@@ -37,13 +37,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Configure port for Railway
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-builder.WebHost.ConfigureKestrel(serverOptions =>
-{
-    serverOptions.ListenAnyIP(int.Parse(port));
-});
-
 var app = builder.Build();
 
 // Initialize Supabase storage bucket
@@ -77,6 +70,5 @@ if (app.Environment.IsDevelopment())
 app.UseCors("AllowReact");
 app.UseAuthorization();
 app.MapControllers();
-app.MapFallbackToFile("/index.html");
 
 app.Run();
