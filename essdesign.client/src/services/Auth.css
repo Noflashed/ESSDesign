@@ -1,0 +1,149 @@
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+}
+
+.auth-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 420px;
+    padding: 40px;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.auth-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.auth-logo .logo-icon {
+    font-size: 36px;
+}
+
+.auth-logo .logo-text {
+    font-size: 28px;
+    font-weight: 600;
+    color: #202124;
+}
+
+.auth-header h2 {
+    font-size: 24px;
+    font-weight: 500;
+    color: #202124;
+    margin: 0 0 8px 0;
+}
+
+.auth-header p {
+    font-size: 14px;
+    color: #5f6368;
+    margin: 0;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-field label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #202124;
+}
+
+.form-field input {
+    padding: 12px 16px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.form-field input:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+}
+
+.error-message {
+    padding: 12px;
+    background: #fce8e6;
+    color: #c5221f;
+    border-radius: 6px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.auth-button {
+    padding: 14px;
+    background: #1a73e8;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.auth-button:hover:not(:disabled) {
+    background: #1765cc;
+}
+
+.auth-button:disabled {
+    background: #dadce0;
+    cursor: not-allowed;
+}
+
+.auth-switch {
+    text-align: center;
+    font-size: 14px;
+    color: #5f6368;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+}
+
+.switch-button {
+    background: none;
+    border: none;
+    color: #1a73e8;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+
+.switch-button:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .auth-card {
+        padding: 24px;
+    }
+    
+    .auth-logo .logo-text {
+        font-size: 24px;
+    }
+}

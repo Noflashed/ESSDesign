@@ -15,6 +15,9 @@ namespace ESSDesign.Server.Models
         [Column("parent_folder_id")]
         public Guid? ParentFolderId { get; set; }
 
+        [Column("user_id")]
+        public string? UserId { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
@@ -46,11 +49,41 @@ namespace ESSDesign.Server.Models
         [Column("third_party_design_name")]
         public string? ThirdPartyDesignName { get; set; }
 
+        [Column("user_id")]
+        public string? UserId { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; }
+    }
+
+    public class SignUpRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+    }
+
+    public class SignInRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    public class AuthResponse
+    {
+        public string AccessToken { get; set; } = string.Empty;
+        public string RefreshToken { get; set; } = string.Empty;
+        public UserInfo User { get; set; } = new();
+    }
+
+    public class UserInfo
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
     }
 
     public class CreateFolderRequest
@@ -77,6 +110,7 @@ namespace ESSDesign.Server.Models
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public Guid? ParentFolderId { get; set; }
+        public string? UserId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public List<FolderResponse> SubFolders { get; set; } = new();
@@ -92,6 +126,7 @@ namespace ESSDesign.Server.Models
         public string? EssDesignIssueName { get; set; }
         public string? ThirdPartyDesignPath { get; set; }
         public string? ThirdPartyDesignName { get; set; }
+        public string? UserId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

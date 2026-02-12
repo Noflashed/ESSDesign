@@ -7,6 +7,53 @@ const apiClient = axios.create({
     headers: { 'Content-Type': 'application/json' }
 });
 
+// Add auth token to requests
+apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+export const authAPI = {
+    signUp: async (email, password, fullName) => {
+        const response = await apiClient.post('/auth/signup', { email, password, fullName });
+        if (response.data.accessToken) {
+            localStorage.setItem('access_token', response.data.accessToken);
+            localStorage.setItem('refresh_token', response.data.refreshToken);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+        return response.data;
+    },
+
+    signIn: async (email, password) => {
+        const response = await apiClient.post('/auth/signin', { email, password });
+        if (response.data.accessToken) {
+            localStorage.setItem('access_token', response.data.accessToken);
+            localStorage.setItem('refresh_token', response.data.refreshToken);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+        return response.data;
+    },
+
+    signOut: async () => {
+        await apiClient.post('/auth/signout');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
+    },
+
+    getCurrentUser: () => {
+        const userStr = localStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : null;
+    },
+
+    isAuthenticated: () => {
+        return !!localStorage.getItem('access_token');
+    }
+};
+
 export const foldersAPI = {
     getRootFolders: async () => {
         const response = await apiClient.get('/folders');
@@ -46,7 +93,10 @@ export const foldersAPI = {
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
 
         const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
         });
         return response.data;
     },
@@ -62,4 +112,4 @@ export const foldersAPI = {
     }
 };
 
-export default foldersAPI;
+export default { authAPI, foldersAPI };

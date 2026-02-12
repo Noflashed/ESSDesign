@@ -76,6 +76,7 @@ namespace ESSDesign.Server.Services
                     Id = subfolder.Id,
                     Name = subfolder.Name,
                     ParentFolderId = subfolder.ParentFolderId,
+                    UserId = subfolder.UserId,
                     CreatedAt = subfolder.CreatedAt,
                     UpdatedAt = subfolder.UpdatedAt
                 });
@@ -96,6 +97,7 @@ namespace ESSDesign.Server.Services
                 EssDesignIssueName = d.EssDesignIssueName,
                 ThirdPartyDesignPath = d.ThirdPartyDesignPath,
                 ThirdPartyDesignName = d.ThirdPartyDesignName,
+                UserId = d.UserId,
                 CreatedAt = d.CreatedAt,
                 UpdatedAt = d.UpdatedAt
             }).ToList();
@@ -105,6 +107,7 @@ namespace ESSDesign.Server.Services
                 Id = folder.Id,
                 Name = folder.Name,
                 ParentFolderId = folder.ParentFolderId,
+                UserId = folder.UserId,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
                 SubFolders = subfolders,
@@ -112,7 +115,7 @@ namespace ESSDesign.Server.Services
             };
         }
 
-        public async Task<Guid> CreateFolderAsync(string name, Guid? parentFolderId)
+        public async Task<Guid> CreateFolderAsync(string name, Guid? parentFolderId, string? userId = null)
         {
             try
             {
@@ -121,6 +124,7 @@ namespace ESSDesign.Server.Services
                     Id = Guid.NewGuid(),
                     Name = name,
                     ParentFolderId = parentFolderId,
+                    UserId = userId,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -202,7 +206,7 @@ namespace ESSDesign.Server.Services
             return breadcrumbs;
         }
 
-        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty)
+        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? userId = null)
         {
             try
             {
@@ -211,6 +215,7 @@ namespace ESSDesign.Server.Services
                     Id = Guid.NewGuid(),
                     FolderId = folderId,
                     RevisionNumber = revisionNumber,
+                    UserId = userId,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
