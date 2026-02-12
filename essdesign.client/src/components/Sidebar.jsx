@@ -1,24 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { foldersAPI } from '../services/api';
 import './Sidebar.css';
 
-function Sidebar({ onFolderSelect, currentFolderId }) {
+function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger }) {
     const [folders, setFolders] = useState([]);
     const [expandedFolders, setExpandedFolders] = useState(new Set());
+    const [loadedFolders, setLoadedFolders] = useState(new Map());
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadFolders();
-    }, []);
+        loadRootFolders();
+    }, [refreshTrigger]);
 
-    const loadFolders = async () => {
+    const loadRootFolders = async () => {
         try {
+            setLoading(true);
             const data = await foldersAPI.getRootFolders();
-            // Recursively load all subfolders
-            const foldersWithChildren = await Promise.all(
-                data.map(folder => loadFolderRecursive(folder))
-            );
-            setFolders(foldersWithChildren);
+            setFolders(data);
+            
+            // Cache root folders
+            const folderMap = new Map();
+            data.forEach(folder => {
+                folderMap.set(folder.id, { ...folder, loaded: true });
+            });
+            setLoadedFolders(folderMap);
         } catch (error) {
             console.error('Error loading folders:', error);
         } finally {
@@ -26,32 +31,57 @@ function Sidebar({ onFolderSelect, currentFolderId }) {
         }
     };
 
-    const loadFolderRecursive = async (folder) => {
-        if (!folder.subFolders || folder.subFolders.length === 0) {
-            return folder;
+    const loadSubFolders = useCallback(async (folderId) => {
+        // Check if already loaded
+        const cached = loadedFolders.get(folderId);
+        if (cached?.loaded) {
+            return;
         }
 
-        // Load full data for each subfolder
-        const subFoldersWithChildren = await Promise.all(
-            folder.subFolders.map(async (subfolder) => {
-                const fullSubFolder = await foldersAPI.getFolder(subfolder.id);
-                return loadFolderRecursive(fullSubFolder);
-            })
-        );
+        try {
+            const folderData = await foldersAPI.getFolder(folderId);
+            
+            // Update cache
+            const newLoadedFolders = new Map(loadedFolders);
+            newLoadedFolders.set(folderId, { ...folderData, loaded: true });
+            setLoadedFolders(newLoadedFolders);
 
-        return {
-            ...folder,
-            subFolders: subFoldersWithChildren
-        };
+            // Update tree
+            updateFolderInTree(folderId, folderData);
+        } catch (error) {
+            console.error('Error loading subfolders:', error);
+        }
+    }, [loadedFolders]);
+
+    const updateFolderInTree = (folderId, folderData) => {
+        setFolders(prev => {
+            const updateRecursive = (items) => {
+                return items.map(item => {
+                    if (item.id === folderId) {
+                        return { ...item, subFolders: folderData.subFolders || [] };
+                    }
+                    if (item.subFolders && item.subFolders.length > 0) {
+                        return { ...item, subFolders: updateRecursive(item.subFolders) };
+                    }
+                    return item;
+                });
+            };
+            return updateRecursive(prev);
+        });
     };
 
-    const toggleFolder = (folderId) => {
+    const toggleFolder = async (folderId, hasSubFolders) => {
         const newExpanded = new Set(expandedFolders);
+        
         if (newExpanded.has(folderId)) {
             newExpanded.delete(folderId);
         } else {
             newExpanded.add(folderId);
+            if (hasSubFolders) {
+                await loadSubFolders(folderId);
+            }
         }
+        
         setExpandedFolders(newExpanded);
     };
 
@@ -72,7 +102,7 @@ function Sidebar({ onFolderSelect, currentFolderId }) {
                             className={`folder-arrow ${isExpanded ? 'expanded' : ''}`}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                toggleFolder(folder.id);
+                                toggleFolder(folder.id, hasSubFolders);
                             }}
                         >
                             ▶

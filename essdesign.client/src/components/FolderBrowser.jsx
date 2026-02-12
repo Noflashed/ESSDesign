@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { foldersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import './FolderBrowser.css';
@@ -14,6 +14,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
     const [newFolderName, setNewFolderName] = useState('');
     const [renameTarget, setRenameTarget] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
+    const [cache, setCache] = useState(new Map());
 
     useEffect(() => {
         if (selectedFolderId !== undefined) {
@@ -25,24 +26,56 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         loadCurrentFolder();
     }, [currentFolder]);
 
-    const loadCurrentFolder = async () => {
+    const loadCurrentFolder = useCallback(async () => {
+        // Check cache first
+        const cacheKey = currentFolder === null ? 'root' : currentFolder;
+        const cached = cache.get(cacheKey);
+        
+        if (cached && (Date.now() - cached.timestamp < 60000)) { // 1 minute cache
+            setFolders(cached.data);
+            setBreadcrumbs(cached.breadcrumbs || []);
+            return;
+        }
+
         setLoading(true);
         try {
             if (currentFolder === null) {
                 const data = await foldersAPI.getRootFolders();
                 setFolders(data);
                 setBreadcrumbs([]);
+                
+                // Cache it
+                setCache(prev => new Map(prev).set('root', {
+                    data,
+                    breadcrumbs: [],
+                    timestamp: Date.now()
+                }));
             } else {
-                const data = await foldersAPI.getFolder(currentFolder);
-                setFolders([...data.subFolders, ...data.documents.map(d => ({ ...d, isDocument: true }))]);
-                const crumbs = await foldersAPI.getBreadcrumbs(currentFolder);
+                const [data, crumbs] = await Promise.all([
+                    foldersAPI.getFolder(currentFolder),
+                    foldersAPI.getBreadcrumbs(currentFolder)
+                ]);
+                
+                const folderItems = [...data.subFolders, ...data.documents.map(d => ({ ...d, isDocument: true }))];
+                setFolders(folderItems);
                 setBreadcrumbs(crumbs);
+                
+                // Cache it
+                setCache(prev => new Map(prev).set(currentFolder, {
+                    data: folderItems,
+                    breadcrumbs: crumbs,
+                    timestamp: Date.now()
+                }));
             }
         } catch (error) {
             console.error('Error loading folder:', error);
         } finally {
             setLoading(false);
         }
+    }, [currentFolder, cache]);
+
+    const clearCache = () => {
+        setCache(new Map());
     };
 
     const handleFolderClick = (folderId) => {
@@ -66,6 +99,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
             await foldersAPI.createFolder(newFolderName, currentFolder);
             setNewFolderName('');
             setShowNewFolderModal(false);
+            clearCache();
             loadCurrentFolder();
         } catch (error) {
             alert('Failed to create folder');
@@ -79,6 +113,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
             setNewFolderName('');
             setRenameTarget(null);
             setShowRenameModal(false);
+            clearCache();
             loadCurrentFolder();
         } catch (error) {
             alert('Failed to rename folder');
@@ -89,6 +124,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         if (!confirm('Delete this folder and all its contents?')) return;
         try {
             await foldersAPI.deleteFolder(folderId);
+            clearCache();
             loadCurrentFolder();
         } catch (error) {
             alert('Failed to delete folder');
@@ -99,16 +135,17 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         if (!confirm('Delete this document?')) return;
         try {
             await foldersAPI.deleteDocument(documentId);
+            clearCache();
             loadCurrentFolder();
         } catch (error) {
             alert('Failed to delete document');
         }
     };
+
     const handleDownload = async (documentId, type) => {
         try {
             const fileInfo = await foldersAPI.getDownloadUrl(documentId, type);
-
-            // Create a temporary anchor element to trigger download with original filename
+            
             const link = document.createElement('a');
             link.href = fileInfo.url;
             link.download = fileInfo.fileName;
@@ -120,7 +157,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
             alert('Failed to download file');
         }
     };
-
 
     const handleContextMenu = (e, item) => {
         e.preventDefault();
@@ -150,7 +186,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                 <span className="breadcrumb" onClick={() => handleBreadcrumbClick(null)}>
                     Home
                 </span>
-                {breadcrumbs.map((crumb, idx) => (
+                {breadcrumbs.map((crumb) => (
                     <React.Fragment key={crumb.id}>
                         <span className="breadcrumb-sep">/</span>
                         <span className="breadcrumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
@@ -161,7 +197,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
             </div>
 
             {loading ? (
-                <div className="loading">Loading...</div>
+                <div className="loading">
+                    <div className="spinner-small"></div>
+                    Loading...
+                </div>
             ) : (
                 <div className="items-grid">
                     {folders.map(item => (
@@ -257,6 +296,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                     onClose={() => setShowUploadModal(false)}
                     onSuccess={() => {
                         setShowUploadModal(false);
+                        clearCache();
                         loadCurrentFolder();
                     }}
                 />

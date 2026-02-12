@@ -1,5 +1,6 @@
 using Supabase;
 using ESSDesign.Server.Models;
+using System.Collections.Concurrent;
 
 namespace ESSDesign.Server.Services
 {
@@ -8,6 +9,10 @@ namespace ESSDesign.Server.Services
         private readonly Supabase.Client _supabase;
         private readonly ILogger<SupabaseService> _logger;
         private readonly string _bucketName = "design-pdfs";
+        
+        // In-memory cache for folders (5 minute expiration)
+        private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
+        private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
 
         public SupabaseService(Supabase.Client supabase, ILogger<SupabaseService> logger)
         {
@@ -28,7 +33,7 @@ namespace ESSDesign.Server.Services
                 var result = new List<FolderResponse>();
                 foreach (var folder in foldersResponse.Models)
                 {
-                    result.Add(await BuildFolderResponse(folder));
+                    result.Add(await BuildFolderResponseLight(folder));
                 }
 
                 return result;
@@ -44,6 +49,20 @@ namespace ESSDesign.Server.Services
         {
             try
             {
+                // Check cache first
+                if (_folderCache.TryGetValue(folderId, out var cached))
+                {
+                    if (cached.Expiry > DateTime.UtcNow)
+                    {
+                        _logger.LogInformation("Cache hit for folder {FolderId}", folderId);
+                        return cached.Data;
+                    }
+                    else
+                    {
+                        _folderCache.TryRemove(folderId, out _);
+                    }
+                }
+
                 var folderResponse = await _supabase
                     .From<Folder>()
                     .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
@@ -51,7 +70,12 @@ namespace ESSDesign.Server.Services
 
                 if (folderResponse == null) throw new Exception("Folder not found");
 
-                return await BuildFolderResponse(folderResponse);
+                var result = await BuildFolderResponseFull(folderResponse);
+                
+                // Cache the result
+                _folderCache[folderId] = (result, DateTime.UtcNow.Add(_cacheExpiration));
+                
+                return result;
             }
             catch (Exception ex)
             {
@@ -60,7 +84,8 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        private async Task<FolderResponse> BuildFolderResponse(Folder folder)
+        // Light version - only gets immediate subfolders count, no documents
+        private async Task<FolderResponse> BuildFolderResponseLight(Folder folder)
         {
             var subfoldersResponse = await _supabase
                 .From<Folder>()
@@ -68,27 +93,62 @@ namespace ESSDesign.Server.Services
                 .Order("name", Postgrest.Constants.Ordering.Ascending)
                 .Get();
 
-            var subfolders = new List<FolderResponse>();
-            foreach (var subfolder in subfoldersResponse.Models)
+            var subfolders = subfoldersResponse.Models.Select(sf => new FolderResponse
             {
-                subfolders.Add(new FolderResponse
-                {
-                    Id = subfolder.Id,
-                    Name = subfolder.Name,
-                    ParentFolderId = subfolder.ParentFolderId,
-                    UserId = subfolder.UserId,
-                    CreatedAt = subfolder.CreatedAt,
-                    UpdatedAt = subfolder.UpdatedAt
-                });
-            }
+                Id = sf.Id,
+                Name = sf.Name,
+                ParentFolderId = sf.ParentFolderId,
+                UserId = sf.UserId,
+                CreatedAt = sf.CreatedAt,
+                UpdatedAt = sf.UpdatedAt,
+                SubFolders = new List<FolderResponse>(),
+                Documents = new List<DocumentResponse>()
+            }).ToList();
 
-            var documentsResponse = await _supabase
+            return new FolderResponse
+            {
+                Id = folder.Id,
+                Name = folder.Name,
+                ParentFolderId = folder.ParentFolderId,
+                UserId = folder.UserId,
+                CreatedAt = folder.CreatedAt,
+                UpdatedAt = folder.UpdatedAt,
+                SubFolders = subfolders,
+                Documents = new List<DocumentResponse>()
+            };
+        }
+
+        // Full version - gets everything including documents
+        private async Task<FolderResponse> BuildFolderResponseFull(Folder folder)
+        {
+            // Parallel execution for subfolders and documents
+            var subfoldersTask = _supabase
+                .From<Folder>()
+                .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
+                .Order("name", Postgrest.Constants.Ordering.Ascending)
+                .Get();
+
+            var documentsTask = _supabase
                 .From<DesignDocument>()
                 .Filter("folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
                 .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
                 .Get();
 
-            var documents = documentsResponse.Models.Select(d => new DocumentResponse
+            await Task.WhenAll(subfoldersTask, documentsTask);
+
+            var subfolders = (await subfoldersTask).Models.Select(sf => new FolderResponse
+            {
+                Id = sf.Id,
+                Name = sf.Name,
+                ParentFolderId = sf.ParentFolderId,
+                UserId = sf.UserId,
+                CreatedAt = sf.CreatedAt,
+                UpdatedAt = sf.UpdatedAt,
+                SubFolders = new List<FolderResponse>(),
+                Documents = new List<DocumentResponse>()
+            }).ToList();
+
+            var documents = (await documentsTask).Models.Select(d => new DocumentResponse
             {
                 Id = d.Id,
                 FolderId = d.FolderId,
@@ -133,6 +193,12 @@ namespace ESSDesign.Server.Services
                 var created = response.Models.FirstOrDefault();
                 if (created == null) throw new Exception("Failed to create folder");
 
+                // Clear parent folder cache
+                if (parentFolderId.HasValue)
+                {
+                    _folderCache.TryRemove(parentFolderId.Value, out _);
+                }
+
                 _logger.LogInformation("Created folder: {Name}", name);
                 return created.Id;
             }
@@ -158,6 +224,14 @@ namespace ESSDesign.Server.Services
                 folder.UpdatedAt = DateTime.UtcNow;
 
                 await _supabase.From<Folder>().Update(folder);
+                
+                // Clear cache
+                _folderCache.TryRemove(folderId, out _);
+                if (folder.ParentFolderId.HasValue)
+                {
+                    _folderCache.TryRemove(folder.ParentFolderId.Value, out _);
+                }
+
                 _logger.LogInformation("Renamed folder {FolderId}", folderId);
             }
             catch (Exception ex)
@@ -171,10 +245,22 @@ namespace ESSDesign.Server.Services
         {
             try
             {
+                var folder = await _supabase
+                    .From<Folder>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Single();
+
                 await _supabase
                     .From<Folder>()
                     .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
                     .Delete();
+
+                // Clear cache
+                _folderCache.TryRemove(folderId, out _);
+                if (folder?.ParentFolderId != null)
+                {
+                    _folderCache.TryRemove(folder.ParentFolderId.Value, out _);
+                }
 
                 _logger.LogInformation("Deleted folder {FolderId}", folderId);
             }
@@ -220,25 +306,39 @@ namespace ESSDesign.Server.Services
                     UpdatedAt = DateTime.UtcNow
                 };
 
+                // Upload files in parallel
+                var uploadTasks = new List<Task>();
+
                 if (essDesign != null)
                 {
                     var path = $"documents/{folderId}/{document.Id}/ess_{essDesign.FileName}";
-                    await UploadFileAsync(essDesign, path);
-                    document.EssDesignIssuePath = path;
-                    document.EssDesignIssueName = essDesign.FileName;
+                    uploadTasks.Add(Task.Run(async () =>
+                    {
+                        await UploadFileAsync(essDesign, path);
+                        document.EssDesignIssuePath = path;
+                        document.EssDesignIssueName = essDesign.FileName;
+                    }));
                 }
 
                 if (thirdParty != null)
                 {
                     var path = $"documents/{folderId}/{document.Id}/third_party_{thirdParty.FileName}";
-                    await UploadFileAsync(thirdParty, path);
-                    document.ThirdPartyDesignPath = path;
-                    document.ThirdPartyDesignName = thirdParty.FileName;
+                    uploadTasks.Add(Task.Run(async () =>
+                    {
+                        await UploadFileAsync(thirdParty, path);
+                        document.ThirdPartyDesignPath = path;
+                        document.ThirdPartyDesignName = thirdParty.FileName;
+                    }));
                 }
+
+                await Task.WhenAll(uploadTasks);
 
                 var response = await _supabase.From<DesignDocument>().Insert(document);
                 var created = response.Models.FirstOrDefault();
                 if (created == null) throw new Exception("Failed to create document");
+
+                // Clear folder cache
+                _folderCache.TryRemove(folderId, out _);
 
                 _logger.LogInformation("Uploaded document Rev {RevisionNumber}", revisionNumber);
                 return created.Id;
@@ -261,10 +361,17 @@ namespace ESSDesign.Server.Services
 
                 if (document != null)
                 {
+                    // Delete files in parallel
+                    var deleteTasks = new List<Task>();
                     if (!string.IsNullOrEmpty(document.EssDesignIssuePath))
-                        await DeleteFileAsync(document.EssDesignIssuePath);
+                        deleteTasks.Add(DeleteFileAsync(document.EssDesignIssuePath));
                     if (!string.IsNullOrEmpty(document.ThirdPartyDesignPath))
-                        await DeleteFileAsync(document.ThirdPartyDesignPath);
+                        deleteTasks.Add(DeleteFileAsync(document.ThirdPartyDesignPath));
+
+                    await Task.WhenAll(deleteTasks);
+
+                    // Clear folder cache
+                    _folderCache.TryRemove(document.FolderId, out _);
                 }
 
                 await _supabase
@@ -369,6 +476,12 @@ namespace ESSDesign.Server.Services
             {
                 _logger.LogWarning(ex, "Storage initialization warning");
             }
+        }
+
+        // Method to clear entire cache (useful for testing)
+        public static void ClearCache()
+        {
+            _folderCache.Clear();
         }
     }
 
