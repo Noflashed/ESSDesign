@@ -61,13 +61,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Only use HTTPS redirection in development (Railway handles SSL)
-if (app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
-
+// Enable CORS BEFORE other middleware
 app.UseCors("AllowReact");
+
+// Health check endpoint
+app.MapGet("/", () => Results.Ok(new { status = "API is running", timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
 app.UseAuthorization();
 app.MapControllers();
 
