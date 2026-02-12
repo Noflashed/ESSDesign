@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { foldersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
+import PDFViewer from './PDFViewer';
 import './FolderBrowser.css';
 
 function FolderBrowser({ selectedFolderId, onFolderChange }) {
@@ -15,6 +16,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
     const [renameTarget, setRenameTarget] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
     const [cache, setCache] = useState(new Map());
+    
+    // PDF Viewer state
+    const [pdfViewer, setPdfViewer] = useState(null);
 
     useEffect(() => {
         if (selectedFolderId !== undefined) {
@@ -27,11 +31,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
     }, [currentFolder]);
 
     const loadCurrentFolder = useCallback(async () => {
-        // Check cache first
         const cacheKey = currentFolder === null ? 'root' : currentFolder;
         const cached = cache.get(cacheKey);
         
-        if (cached && (Date.now() - cached.timestamp < 60000)) { // 1 minute cache
+        if (cached && (Date.now() - cached.timestamp < 60000)) {
             setFolders(cached.data);
             setBreadcrumbs(cached.breadcrumbs || []);
             return;
@@ -44,7 +47,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                 setFolders(data);
                 setBreadcrumbs([]);
                 
-                // Cache it
                 setCache(prev => new Map(prev).set('root', {
                     data,
                     breadcrumbs: [],
@@ -60,7 +62,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                 setFolders(folderItems);
                 setBreadcrumbs(crumbs);
                 
-                // Cache it
                 setCache(prev => new Map(prev).set(currentFolder, {
                     data: folderItems,
                     breadcrumbs: crumbs,
@@ -142,20 +143,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         }
     };
 
-    const handleDownload = async (documentId, type) => {
-        try {
-            const fileInfo = await foldersAPI.getDownloadUrl(documentId, type);
-            
-            const link = document.createElement('a');
-            link.href = fileInfo.url;
-            link.download = fileInfo.fileName;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (error) {
-            alert('Failed to download file');
-        }
+    const handleViewPDF = (document, type) => {
+        const fileName = type === 'ess' ? document.essDesignIssueName : document.thirdPartyDesignName;
+        setPdfViewer({
+            documentId: document.id,
+            fileName: fileName || 'document.pdf',
+            fileType: type
+        });
     };
 
     const handleContextMenu = (e, item) => {
@@ -219,13 +213,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                             {item.isDocument && (
                                 <div className="document-files">
                                     {item.essDesignIssuePath && (
-                                        <button onClick={() => handleDownload(item.id, 'ess')} className="file-btn">
-                                            ESS Design
+                                        <button 
+                                            onClick={() => handleViewPDF(item, 'ess')} 
+                                            className="file-btn"
+                                        >
+                                            📄 ESS Design
                                         </button>
                                     )}
                                     {item.thirdPartyDesignPath && (
-                                        <button onClick={() => handleDownload(item.id, 'thirdparty')} className="file-btn">
-                                            Third-Party
+                                        <button 
+                                            onClick={() => handleViewPDF(item, 'thirdparty')} 
+                                            className="file-btn"
+                                        >
+                                            📄 Third-Party
                                         </button>
                                     )}
                                 </div>
@@ -299,6 +299,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                         clearCache();
                         loadCurrentFolder();
                     }}
+                />
+            )}
+
+            {pdfViewer && (
+                <PDFViewer
+                    documentId={pdfViewer.documentId}
+                    fileName={pdfViewer.fileName}
+                    fileType={pdfViewer.fileType}
+                    onClose={() => setPdfViewer(null)}
                 />
             )}
         </div>
