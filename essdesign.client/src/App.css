@@ -4,16 +4,53 @@
     box-sizing: border-box;
 }
 
+:root[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f1f3f4;
+    --text-primary: #202124;
+    --text-secondary: #5f6368;
+    --border-color: #e8eaed;
+    --hover-bg: #f1f3f4;
+    --selected-bg: #e8f0fe;
+    --primary-color: #1a73e8;
+    --primary-hover: #1765cc;
+    --sidebar-bg: #ffffff;
+    --card-bg: #ffffff;
+    --shadow: 0 1px 3px rgba(60,64,67,.3);
+    --scrollbar-thumb: #dadce0;
+    --scrollbar-thumb-hover: #bdc1c6;
+}
+
+:root[data-theme="dark"] {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #121212;
+    --text-primary: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --border-color: #3c4043;
+    --hover-bg: #2d2d2d;
+    --selected-bg: #2d3748;
+    --primary-color: #8ab4f8;
+    --primary-hover: #aecbfa;
+    --sidebar-bg: #1e1e1e;
+    --card-bg: #2d2d2d;
+    --shadow: 0 1px 3px rgba(0,0,0,.5);
+    --scrollbar-thumb: #5f6368;
+    --scrollbar-thumb-hover: #80868b;
+}
+
 body {
     font-family: 'Google Sans', Roboto, Arial, sans-serif;
-    background: #f1f3f4;
+    background: var(--bg-secondary);
     min-height: 100vh;
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
 }
 
 .App {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    background: var(--bg-secondary);
 }
 
 .loading-screen {
@@ -21,12 +58,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f1f3f4;
+    background: var(--bg-secondary);
 }
 
 .spinner {
-    border: 3px solid #f1f3f4;
-    border-top: 3px solid #1a73e8;
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--primary-color);
     border-radius: 50%;
     width: 40px;
     height: 40px;
@@ -34,26 +71,22 @@ body {
 }
 
 @keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 .app-header {
-    background: #fff;
+    background: var(--bg-primary);
     padding: 8px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #e8eaed;
-    box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: background-color 0.3s;
 }
 
 .header-left {
@@ -75,13 +108,31 @@ body {
 .logo-text {
     font-size: 22px;
     font-weight: 400;
-    color: #202124;
+    color: var(--text-primary);
 }
 
 .header-right {
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+.theme-toggle {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle:hover {
+    background: var(--hover-bg);
 }
 
 .user-menu {
@@ -92,44 +143,49 @@ body {
 
 .user-name {
     font-size: 14px;
-    color: #5f6368;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
 .logout-button {
     padding: 8px 16px;
     background: transparent;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: #1a73e8;
+    color: var(--primary-color);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
 }
 
-    .logout-button:hover {
-        background: #f1f3f4;
-        border-color: #1a73e8;
-    }
+.logout-button:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
 
 .app-main {
     flex: 1;
     padding: 24px;
-    max-width: 1600px;
-    width: 100%;
-    margin: 0 auto;
+    overflow-y: auto;
+    background: var(--bg-secondary);
 }
 
 @media (max-width: 768px) {
     .app-main {
         padding: 16px;
     }
-
+    
     .logo-text {
         display: none;
     }
-
+    
     .user-name {
         display: none;
     }

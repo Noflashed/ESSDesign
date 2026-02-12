@@ -3,7 +3,7 @@ import { foldersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import './FolderBrowser.css';
 
-function FolderBrowser() {
+function FolderBrowser({ selectedFolderId, onFolderChange }) {
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -14,6 +14,12 @@ function FolderBrowser() {
     const [newFolderName, setNewFolderName] = useState('');
     const [renameTarget, setRenameTarget] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
+
+    useEffect(() => {
+        if (selectedFolderId !== undefined) {
+            setCurrentFolder(selectedFolderId);
+        }
+    }, [selectedFolderId]);
 
     useEffect(() => {
         loadCurrentFolder();
@@ -41,10 +47,17 @@ function FolderBrowser() {
 
     const handleFolderClick = (folderId) => {
         setCurrentFolder(folderId);
+        if (onFolderChange) {
+            onFolderChange(folderId);
+        }
     };
 
     const handleBreadcrumbClick = (folderId) => {
-        setCurrentFolder(folderId || null);
+        const newFolderId = folderId || null;
+        setCurrentFolder(newFolderId);
+        if (onFolderChange) {
+            onFolderChange(newFolderId);
+        }
     };
 
     const handleCreateFolder = async () => {
@@ -91,15 +104,23 @@ function FolderBrowser() {
             alert('Failed to delete document');
         }
     };
-
     const handleDownload = async (documentId, type) => {
         try {
-            const url = await foldersAPI.getDownloadUrl(documentId, type);
-            window.open(url, '_blank');
+            const fileInfo = await foldersAPI.getDownloadUrl(documentId, type);
+
+            // Create a temporary anchor element to trigger download with original filename
+            const link = document.createElement('a');
+            link.href = fileInfo.url;
+            link.download = fileInfo.fileName;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         } catch (error) {
             alert('Failed to download file');
         }
     };
+
 
     const handleContextMenu = (e, item) => {
         e.preventDefault();

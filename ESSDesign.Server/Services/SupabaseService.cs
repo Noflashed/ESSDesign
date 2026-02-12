@@ -281,7 +281,7 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        public async Task<string> GetDocumentDownloadUrlAsync(Guid documentId, string type)
+        public async Task<FileDownloadInfo> GetDocumentDownloadUrlAsync(Guid documentId, string type)
         {
             try
             {
@@ -292,10 +292,29 @@ namespace ESSDesign.Server.Services
 
                 if (document == null) throw new FileNotFoundException("Document not found");
 
-                var path = type.ToLower() == "ess" ? document.EssDesignIssuePath : document.ThirdPartyDesignPath;
+                string path;
+                string fileName;
+
+                if (type.ToLower() == "ess")
+                {
+                    path = document.EssDesignIssuePath;
+                    fileName = document.EssDesignIssueName;
+                }
+                else
+                {
+                    path = document.ThirdPartyDesignPath;
+                    fileName = document.ThirdPartyDesignName;
+                }
+
                 if (string.IsNullOrEmpty(path)) throw new FileNotFoundException($"File type {type} not found");
 
-                return await GetSignedUrlAsync(path);
+                var url = await GetSignedUrlAsync(path);
+
+                return new FileDownloadInfo
+                {
+                    Url = url,
+                    FileName = fileName ?? "document.pdf"
+                };
             }
             catch (Exception ex)
             {
@@ -351,5 +370,11 @@ namespace ESSDesign.Server.Services
                 _logger.LogWarning(ex, "Storage initialization warning");
             }
         }
+    }
+
+    public class FileDownloadInfo
+    {
+        public string Url { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
     }
 }

@@ -166,8 +166,8 @@ namespace ESSDesign.Server.Controllers
                     !type.Equals("thirdparty", StringComparison.OrdinalIgnoreCase))
                     return BadRequest(new { error = "Type must be 'ess' or 'thirdparty'" });
 
-                var url = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
-                return Ok(new { url });
+                var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
+                return Ok(new { url = fileInfo.Url, fileName = fileInfo.FileName });
             }
             catch (FileNotFoundException ex)
             {

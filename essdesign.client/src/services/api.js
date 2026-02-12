@@ -93,7 +93,7 @@ export const foldersAPI = {
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
 
         const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
-            headers: {
+            headers: { 
                 'Content-Type': 'multipart/form-data',
                 'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             }
@@ -108,7 +108,7 @@ export const foldersAPI = {
 
     getDownloadUrl: async (documentId, type) => {
         const response = await apiClient.get(`/folders/documents/${documentId}/download/${type}`);
-        return response.data.url;
+        return response.data; // Returns { url, fileName }
     }
 };
 
