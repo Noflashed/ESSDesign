@@ -29,18 +29,16 @@ builder.Services.AddScoped<SupabaseService>();
 // Configure CORS for React frontend (updated for Vercel)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReact", policy =>
-    {
-        policy.WithOrigins(
+    options.AddPolicy("AllowAll",
+        builder => builder
+            .WithOrigins(
                 "https://localhost:5173",
                 "http://localhost:5173",
                 "https://*.vercel.app"  // Allow all Vercel deployments
-              )
-              .SetIsOriginAllowedToAllowWildcardSubdomains()
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials());
 });
 
 // Configure port for Railway
