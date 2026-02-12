@@ -9,7 +9,7 @@ namespace ESSDesign.Server.Services
         private readonly Supabase.Client _supabase;
         private readonly ILogger<SupabaseService> _logger;
         private readonly string _bucketName = "design-pdfs";
-        
+
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
         private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
@@ -71,10 +71,10 @@ namespace ESSDesign.Server.Services
                 if (folderResponse == null) throw new Exception("Folder not found");
 
                 var result = await BuildFolderResponseFull(folderResponse);
-                
+
                 // Cache the result
                 _folderCache[folderId] = (result, DateTime.UtcNow.Add(_cacheExpiration));
-                
+
                 return result;
             }
             catch (Exception ex)
@@ -224,7 +224,7 @@ namespace ESSDesign.Server.Services
                 folder.UpdatedAt = DateTime.UtcNow;
 
                 await _supabase.From<Folder>().Update(folder);
-                
+
                 // Clear cache
                 _folderCache.TryRemove(folderId, out _);
                 if (folder.ParentFolderId.HasValue)
@@ -482,6 +482,82 @@ namespace ESSDesign.Server.Services
         public static void ClearCache()
         {
             _folderCache.Clear();
+        }
+
+        // User Preferences Methods
+        public async Task<UserPreferences?> GetUserPreferencesAsync(Guid userId)
+        {
+            try
+            {
+                var response = await _supabase
+                    .From<UserPreferences>()
+                    .Filter("user_id", Postgrest.Constants.Operator.Equals, userId.ToString())
+                    .Single();
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation("No preferences found for user {UserId}: {Message}", userId, ex.Message);
+                return null;
+            }
+        }
+
+        public async Task<UserPreferences> UpsertUserPreferencesAsync(
+            Guid userId,
+            Guid? selectedFolderId,
+            string? theme,
+            string? viewMode,
+            int? sidebarWidth)
+        {
+            try
+            {
+                // Check if preferences exist
+                var existing = await GetUserPreferencesAsync(userId);
+
+                if (existing != null)
+                {
+                    // Update existing
+                    existing.SelectedFolderId = selectedFolderId ?? existing.SelectedFolderId;
+                    existing.Theme = theme ?? existing.Theme;
+                    existing.ViewMode = viewMode ?? existing.ViewMode;
+                    existing.SidebarWidth = sidebarWidth ?? existing.SidebarWidth;
+                    existing.UpdatedAt = DateTime.UtcNow;
+
+                    var updateResponse = await _supabase
+                        .From<UserPreferences>()
+                        .Update(existing);
+
+                    return updateResponse.Models.FirstOrDefault()
+                        ?? throw new Exception("Failed to update preferences");
+                }
+                else
+                {
+                    // Create new
+                    var newPrefs = new UserPreferences
+                    {
+                        UserId = userId,
+                        SelectedFolderId = selectedFolderId,
+                        Theme = theme ?? "light",
+                        ViewMode = viewMode ?? "grid",
+                        SidebarWidth = sidebarWidth ?? 280,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    var insertResponse = await _supabase
+                        .From<UserPreferences>()
+                        .Insert(newPrefs);
+
+                    return insertResponse.Models.FirstOrDefault()
+                        ?? throw new Exception("Failed to create preferences");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error upserting user preferences for {UserId}", userId);
+                throw;
+            }
         }
     }
 

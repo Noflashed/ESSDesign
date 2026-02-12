@@ -4,7 +4,7 @@ import UploadDocumentModal from './UploadDocumentModal';
 import PDFViewer from './PDFViewer';
 import './FolderBrowser.css';
 
-function FolderBrowser({ selectedFolderId, onFolderChange }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange }) {
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -13,10 +13,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+    const [newFolderParent, setNewFolderParent] = useState(null); // Track parent for subfolder creation
     const [renameTarget, setRenameTarget] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
     const [cache, setCache] = useState(new Map());
-    
+    const [viewMode, setViewMode] = useState(() => {
+        return initialViewMode || localStorage.getItem('viewMode') || 'grid';
+    }); // 'grid' or 'list'
+
     // PDF Viewer state
     const [pdfViewer, setPdfViewer] = useState(null);
 
@@ -30,10 +34,18 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         loadCurrentFolder();
     }, [currentFolder]);
 
+    // Save view mode preference
+    useEffect(() => {
+        localStorage.setItem('viewMode', viewMode);
+        if (onViewModeChange) {
+            onViewModeChange(viewMode);
+        }
+    }, [viewMode, onViewModeChange]);
+
     const loadCurrentFolder = useCallback(async () => {
         const cacheKey = currentFolder === null ? 'root' : currentFolder;
         const cached = cache.get(cacheKey);
-        
+
         if (cached && (Date.now() - cached.timestamp < 60000)) {
             setFolders(cached.data);
             setBreadcrumbs(cached.breadcrumbs || []);
@@ -46,7 +58,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                 const data = await foldersAPI.getRootFolders();
                 setFolders(data);
                 setBreadcrumbs([]);
-                
+
                 setCache(prev => new Map(prev).set('root', {
                     data,
                     breadcrumbs: [],
@@ -57,11 +69,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                     foldersAPI.getFolder(currentFolder),
                     foldersAPI.getBreadcrumbs(currentFolder)
                 ]);
-                
+
                 const folderItems = [...data.subFolders, ...data.documents.map(d => ({ ...d, isDocument: true }))];
                 setFolders(folderItems);
                 setBreadcrumbs(crumbs);
-                
+
                 setCache(prev => new Map(prev).set(currentFolder, {
                     data: folderItems,
                     breadcrumbs: crumbs,
@@ -96,14 +108,41 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
 
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
+
         try {
-            await foldersAPI.createFolder(newFolderName, currentFolder);
+            // Use newFolderParent if set, otherwise use currentFolder
+            const parentId = newFolderParent !== null ? newFolderParent : currentFolder;
+
+            // Call API to create folder
+            const newFolder = await foldersAPI.createFolder(newFolderName, parentId);
+
+            // Validate response
+            if (!newFolder || !newFolder.id || !newFolder.name) {
+                throw new Error('Invalid folder response from server');
+            }
+
+            // Close modal and clear input immediately
             setNewFolderName('');
+            setNewFolderParent(null);
             setShowNewFolderModal(false);
+
+            // Only update UI if creating in current view
+            if (parentId === currentFolder) {
+                // Optimistically add the new folder to the UI
+                setFolders(prev => [newFolder, ...prev]);
+            }
+
+            // Clear cache to prevent stale data on next load
+            clearCache();
+
+        } catch (error) {
+            console.error('Create folder error:', error);
+            alert('Failed to create folder. Please try again.');
+
+            // On error, clear cache and reload to ensure consistency
+            setNewFolderParent(null);
             clearCache();
             loadCurrentFolder();
-        } catch (error) {
-            alert('Failed to create folder');
         }
     };
 
@@ -157,6 +196,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
         setContextMenu({ x: e.pageX, y: e.pageY, item });
     };
 
+    const handleEmptySpaceContextMenu = (e) => {
+        // Only trigger if clicking on the grid/list container itself, not on items
+        if (e.target.classList.contains('items-grid') || e.target.classList.contains('items-list')) {
+            e.preventDefault();
+            setContextMenu({ x: e.pageX, y: e.pageY, item: null, isEmptySpace: true });
+        }
+    };
+
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
         document.addEventListener('click', handleClick);
@@ -174,6 +221,34 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                         📄 Upload Document
                     </button>
                 )}
+                <div className="view-toggle">
+                    <button
+                        className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                        onClick={() => setViewMode('grid')}
+                        title="Grid view"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
+                    </button>
+                    <button
+                        className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                        onClick={() => setViewMode('list')}
+                        title="List view"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div className="breadcrumbs">
@@ -196,76 +271,167 @@ function FolderBrowser({ selectedFolderId, onFolderChange }) {
                     Loading...
                 </div>
             ) : (
-                <div className="items-grid">
+                <div
+                    className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
+                    onContextMenu={handleEmptySpaceContextMenu}
+                >
                     {folders.map(item => (
-                        <div
-                            key={item.id}
-                            className={`item-card ${item.isDocument ? 'document' : 'folder'}`}
-                            onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                            onContextMenu={(e) => handleContextMenu(e, item)}
-                        >
-                            <div className="item-icon">
-                                {item.isDocument ? '📄' : '📁'}
+                        viewMode === 'grid' ? (
+                            <div
+                                key={item.id}
+                                className={`item-card ${item.isDocument ? 'document' : 'folder'}`}
+                                onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
+                                onContextMenu={(e) => handleContextMenu(e, item)}
+                            >
+                                <div className="item-icon">
+                                    {item.isDocument ? '📄' : '📁'}
+                                </div>
+                                <div className="item-name">
+                                    {item.isDocument ? `Rev ${item.revisionNumber}` : item.name}
+                                </div>
+                                {item.isDocument && (
+                                    <div className="document-files">
+                                        {item.essDesignIssuePath && (
+                                            <button
+                                                onClick={() => handleViewPDF(item, 'ess')}
+                                                className="file-btn"
+                                            >
+                                                📄 ESS Design
+                                            </button>
+                                        )}
+                                        {item.thirdPartyDesignPath && (
+                                            <button
+                                                onClick={() => handleViewPDF(item, 'thirdparty')}
+                                                className="file-btn"
+                                            >
+                                                📄 Third-Party
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                            <div className="item-name">
-                                {item.isDocument ? `Rev ${item.revisionNumber}` : item.name}
-                            </div>
-                            {item.isDocument && (
-                                <div className="document-files">
-                                    {item.essDesignIssuePath && (
-                                        <button 
-                                            onClick={() => handleViewPDF(item, 'ess')} 
-                                            className="file-btn"
-                                        >
-                                            📄 ESS Design
-                                        </button>
-                                    )}
-                                    {item.thirdPartyDesignPath && (
-                                        <button 
-                                            onClick={() => handleViewPDF(item, 'thirdparty')} 
-                                            className="file-btn"
-                                        >
-                                            📄 Third-Party
-                                        </button>
+                        ) : (
+                            <div
+                                key={item.id}
+                                className={`list-item ${item.isDocument ? 'document' : 'folder'}`}
+                                onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
+                                onContextMenu={(e) => handleContextMenu(e, item)}
+                            >
+                                <div className="list-item-icon">
+                                    {item.isDocument ? '📄' : '📁'}
+                                </div>
+                                <div className="list-item-info">
+                                    <div className="list-item-name">
+                                        {item.isDocument ? `Rev ${item.revisionNumber}` : item.name}
+                                    </div>
+                                    {item.isDocument && (
+                                        <div className="list-item-meta">
+                                            {item.essDesignIssuePath && <span>ESS Design</span>}
+                                            {item.essDesignIssuePath && item.thirdPartyDesignPath && <span> • </span>}
+                                            {item.thirdPartyDesignPath && <span>Third-Party</span>}
+                                        </div>
                                     )}
                                 </div>
-                            )}
-                        </div>
+                                {item.isDocument && (
+                                    <div className="list-item-actions">
+                                        {item.essDesignIssuePath && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleViewPDF(item, 'ess');
+                                                }}
+                                                className="file-btn-small"
+                                            >
+                                                ESS Design
+                                            </button>
+                                        )}
+                                        {item.thirdPartyDesignPath && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleViewPDF(item, 'thirdparty');
+                                                }}
+                                                className="file-btn-small"
+                                            >
+                                                Third-Party Design
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
                     ))}
                 </div>
             )}
 
             {contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
-                    {!contextMenu.item.isDocument && (
+                    {contextMenu.isEmptySpace && (
+                        <div onClick={() => {
+                            setNewFolderParent(currentFolder);
+                            setShowNewFolderModal(true);
+                            setContextMenu(null);
+                        }}>
+                            📁 New Folder
+                        </div>
+                    )}
+                    {contextMenu.item && !contextMenu.item.isDocument && (
                         <>
+                            <div onClick={() => {
+                                setNewFolderParent(contextMenu.item.id);
+                                setShowNewFolderModal(true);
+                                setContextMenu(null);
+                            }}>
+                                📁 New Subfolder
+                            </div>
+                            <div className="context-menu-divider"></div>
                             <div onClick={() => {
                                 setRenameTarget(contextMenu.item);
                                 setNewFolderName(contextMenu.item.name);
                                 setShowRenameModal(true);
-                            }}>Rename</div>
-                            <div onClick={() => handleDeleteFolder(contextMenu.item.id)}>Delete</div>
+                                setContextMenu(null);
+                            }}>
+                                ✏️ Rename
+                            </div>
+                            <div onClick={() => {
+                                handleDeleteFolder(contextMenu.item.id);
+                                setContextMenu(null);
+                            }}>
+                                🗑️ Delete
+                            </div>
                         </>
                     )}
-                    {contextMenu.item.isDocument && (
-                        <div onClick={() => handleDeleteDocument(contextMenu.item.id)}>Delete</div>
+                    {contextMenu.item && contextMenu.item.isDocument && (
+                        <div onClick={() => {
+                            handleDeleteDocument(contextMenu.item.id);
+                            setContextMenu(null);
+                        }}>
+                            🗑️ Delete
+                        </div>
                     )}
                 </div>
             )}
 
             {showNewFolderModal && (
-                <div className="modal-overlay" onClick={() => setShowNewFolderModal(false)}>
+                <div className="modal-overlay" onClick={() => {
+                    setShowNewFolderModal(false);
+                    setNewFolderParent(null);
+                }}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>New Folder</h3>
+                        <h3>{newFolderParent !== null && newFolderParent !== currentFolder ? 'New Subfolder' : 'New Folder'}</h3>
                         <input
                             type="text"
                             value={newFolderName}
                             onChange={(e) => setNewFolderName(e.target.value)}
                             placeholder="Folder name"
                             autoFocus
+                            onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
                         />
                         <div className="modal-actions">
-                            <button onClick={() => setShowNewFolderModal(false)}>Cancel</button>
+                            <button onClick={() => {
+                                setShowNewFolderModal(false);
+                                setNewFolderParent(null);
+                            }}>Cancel</button>
                             <button onClick={handleCreateFolder}>Create</button>
                         </div>
                     </div>

@@ -10,7 +10,45 @@
     display: flex;
     gap: 12px;
     margin-bottom: 20px;
+    align-items: center;
 }
+
+.view-toggle {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px;
+    background: var(--bg-primary);
+}
+
+.view-btn {
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    .view-btn:hover {
+        background: var(--hover-bg);
+        color: var(--text-primary);
+    }
+
+    .view-btn.active {
+        background: var(--primary-color);
+        color: #fff;
+    }
+
+    .view-btn svg {
+        display: block;
+    }
 
 .btn-new, .btn-upload {
     padding: 10px 20px;
@@ -23,10 +61,10 @@
     transition: all 0.2s;
 }
 
-.btn-new:hover, .btn-upload:hover {
-    background: var(--hover-bg);
-    border-color: var(--primary-color);
-}
+    .btn-new:hover, .btn-upload:hover {
+        background: var(--hover-bg);
+        border-color: var(--primary-color);
+    }
 
 .breadcrumbs {
     display: flex;
@@ -43,9 +81,9 @@
     transition: opacity 0.2s;
 }
 
-.breadcrumb:hover {
-    opacity: 0.8;
-}
+    .breadcrumb:hover {
+        opacity: 0.8;
+    }
 
 .breadcrumb-sep {
     color: var(--text-secondary);
@@ -57,6 +95,80 @@
     gap: 16px;
 }
 
+.items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    background: var(--bg-primary);
+    border: 1px solid transparent;
+}
+
+    .list-item:hover {
+        background: var(--hover-bg);
+        border-color: var(--border-color);
+    }
+
+    .list-item.document {
+        background: var(--card-bg);
+    }
+
+.list-item-icon {
+    font-size: 24px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.list-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.list-item-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.list-item-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.list-item-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+}
+
+.file-btn-small {
+    padding: 6px 12px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+    .file-btn-small:hover {
+        background: var(--primary-hover);
+    }
+
 .item-card {
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -67,15 +179,15 @@
     background: var(--bg-primary);
 }
 
-.item-card:hover {
-    border-color: var(--primary-color);
-    box-shadow: 0 2px 4px rgba(0,0,0,.1);
-    transform: translateY(-2px);
-}
+    .item-card:hover {
+        border-color: var(--primary-color);
+        box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        transform: translateY(-2px);
+    }
 
-.item-card.document {
-    background: var(--hover-bg);
-}
+    .item-card.document {
+        background: var(--hover-bg);
+    }
 
 .item-icon {
     font-size: 48px;
@@ -107,9 +219,9 @@
     transition: background 0.2s;
 }
 
-.file-btn:hover {
-    background: var(--primary-hover);
-}
+    .file-btn:hover {
+        background: var(--primary-hover);
+    }
 
 .context-menu {
     position: fixed;
@@ -118,20 +230,36 @@
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,.2);
     z-index: 1000;
-    min-width: 150px;
+    min-width: 180px;
+    padding: 4px 0;
 }
 
-.context-menu div {
-    padding: 10px 16px;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--text-primary);
-    transition: background 0.2s;
+    .context-menu div {
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-primary);
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+        .context-menu div:hover {
+            background: var(--hover-bg);
+        }
+
+.context-menu-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 8px;
+    padding: 0 !important;
+    cursor: default !important;
 }
 
-.context-menu div:hover {
-    background: var(--hover-bg);
-}
+    .context-menu-divider:hover {
+        background: var(--border-color) !important;
+    }
 
 .modal-overlay {
     position: fixed;
@@ -154,30 +282,30 @@
     box-shadow: 0 8px 16px rgba(0,0,0,.3);
 }
 
-.modal h3 {
-    margin: 0 0 16px 0;
-    font-size: 20px;
-    font-weight: 400;
-    color: var(--text-primary);
-}
+    .modal h3 {
+        margin: 0 0 16px 0;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--text-primary);
+    }
 
-.modal input[type="text"],
-.modal select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 14px;
-    margin-bottom: 16px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-}
+    .modal input[type="text"],
+    .modal select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        margin-bottom: 16px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
 
-.modal input[type="text"]:focus,
-.modal select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-}
+        .modal input[type="text"]:focus,
+        .modal select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
 
 .modal-actions {
     display: flex;
@@ -185,33 +313,33 @@
     gap: 12px;
 }
 
-.modal-actions button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
-}
+    .modal-actions button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
 
-.modal-actions button:first-child {
-    background: transparent;
-    color: var(--primary-color);
-    border: 1px solid var(--border-color);
-}
+        .modal-actions button:first-child {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--border-color);
+        }
 
-.modal-actions button:first-child:hover {
-    background: var(--hover-bg);
-}
+            .modal-actions button:first-child:hover {
+                background: var(--hover-bg);
+            }
 
-.modal-actions button:last-child {
-    background: var(--primary-color);
-    color: #fff;
-}
+        .modal-actions button:last-child {
+            background: var(--primary-color);
+            color: #fff;
+        }
 
-.modal-actions button:last-child:hover {
-    background: var(--primary-hover);
-}
+            .modal-actions button:last-child:hover {
+                background: var(--primary-hover);
+            }
 
 .upload-modal {
     min-width: 500px;
@@ -221,13 +349,13 @@
     margin-bottom: 16px;
 }
 
-.form-group label {
-    display: block;
-    font-size: 14px;
-    font-weight: 500;
-    margin-bottom: 6px;
-    color: var(--text-primary);
-}
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+    }
 
 .file-uploads {
     display: grid;
@@ -245,21 +373,21 @@
     transition: all 0.2s;
 }
 
-.file-upload-box:hover {
-    border-color: var(--primary-color);
-}
+    .file-upload-box:hover {
+        border-color: var(--primary-color);
+    }
 
-.file-upload-box label {
-    cursor: pointer;
-    font-size: 13px;
-    display: block;
-    color: var(--text-primary);
-}
+    .file-upload-box label {
+        cursor: pointer;
+        font-size: 13px;
+        display: block;
+        color: var(--text-primary);
+    }
 
-.file-upload-box input[type="file"] {
-    margin-top: 8px;
-    font-size: 12px;
-}
+    .file-upload-box input[type="file"] {
+        margin-top: 8px;
+        font-size: 12px;
+    }
 
 .file-selected {
     margin-top: 8px;
@@ -273,6 +401,7 @@
     padding: 40px;
     color: var(--text-secondary);
 }
+
 .loading {
     display: flex;
     align-items: center;
@@ -300,4 +429,3 @@
         transform: rotate(360deg);
     }
 }
-

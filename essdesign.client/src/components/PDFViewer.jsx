@@ -14,7 +14,7 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
         try {
             setLoading(true);
             setError(null);
-            
+
             const response = await fetch(
                 `${import.meta.env.VITE_API_URL || 'https://localhost:7001/api'}/folders/documents/${documentId}/download/${fileType}`,
                 {
@@ -25,7 +25,7 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
             );
 
             if (!response.ok) throw new Error('Failed to load PDF');
-            
+
             const data = await response.json();
             setPdfUrl(data.url);
         } catch (err) {
@@ -36,14 +36,28 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
         }
     };
 
-    const handleDownload = () => {
-        const link = document.createElement('a');
-        link.href = pdfUrl;
-        link.download = fileName;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleDownload = async () => {
+        try {
+            // Fetch the PDF as a blob
+            const response = await fetch(pdfUrl);
+            const blob = await response.blob();
+
+            // Create a download link
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName; // Use exact original filename
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback to opening in new tab if download fails
+            window.open(pdfUrl, '_blank');
+        }
     };
 
     const handleKeyDown = (e) => {
@@ -63,8 +77,8 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
                 {/* Minimal header - Google Drive style */}
                 <div className="pdf-viewer-header">
                     <div className="pdf-header-left">
-                        <button 
-                            className="pdf-close-icon" 
+                        <button
+                            className="pdf-close-icon"
                             onClick={onClose}
                             title="Close"
                         >
@@ -73,15 +87,15 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
                         <span className="pdf-filename-small">{fileName}</span>
                     </div>
                     <div className="pdf-header-right">
-                        <button 
-                            className="pdf-icon-btn" 
+                        <button
+                            className="pdf-icon-btn"
                             onClick={handleDownload}
                             title="Download"
                         >
                             ⬇
                         </button>
-                        <button 
-                            className="pdf-icon-btn" 
+                        <button
+                            className="pdf-icon-btn"
                             onClick={() => window.open(pdfUrl, '_blank')}
                             title="Open in new tab"
                         >
@@ -101,14 +115,14 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
                             <p>Loading PDF...</p>
                         </div>
                     )}
-                    
+
                     {error && (
                         <div className="pdf-error">
                             <p>{error}</p>
                             <button onClick={loadPDF}>Retry</button>
                         </div>
                     )}
-                    
+
                     {!loading && !error && pdfUrl && (
                         <iframe
                             src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=1`}

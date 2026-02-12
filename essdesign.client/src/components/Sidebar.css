@@ -1,20 +1,51 @@
 .sidebar {
-    width: 280px;
+    min-width: 200px;
+    max-width: 600px;
     background: var(--sidebar-bg);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
 }
+
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.2s;
+    z-index: 10;
+}
+
+    .sidebar-resize-handle:hover,
+    .sidebar-resize-handle.resizing {
+        background: var(--primary-color);
+    }
+
+    .sidebar-resize-handle::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: -2px;
+        width: 8px;
+        height: 100%;
+    }
 
 .sidebar-header {
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: 8px;
 }
 
 .home-button {
-    width: 100%;
+    flex: 1;
     padding: 10px 16px;
     background: var(--primary-color);
     color: white;
@@ -26,12 +57,34 @@
     transition: background 0.2s;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
 }
 
-.home-button:hover {
-    background: var(--primary-hover);
+    .home-button:hover {
+        background: var(--primary-hover);
+    }
+
+.new-folder-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+
+    .new-folder-button:hover {
+        background: var(--hover-bg);
+        border-color: var(--primary-color);
+    }
 
 .sidebar-content {
     flex: 1;
@@ -61,15 +114,15 @@
     color: var(--text-primary);
 }
 
-.folder-row:hover {
-    background: var(--hover-bg);
-}
+    .folder-row:hover {
+        background: var(--hover-bg);
+    }
 
-.folder-row.selected {
-    background: var(--selected-bg);
-    color: var(--primary-color);
-    font-weight: 500;
-}
+    .folder-row.selected {
+        background: var(--selected-bg);
+        color: var(--primary-color);
+        font-weight: 500;
+    }
 
 .folder-arrow {
     font-size: 10px;
@@ -77,11 +130,17 @@
     cursor: pointer;
     width: 12px;
     display: inline-block;
+    opacity: 0.6;
 }
 
-.folder-arrow.expanded {
-    transform: rotate(90deg);
-}
+    .folder-arrow.expanded {
+        transform: rotate(90deg);
+    }
+
+    .folder-arrow.empty {
+        opacity: 0.3;
+        pointer-events: none;
+    }
 
 .folder-spacer {
     width: 12px;
@@ -98,6 +157,42 @@
     white-space: nowrap;
 }
 
+.document-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    margin: 2px 8px;
+}
+
+    .document-row:hover {
+        background: var(--hover-bg);
+        color: var(--text-primary);
+    }
+
+    .document-row:active {
+        background: var(--selected-bg);
+    }
+
+.document-spacer {
+    width: 12px;
+}
+
+.document-icon {
+    font-size: 14px;
+}
+
+.document-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .folder-children {
     animation: slideDown 0.2s ease-out;
 }
@@ -107,6 +202,7 @@
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -127,9 +223,115 @@
     border-radius: 4px;
 }
 
-.sidebar-content::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
+    .sidebar-content::-webkit-scrollbar-thumb:hover {
+        background: var(--scrollbar-thumb-hover);
+    }
+
+/* Context menu for sidebar */
+.sidebar-context-menu {
+    position: fixed;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    z-index: 1000;
+    min-width: 180px;
+    padding: 4px 0;
 }
+
+    .sidebar-context-menu div {
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--text-primary);
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+        .sidebar-context-menu div:hover {
+            background: var(--hover-bg);
+        }
+
+/* Modal overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.modal {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 400px;
+    box-shadow: 0 8px 16px rgba(0,0,0,.3);
+}
+
+    .modal h3 {
+        margin: 0 0 16px 0;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--text-primary);
+    }
+
+    .modal input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        margin-bottom: 16px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+        .modal input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+    .modal-actions button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+        .modal-actions button:first-child {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--border-color);
+        }
+
+            .modal-actions button:first-child:hover {
+                background: var(--hover-bg);
+            }
+
+        .modal-actions button:last-child {
+            background: var(--primary-color);
+            color: #fff;
+        }
+
+            .modal-actions button:last-child:hover {
+                background: var(--primary-hover);
+            }
 
 /* Responsive */
 @media (max-width: 768px) {

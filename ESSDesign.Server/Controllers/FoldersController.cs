@@ -63,7 +63,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> CreateFolder([FromBody] CreateFolderRequest request)
+        public async Task<ActionResult<FolderResponse>> CreateFolder([FromBody] CreateFolderRequest request)
         {
             try
             {
@@ -71,7 +71,21 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Folder name is required" });
 
                 var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId);
-                return Ok(new { id = folderId, message = "Folder created" });
+
+                // Fetch and return the complete folder object
+                var folderResponse = new FolderResponse
+                {
+                    Id = folderId,
+                    Name = request.Name,
+                    ParentFolderId = request.ParentFolderId,
+                    SubFolders = new List<FolderResponse>(),
+                    Documents = new List<DocumentResponse>(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _logger.LogInformation("Created folder {FolderId} with name {Name}", folderId, request.Name);
+                return Ok(folderResponse);
             }
             catch (Exception ex)
             {

@@ -93,7 +93,7 @@ export const foldersAPI = {
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
 
         const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
-            headers: { 
+            headers: {
                 'Content-Type': 'multipart/form-data',
                 'Authorization': `Bearer ${localStorage.getItem('access_token')}`
             }
@@ -112,4 +112,16 @@ export const foldersAPI = {
     }
 };
 
-export default { authAPI, foldersAPI };
+export const preferencesAPI = {
+    getPreferences: async () => {
+        const response = await apiClient.get('/userpreferences');
+        return response.data;
+    },
+
+    updatePreferences: async (preferences) => {
+        const response = await apiClient.put('/userpreferences', preferences);
+        return response.data;
+    }
+};
+
+export default { authAPI, foldersAPI, preferencesAPI };

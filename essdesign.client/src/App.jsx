@@ -2,20 +2,37 @@ import React, { useState, useEffect } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
-import { authAPI } from './services/api';
+import PDFViewer from './components/PDFViewer';
+import { authAPI, preferencesAPI } from './services/api';
+import logo from 'C:/Users/User/source/repos/Noflashed/ESSDesign/essdesign.client/Public/logo.png';
 import './App.css';
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [theme, setTheme] = useState('light');
-    const [selectedFolderId, setSelectedFolderId] = useState(null);
+    const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+    const [selectedFolderId, setSelectedFolderId] = useState(() => {
+        const saved = localStorage.getItem('selectedFolderId');
+        return saved && saved !== 'null' ? saved : null;
+    });
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        const saved = localStorage.getItem('sidebarWidth');
+        return saved ? parseInt(saved) : 280;
+    });
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'grid');
+    const [pdfViewer, setPdfViewer] = useState(null);
+    const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
     useEffect(() => {
         checkAuth();
-        loadTheme();
     }, []);
+
+    useEffect(() => {
+        if (isAuthenticated && !preferencesLoaded) {
+            loadPreferences();
+        }
+    }, [isAuthenticated, preferencesLoaded]);
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
@@ -30,13 +47,49 @@ function App() {
         setLoading(false);
     };
 
-    const loadTheme = () => {
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        setTheme(savedTheme);
+    const loadPreferences = async () => {
+        try {
+            const prefs = await preferencesAPI.getPreferences();
+
+            // Update state from backend
+            if (prefs.selectedFolderId !== undefined) {
+                setSelectedFolderId(prefs.selectedFolderId);
+                localStorage.setItem('selectedFolderId', prefs.selectedFolderId || '');
+            }
+            if (prefs.theme) {
+                setTheme(prefs.theme);
+                localStorage.setItem('theme', prefs.theme);
+            }
+            if (prefs.viewMode) {
+                setViewMode(prefs.viewMode);
+                localStorage.setItem('viewMode', prefs.viewMode);
+            }
+            if (prefs.sidebarWidth) {
+                setSidebarWidth(prefs.sidebarWidth);
+                localStorage.setItem('sidebarWidth', prefs.sidebarWidth.toString());
+            }
+
+            setPreferencesLoaded(true);
+        } catch (error) {
+            console.error('Error loading preferences:', error);
+            // Continue with localStorage defaults
+            setPreferencesLoaded(true);
+        }
+    };
+
+    const savePreferencesToBackend = async (updates) => {
+        try {
+            await preferencesAPI.updatePreferences(updates);
+        } catch (error) {
+            console.error('Error saving preferences:', error);
+        }
     };
 
     const toggleTheme = () => {
-        setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        savePreferencesToBackend({ theme: newTheme });
     };
 
     const handleLoginSuccess = () => {
@@ -55,6 +108,48 @@ function App() {
 
     const handleFolderSelect = (folderId) => {
         setSelectedFolderId(folderId);
+
+        // Save to localStorage
+        if (folderId === null) {
+            localStorage.removeItem('selectedFolderId');
+        } else {
+            localStorage.setItem('selectedFolderId', folderId);
+        }
+
+        // Save to backend
+        savePreferencesToBackend({ selectedFolderId: folderId });
+    };
+
+    const handleSidebarResize = (newWidth) => {
+        setSidebarWidth(newWidth);
+        localStorage.setItem('sidebarWidth', newWidth.toString());
+        savePreferencesToBackend({ sidebarWidth: newWidth });
+    };
+
+    const handleViewModeChange = (newViewMode) => {
+        setViewMode(newViewMode);
+        localStorage.setItem('viewMode', newViewMode);
+        savePreferencesToBackend({ viewMode: newViewMode });
+    };
+
+    const handleDocumentClick = (document) => {
+        // Determine which PDF to show (prioritize ESS Design Issue)
+        const hasEssDesign = document.essDesignIssuePath;
+        const hasThirdParty = document.thirdPartyDesignPath;
+
+        if (hasEssDesign) {
+            setPdfViewer({
+                documentId: document.id,
+                fileName: document.essDesignIssueName || 'document.pdf',
+                fileType: 'ess'
+            });
+        } else if (hasThirdParty) {
+            setPdfViewer({
+                documentId: document.id,
+                fileName: document.thirdPartyDesignName || 'document.pdf',
+                fileType: 'thirdparty'
+            });
+        }
     };
 
     if (loading) {
@@ -74,8 +169,7 @@ function App() {
             <header className="app-header">
                 <div className="header-left">
                     <div className="logo">
-                        <span className="logo-icon">📐</span>
-                        <span className="logo-text">ESS Design</span>
+                        <img src={logo} alt="ErectSafe Scaffolding" className="logo-icon" />
                     </div>
                 </div>
                 <div className="header-right">
@@ -90,19 +184,33 @@ function App() {
                     </div>
                 </div>
             </header>
-            
+
             <div className="app-body">
-                <Sidebar 
+                <Sidebar
                     onFolderSelect={handleFolderSelect}
                     currentFolderId={selectedFolderId}
+                    width={sidebarWidth}
+                    onResize={handleSidebarResize}
+                    onDocumentClick={handleDocumentClick}
                 />
                 <main className="app-main">
-                    <FolderBrowser 
+                    <FolderBrowser
                         selectedFolderId={selectedFolderId}
                         onFolderChange={handleFolderSelect}
+                        viewMode={viewMode}
+                        onViewModeChange={handleViewModeChange}
                     />
                 </main>
             </div>
+
+            {pdfViewer && (
+                <PDFViewer
+                    documentId={pdfViewer.documentId}
+                    fileName={pdfViewer.fileName}
+                    fileType={pdfViewer.fileType}
+                    onClose={() => setPdfViewer(null)}
+                />
+            )}
         </div>
     );
 }

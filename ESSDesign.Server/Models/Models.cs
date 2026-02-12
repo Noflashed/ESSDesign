@@ -59,6 +59,31 @@ namespace ESSDesign.Server.Models
         public DateTime UpdatedAt { get; set; }
     }
 
+    [Table("user_preferences")]
+    public class UserPreferences : BaseModel
+    {
+        [PrimaryKey("user_id", false)]
+        public Guid UserId { get; set; }
+
+        [Column("selected_folder_id")]
+        public Guid? SelectedFolderId { get; set; }
+
+        [Column("theme")]
+        public string Theme { get; set; } = "light";
+
+        [Column("view_mode")]
+        public string ViewMode { get; set; } = "grid";
+
+        [Column("sidebar_width")]
+        public int SidebarWidth { get; set; } = 280;
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public class SignUpRequest
     {
         public string Email { get; set; } = string.Empty;
@@ -135,5 +160,24 @@ namespace ESSDesign.Server.Models
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
+    }
+
+    public class UserPreferencesRequest
+    {
+        public Guid? SelectedFolderId { get; set; }
+        public string? Theme { get; set; }
+        public string? ViewMode { get; set; }
+        public int? SidebarWidth { get; set; }
+    }
+
+    public class UserPreferencesResponse
+    {
+        public Guid UserId { get; set; }
+        public Guid? SelectedFolderId { get; set; }
+        public string Theme { get; set; } = "light";
+        public string ViewMode { get; set; } = "grid";
+        public int SidebarWidth { get; set; } = 280;
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }
