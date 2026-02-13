@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { foldersAPI } from '../services/api';
+import { foldersAPI, authAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import PDFViewer from './PDFViewer';
+import { useToast } from './Toast';
 import './FolderBrowser.css';
 
 // Helper function to format file size
@@ -21,6 +22,7 @@ const formatDate = (dateString) => {
 };
 
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
+    const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -125,83 +127,145 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
 
+        const parentId = newFolderParent !== null ? newFolderParent : currentFolder;
+        const user = authAPI.getCurrentUser();
+
+        // 1. Create optimistic folder object
+        const optimisticFolder = {
+            id: crypto.randomUUID(), // Temporary ID
+            name: newFolderName,
+            parentFolderId: parentId,
+            userId: user?.id,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            subFolders: [],
+            documents: [],
+            _optimistic: true // Flag for styling
+        };
+
+        // 2. Update UI IMMEDIATELY
+        setNewFolderName('');
+        setNewFolderParent(null);
+        setShowNewFolderModal(false);
+
+        if (parentId === currentFolder) {
+            setFolders(prev => [optimisticFolder, ...prev]);
+        }
+
+        // 3. Show toast
+        const toastId = showToast('Creating folder...', 'info', 0);
+
+        // 4. Send to server in background
         try {
-            // Use newFolderParent if set, otherwise use currentFolder
-            const parentId = newFolderParent !== null ? newFolderParent : currentFolder;
+            const serverFolder = await foldersAPI.createFolder(newFolderName, parentId);
 
-            // Call API to create folder
-            const newFolder = await foldersAPI.createFolder(newFolderName, parentId);
+            // 5. Replace optimistic with real data
+            setFolders(prev => prev.map(f =>
+                f.id === optimisticFolder.id ? serverFolder : f
+            ));
 
-            // Validate response
-            if (!newFolder || !newFolder.id || !newFolder.name) {
-                throw new Error('Invalid folder response from server');
-            }
-
-            // Close modal and clear input immediately
-            setNewFolderName('');
-            setNewFolderParent(null);
-            setShowNewFolderModal(false);
-
-            // Only update UI if creating in current view
-            if (parentId === currentFolder) {
-                // Optimistically add the new folder to the UI
-                setFolders(prev => [newFolder, ...prev]);
-            }
-
-            // Clear cache to prevent stale data on next load
             clearCache();
-
-            // Trigger refresh of sidebar and other components
             if (onRefreshNeeded) onRefreshNeeded();
-
+            updateToast(toastId, 'Folder created!', 'success');
         } catch (error) {
+            // 6. Rollback on error
+            setFolders(prev => prev.filter(f => f.id !== optimisticFolder.id));
+            updateToast(toastId, 'Failed to create folder', 'error');
             console.error('Create folder error:', error);
-            alert('Failed to create folder. Please try again.');
-
-            // On error, clear cache and reload to ensure consistency
-            setNewFolderParent(null);
-            clearCache();
-            loadCurrentFolder();
-            if (onRefreshNeeded) onRefreshNeeded();
         }
     };
 
     const handleRenameFolder = async () => {
         if (!newFolderName.trim() || !renameTarget) return;
+
+        const oldName = renameTarget.name;
+        const folderId = renameTarget.id;
+
+        // 1. Update UI IMMEDIATELY
+        setFolders(prev => prev.map(f =>
+            f.id === folderId ? { ...f, name: newFolderName, _optimistic: true } : f
+        ));
+
+        setNewFolderName('');
+        setRenameTarget(null);
+        setShowRenameModal(false);
+
+        // 2. Show toast
+        const toastId = showToast('Renaming folder...', 'info', 0);
+
+        // 3. Send to server in background
         try {
-            await foldersAPI.renameFolder(renameTarget.id, newFolderName);
-            setNewFolderName('');
-            setRenameTarget(null);
-            setShowRenameModal(false);
+            await foldersAPI.renameFolder(folderId, newFolderName);
+
+            // Remove optimistic flag
+            setFolders(prev => prev.map(f =>
+                f.id === folderId ? { ...f, _optimistic: false } : f
+            ));
+
             clearCache();
-            loadCurrentFolder();
             if (onRefreshNeeded) onRefreshNeeded();
+            updateToast(toastId, 'Folder renamed!', 'success');
         } catch (error) {
-            alert('Failed to rename folder');
+            // 4. Rollback on error
+            setFolders(prev => prev.map(f =>
+                f.id === folderId ? { ...f, name: oldName, _optimistic: false } : f
+            ));
+            updateToast(toastId, 'Failed to rename folder', 'error');
+            console.error('Rename folder error:', error);
         }
     };
 
     const handleDeleteFolder = async (folderId) => {
         if (!confirm('Delete this folder and all its contents?')) return;
+
+        // 1. Save current state for rollback
+        const currentFolders = [...folders];
+
+        // 2. Remove from UI IMMEDIATELY
+        setFolders(prev => prev.filter(f => f.id !== folderId));
+
+        // 3. Show toast notification
+        const toastId = showToast('Deleting folder...', 'info', 0);
+
+        // 4. Send to server in background
         try {
             await foldersAPI.deleteFolder(folderId);
+
             clearCache();
-            loadCurrentFolder();
             if (onRefreshNeeded) onRefreshNeeded();
+            updateToast(toastId, 'Folder deleted', 'success');
         } catch (error) {
-            alert('Failed to delete folder');
+            // 5. Rollback on error
+            setFolders(currentFolders);
+            updateToast(toastId, 'Failed to delete folder', 'error');
+            console.error('Delete folder error:', error);
         }
     };
 
     const handleDeleteDocument = async (documentId) => {
         if (!confirm('Delete this document?')) return;
+
+        // 1. Save current state for rollback
+        const currentFolders = [...folders];
+
+        // 2. Remove from UI IMMEDIATELY
+        setFolders(prev => prev.filter(f => f.id !== documentId));
+
+        // 3. Show toast notification
+        const toastId = showToast('Deleting document...', 'info', 0);
+
+        // 4. Send to server in background
         try {
             await foldersAPI.deleteDocument(documentId);
+
             clearCache();
-            loadCurrentFolder();
             if (onRefreshNeeded) onRefreshNeeded();
+            updateToast(toastId, 'Document deleted', 'success');
         } catch (error) {
-            alert('Failed to delete document');
+            // 5. Rollback on error
+            setFolders(currentFolders);
+            updateToast(toastId, 'Failed to delete document', 'error');
+            console.error('Delete document error:', error);
         }
     };
 

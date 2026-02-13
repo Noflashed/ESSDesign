@@ -25,7 +25,7 @@ builder.Services.AddScoped<Client>(_ =>
         new SupabaseOptions
         {
             AutoRefreshToken = true,
-            AutoConnectRealtime = false
+            AutoConnectRealtime = true // ✅ Enable realtime for instant updates!
         }
     ));
 
