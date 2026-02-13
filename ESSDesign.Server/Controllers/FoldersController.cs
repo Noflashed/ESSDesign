@@ -194,6 +194,24 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpGet("search")]
+        public async Task<ActionResult<List<SearchResult>>> Search([FromQuery] string q)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+                    return BadRequest(new { error = "Search query must be at least 2 characters" });
+
+                var results = await _supabaseService.SearchAsync(q.Trim());
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("health")]
         public ActionResult Health()
         {

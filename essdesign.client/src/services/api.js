@@ -109,6 +109,11 @@ export const foldersAPI = {
     getDownloadUrl: async (documentId, type) => {
         const response = await apiClient.get(`/folders/documents/${documentId}/download/${type}`);
         return response.data; // Returns { url, fileName }
+    },
+
+    search: async (query) => {
+        const response = await apiClient.get(`/folders/search?q=${encodeURIComponent(query)}`);
+        return response.data;
     }
 };
 

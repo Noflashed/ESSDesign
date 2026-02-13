@@ -484,6 +484,70 @@ namespace ESSDesign.Server.Services
             _folderCache.Clear();
         }
 
+        public async Task<List<SearchResult>> SearchAsync(string query)
+        {
+            try
+            {
+                var queryLower = query.ToLower();
+
+                // Search folders by name (case-insensitive using ilike)
+                var foldersResponse = await _supabase
+                    .From<Folder>()
+                    .Filter("name", Postgrest.Constants.Operator.ILike, $"%{query}%")
+                    .Order("name", Postgrest.Constants.Ordering.Ascending)
+                    .Get();
+
+                var results = new List<SearchResult>();
+
+                foreach (var folder in foldersResponse.Models)
+                {
+                    // Build breadcrumb path for each folder
+                    var breadcrumbs = await GetBreadcrumbsAsync(folder.Id);
+                    var pathParts = breadcrumbs.Select(b => b.Name).ToList();
+                    // Remove the last item (itself) from the path display
+                    if (pathParts.Count > 0) pathParts.RemoveAt(pathParts.Count - 1);
+
+                    // Get documents inside this folder
+                    var documentsResponse = await _supabase
+                        .From<DesignDocument>()
+                        .Filter("folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
+                        .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
+                        .Get();
+
+                    var documents = documentsResponse.Models.Select(d => new DocumentResponse
+                    {
+                        Id = d.Id,
+                        FolderId = d.FolderId,
+                        RevisionNumber = d.RevisionNumber,
+                        EssDesignIssuePath = d.EssDesignIssuePath,
+                        EssDesignIssueName = d.EssDesignIssueName,
+                        ThirdPartyDesignPath = d.ThirdPartyDesignPath,
+                        ThirdPartyDesignName = d.ThirdPartyDesignName,
+                        UserId = d.UserId,
+                        CreatedAt = d.CreatedAt,
+                        UpdatedAt = d.UpdatedAt
+                    }).ToList();
+
+                    results.Add(new SearchResult
+                    {
+                        Id = folder.Id,
+                        Name = folder.Name,
+                        Type = "folder",
+                        ParentFolderId = folder.ParentFolderId,
+                        Path = string.Join(" / ", pathParts),
+                        Documents = documents
+                    });
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching for '{Query}'", query);
+                throw;
+            }
+        }
+
         // User Preferences Methods
         public async Task<UserPreferences?> GetUserPreferencesAsync(Guid userId)
         {
