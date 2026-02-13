@@ -72,18 +72,8 @@ namespace ESSDesign.Server.Controllers
 
                 var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, request.UserId);
 
-                // Fetch and return the complete folder object
-                var folderResponse = new FolderResponse
-                {
-                    Id = folderId,
-                    Name = request.Name,
-                    ParentFolderId = request.ParentFolderId,
-                    UserId = request.UserId,
-                    SubFolders = new List<FolderResponse>(),
-                    Documents = new List<DocumentResponse>(),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
+                // Fetch the complete folder object with owner name
+                var folderResponse = await _supabaseService.GetFolderByIdAsync(folderId);
 
                 _logger.LogInformation("Created folder {FolderId} with name {Name}", folderId, request.Name);
                 return Ok(folderResponse);
