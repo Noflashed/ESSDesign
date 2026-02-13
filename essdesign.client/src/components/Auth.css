@@ -15,28 +15,6 @@
     max-width: 460px;
     padding: 40px;
     border: 1px solid var(--border-color, #e8eaed);
-    position: relative;
-}
-
-.auth-theme-toggle-btn {
-    width: 40px;
-    height: 40px;
-    border: none;
-    background: transparent;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 20px;
-    transition: background 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: absolute;
-    top: 14px;
-    right: 14px;
-}
-
-.auth-theme-toggle-btn:hover {
-    background: var(--hover-bg, #f1f3f4);
 }
 
 .auth-header {
@@ -52,10 +30,20 @@
 }
 
 .auth-logo-image {
-    height: 92px;
+    height: 44px;
     width: auto;
     object-fit: contain;
     display: block;
+}
+
+.auth-logo .logo-text {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary, #202124);
+}
+
+:root[data-theme="dark"] .auth-logo-image {
+    filter: brightness(0) invert(1);
 }
 
 :root[data-theme="dark"] .auth-logo-image {
@@ -137,6 +125,30 @@
 .auth-button:disabled {
     background: #dadce0;
     cursor: not-allowed;
+}
+
+.auth-switch {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-secondary, #5f6368);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+}
+
+.switch-button {
+    background: none;
+    border: none;
+    color: #1a73e8;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+
+.switch-button:hover {
+    text-decoration: underline;
 }
 
 @media (max-width: 480px) {
