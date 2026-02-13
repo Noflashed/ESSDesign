@@ -99,6 +99,28 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        // Helper method to get user's display name from auth.users
+        private async Task<string?> GetUserDisplayNameAsync(string? userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return null;
+
+            try
+            {
+                // Query auth.users table via RPC or direct table access
+                var result = await _supabase.Rpc("get_user_display_name", new Dictionary<string, object>
+                {
+                    { "user_id_param", userId }
+                });
+
+                return result ?? "Unknown User";
+            }
+            catch
+            {
+                // Fallback: try to extract email from raw metadata if available
+                return "Unknown User";
+            }
+        }
+
         // Light version - only gets immediate subfolders count, no documents
         private async Task<FolderResponse> BuildFolderResponseLight(Folder folder)
         {
@@ -163,18 +185,26 @@ namespace ESSDesign.Server.Services
                 Documents = new List<DocumentResponse>()
             }).ToList();
 
-            var documents = (await documentsTask).Models.Select(d => new DocumentResponse
+            var documents = (await documentsTask).Models.Select(d =>
             {
-                Id = d.Id,
-                FolderId = d.FolderId,
-                RevisionNumber = d.RevisionNumber,
-                EssDesignIssuePath = d.EssDesignIssuePath,
-                EssDesignIssueName = d.EssDesignIssueName,
-                ThirdPartyDesignPath = d.ThirdPartyDesignPath,
-                ThirdPartyDesignName = d.ThirdPartyDesignName,
-                UserId = d.UserId,
-                CreatedAt = d.CreatedAt,
-                UpdatedAt = d.UpdatedAt
+                var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
+                return new DocumentResponse
+                {
+                    Id = d.Id,
+                    FolderId = d.FolderId,
+                    RevisionNumber = d.RevisionNumber,
+                    EssDesignIssuePath = d.EssDesignIssuePath,
+                    EssDesignIssueName = d.EssDesignIssueName,
+                    ThirdPartyDesignPath = d.ThirdPartyDesignPath,
+                    ThirdPartyDesignName = d.ThirdPartyDesignName,
+                    EssDesignFileSize = d.EssDesignFileSize,
+                    ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
+                    TotalFileSize = totalSize > 0 ? totalSize : null,
+                    UserId = d.UserId,
+                    OwnerName = null, // Will be populated below
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt
+                };
             }).ToList();
 
             return new FolderResponse
@@ -342,6 +372,7 @@ namespace ESSDesign.Server.Services
                         await UploadFileAsync(essDesign, path);
                         document.EssDesignIssuePath = path;
                         document.EssDesignIssueName = essDesign.FileName;
+                        document.EssDesignFileSize = essDesign.Length;
                     }));
                 }
 
@@ -353,6 +384,7 @@ namespace ESSDesign.Server.Services
                         await UploadFileAsync(thirdParty, path);
                         document.ThirdPartyDesignPath = path;
                         document.ThirdPartyDesignName = thirdParty.FileName;
+                        document.ThirdPartyDesignFileSize = thirdParty.Length;
                     }));
                 }
 
@@ -560,18 +592,26 @@ namespace ESSDesign.Server.Services
                         Documents = new List<DocumentResponse>()
                     }).ToList();
 
-                    var documents = (await documentsTask).Models.Select(d => new DocumentResponse
+                    var documents = (await documentsTask).Models.Select(d =>
                     {
-                        Id = d.Id,
-                        FolderId = d.FolderId,
-                        RevisionNumber = d.RevisionNumber,
-                        EssDesignIssuePath = d.EssDesignIssuePath,
-                        EssDesignIssueName = d.EssDesignIssueName,
-                        ThirdPartyDesignPath = d.ThirdPartyDesignPath,
-                        ThirdPartyDesignName = d.ThirdPartyDesignName,
-                        UserId = d.UserId,
-                        CreatedAt = d.CreatedAt,
-                        UpdatedAt = d.UpdatedAt
+                        var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
+                        return new DocumentResponse
+                        {
+                            Id = d.Id,
+                            FolderId = d.FolderId,
+                            RevisionNumber = d.RevisionNumber,
+                            EssDesignIssuePath = d.EssDesignIssuePath,
+                            EssDesignIssueName = d.EssDesignIssueName,
+                            ThirdPartyDesignPath = d.ThirdPartyDesignPath,
+                            ThirdPartyDesignName = d.ThirdPartyDesignName,
+                            EssDesignFileSize = d.EssDesignFileSize,
+                            ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
+                            TotalFileSize = totalSize > 0 ? totalSize : null,
+                            UserId = d.UserId,
+                            OwnerName = null,
+                            CreatedAt = d.CreatedAt,
+                            UpdatedAt = d.UpdatedAt
+                        };
                     }).ToList();
 
                     return new SearchResult
