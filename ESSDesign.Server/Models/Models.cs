@@ -90,6 +90,19 @@ namespace ESSDesign.Server.Models
         public DateTime UpdatedAt { get; set; }
     }
 
+    [Table("user_names")]
+    public class UserName : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        public Guid Id { get; set; }
+
+        [Column("email")]
+        public string Email { get; set; } = string.Empty;
+
+        [Column("full_name")]
+        public string FullName { get; set; } = string.Empty;
+    }
+
     public class SignUpRequest
     {
         public string Email { get; set; } = string.Empty;
