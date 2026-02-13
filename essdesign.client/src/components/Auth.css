@@ -15,6 +15,27 @@
     max-width: 460px;
     padding: 40px;
     border: 1px solid var(--border-color, #e8eaed);
+    position: relative;
+}
+
+.auth-theme-toggle-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s;
+    outline: none;
+}
+
+.auth-theme-toggle-btn:hover {
+    opacity: 0.7;
 }
 
 .auth-header {
@@ -36,11 +57,6 @@
     display: block;
 }
 
-.auth-logo .logo-text {
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text-primary, #202124);
-}
 
 :root[data-theme="dark"] .auth-logo-image {
     filter: brightness(0) invert(1);

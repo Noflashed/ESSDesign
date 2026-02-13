@@ -56,7 +56,6 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
                 <div className="auth-header">
                     <div className="auth-logo">
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
-                        <span className="logo-text">ESS Design</span>
                     </div>
                     <h2>Welcome Back</h2>
                     <p>Sign in to continue</p>
