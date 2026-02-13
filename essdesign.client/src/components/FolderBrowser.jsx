@@ -209,14 +209,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     const handleContextMenu = (e, item) => {
         e.preventDefault();
-        setContextMenu({ x: e.pageX, y: e.pageY, item });
+        setContextMenu({ x: e.clientX, y: e.clientY, item });
     };
 
     const handleEmptySpaceContextMenu = (e) => {
         // Only trigger if clicking on the grid/list container itself, not on items
         if (e.target.classList.contains('items-grid') || e.target.classList.contains('items-list')) {
             e.preventDefault();
-            setContextMenu({ x: e.pageX, y: e.pageY, item: null, isEmptySpace: true });
+            setContextMenu({ x: e.clientX, y: e.clientY, item: null, isEmptySpace: true });
         }
     };
 
