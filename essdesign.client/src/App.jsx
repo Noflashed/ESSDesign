@@ -3,6 +3,7 @@ import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import PDFViewer from './components/PDFViewer';
+import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
 
@@ -341,7 +342,8 @@ function App() {
     }
 
     return (
-        <div className="App">
+        <ToastProvider>
+            <div className="App">
             <header className="app-header">
                 <div className="header-left">
                     <div className="logo">
@@ -467,6 +469,7 @@ function App() {
                 />
             )}
         </div>
+        </ToastProvider>
     );
 }
 
