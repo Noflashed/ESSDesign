@@ -115,6 +115,13 @@ export const foldersAPI = {
         return response.data;
     },
 
+    updateDocumentRevision: async (documentId, newRevisionNumber) => {
+        const response = await apiClient.put(`/folders/documents/${documentId}/revision`, {
+            newRevisionNumber
+        });
+        return response.data;
+    },
+
     getDownloadUrl: async (documentId, type) => {
         const response = await apiClient.get(`/folders/documents/${documentId}/download/${type}`);
         return response.data; // Returns { url, fileName }

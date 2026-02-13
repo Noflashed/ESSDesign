@@ -163,6 +163,24 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("documents/{documentId}/revision")]
+        public async Task<ActionResult> UpdateDocumentRevision(Guid documentId, [FromBody] UpdateDocumentRevisionRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.NewRevisionNumber))
+                    return BadRequest(new { error = "New revision number is required" });
+
+                await _supabaseService.UpdateDocumentRevisionAsync(documentId, request.NewRevisionNumber);
+                return Ok(new { message = "Document revision updated" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating document revision");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("documents/{documentId}/download/{type}")]
         public async Task<ActionResult> DownloadDocument(Guid documentId, string type)
         {
