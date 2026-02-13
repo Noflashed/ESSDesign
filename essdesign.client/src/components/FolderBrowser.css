@@ -127,6 +127,28 @@
     padding: 0 8px;
 }
 
+.list-header .sortable {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+}
+
+    .list-header .sortable:hover {
+        color: var(--primary-color);
+    }
+
+    .list-header .sortable.active {
+        color: var(--primary-color);
+    }
+
+.sort-arrow {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
 .list-header-actions {
     min-width: 200px;
 }

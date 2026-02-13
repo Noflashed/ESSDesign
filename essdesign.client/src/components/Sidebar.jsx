@@ -9,8 +9,10 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
     const [loading, setLoading] = useState(true);
     const [contextMenu, setContextMenu] = useState(null);
     const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+    const [showRenameModal, setShowRenameModal] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderParent, setNewFolderParent] = useState(null);
+    const [renameTarget, setRenameTarget] = useState(null);
     const [isResizing, setIsResizing] = useState(false);
 
     useEffect(() => {
@@ -145,6 +147,62 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
         }
     };
 
+    const handleRenameFolder = async () => {
+        if (!newFolderName.trim() || !renameTarget) return;
+
+        try {
+            await foldersAPI.renameFolder(renameTarget.id, newFolderName);
+
+            // Update folder in tree
+            setFolders(prev => renameFolderInTree(prev, renameTarget.id, newFolderName));
+
+            // Close modal
+            setNewFolderName('');
+            setRenameTarget(null);
+            setShowRenameModal(false);
+
+            // Clear cache
+            setLoadedFolders(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(renameTarget.id);
+                return newMap;
+            });
+
+        } catch (error) {
+            console.error('Rename folder error:', error);
+            alert('Failed to rename folder');
+            loadRootFolders(); // Reload on error
+        }
+    };
+
+    const handleDeleteFolder = async (folderId) => {
+        if (!confirm('Delete this folder and all its contents?')) return;
+
+        try {
+            await foldersAPI.deleteFolder(folderId);
+
+            // Remove folder from tree
+            setFolders(prev => removeFolderFromTree(prev, folderId));
+
+            // Clear cache
+            setLoadedFolders(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(folderId);
+                return newMap;
+            });
+
+            // If we're currently viewing the deleted folder, go to home
+            if (currentFolderId === folderId) {
+                onFolderSelect(null);
+            }
+
+        } catch (error) {
+            console.error('Delete folder error:', error);
+            alert('Failed to delete folder');
+            loadRootFolders(); // Reload on error
+        }
+    };
+
     const addFolderToTree = (items, parentId, newFolder) => {
         return items.map(item => {
             if (item.id === parentId) {
@@ -156,6 +214,29 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
             }
             return item;
         });
+    };
+
+    const renameFolderInTree = (items, folderId, newName) => {
+        return items.map(item => {
+            if (item.id === folderId) {
+                return { ...item, name: newName };
+            }
+            if (item.subFolders && item.subFolders.length > 0) {
+                return { ...item, subFolders: renameFolderInTree(item.subFolders, folderId, newName) };
+            }
+            return item;
+        });
+    };
+
+    const removeFolderFromTree = (items, folderId) => {
+        return items
+            .filter(item => item.id !== folderId)
+            .map(item => {
+                if (item.subFolders && item.subFolders.length > 0) {
+                    return { ...item, subFolders: removeFolderFromTree(item.subFolders, folderId) };
+                }
+                return item;
+            });
     };
 
     const handleContextMenu = (e, folder) => {
@@ -315,6 +396,21 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                     }}>
                         📁 New Subfolder
                     </div>
+                    <div className="context-menu-divider"></div>
+                    <div onClick={() => {
+                        setRenameTarget(contextMenu.folder);
+                        setNewFolderName(contextMenu.folder.name);
+                        setShowRenameModal(true);
+                        setContextMenu(null);
+                    }}>
+                        ✏️ Rename
+                    </div>
+                    <div onClick={() => {
+                        handleDeleteFolder(contextMenu.folder.id);
+                        setContextMenu(null);
+                    }}>
+                        🗑️ Delete
+                    </div>
                 </div>
             )}
 
@@ -341,6 +437,34 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                                 setNewFolderName('');
                             }}>Cancel</button>
                             <button onClick={handleCreateFolder}>Create</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showRenameModal && (
+                <div className="modal-overlay" onClick={() => {
+                    setShowRenameModal(false);
+                    setRenameTarget(null);
+                    setNewFolderName('');
+                }}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <h3>Rename Folder</h3>
+                        <input
+                            type="text"
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            placeholder="Folder name"
+                            autoFocus
+                            onKeyPress={(e) => e.key === 'Enter' && handleRenameFolder()}
+                        />
+                        <div className="modal-actions">
+                            <button onClick={() => {
+                                setShowRenameModal(false);
+                                setRenameTarget(null);
+                                setNewFolderName('');
+                            }}>Cancel</button>
+                            <button onClick={handleRenameFolder}>Rename</button>
                         </div>
                     </div>
                 </div>
