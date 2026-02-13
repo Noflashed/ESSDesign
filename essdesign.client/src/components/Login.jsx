@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { authAPI } from '../services/api';
 import './Auth.css';
 
+// Same logo URL used in App.jsx header
+const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+
 function Login({ onLoginSuccess }) {
     const [formData, setFormData] = useState({
         email: '',
@@ -38,7 +41,7 @@ function Login({ onLoginSuccess }) {
             <div className="auth-card">
                 <div className="auth-header">
                     <div className="auth-logo">
-                        <span className="logo-icon">📐</span>
+                        <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
                         <span className="logo-text">ESS Design</span>
                     </div>
                     <h2>Welcome Back</h2>
