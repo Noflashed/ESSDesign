@@ -190,11 +190,18 @@ function App() {
         }
     };
 
-    const toggleTheme = () => {
-        const newTheme = theme === 'light' ? 'dark' : 'light';
+    const applyTheme = (newTheme, persistToBackend = true) => {
         setTheme(newTheme);
         localStorage.setItem('theme', newTheme);
-        savePreferencesToBackend({ theme: newTheme });
+
+        if (persistToBackend && isAuthenticated) {
+            savePreferencesToBackend({ theme: newTheme });
+        }
+    };
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        applyTheme(newTheme, true);
     };
 
     const handleLoginSuccess = () => {
@@ -325,7 +332,7 @@ function App() {
     }
 
     if (!isAuthenticated) {
-        return <Login onLoginSuccess={handleLoginSuccess} />;
+        return <Login onLoginSuccess={handleLoginSuccess} theme={theme} onThemeChange={(value) => applyTheme(value, false)} />;
     }
 
     return (

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { authAPI } from '../services/api';
 import './Auth.css';
 
-function Login({ onLoginSuccess }) {
+// Same logo URL used in App.jsx header
+const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+
+function Login({ onLoginSuccess, theme = 'light', onThemeChange }) {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -36,10 +39,26 @@ function Login({ onLoginSuccess }) {
     return (
         <div className="auth-container">
             <div className="auth-card">
+                <div className="auth-theme-toggle" role="group" aria-label="Theme selection">
+                    <button
+                        type="button"
+                        className={`auth-theme-btn ${theme === 'light' ? 'active' : ''}`}
+                        onClick={() => onThemeChange?.('light')}
+                    >
+                        ☀️ Light
+                    </button>
+                    <button
+                        type="button"
+                        className={`auth-theme-btn ${theme === 'dark' ? 'active' : ''}`}
+                        onClick={() => onThemeChange?.('dark')}
+                    >
+                        🌙 Dark
+                    </button>
+                </div>
+
                 <div className="auth-header">
                     <div className="auth-logo">
-                        <span className="logo-icon">📐</span>
-                        <span className="logo-text">ESS Design</span>
+                        <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
                     </div>
                     <h2>Welcome Back</h2>
                     <p>Sign in to continue</p>
