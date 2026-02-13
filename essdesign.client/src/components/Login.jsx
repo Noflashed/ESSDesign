@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { authAPI } from '../services/api';
 import './Auth.css';
 
-// Same logo URL used in App.jsx header
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function Login({ onLoginSuccess }) {

@@ -47,6 +47,10 @@
     filter: brightness(0) invert(1);
 }
 
+:root[data-theme="dark"] .auth-logo-image {
+    filter: brightness(0) invert(1);
+}
+
 .auth-header h2 {
     font-size: 24px;
     font-weight: 500;
