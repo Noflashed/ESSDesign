@@ -49,6 +49,12 @@ namespace ESSDesign.Server.Models
         [Column("third_party_design_name")]
         public string? ThirdPartyDesignName { get; set; }
 
+        [Column("ess_design_file_size")]
+        public long? EssDesignFileSize { get; set; }
+
+        [Column("third_party_design_file_size")]
+        public long? ThirdPartyDesignFileSize { get; set; }
+
         [Column("user_id")]
         public string? UserId { get; set; }
 
@@ -128,6 +134,8 @@ namespace ESSDesign.Server.Models
         public string RevisionNumber { get; set; } = string.Empty;
         public IFormFile? EssDesignIssue { get; set; }
         public IFormFile? ThirdPartyDesign { get; set; }
+        public long? EssDesignFileSize { get; set; }
+        public long? ThirdPartyDesignFileSize { get; set; }
     }
 
     public class FolderResponse
@@ -136,8 +144,10 @@ namespace ESSDesign.Server.Models
         public string Name { get; set; } = string.Empty;
         public Guid? ParentFolderId { get; set; }
         public string? UserId { get; set; }
+        public string? OwnerName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public long? FileSize { get; set; }
         public List<FolderResponse> SubFolders { get; set; } = new();
         public List<DocumentResponse> Documents { get; set; } = new();
     }
@@ -151,7 +161,11 @@ namespace ESSDesign.Server.Models
         public string? EssDesignIssueName { get; set; }
         public string? ThirdPartyDesignPath { get; set; }
         public string? ThirdPartyDesignName { get; set; }
+        public long? EssDesignFileSize { get; set; }
+        public long? ThirdPartyDesignFileSize { get; set; }
+        public long? TotalFileSize { get; set; }
         public string? UserId { get; set; }
+        public string? OwnerName { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

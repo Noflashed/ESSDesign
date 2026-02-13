@@ -4,6 +4,22 @@ import UploadDocumentModal from './UploadDocumentModal';
 import PDFViewer from './PDFViewer';
 import './FolderBrowser.css';
 
+// Helper function to format file size
+const formatFileSize = (bytes) => {
+    if (!bytes || bytes === 0) return '—';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+};
+
+// Helper function to format date
+const formatDate = (dateString) => {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+};
+
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange }) {
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
@@ -271,11 +287,22 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     Loading...
                 </div>
             ) : (
-                <div
-                    className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
-                    onContextMenu={handleEmptySpaceContextMenu}
-                >
-                    {folders.map(item => (
+                <>
+                    {viewMode === 'list' && (
+                        <div className="list-header">
+                            <div className="list-header-icon"></div>
+                            <div className="list-header-name">Name</div>
+                            <div className="list-header-owner">Owner</div>
+                            <div className="list-header-modified">Date Modified</div>
+                            <div className="list-header-size">File Size</div>
+                            <div className="list-header-actions"></div>
+                        </div>
+                    )}
+                    <div
+                        className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
+                        onContextMenu={handleEmptySpaceContextMenu}
+                    >
+                        {folders.map(item => (
                         viewMode === 'grid' ? (
                             <div
                                 key={item.id}
@@ -332,6 +359,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         </div>
                                     )}
                                 </div>
+                                <div className="list-item-owner">
+                                    {item.ownerName || 'Unknown'}
+                                </div>
+                                <div className="list-item-modified">
+                                    {formatDate(item.updatedAt || item.createdAt)}
+                                </div>
+                                <div className="list-item-size">
+                                    {item.isDocument ? formatFileSize(item.totalFileSize) : '—'}
+                                </div>
                                 {item.isDocument && (
                                     <div className="list-item-actions">
                                         {item.essDesignIssuePath && (
@@ -360,8 +396,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 )}
                             </div>
                         )
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                </>
             )}
 
             {contextMenu && (
