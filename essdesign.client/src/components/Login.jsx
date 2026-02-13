@@ -4,7 +4,7 @@ import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
-function Login({ onLoginSuccess }) {
+function Login({ onLoginSuccess, theme, onThemeChange }) {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
