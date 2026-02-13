@@ -126,6 +126,7 @@ function App() {
     const [searchResults, setSearchResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
     const searchRef = useRef(null);
     const searchTimerRef = useRef(null);
 
@@ -242,6 +243,10 @@ function App() {
         setViewMode(newViewMode);
         localStorage.setItem('viewMode', newViewMode);
         savePreferencesToBackend({ viewMode: newViewMode });
+    };
+
+    const triggerRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
     };
 
     const handleSearch = useCallback((query) => {
@@ -437,6 +442,7 @@ function App() {
                 <Sidebar
                     onFolderSelect={handleFolderSelect}
                     currentFolderId={selectedFolderId}
+                    refreshTrigger={refreshTrigger}
                     width={sidebarWidth}
                     onResize={handleSidebarResize}
                     onDocumentClick={handleDocumentClick}
@@ -447,6 +453,7 @@ function App() {
                         onFolderChange={handleFolderSelect}
                         viewMode={viewMode}
                         onViewModeChange={handleViewModeChange}
+                        onRefreshNeeded={triggerRefresh}
                     />
                 </main>
             </div>

@@ -20,7 +20,7 @@ const formatDate = (dateString) => {
     return date.toLocaleDateString('en-US', options);
 };
 
-function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -151,6 +151,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             // Clear cache to prevent stale data on next load
             clearCache();
 
+            // Trigger refresh of sidebar and other components
+            if (onRefreshNeeded) onRefreshNeeded();
+
         } catch (error) {
             console.error('Create folder error:', error);
             alert('Failed to create folder. Please try again.');
@@ -159,6 +162,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setNewFolderParent(null);
             clearCache();
             loadCurrentFolder();
+            if (onRefreshNeeded) onRefreshNeeded();
         }
     };
 
@@ -171,6 +175,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setShowRenameModal(false);
             clearCache();
             loadCurrentFolder();
+            if (onRefreshNeeded) onRefreshNeeded();
         } catch (error) {
             alert('Failed to rename folder');
         }
@@ -182,6 +187,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             await foldersAPI.deleteFolder(folderId);
             clearCache();
             loadCurrentFolder();
+            if (onRefreshNeeded) onRefreshNeeded();
         } catch (error) {
             alert('Failed to delete folder');
         }
@@ -193,6 +199,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             await foldersAPI.deleteDocument(documentId);
             clearCache();
             loadCurrentFolder();
+            if (onRefreshNeeded) onRefreshNeeded();
         } catch (error) {
             alert('Failed to delete document');
         }
@@ -360,7 +367,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     )}
                                 </div>
                                 <div className="list-item-owner">
-                                    {item.ownerName || 'Unknown'}
+                                    {item.ownerName || (item.userId ? item.userId.slice(0, 8) + '...' : 'Unknown')}
                                 </div>
                                 <div className="list-item-modified">
                                     {formatDate(item.updatedAt || item.createdAt)}
@@ -501,6 +508,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         setShowUploadModal(false);
                         clearCache();
                         loadCurrentFolder();
+                        if (onRefreshNeeded) onRefreshNeeded();
                     }}
                 />
             )}
