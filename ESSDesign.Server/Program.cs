@@ -32,14 +32,20 @@ builder.Services.AddScoped<Client>(_ =>
 // Register Supabase Service
 builder.Services.AddScoped<SupabaseService>();
 
-// Configure CORS - Allow all origins (temporary for testing)
+// Configure CORS - Allow production and development origins
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReact", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+                "https://essdesign.app",
+                "https://www.essdesign.app",
+                "http://localhost:5173",
+                "http://localhost:3000"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
