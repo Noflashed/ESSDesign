@@ -12,7 +12,7 @@
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
     padding: 40px;
     border: 1px solid var(--border-color, #e8eaed);
 }
@@ -26,7 +26,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
     margin-bottom: 24px;
 }
 
@@ -156,9 +155,9 @@
     .auth-card {
         padding: 24px;
     }
-    
-    .auth-logo .logo-text {
-        font-size: 24px;
+
+    .auth-logo-image {
+        height: 74px;
     }
 }
 

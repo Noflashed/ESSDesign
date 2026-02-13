@@ -35,9 +35,24 @@ function Login({ onLoginSuccess }) {
         }
     };
 
+    const handleThemeToggle = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        onThemeChange?.(newTheme);
+    };
+
     return (
         <div className="auth-container">
             <div className="auth-card">
+                <button
+                    type="button"
+                    className="auth-theme-toggle-btn"
+                    onClick={handleThemeToggle}
+                    title="Toggle theme"
+                    aria-label="Toggle theme"
+                >
+                    {theme === 'light' ? '🌙' : '☀️'}
+                </button>
+
                 <div className="auth-header">
                     <div className="auth-logo">
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
