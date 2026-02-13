@@ -175,6 +175,13 @@ function App() {
         handleFolderSelect(result.id);
     };
 
+    const handleSearchSubfolderClick = (subfolder) => {
+        setSearchQuery('');
+        setShowSearchResults(false);
+        setExpandedResults(new Set());
+        handleFolderSelect(subfolder.id);
+    };
+
     const toggleResultExpand = (resultId, e) => {
         e.stopPropagation();
         setExpandedResults(prev => {
@@ -289,23 +296,29 @@ function App() {
                                                 <div className="search-result-name">{result.name}</div>
                                                 {result.path && <div className="search-result-path">{result.path}</div>}
                                             </div>
-                                            {result.documents && result.documents.length > 0 && (
+                                            {((result.subFolders && result.subFolders.length > 0) || (result.documents && result.documents.length > 0)) && (
                                                 <button
                                                     className="search-result-expand"
                                                     onClick={(e) => toggleResultExpand(result.id, e)}
-                                                    title="Show documents"
+                                                    title="Show contents"
                                                 >
                                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                                                         style={{ transform: expandedResults.has(result.id) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                                                         <polyline points="6 9 12 15 18 9"></polyline>
                                                     </svg>
-                                                    <span className="search-doc-count">{result.documents.length}</span>
+                                                    <span className="search-doc-count">{(result.subFolders?.length || 0) + (result.documents?.length || 0)}</span>
                                                 </button>
                                             )}
                                         </div>
-                                        {expandedResults.has(result.id) && result.documents && result.documents.length > 0 && (
+                                        {expandedResults.has(result.id) && ((result.subFolders && result.subFolders.length > 0) || (result.documents && result.documents.length > 0)) && (
                                             <div className="search-result-documents">
-                                                {result.documents.map(doc => (
+                                                {result.subFolders && result.subFolders.map(sf => (
+                                                    <div key={sf.id} className="search-doc-item search-subfolder-item" onClick={() => handleSearchSubfolderClick(sf)}>
+                                                        <span className="search-doc-icon">📁</span>
+                                                        <span className="search-doc-name">{sf.name}</span>
+                                                    </div>
+                                                ))}
+                                                {result.documents && result.documents.map(doc => (
                                                     <div key={doc.id} className="search-doc-item">
                                                         <span className="search-doc-icon">📄</span>
                                                         <span className="search-doc-name">Rev {doc.revisionNumber}</span>

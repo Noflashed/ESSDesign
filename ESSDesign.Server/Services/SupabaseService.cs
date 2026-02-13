@@ -507,14 +507,34 @@ namespace ESSDesign.Server.Services
                     // Remove the last item (itself) from the path display
                     if (pathParts.Count > 0) pathParts.RemoveAt(pathParts.Count - 1);
 
-                    // Get documents inside this folder
-                    var documentsResponse = await _supabase
+                    // Get subfolders and documents inside this folder in parallel
+                    var subfoldersTask = _supabase
+                        .From<Folder>()
+                        .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
+                        .Order("name", Postgrest.Constants.Ordering.Ascending)
+                        .Get();
+
+                    var documentsTask = _supabase
                         .From<DesignDocument>()
                         .Filter("folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
                         .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
                         .Get();
 
-                    var documents = documentsResponse.Models.Select(d => new DocumentResponse
+                    await Task.WhenAll(subfoldersTask, documentsTask);
+
+                    var subFolders = (await subfoldersTask).Models.Select(sf => new FolderResponse
+                    {
+                        Id = sf.Id,
+                        Name = sf.Name,
+                        ParentFolderId = sf.ParentFolderId,
+                        UserId = sf.UserId,
+                        CreatedAt = sf.CreatedAt,
+                        UpdatedAt = sf.UpdatedAt,
+                        SubFolders = new List<FolderResponse>(),
+                        Documents = new List<DocumentResponse>()
+                    }).ToList();
+
+                    var documents = (await documentsTask).Models.Select(d => new DocumentResponse
                     {
                         Id = d.Id,
                         FolderId = d.FolderId,
@@ -535,6 +555,7 @@ namespace ESSDesign.Server.Services
                         Type = "folder",
                         ParentFolderId = folder.ParentFolderId,
                         Path = string.Join(" / ", pathParts),
+                        SubFolders = subFolders,
                         Documents = documents
                     });
                 }
