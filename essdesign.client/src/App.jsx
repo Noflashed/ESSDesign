@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
+import SignUp from './components/SignUp';
 import PDFViewer from './components/PDFViewer';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
@@ -111,6 +112,7 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [authView, setAuthView] = useState('login'); // 'login' or 'signup'
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
     const [selectedFolderId, setSelectedFolderId] = useState(() => {
         const saved = localStorage.getItem('selectedFolderId');
@@ -208,6 +210,18 @@ function App() {
 
     const handleLoginSuccess = () => {
         checkAuth();
+    };
+
+    const handleSignUpSuccess = () => {
+        checkAuth();
+    };
+
+    const handleSwitchToSignUp = () => {
+        setAuthView('signup');
+    };
+
+    const handleSwitchToLogin = () => {
+        setAuthView('login');
     };
 
     const handleLogout = async () => {
@@ -338,7 +352,24 @@ function App() {
     }
 
     if (!isAuthenticated) {
-        return <Login onLoginSuccess={handleLoginSuccess} theme={theme} onThemeChange={(value) => applyTheme(value, false)} />;
+        if (authView === 'signup') {
+            return (
+                <SignUp
+                    onSignUpSuccess={handleSignUpSuccess}
+                    onSwitchToLogin={handleSwitchToLogin}
+                    theme={theme}
+                    onThemeChange={(value) => applyTheme(value, false)}
+                />
+            );
+        }
+        return (
+            <Login
+                onLoginSuccess={handleLoginSuccess}
+                onSwitchToSignUp={handleSwitchToSignUp}
+                theme={theme}
+                onThemeChange={(value) => applyTheme(value, false)}
+            />
+        );
     }
 
     return (
