@@ -487,6 +487,37 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task UpdateDocumentRevisionAsync(Guid documentId, string newRevisionNumber)
+        {
+            try
+            {
+                var document = await _supabase
+                    .From<DesignDocument>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, documentId.ToString())
+                    .Single();
+
+                if (document == null)
+                    throw new FileNotFoundException("Document not found");
+
+                document.RevisionNumber = newRevisionNumber;
+                document.UpdatedAt = DateTime.UtcNow;
+
+                await _supabase
+                    .From<DesignDocument>()
+                    .Update(document);
+
+                // Clear folder cache
+                _folderCache.TryRemove(document.FolderId, out _);
+
+                _logger.LogInformation("Updated document {DocumentId} revision to {RevisionNumber}", documentId, newRevisionNumber);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating document revision");
+                throw;
+            }
+        }
+
         public async Task<FileDownloadInfo> GetDocumentDownloadUrlAsync(Guid documentId, string type)
         {
             try

@@ -36,9 +36,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [showNewFolderModal, setShowNewFolderModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
+    const [showEditDocumentModal, setShowEditDocumentModal] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderParent, setNewFolderParent] = useState(null); // Track parent for subfolder creation
     const [renameTarget, setRenameTarget] = useState(null);
+    const [editDocumentTarget, setEditDocumentTarget] = useState(null);
+    const [newRevisionNumber, setNewRevisionNumber] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
     const cacheRef = useRef(new Map());
     const [viewMode, setViewMode] = useState(() => {
@@ -284,6 +287,49 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setFolders(currentFolders);
             updateToast(toastId, 'Failed to delete document', 'error');
             console.error('Delete document error:', error);
+        }
+    };
+
+    const handleUpdateDocumentRevision = async () => {
+        if (!newRevisionNumber.trim()) {
+            alert('Revision number cannot be empty');
+            return;
+        }
+
+        const documentId = editDocumentTarget.id;
+        const oldRevisionNumber = editDocumentTarget.revisionNumber;
+
+        // 1. Update UI IMMEDIATELY
+        setFolders(prev => prev.map(f =>
+            f.id === documentId ? { ...f, revisionNumber: newRevisionNumber, _optimistic: true } : f
+        ));
+
+        setNewRevisionNumber('');
+        setEditDocumentTarget(null);
+        setShowEditDocumentModal(false);
+
+        // 2. Show toast
+        const toastId = showToast('Updating revision...', 'info', 0);
+
+        // 3. Send to server in background
+        try {
+            await foldersAPI.updateDocumentRevision(documentId, newRevisionNumber);
+
+            // Remove optimistic flag
+            setFolders(prev => prev.map(f =>
+                f.id === documentId ? { ...f, _optimistic: false } : f
+            ));
+
+            clearCache();
+            if (onRefreshNeeded) onRefreshNeeded();
+            updateToast(toastId, 'Revision updated!', 'success');
+        } catch (error) {
+            // 4. Rollback on error
+            setFolders(prev => prev.map(f =>
+                f.id === documentId ? { ...f, revisionNumber: oldRevisionNumber, _optimistic: false } : f
+            ));
+            updateToast(toastId, 'Failed to update revision', 'error');
+            console.error('Update revision error:', error);
         }
     };
 
@@ -624,12 +670,23 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         </>
                     )}
                     {contextMenu.item && contextMenu.item.isDocument && (
-                        <div onClick={() => {
-                            handleDeleteDocument(contextMenu.item.id);
-                            setContextMenu(null);
-                        }}>
-                            🗑️ Delete
-                        </div>
+                        <>
+                            <div onClick={() => {
+                                setEditDocumentTarget(contextMenu.item);
+                                setNewRevisionNumber(contextMenu.item.revisionNumber);
+                                setShowEditDocumentModal(true);
+                                setContextMenu(null);
+                            }}>
+                                ✏️ Edit Revision
+                            </div>
+                            <div className="context-menu-divider"></div>
+                            <div onClick={() => {
+                                handleDeleteDocument(contextMenu.item.id);
+                                setContextMenu(null);
+                            }}>
+                                🗑️ Delete
+                            </div>
+                        </>
                     )}
                 </div>
             )}
@@ -673,6 +730,25 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         <div className="modal-actions">
                             <button onClick={() => setShowRenameModal(false)}>Cancel</button>
                             <button onClick={handleRenameFolder}>Rename</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showEditDocumentModal && (
+                <div className="modal-overlay" onClick={() => setShowEditDocumentModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <h3>Edit Document Revision</h3>
+                        <input
+                            type="text"
+                            value={newRevisionNumber}
+                            onChange={(e) => setNewRevisionNumber(e.target.value)}
+                            placeholder="Enter revision number"
+                            autoFocus
+                        />
+                        <div className="modal-actions">
+                            <button onClick={() => setShowEditDocumentModal(false)}>Cancel</button>
+                            <button onClick={handleUpdateDocumentRevision}>Update</button>
                         </div>
                     </div>
                 </div>
