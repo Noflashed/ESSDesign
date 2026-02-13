@@ -10,6 +10,102 @@ import './App.css';
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
+function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPDF }) {
+    const [expanded, setExpanded] = useState(false);
+    const [children, setChildren] = useState(initialChildren || null);
+    const [loading, setLoading] = useState(false);
+
+    const hasKnownChildren = children
+        ? (children.subFolders?.length > 0 || children.documents?.length > 0)
+        : true; // assume expandable if we haven't loaded yet
+
+    const handleToggle = async (e) => {
+        e.stopPropagation();
+        if (expanded) {
+            setExpanded(false);
+            return;
+        }
+        if (children) {
+            setExpanded(true);
+            return;
+        }
+        // Lazy-load folder contents
+        setLoading(true);
+        try {
+            const data = await foldersAPI.getFolder(folder.id);
+            setChildren({ subFolders: data.subFolders || [], documents: data.documents || [] });
+            setExpanded(true);
+        } catch (error) {
+            console.error('Error loading folder contents:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const paddingLeft = 16 + depth * 24;
+
+    return (
+        <div className="search-folder-node">
+            <div
+                className="search-folder-row"
+                style={{ paddingLeft: `${paddingLeft}px` }}
+                onClick={() => onNavigate(folder.id)}
+            >
+                {hasKnownChildren && (
+                    <button className="search-folder-toggle" onClick={handleToggle}>
+                        {loading ? (
+                            <div className="spinner-tiny"></div>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        )}
+                    </button>
+                )}
+                <span className="search-doc-icon">📁</span>
+                <span className="search-doc-name">{folder.name}</span>
+            </div>
+            {expanded && children && (
+                <div className="search-folder-children">
+                    {children.subFolders.map(sf => (
+                        <SearchFolderNode
+                            key={sf.id}
+                            folder={sf}
+                            depth={depth + 1}
+                            onNavigate={onNavigate}
+                            onViewPDF={onViewPDF}
+                        />
+                    ))}
+                    {children.documents.map(doc => (
+                        <div key={doc.id} className="search-folder-row search-doc-row" style={{ paddingLeft: `${paddingLeft + 24}px` }}>
+                            <span className="search-doc-icon">📄</span>
+                            <span className="search-doc-name">Rev {doc.revisionNumber}</span>
+                            <div className="search-doc-actions">
+                                {doc.essDesignIssuePath && (
+                                    <button className="search-doc-btn" onClick={(e) => { e.stopPropagation(); onViewPDF(doc, 'ess'); }}>
+                                        ESS Design
+                                    </button>
+                                )}
+                                {doc.thirdPartyDesignPath && (
+                                    <button className="search-doc-btn" onClick={(e) => { e.stopPropagation(); onViewPDF(doc, 'thirdparty'); }}>
+                                        Third-Party
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {children.subFolders.length === 0 && children.documents.length === 0 && (
+                        <div className="search-folder-row search-empty-folder" style={{ paddingLeft: `${paddingLeft + 24}px` }}>
+                            <span className="search-empty-text">Empty folder</span>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
@@ -30,7 +126,6 @@ function App() {
     const [searchResults, setSearchResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
-    const [expandedResults, setExpandedResults] = useState(new Set());
     const searchRef = useRef(null);
     const searchTimerRef = useRef(null);
 
@@ -168,28 +263,15 @@ function App() {
         }, 300);
     }, []);
 
-    const handleSearchResultClick = (result) => {
+    const closeSearch = () => {
         setSearchQuery('');
         setShowSearchResults(false);
-        setExpandedResults(new Set());
-        handleFolderSelect(result.id);
+        setSearchResults([]);
     };
 
-    const handleSearchSubfolderClick = (subfolder) => {
-        setSearchQuery('');
-        setShowSearchResults(false);
-        setExpandedResults(new Set());
-        handleFolderSelect(subfolder.id);
-    };
-
-    const toggleResultExpand = (resultId, e) => {
-        e.stopPropagation();
-        setExpandedResults(prev => {
-            const next = new Set(prev);
-            if (next.has(resultId)) next.delete(resultId);
-            else next.add(resultId);
-            return next;
-        });
+    const handleSearchNavigate = (folderId) => {
+        closeSearch();
+        handleFolderSelect(folderId);
     };
 
     const handleSearchViewPDF = (doc, type) => {
@@ -199,9 +281,7 @@ function App() {
             fileName: fileName || 'document.pdf',
             fileType: type
         });
-        setSearchQuery('');
-        setShowSearchResults(false);
-        setExpandedResults(new Set());
+        closeSearch();
     };
 
     // Close search results when clicking outside
@@ -270,7 +350,7 @@ function App() {
                             onFocus={() => { if (searchQuery.trim().length >= 2) setShowSearchResults(true); }}
                         />
                         {searchQuery && (
-                            <button className="search-clear" onClick={() => { setSearchQuery(''); setShowSearchResults(false); setSearchResults([]); }}>
+                            <button className="search-clear" onClick={closeSearch}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <line x1="18" y1="6" x2="6" y2="18"></line>
                                     <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -290,54 +370,42 @@ function App() {
                             ) : (
                                 searchResults.map(result => (
                                     <div key={result.id} className="search-result-item">
-                                        <div className="search-result-header" onClick={() => handleSearchResultClick(result)}>
+                                        <div className="search-result-header" onClick={() => handleSearchNavigate(result.id)}>
                                             <span className="search-result-icon">📁</span>
                                             <div className="search-result-info">
                                                 <div className="search-result-name">{result.name}</div>
                                                 {result.path && <div className="search-result-path">{result.path}</div>}
                                             </div>
-                                            {((result.subFolders && result.subFolders.length > 0) || (result.documents && result.documents.length > 0)) && (
-                                                <button
-                                                    className="search-result-expand"
-                                                    onClick={(e) => toggleResultExpand(result.id, e)}
-                                                    title="Show contents"
-                                                >
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                                        style={{ transform: expandedResults.has(result.id) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                                        <polyline points="6 9 12 15 18 9"></polyline>
-                                                    </svg>
-                                                    <span className="search-doc-count">{(result.subFolders?.length || 0) + (result.documents?.length || 0)}</span>
-                                                </button>
-                                            )}
                                         </div>
-                                        {expandedResults.has(result.id) && ((result.subFolders && result.subFolders.length > 0) || (result.documents && result.documents.length > 0)) && (
-                                            <div className="search-result-documents">
-                                                {result.subFolders && result.subFolders.map(sf => (
-                                                    <div key={sf.id} className="search-doc-item search-subfolder-item" onClick={() => handleSearchSubfolderClick(sf)}>
-                                                        <span className="search-doc-icon">📁</span>
-                                                        <span className="search-doc-name">{sf.name}</span>
+                                        <div className="search-result-contents">
+                                            {result.subFolders && result.subFolders.map(sf => (
+                                                <SearchFolderNode
+                                                    key={sf.id}
+                                                    folder={sf}
+                                                    depth={1}
+                                                    onNavigate={handleSearchNavigate}
+                                                    onViewPDF={handleSearchViewPDF}
+                                                />
+                                            ))}
+                                            {result.documents && result.documents.map(doc => (
+                                                <div key={doc.id} className="search-folder-row search-doc-row" style={{ paddingLeft: '40px' }}>
+                                                    <span className="search-doc-icon">📄</span>
+                                                    <span className="search-doc-name">Rev {doc.revisionNumber}</span>
+                                                    <div className="search-doc-actions">
+                                                        {doc.essDesignIssuePath && (
+                                                            <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'ess')}>
+                                                                ESS Design
+                                                            </button>
+                                                        )}
+                                                        {doc.thirdPartyDesignPath && (
+                                                            <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'thirdparty')}>
+                                                                Third-Party
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ))}
-                                                {result.documents && result.documents.map(doc => (
-                                                    <div key={doc.id} className="search-doc-item">
-                                                        <span className="search-doc-icon">📄</span>
-                                                        <span className="search-doc-name">Rev {doc.revisionNumber}</span>
-                                                        <div className="search-doc-actions">
-                                                            {doc.essDesignIssuePath && (
-                                                                <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'ess')}>
-                                                                    ESS Design
-                                                                </button>
-                                                            )}
-                                                            {doc.thirdPartyDesignPath && (
-                                                                <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'thirdparty')}>
-                                                                    Third-Party
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))
                             )}
