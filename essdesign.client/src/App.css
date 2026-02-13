@@ -260,73 +260,99 @@ body {
     text-overflow: ellipsis;
 }
 
-.search-result-expand {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 4px 8px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    font-size: 12px;
-    transition: all 0.2s;
-    margin-left: 8px;
-    flex-shrink: 0;
-}
-
-.search-result-expand:hover {
-    background: var(--hover-bg);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.search-doc-count {
-    font-size: 11px;
-    font-weight: 500;
-}
-
-.search-result-documents {
-    background: var(--bg-secondary);
+.search-result-contents {
     border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
 }
 
-.search-doc-item {
+.search-folder-row {
     display: flex;
     align-items: center;
-    padding: 8px 16px 8px 48px;
+    padding: 7px 12px;
     font-size: 13px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.search-doc-item:last-child {
-    border-bottom: none;
-}
-
-.search-subfolder-item {
     cursor: pointer;
     transition: background 0.2s;
 }
 
-.search-subfolder-item:hover {
+.search-folder-row:hover {
     background: var(--hover-bg);
+}
+
+.search-doc-row {
+    cursor: default;
+}
+
+.search-doc-row:hover {
+    background: transparent;
+}
+
+.search-folder-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    margin-right: 4px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.search-folder-toggle:hover {
+    background: var(--hover-bg);
+    color: var(--primary-color);
+}
+
+.spinner-tiny {
+    border: 2px solid var(--border-color);
+    border-top: 2px solid var(--primary-color);
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    animation: spin 0.8s linear infinite;
+}
+
+.search-folder-children {
+    /* children are indented via inline padding */
+}
+
+.search-empty-folder {
+    cursor: default;
+}
+
+.search-empty-folder:hover {
+    background: transparent;
+}
+
+.search-empty-text {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
 }
 
 .search-doc-icon {
     font-size: 16px;
     margin-right: 8px;
+    flex-shrink: 0;
 }
 
 .search-doc-name {
     flex: 1;
     color: var(--text-primary);
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .search-doc-actions {
     display: flex;
     gap: 6px;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
 
 .search-doc-btn {
