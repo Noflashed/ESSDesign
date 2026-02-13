@@ -38,6 +38,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [viewMode, setViewMode] = useState(() => {
         return initialViewMode || localStorage.getItem('viewMode') || 'grid';
     }); // 'grid' or 'list'
+    const [sortField, setSortField] = useState(() => {
+        return localStorage.getItem('sortField') || 'name';
+    });
+    const [sortDirection, setSortDirection] = useState(() => {
+        return localStorage.getItem('sortDirection') || 'asc';
+    });
 
     // PDF Viewer state
     const [pdfViewer, setPdfViewer] = useState(null);
@@ -59,6 +65,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             onViewModeChange(viewMode);
         }
     }, [viewMode, onViewModeChange]);
+
+    // Save sort preferences
+    useEffect(() => {
+        localStorage.setItem('sortField', sortField);
+        localStorage.setItem('sortDirection', sortDirection);
+    }, [sortField, sortDirection]);
 
     const loadCurrentFolder = useCallback(async () => {
         const cacheKey = currentFolder === null ? 'root' : currentFolder;
@@ -291,6 +303,54 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         }
     };
 
+    const handleSort = (field) => {
+        if (sortField === field) {
+            // Toggle direction if clicking the same field
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            // New field, default to ascending
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
+
+    const getSortedFolders = useCallback(() => {
+        const sorted = [...folders].sort((a, b) => {
+            // Always show folders before documents
+            if (!a.isDocument && b.isDocument) return -1;
+            if (a.isDocument && !b.isDocument) return 1;
+
+            let aValue, bValue;
+
+            switch (sortField) {
+                case 'name':
+                    aValue = a.isDocument ? `Rev ${a.revisionNumber}` : a.name;
+                    bValue = b.isDocument ? `Rev ${b.revisionNumber}` : b.name;
+                    break;
+                case 'owner':
+                    aValue = a.ownerName || (a.userId ? a.userId.slice(0, 8) : 'Unknown');
+                    bValue = b.ownerName || (b.userId ? b.userId.slice(0, 8) : 'Unknown');
+                    break;
+                case 'modified':
+                    aValue = new Date(a.updatedAt || a.createdAt).getTime();
+                    bValue = new Date(b.updatedAt || b.createdAt).getTime();
+                    break;
+                case 'size':
+                    aValue = a.isDocument ? (a.totalFileSize || 0) : 0;
+                    bValue = b.isDocument ? (b.totalFileSize || 0) : 0;
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        return sorted;
+    }, [folders, sortField, sortDirection]);
+
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
         document.addEventListener('click', handleClick);
@@ -362,10 +422,42 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     {viewMode === 'list' && (
                         <div className="list-header">
                             <div className="list-header-icon"></div>
-                            <div className="list-header-name">Name</div>
-                            <div className="list-header-owner">Owner</div>
-                            <div className="list-header-modified">Date Modified</div>
-                            <div className="list-header-size">File Size</div>
+                            <div
+                                className={`list-header-name sortable ${sortField === 'name' ? 'active' : ''}`}
+                                onClick={() => handleSort('name')}
+                            >
+                                Name
+                                {sortField === 'name' && (
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                            </div>
+                            <div
+                                className={`list-header-owner sortable ${sortField === 'owner' ? 'active' : ''}`}
+                                onClick={() => handleSort('owner')}
+                            >
+                                Owner
+                                {sortField === 'owner' && (
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                            </div>
+                            <div
+                                className={`list-header-modified sortable ${sortField === 'modified' ? 'active' : ''}`}
+                                onClick={() => handleSort('modified')}
+                            >
+                                Date Modified
+                                {sortField === 'modified' && (
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                            </div>
+                            <div
+                                className={`list-header-size sortable ${sortField === 'size' ? 'active' : ''}`}
+                                onClick={() => handleSort('size')}
+                            >
+                                File Size
+                                {sortField === 'size' && (
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                            </div>
                             <div className="list-header-actions"></div>
                         </div>
                     )}
@@ -373,7 +465,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
                         onContextMenu={handleEmptySpaceContextMenu}
                     >
-                        {folders.map(item => (
+                        {getSortedFolders().map(item => (
                         viewMode === 'grid' ? (
                             <div
                                 key={item.id}
@@ -439,32 +531,34 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 <div className="list-item-size">
                                     {item.isDocument ? formatFileSize(item.totalFileSize) : '—'}
                                 </div>
-                                {item.isDocument && (
-                                    <div className="list-item-actions">
-                                        {item.essDesignIssuePath && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleViewPDF(item, 'ess');
-                                                }}
-                                                className="file-btn-small"
-                                            >
-                                                ESS Design
-                                            </button>
-                                        )}
-                                        {item.thirdPartyDesignPath && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleViewPDF(item, 'thirdparty');
-                                                }}
-                                                className="file-btn-small"
-                                            >
-                                                Third-Party Design
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                <div className="list-item-actions">
+                                    {item.isDocument && (
+                                        <>
+                                            {item.essDesignIssuePath && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleViewPDF(item, 'ess');
+                                                    }}
+                                                    className="file-btn-small"
+                                                >
+                                                    ESS Design
+                                                </button>
+                                            )}
+                                            {item.thirdPartyDesignPath && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleViewPDF(item, 'thirdparty');
+                                                    }}
+                                                    className="file-btn-small"
+                                                >
+                                                    Third-Party Design
+                                                </button>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         )
                         ))}

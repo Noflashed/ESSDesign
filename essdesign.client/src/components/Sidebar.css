@@ -254,6 +254,18 @@
             background: var(--hover-bg);
         }
 
+.context-menu-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 8px;
+    padding: 0 !important;
+    cursor: default !important;
+}
+
+    .context-menu-divider:hover {
+        background: var(--border-color) !important;
+    }
+
 /* Modal overlay */
 .modal-overlay {
     position: fixed;
