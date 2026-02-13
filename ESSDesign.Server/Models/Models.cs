@@ -169,6 +169,7 @@ namespace ESSDesign.Server.Models
         public string Type { get; set; } = string.Empty;
         public Guid? ParentFolderId { get; set; }
         public string Path { get; set; } = string.Empty;
+        public List<FolderResponse> SubFolders { get; set; } = new();
         public List<DocumentResponse> Documents { get; set; } = new();
     }
 
