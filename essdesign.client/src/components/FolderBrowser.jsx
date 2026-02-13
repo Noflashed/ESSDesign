@@ -531,7 +531,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {item.isDocument ? '📄' : '📁'}
                                 </div>
                                 <div className="list-item-name">
-                                    {item.isDocument ? '' : item.name}
+                                    {item.name || (item.isDocument ? 'Document' : 'Folder')}
                                 </div>
                                 <div className="list-item-revision">
                                     {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
