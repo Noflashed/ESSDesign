@@ -73,7 +73,12 @@ export const foldersAPI = {
     },
 
     createFolder: async (name, parentFolderId = null) => {
-        const response = await apiClient.post('/folders', { name, parentFolderId });
+        const user = authAPI.getCurrentUser();
+        const response = await apiClient.post('/folders', {
+            name,
+            parentFolderId,
+            userId: user?.id
+        });
         return response.data;
     },
 
@@ -88,9 +93,11 @@ export const foldersAPI = {
     },
 
     uploadDocument: async (folderId, revisionNumber, essDesignFile, thirdPartyFile) => {
+        const user = authAPI.getCurrentUser();
         const formData = new FormData();
         formData.append('FolderId', folderId);
         formData.append('RevisionNumber', revisionNumber);
+        if (user?.id) formData.append('UserId', user.id);
         if (essDesignFile) formData.append('EssDesignIssue', essDesignFile);
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
 

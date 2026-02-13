@@ -70,7 +70,7 @@ namespace ESSDesign.Server.Controllers
                 if (string.IsNullOrWhiteSpace(request.Name))
                     return BadRequest(new { error = "Folder name is required" });
 
-                var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId);
+                var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, request.UserId);
 
                 // Fetch and return the complete folder object
                 var folderResponse = new FolderResponse
@@ -78,6 +78,7 @@ namespace ESSDesign.Server.Controllers
                     Id = folderId,
                     Name = request.Name,
                     ParentFolderId = request.ParentFolderId,
+                    UserId = request.UserId,
                     SubFolders = new List<FolderResponse>(),
                     Documents = new List<DocumentResponse>(),
                     CreatedAt = DateTime.UtcNow,
@@ -144,7 +145,8 @@ namespace ESSDesign.Server.Controllers
                     request.FolderId,
                     request.RevisionNumber,
                     request.EssDesignIssue,
-                    request.ThirdPartyDesign
+                    request.ThirdPartyDesign,
+                    request.UserId
                 );
 
                 return Ok(new { id = documentId, message = "Document uploaded" });

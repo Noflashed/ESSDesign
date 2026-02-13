@@ -121,6 +121,7 @@ namespace ESSDesign.Server.Models
     {
         public string Name { get; set; } = string.Empty;
         public Guid? ParentFolderId { get; set; }
+        public string? UserId { get; set; }
     }
 
     public class RenameFolderRequest
@@ -132,6 +133,7 @@ namespace ESSDesign.Server.Models
     {
         public Guid FolderId { get; set; }
         public string RevisionNumber { get; set; } = string.Empty;
+        public string? UserId { get; set; }
         public IFormFile? EssDesignIssue { get; set; }
         public IFormFile? ThirdPartyDesign { get; set; }
         public long? EssDesignFileSize { get; set; }
