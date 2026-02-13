@@ -21,6 +21,12 @@ const formatDate = (dateString) => {
     return date.toLocaleDateString('en-US', options);
 };
 
+// Helper function to format revision number
+const formatRevisionNumber = (revisionNumber) => {
+    if (!revisionNumber) return 'Revision 00';
+    return `Revision ${String(revisionNumber).padStart(2, '0')}`;
+};
+
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
@@ -324,8 +330,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
             switch (sortField) {
                 case 'name':
-                    aValue = a.isDocument ? `Rev ${a.revisionNumber}` : a.name;
-                    bValue = b.isDocument ? `Rev ${b.revisionNumber}` : b.name;
+                    aValue = a.isDocument ? formatRevisionNumber(a.revisionNumber) : a.name;
+                    bValue = b.isDocument ? formatRevisionNumber(b.revisionNumber) : b.name;
+                    break;
+                case 'revision':
+                    // Numeric sort for revision numbers
+                    aValue = a.isDocument ? (a.revisionNumber || 0) : 0;
+                    bValue = b.isDocument ? (b.revisionNumber || 0) : 0;
                     break;
                 case 'owner':
                     aValue = a.ownerName || (a.userId ? a.userId.slice(0, 8) : 'Unknown');
@@ -432,6 +443,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 )}
                             </div>
                             <div
+                                className={`list-header-revision sortable ${sortField === 'revision' ? 'active' : ''}`}
+                                onClick={() => handleSort('revision')}
+                            >
+                                Revision
+                                {sortField === 'revision' && (
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                            </div>
+                            <div
                                 className={`list-header-owner sortable ${sortField === 'owner' ? 'active' : ''}`}
                                 onClick={() => handleSort('owner')}
                             >
@@ -477,7 +497,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {item.isDocument ? '📄' : '📁'}
                                 </div>
                                 <div className="item-name">
-                                    {item.isDocument ? `Rev ${item.revisionNumber}` : item.name}
+                                    {item.isDocument ? formatRevisionNumber(item.revisionNumber) : item.name}
                                 </div>
                                 {item.isDocument && (
                                     <div className="document-files">
@@ -510,17 +530,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 <div className="list-item-icon">
                                     {item.isDocument ? '📄' : '📁'}
                                 </div>
-                                <div className="list-item-info">
-                                    <div className="list-item-name">
-                                        {item.isDocument ? `Rev ${item.revisionNumber}` : item.name}
-                                    </div>
-                                    {item.isDocument && (
-                                        <div className="list-item-meta">
-                                            {item.essDesignIssuePath && <span>ESS Design</span>}
-                                            {item.essDesignIssuePath && item.thirdPartyDesignPath && <span> • </span>}
-                                            {item.thirdPartyDesignPath && <span>Third-Party</span>}
-                                        </div>
-                                    )}
+                                <div className="list-item-name">
+                                    {item.isDocument ? '' : item.name}
+                                </div>
+                                <div className="list-item-revision">
+                                    {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
                                 </div>
                                 <div className="list-item-owner">
                                     {item.ownerName || (item.userId ? item.userId.slice(0, 8) + '...' : 'Unknown')}
