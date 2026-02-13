@@ -497,7 +497,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {item.isDocument ? '📄' : '📁'}
                                 </div>
                                 <div className="item-name">
-                                    {item.isDocument ? formatRevisionNumber(item.revisionNumber) : item.name}
+                                    {item.isDocument
+                                        ? (item.essDesignIssueName || item.thirdPartyDesignName || formatRevisionNumber(item.revisionNumber))
+                                        : item.name
+                                    }
                                 </div>
                                 {item.isDocument && (
                                     <div className="document-files">
@@ -531,7 +534,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {item.isDocument ? '📄' : '📁'}
                                 </div>
                                 <div className="list-item-name">
-                                    {item.name || (item.isDocument ? 'Document' : 'Folder')}
+                                    {item.isDocument
+                                        ? (item.essDesignIssueName || item.thirdPartyDesignName || 'Document')
+                                        : (item.name || 'Folder')
+                                    }
                                 </div>
                                 <div className="list-item-revision">
                                     {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
