@@ -99,6 +99,52 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        // Helper method to get user name by ID
+        private async Task<string?> GetUserNameAsync(string? userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return null;
+
+            try
+            {
+                if (!Guid.TryParse(userId, out var userGuid)) return null;
+
+                var userResponse = await _supabase
+                    .From<UserName>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, userId)
+                    .Single();
+
+                return userResponse?.FullName;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch user name for {UserId}", userId);
+                return null;
+            }
+        }
+
+        // Helper method to get multiple user names at once (more efficient)
+        private async Task<Dictionary<string, string>> GetUserNamesAsync(IEnumerable<string?> userIds)
+        {
+            var validUserIds = userIds.Where(id => !string.IsNullOrEmpty(id) && Guid.TryParse(id, out _)).Distinct().ToList();
+            if (!validUserIds.Any()) return new Dictionary<string, string>();
+
+            try
+            {
+                var usersResponse = await _supabase
+                    .From<UserName>()
+                    .Get();
+
+                return usersResponse.Models
+                    .Where(u => validUserIds.Contains(u.Id.ToString()))
+                    .ToDictionary(u => u.Id.ToString(), u => u.FullName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch user names");
+                return new Dictionary<string, string>();
+            }
+        }
+
         // Light version - only gets immediate subfolders count, no documents
         private async Task<FolderResponse> BuildFolderResponseLight(Folder folder)
         {
@@ -108,12 +154,18 @@ namespace ESSDesign.Server.Services
                 .Order("name", Postgrest.Constants.Ordering.Ascending)
                 .Get();
 
+            // Collect all user IDs to fetch names in batch
+            var userIds = new List<string?> { folder.UserId };
+            userIds.AddRange(subfoldersResponse.Models.Select(sf => sf.UserId));
+            var userNames = await GetUserNamesAsync(userIds);
+
             var subfolders = subfoldersResponse.Models.Select(sf => new FolderResponse
             {
                 Id = sf.Id,
                 Name = sf.Name,
                 ParentFolderId = sf.ParentFolderId,
                 UserId = sf.UserId,
+                OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
                 CreatedAt = sf.CreatedAt,
                 UpdatedAt = sf.UpdatedAt,
                 SubFolders = new List<FolderResponse>(),
@@ -126,6 +178,7 @@ namespace ESSDesign.Server.Services
                 Name = folder.Name,
                 ParentFolderId = folder.ParentFolderId,
                 UserId = folder.UserId,
+                OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
                 SubFolders = subfolders,
@@ -151,19 +204,29 @@ namespace ESSDesign.Server.Services
 
             await Task.WhenAll(subfoldersTask, documentsTask);
 
-            var subfolders = (await subfoldersTask).Models.Select(sf => new FolderResponse
+            var subfoldersResult = (await subfoldersTask).Models;
+            var documentsResult = (await documentsTask).Models;
+
+            // Collect all user IDs to fetch names in batch
+            var userIds = new List<string?> { folder.UserId };
+            userIds.AddRange(subfoldersResult.Select(sf => sf.UserId));
+            userIds.AddRange(documentsResult.Select(d => d.UserId));
+            var userNames = await GetUserNamesAsync(userIds);
+
+            var subfolders = subfoldersResult.Select(sf => new FolderResponse
             {
                 Id = sf.Id,
                 Name = sf.Name,
                 ParentFolderId = sf.ParentFolderId,
                 UserId = sf.UserId,
+                OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
                 CreatedAt = sf.CreatedAt,
                 UpdatedAt = sf.UpdatedAt,
                 SubFolders = new List<FolderResponse>(),
                 Documents = new List<DocumentResponse>()
             }).ToList();
 
-            var documents = (await documentsTask).Models.Select(d =>
+            var documents = documentsResult.Select(d =>
             {
                 var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
                 return new DocumentResponse
@@ -179,7 +242,7 @@ namespace ESSDesign.Server.Services
                     ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
                     TotalFileSize = totalSize > 0 ? totalSize : null,
                     UserId = d.UserId,
-                    OwnerName = null, // Will be populated below
+                    OwnerName = d.UserId != null && userNames.ContainsKey(d.UserId) ? userNames[d.UserId] : null,
                     CreatedAt = d.CreatedAt,
                     UpdatedAt = d.UpdatedAt
                 };
@@ -191,6 +254,7 @@ namespace ESSDesign.Server.Services
                 Name = folder.Name,
                 ParentFolderId = folder.ParentFolderId,
                 UserId = folder.UserId,
+                OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
                 SubFolders = subfolders,
@@ -558,19 +622,29 @@ namespace ESSDesign.Server.Services
 
                     await Task.WhenAll(subfoldersTask, documentsTask);
 
-                    var subFolders = (await subfoldersTask).Models.Select(sf => new FolderResponse
+                    var subfoldersResult = (await subfoldersTask).Models;
+                    var documentsResult = (await documentsTask).Models;
+
+                    // Fetch user names in batch
+                    var userIds = new List<string?> { folder.UserId };
+                    userIds.AddRange(subfoldersResult.Select(sf => sf.UserId));
+                    userIds.AddRange(documentsResult.Select(d => d.UserId));
+                    var userNames = await GetUserNamesAsync(userIds);
+
+                    var subFolders = subfoldersResult.Select(sf => new FolderResponse
                     {
                         Id = sf.Id,
                         Name = sf.Name,
                         ParentFolderId = sf.ParentFolderId,
                         UserId = sf.UserId,
+                        OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
                         CreatedAt = sf.CreatedAt,
                         UpdatedAt = sf.UpdatedAt,
                         SubFolders = new List<FolderResponse>(),
                         Documents = new List<DocumentResponse>()
                     }).ToList();
 
-                    var documents = (await documentsTask).Models.Select(d =>
+                    var documents = documentsResult.Select(d =>
                     {
                         var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
                         return new DocumentResponse
@@ -586,7 +660,7 @@ namespace ESSDesign.Server.Services
                             ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
                             TotalFileSize = totalSize > 0 ? totalSize : null,
                             UserId = d.UserId,
-                            OwnerName = null,
+                            OwnerName = d.UserId != null && userNames.ContainsKey(d.UserId) ? userNames[d.UserId] : null,
                             CreatedAt = d.CreatedAt,
                             UpdatedAt = d.UpdatedAt
                         };
