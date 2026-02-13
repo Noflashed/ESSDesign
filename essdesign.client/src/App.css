@@ -463,3 +463,24 @@ body {
         font-size: 14px;
     }
 }
+
+:root[data-theme="dark"] .logo-icon {
+    filter: brightness(0) invert(1);
+}
+
+:root[data-theme="dark"] .search-icon,
+:root[data-theme="dark"] .search-clear,
+:root[data-theme="dark"] .search-folder-toggle,
+:root[data-theme="dark"] .view-btn,
+:root[data-theme="dark"] .theme-toggle {
+    color: #fff;
+}
+
+:root[data-theme="dark"] .search-result-icon,
+:root[data-theme="dark"] .search-doc-icon,
+:root[data-theme="dark"] .item-icon,
+:root[data-theme="dark"] .list-item-icon,
+:root[data-theme="dark"] .folder-icon,
+:root[data-theme="dark"] .document-icon {
+    filter: grayscale(1) brightness(2.5);
+}
