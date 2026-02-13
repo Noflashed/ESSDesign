@@ -29,14 +29,21 @@
     margin-bottom: 24px;
 }
 
-.auth-logo .logo-icon {
-    font-size: 36px;
+.auth-logo-image {
+    height: 44px;
+    width: auto;
+    object-fit: contain;
+    display: block;
 }
 
 .auth-logo .logo-text {
     font-size: 28px;
     font-weight: 600;
     color: #202124;
+}
+
+:root[data-theme="dark"] .auth-logo-image {
+    filter: brightness(0) invert(1);
 }
 
 .auth-header h2 {
