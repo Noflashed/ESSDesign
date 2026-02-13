@@ -4,8 +4,11 @@ import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import PDFViewer from './components/PDFViewer';
 import { authAPI, preferencesAPI } from './services/api';
-import logo from 'C:/Users/User/source/repos/Noflashed/ESSDesign/essdesign.client/Public/logo.png';
 import './App.css';
+
+// ✅ FIXED: Load logo from Supabase Storage
+// Replace YOUR_PROJECT with your actual Supabase project ID
+const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -169,7 +172,7 @@ function App() {
             <header className="app-header">
                 <div className="header-left">
                     <div className="logo">
-                        <img src={logo} alt="ErectSafe Scaffolding" className="logo-icon" />
+                        <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="logo-icon" />
                     </div>
                 </div>
                 <div className="header-right">
