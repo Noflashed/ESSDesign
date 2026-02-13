@@ -255,6 +255,7 @@ function App() {
                 const results = await foldersAPI.search(query.trim());
                 setSearchResults(results);
             } catch (error) {
+                if (error.name === 'CanceledError' || error.name === 'AbortError') return;
                 console.error('Search error:', error);
                 setSearchResults([]);
             } finally {

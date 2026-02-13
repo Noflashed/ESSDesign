@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { foldersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import PDFViewer from './PDFViewer';
@@ -16,7 +16,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [newFolderParent, setNewFolderParent] = useState(null); // Track parent for subfolder creation
     const [renameTarget, setRenameTarget] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
-    const [cache, setCache] = useState(new Map());
+    const cacheRef = useRef(new Map());
     const [viewMode, setViewMode] = useState(() => {
         return initialViewMode || localStorage.getItem('viewMode') || 'grid';
     }); // 'grid' or 'list'
@@ -44,7 +44,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     const loadCurrentFolder = useCallback(async () => {
         const cacheKey = currentFolder === null ? 'root' : currentFolder;
-        const cached = cache.get(cacheKey);
+        const cached = cacheRef.current.get(cacheKey);
 
         if (cached && (Date.now() - cached.timestamp < 60000)) {
             setFolders(cached.data);
@@ -59,11 +59,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 setFolders(data);
                 setBreadcrumbs([]);
 
-                setCache(prev => new Map(prev).set('root', {
+                cacheRef.current.set('root', {
                     data,
                     breadcrumbs: [],
                     timestamp: Date.now()
-                }));
+                });
             } else {
                 const [data, crumbs] = await Promise.all([
                     foldersAPI.getFolder(currentFolder),
@@ -74,21 +74,21 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 setFolders(folderItems);
                 setBreadcrumbs(crumbs);
 
-                setCache(prev => new Map(prev).set(currentFolder, {
+                cacheRef.current.set(currentFolder, {
                     data: folderItems,
                     breadcrumbs: crumbs,
                     timestamp: Date.now()
-                }));
+                });
             }
         } catch (error) {
             console.error('Error loading folder:', error);
         } finally {
             setLoading(false);
         }
-    }, [currentFolder, cache]);
+    }, [currentFolder]);
 
     const clearCache = () => {
-        setCache(new Map());
+        cacheRef.current = new Map();
     };
 
     const handleFolderClick = (folderId) => {

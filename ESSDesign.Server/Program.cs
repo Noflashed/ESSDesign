@@ -8,6 +8,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Enable response compression (GZip + Brotli)
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
 // Configure Supabase
 var supabaseUrl = builder.Configuration["Supabase:Url"]!;
 var supabaseKey = builder.Configuration["Supabase:Key"]!;
@@ -60,6 +66,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Enable response compression
+app.UseResponseCompression();
 
 // Enable CORS BEFORE other middleware
 app.UseCors("AllowReact");

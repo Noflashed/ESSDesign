@@ -54,6 +54,8 @@ export const authAPI = {
     }
 };
 
+let searchAbortController = null;
+
 export const foldersAPI = {
     getRootFolders: async () => {
         const response = await apiClient.get('/folders');
@@ -112,7 +114,13 @@ export const foldersAPI = {
     },
 
     search: async (query) => {
-        const response = await apiClient.get(`/folders/search?q=${encodeURIComponent(query)}`);
+        if (searchAbortController) searchAbortController.abort();
+        searchAbortController = new AbortController();
+
+        const response = await apiClient.get(
+            `/folders/search?q=${encodeURIComponent(query)}`,
+            { signal: searchAbortController.signal }
+        );
         return response.data;
     }
 };

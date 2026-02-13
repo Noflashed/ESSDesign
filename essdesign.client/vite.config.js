@@ -14,6 +14,15 @@ const keyFilePath = path.join(baseFolder, `${certificateName}.key`);
 
 export default defineConfig({
     plugins: [react()],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom'],
+                }
+            }
+        }
+    },
     server: {
         port: 5173,
         https: fs.existsSync(certFilePath) && fs.existsSync(keyFilePath)

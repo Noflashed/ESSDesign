@@ -14,6 +14,10 @@ namespace ESSDesign.Server.Services
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
         private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
 
+        // Root folders cache
+        private static List<FolderResponse>? _rootFoldersCache;
+        private static DateTime _rootFoldersCacheExpiry = DateTime.MinValue;
+
         public SupabaseService(Supabase.Client supabase, ILogger<SupabaseService> logger)
         {
             _supabase = supabase;
@@ -24,6 +28,13 @@ namespace ESSDesign.Server.Services
         {
             try
             {
+                // Check root folders cache
+                if (_rootFoldersCache != null && _rootFoldersCacheExpiry > DateTime.UtcNow)
+                {
+                    _logger.LogInformation("Cache hit for root folders");
+                    return _rootFoldersCache;
+                }
+
                 var foldersResponse = await _supabase
                     .From<Folder>()
                     .Where(x => x.ParentFolderId == null)
@@ -35,6 +46,10 @@ namespace ESSDesign.Server.Services
                 {
                     result.Add(await BuildFolderResponseLight(folder));
                 }
+
+                // Cache the result
+                _rootFoldersCache = result;
+                _rootFoldersCacheExpiry = DateTime.UtcNow.Add(_cacheExpiration);
 
                 return result;
             }
@@ -198,6 +213,11 @@ namespace ESSDesign.Server.Services
                 {
                     _folderCache.TryRemove(parentFolderId.Value, out _);
                 }
+                else
+                {
+                    // Root folder created - invalidate root cache
+                    _rootFoldersCache = null;
+                }
 
                 _logger.LogInformation("Created folder: {Name}", name);
                 return created.Id;
@@ -260,6 +280,11 @@ namespace ESSDesign.Server.Services
                 if (folder?.ParentFolderId != null)
                 {
                     _folderCache.TryRemove(folder.ParentFolderId.Value, out _);
+                }
+                else
+                {
+                    // Root folder deleted - invalidate root cache
+                    _rootFoldersCache = null;
                 }
 
                 _logger.LogInformation("Deleted folder {FolderId}", folderId);
@@ -482,32 +507,33 @@ namespace ESSDesign.Server.Services
         public static void ClearCache()
         {
             _folderCache.Clear();
+            _rootFoldersCache = null;
         }
 
         public async Task<List<SearchResult>> SearchAsync(string query)
         {
             try
             {
-                var queryLower = query.ToLower();
-
-                // Search folders by name (case-insensitive using ilike)
+                // 1. Search matching folders (1 query)
                 var foldersResponse = await _supabase
                     .From<Folder>()
                     .Filter("name", Postgrest.Constants.Operator.ILike, $"%{query}%")
                     .Order("name", Postgrest.Constants.Ordering.Ascending)
                     .Get();
 
-                var results = new List<SearchResult>();
+                if (!foldersResponse.Models.Any())
+                    return new List<SearchResult>();
 
-                foreach (var folder in foldersResponse.Models)
+                // 2. Fetch ALL folders once for in-memory breadcrumb computation (1 query)
+                var allFoldersResponse = await _supabase.From<Folder>().Get();
+                var folderLookup = allFoldersResponse.Models.ToDictionary(f => f.Id);
+
+                // 3. For each match, compute breadcrumbs in-memory + fetch children in parallel
+                var tasks = foldersResponse.Models.Select(async folder =>
                 {
-                    // Build breadcrumb path for each folder
-                    var breadcrumbs = await GetBreadcrumbsAsync(folder.Id);
-                    var pathParts = breadcrumbs.Select(b => b.Name).ToList();
-                    // Remove the last item (itself) from the path display
-                    if (pathParts.Count > 0) pathParts.RemoveAt(pathParts.Count - 1);
+                    var path = BuildBreadcrumbPath(folder, folderLookup);
 
-                    // Get subfolders and documents inside this folder in parallel
+                    // Subfolders + documents in parallel (2 queries per result, all results concurrent)
                     var subfoldersTask = _supabase
                         .From<Folder>()
                         .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
@@ -548,25 +574,37 @@ namespace ESSDesign.Server.Services
                         UpdatedAt = d.UpdatedAt
                     }).ToList();
 
-                    results.Add(new SearchResult
+                    return new SearchResult
                     {
                         Id = folder.Id,
                         Name = folder.Name,
                         Type = "folder",
                         ParentFolderId = folder.ParentFolderId,
-                        Path = string.Join(" / ", pathParts),
+                        Path = path,
                         SubFolders = subFolders,
                         Documents = documents
-                    });
-                }
+                    };
+                });
 
-                return results;
+                return (await Task.WhenAll(tasks)).ToList();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error searching for '{Query}'", query);
                 throw;
             }
+        }
+
+        private static string BuildBreadcrumbPath(Folder folder, Dictionary<Guid, Folder> lookup)
+        {
+            var parts = new List<string>();
+            var currentId = folder.ParentFolderId;
+            while (currentId.HasValue && lookup.TryGetValue(currentId.Value, out var parent))
+            {
+                parts.Insert(0, parent.Name);
+                currentId = parent.ParentFolderId;
+            }
+            return string.Join(" / ", parts);
         }
 
         // User Preferences Methods
