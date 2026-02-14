@@ -115,6 +115,15 @@ function App() {
     const [authView, setAuthView] = useState('login'); // 'login' or 'signup'
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
     const [selectedFolderId, setSelectedFolderId] = useState(() => {
+        // Check for ?folder= deep link in URL first
+        const urlParams = new URLSearchParams(window.location.search);
+        const folderFromUrl = urlParams.get('folder');
+        if (folderFromUrl) {
+            // Clean the URL without reloading the page
+            window.history.replaceState({}, '', window.location.pathname);
+            localStorage.setItem('selectedFolderId', folderFromUrl);
+            return folderFromUrl;
+        }
         const saved = localStorage.getItem('selectedFolderId');
         return saved && saved !== 'null' ? saved : null;
     });
