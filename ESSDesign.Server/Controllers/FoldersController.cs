@@ -175,6 +175,7 @@ namespace ESSDesign.Server.Controllers
                             uploaderName,
                             DateTime.UtcNow,
                             documentId,
+                            request.FolderId,
                             request.EssDesignIssue != null,
                             request.ThirdPartyDesign != null,
                             request.Description
