@@ -50,13 +50,30 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReact", policy =>
     {
-        policy.WithOrigins(
-                "https://essdesign.app",
-                "https://www.essdesign.app",
-                "https://essdesign-production.up.railway.app",
-                "http://localhost:5173",
-                "http://localhost:3000"
-            )
+        policy.SetIsOriginAllowed(origin =>
+            {
+                // Allow production domains
+                if (origin == "https://essdesign.app" ||
+                    origin == "https://www.essdesign.app" ||
+                    origin == "https://essdesign-production.up.railway.app")
+                {
+                    return true;
+                }
+
+                // Allow Vercel preview deployments
+                if (origin.Contains(".vercel.app"))
+                {
+                    return true;
+                }
+
+                // Allow localhost for development
+                if (origin.StartsWith("http://localhost:"))
+                {
+                    return true;
+                }
+
+                return false;
+            })
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials()
