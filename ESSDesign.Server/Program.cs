@@ -1,5 +1,6 @@
 using ESSDesign.Server.Services;
 using Supabase;
+using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,15 @@ builder.Services.AddScoped<Client>(_ =>
 
 // Register Supabase Service
 builder.Services.AddScoped<SupabaseService>();
+
+// Configure Resend Email Service
+builder.Services.AddOptions();
+builder.Services.AddHttpClient<ResendClient>();
+builder.Services.Configure<ResendClientOptions>(o =>
+{
+    o.ApiToken = builder.Configuration["Resend:ApiKey"] ?? throw new InvalidOperationException("Resend:ApiKey not configured");
+});
+builder.Services.AddTransient<IResend, ResendClient>();
 
 // Register Email Service
 builder.Services.AddScoped<EmailService>();
