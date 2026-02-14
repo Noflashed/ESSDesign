@@ -62,16 +62,8 @@ namespace ESSDesign.Server.Services
                     message.Subject = subject;
                     message.HtmlBody = htmlContent;
 
-                    var response = await _resend.EmailSendAsync(message);
-
-                    if (response != null && response.Data != Guid.Empty)
-                    {
-                        _logger.LogInformation("Email sent successfully to {Email}. Message ID: {MessageId}", recipientEmail, response.Data);
-                    }
-                    else
-                    {
-                        _logger.LogError("Failed to send email to {Email}", recipientEmail);
-                    }
+                    await _resend.EmailSendAsync(message);
+                    _logger.LogInformation("Email sent to {Email}", recipientEmail);
                 }
             }
             catch (Exception ex)
