@@ -598,9 +598,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {item.isDocument ? formatFileSize(item.totalFileSize) : '—'}
                                 </div>
                                 <div className="list-item-actions">
-                                    {item.isDocument && (
+                                    {item.isDocument ? (
                                         <>
-                                            {item.essDesignIssuePath && (
+                                            {item.essDesignIssuePath ? (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -610,8 +610,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 >
                                                     ESS Design
                                                 </button>
+                                            ) : (
+                                                <div className="file-btn-placeholder"></div>
                                             )}
-                                            {item.thirdPartyDesignPath && (
+                                            {item.thirdPartyDesignPath ? (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -621,9 +623,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 >
                                                     Third-Party Design
                                                 </button>
+                                            ) : (
+                                                <div className="file-btn-placeholder"></div>
                                             )}
                                         </>
-                                    )}
+                                    ) : null}
                                 </div>
                             </div>
                         )
