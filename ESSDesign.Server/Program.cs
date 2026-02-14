@@ -110,8 +110,36 @@ using (var scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline
 app.UseForwardedHeaders();
 
-// Enable CORS early so headers are present on all responses (redirects, errors, etc.)
-app.UseCors("AllowReact");
+// Manual CORS middleware - runs before everything to guarantee headers on all responses
+app.Use(async (context, next) =>
+{
+    var origin = context.Request.Headers.Origin.ToString();
+    if (!string.IsNullOrEmpty(origin))
+    {
+        var allowed = origin == "https://essdesign.app" ||
+                      origin == "https://www.essdesign.app" ||
+                      origin == "https://essdesign-production.up.railway.app" ||
+                      origin.Contains(".vercel.app") ||
+                      origin.StartsWith("http://localhost:");
+
+        if (allowed)
+        {
+            context.Response.Headers.Append("Access-Control-Allow-Origin", origin);
+            context.Response.Headers.Append("Access-Control-Allow-Credentials", "true");
+            context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+            context.Response.Headers.Append("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        }
+
+        // Handle preflight OPTIONS requests immediately
+        if (context.Request.Method == "OPTIONS")
+        {
+            context.Response.StatusCode = 204;
+            return;
+        }
+    }
+
+    await next();
+});
 
 if (app.Environment.IsDevelopment())
 {
@@ -130,6 +158,9 @@ app.UseResponseCompression();
 
 // Routing
 app.UseRouting();
+
+// CORS (kept as backup for endpoint-level policies)
+app.UseCors("AllowReact");
 
 // Authorization
 app.UseAuthorization();
