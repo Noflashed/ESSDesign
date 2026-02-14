@@ -32,6 +32,9 @@ builder.Services.AddScoped<Client>(_ =>
 // Register Supabase Service
 builder.Services.AddScoped<SupabaseService>();
 
+// Register Email Service
+builder.Services.AddScoped<EmailService>();
+
 // Configure CORS - Allow production and development origins
 builder.Services.AddCors(options =>
 {

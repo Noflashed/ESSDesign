@@ -92,7 +92,7 @@ export const foldersAPI = {
         return response.data;
     },
 
-    uploadDocument: async (folderId, revisionNumber, essDesignFile, thirdPartyFile) => {
+    uploadDocument: async (folderId, revisionNumber, essDesignFile, thirdPartyFile, description = '', recipients = []) => {
         const user = authAPI.getCurrentUser();
         const formData = new FormData();
         formData.append('FolderId', folderId);
@@ -100,6 +100,12 @@ export const foldersAPI = {
         if (user?.id) formData.append('UserId', user.id);
         if (essDesignFile) formData.append('EssDesignIssue', essDesignFile);
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
+        if (description) formData.append('Description', description);
+        if (recipients.length > 0) {
+            recipients.forEach(recipientId => {
+                formData.append('RecipientIds', recipientId);
+            });
+        }
 
         const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
             headers: {
@@ -151,4 +157,11 @@ export const preferencesAPI = {
     }
 };
 
-export default { authAPI, foldersAPI, preferencesAPI };
+export const usersAPI = {
+    getAllUsers: async () => {
+        const response = await apiClient.get('/users');
+        return response.data;
+    }
+};
+
+export default { authAPI, foldersAPI, preferencesAPI, usersAPI };

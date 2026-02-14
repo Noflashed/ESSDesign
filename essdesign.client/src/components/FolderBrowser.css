@@ -531,3 +531,46 @@
         transform: rotate(360deg);
     }
 }
+
+.recipient-selection {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    background: var(--bg-primary);
+}
+
+.recipient-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: normal !important;
+    margin-bottom: 0 !important;
+}
+
+    .recipient-checkbox:hover {
+        background: var(--hover-bg);
+    }
+
+    .recipient-checkbox input[type="checkbox"] {
+        margin-right: 8px;
+        cursor: pointer;
+    }
+
+.recipients-count {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.upload-modal {
+    min-width: 550px;
+    max-height: 90vh;
+    overflow-y: auto;
+}

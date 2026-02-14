@@ -389,7 +389,7 @@ namespace ESSDesign.Server.Services
             return breadcrumbs;
         }
 
-        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? userId = null)
+        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null)
         {
             try
             {
@@ -398,6 +398,7 @@ namespace ESSDesign.Server.Services
                     Id = Guid.NewGuid(),
                     FolderId = folderId,
                     RevisionNumber = revisionNumber,
+                    Description = description,
                     UserId = userId,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -802,6 +803,29 @@ namespace ESSDesign.Server.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error upserting user preferences for {UserId}", userId);
+                throw;
+            }
+        }
+
+        public async Task<List<UserInfo>> GetAllUsersAsync()
+        {
+            try
+            {
+                var response = await _supabase
+                    .From<UserName>()
+                    .Order("full_name", Postgrest.Constants.Ordering.Ascending)
+                    .Get();
+
+                return response.Models.Select(u => new UserInfo
+                {
+                    Id = u.Id.ToString(),
+                    Email = u.Email,
+                    FullName = u.FullName
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all users");
                 throw;
             }
         }

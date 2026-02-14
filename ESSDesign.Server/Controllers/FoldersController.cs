@@ -9,11 +9,13 @@ namespace ESSDesign.Server.Controllers
     public class FoldersController : ControllerBase
     {
         private readonly SupabaseService _supabaseService;
+        private readonly EmailService _emailService;
         private readonly ILogger<FoldersController> _logger;
 
-        public FoldersController(SupabaseService supabaseService, ILogger<FoldersController> logger)
+        public FoldersController(SupabaseService supabaseService, EmailService emailService, ILogger<FoldersController> logger)
         {
             _supabaseService = supabaseService;
+            _emailService = emailService;
             _logger = logger;
         }
 
@@ -136,8 +138,58 @@ namespace ESSDesign.Server.Controllers
                     request.RevisionNumber,
                     request.EssDesignIssue,
                     request.ThirdPartyDesign,
+                    request.Description,
                     request.UserId
                 );
+
+                // Send email notifications if recipients were specified
+                if (request.RecipientIds != null && request.RecipientIds.Any())
+                {
+                    try
+                    {
+                        // Get folder info for document name
+                        var folder = await _supabaseService.GetFolderByIdAsync(request.FolderId);
+                        var breadcrumbs = await _supabaseService.GetBreadcrumbsAsync(request.FolderId);
+                        var documentName = string.Join(" / ", breadcrumbs.Select(b => b.Name));
+
+                        // Get uploader name
+                        var uploaderName = "Unknown User";
+                        if (!string.IsNullOrEmpty(request.UserId))
+                        {
+                            var users = await _supabaseService.GetAllUsersAsync();
+                            var uploader = users.FirstOrDefault(u => u.Id == request.UserId);
+                            uploaderName = uploader?.FullName ?? "Unknown User";
+                        }
+
+                        // Get recipient emails
+                        var allUsers = await _supabaseService.GetAllUsersAsync();
+                        var recipientEmails = allUsers
+                            .Where(u => request.RecipientIds.Contains(u.Id))
+                            .Select(u => u.Email)
+                            .ToList();
+
+                        // Send notification emails
+                        await _emailService.SendDocumentUploadNotificationAsync(
+                            recipientEmails,
+                            documentName,
+                            request.RevisionNumber,
+                            uploaderName,
+                            DateTime.UtcNow,
+                            documentId,
+                            request.EssDesignIssue != null,
+                            request.ThirdPartyDesign != null,
+                            request.Description
+                        );
+
+                        _logger.LogInformation("Sent email notifications to {Count} recipients for document {DocumentId}",
+                            recipientEmails.Count, documentId);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        // Log but don't fail the upload if email fails
+                        _logger.LogError(emailEx, "Error sending email notifications for document {DocumentId}", documentId);
+                    }
+                }
 
                 return Ok(new { id = documentId, message = "Document uploaded" });
             }

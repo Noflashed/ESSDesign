@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { foldersAPI } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { foldersAPI, usersAPI } from '../services/api';
 
 function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [revisionNumber, setRevisionNumber] = useState('01');
     const [essDesignFile, setEssDesignFile] = useState(null);
     const [thirdPartyFile, setThirdPartyFile] = useState(null);
+    const [description, setDescription] = useState('');
+    const [selectedRecipients, setSelectedRecipients] = useState([]);
+    const [users, setUsers] = useState([]);
     const [uploading, setUploading] = useState(false);
 
     // Generate revision options 01 to 15
@@ -12,6 +15,19 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
         const num = i + 1;
         return num < 10 ? `0${num}` : `${num}`;
     });
+
+    // Fetch users for recipient selection
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const userList = await usersAPI.getAllUsers();
+                setUsers(userList);
+            } catch (error) {
+                console.error('Failed to fetch users:', error);
+            }
+        };
+        fetchUsers();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -26,7 +42,14 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
 
         setUploading(true);
         try {
-            await foldersAPI.uploadDocument(folderId, revisionNumber, essDesignFile, thirdPartyFile);
+            await foldersAPI.uploadDocument(
+                folderId,
+                revisionNumber,
+                essDesignFile,
+                thirdPartyFile,
+                description,
+                selectedRecipients
+            );
             onSuccess();
         } catch (error) {
             alert('Upload failed: ' + (error.response?.data?.error || error.message));
@@ -79,6 +102,44 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             </label>
                             {thirdPartyFile && <div className="file-selected">✓ {thirdPartyFile.name}</div>}
                         </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label>Change Description (Optional)</label>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Describe the changes in this revision..."
+                            rows={3}
+                            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label>Notify Users (Optional)</label>
+                        <div className="recipient-selection">
+                            {users.map(user => (
+                                <label key={user.id} className="recipient-checkbox">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedRecipients.includes(user.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedRecipients([...selectedRecipients, user.id]);
+                                            } else {
+                                                setSelectedRecipients(selectedRecipients.filter(id => id !== user.id));
+                                            }
+                                        }}
+                                    />
+                                    {user.fullName} ({user.email})
+                                </label>
+                            ))}
+                        </div>
+                        {selectedRecipients.length > 0 && (
+                            <div className="recipients-count">
+                                {selectedRecipients.length} user{selectedRecipients.length > 1 ? 's' : ''} will be notified
+                            </div>
+                        )}
                     </div>
 
                     <div className="modal-actions">
