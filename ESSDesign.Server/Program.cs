@@ -114,11 +114,11 @@ if (!app.Environment.IsDevelopment())
 // Enable response compression
 app.UseResponseCompression();
 
-// Enable CORS - Must be before Authorization and Controllers
-app.UseCors("AllowReact");
-
 // Routing
 app.UseRouting();
+
+// Enable CORS - Must be between Routing and Authorization/Endpoints
+app.UseCors("AllowReact");
 
 // Authorization
 app.UseAuthorization();
