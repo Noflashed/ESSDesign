@@ -147,10 +147,9 @@ namespace ESSDesign.Server.Controllers
                 {
                     try
                     {
-                        // Get folder info for document name
+                        // Get folder info for document name (use nearest/current folder name)
                         var folder = await _supabaseService.GetFolderByIdAsync(request.FolderId);
-                        var breadcrumbs = await _supabaseService.GetBreadcrumbsAsync(request.FolderId);
-                        var documentName = string.Join(" / ", breadcrumbs.Select(b => b.Name));
+                        var documentName = folder.Name;
 
                         // Get uploader name
                         var uploaderName = "Unknown User";
@@ -234,7 +233,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("documents/{documentId}/download/{type}")]
-        public async Task<ActionResult> DownloadDocument(Guid documentId, string type)
+        public async Task<ActionResult> DownloadDocument(Guid documentId, string type, [FromQuery] bool redirect = false)
         {
             try
             {
@@ -243,6 +242,11 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Type must be 'ess' or 'thirdparty'" });
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
+
+                // When accessed from email links, redirect directly to the signed URL
+                if (redirect)
+                    return Redirect(fileInfo.Url);
+
                 return Ok(new { url = fileInfo.Url, fileName = fileInfo.FileName });
             }
             catch (FileNotFoundException ex)

@@ -89,8 +89,8 @@ namespace ESSDesign.Server.Services
             bool hasThirdPartyDesign,
             string? description)
         {
-            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess" : null;
-            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty" : null;
+            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess?redirect=true" : null;
+            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
 
             var html = $@"
 <!DOCTYPE html>
@@ -148,7 +148,7 @@ namespace ESSDesign.Server.Services
                 </div>
                 <div class='info-row'>
                     <span class='info-label'>Upload Date:</span>
-                    <span class='info-value'>{uploadDate:MMMM dd, yyyy 'at' h:mm tt} UTC</span>
+                    <span class='info-value'>{TimeZoneInfo.ConvertTimeFromUtc(uploadDate, TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney")):MMMM dd, yyyy 'at' h:mm tt} AEST</span>
                 </div>
             </div>";
 
