@@ -190,6 +190,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: left;
+    display: flex;
+    align-items: center;
 }
 
 .list-item-revision,
@@ -202,6 +204,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: left;
+    display: flex;
+    align-items: center;
 }
 
 .list-item-actions {
@@ -222,11 +226,18 @@
     font-size: 12px;
     transition: background 0.2s;
     white-space: nowrap;
+    width: 140px;
+    text-align: center;
 }
 
     .file-btn-small:hover {
         background: var(--primary-hover);
     }
+
+.file-btn-placeholder {
+    width: 140px;
+    height: 28px;
+}
 
 .item-card {
     border: 1px solid var(--border-color);
