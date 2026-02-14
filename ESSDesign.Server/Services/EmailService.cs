@@ -104,6 +104,7 @@ namespace ESSDesign.Server.Services
             var formattedDate = aestTime.ToString("dd MMMM yyyy");
             var formattedTime = aestTime.ToString("h:mm tt");
 
+            // All styles are inlined because email clients (Gmail, Outlook, etc.) strip <style> tags
             var html = $@"
 <!DOCTYPE html>
 <html>
@@ -119,136 +120,124 @@ namespace ESSDesign.Server.Services
         </xml>
     </noscript>
     <![endif]-->
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #2d3748; margin: 0; padding: 0; background-color: #edf2f7; -webkit-font-smoothing: antialiased; }}
-        .wrapper {{ width: 100%; background-color: #edf2f7; padding: 40px 20px; }}
-        .container {{ max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.1); }}
-        .header {{ background: #1a1a2e; padding: 36px 32px 32px; text-align: center; }}
-        .header-logo {{ margin-bottom: 20px; }}
-        .header-logo img {{ height: 52px; width: auto; }}
-        .header-divider {{ width: 40px; height: 2px; background: #f5a623; margin: 0 auto 20px; }}
-        .header h1 {{ color: #ffffff; font-size: 21px; font-weight: 600; letter-spacing: -0.2px; margin: 0; }}
-        .header p {{ color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-top: 6px; font-weight: 400; }}
-        .badge {{ display: inline-block; background: #f5a623; color: #1a1a2e; padding: 5px 16px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 18px; }}
-        .content {{ padding: 32px; }}
-        .greeting {{ font-size: 14px; color: #4a5568; margin-bottom: 24px; line-height: 1.7; }}
-        .greeting strong {{ color: #2d3748; }}
-        .section-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; font-weight: 600; margin-bottom: 12px; }}
-        .detail-card {{ background: #f7fafc; border-radius: 8px; padding: 0; margin: 0 0 24px; border: 1px solid #e2e8f0; overflow: hidden; }}
-        .detail-row {{ padding: 14px 20px; border-bottom: 1px solid #e2e8f0; }}
-        .detail-row:last-child {{ border-bottom: none; }}
-        .detail-label {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #a0aec0; font-weight: 600; margin-bottom: 3px; }}
-        .detail-value {{ font-size: 15px; color: #2d3748; font-weight: 500; }}
-        .description-section {{ background: #fffbeb; border-radius: 8px; padding: 18px 20px; margin: 0 0 24px; border: 1px solid #fde68a; border-left: 3px solid #f5a623; }}
-        .description-title {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #b45309; font-weight: 700; margin-bottom: 6px; }}
-        .description-text {{ font-size: 14px; color: #78350f; line-height: 1.6; white-space: pre-wrap; }}
-        .divider {{ height: 1px; background: #e2e8f0; margin: 24px 0; }}
-        .actions {{ margin: 0 0 8px; text-align: center; }}
-        .actions-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; font-weight: 600; margin-bottom: 16px; }}
-        .btn {{ display: inline-block; padding: 12px 24px; margin: 5px; border-radius: 6px; font-weight: 600; font-size: 13px; text-decoration: none; }}
-        .btn-primary {{ background: #f5a623; color: #1a1a2e !important; }}
-        .btn-secondary {{ background: #ffffff; color: #2d3748 !important; border: 1px solid #cbd5e0; }}
-        .btn-download {{ background: #1a1a2e; color: #ffffff !important; }}
-        .footer {{ background: #f7fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0; }}
-        .footer-brand {{ font-size: 12px; font-weight: 700; color: #2d3748; letter-spacing: 0.5px; margin-bottom: 6px; }}
-        .footer-text {{ font-size: 11px; color: #a0aec0; line-height: 1.6; }}
-        @media only screen and (max-width: 600px) {{
-            .wrapper {{ padding: 16px 8px; }}
-            .container {{ border-radius: 8px; }}
-            .header {{ padding: 28px 20px 24px; }}
-            .header h1 {{ font-size: 18px; }}
-            .content {{ padding: 24px 20px; }}
-            .btn {{ display: block; margin: 6px 0; text-align: center; }}
-            .footer {{ padding: 20px; }}
-        }}
-    </style>
 </head>
-<body>
-    <div class='wrapper'>
-        <div class='container'>
-            <div class='header'>
-                <div class='header-logo'>
-                    <img src='{logoUrl}' alt='ErectSafe Scaffolding' height='52' style='height:52px;width:auto;' />
-                </div>
-                <div class='header-divider'></div>
-                <h1>New Document Uploaded</h1>
-                <p>A new revision has been added to the design system</p>
-                <span class='badge'>Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</span>
-            </div>
-            <div class='content'>
-                <p class='greeting'>
-                    <strong>{System.Web.HttpUtility.HtmlEncode(uploaderName)}</strong> has uploaded a new document revision. Here are the details:
-                </p>
+<body style=""margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d3748;background-color:#edf2f7;-webkit-font-smoothing:antialiased;"">
+    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#edf2f7;padding:40px 20px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""620"" style=""max-width:620px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;"">
+                    <!-- Header -->
+                    <tr>
+                        <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 auto 20px;"">
+                                <tr><td style=""width:40px;height:2px;background-color:#f5a623;font-size:0;line-height:0;"">&nbsp;</td></tr>
+                            </table>
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0;"">New Document Uploaded</h1>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">A new revision has been added to the design system</p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:18px auto 0;"">
+                                <tr><td style=""background-color:#f5a623;color:#1a1a2e;padding:5px 16px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;"">Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</td></tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
+                                <strong style=""color:#2d3748;"">{System.Web.HttpUtility.HtmlEncode(uploaderName)}</strong> has uploaded a new document revision. Here are the details:
+                            </p>
 
-                <div class='section-label'>Document Details</div>
-                <div class='detail-card'>
-                    <div class='detail-row'>
-                        <div class='detail-label'>Document</div>
-                        <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(documentName)}</div>
-                    </div>
-                    <div class='detail-row'>
-                        <div class='detail-label'>Revision</div>
-                        <div class='detail-value'>Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</div>
-                    </div>
-                    <div class='detail-row'>
-                        <div class='detail-label'>Uploaded By</div>
-                        <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(uploaderName)}</div>
-                    </div>
-                    <div class='detail-row'>
-                        <div class='detail-label'>Date &amp; Time</div>
-                        <div class='detail-value'>{formattedDate} at {formattedTime} AEST</div>
-                    </div>
-                </div>";
+                            <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 12px;"">Document Details</p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Document</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(documentName)}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Revision</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Uploaded By</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(uploaderName)}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding:14px 20px;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Date &amp; Time</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{formattedDate} at {formattedTime} AEST</p>
+                                    </td>
+                                </tr>
+                            </table>";
 
             if (!string.IsNullOrWhiteSpace(description))
             {
                 html += $@"
-                <div class='description-section'>
-                    <div class='description-title'>Change Notes</div>
-                    <div class='description-text'>{System.Web.HttpUtility.HtmlEncode(description)}</div>
-                </div>";
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:0 0 24px;border:1px solid #fde68a;border-left:3px solid #f5a623;border-radius:8px;background-color:#fffbeb;"">
+                                <tr>
+                                    <td style=""padding:18px 20px;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#b45309;font-weight:700;margin:0 0 6px;"">Change Notes</p>
+                                        <p style=""font-size:14px;color:#78350f;line-height:1.6;margin:0;white-space:pre-wrap;"">{System.Web.HttpUtility.HtmlEncode(description)}</p>
+                                    </td>
+                                </tr>
+                            </table>";
             }
 
             html += @"
-                <div class='divider'></div>
+                            <!-- Divider -->
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:24px 0;"">
+                                <tr><td style=""height:1px;background-color:#e2e8f0;font-size:0;line-height:0;"">&nbsp;</td></tr>
+                            </table>
 
-                <div class='actions'>
-                    <div class='actions-title'>Actions</div>";
+                            <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 16px;text-align:center;"">Actions</p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
+                                <tr><td align=""center"">";
 
             html += $@"
-                    <a href='{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}' class='btn btn-primary'>
-                        Open in ESS Design
-                    </a>";
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
+                                        Open in ESS Design
+                                    </a>";
 
             if (hasEssDesign)
             {
                 html += $@"
-                    <a href='{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}' class='btn btn-download'>
-                        Download ESS Design
-                    </a>";
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#1a1a2e;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
+                                        Download ESS Design
+                                    </a>";
             }
 
             if (hasThirdPartyDesign)
             {
                 html += $@"
-                    <a href='{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}' class='btn btn-secondary'>
-                        Download Third-Party
-                    </a>";
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#ffffff;color:#2d3748;border:1px solid #cbd5e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
+                                        Download Third-Party
+                                    </a>";
             }
 
             html += $@"
-                </div>
-            </div>
-            <div class='footer'>
-                <div class='footer-brand'>ESS Design</div>
-                <div class='footer-text'>
-                    Automated notification from the ESS Design document management system.<br>
-                    &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
-                </div>
-            </div>
-        </div>
-    </div>
+                                </td></tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td align=""center"" style=""background-color:#f7fafc;padding:24px 32px;border-top:1px solid #e2e8f0;"">
+                            <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
+                            <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">
+                                Automated notification from the ESS Design document management system.<br>
+                                &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>";
 
