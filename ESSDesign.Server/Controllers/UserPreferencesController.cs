@@ -1,12 +1,10 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
-using System.Security.Claims;
+using System.Text.Json;
 
 namespace ESSDesign.Server.Controllers
 {
-    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class UserPreferencesController : ControllerBase
@@ -24,15 +22,32 @@ namespace ESSDesign.Server.Controllers
 
         private Guid GetUserId()
         {
-            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                ?? throw new UnauthorizedAccessException("User ID not found");
-            
-            if (!Guid.TryParse(userIdString, out var userId))
+            var authHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
             {
-                throw new UnauthorizedAccessException("Invalid User ID format");
+                throw new UnauthorizedAccessException("No authorization token provided");
             }
-            
-            return userId;
+
+            var token = authHeader["Bearer ".Length..];
+            // Decode the JWT payload (second segment) to extract the user ID
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                throw new UnauthorizedAccessException("Invalid token format");
+            }
+
+            var payload = parts[1];
+            // Pad base64 if needed
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            var jsonBytes = Convert.FromBase64String(payload);
+            var claims = JsonSerializer.Deserialize<JsonElement>(jsonBytes);
+
+            if (claims.TryGetProperty("sub", out var sub) && Guid.TryParse(sub.GetString(), out var userId))
+            {
+                return userId;
+            }
+
+            throw new UnauthorizedAccessException("User ID not found in token");
         }
 
         [HttpGet]

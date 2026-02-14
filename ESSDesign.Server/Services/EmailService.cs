@@ -5,13 +5,13 @@ namespace ESSDesign.Server.Services
 {
     public class EmailService
     {
-        private readonly IResend _resend;
+        private readonly IResend? _resend;
         private readonly string _fromEmail;
         private readonly string _fromName;
         private readonly string _appBaseUrl;
         private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IResend resend, IConfiguration configuration, ILogger<EmailService> logger)
+        public EmailService(IResend? resend, IConfiguration configuration, ILogger<EmailService> logger)
         {
             _resend = resend;
             _fromEmail = configuration["Resend:FromEmail"] ?? "noreply@essdesign.com";
@@ -34,6 +34,12 @@ namespace ESSDesign.Server.Services
             if (recipientEmails == null || !recipientEmails.Any())
             {
                 _logger.LogWarning("No recipients provided for email notification");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping notifications.");
                 return;
             }
 
