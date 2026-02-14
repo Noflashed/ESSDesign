@@ -1,6 +1,6 @@
 # Email Notifications Setup Guide
 
-This guide will help you configure the email notification system for document uploads in the ESS Design application.
+This guide will help you configure the email notification system for document uploads in the ESS Design application using **Resend**.
 
 ## Overview
 
@@ -11,54 +11,75 @@ The email notification system allows users to send automated email notifications
 
 ## Prerequisites
 
-1. A SendGrid account (free tier available: 100 emails/day)
+1. A Resend account (free tier: 3,000 emails/month, 100 emails/day)
 2. Access to your application's configuration settings
 3. Database access to run the migration script
 
-## Step 1: Create SendGrid Account & API Key
+## Step 1: Create Resend Account & API Key
 
-### 1.1 Sign up for SendGrid
-1. Go to [https://sendgrid.com/](https://sendgrid.com/)
-2. Click "Start for Free" and create an account
-3. Verify your email address
+### 1.1 Sign up for Resend
+1. Go to [https://resend.com/](https://resend.com/)
+2. Click "Start Building" or "Sign Up"
+3. Create an account (can use GitHub to sign in)
+4. Verify your email address
 
-### 1.2 Create API Key
-1. Log in to SendGrid dashboard
-2. Navigate to **Settings** → **API Keys**
-3. Click **Create API Key**
-4. Name it (e.g., "ESS Design Notifications")
-5. Select **Full Access** or at minimum **Mail Send** permissions
-6. Click **Create & View**
-7. **IMPORTANT**: Copy the API key immediately - it won't be shown again!
+### 1.2 Add Your Domain (Recommended) or Use Onboarding Domain
 
-### 1.3 Verify Sender Identity
-SendGrid requires sender verification:
+**Option A - Use Onboarding Domain (Quick Start for Testing):**
+- Resend provides an onboarding domain for immediate testing
+- Limited to 1 email per day
+- Emails can only be sent to your verified email address
+- Good for development/testing only
 
-1. Navigate to **Settings** → **Sender Authentication**
-2. Choose one of two options:
+**Option B - Add Your Own Domain (Recommended for Production):**
 
-   **Option A - Single Sender Verification (Recommended for testing):**
-   - Click **Verify a Single Sender**
-   - Fill in your details:
-     - From Name: `ESS Design System`
-     - From Email Address: Your verified email (e.g., `notifications@yourdomain.com`)
-   - Verify the email sent to this address
+1. In Resend dashboard, go to **Domains** → **Add Domain**
+2. Enter your domain (e.g., `essdesign.com`)
+3. Add the DNS records to your domain provider:
+   - **SPF Record** (TXT): Prevents email spoofing
+   - **DKIM Records** (TXT): Verifies email authenticity
+   - **MX Record** (optional): For bounce handling
 
-   **Option B - Domain Authentication (Recommended for production):**
-   - Click **Authenticate Your Domain**
-   - Follow the wizard to add DNS records to your domain
-   - This provides better deliverability and professionalism
+Example DNS Records:
+```
+Type: TXT
+Name: @
+Value: v=spf1 include:resend.com ~all
+
+Type: TXT
+Name: resend._domainkey
+Value: [Provided by Resend]
+
+Type: TXT
+Name: _dmarc
+Value: [Provided by Resend]
+```
+
+4. Click **Verify DNS Records** (may take a few minutes to propagate)
+5. Once verified, your domain is ready to send emails!
+
+### 1.3 Create API Key
+
+1. Go to **API Keys** in the Resend dashboard
+2. Click **Create API Key**
+3. Name it (e.g., "ESS Design Notifications")
+4. Select permissions:
+   - **Sending access**: Required
+   - **Full access**: Optional (only if you need other features)
+5. Click **Create**
+6. **IMPORTANT**: Copy the API key immediately - it won't be shown again!
+   - Format: `re_xxxxxxxxxxxx`
 
 ## Step 2: Configure Application Settings
 
-### 2.1 Add SendGrid Configuration
+### 2.1 Add Resend Configuration
 
 Add the following to your `appsettings.json` or `appsettings.Production.json`:
 
 ```json
 {
-  "SendGrid": {
-    "ApiKey": "YOUR_SENDGRID_API_KEY_HERE",
+  "Resend": {
+    "ApiKey": "re_your_api_key_here",
     "FromEmail": "notifications@yourdomain.com",
     "FromName": "ESS Design System"
   },
@@ -68,23 +89,28 @@ Add the following to your `appsettings.json` or `appsettings.Production.json`:
 }
 ```
 
-### 2.2 Environment Variables (Alternative)
+**Important Notes:**
+- `FromEmail` must use a verified domain (either your custom domain or Resend's onboarding domain)
+- For testing with onboarding domain, use: `onboarding@resend.dev`
+- For production, use your verified domain: `notifications@yourdomain.com`
+
+### 2.2 Environment Variables (Recommended for Production)
 
 For better security, use environment variables instead:
 
 **Linux/Mac:**
 ```bash
-export SendGrid__ApiKey="YOUR_SENDGRID_API_KEY_HERE"
-export SendGrid__FromEmail="notifications@yourdomain.com"
-export SendGrid__FromName="ESS Design System"
+export Resend__ApiKey="re_your_api_key_here"
+export Resend__FromEmail="notifications@yourdomain.com"
+export Resend__FromName="ESS Design System"
 export AppSettings__BaseUrl="https://yourdomain.com"
 ```
 
 **Windows:**
 ```powershell
-$env:SendGrid__ApiKey="YOUR_SENDGRID_API_KEY_HERE"
-$env:SendGrid__FromEmail="notifications@yourdomain.com"
-$env:SendGrid__FromName="ESS Design System"
+$env:Resend__ApiKey="re_your_api_key_here"
+$env:Resend__FromEmail="notifications@yourdomain.com"
+$env:Resend__FromName="ESS Design System"
 $env:AppSettings__BaseUrl="https://yourdomain.com"
 ```
 
@@ -93,9 +119,9 @@ $env:AppSettings__BaseUrl="https://yourdomain.com"
 services:
   essdesign-api:
     environment:
-      - SendGrid__ApiKey=YOUR_SENDGRID_API_KEY_HERE
-      - SendGrid__FromEmail=notifications@yourdomain.com
-      - SendGrid__FromName=ESS Design System
+      - Resend__ApiKey=re_your_api_key_here
+      - Resend__FromEmail=notifications@yourdomain.com
+      - Resend__FromName=ESS Design System
       - AppSettings__BaseUrl=https://yourdomain.com
 ```
 
@@ -103,9 +129,9 @@ services:
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| `SendGrid:ApiKey` | Your SendGrid API key (keep secret!) | `SG.abc123...` |
-| `SendGrid:FromEmail` | Email address notifications come from (must be verified in SendGrid) | `notifications@essdesign.com` |
-| `SendGrid:FromName` | Display name for sender | `ESS Design System` |
+| `Resend:ApiKey` | Your Resend API key (keep secret!) | `re_abc123...` |
+| `Resend:FromEmail` | Email address notifications come from (must be from verified domain) | `notifications@essdesign.com` |
+| `Resend:FromName` | Display name for sender | `ESS Design System` |
 | `AppSettings:BaseUrl` | Your application's base URL (for generating document links) | `https://essdesign.app` |
 
 ## Step 3: Run Database Migration
@@ -121,6 +147,14 @@ Apply the database migration to add the `description` column:
 ### Using psql:
 ```bash
 psql -h your-database-host -U your-username -d your-database-name -f database/migrations/002_add_description_to_documents.sql
+```
+
+### Migration SQL:
+```sql
+ALTER TABLE design_documents
+ADD COLUMN IF NOT EXISTS description TEXT;
+
+COMMENT ON COLUMN design_documents.description IS 'Optional description of changes made in this revision';
 ```
 
 ## Step 4: Restart Application
@@ -140,6 +174,8 @@ sudo systemctl restart essdesign-api
 
 ## Step 5: Test the Feature
 
+### Quick Test Steps:
+
 1. **Log in** to your ESS Design application
 2. **Navigate** to any folder
 3. **Click** "Upload Document"
@@ -151,16 +187,38 @@ sudo systemctl restart essdesign-api
 5. **Click** "Upload"
 6. **Check** recipient inboxes for the notification email
 
+### Testing with Onboarding Domain:
+
+If using Resend's onboarding domain:
+- You can only send to your own verified email
+- Select yourself as the recipient to test
+- Check your email inbox (may take 1-2 minutes)
+
 ### Troubleshooting Email Delivery
 
 If emails aren't being received:
 
-1. **Check spam folders** - First emails may be filtered
-2. **Verify SendGrid sender** - Ensure sender email is verified
-3. **Check application logs** - Look for error messages
-4. **Verify API key** - Ensure it's correctly configured
-5. **Check SendGrid dashboard** - View activity logs
-6. **Test with yourself first** - Select your own email as recipient
+1. **Check application logs** - Look for error messages in server logs
+   ```bash
+   # Check for email-related errors
+   grep -i "email" logs/app.log
+   ```
+
+2. **Verify Resend Dashboard**:
+   - Go to **Emails** tab in Resend dashboard
+   - Check email status (Sent, Delivered, Failed, etc.)
+   - View delivery details and error messages
+
+3. **Common Issues**:
+   - ❌ **Domain not verified**: Add and verify your domain
+   - ❌ **Wrong from email**: Ensure it matches verified domain
+   - ❌ **API key invalid**: Generate a new key
+   - ❌ **Rate limit exceeded**: Check Resend dashboard for limits
+   - ❌ **Recipient email invalid**: Verify recipient email addresses
+
+4. **Check spam folders** - First emails may be filtered
+
+5. **Test with yourself first** - Select your own email as recipient
 
 ## Email Template Customization
 
@@ -170,48 +228,79 @@ The email template is defined in `/ESSDesign.Server/Services/EmailService.cs`.
 
 **Colors & Branding:**
 ```csharp
-// In BuildHtmlEmailContent method
-.header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}
-.button {{ background: #667eea; }}
+// In BuildHtmlEmailContent method, modify the CSS:
+.header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.button { background: #667eea; }
+.info-box { border-left: 4px solid #667eea; }
 ```
 
-**Email Content:**
-Modify the HTML/text in `BuildHtmlEmailContent()` and `BuildPlainTextEmailContent()` methods.
+**Email Structure:**
+The template uses responsive HTML with:
+- Mobile-friendly design (media queries)
+- Gradient header
+- Information box with document details
+- Optional description box (yellow highlight)
+- Download buttons
+- Footer with branding
+
+**Modify Content:**
+Edit the HTML in `BuildHtmlEmailContent()` method to customize the layout and text.
 
 ## Security Best Practices
 
 1. ✅ **Never commit API keys** to version control
 2. ✅ **Use environment variables** in production
-3. ✅ **Restrict API key permissions** to only Mail Send
-4. ✅ **Rotate API keys** periodically
-5. ✅ **Monitor SendGrid usage** to detect abuse
-6. ✅ **Implement rate limiting** if needed
+3. ✅ **Restrict API key permissions** to Sending Access only
+4. ✅ **Rotate API keys** periodically (every 3-6 months)
+5. ✅ **Monitor Resend usage** to detect abuse
+6. ✅ **Implement rate limiting** if needed (application-level)
+7. ✅ **Use HTTPS** for all document download links
+8. ✅ **Verify sender domain** with SPF/DKIM/DMARC
 
-## SendGrid Free Tier Limits
+## Resend Free Tier Limits
 
-- **100 emails per day** (forever free)
-- Email validation available
-- Basic templates included
-- Email activity feed for 3 days
+- **3,000 emails per month** (free forever)
+- **100 emails per day**
+- Email activity logs for 30 days
+- Webhook support
+- Email testing in sandbox
+- React email templates supported
 
-For higher volume, consider upgrading to a paid plan.
+For higher volume, paid plans start at $20/month for 50,000 emails.
 
 ## Production Checklist
 
-- [ ] SendGrid API key configured via environment variable
-- [ ] Sender domain authenticated (not just single sender)
-- [ ] Database migration applied
+- [ ] Resend account created and verified
+- [ ] Custom domain added and verified (DNS records configured)
+- [ ] API key configured via environment variable (not hardcoded)
+- [ ] Database migration applied successfully
 - [ ] Email template tested and working
 - [ ] Spam filters checked (test across Gmail, Outlook, etc.)
 - [ ] Application logs monitored for email errors
 - [ ] Rate limiting considered if needed
 - [ ] Recipient selection tested with multiple users
+- [ ] Document download links tested (HTTPS working)
+- [ ] DMARC policy configured for domain
+- [ ] Bounce handling configured (optional)
+
+## Resend Advantages
+
+✅ **Modern API** - Simple, developer-friendly REST API
+✅ **React Email** - Use React components for emails (optional)
+✅ **Generous Free Tier** - 3,000 emails/month free
+✅ **Fast Setup** - Domain verification in minutes
+✅ **Great Deliverability** - High inbox placement rates
+✅ **Real-time Logs** - See email status instantly
+✅ **Webhooks** - Get notified of bounces, opens, clicks
+✅ **No Complex Setup** - Much simpler than SendGrid/AWS SES
 
 ## Support & Resources
 
-- **SendGrid Documentation**: https://docs.sendgrid.com/
-- **SendGrid Support**: https://support.sendgrid.com/
-- **Email Deliverability Guide**: https://sendgrid.com/resource/email-deliverability-guide/
+- **Resend Documentation**: https://resend.com/docs
+- **Resend API Reference**: https://resend.com/docs/api-reference
+- **Domain Setup Guide**: https://resend.com/docs/dashboard/domains/introduction
+- **Resend Status Page**: https://status.resend.com/
+- **Support Email**: support@resend.com
 
 ## Feature Architecture
 
@@ -235,8 +324,8 @@ For higher volume, consider upgrading to a paid plan.
                            │
                            ▼
                     ┌──────────────┐
-                    │   SendGrid   │
-                    │  API (SMTP)  │
+                    │   Resend API │
+                    │              │
                     └──────┬───────┘
                            │
                            ▼
@@ -247,8 +336,17 @@ For higher volume, consider upgrading to a paid plan.
                     └──────────────┘
 ```
 
+## Quick Start Summary
+
+1. **Sign up** at resend.com
+2. **Create API key** in Resend dashboard
+3. **Add to config**: `Resend:ApiKey`, `Resend:FromEmail`, `Resend:FromName`
+4. **Run migration**: Add description column to database
+5. **Restart app** and test!
+
 ---
 
 **Created**: 2026-02-14
 **Last Updated**: 2026-02-14
-**Version**: 1.0
+**Version**: 2.0 (Resend)
+**Previous Version**: 1.0 (SendGrid)
