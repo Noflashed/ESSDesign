@@ -110,6 +110,9 @@ using (var scope = app.Services.CreateScope())
 // Configure the HTTP request pipeline
 app.UseForwardedHeaders();
 
+// Enable CORS early so headers are present on all responses (redirects, errors, etc.)
+app.UseCors("AllowReact");
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -127,9 +130,6 @@ app.UseResponseCompression();
 
 // Routing
 app.UseRouting();
-
-// Enable CORS - Must be between Routing and Authorization/Endpoints
-app.UseCors("AllowReact");
 
 // Authorization
 app.UseAuthorization();
