@@ -98,6 +98,8 @@ namespace ESSDesign.Server.Services
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
             var folderLink = $"{_frontendUrl}?folder={folderId}";
 
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
+
             var aestTime = TimeZoneInfo.ConvertTimeFromUtc(uploadDate, TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney"));
             var formattedDate = aestTime.ToString("dd MMMM yyyy");
             var formattedTime = aestTime.ToString("h:mm tt");
@@ -119,52 +121,45 @@ namespace ESSDesign.Server.Services
     <![endif]-->
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1a1a2e; margin: 0; padding: 0; background-color: #f0f2f5; -webkit-font-smoothing: antialiased; }}
-        .wrapper {{ width: 100%; background-color: #f0f2f5; padding: 40px 20px; }}
-        .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08); }}
-        .header {{ background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); padding: 40px 32px; text-align: center; }}
-        .header-logo {{ margin-bottom: 16px; }}
-        .header-logo img {{ height: 48px; }}
-        .header h1 {{ color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin: 0; }}
-        .header p {{ color: rgba(255, 255, 255, 0.7); font-size: 14px; margin-top: 8px; font-weight: 400; }}
-        .badge {{ display: inline-block; background: rgba(255, 255, 255, 0.15); color: #ffffff; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 16px; border: 1px solid rgba(255, 255, 255, 0.2); }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #2d3748; margin: 0; padding: 0; background-color: #edf2f7; -webkit-font-smoothing: antialiased; }}
+        .wrapper {{ width: 100%; background-color: #edf2f7; padding: 40px 20px; }}
+        .container {{ max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.1); }}
+        .header {{ background: #1a1a2e; padding: 36px 32px 32px; text-align: center; }}
+        .header-logo {{ margin-bottom: 20px; }}
+        .header-logo img {{ height: 52px; width: auto; }}
+        .header-divider {{ width: 40px; height: 2px; background: #f5a623; margin: 0 auto 20px; }}
+        .header h1 {{ color: #ffffff; font-size: 21px; font-weight: 600; letter-spacing: -0.2px; margin: 0; }}
+        .header p {{ color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-top: 6px; font-weight: 400; }}
+        .badge {{ display: inline-block; background: #f5a623; color: #1a1a2e; padding: 5px 16px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 18px; }}
         .content {{ padding: 32px; }}
-        .greeting {{ font-size: 15px; color: #555; margin-bottom: 24px; line-height: 1.7; }}
-        .detail-card {{ background: #f8f9fb; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #e8eaef; }}
-        .detail-row {{ display: flex; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #e8eaef; }}
+        .greeting {{ font-size: 14px; color: #4a5568; margin-bottom: 24px; line-height: 1.7; }}
+        .greeting strong {{ color: #2d3748; }}
+        .section-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; font-weight: 600; margin-bottom: 12px; }}
+        .detail-card {{ background: #f7fafc; border-radius: 8px; padding: 0; margin: 0 0 24px; border: 1px solid #e2e8f0; overflow: hidden; }}
+        .detail-row {{ padding: 14px 20px; border-bottom: 1px solid #e2e8f0; }}
         .detail-row:last-child {{ border-bottom: none; }}
-        .detail-icon {{ width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 14px; flex-shrink: 0; font-size: 16px; }}
-        .detail-icon.doc {{ background: #e8f0fe; }}
-        .detail-icon.rev {{ background: #e6f4ea; }}
-        .detail-icon.user {{ background: #fce8e6; }}
-        .detail-icon.date {{ background: #fef7e0; }}
-        .detail-text {{ flex: 1; }}
-        .detail-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; font-weight: 600; margin-bottom: 2px; }}
-        .detail-value {{ font-size: 15px; color: #1a1a2e; font-weight: 500; }}
-        .description-section {{ background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%); border-radius: 12px; padding: 20px 24px; margin: 24px 0; border-left: 4px solid #f9a825; }}
-        .description-title {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: #f57f17; font-weight: 700; margin-bottom: 8px; }}
-        .description-text {{ font-size: 14px; color: #5d4037; line-height: 1.6; white-space: pre-wrap; }}
-        .actions {{ margin: 32px 0 8px; text-align: center; }}
-        .actions-title {{ font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: 600; margin-bottom: 16px; }}
-        .btn {{ display: inline-block; padding: 14px 28px; margin: 6px; border-radius: 10px; font-weight: 600; font-size: 14px; text-decoration: none; transition: all 0.2s; }}
-        .btn-primary {{ background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #ffffff !important; box-shadow: 0 4px 14px rgba(26, 26, 46, 0.3); }}
-        .btn-secondary {{ background: #ffffff; color: #1a1a2e !important; border: 2px solid #1a1a2e; }}
-        .btn-download {{ background: linear-gradient(135deg, #0f3460 0%, #1a5276 100%); color: #ffffff !important; box-shadow: 0 4px 14px rgba(15, 52, 96, 0.25); }}
-        .divider {{ height: 1px; background: #e8eaef; margin: 28px 0; }}
-        .folder-link {{ text-align: center; margin: 24px 0 8px; }}
-        .folder-link a {{ color: #0f3460; font-weight: 600; text-decoration: none; font-size: 14px; border-bottom: 2px solid #0f3460; padding-bottom: 2px; }}
-        .footer {{ background: #f8f9fb; padding: 28px 32px; text-align: center; border-top: 1px solid #e8eaef; }}
-        .footer-brand {{ font-size: 13px; font-weight: 700; color: #1a1a2e; letter-spacing: 0.5px; margin-bottom: 8px; }}
-        .footer-text {{ font-size: 12px; color: #999; line-height: 1.6; }}
-        .footer-link {{ color: #0f3460; text-decoration: none; font-weight: 500; }}
+        .detail-label {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #a0aec0; font-weight: 600; margin-bottom: 3px; }}
+        .detail-value {{ font-size: 15px; color: #2d3748; font-weight: 500; }}
+        .description-section {{ background: #fffbeb; border-radius: 8px; padding: 18px 20px; margin: 0 0 24px; border: 1px solid #fde68a; border-left: 3px solid #f5a623; }}
+        .description-title {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #b45309; font-weight: 700; margin-bottom: 6px; }}
+        .description-text {{ font-size: 14px; color: #78350f; line-height: 1.6; white-space: pre-wrap; }}
+        .divider {{ height: 1px; background: #e2e8f0; margin: 24px 0; }}
+        .actions {{ margin: 0 0 8px; text-align: center; }}
+        .actions-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; font-weight: 600; margin-bottom: 16px; }}
+        .btn {{ display: inline-block; padding: 12px 24px; margin: 5px; border-radius: 6px; font-weight: 600; font-size: 13px; text-decoration: none; }}
+        .btn-primary {{ background: #f5a623; color: #1a1a2e !important; }}
+        .btn-secondary {{ background: #ffffff; color: #2d3748 !important; border: 1px solid #cbd5e0; }}
+        .btn-download {{ background: #1a1a2e; color: #ffffff !important; }}
+        .footer {{ background: #f7fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e2e8f0; }}
+        .footer-brand {{ font-size: 12px; font-weight: 700; color: #2d3748; letter-spacing: 0.5px; margin-bottom: 6px; }}
+        .footer-text {{ font-size: 11px; color: #a0aec0; line-height: 1.6; }}
         @media only screen and (max-width: 600px) {{
             .wrapper {{ padding: 16px 8px; }}
-            .container {{ border-radius: 12px; }}
-            .header {{ padding: 28px 20px; }}
-            .header h1 {{ font-size: 19px; }}
+            .container {{ border-radius: 8px; }}
+            .header {{ padding: 28px 20px 24px; }}
+            .header h1 {{ font-size: 18px; }}
             .content {{ padding: 24px 20px; }}
-            .detail-card {{ padding: 16px; }}
-            .btn {{ display: block; margin: 8px 0; text-align: center; }}
+            .btn {{ display: block; margin: 6px 0; text-align: center; }}
             .footer {{ padding: 20px; }}
         }}
     </style>
@@ -173,6 +168,10 @@ namespace ESSDesign.Server.Services
     <div class='wrapper'>
         <div class='container'>
             <div class='header'>
+                <div class='header-logo'>
+                    <img src='{logoUrl}' alt='ErectSafe Scaffolding' height='52' style='height:52px;width:auto;' />
+                </div>
+                <div class='header-divider'></div>
                 <h1>New Document Uploaded</h1>
                 <p>A new revision has been added to the design system</p>
                 <span class='badge'>Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</span>
@@ -182,42 +181,23 @@ namespace ESSDesign.Server.Services
                     <strong>{System.Web.HttpUtility.HtmlEncode(uploaderName)}</strong> has uploaded a new document revision. Here are the details:
                 </p>
 
+                <div class='section-label'>Document Details</div>
                 <div class='detail-card'>
                     <div class='detail-row'>
-                        <div class='detail-icon doc'>
-                            <span>&#128196;</span>
-                        </div>
-                        <div class='detail-text'>
-                            <div class='detail-label'>Document</div>
-                            <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(documentName)}</div>
-                        </div>
+                        <div class='detail-label'>Document</div>
+                        <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(documentName)}</div>
                     </div>
                     <div class='detail-row'>
-                        <div class='detail-icon rev'>
-                            <span>&#128204;</span>
-                        </div>
-                        <div class='detail-text'>
-                            <div class='detail-label'>Revision</div>
-                            <div class='detail-value'>Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</div>
-                        </div>
+                        <div class='detail-label'>Revision</div>
+                        <div class='detail-value'>Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</div>
                     </div>
                     <div class='detail-row'>
-                        <div class='detail-icon user'>
-                            <span>&#128100;</span>
-                        </div>
-                        <div class='detail-text'>
-                            <div class='detail-label'>Uploaded By</div>
-                            <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(uploaderName)}</div>
-                        </div>
+                        <div class='detail-label'>Uploaded By</div>
+                        <div class='detail-value'>{System.Web.HttpUtility.HtmlEncode(uploaderName)}</div>
                     </div>
                     <div class='detail-row'>
-                        <div class='detail-icon date'>
-                            <span>&#128197;</span>
-                        </div>
-                        <div class='detail-text'>
-                            <div class='detail-label'>Date &amp; Time</div>
-                            <div class='detail-value'>{formattedDate} at {formattedTime} AEST</div>
-                        </div>
+                        <div class='detail-label'>Date &amp; Time</div>
+                        <div class='detail-value'>{formattedDate} at {formattedTime} AEST</div>
                     </div>
                 </div>";
 
@@ -234,18 +214,18 @@ namespace ESSDesign.Server.Services
                 <div class='divider'></div>
 
                 <div class='actions'>
-                    <div class='actions-title'>Quick Actions</div>";
+                    <div class='actions-title'>Actions</div>";
 
             html += $@"
                     <a href='{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}' class='btn btn-primary'>
-                        &#128193; Open in ESS Design
+                        Open in ESS Design
                     </a>";
 
             if (hasEssDesign)
             {
                 html += $@"
                     <a href='{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}' class='btn btn-download'>
-                        &#128229; Download ESS Design
+                        Download ESS Design
                     </a>";
             }
 
@@ -253,7 +233,7 @@ namespace ESSDesign.Server.Services
             {
                 html += $@"
                     <a href='{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}' class='btn btn-secondary'>
-                        &#128229; Download Third-Party
+                        Download Third-Party
                     </a>";
             }
 
@@ -263,7 +243,7 @@ namespace ESSDesign.Server.Services
             <div class='footer'>
                 <div class='footer-brand'>ESS Design</div>
                 <div class='footer-text'>
-                    This is an automated notification from the ESS Design document management system.<br>
+                    Automated notification from the ESS Design document management system.<br>
                     &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
                 </div>
             </div>
