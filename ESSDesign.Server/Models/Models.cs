@@ -37,6 +37,9 @@ namespace ESSDesign.Server.Models
         [Column("revision_number")]
         public string RevisionNumber { get; set; } = string.Empty;
 
+        [Column("description")]
+        public string? Description { get; set; }
+
         [Column("ess_design_issue_path")]
         public string? EssDesignIssuePath { get; set; }
 
@@ -151,9 +154,11 @@ namespace ESSDesign.Server.Models
     {
         public Guid FolderId { get; set; }
         public string RevisionNumber { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public string? UserId { get; set; }
         public IFormFile? EssDesignIssue { get; set; }
         public IFormFile? ThirdPartyDesign { get; set; }
+        public List<string>? RecipientIds { get; set; }
         public long? EssDesignFileSize { get; set; }
         public long? ThirdPartyDesignFileSize { get; set; }
     }
