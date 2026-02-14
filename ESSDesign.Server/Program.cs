@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using ESSDesign.Server.Services;
 using Supabase;
 using Resend;
@@ -13,6 +14,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
+});
+
+// Trust proxy headers (Railway/edge proxies) so HTTPS redirection and CORS behave correctly
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // Configure Supabase
@@ -99,6 +108,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -114,11 +125,11 @@ if (!app.Environment.IsDevelopment())
 // Enable response compression
 app.UseResponseCompression();
 
-// Enable CORS - Must be before Authorization and Controllers
-app.UseCors("AllowReact");
-
 // Routing
 app.UseRouting();
+
+// Enable CORS - Must be between Routing and Authorization/Endpoints
+app.UseCors("AllowReact");
 
 // Authorization
 app.UseAuthorization();
