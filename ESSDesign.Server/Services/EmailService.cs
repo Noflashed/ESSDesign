@@ -64,9 +64,9 @@ namespace ESSDesign.Server.Services
 
                     var response = await _resend.EmailSendAsync(message);
 
-                    if (response != null && !string.IsNullOrEmpty(response.Id))
+                    if (response != null && response.Data != Guid.Empty)
                     {
-                        _logger.LogInformation("Email sent successfully to {Email}. Message ID: {MessageId}", recipientEmail, response.Id);
+                        _logger.LogInformation("Email sent successfully to {Email}. Message ID: {MessageId}", recipientEmail, response.Data);
                     }
                     else
                     {
