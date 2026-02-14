@@ -5,16 +5,15 @@ namespace ESSDesign.Server.Services
 {
     public class EmailService
     {
-        private readonly ResendClient _resend;
+        private readonly IResend _resend;
         private readonly string _fromEmail;
         private readonly string _fromName;
         private readonly string _appBaseUrl;
         private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+        public EmailService(IResend resend, IConfiguration configuration, ILogger<EmailService> logger)
         {
-            var apiKey = configuration["Resend:ApiKey"] ?? throw new ArgumentNullException("Resend:ApiKey not configured");
-            _resend = new ResendClient(apiKey);
+            _resend = resend;
             _fromEmail = configuration["Resend:FromEmail"] ?? "noreply@essdesign.com";
             _fromName = configuration["Resend:FromName"] ?? "ESS Design System";
             _appBaseUrl = configuration["AppSettings:BaseUrl"] ?? "https://localhost:7001";
