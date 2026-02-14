@@ -434,8 +434,8 @@ namespace ESSDesign.Server.Services
                 await Task.WhenAll(uploadTasks);
 
                 var response = await _supabase.From<DesignDocument>().Insert(document);
-                var created = response.Models.FirstOrDefault();
-                if (created == null) throw new Exception("Failed to create document");
+                var created = response?.Models?.FirstOrDefault();
+                if (created == null) throw new Exception("Failed to create document record in database");
 
                 // Clear folder cache
                 _folderCache.TryRemove(folderId, out _);
