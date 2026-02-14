@@ -53,12 +53,14 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "https://essdesign.app",
                 "https://www.essdesign.app",
+                "https://essdesign-production.up.railway.app",
                 "http://localhost:5173",
                 "http://localhost:3000"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowCredentials()
+            .WithExposedHeaders("*");
     });
 });
 
@@ -86,17 +88,29 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// HTTPS redirection for production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 // Enable response compression
 app.UseResponseCompression();
 
-// Enable CORS BEFORE other middleware
+// Enable CORS - Must be before Authorization and Controllers
 app.UseCors("AllowReact");
 
-// Health check endpoint
+// Routing
+app.UseRouting();
+
+// Authorization
+app.UseAuthorization();
+
+// Health check endpoints
 app.MapGet("/", () => Results.Ok(new { status = "API is running", timestamp = DateTime.UtcNow }));
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-app.UseAuthorization();
+// Controllers
 app.MapControllers();
 
 app.Run();
