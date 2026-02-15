@@ -5,6 +5,47 @@ import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
 import './FolderBrowser.css';
 
+// Professional SVG Icons (Google Drive style)
+const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill="#5F6368" stroke="#5F6368" strokeWidth="0.5"/>
+    </svg>
+);
+
+const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="#EA4335" fillOpacity="0.9"/>
+        <path d="M14 2V8H20" fill="#EA4335" fillOpacity="0.7"/>
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#B71C1C" strokeWidth="0.5"/>
+    </svg>
+);
+
+const UploadIcon = ({ size = 16, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+    </svg>
+);
+
+const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+        <polyline points="10 9 9 9 8 9"></polyline>
+    </svg>
+);
+
+const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        <line x1="12" y1="11" x2="12" y2="17"></line>
+        <line x1="9" y1="14" x2="15" y2="14"></line>
+    </svg>
+);
+
 // Helper function to format file size
 const formatFileSize = (bytes) => {
     if (!bytes || bytes === 0) return '—';
@@ -519,7 +560,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 </button>
                 {currentFolder && (
                     <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
-                        📄 Upload Document
+                        <UploadIcon size={16} /> Upload Document
                     </button>
                 )}
                 <div className="view-toggle">
@@ -646,7 +687,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 onContextMenu={(e) => handleContextMenu(e, item)}
                             >
                                 <div className="item-icon">
-                                    {item.isDocument ? '📄' : '📁'}
+                                    {item.isDocument ? <DocumentIcon size={32} /> : <FolderIcon size={32} />}
                                 </div>
                                 <div className="item-name">
                                     {item.isDocument
@@ -661,7 +702,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 onClick={() => handleViewPDF(item, 'ess')}
                                                 className="file-btn"
                                             >
-                                                📄 ESS Design
+                                                <FileTextIcon size={14} /> ESS Design
                                             </button>
                                         )}
                                         {item.thirdPartyDesignPath && (
@@ -669,7 +710,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 onClick={() => handleViewPDF(item, 'thirdparty')}
                                                 className="file-btn"
                                             >
-                                                📄 Third-Party
+                                                <FileTextIcon size={14} /> Third-Party
                                             </button>
                                         )}
                                     </div>
@@ -684,7 +725,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 onContextMenu={(e) => handleContextMenu(e, item)}
                             >
                                 <div className="list-item-icon">
-                                    {item.isDocument ? '📄' : '📁'}
+                                    {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
                                 </div>
                                 <div className="list-item-name">
                                     {item.isDocument
@@ -751,7 +792,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             setShowNewFolderModal(true);
                             setContextMenu(null);
                         }}>
-                            📁 New Folder
+                            <FolderPlusIcon size={14} /> New Folder
                         </div>
                     )}
                     {contextMenu.item && !contextMenu.item.isDocument && (
@@ -761,7 +802,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowNewFolderModal(true);
                                 setContextMenu(null);
                             }}>
-                                📁 New Subfolder
+                                <FolderPlusIcon size={14} /> New Subfolder
                             </div>
                             <div className="context-menu-divider"></div>
                             <div onClick={() => {

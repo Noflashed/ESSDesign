@@ -12,6 +12,21 @@ import './App.css';
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
+// Professional SVG Icons (Google Drive style)
+const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill="#5F6368" stroke="#5F6368" strokeWidth="0.5"/>
+    </svg>
+);
+
+const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="#EA4335" fillOpacity="0.9"/>
+        <path d="M14 2V8H20" fill="#EA4335" fillOpacity="0.7"/>
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#B71C1C" strokeWidth="0.5"/>
+    </svg>
+);
+
 function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPDF }) {
     const [expanded, setExpanded] = useState(false);
     const [children, setChildren] = useState(initialChildren || null);
@@ -65,7 +80,7 @@ function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPD
                         )}
                     </button>
                 )}
-                <span className="search-doc-icon">📁</span>
+                <span className="search-doc-icon"><FolderIcon size={16} /></span>
                 <span className="search-doc-name">{folder.name}</span>
             </div>
             {expanded && children && (
@@ -81,8 +96,8 @@ function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPD
                     ))}
                     {children.documents.map(doc => (
                         <div key={doc.id} className="search-folder-row search-doc-row" style={{ paddingLeft: `${paddingLeft + 24}px` }}>
-                            <span className="search-doc-icon">📄</span>
-                            <span className="search-doc-name">Rev {doc.revisionNumber}</span>
+                            <span className="search-doc-icon"><DocumentIcon size={16} /></span>
+                            <span className="search-doc-name">Revision {doc.revisionNumber}</span>
                             <div className="search-doc-actions">
                                 {doc.essDesignIssuePath && (
                                     <button className="search-doc-btn" onClick={(e) => { e.stopPropagation(); onViewPDF(doc, 'ess'); }}>
@@ -443,7 +458,7 @@ function App() {
                                 searchResults.map(result => (
                                     <div key={result.id} className="search-result-item">
                                         <div className="search-result-header" onClick={() => handleSearchNavigate(result.id)}>
-                                            <span className="search-result-icon">📁</span>
+                                            <span className="search-result-icon"><FolderIcon size={18} /></span>
                                             <div className="search-result-info">
                                                 <div className="search-result-name">{result.name}</div>
                                                 {result.path && <div className="search-result-path">{result.path}</div>}
@@ -461,8 +476,8 @@ function App() {
                                             ))}
                                             {result.documents && result.documents.map(doc => (
                                                 <div key={doc.id} className="search-folder-row search-doc-row" style={{ paddingLeft: '40px' }}>
-                                                    <span className="search-doc-icon">📄</span>
-                                                    <span className="search-doc-name">Rev {doc.revisionNumber}</span>
+                                                    <span className="search-doc-icon"><DocumentIcon size={16} /></span>
+                                                    <span className="search-doc-name">Revision {doc.revisionNumber}</span>
                                                     <div className="search-doc-actions">
                                                         {doc.essDesignIssuePath && (
                                                             <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'ess')}>
