@@ -129,7 +129,7 @@ namespace ESSDesign.Server.Services
                     <!-- Header -->
                     <tr>
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
-                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:brightness(0) invert(1) brightness(2);-webkit-filter:brightness(0) invert(1) brightness(2);"" />
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:invert(1) grayscale(1) brightness(2);-webkit-filter:invert(1) grayscale(1) brightness(2);opacity:1;"" />
                             <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">New Document Uploaded</h1>
                             <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">A new revision has been added to the design system</p>
                             <p style=""color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin:18px 0 0;"">Revision {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
@@ -189,28 +189,28 @@ namespace ESSDesign.Server.Services
                                 <tr><td style=""height:1px;background-color:#e2e8f0;font-size:0;line-height:0;"">&nbsp;</td></tr>
                             </table>
 
-                            <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 16px;text-align:center;"">Actions</p>
+                            <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 20px;text-align:center;"">Actions</p>
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
-                                <tr><td align=""center"">";
+                                <tr><td align=""center"" style=""padding:0 0 10px 0;"">";
 
             html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
-                                        Open in ESS Design
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
+                                        📂 Open in ESS Design
                                     </a>";
 
             if (hasEssDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#1a1a2e;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
-                                        Download ESS Design
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#1a1a2e;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
+                                        ⬇️ Download ESS Design
                                     </a>";
             }
 
             if (hasThirdPartyDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:12px 24px;margin:5px;border-radius:6px;font-weight:600;font-size:13px;text-decoration:none;background-color:#ffffff;color:#2d3748;border:1px solid #cbd5e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;"">
-                                        Download Third-Party
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#ffffff;color:#2d3748;border:2px solid #cbd5e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
+                                        ⬇️ Download Third-Party
                                     </a>";
             }
 
