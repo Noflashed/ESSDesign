@@ -129,7 +129,7 @@ namespace ESSDesign.Server.Services
                     <!-- Header -->
                     <tr>
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
-                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:brightness(0) invert(1);-webkit-filter:brightness(0) invert(1);"" />
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 auto 20px;"">
                                 <tr><td style=""width:40px;height:2px;background-color:#f5a623;font-size:0;line-height:0;"">&nbsp;</td></tr>
                             </table>
