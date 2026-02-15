@@ -98,7 +98,8 @@ namespace ESSDesign.Server.Services
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
             var folderLink = $"{_frontendUrl}?folder={folderId}";
 
-            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
+            // Use white version of logo for email (upload logo-white.png to your Supabase public-assets bucket)
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
 
             var aestTime = TimeZoneInfo.ConvertTimeFromUtc(uploadDate, TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney"));
             var formattedDate = aestTime.ToString("dd MMMM yyyy");
@@ -129,7 +130,7 @@ namespace ESSDesign.Server.Services
                     <!-- Header -->
                     <tr>
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
-                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:invert(1) grayscale(1) brightness(2);-webkit-filter:invert(1) grayscale(1) brightness(2);opacity:1;"" />
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
                             <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">New Document Uploaded</h1>
                             <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">A new revision has been added to the design system</p>
                             <p style=""color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin:18px 0 0;"">Revision {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
@@ -172,12 +173,15 @@ namespace ESSDesign.Server.Services
 
             if (!string.IsNullOrWhiteSpace(description))
             {
+                // Format description as bullet points
+                var formattedDescription = FormatDescriptionAsBulletPoints(description);
+
                 html += $@"
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:0 0 24px;border:1px solid #fde68a;border-left:3px solid #f5a623;border-radius:8px;background-color:#fffbeb;"">
                                 <tr>
                                     <td style=""padding:18px 20px;"">
-                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#b45309;font-weight:700;margin:0 0 6px;"">Change Notes</p>
-                                        <p style=""font-size:14px;color:#78350f;line-height:1.6;margin:0;white-space:pre-wrap;"">{System.Web.HttpUtility.HtmlEncode(description)}</p>
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#b45309;font-weight:700;margin:0 0 10px;"">Change Notes</p>
+                                        {formattedDescription}
                                     </td>
                                 </tr>
                             </table>";
@@ -194,23 +198,23 @@ namespace ESSDesign.Server.Services
                                 <tr><td align=""center"" style=""padding:0 0 10px 0;"">";
 
             html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
-                                        📂 Open in ESS Design
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
+                                        📂 Open Folder
                                     </a>";
 
             if (hasEssDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#1a1a2e;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
-                                        ⬇️ Download ESS Design
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
+                                        ⬇️ ESS Design
                                     </a>";
             }
 
             if (hasThirdPartyDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:14px 32px;margin:8px 12px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;background-color:#ffffff;color:#2d3748;border:2px solid #cbd5e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:180px;text-align:center;"">
-                                        ⬇️ Download Third-Party
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
+                                        ⬇️ Third-Party
                                     </a>";
             }
 
@@ -237,6 +241,39 @@ namespace ESSDesign.Server.Services
 </html>";
 
             return html;
+        }
+
+        private string FormatDescriptionAsBulletPoints(string description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+                return string.Empty;
+
+            var lines = description.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            var bulletPoints = new List<string>();
+
+            foreach (var line in lines)
+            {
+                var trimmedLine = line.TrimStart();
+                // Check if line starts with - or * for bullet points
+                if (trimmedLine.StartsWith("- ") || trimmedLine.StartsWith("* "))
+                {
+                    var content = trimmedLine.Substring(2).Trim();
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        bulletPoints.Add($@"<div style=""display:flex;align-items:start;margin-bottom:6px;"">
+                            <span style=""color:#f59e0b;margin-right:8px;font-weight:700;"">•</span>
+                            <span style=""font-size:14px;color:#78350f;line-height:1.6;"">{System.Web.HttpUtility.HtmlEncode(content)}</span>
+                        </div>");
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(trimmedLine))
+                {
+                    // Non-bullet line, just display it
+                    bulletPoints.Add($@"<p style=""font-size:14px;color:#78350f;line-height:1.6;margin:0 0 6px 0;"">{System.Web.HttpUtility.HtmlEncode(trimmedLine)}</p>");
+                }
+            }
+
+            return string.Join("", bulletPoints);
         }
     }
 }

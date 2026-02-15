@@ -440,7 +440,7 @@ namespace ESSDesign.Server.Services
 
                 if (essDesign != null)
                 {
-                    var path = $"documents/{folderId}/{document.Id}/ess_{essDesign.FileName}";
+                    var path = $"documents/{folderId}/{document.Id}/ess/{essDesign.FileName}";
                     uploadTasks.Add(Task.Run(async () =>
                     {
                         await UploadFileAsync(essDesign, path);
@@ -452,7 +452,7 @@ namespace ESSDesign.Server.Services
 
                 if (thirdParty != null)
                 {
-                    var path = $"documents/{folderId}/{document.Id}/third_party_{thirdParty.FileName}";
+                    var path = $"documents/{folderId}/{document.Id}/third-party/{thirdParty.FileName}";
                     uploadTasks.Add(Task.Run(async () =>
                     {
                         await UploadFileAsync(thirdParty, path);

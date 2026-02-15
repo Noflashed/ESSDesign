@@ -106,12 +106,15 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
 
                     <div className="form-group">
                         <label>Change Description (Optional)</label>
+                        <small style={{ display: 'block', color: '#666', marginBottom: '4px', fontSize: '12px' }}>
+                            Start each line with a dash (-) or asterisk (*) for bullet points
+                        </small>
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Describe the changes in this revision..."
-                            rows={3}
-                            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                            placeholder="- First change&#10;- Second change&#10;- Third change"
+                            rows={4}
+                            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontFamily: 'monospace' }}
                         />
                     </div>
 
