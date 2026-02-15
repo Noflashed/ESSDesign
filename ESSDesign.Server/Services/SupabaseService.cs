@@ -125,7 +125,11 @@ namespace ESSDesign.Server.Services
         // Helper method to get multiple user names at once (more efficient)
         private async Task<Dictionary<string, string>> GetUserNamesAsync(IEnumerable<string?> userIds)
         {
-            var validUserIds = userIds.Where(id => !string.IsNullOrEmpty(id) && Guid.TryParse(id, out _)).Distinct().ToList();
+            var validUserIds = userIds
+                .Where(id => !string.IsNullOrEmpty(id) && Guid.TryParse(id, out _))
+                .Select(id => id!.ToLowerInvariant())
+                .Distinct()
+                .ToList();
             if (!validUserIds.Any()) return new Dictionary<string, string>();
 
             try
@@ -135,13 +139,40 @@ namespace ESSDesign.Server.Services
                     .Get();
 
                 return usersResponse.Models
-                    .Where(u => validUserIds.Contains(u.Id.ToString()))
-                    .ToDictionary(u => u.Id.ToString(), u => u.FullName);
+                    .Where(u => validUserIds.Contains(u.Id.ToString().ToLowerInvariant()))
+                    .ToDictionary(
+                        u => u.Id.ToString().ToLowerInvariant(),
+                        u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Email,
+                        StringComparer.OrdinalIgnoreCase
+                    );
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to fetch user names");
+                _logger.LogWarning(ex, "Failed to fetch user names for {Count} user IDs", validUserIds.Count);
                 return new Dictionary<string, string>();
+            }
+        }
+
+        // Upsert a user name entry (called on signup as a fallback for the DB trigger)
+        public async Task UpsertUserNameAsync(string userId, string email, string fullName)
+        {
+            if (!Guid.TryParse(userId, out var userGuid)) return;
+
+            try
+            {
+                var userName = new UserName
+                {
+                    Id = userGuid,
+                    Email = email,
+                    FullName = !string.IsNullOrWhiteSpace(fullName) ? fullName : email.Split('@')[0]
+                };
+
+                await _supabase.From<UserName>().Upsert(userName);
+                _logger.LogInformation("Upserted user_names for {UserId}", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to upsert user_names for {UserId}", userId);
             }
         }
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
+using ESSDesign.Server.Services;
 using Supabase.Gotrue;
 
 namespace ESSDesign.Server.Controllers
@@ -9,11 +10,13 @@ namespace ESSDesign.Server.Controllers
     public class AuthController : ControllerBase
     {
         private readonly Supabase.Client _supabase;
+        private readonly SupabaseService _supabaseService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(Supabase.Client supabase, ILogger<AuthController> logger)
+        public AuthController(Supabase.Client supabase, SupabaseService supabaseService, ILogger<AuthController> logger)
         {
             _supabase = supabase;
+            _supabaseService = supabaseService;
             _logger = logger;
         }
 
@@ -33,6 +36,16 @@ namespace ESSDesign.Server.Controllers
                 if (session?.User == null)
                 {
                     return BadRequest(new { error = "Failed to create account" });
+                }
+
+                // Upsert into user_names table so name is always resolvable
+                try
+                {
+                    await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, request.FullName);
+                }
+                catch (Exception nameEx)
+                {
+                    _logger.LogWarning(nameEx, "Failed to upsert user_names for {UserId} - trigger should handle it", session.User.Id);
                 }
 
                 return Ok(new AuthResponse
