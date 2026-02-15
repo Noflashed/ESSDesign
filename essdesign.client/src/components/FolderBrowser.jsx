@@ -27,6 +27,10 @@ const formatRevisionNumber = (revisionNumber) => {
     return `Revision ${String(revisionNumber).padStart(2, '0')}`;
 };
 
+// Default column widths as fractions (must match grid-template-columns order after icon)
+const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
+const MIN_COL_WIDTH_PX = 60;
+
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
@@ -53,6 +57,99 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [sortDirection, setSortDirection] = useState(() => {
         return localStorage.getItem('sortDirection') || 'asc';
     });
+
+    // Column resize state
+    const [colWidths, setColWidths] = useState(() => {
+        try {
+            const saved = localStorage.getItem('listColWidths');
+            if (saved) return JSON.parse(saved);
+        } catch { /* ignore */ }
+        return { ...DEFAULT_COL_WIDTHS };
+    });
+    const resizingRef = useRef(null);
+    const headerRef = useRef(null);
+
+    // Persist column widths
+    useEffect(() => {
+        localStorage.setItem('listColWidths', JSON.stringify(colWidths));
+    }, [colWidths]);
+
+    // Build the grid-template-columns string from widths
+    const gridTemplateColumns = `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`;
+
+    // Column resize handlers
+    const colKeys = ['name', 'revision', 'owner', 'modified', 'size'];
+
+    const handleResizeStart = useCallback((e, colIndex) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const headerEl = headerRef.current;
+        if (!headerEl) return;
+
+        // Get the pixel widths of all resizable columns from the DOM
+        const cells = headerEl.children;
+        // cells[0] = icon, cells[1..5] = resizable cols (with resize handles interspersed)
+        // We use a data attribute to identify column cells
+        const colElements = Array.from(headerEl.querySelectorAll('[data-col-key]'));
+        const pixelWidths = {};
+        colElements.forEach(el => {
+            pixelWidths[el.dataset.colKey] = el.getBoundingClientRect().width;
+        });
+
+        const leftKey = colKeys[colIndex];
+        const rightKey = colKeys[colIndex + 1];
+        const startX = e.clientX;
+        const startLeftPx = pixelWidths[leftKey];
+        const startRightPx = pixelWidths[rightKey];
+        const totalPx = startLeftPx + startRightPx;
+        const startLeftFr = colWidths[leftKey];
+        const startRightFr = colWidths[rightKey];
+        const totalFr = startLeftFr + startRightFr;
+
+        resizingRef.current = { leftKey, rightKey, startX, startLeftPx, startRightPx, totalPx, totalFr };
+
+        const handleMouseMove = (moveEvent) => {
+            const { startX, startLeftPx, totalPx, totalFr, leftKey, rightKey } = resizingRef.current;
+            const dx = moveEvent.clientX - startX;
+            let newLeftPx = startLeftPx + dx;
+            let newRightPx = totalPx - newLeftPx;
+
+            // Enforce minimums
+            if (newLeftPx < MIN_COL_WIDTH_PX) {
+                newLeftPx = MIN_COL_WIDTH_PX;
+                newRightPx = totalPx - MIN_COL_WIDTH_PX;
+            }
+            if (newRightPx < MIN_COL_WIDTH_PX) {
+                newRightPx = MIN_COL_WIDTH_PX;
+                newLeftPx = totalPx - MIN_COL_WIDTH_PX;
+            }
+
+            const leftRatio = newLeftPx / totalPx;
+            setColWidths(prev => ({
+                ...prev,
+                [leftKey]: +(totalFr * leftRatio).toFixed(4),
+                [rightKey]: +(totalFr * (1 - leftRatio)).toFixed(4),
+            }));
+        };
+
+        const handleMouseUp = () => {
+            resizingRef.current = null;
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, [colWidths]);
+
+    const handleResetColWidths = useCallback(() => {
+        setColWidths({ ...DEFAULT_COL_WIDTHS });
+    }, []);
 
     // PDF Viewer state
     const [pdfViewer, setPdfViewer] = useState(null);
@@ -477,49 +574,58 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             ) : (
                 <>
                     {viewMode === 'list' && (
-                        <div className="list-header">
+                        <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
                             <div className="list-header-icon"></div>
                             <div
-                                className={`list-header-name sortable ${sortField === 'name' ? 'active' : ''}`}
+                                className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
                                 onClick={() => handleSort('name')}
+                                data-col-key="name"
                             >
-                                Name
+                                <span>Name</span>
                                 {sortField === 'name' && (
                                     <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
                                 )}
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
-                                className={`list-header-revision sortable ${sortField === 'revision' ? 'active' : ''}`}
+                                className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
                                 onClick={() => handleSort('revision')}
+                                data-col-key="revision"
                             >
-                                Revision
+                                <span>Revision</span>
                                 {sortField === 'revision' && (
                                     <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
                                 )}
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
-                                className={`list-header-owner sortable ${sortField === 'owner' ? 'active' : ''}`}
+                                className={`list-header-cell sortable ${sortField === 'owner' ? 'active' : ''}`}
                                 onClick={() => handleSort('owner')}
+                                data-col-key="owner"
                             >
-                                Owner
+                                <span>Owner</span>
                                 {sortField === 'owner' && (
                                     <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
                                 )}
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
-                                className={`list-header-modified sortable ${sortField === 'modified' ? 'active' : ''}`}
+                                className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
                                 onClick={() => handleSort('modified')}
+                                data-col-key="modified"
                             >
-                                Date Modified
+                                <span>Date Modified</span>
                                 {sortField === 'modified' && (
                                     <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
                                 )}
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
-                                className={`list-header-size sortable ${sortField === 'size' ? 'active' : ''}`}
+                                className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
                                 onClick={() => handleSort('size')}
+                                data-col-key="size"
                             >
-                                File Size
+                                <span>File Size</span>
                                 {sortField === 'size' && (
                                     <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
                                 )}
@@ -573,6 +679,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             <div
                                 key={item.id}
                                 className={`list-item ${item.isDocument ? 'document' : 'folder'}`}
+                                style={{ gridTemplateColumns }}
                                 onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                 onContextMenu={(e) => handleContextMenu(e, item)}
                             >
