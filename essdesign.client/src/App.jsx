@@ -119,8 +119,6 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const folderFromUrl = urlParams.get('folder');
         if (folderFromUrl) {
-            // Clean the URL without reloading the page
-            window.history.replaceState({}, '', window.location.pathname);
             localStorage.setItem('selectedFolderId', folderFromUrl);
             return folderFromUrl;
         }
@@ -195,13 +193,13 @@ function App() {
         }
     };
 
-    const savePreferencesToBackend = async (updates) => {
+    const savePreferencesToBackend = useCallback(async (updates) => {
         try {
             await preferencesAPI.updatePreferences(updates);
         } catch (error) {
             console.error('Error saving preferences:', error);
         }
-    };
+    }, []);
 
     const applyTheme = (newTheme, persistToBackend = true) => {
         setTheme(newTheme);
@@ -243,7 +241,7 @@ function App() {
         }
     };
 
-    const handleFolderSelect = (folderId) => {
+    const handleFolderSelect = useCallback((folderId, { pushHistory = true } = {}) => {
         setSelectedFolderId(folderId);
 
         // Save to localStorage
@@ -253,9 +251,14 @@ function App() {
             localStorage.setItem('selectedFolderId', folderId);
         }
 
+        // Push browser history so back/forward buttons work
+        if (pushHistory) {
+            window.history.pushState({ folderId }, '', folderId ? `?folder=${folderId}` : window.location.pathname);
+        }
+
         // Save to backend
         savePreferencesToBackend({ selectedFolderId: folderId });
-    };
+    }, [savePreferencesToBackend]);
 
     const handleSidebarResize = (newWidth) => {
         setSidebarWidth(newWidth);
@@ -320,6 +323,20 @@ function App() {
         });
         closeSearch();
     };
+
+    // Browser back/forward button support
+    useEffect(() => {
+        // Replace current entry with initial state so the first back press doesn't leave the app
+        window.history.replaceState({ folderId: selectedFolderId }, '', selectedFolderId ? `?folder=${selectedFolderId}` : window.location.pathname);
+
+        const handlePopState = (e) => {
+            const folderId = e.state?.folderId ?? null;
+            handleFolderSelect(folderId, { pushHistory: false });
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results when clicking outside
     useEffect(() => {

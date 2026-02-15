@@ -156,8 +156,8 @@
 .col-resize-handle {
     position: absolute;
     top: 0;
-    right: -4px;
-    width: 8px;
+    right: -5px;
+    width: 10px;
     height: 100%;
     cursor: col-resize;
     z-index: 1;
@@ -166,15 +166,29 @@
     justify-content: center;
 }
 
+.col-resize-handle::before,
 .col-resize-handle::after {
     content: '';
-    width: 2px;
-    height: 60%;
-    border-radius: 1px;
-    background: transparent;
+    position: absolute;
+    width: 1px;
+    background: var(--border-color);
     transition: background 0.15s;
 }
 
+/* Two thin vertical lines spaced 3px apart */
+.col-resize-handle::before {
+    left: 3px;
+    top: 20%;
+    height: 60%;
+}
+
+.col-resize-handle::after {
+    right: 3px;
+    top: 20%;
+    height: 60%;
+}
+
+.col-resize-handle:hover::before,
 .col-resize-handle:hover::after {
     background: var(--primary-color);
 }
