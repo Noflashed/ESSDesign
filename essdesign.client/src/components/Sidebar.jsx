@@ -2,6 +2,29 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { foldersAPI } from '../services/api';
 import './Sidebar.css';
 
+// Professional SVG Icons (Google Drive style)
+const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill="#5F6368" stroke="#5F6368" strokeWidth="0.5"/>
+    </svg>
+);
+
+const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="#EA4335" fillOpacity="0.9"/>
+        <path d="M14 2V8H20" fill="#EA4335" fillOpacity="0.7"/>
+        <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#B71C1C" strokeWidth="0.5"/>
+    </svg>
+);
+
+const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        <line x1="12" y1="11" x2="12" y2="17"></line>
+        <line x1="9" y1="14" x2="15" y2="14"></line>
+    </svg>
+);
+
 function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280, onResize, onDocumentClick }) {
     const [folders, setFolders] = useState([]);
     const [expandedFolders, setExpandedFolders] = useState(new Set());
@@ -314,7 +337,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                     >
                         ▶
                     </span>
-                    <span className="folder-icon">📁</span>
+                    <span className="folder-icon"><FolderIcon size={16} /></span>
                     <span className="folder-name">{folder.name}</span>
                 </div>
                 {isExpanded && hasChildren && (
@@ -334,11 +357,11 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                                         onDocumentClick(doc);
                                     }
                                 }}
-                                title={`Rev ${doc.revisionNumber} - Click to view PDF`}
+                                title={`Revision ${doc.revisionNumber} - Click to view PDF`}
                             >
                                 <span className="document-spacer"></span>
-                                <span className="document-icon">📄</span>
-                                <span className="document-name">Rev {doc.revisionNumber}</span>
+                                <span className="document-icon"><DocumentIcon size={14} /></span>
+                                <span className="document-name">Revision {doc.revisionNumber}</span>
                             </div>
                         ))}
                     </div>
@@ -394,7 +417,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                         setShowNewFolderModal(true);
                         setContextMenu(null);
                     }}>
-                        📁 New Subfolder
+                        <FolderPlusIcon size={14} /> New Subfolder
                     </div>
                     <div className="context-menu-divider"></div>
                     <div onClick={() => {

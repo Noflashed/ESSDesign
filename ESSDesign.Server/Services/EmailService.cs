@@ -48,7 +48,7 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var subject = $"New Document Upload: {documentName} - Rev {revisionNumber}";
+                var subject = $"New Document Upload: {documentName} - Revision {revisionNumber}";
 
                 // Build email content
                 var htmlContent = BuildHtmlEmailContent(
@@ -129,15 +129,10 @@ namespace ESSDesign.Server.Services
                     <!-- Header -->
                     <tr>
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
-                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:brightness(0) invert(1);-webkit-filter:brightness(0) invert(1);"" />
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:0 auto 20px;"">
-                                <tr><td style=""width:40px;height:2px;background-color:#f5a623;font-size:0;line-height:0;"">&nbsp;</td></tr>
-                            </table>
-                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0;"">New Document Uploaded</h1>
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;filter:brightness(0) invert(1) brightness(2);-webkit-filter:brightness(0) invert(1) brightness(2);"" />
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">New Document Uploaded</h1>
                             <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">A new revision has been added to the design system</p>
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""margin:18px auto 0;"">
-                                <tr><td style=""background-color:#f5a623;color:#1a1a2e;padding:5px 16px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;"">Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</td></tr>
-                            </table>
+                            <p style=""color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin:18px 0 0;"">Revision {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
                         </td>
                     </tr>
                     <!-- Content -->
@@ -158,7 +153,7 @@ namespace ESSDesign.Server.Services
                                 <tr>
                                     <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
                                         <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Revision</p>
-                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Rev {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Revision {System.Web.HttpUtility.HtmlEncode(revisionNumber)}</p>
                                     </td>
                                 </tr>
                                 <tr>
