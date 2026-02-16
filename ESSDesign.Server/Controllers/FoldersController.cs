@@ -244,21 +244,9 @@ namespace ESSDesign.Server.Controllers
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
 
-                // When accessed from email links, stream the file with proper filename
+                // When accessed from email links, redirect directly to the signed URL
                 if (redirect)
-                {
-                    using var httpClient = new HttpClient();
-                    var fileStream = await httpClient.GetStreamAsync(fileInfo.Url);
-
-                    // Set proper Content-Disposition header with original filename (no prefix)
-                    Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
-                    Response.Headers.Add("Content-Type", "application/pdf");
-
-                    return new FileStreamResult(fileStream, "application/pdf")
-                    {
-                        FileDownloadName = fileInfo.FileName
-                    };
-                }
+                    return Redirect(fileInfo.Url);
 
                 return Ok(new { url = fileInfo.Url, fileName = fileInfo.FileName });
             }
