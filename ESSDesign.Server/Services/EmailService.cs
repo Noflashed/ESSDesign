@@ -198,23 +198,23 @@ namespace ESSDesign.Server.Services
                                 <tr><td align=""center"" style=""padding:0 0 10px 0;"">";
 
             html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
-                                        📂 Open Folder
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
+                                        <span style=""display:block;padding:0 10px;"">View in ESS design</span>
                                     </a>";
 
             if (hasEssDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
-                                        ⬇️ ESS Design
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
+                                        <span style=""display:block;padding:0 10px;"">Download ESS version</span>
                                     </a>";
             }
 
             if (hasThirdPartyDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:12px 28px;margin:6px 10px;border-radius:50px;font-weight:600;font-size:13px;text-decoration:none;background-color:#f5a623;color:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 2px 8px rgba(245,166,35,0.3);min-width:160px;text-align:center;transition:all 0.2s;"">
-                                        ⬇️ Third-Party
+                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segue UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
+                                        <span style=""display:block;padding:0 10px;"">Download Third-Party version</span>
                                     </a>";
             }
 
