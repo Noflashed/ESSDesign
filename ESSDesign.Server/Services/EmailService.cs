@@ -194,32 +194,52 @@ namespace ESSDesign.Server.Services
                             </table>
 
                             <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 20px;text-align:center;"">Actions</p>
+                            <!-- Button Container Table -->
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
-                                <tr><td align=""center"" style=""padding:0 0 10px 0;"">";
+                                <tr>";
 
+            // View in ESS design button
             html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
-                                        <span style=""display:block;padding:0 10px;"">View in ESS design</span>
-                                    </a>";
+                                    <td align=""center"" valign=""top"" style=""padding:10px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
+                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(folderLink)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">View in ESS design</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>";
 
             if (hasEssDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
-                                        <span style=""display:block;padding:0 10px;"">Download ESS version</span>
-                                    </a>";
+                                    <td align=""center"" valign=""top"" style=""padding:10px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
+                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">Download ESS version</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>";
             }
 
             if (hasThirdPartyDesign)
             {
                 html += $@"
-                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-flex;width:140px;height:140px;margin:12px;border-radius:50%;font-weight:600;font-size:13px;text-decoration:none;background-color:#FF6B35;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segue UI',Roboto,'Helvetica Neue',Arial,sans-serif;box-shadow:0 4px 12px rgba(255,107,53,0.4);text-align:center;transition:all 0.2s;align-items:center;justify-content:center;line-height:1.3;vertical-align:top;"">
-                                        <span style=""display:block;padding:0 10px;"">Download Third-Party version</span>
-                                    </a>";
+                                    <td align=""center"" valign=""top"" style=""padding:10px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
+                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink!)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">Download Third-Party version</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>";
             }
 
             html += $@"
-                                </td></tr>
+                                </tr>
                             </table>
                         </td>
                     </tr>
