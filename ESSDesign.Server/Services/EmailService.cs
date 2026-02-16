@@ -46,25 +46,63 @@ namespace ESSDesign.Server.Services
                 return;
             }
 
-            try
+            var subject = $"New Document Upload: {documentName} - Revision {revisionNumber}";
+
+            // Build email content once for all recipients
+            var htmlContent = BuildHtmlEmailContent(
+                documentName,
+                revisionNumber,
+                uploaderName,
+                uploadDate,
+                documentId,
+                folderId,
+                hasEssDesign,
+                hasThirdPartyDesign,
+                description
+            );
+
+            var successfulRecipients = new List<string>();
+            var failedRecipients = new List<(string Email, string Error)>();
+
+            // Send emails to all recipients with retry logic
+            foreach (var recipientEmail in recipientEmails)
             {
-                var subject = $"New Document Upload: {documentName} - Revision {revisionNumber}";
+                try
+                {
+                    await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+                    successfulRecipients.Add(recipientEmail);
+                    _logger.LogInformation("Email successfully sent to {Email}", recipientEmail);
+                }
+                catch (Exception ex)
+                {
+                    failedRecipients.Add((recipientEmail, ex.Message));
+                    _logger.LogError(ex, "Failed to send email to {Email} after all retry attempts", recipientEmail);
+                }
+            }
 
-                // Build email content
-                var htmlContent = BuildHtmlEmailContent(
-                    documentName,
-                    revisionNumber,
-                    uploaderName,
-                    uploadDate,
-                    documentId,
-                    folderId,
-                    hasEssDesign,
-                    hasThirdPartyDesign,
-                    description
-                );
+            // Log summary
+            _logger.LogInformation(
+                "Email notification summary: {SuccessCount} sent, {FailedCount} failed. Document: {DocumentName}, Revision: {RevisionNumber}",
+                successfulRecipients.Count,
+                failedRecipients.Count,
+                documentName,
+                revisionNumber
+            );
 
-                // Send individual emails to each recipient
-                foreach (var recipientEmail in recipientEmails)
+            if (failedRecipients.Any())
+            {
+                var failedEmails = string.Join(", ", failedRecipients.Select(f => $"{f.Email} ({f.Error})"));
+                _logger.LogWarning("Failed recipients: {FailedRecipients}", failedEmails);
+            }
+        }
+
+        private async Task SendEmailWithRetryAsync(string recipientEmail, string subject, string htmlContent, int maxRetries = 3)
+        {
+            var retryDelays = new[] { 1000, 2000, 4000 }; // Exponential backoff: 1s, 2s, 4s
+
+            for (int attempt = 0; attempt <= maxRetries; attempt++)
+            {
+                try
                 {
                     var message = new EmailMessage();
                     message.From = $"{_fromName} <{_fromEmail}>";
@@ -72,14 +110,36 @@ namespace ESSDesign.Server.Services
                     message.Subject = subject;
                     message.HtmlBody = htmlContent;
 
-                    await _resend.EmailSendAsync(message);
-                    _logger.LogInformation("Email sent to {Email}", recipientEmail);
+                    await _resend!.EmailSendAsync(message);
+
+                    if (attempt > 0)
+                    {
+                        _logger.LogInformation("Email sent to {Email} on retry attempt {Attempt}", recipientEmail, attempt);
+                    }
+
+                    return; // Success - exit the retry loop
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error sending email notifications");
-                // Don't throw - we don't want email failures to break the upload
+                catch (Exception ex)
+                {
+                    if (attempt < maxRetries)
+                    {
+                        var delay = retryDelays[attempt];
+                        _logger.LogWarning(
+                            ex,
+                            "Failed to send email to {Email} on attempt {Attempt}/{MaxRetries}. Retrying in {Delay}ms...",
+                            recipientEmail,
+                            attempt + 1,
+                            maxRetries + 1,
+                            delay
+                        );
+                        await Task.Delay(delay);
+                    }
+                    else
+                    {
+                        // Final attempt failed - throw the exception
+                        throw;
+                    }
+                }
             }
         }
 

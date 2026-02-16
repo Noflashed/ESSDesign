@@ -302,6 +302,39 @@ For higher volume, paid plans start at $20/month for 50,000 emails.
 - **Resend Status Page**: https://status.resend.com/
 - **Support Email**: support@resend.com
 
+## Email Reliability Features
+
+The email notification system includes several reliability improvements:
+
+### Automatic Retry Logic
+- **3 retry attempts** with exponential backoff (1s, 2s, 4s delays)
+- Handles temporary API failures gracefully
+- Each recipient is retried independently
+
+### Resilient Delivery
+- **Continues sending** to all recipients even if some fail
+- Failed recipients don't block successful deliveries
+- Comprehensive error tracking and logging
+
+### Detailed Logging
+- Success/failure status for each recipient
+- Summary logs showing total sent/failed counts
+- Failed recipient details with error messages
+- Retry attempt tracking
+
+### Multiple Recipients
+- Supports sending to multiple users simultaneously
+- Efficient content generation (HTML built once, sent to all)
+- Independent delivery status per recipient
+
+Example log output:
+```
+[Information] Email successfully sent to user1@example.com
+[Warning] Failed to send email to user2@example.com on attempt 1/4. Retrying in 1000ms...
+[Information] Email sent to user2@example.com on retry attempt 1
+[Information] Email notification summary: 2 sent, 0 failed. Document: ProjectA, Revision: R01
+```
+
 ## Feature Architecture
 
 ```
@@ -317,23 +350,28 @@ For higher volume, paid plans start at $20/month for 50,000 emails.
 └─────────────────┘  │
          │           │
          ▼           ▼
-┌─────────────────┐ ┌──────────────┐
-│ SupabaseService │ │ EmailService │
-│  Save Document  │ │ Send Emails  │
-└─────────────────┘ └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │   Resend API │
-                    │              │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  Recipients  │
-                    │   Receive    │
-                    │    Email     │
-                    └──────────────┘
+┌─────────────────┐ ┌──────────────────────┐
+│ SupabaseService │ │   EmailService       │
+│  Save Document  │ │ ┌──────────────────┐ │
+└─────────────────┘ │ │ Retry Logic      │ │
+                    │ │ (1s, 2s, 4s)     │ │
+                    │ └──────────────────┘ │
+                    │ ┌──────────────────┐ │
+                    │ │ Error Tracking   │ │
+                    │ └──────────────────┘ │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │  Resend API  │
+                        └──────┬───────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │  Recipients  │
+                        │   Receive    │
+                        │    Email     │
+                        └──────────────┘
 ```
 
 ## Quick Start Summary
