@@ -107,13 +107,42 @@ export const foldersAPI = {
             });
         }
 
-        const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        try {
+            const response = await axios.post(`${API_BASE_URL}/folders/documents`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                timeout: 120000, // 2 minutes timeout for large files
+                validateStatus: (status) => status < 500 // Don't throw on 4xx errors
+            });
+
+            if (response.status >= 400) {
+                throw new Error(response.data?.error || `Upload failed with status ${response.status}`);
             }
-        });
-        return response.data;
+
+            return response.data;
+        } catch (error) {
+            // Better error handling for common issues
+            if (error.code === 'ECONNABORTED') {
+                throw new Error('Upload timeout - file may be too large. Please try again.');
+            }
+            if (error.response) {
+                // Server responded with error
+                const contentType = error.response.headers['content-type'];
+                if (contentType && contentType.includes('text/html')) {
+                    // Server returned HTML error page instead of JSON
+                    throw new Error('Server error occurred. Please try again in a moment.');
+                }
+                throw new Error(error.response.data?.error || error.message);
+            }
+            if (error.request) {
+                // Request made but no response
+                throw new Error('No response from server. Please check your connection and try again.');
+            }
+            // Other errors
+            throw new Error(error.message || 'Upload failed. Please try again.');
+        }
     },
 
     deleteDocument: async (documentId) => {
