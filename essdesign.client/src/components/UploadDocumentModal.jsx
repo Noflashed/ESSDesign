@@ -41,21 +41,46 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
         }
 
         setUploading(true);
-        try {
-            await foldersAPI.uploadDocument(
-                folderId,
-                revisionNumber,
-                essDesignFile,
-                thirdPartyFile,
-                description,
-                selectedRecipients
-            );
-            onSuccess();
-        } catch (error) {
-            alert('Upload failed: ' + (error.response?.data?.error || error.message));
-        } finally {
-            setUploading(false);
+
+        // Retry logic for transient failures
+        const maxRetries = 2;
+        let lastError = null;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                await foldersAPI.uploadDocument(
+                    folderId,
+                    revisionNumber,
+                    essDesignFile,
+                    thirdPartyFile,
+                    description,
+                    selectedRecipients
+                );
+                onSuccess();
+                return; // Success, exit
+            } catch (error) {
+                lastError = error;
+                const errorMsg = error.message || error.response?.data?.error || 'Unknown error';
+
+                // Don't retry on validation errors (4xx)
+                if (error.response && error.response.status >= 400 && error.response.status < 500) {
+                    alert('Upload failed: ' + errorMsg);
+                    setUploading(false);
+                    return;
+                }
+
+                // If not last attempt and it's a server error, retry
+                if (attempt < maxRetries) {
+                    console.log(`Upload attempt ${attempt + 1} failed, retrying...`, errorMsg);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+                } else {
+                    // Last attempt failed
+                    alert('Upload failed after ' + (maxRetries + 1) + ' attempts: ' + errorMsg);
+                }
+            }
         }
+
+        setUploading(false);
     };
 
     return (
