@@ -244,9 +244,21 @@ namespace ESSDesign.Server.Controllers
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
 
-                // When accessed from email links, redirect directly to the signed URL
+                // When accessed from email links, stream file with inline content disposition for preview
                 if (redirect)
-                    return Redirect(fileInfo.Url);
+                {
+                    using var httpClient = new HttpClient();
+                    var response = await httpClient.GetAsync(fileInfo.Url);
+                    response.EnsureSuccessStatusCode();
+
+                    var stream = await response.Content.ReadAsStreamAsync();
+                    var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
+
+                    // Set Content-Disposition to inline so browser shows preview instead of downloading
+                    Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+
+                    return new FileStreamResult(stream, contentType);
+                }
 
                 return Ok(new { url = fileInfo.Url, fileName = fileInfo.FileName });
             }
