@@ -701,16 +701,18 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             <button
                                                 onClick={() => handleViewPDF(item, 'ess')}
                                                 className="file-btn"
+                                                title="View in ESS design"
                                             >
-                                                <FileTextIcon size={14} /> ESS Design
+                                                ESS
                                             </button>
                                         )}
                                         {item.thirdPartyDesignPath && (
                                             <button
                                                 onClick={() => handleViewPDF(item, 'thirdparty')}
                                                 className="file-btn"
+                                                title="Download Third-Party version"
                                             >
-                                                <FileTextIcon size={14} /> Third-Party
+                                                3rd
                                             </button>
                                         )}
                                     </div>
@@ -755,8 +757,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                         handleViewPDF(item, 'ess');
                                                     }}
                                                     className="file-btn-small"
+                                                    title="View in ESS design"
                                                 >
-                                                    ESS Design
+                                                    ESS
                                                 </button>
                                             ) : (
                                                 <div className="file-btn-placeholder"></div>
@@ -768,8 +771,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                         handleViewPDF(item, 'thirdparty');
                                                     }}
                                                     className="file-btn-small"
+                                                    title="Download Third-Party version"
                                                 >
-                                                    Third-Party Design
+                                                    3rd
                                                 </button>
                                             ) : (
                                                 <div className="file-btn-placeholder"></div>
