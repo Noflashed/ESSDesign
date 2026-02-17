@@ -5,6 +5,12 @@ using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel server limits for large file uploads
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 1_000_000_000; // 1GB limit
+});
+
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
