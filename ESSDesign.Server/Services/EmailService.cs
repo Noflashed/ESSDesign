@@ -32,6 +32,9 @@ namespace ESSDesign.Server.Services
             Guid folderId,
             bool hasEssDesign,
             bool hasThirdPartyDesign,
+            string? client = null,
+            string? project = null,
+            string? scaffold = null,
             string? description = null)
         {
             if (recipientEmails == null || !recipientEmails.Any())
@@ -46,7 +49,17 @@ namespace ESSDesign.Server.Services
                 return;
             }
 
-            var subject = $"New Document Upload: {documentName} - Revision {revisionNumber}";
+            // Build subject with hierarchy
+            var subjectParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(client))
+                subjectParts.Add(client);
+            if (!string.IsNullOrWhiteSpace(project))
+                subjectParts.Add(project);
+            if (!string.IsNullOrWhiteSpace(scaffold))
+                subjectParts.Add(scaffold);
+
+            var hierarchyString = subjectParts.Any() ? string.Join(" - ", subjectParts) + " - " : "";
+            var subject = $"New Document Upload: {hierarchyString}Revision {revisionNumber}";
 
             // Build email content once for all recipients
             var htmlContent = BuildHtmlEmailContent(
@@ -58,6 +71,9 @@ namespace ESSDesign.Server.Services
                 folderId,
                 hasEssDesign,
                 hasThirdPartyDesign,
+                client,
+                project,
+                scaffold,
                 description
             );
 
@@ -152,6 +168,9 @@ namespace ESSDesign.Server.Services
             Guid folderId,
             bool hasEssDesign,
             bool hasThirdPartyDesign,
+            string? client,
+            string? project,
+            string? scaffold,
             string? description)
         {
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess?redirect=true" : null;
@@ -204,13 +223,45 @@ namespace ESSDesign.Server.Services
                             </p>
 
                             <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 12px;"">Document Details</p>
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">";
+
+            // Add Client row if available
+            if (!string.IsNullOrWhiteSpace(client))
+            {
+                html += $@"
                                 <tr>
                                     <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
-                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Document</p>
-                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(documentName)}</p>
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(client)}</p>
                                     </td>
-                                </tr>
+                                </tr>";
+            }
+
+            // Add Project row if available
+            if (!string.IsNullOrWhiteSpace(project))
+            {
+                html += $@"
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(project)}</p>
+                                    </td>
+                                </tr>";
+            }
+
+            // Add Scaffold row if available
+            if (!string.IsNullOrWhiteSpace(scaffold))
+            {
+                html += $@"
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{System.Web.HttpUtility.HtmlEncode(scaffold)}</p>
+                                    </td>
+                                </tr>";
+            }
+
+            html += $@"
                                 <tr>
                                     <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
                                         <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Revision</p>

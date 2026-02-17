@@ -151,6 +151,9 @@ namespace ESSDesign.Server.Controllers
                         var folder = await _supabaseService.GetFolderByIdAsync(request.FolderId);
                         var documentName = folder.Name;
 
+                        // Get folder hierarchy (Client, Project, Scaffold)
+                        var hierarchy = await _supabaseService.GetFolderHierarchyAsync(request.FolderId);
+
                         // Get uploader name
                         var uploaderName = "Unknown User";
                         if (!string.IsNullOrEmpty(request.UserId))
@@ -178,6 +181,9 @@ namespace ESSDesign.Server.Controllers
                             request.FolderId,
                             request.EssDesignIssue != null,
                             request.ThirdPartyDesign != null,
+                            hierarchy.Client,
+                            hierarchy.Project,
+                            hierarchy.Scaffold,
                             request.Description
                         );
 

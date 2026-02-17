@@ -201,6 +201,13 @@ namespace ESSDesign.Server.Models
         public string Name { get; set; } = string.Empty;
     }
 
+    public class FolderHierarchy
+    {
+        public string? Client { get; set; }
+        public string? Project { get; set; }
+        public string? Scaffold { get; set; }
+    }
+
     public class SearchResult
     {
         public Guid Id { get; set; }
