@@ -121,7 +121,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost("documents")]
-        [RequestSizeLimit(100_000_000)]
+        [RequestSizeLimit(1_000_000_000)] // 1GB limit for large file uploads
         public async Task<ActionResult> UploadDocument([FromForm] UploadDocumentRequest request)
         {
             try
