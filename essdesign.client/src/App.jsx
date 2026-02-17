@@ -182,8 +182,11 @@ function App() {
         try {
             const prefs = await preferencesAPI.getPreferences();
 
-            // Update state from backend
-            if (prefs.selectedFolderId !== undefined) {
+            // Only restore selectedFolderId from backend if there's no ?folder= deep link in the URL.
+            // A deep link (e.g. from an email) must take priority over the saved preference.
+            const urlParams = new URLSearchParams(window.location.search);
+            const folderFromUrl = urlParams.get('folder');
+            if (!folderFromUrl && prefs.selectedFolderId !== undefined) {
                 setSelectedFolderId(prefs.selectedFolderId);
                 localStorage.setItem('selectedFolderId', prefs.selectedFolderId || '');
             }
