@@ -420,6 +420,37 @@ namespace ESSDesign.Server.Services
             return breadcrumbs;
         }
 
+        public async Task<FolderHierarchy> GetFolderHierarchyAsync(Guid folderId)
+        {
+            var hierarchy = new FolderHierarchy();
+            var currentId = folderId;
+            var level = 0;
+
+            // Traverse up the folder tree
+            while (currentId != Guid.Empty && level < 3)
+            {
+                var folder = await _supabase
+                    .From<Folder>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, currentId.ToString())
+                    .Single();
+
+                if (folder == null) break;
+
+                // Assign to hierarchy based on level (0 = Scaffold, 1 = Project, 2 = Client)
+                if (level == 0)
+                    hierarchy.Scaffold = folder.Name;
+                else if (level == 1)
+                    hierarchy.Project = folder.Name;
+                else if (level == 2)
+                    hierarchy.Client = folder.Name;
+
+                currentId = folder.ParentFolderId ?? Guid.Empty;
+                level++;
+            }
+
+            return hierarchy;
+        }
+
         public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null)
         {
             try
