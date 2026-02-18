@@ -1,0 +1,6 @@
+**/dgph
+**/Pods/
+**/Podfile.lock
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+ServiceDefinitions.json
