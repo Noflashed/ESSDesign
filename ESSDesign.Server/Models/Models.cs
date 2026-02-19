@@ -150,6 +150,11 @@ namespace ESSDesign.Server.Models
         public string NewRevisionNumber { get; set; } = string.Empty;
     }
 
+    public class MoveDocumentRequest
+    {
+        public Guid TargetFolderId { get; set; }
+    }
+
     public class UploadDocumentRequest
     {
         public Guid FolderId { get; set; }

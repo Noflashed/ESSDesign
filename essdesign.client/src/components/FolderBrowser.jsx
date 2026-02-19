@@ -89,6 +89,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [newRevisionNumber, setNewRevisionNumber] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
     const cacheRef = useRef(new Map());
+
+    // Drag-and-drop state
+    const draggedItemRef = useRef(null);
+    const [dragOverFolderId, setDragOverFolderId] = useState(null);
     const [viewMode, setViewMode] = useState(() => {
         return initialViewMode || localStorage.getItem('viewMode') || 'grid';
     }); // 'grid' or 'list'
@@ -471,6 +475,71 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         }
     };
 
+    const handleMoveDocument = async (document, targetFolder) => {
+        if (document.id === targetFolder.id) return;
+
+        // 1. Save current state for rollback
+        const currentFolders = [...folders];
+
+        // 2. Remove document from current view immediately
+        setFolders(prev => prev.filter(f => f.id !== document.id));
+
+        // 3. Show toast
+        const toastId = showToast(`Moving to "${targetFolder.name}"...`, 'info', 0);
+
+        // 4. Call API in background
+        try {
+            await foldersAPI.moveDocument(document.id, targetFolder.id);
+
+            clearCache();
+            if (onRefreshNeeded) onRefreshNeeded();
+            updateToast(toastId, `Moved to "${targetFolder.name}"`, 'success');
+        } catch (error) {
+            // 5. Rollback on error
+            setFolders(currentFolders);
+            updateToast(toastId, 'Failed to move document', 'error');
+            console.error('Move document error:', error);
+        }
+    };
+
+    const handleDragStart = (e, item) => {
+        draggedItemRef.current = item;
+        e.dataTransfer.effectAllowed = 'move';
+        // Use a tiny delay so the drag image renders before the element fades
+        setTimeout(() => {
+            e.target.classList.add('dragging');
+        }, 0);
+    };
+
+    const handleDragEnd = (e) => {
+        e.target.classList.remove('dragging');
+        draggedItemRef.current = null;
+        setDragOverFolderId(null);
+    };
+
+    const handleDragOver = (e, folder) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (draggedItemRef.current && draggedItemRef.current.isDocument) {
+            setDragOverFolderId(folder.id);
+        }
+    };
+
+    const handleDragLeave = (e) => {
+        // Only clear if leaving the element entirely (not entering a child)
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            setDragOverFolderId(null);
+        }
+    };
+
+    const handleDrop = (e, targetFolder) => {
+        e.preventDefault();
+        setDragOverFolderId(null);
+        const dragged = draggedItemRef.current;
+        if (!dragged || !dragged.isDocument) return;
+        handleMoveDocument(dragged, targetFolder);
+    };
+
     const handleViewPDF = (document, type) => {
         const fileName = type === 'ess' ? document.essDesignIssueName : document.thirdPartyDesignName;
         setPdfViewer({
@@ -682,7 +751,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         viewMode === 'grid' ? (
                             <div
                                 key={item.id}
-                                className={`item-card ${item.isDocument ? 'document' : 'folder'}`}
+                                className={`item-card ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
+                                draggable={!!item.isDocument}
+                                onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
+                                onDragEnd={item.isDocument ? handleDragEnd : undefined}
+                                onDragOver={!item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                onDragLeave={!item.isDocument ? handleDragLeave : undefined}
+                                onDrop={!item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                 onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                 onContextMenu={(e) => handleContextMenu(e, item)}
                             >
@@ -719,8 +794,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         ) : (
                             <div
                                 key={item.id}
-                                className={`list-item ${item.isDocument ? 'document' : 'folder'}`}
+                                className={`list-item ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
                                 style={{ gridTemplateColumns }}
+                                draggable={!!item.isDocument}
+                                onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
+                                onDragEnd={item.isDocument ? handleDragEnd : undefined}
+                                onDragOver={!item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                onDragLeave={!item.isDocument ? handleDragLeave : undefined}
+                                onDrop={!item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                 onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                 onContextMenu={(e) => handleContextMenu(e, item)}
                             >

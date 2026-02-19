@@ -157,6 +157,13 @@ export const foldersAPI = {
         return response.data;
     },
 
+    moveDocument: async (documentId, targetFolderId) => {
+        const response = await apiClient.put(`/folders/documents/${documentId}/move`, {
+            targetFolderId
+        });
+        return response.data;
+    },
+
     getDownloadUrl: async (documentId, type) => {
         const response = await apiClient.get(`/folders/documents/${documentId}/download/${type}`);
         return response.data; // Returns { url, fileName }

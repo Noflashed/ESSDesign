@@ -550,6 +550,39 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task MoveDocumentAsync(Guid documentId, Guid targetFolderId)
+        {
+            try
+            {
+                var document = await _supabase
+                    .From<DesignDocument>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, documentId.ToString())
+                    .Single();
+
+                if (document == null)
+                    throw new FileNotFoundException("Document not found");
+
+                var oldFolderId = document.FolderId;
+                document.FolderId = targetFolderId;
+                document.UpdatedAt = DateTime.UtcNow;
+
+                await _supabase
+                    .From<DesignDocument>()
+                    .Update(document);
+
+                // Clear cache for both old and new folders
+                _folderCache.TryRemove(oldFolderId, out _);
+                _folderCache.TryRemove(targetFolderId, out _);
+
+                _logger.LogInformation("Moved document {DocumentId} from folder {OldFolderId} to folder {TargetFolderId}", documentId, oldFolderId, targetFolderId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving document");
+                throw;
+            }
+        }
+
         public async Task UpdateDocumentRevisionAsync(Guid documentId, string newRevisionNumber)
         {
             try
