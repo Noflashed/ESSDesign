@@ -298,6 +298,21 @@
         background: var(--hover-bg);
     }
 
+/* Drag-and-drop states */
+.item-card.dragging,
+.list-item.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.item-card.drag-over,
+.list-item.drag-over {
+    border-color: var(--primary-color);
+    background: rgba(26, 115, 232, 0.08);
+    box-shadow: 0 0 0 2px var(--primary-color);
+    transform: scale(1.02);
+}
+
 /* Optimistic UI states */
 .item-card._optimistic,
 .list-item._optimistic {

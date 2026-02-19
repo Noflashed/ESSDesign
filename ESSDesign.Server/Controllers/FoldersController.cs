@@ -221,6 +221,24 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("documents/{documentId}/move")]
+        public async Task<ActionResult> MoveDocument(Guid documentId, [FromBody] MoveDocumentRequest request)
+        {
+            try
+            {
+                if (request.TargetFolderId == Guid.Empty)
+                    return BadRequest(new { error = "Target folder ID is required" });
+
+                await _supabaseService.MoveDocumentAsync(documentId, request.TargetFolderId);
+                return Ok(new { message = "Document moved" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error moving document");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPut("documents/{documentId}/revision")]
         public async Task<ActionResult> UpdateDocumentRevision(Guid documentId, [FromBody] UpdateDocumentRevisionRequest request)
         {
