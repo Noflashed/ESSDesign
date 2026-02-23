@@ -10,12 +10,18 @@ namespace ESSDesign.Server.Controllers
     {
         private readonly SupabaseService _supabaseService;
         private readonly EmailService _emailService;
+        private readonly PushNotificationService _pushNotificationService;
         private readonly ILogger<FoldersController> _logger;
 
-        public FoldersController(SupabaseService supabaseService, EmailService emailService, ILogger<FoldersController> logger)
+        public FoldersController(
+            SupabaseService supabaseService,
+            EmailService emailService,
+            PushNotificationService pushNotificationService,
+            ILogger<FoldersController> logger)
         {
             _supabaseService = supabaseService;
             _emailService = emailService;
+            _pushNotificationService = pushNotificationService;
             _logger = logger;
         }
 
@@ -189,11 +195,25 @@ namespace ESSDesign.Server.Controllers
 
                         _logger.LogInformation("Sent email notifications to {Count} recipients for document {DocumentId}",
                             recipientEmails.Count, documentId);
+
+                        // Send APNs push notifications to recipient devices
+                        var pushSentCount = await _pushNotificationService.SendDocumentUploadPushAsync(
+                            request.RecipientIds,
+                            uploaderName,
+                            hierarchy.Client ?? "Unknown Client",
+                            hierarchy.Project ?? "Unknown Project",
+                            hierarchy.Scaffold ?? folder.Name,
+                            documentName,
+                            request.RevisionNumber
+                        );
+
+                        _logger.LogInformation("Sent APNs notifications to {Count} devices for document {DocumentId}",
+                            pushSentCount, documentId);
                     }
                     catch (Exception emailEx)
                     {
                         // Log but don't fail the upload if email fails
-                        _logger.LogError(emailEx, "Error sending email notifications for document {DocumentId}", documentId);
+                        _logger.LogError(emailEx, "Error sending notifications for document {DocumentId}", documentId);
                     }
                 }
 
