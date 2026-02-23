@@ -106,6 +106,34 @@ namespace ESSDesign.Server.Models
         public string FullName { get; set; } = string.Empty;
     }
 
+    [Table("user_push_tokens")]
+    public class UserPushToken : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        public Guid Id { get; set; }
+
+        [Column("user_id")]
+        public Guid UserId { get; set; }
+
+        [Column("token")]
+        public string Token { get; set; } = string.Empty;
+
+        [Column("platform")]
+        public string Platform { get; set; } = "ios";
+
+        [Column("app_bundle_id")]
+        public string? AppBundleId { get; set; }
+
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public class SignUpRequest
     {
         public string Email { get; set; } = string.Empty;
@@ -241,5 +269,15 @@ namespace ESSDesign.Server.Models
         public int SidebarWidth { get; set; } = 280;
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+    }
+
+    public class RegisterDeviceTokenRequest
+    {
+        public string? Token { get; set; }
+        public string? DeviceToken { get; set; }
+        public string? ApnsToken { get; set; }
+        public string? Platform { get; set; }
+        public string? AppBundleId { get; set; }
+        public string? UserId { get; set; }
     }
 }

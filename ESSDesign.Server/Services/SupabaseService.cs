@@ -924,6 +924,122 @@ namespace ESSDesign.Server.Services
                 throw;
             }
         }
+
+        public async Task UpsertUserPushTokenAsync(
+            Guid userId,
+            string token,
+            string platform,
+            string? appBundleId)
+        {
+            try
+            {
+                var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
+                    ? "ios"
+                    : platform.Trim().ToLowerInvariant();
+
+                var existingResponse = await _supabase
+                    .From<UserPushToken>()
+                    .Filter("user_id", Postgrest.Constants.Operator.Equals, userId.ToString())
+                    .Filter("platform", Postgrest.Constants.Operator.Equals, normalizedPlatform)
+                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
+                    .Get();
+
+                var now = DateTime.UtcNow;
+                var existing = existingResponse.Models.FirstOrDefault();
+                if (existing != null)
+                {
+                    existing.Token = token;
+                    existing.AppBundleId = appBundleId;
+                    existing.IsActive = true;
+                    existing.UpdatedAt = now;
+                    await _supabase.From<UserPushToken>().Update(existing);
+                    return;
+                }
+
+                var row = new UserPushToken
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Token = token,
+                    Platform = normalizedPlatform,
+                    AppBundleId = appBundleId,
+                    IsActive = true,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                await _supabase.From<UserPushToken>().Insert(row);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error upserting push token for user {UserId}", userId);
+                throw;
+            }
+        }
+
+        public async Task<List<UserPushToken>> GetActivePushTokensByUserIdsAsync(
+            IEnumerable<string> userIds,
+            string platform = "ios")
+        {
+            var guidIds = userIds
+                .Where(id => Guid.TryParse(id, out _))
+                .Select(Guid.Parse)
+                .ToHashSet();
+
+            if (!guidIds.Any())
+            {
+                return new List<UserPushToken>();
+            }
+
+            try
+            {
+                var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
+                    ? "ios"
+                    : platform.Trim().ToLowerInvariant();
+
+                var response = await _supabase
+                    .From<UserPushToken>()
+                    .Filter("platform", Postgrest.Constants.Operator.Equals, normalizedPlatform)
+                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
+                    .Get();
+
+                return response.Models
+                    .Where(r => guidIds.Contains(r.UserId))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting push tokens for users");
+                throw;
+            }
+        }
+
+        public async Task DeactivatePushTokenAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            try
+            {
+                var response = await _supabase
+                    .From<UserPushToken>()
+                    .Filter("token", Postgrest.Constants.Operator.Equals, token)
+                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
+                    .Get();
+
+                foreach (var row in response.Models)
+                {
+                    row.IsActive = false;
+                    row.UpdatedAt = DateTime.UtcNow;
+                    await _supabase.From<UserPushToken>().Update(row);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to deactivate push token");
+            }
+        }
     }
 
     public class FileDownloadInfo
