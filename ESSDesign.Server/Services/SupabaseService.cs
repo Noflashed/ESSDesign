@@ -1,6 +1,8 @@
 using Supabase;
 using ESSDesign.Server.Models;
 using System.Collections.Concurrent;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace ESSDesign.Server.Services
 {
@@ -8,7 +10,11 @@ namespace ESSDesign.Server.Services
     {
         private readonly Supabase.Client _supabase;
         private readonly ILogger<SupabaseService> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly string _supabaseUrl;
+        private readonly string _supabaseKey;
         private readonly string _bucketName = "design-pdfs";
+        private readonly string _safetyBucketName = "project-information";
 
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
@@ -18,10 +24,20 @@ namespace ESSDesign.Server.Services
         private static List<FolderResponse>? _rootFoldersCache;
         private static DateTime _rootFoldersCacheExpiry = DateTime.MinValue;
 
-        public SupabaseService(Supabase.Client supabase, ILogger<SupabaseService> logger)
+        public SupabaseService(
+            Supabase.Client supabase,
+            ILogger<SupabaseService> logger,
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration)
         {
             _supabase = supabase;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
+            _supabaseUrl = configuration["Supabase:Url"] ?? string.Empty;
+            _supabaseKey = configuration["Supabase:ServiceRoleKey"]
+                ?? configuration["Supabase:Key"]
+                ?? string.Empty;
+            _safetyBucketName = configuration["Supabase:SafetyBucket"] ?? "project-information";
         }
 
         public async Task<List<FolderResponse>> GetRootFoldersAsync()
@@ -702,6 +718,131 @@ namespace ESSDesign.Server.Services
             {
                 _logger.LogWarning(ex, "Storage initialization warning");
             }
+        }
+
+        public async Task<string?> GetScaffTagPdfPathAsync(string builderId, string projectId, string formId)
+        {
+            var formPath = $"site-data/{builderId}/{projectId}/scaff-tags/forms/{formId}.json";
+            var json = await DownloadStorageObjectAsync(_safetyBucketName, formPath);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("pdfPath", out var pdfPathElement))
+                {
+                    var pdfPath = pdfPathElement.GetString();
+                    return string.IsNullOrWhiteSpace(pdfPath) ? null : pdfPath;
+                }
+
+                if (root.TryGetProperty("pdf_path", out var pdfPathSnakeElement))
+                {
+                    var pdfPath = pdfPathSnakeElement.GetString();
+                    return string.IsNullOrWhiteSpace(pdfPath) ? null : pdfPath;
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse scaff-tag form JSON at {Path}", formPath);
+            }
+
+            return null;
+        }
+
+        public async Task<string> GetSafetyStorageSignedUrlAsync(string path, int expiresInSeconds = 60 * 60 * 24 * 14)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var escapedPath = string.Join(
+                "/",
+                path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/sign/{Uri.EscapeDataString(_safetyBucketName)}/{escapedPath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Content = JsonContent.Create(new { expiresIn = expiresInSeconds });
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create signed URL for '{path}'. Status: {(int)response.StatusCode}. Body: {body}");
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            string? signedPath = null;
+            if (root.TryGetProperty("signedURL", out var signedUrlUpper))
+            {
+                signedPath = signedUrlUpper.GetString();
+            }
+            else if (root.TryGetProperty("signedUrl", out var signedUrlLower))
+            {
+                signedPath = signedUrlLower.GetString();
+            }
+
+            if (string.IsNullOrWhiteSpace(signedPath))
+            {
+                throw new InvalidOperationException($"Supabase signed URL response missing signed URL. Body: {body}");
+            }
+
+            if (signedPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                signedPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return signedPath;
+            }
+
+            return $"{_supabaseUrl.TrimEnd('/')}/storage/v1{signedPath}";
+        }
+
+        private async Task<string?> DownloadStorageObjectAsync(string bucket, string path)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                _logger.LogWarning("Supabase URL or key not configured; cannot download storage object.");
+                return null;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var escapedPath = string.Join(
+                "/",
+                path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/{Uri.EscapeDataString(bucket)}/{escapedPath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+            using var response = await client.SendAsync(request);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning(
+                    "Failed to download storage object {Bucket}/{Path}. Status: {Status}. Body: {Body}",
+                    bucket,
+                    path,
+                    (int)response.StatusCode,
+                    errorBody);
+                return null;
+            }
+
+            return await response.Content.ReadAsStringAsync();
         }
 
         // Method to clear entire cache (useful for testing)

@@ -184,6 +184,46 @@ app.UseAuthorization();
 // Health check endpoints
 app.MapGet("/", () => Results.Ok(new { status = "API is running", timestamp = DateTime.UtcNow }));
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+app.MapGet("/t/{tagRef}", async (string tagRef, SupabaseService supabaseService, ILogger<Program> logger) =>
+{
+    if (string.IsNullOrWhiteSpace(tagRef))
+    {
+        return Results.BadRequest("Missing tag reference.");
+    }
+
+    var decodedRef = Uri.UnescapeDataString(tagRef);
+    var parts = decodedRef.Split(':', StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length != 3)
+    {
+        return Results.BadRequest("Invalid tag reference format.");
+    }
+
+    var builderId = parts[0].Trim();
+    var projectId = parts[1].Trim();
+    var formId = parts[2].Trim();
+
+    if (string.IsNullOrWhiteSpace(builderId) || string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(formId))
+    {
+        return Results.BadRequest("Invalid tag reference values.");
+    }
+
+    try
+    {
+        var pdfPath = await supabaseService.GetScaffTagPdfPathAsync(builderId, projectId, formId);
+        if (string.IsNullOrWhiteSpace(pdfPath))
+        {
+            return Results.NotFound("Scaff-tag form or PDF path not found.");
+        }
+
+        var signedUrl = await supabaseService.GetSafetyStorageSignedUrlAsync(pdfPath);
+        return Results.Redirect(signedUrl, permanent: false);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed QR redirect for tag ref {TagRef}", tagRef);
+        return Results.Problem("Unable to resolve scaff-tag PDF.", statusCode: 500);
+    }
+});
 
 // Controllers
 app.MapControllers();
