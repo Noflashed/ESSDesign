@@ -237,13 +237,13 @@ app.MapGet("/t/{tagRef}", async (string tagRef, SupabaseService supabaseService,
   <style>
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; background: #f4f6f8; color: #111827; }
     .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
-    .card { background: #fff; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 14px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 14px; border: 2px solid #0b7f45; }
     .head { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
     h1 { margin: 0; font-size: 18px; line-height: 1.2; }
     .sub { margin-top: 6px; color: #4b5563; font-size: 13px; }
     .pdf { width: 100%; height: 72vh; border: 0; display: block; }
     .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 12px; }
-    .photo { border-radius: 10px; overflow: hidden; display: block; border: 1px solid #e5e7eb; background: #fff; }
+    .photo { border-radius: 10px; overflow: hidden; display: block; border: 2px solid #0b7f45; background: #fff; }
     .photo img { width: 100%; height: 130px; object-fit: cover; display: block; }
     .muted { margin: 0; padding: 12px; color: #6b7280; font-size: 14px; }
   </style>
