@@ -209,19 +209,64 @@ app.MapGet("/t/{tagRef}", async (string tagRef, SupabaseService supabaseService,
 
     try
     {
-        var pdfPath = await supabaseService.GetScaffTagPdfPathAsync(builderId, projectId, formId);
-        if (string.IsNullOrWhiteSpace(pdfPath))
+        var details = await supabaseService.GetScaffTagFormDetailsAsync(builderId, projectId, formId);
+        if (details == null || string.IsNullOrWhiteSpace(details.PdfPath))
         {
             return Results.NotFound("Scaff-tag form or PDF path not found.");
         }
 
-        var file = await supabaseService.DownloadSafetyObjectAsync(pdfPath);
-        if (file == null || file.Bytes.Length == 0)
-        {
-            return Results.NotFound("Scaff-tag PDF not found.");
-        }
+        var pdfUrl = await supabaseService.GetSafetyStorageSignedUrlAsync(details.PdfPath, 60 * 60 * 24 * 14);
+        var photoUrls = await Task.WhenAll(details.PhotoPaths.Select(p => supabaseService.GetSafetyStorageSignedUrlAsync(p, 60 * 60 * 24 * 7)));
 
-        return Results.File(file.Bytes, file.ContentType ?? "application/pdf");
+        var scaffoldTitle = System.Net.WebUtility.HtmlEncode(details.ScaffoldName ?? "Scaff-Tag");
+        var locationTitle = System.Net.WebUtility.HtmlEncode(details.JobLocation ?? string.Empty);
+        var photosHtml = photoUrls.Length == 0
+            ? "<p class=\"muted\">No photos attached.</p>"
+            : string.Join(
+                "",
+                photoUrls.Select(url =>
+                    $"<a class=\"photo\" href=\"{System.Net.WebUtility.HtmlEncode(url)}\" target=\"_blank\" rel=\"noopener noreferrer\"><img src=\"{System.Net.WebUtility.HtmlEncode(url)}\" loading=\"lazy\" /></a>"));
+
+        var html = $$"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scaff-Tag</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; background: #f4f6f8; color: #111827; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 14px; }
+    .head { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
+    h1 { margin: 0; font-size: 18px; line-height: 1.2; }
+    .sub { margin-top: 6px; color: #4b5563; font-size: 13px; }
+    .pdf { width: 100%; height: 72vh; border: 0; display: block; }
+    .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 12px; }
+    .photo { border-radius: 10px; overflow: hidden; display: block; border: 1px solid #e5e7eb; background: #fff; }
+    .photo img { width: 100%; height: 130px; object-fit: cover; display: block; }
+    .muted { margin: 0; padding: 12px; color: #6b7280; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <h1>{{scaffoldTitle}}</h1>
+        <div class="sub">{{locationTitle}}</div>
+      </div>
+      <iframe class="pdf" src="{{System.Net.WebUtility.HtmlEncode(pdfUrl)}}" title="Scaff-Tag PDF"></iframe>
+    </div>
+    <div class="card">
+      <div class="head"><h1>Photos</h1></div>
+      <div class="photos">{{photosHtml}}</div>
+    </div>
+  </div>
+</body>
+</html>
+""";
+
+        return Results.Content(html, "text/html; charset=utf-8");
     }
     catch (Exception ex)
     {

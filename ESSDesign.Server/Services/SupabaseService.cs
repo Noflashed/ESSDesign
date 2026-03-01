@@ -722,6 +722,12 @@ namespace ESSDesign.Server.Services
 
         public async Task<string?> GetScaffTagPdfPathAsync(string builderId, string projectId, string formId)
         {
+            var details = await GetScaffTagFormDetailsAsync(builderId, projectId, formId);
+            return details?.PdfPath;
+        }
+
+        public async Task<ScaffTagFormDetails?> GetScaffTagFormDetailsAsync(string builderId, string projectId, string formId)
+        {
             var formPath = $"site-data/{builderId}/{projectId}/scaff-tags/forms/{formId}.json";
             var json = await DownloadStorageObjectAsync(_safetyBucketName, formPath);
             if (string.IsNullOrWhiteSpace(json))
@@ -733,18 +739,41 @@ namespace ESSDesign.Server.Services
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+                var details = new ScaffTagFormDetails();
 
                 if (root.TryGetProperty("pdfPath", out var pdfPathElement))
                 {
-                    var pdfPath = pdfPathElement.GetString();
-                    return string.IsNullOrWhiteSpace(pdfPath) ? null : pdfPath;
+                    details.PdfPath = pdfPathElement.GetString();
+                }
+                else if (root.TryGetProperty("pdf_path", out var pdfPathSnakeElement))
+                {
+                    details.PdfPath = pdfPathSnakeElement.GetString();
                 }
 
-                if (root.TryGetProperty("pdf_path", out var pdfPathSnakeElement))
+                if (root.TryGetProperty("photoPaths", out var photoPathsElement) &&
+                    photoPathsElement.ValueKind == JsonValueKind.Array)
                 {
-                    var pdfPath = pdfPathSnakeElement.GetString();
-                    return string.IsNullOrWhiteSpace(pdfPath) ? null : pdfPath;
+                    foreach (var item in photoPathsElement.EnumerateArray())
+                    {
+                        var value = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            details.PhotoPaths.Add(value);
+                        }
+                    }
                 }
+
+                if (root.TryGetProperty("scaffoldNo", out var scaffoldElement))
+                {
+                    details.ScaffoldName = scaffoldElement.GetString();
+                }
+
+                if (root.TryGetProperty("jobLocation", out var jobLocationElement))
+                {
+                    details.JobLocation = jobLocationElement.GetString();
+                }
+
+                return string.IsNullOrWhiteSpace(details.PdfPath) ? null : details;
             }
             catch (JsonException ex)
             {
@@ -1243,5 +1272,13 @@ namespace ESSDesign.Server.Services
     {
         public byte[] Bytes { get; set; } = Array.Empty<byte>();
         public string? ContentType { get; set; }
+    }
+
+    public class ScaffTagFormDetails
+    {
+        public string? PdfPath { get; set; }
+        public string? ScaffoldName { get; set; }
+        public string? JobLocation { get; set; }
+        public List<string> PhotoPaths { get; set; } = new();
     }
 }
