@@ -215,8 +215,13 @@ app.MapGet("/t/{tagRef}", async (string tagRef, SupabaseService supabaseService,
             return Results.NotFound("Scaff-tag form or PDF path not found.");
         }
 
-        var signedUrl = await supabaseService.GetSafetyStorageSignedUrlAsync(pdfPath);
-        return Results.Redirect(signedUrl, permanent: false);
+        var file = await supabaseService.DownloadSafetyObjectAsync(pdfPath);
+        if (file == null || file.Bytes.Length == 0)
+        {
+            return Results.NotFound("Scaff-tag PDF not found.");
+        }
+
+        return Results.File(file.Bytes, file.ContentType ?? "application/pdf");
     }
     catch (Exception ex)
     {

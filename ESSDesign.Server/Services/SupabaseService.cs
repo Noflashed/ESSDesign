@@ -806,6 +806,11 @@ namespace ESSDesign.Server.Services
             return $"{_supabaseUrl.TrimEnd('/')}/storage/v1{signedPath}";
         }
 
+        public async Task<StorageObjectDownload?> DownloadSafetyObjectAsync(string path)
+        {
+            return await DownloadStorageBinaryObjectAsync(_safetyBucketName, path);
+        }
+
         private async Task<string?> DownloadStorageObjectAsync(string bucket, string path)
         {
             if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
@@ -843,6 +848,51 @@ namespace ESSDesign.Server.Services
             }
 
             return await response.Content.ReadAsStringAsync();
+        }
+
+        private async Task<StorageObjectDownload?> DownloadStorageBinaryObjectAsync(string bucket, string path)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                _logger.LogWarning("Supabase URL or key not configured; cannot download storage object.");
+                return null;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var escapedPath = string.Join(
+                "/",
+                path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/{Uri.EscapeDataString(bucket)}/{escapedPath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+            using var response = await client.SendAsync(request);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning(
+                    "Failed to download storage object {Bucket}/{Path}. Status: {Status}. Body: {Body}",
+                    bucket,
+                    path,
+                    (int)response.StatusCode,
+                    errorBody);
+                return null;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+            return new StorageObjectDownload
+            {
+                Bytes = bytes,
+                ContentType = contentType
+            };
         }
 
         // Method to clear entire cache (useful for testing)
@@ -1187,5 +1237,11 @@ namespace ESSDesign.Server.Services
     {
         public string Url { get; set; } = string.Empty;
         public string FileName { get; set; } = string.Empty;
+    }
+
+    public class StorageObjectDownload
+    {
+        public byte[] Bytes { get; set; } = Array.Empty<byte>();
+        public string? ContentType { get; set; }
     }
 }
