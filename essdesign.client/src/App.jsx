@@ -208,6 +208,8 @@ function App() {
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
+    const avatarCandidates = buildAvatarCandidates(user);
+    const [avatarIndex, setAvatarIndex] = useState(0);
 
     useEffect(() => {
         checkAuth();
