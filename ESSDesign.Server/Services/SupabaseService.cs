@@ -1106,46 +1106,26 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                // Check if preferences exist
                 var existing = await GetUserPreferencesAsync(userId);
+                var now = DateTime.UtcNow;
 
-                if (existing != null)
+                var mergedPreferences = new UserPreferences
                 {
-                    // Update existing
-                    existing.SelectedFolderId = selectedFolderId ?? existing.SelectedFolderId;
-                    existing.Theme = theme ?? existing.Theme;
-                    existing.ViewMode = viewMode ?? existing.ViewMode;
-                    existing.SidebarWidth = sidebarWidth ?? existing.SidebarWidth;
-                    existing.UpdatedAt = DateTime.UtcNow;
+                    UserId = userId,
+                    SelectedFolderId = selectedFolderId ?? existing?.SelectedFolderId,
+                    Theme = theme ?? existing?.Theme ?? "light",
+                    ViewMode = viewMode ?? existing?.ViewMode ?? "grid",
+                    SidebarWidth = sidebarWidth ?? existing?.SidebarWidth ?? 280,
+                    CreatedAt = existing?.CreatedAt ?? now,
+                    UpdatedAt = now
+                };
 
-                    var updateResponse = await _supabase
-                        .From<UserPreferences>()
-                        .Update(existing);
+                var upsertResponse = await _supabase
+                    .From<UserPreferences>()
+                    .Upsert(mergedPreferences);
 
-                    return updateResponse.Models.FirstOrDefault()
-                        ?? throw new Exception("Failed to update preferences");
-                }
-                else
-                {
-                    // Create new
-                    var newPrefs = new UserPreferences
-                    {
-                        UserId = userId,
-                        SelectedFolderId = selectedFolderId,
-                        Theme = theme ?? "light",
-                        ViewMode = viewMode ?? "grid",
-                        SidebarWidth = sidebarWidth ?? 280,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-
-                    var insertResponse = await _supabase
-                        .From<UserPreferences>()
-                        .Insert(newPrefs);
-
-                    return insertResponse.Models.FirstOrDefault()
-                        ?? throw new Exception("Failed to create preferences");
-                }
+                return upsertResponse.Models.FirstOrDefault()
+                    ?? mergedPreferences;
             }
             catch (Exception ex)
             {
