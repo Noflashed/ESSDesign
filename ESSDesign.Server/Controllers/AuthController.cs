@@ -59,7 +59,15 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Signup error");
-                return StatusCode(500, new { error = ex.Message });
+                var errorMessage = ex.Message ?? "Failed to create account";
+                if (errorMessage.Contains("already registered", StringComparison.OrdinalIgnoreCase) ||
+                    errorMessage.Contains("already been registered", StringComparison.OrdinalIgnoreCase) ||
+                    errorMessage.Contains("user already registered", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Conflict(new { error = "An account already exists for this email. Please sign in instead." });
+                }
+
+                return StatusCode(500, new { error = errorMessage });
             }
         }
 

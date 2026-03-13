@@ -184,3 +184,26 @@
 :root[data-theme="dark"] .auth-button {
     color: #0f0f0f;
 }
+
+
+.auth-success-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.auth-success-message {
+    padding: 16px;
+    border-radius: 10px;
+    background: #eef6ff;
+    color: var(--text-primary, #202124);
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: center;
+    border: 1px solid #d2e3fc;
+}
+
+:root[data-theme="dark"] .auth-success-message {
+    background: rgba(26, 115, 232, 0.14);
+    border-color: rgba(138, 180, 248, 0.3);
+}

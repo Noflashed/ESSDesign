@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
 const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
@@ -46,11 +46,6 @@ export const authAPI = {
         const response = await apiClient.post('/auth/signup', { email, password, fullName });
         const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
-        if (response.data.accessToken) {
-            localStorage.setItem('access_token', response.data.accessToken);
-            localStorage.setItem('refresh_token', response.data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(hydratedUser));
-        }
         return { ...response.data, user: hydratedUser };
     },
 
