@@ -1,6 +1,31 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
+const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
+const PROFILE_IMAGES_BUCKET = 'profile-images';
+
+const getPublicStorageUrl = (bucket, objectPath) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`;
+
+const resolveProfileImageUrl = async (userId) => {
+    if (!userId) return null;
+
+    const extensions = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
+
+    for (const ext of extensions) {
+        const objectPath = `${userId}/avatar.${ext}`;
+        const testUrl = `${getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath)}?t=${Date.now()}`;
+        try {
+            const response = await fetch(testUrl, { method: 'HEAD' });
+            if (response.ok) {
+                return testUrl;
+            }
+        } catch {
+            // Try next possible extension.
+        }
+    }
+
+    return null;
+};
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -19,22 +44,26 @@ apiClient.interceptors.request.use((config) => {
 export const authAPI = {
     signUp: async (email, password, fullName) => {
         const response = await apiClient.post('/auth/signup', { email, password, fullName });
+        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+        const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         if (response.data.accessToken) {
             localStorage.setItem('access_token', response.data.accessToken);
             localStorage.setItem('refresh_token', response.data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
+            localStorage.setItem('user', JSON.stringify(hydratedUser));
         }
-        return response.data;
+        return { ...response.data, user: hydratedUser };
     },
 
     signIn: async (email, password) => {
         const response = await apiClient.post('/auth/signin', { email, password });
+        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+        const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         if (response.data.accessToken) {
             localStorage.setItem('access_token', response.data.accessToken);
             localStorage.setItem('refresh_token', response.data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
+            localStorage.setItem('user', JSON.stringify(hydratedUser));
         }
-        return response.data;
+        return { ...response.data, user: hydratedUser };
     },
 
     signOut: async () => {
@@ -52,10 +81,12 @@ export const authAPI = {
 
     refreshCurrentUser: async () => {
         const response = await apiClient.get('/auth/user');
+        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
+        const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
         if (response.data) {
-            localStorage.setItem('user', JSON.stringify(response.data));
+            localStorage.setItem('user', JSON.stringify(hydratedUser));
         }
-        return response.data;
+        return hydratedUser;
     },
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
@@ -209,3 +240,4 @@ export const usersAPI = {
 };
 
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
+

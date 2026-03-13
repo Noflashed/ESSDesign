@@ -11,6 +11,7 @@ import './App.css';
 // âœ… FIXED: Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 // Professional SVG Icons (Google Drive style)
 const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
@@ -134,6 +135,45 @@ function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPD
         </div>
     );
 }
+
+
+const normalizeAvatarSource = (value) => {
+    if (!value || typeof value !== 'string') return [];
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    if (/^https?:\/\//i.test(trimmed)) {
+        return [trimmed];
+    }
+
+    const normalizedPath = trimmed.replace(/^\/+/, '');
+    const candidates = [];
+
+    if (normalizedPath.startsWith('storage/v1/')) {
+        candidates.push(`${SUPABASE_BASE_URL}/${normalizedPath}`);
+    } else {
+        candidates.push(`${SUPABASE_BASE_URL}/storage/v1/object/public/${normalizedPath}`);
+        candidates.push(`${SUPABASE_BASE_URL}/storage/v1/object/public/public-assets/${normalizedPath}`);
+    }
+
+    return [...new Set(candidates)];
+};
+
+const buildAvatarCandidates = (user) => {
+    const rawValues = [
+        user?.avatarUrl,
+        user?.avatar_url,
+        user?.picture,
+        user?.profileImageUrl,
+        user?.profile_image_url,
+        user?.profileImage,
+        user?.profile_image,
+        user?.avatarPath,
+        user?.avatar_path
+    ].filter(Boolean);
+
+    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
+};
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -405,7 +445,11 @@ function App() {
             .map(part => part[0]?.toUpperCase())
             .join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
-    const userAvatarUrl = user?.avatarUrl || user?.avatar_url || user?.picture || user?.profileImageUrl || user?.profile_image_url || null;
+    const userAvatarUrl = avatarCandidates[avatarIndex] || null;
+
+    useEffect(() => {
+        setAvatarIndex(0);
+    }, [user?.id, user?.avatarUrl, user?.avatar_url, user?.picture, user?.profileImageUrl, user?.profile_image_url, user?.avatarPath, user?.avatar_path]);
 
     const handleDocumentClick = (document) => {
         // Determine which PDF to show (prioritize ESS Design Issue)
@@ -555,7 +599,7 @@ function App() {
                             aria-expanded={showUserMenu}
                         >
                             {userAvatarUrl ? (
-                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" />
+                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" onError={() => setAvatarIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)} />
                             ) : (
                                 <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
                             )}
@@ -568,7 +612,7 @@ function App() {
                                 <div className="user-menu-summary">
                                     <div className="user-menu-avatar" aria-hidden="true">
                                         {userAvatarUrl ? (
-                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" />
+                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" onError={() => setAvatarIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)} />
                                         ) : (
                                             userInitials
                                         )}
