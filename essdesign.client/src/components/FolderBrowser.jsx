@@ -48,7 +48,7 @@ const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
 
 // Helper function to format file size
 const formatFileSize = (bytes) => {
-    if (!bytes || bytes === 0) return 'â€”';
+    if (!bytes || bytes === 0) return 'Ã¢â‚¬â€';
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
@@ -56,7 +56,7 @@ const formatFileSize = (bytes) => {
 
 // Helper function to format date
 const formatDate = (dateString) => {
-    if (!dateString) return 'â€”';
+    if (!dateString) return 'Ã¢â‚¬â€';
     const date = new Date(dateString);
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
@@ -196,6 +196,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setColWidths({ ...DEFAULT_COL_WIDTHS });
     }, []);
 
+    const handleViewModeSelect = useCallback((nextViewMode) => {
+        setViewMode(nextViewMode);
+        if (onViewModeChange) {
+            onViewModeChange(nextViewMode);
+        }
+    }, [onViewModeChange]);
+
     // PDF Viewer state
     const [pdfViewer, setPdfViewer] = useState(null);
 
@@ -217,10 +224,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     useEffect(() => {
         localStorage.setItem('viewMode', viewMode);
-        if (onViewModeChange) {
-            onViewModeChange(viewMode);
-        }
-    }, [viewMode, onViewModeChange]);
+    }, [viewMode]);
 
     // Save sort preferences
     useEffect(() => {
@@ -640,7 +644,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 <div className="view-toggle">
                     <button
                         className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                        onClick={() => setViewMode('grid')}
+                        onClick={() => handleViewModeSelect('grid')}
                         title="Grid view"
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -652,7 +656,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     </button>
                     <button
                         className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                        onClick={() => setViewMode('list')}
+                        onClick={() => handleViewModeSelect('list')}
                         title="List view"
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -698,7 +702,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Name</span>
                                 {sortField === 'name' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -709,7 +713,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Revision</span>
                                 {sortField === 'revision' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -720,7 +724,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Owner</span>
                                 {sortField === 'owner' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -731,7 +735,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Date Modified</span>
                                 {sortField === 'modified' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -742,7 +746,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>File Size</span>
                                 {sortField === 'size' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
                                 )}
                             </div>
                             <div className="list-header-actions"></div>
@@ -829,7 +833,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {formatDate(item.updatedAt || item.createdAt)}
                                 </div>
                                 <div className="list-item-size">
-                                    {item.isDocument ? formatFileSize(item.totalFileSize) : 'â€”'}
+                                    {item.isDocument ? formatFileSize(item.totalFileSize) : 'Ã¢â‚¬â€'}
                                 </div>
                                 <div className="list-item-actions">
                                     {item.isDocument ? (
@@ -897,13 +901,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowRenameModal(true);
                                 setContextMenu(null);
                             }}>
-                                âœï¸ Rename
+                                Ã¢Å“ÂÃ¯Â¸Â Rename
                             </div>
                             <div onClick={() => {
                                 handleDeleteFolder(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                ðŸ—‘ï¸ Delete
+                                Ã°Å¸â€”â€˜Ã¯Â¸Â Delete
                             </div>
                         </>
                     )}
@@ -915,14 +919,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowEditDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                âœï¸ Edit Revision
+                                Ã¢Å“ÂÃ¯Â¸Â Edit Revision
                             </div>
                             <div className="context-menu-divider"></div>
                             <div onClick={() => {
                                 handleDeleteDocument(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                ðŸ—‘ï¸ Delete
+                                Ã°Å¸â€”â€˜Ã¯Â¸Â Delete
                             </div>
                         </>
                     )}
