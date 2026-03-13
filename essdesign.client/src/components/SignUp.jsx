@@ -1,18 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
 import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
-function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange }) {
+function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initialEmail = '' }) {
     const [formData, setFormData] = useState({
         fullName: '',
-        email: '',
+        email: initialEmail,
         password: '',
         confirmPassword: ''
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        setFormData((current) => ({ ...current, email: initialEmail }));
+    }, [initialEmail]);
 
     const handleChange = (e) => {
         setFormData({
@@ -69,7 +73,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange }) {
                     title="Toggle theme"
                     aria-label="Toggle theme"
                 >
-                    {theme === 'light' ? '🌙' : '☀️'}
+                    {theme === 'light' ? 'ðŸŒ™' : 'â˜€ï¸'}
                 </button>
 
                 <div className="auth-header">
@@ -113,7 +117,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange }) {
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
-                            placeholder="••••••••"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                             required
                         />
                     </div>
@@ -125,7 +129,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange }) {
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
-                            placeholder="••••••••"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                             required
                         />
                     </div>

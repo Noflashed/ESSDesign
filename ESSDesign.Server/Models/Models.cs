@@ -147,6 +147,11 @@ namespace ESSDesign.Server.Models
         public string Password { get; set; } = string.Empty;
     }
 
+    public class InviteUserRequest
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
     public class AuthResponse
     {
         public string AccessToken { get; set; } = string.Empty;

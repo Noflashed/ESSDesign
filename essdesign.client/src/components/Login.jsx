@@ -4,7 +4,7 @@ import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
-function Login({ onLoginSuccess, onSwitchToSignUp, theme, onThemeChange }) {
+function Login({ onLoginSuccess, theme, onThemeChange }) {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -93,13 +93,6 @@ function Login({ onLoginSuccess, onSwitchToSignUp, theme, onThemeChange }) {
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
-
-                <div className="auth-switch">
-                    <span>Don't have an account?</span>
-                    <button type="button" className="switch-button" onClick={onSwitchToSignUp}>
-                        Sign Up
-                    </button>
-                </div>
             </div>
         </div>
     );

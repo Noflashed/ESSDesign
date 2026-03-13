@@ -11,12 +11,14 @@ namespace ESSDesign.Server.Controllers
     {
         private readonly Supabase.Client _supabase;
         private readonly SupabaseService _supabaseService;
+        private readonly EmailService _emailService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(Supabase.Client supabase, SupabaseService supabaseService, ILogger<AuthController> logger)
+        public AuthController(Supabase.Client supabase, SupabaseService supabaseService, EmailService emailService, ILogger<AuthController> logger)
         {
             _supabase = supabase;
             _supabaseService = supabaseService;
+            _emailService = emailService;
             _logger = logger;
         }
 
@@ -88,6 +90,39 @@ namespace ESSDesign.Server.Controllers
             {
                 _logger.LogError(ex, "Signin error");
                 return Unauthorized(new { error = "Invalid email or password" });
+            }
+        }
+
+        [HttpPost("invite")]
+        public async Task<ActionResult> InviteUser([FromBody] InviteUserRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Email))
+                {
+                    return BadRequest(new { error = "Email is required" });
+                }
+
+                var authorizationHeader = Request.Headers.Authorization.ToString();
+                if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+                var inviter = await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+                if (inviter == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                await _emailService.SendUserInviteAsync(request.Email.Trim(), inviter.FullName ?? inviter.Email);
+                return Ok(new { message = "Invite email sent successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Invite user error");
+                return StatusCode(500, new { error = ex.Message });
             }
         }
 

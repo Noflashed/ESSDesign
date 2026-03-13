@@ -90,6 +90,11 @@ export const authAPI = {
     },
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
+    },
+
+    inviteUser: async (email) => {
+        const response = await apiClient.post('/auth/invite', { email });
+        return response.data;
     }
 };
 

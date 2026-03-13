@@ -179,7 +179,7 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [authView, setAuthView] = useState('login'); // 'login' or 'signup'
+    const [authView, setAuthView] = useState(() => new URLSearchParams(window.location.search).get('auth') === 'signup' ? 'signup' : 'login');
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
     const [selectedFolderId, setSelectedFolderId] = useState(() => {
         // Honor explicit deep links, otherwise always start from Home on app reopen.
@@ -204,6 +204,11 @@ function App() {
     const [searchLoading, setSearchLoading] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showInviteModal, setShowInviteModal] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
+    const [inviteLoading, setInviteLoading] = useState(false);
+    const [inviteError, setInviteError] = useState('');
+    const [inviteSuccess, setInviteSuccess] = useState('');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
@@ -225,6 +230,12 @@ function App() {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        setAuthView(urlParams.get('auth') === 'signup' ? 'signup' : 'login');
+        setInviteEmail(urlParams.get('email') || '');
+    }, []);
 
     const checkAuth = async () => {
         const authenticated = authAPI.isAuthenticated();
@@ -301,20 +312,78 @@ function App() {
         applyTheme(newTheme, true);
     };
 
+    const updateAuthView = (nextView, nextEmail = '') => {
+        const url = new URL(window.location.href);
+
+        if (nextView === 'signup') {
+            url.searchParams.set('auth', 'signup');
+            if (nextEmail) {
+                url.searchParams.set('email', nextEmail);
+            } else {
+                url.searchParams.delete('email');
+            }
+        } else {
+            url.searchParams.delete('auth');
+            url.searchParams.delete('email');
+        }
+
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+        setAuthView(nextView);
+        setInviteEmail(nextEmail);
+    };
+
     const handleLoginSuccess = () => {
+        updateAuthView('login');
         checkAuth();
     };
 
     const handleSignUpSuccess = () => {
+        updateAuthView('login');
         checkAuth();
     };
 
-    const handleSwitchToSignUp = () => {
-        setAuthView('signup');
+    const handleSwitchToSignUp = (email = '') => {
+        updateAuthView('signup', email);
     };
 
     const handleSwitchToLogin = () => {
-        setAuthView('login');
+        updateAuthView('login');
+    };
+
+    const closeInviteModal = () => {
+        setShowInviteModal(false);
+        setInviteError('');
+        setInviteSuccess('');
+        setInviteEmail('');
+    };
+
+    const handleInviteUser = async (e) => {
+        e.preventDefault();
+        setInviteError('');
+        setInviteSuccess('');
+
+        if (!inviteEmail.trim()) {
+            setInviteError('Please enter an email address');
+            return;
+        }
+
+        setInviteLoading(true);
+        try {
+            await authAPI.inviteUser(inviteEmail.trim());
+            setInviteSuccess(`Invitation sent to ${inviteEmail.trim()}`);
+        } catch (error) {
+            setInviteError(error.response?.data?.error || 'Failed to send invitation');
+        } finally {
+            setInviteLoading(false);
+        }
+    };
+
+    const openInviteModal = () => {
+        setShowUserMenu(false);
+        setInviteError('');
+        setInviteSuccess('');
+        setInviteEmail('');
+        setShowInviteModal(true);
     };
 
     const handleLogout = async () => {
@@ -323,6 +392,7 @@ function App() {
             await authAPI.signOut();
             setIsAuthenticated(false);
             setUser(null);
+            updateAuthView('login');
         } catch (error) {
             console.error('Logout error:', error);
         }
@@ -489,13 +559,13 @@ function App() {
                     onSwitchToLogin={handleSwitchToLogin}
                     theme={theme}
                     onThemeChange={(value) => applyTheme(value, false)}
+                    initialEmail={inviteEmail}
                 />
             );
         }
         return (
             <Login
                 onLoginSuccess={handleLoginSuccess}
-                onSwitchToSignUp={handleSwitchToSignUp}
                 theme={theme}
                 onThemeChange={(value) => applyTheme(value, false)}
             />
@@ -624,6 +694,9 @@ function App() {
                                         <div className="user-email">{user?.email}</div>
                                     </div>
                                 </div>
+                                <button className="user-menu-action" onClick={openInviteModal}>
+                                    Invite user
+                                </button>
                                 <button className="logout-button" onClick={handleLogout}>
                                     Logout
                                 </button>
@@ -652,6 +725,39 @@ function App() {
                     />
                 </main>
             </div>
+
+            {showInviteModal && (
+                <div className="invite-modal-overlay" onClick={closeInviteModal}>
+                    <div className="invite-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="invite-modal-header">
+                            <h3>Invite User</h3>
+                            <p>Send an email with a direct button to the ESS Design sign-up page.</p>
+                        </div>
+                        <form onSubmit={handleInviteUser} className="invite-form">
+                            <label className="invite-label" htmlFor="invite-email">Email address</label>
+                            <input
+                                id="invite-email"
+                                type="email"
+                                value={inviteEmail}
+                                onChange={(e) => setInviteEmail(e.target.value)}
+                                placeholder="name@company.com"
+                                className="invite-input"
+                                autoFocus
+                            />
+                            {inviteError && <div className="invite-message invite-error">{inviteError}</div>}
+                            {inviteSuccess && <div className="invite-message invite-success">{inviteSuccess}</div>}
+                            <div className="invite-actions">
+                                <button type="button" className="invite-secondary-btn" onClick={closeInviteModal}>
+                                    Close
+                                </button>
+                                <button type="submit" className="invite-primary-btn" disabled={inviteLoading}>
+                                    {inviteLoading ? 'Sending...' : 'Send invite'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {pdfViewer && (
                 <PDFViewer
