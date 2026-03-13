@@ -1,4 +1,4 @@
-using Supabase;
+﻿using Supabase;
 using ESSDesign.Server.Models;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
@@ -1122,6 +1122,88 @@ namespace ESSDesign.Server.Services
             }
         }
 
+
+        public async Task<UserInfo?> GetAuthUserInfoFromAccessTokenAsync(string accessToken)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                return null;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/user";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            string? email = root.TryGetProperty("email", out var emailEl) ? emailEl.GetString() : null;
+            string? fullName = null;
+            string? avatarUrl = null;
+
+            if (root.TryGetProperty("user_metadata", out var metadataEl) && metadataEl.ValueKind == JsonValueKind.Object)
+            {
+                fullName = GetJsonString(metadataEl, "full_name") ?? GetJsonString(metadataEl, "name");
+                avatarUrl = GetJsonString(metadataEl, "avatar_url")
+                    ?? GetJsonString(metadataEl, "picture")
+                    ?? GetJsonString(metadataEl, "profile_image")
+                    ?? GetJsonString(metadataEl, "profile_image_url");
+            }
+
+            if (string.IsNullOrWhiteSpace(avatarUrl) && root.TryGetProperty("identities", out var identitiesEl) && identitiesEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var identity in identitiesEl.EnumerateArray())
+                {
+                    if (!identity.TryGetProperty("identity_data", out var identityData) || identityData.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    avatarUrl = GetJsonString(identityData, "avatar_url")
+                        ?? GetJsonString(identityData, "picture")
+                        ?? GetJsonString(identityData, "profile_image")
+                        ?? GetJsonString(identityData, "profile_image_url");
+
+                    fullName ??= GetJsonString(identityData, "full_name")
+                        ?? GetJsonString(identityData, "name")
+                        ?? GetJsonString(identityData, "display_name");
+
+                    if (!string.IsNullOrWhiteSpace(avatarUrl))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            return new UserInfo
+            {
+                Id = id ?? string.Empty,
+                Email = email ?? string.Empty,
+                FullName = fullName ?? string.Empty,
+                AvatarUrl = avatarUrl
+            };
+        }
+
+        private static string? GetJsonString(JsonElement obj, string propertyName)
+        {
+            if (obj.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String)
+            {
+                return property.GetString();
+            }
+
+            return null;
+        }
         public async Task<List<UserInfo>> GetAllUsersAsync()
         {
             try
@@ -1282,3 +1364,4 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
+

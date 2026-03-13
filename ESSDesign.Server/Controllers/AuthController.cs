@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 using Supabase.Gotrue;
@@ -107,22 +107,24 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("user")]
-        public ActionResult<UserInfo> GetCurrentUser()
+        public async Task<ActionResult<UserInfo>> GetCurrentUser()
         {
             try
             {
-                var user = _supabase.Auth.CurrentUser;
+                var authorizationHeader = Request.Headers.Authorization.ToString();
+                if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
 
+                var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+                var user = await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
                 if (user == null)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var fullName = user.UserMetadata?.ContainsKey("full_name") == true
-                    ? user.UserMetadata["full_name"]?.ToString() ?? string.Empty
-                    : string.Empty;
-
-                return Ok(BuildUserInfo(user, fullName));
+                return Ok(user);
             }
             catch (Exception ex)
             {
@@ -161,3 +163,4 @@ namespace ESSDesign.Server.Controllers
         }
     }
 }
+
