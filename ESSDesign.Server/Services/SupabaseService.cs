@@ -192,6 +192,34 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        private async Task<long?> CalculateFolderFileSizeAsync(Guid folderId)
+        {
+            var documentsTask = _supabase
+                .From<DesignDocument>()
+                .Filter("folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                .Get();
+
+            var subfoldersTask = _supabase
+                .From<Folder>()
+                .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                .Get();
+
+            await Task.WhenAll(documentsTask, subfoldersTask);
+
+            var documents = (await documentsTask).Models;
+            var subfolders = (await subfoldersTask).Models;
+
+            long totalSize = documents.Sum(document => (document.EssDesignFileSize ?? 0) + (document.ThirdPartyDesignFileSize ?? 0));
+
+            if (subfolders.Count > 0)
+            {
+                var nestedSizes = await Task.WhenAll(subfolders.Select(subfolder => CalculateFolderFileSizeAsync(subfolder.Id)));
+                totalSize += nestedSizes.Sum(size => size ?? 0);
+            }
+
+            return totalSize > 0 ? totalSize : null;
+        }
+
         // Light version - only gets immediate subfolders count, no documents
         private async Task<FolderResponse> BuildFolderResponseLight(Folder folder)
         {
@@ -206,7 +234,7 @@ namespace ESSDesign.Server.Services
             userIds.AddRange(subfoldersResponse.Models.Select(sf => sf.UserId));
             var userNames = await GetUserNamesAsync(userIds);
 
-            var subfolders = subfoldersResponse.Models.Select(sf => new FolderResponse
+            var subfolders = await Task.WhenAll(subfoldersResponse.Models.Select(async sf => new FolderResponse
             {
                 Id = sf.Id,
                 Name = sf.Name,
@@ -215,9 +243,10 @@ namespace ESSDesign.Server.Services
                 OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
                 CreatedAt = sf.CreatedAt,
                 UpdatedAt = sf.UpdatedAt,
+                FileSize = await CalculateFolderFileSizeAsync(sf.Id),
                 SubFolders = new List<FolderResponse>(),
                 Documents = new List<DocumentResponse>()
-            }).ToList();
+            }));
 
             return new FolderResponse
             {
@@ -228,7 +257,8 @@ namespace ESSDesign.Server.Services
                 OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
-                SubFolders = subfolders,
+                FileSize = await CalculateFolderFileSizeAsync(folder.Id),
+                SubFolders = subfolders.ToList(),
                 Documents = new List<DocumentResponse>()
             };
         }
@@ -260,7 +290,7 @@ namespace ESSDesign.Server.Services
             userIds.AddRange(documentsResult.Select(d => d.UserId));
             var userNames = await GetUserNamesAsync(userIds);
 
-            var subfolders = subfoldersResult.Select(sf => new FolderResponse
+            var subfolders = await Task.WhenAll(subfoldersResult.Select(async sf => new FolderResponse
             {
                 Id = sf.Id,
                 Name = sf.Name,
@@ -269,9 +299,10 @@ namespace ESSDesign.Server.Services
                 OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
                 CreatedAt = sf.CreatedAt,
                 UpdatedAt = sf.UpdatedAt,
+                FileSize = await CalculateFolderFileSizeAsync(sf.Id),
                 SubFolders = new List<FolderResponse>(),
                 Documents = new List<DocumentResponse>()
-            }).ToList();
+            }));
 
             var documents = documentsResult.Select(d =>
             {
@@ -304,7 +335,8 @@ namespace ESSDesign.Server.Services
                 OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
-                SubFolders = subfolders,
+                FileSize = await CalculateFolderFileSizeAsync(folder.Id),
+                SubFolders = subfolders.ToList(),
                 Documents = documents
             };
         }

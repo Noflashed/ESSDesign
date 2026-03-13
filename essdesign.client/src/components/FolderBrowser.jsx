@@ -46,9 +46,19 @@ const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
     </svg>
 );
 
+const SortArrowIcon = ({ direction }) => (
+    <svg className="sort-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        {direction === 'asc' ? (
+            <path d="M6 2L10 7H2L6 2Z" fill="currentColor" />
+        ) : (
+            <path d="M6 10L2 5H10L6 10Z" fill="currentColor" />
+        )}
+    </svg>
+);
+
 // Helper function to format file size
 const formatFileSize = (bytes) => {
-    if (!bytes || bytes === 0) return 'Ã¢â‚¬â€';
+    if (!bytes || bytes === 0) return '-';
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
@@ -56,7 +66,7 @@ const formatFileSize = (bytes) => {
 
 // Helper function to format date
 const formatDate = (dateString) => {
-    if (!dateString) return 'Ã¢â‚¬â€';
+    if (!dateString) return '-';
     const date = new Date(dateString);
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
@@ -119,11 +129,17 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         localStorage.setItem('listColWidths', JSON.stringify(colWidths));
     }, [colWidths]);
 
+    const showRevisionColumn = folders.some(item => item.isDocument);
+
     // Build the grid-template-columns string from widths
-    const gridTemplateColumns = `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`;
+    const gridTemplateColumns = showRevisionColumn
+        ? `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`
+        : `40px ${colWidths.name}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`;
 
     // Column resize handlers
-    const colKeys = ['name', 'revision', 'owner', 'modified', 'size'];
+    const colKeys = showRevisionColumn
+        ? ['name', 'revision', 'owner', 'modified', 'size']
+        : ['name', 'owner', 'modified', 'size'];
 
     const handleResizeStart = useCallback((e, colIndex) => {
         e.preventDefault();
@@ -131,11 +147,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
         const headerEl = headerRef.current;
         if (!headerEl) return;
-
-        // Get the pixel widths of all resizable columns from the DOM
-        const cells = headerEl.children;
-        // cells[0] = icon, cells[1..5] = resizable cols (with resize handles interspersed)
-        // We use a data attribute to identify column cells
+        // We use a data attribute to identify resizable column cells
         const colElements = Array.from(headerEl.querySelectorAll('[data-col-key]'));
         const pixelWidths = {};
         colElements.forEach(el => {
@@ -225,6 +237,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     useEffect(() => {
         localStorage.setItem('viewMode', viewMode);
     }, [viewMode]);
+
+    useEffect(() => {
+        if (!showRevisionColumn && sortField === 'revision') {
+            setSortField('name');
+        }
+    }, [showRevisionColumn, sortField]);
 
     // Save sort preferences
     useEffect(() => {
@@ -609,8 +627,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     bValue = new Date(b.updatedAt || b.createdAt).getTime();
                     break;
                 case 'size':
-                    aValue = a.isDocument ? (a.totalFileSize || 0) : 0;
-                    bValue = b.isDocument ? (b.totalFileSize || 0) : 0;
+                    aValue = a.isDocument ? (a.totalFileSize || 0) : (a.fileSize || 0);
+                    bValue = b.isDocument ? (b.totalFileSize || 0) : (b.fileSize || 0);
                     break;
                 default:
                     return 0;
@@ -702,21 +720,23 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Name</span>
                                 {sortField === 'name' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
+                                    <SortArrowIcon direction={sortDirection} />
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
                             </div>
-                            <div
-                                className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
-                                onClick={() => handleSort('revision')}
-                                data-col-key="revision"
-                            >
-                                <span>Revision</span>
-                                {sortField === 'revision' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
-                                )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
-                            </div>
+                            {showRevisionColumn && (
+                                <div
+                                    className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
+                                    onClick={() => handleSort('revision')}
+                                    data-col-key="revision"
+                                >
+                                    <span>Revision</span>
+                                    {sortField === 'revision' && (
+                                        <SortArrowIcon direction={sortDirection} />
+                                    )}
+                                    <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
+                                </div>
+                            )}
                             <div
                                 className={`list-header-cell sortable ${sortField === 'owner' ? 'active' : ''}`}
                                 onClick={() => handleSort('owner')}
@@ -724,9 +744,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Owner</span>
                                 {sortField === 'owner' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
+                                    <SortArrowIcon direction={sortDirection} />
                                 )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 2 : 1)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
                                 className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
@@ -735,9 +755,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Date Modified</span>
                                 {sortField === 'modified' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
+                                    <SortArrowIcon direction={sortDirection} />
                                 )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} onDoubleClick={handleResetColWidths} />
+                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 2)} onDoubleClick={handleResetColWidths} />
                             </div>
                             <div
                                 className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
@@ -746,7 +766,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>File Size</span>
                                 {sortField === 'size' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'Ã¢â€“Â²' : 'Ã¢â€“Â¼'}</span>
+                                    <SortArrowIcon direction={sortDirection} />
                                 )}
                             </div>
                             <div className="list-header-actions"></div>
@@ -823,9 +843,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         : (item.name || 'Folder')
                                     }
                                 </div>
-                                <div className="list-item-revision">
-                                    {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
-                                </div>
+                                {showRevisionColumn && (
+                                    <div className="list-item-revision">
+                                        {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
+                                    </div>
+                                )}
                                 <div className="list-item-owner">
                                     {item.ownerName || (item.userId ? item.userId.slice(0, 8) + '...' : 'Unknown')}
                                 </div>
@@ -833,7 +855,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {formatDate(item.updatedAt || item.createdAt)}
                                 </div>
                                 <div className="list-item-size">
-                                    {item.isDocument ? formatFileSize(item.totalFileSize) : 'Ã¢â‚¬â€'}
+                                    {formatFileSize(item.isDocument ? item.totalFileSize : item.fileSize)}
                                 </div>
                                 <div className="list-item-actions">
                                     {item.isDocument ? (
