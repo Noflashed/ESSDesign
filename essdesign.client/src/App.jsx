@@ -27,6 +27,43 @@ const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
     </svg>
 );
 
+const UserProfileIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+            d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+        />
+        <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.8" />
+    </svg>
+);
+
+
+const MoonIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+            d="M20 15.5A8.5 8.5 0 0 1 8.5 4 7 7 0 1 0 20 15.5Z"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+        />
+    </svg>
+);
+
+const SunIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="4" stroke={color} strokeWidth="1.8" />
+        <path d="M12 2V5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M12 19V22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M4.93 4.93L7.05 7.05" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M16.95 16.95L19.07 19.07" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M2 12H5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M19 12H22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M4.93 19.07L7.05 16.95" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M16.95 7.05L19.07 4.93" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+);
 function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPDF }) {
     const [expanded, setExpanded] = useState(false);
     const [children, setChildren] = useState(initialChildren || null);
@@ -151,8 +188,10 @@ function App() {
     const [searchResults, setSearchResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const searchRef = useRef(null);
+    const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
 
     useEffect(() => {
@@ -253,6 +292,7 @@ function App() {
 
     const handleLogout = async () => {
         try {
+            setShowUserMenu(false);
             await authAPI.signOut();
             setIsAuthenticated(false);
             setUser(null);
@@ -358,16 +398,28 @@ function App() {
         return () => window.removeEventListener('popstate', handlePopState);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Close search results when clicking outside
+    // Close search results and user menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (searchRef.current && !searchRef.current.contains(e.target)) {
                 setShowSearchResults(false);
             }
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+                setShowUserMenu(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+    const userDisplayName = user?.fullName || user?.email || 'User';
+    const userInitials = user?.fullName
+        ? user.fullName
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map(part => part[0]?.toUpperCase())
+            .join('')
+        : (user?.email?.[0]?.toUpperCase() || 'U');
 
     const handleDocumentClick = (document) => {
         // Determine which PDF to show (prioritize ESS Design Issue)
@@ -506,13 +558,35 @@ function App() {
                 </div>
                 <div className="header-right">
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-                        {theme === 'light' ? '🌙' : '☀️'}
+                        {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
                     </button>
-                    <div className="user-menu">
-                        <span className="user-name">{user?.fullName || user?.email}</span>
-                        <button className="logout-button" onClick={handleLogout}>
-                            Logout
+                    <div className="user-menu" ref={userMenuRef}>
+                        <button
+                            className="profile-button"
+                            onClick={() => setShowUserMenu((prev) => !prev)}
+                            title="Open user menu"
+                            aria-label="Open user menu"
+                            aria-expanded={showUserMenu}
+                        >
+                            <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
+                            <span className="profile-button-icon" aria-hidden="true">
+                                <UserProfileIcon size={16} />
+                            </span>
                         </button>
+                        {showUserMenu && (
+                            <div className="user-menu-dropdown">
+                                <div className="user-menu-summary">
+                                    <div className="user-menu-avatar" aria-hidden="true">{userInitials}</div>
+                                    <div className="user-menu-details">
+                                        <div className="user-name">{userDisplayName}</div>
+                                        <div className="user-email">{user?.email}</div>
+                                    </div>
+                                </div>
+                                <button className="logout-button" onClick={handleLogout}>
+                                    Logout
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </header>
@@ -551,3 +625,5 @@ function App() {
 }
 
 export default App;
+
+

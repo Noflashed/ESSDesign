@@ -446,9 +446,6 @@ body {
         display: none;
     }
 
-    .user-name {
-        display: none;
-    }
 
     .header-center {
         margin: 0 12px;
@@ -483,4 +480,122 @@ body {
 :root[data-theme="dark"] .folder-icon,
 :root[data-theme="dark"] .document-icon {
     filter: grayscale(1) brightness(2.5);
+}
+
+
+.profile-button {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+
+.profile-button:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.profile-button-initials {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.profile-button-icon {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-menu {
+    position: relative;
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 250px;
+    padding: 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+    z-index: 220;
+}
+
+.user-menu-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.user-menu-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--selected-bg);
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.user-menu-details {
+    min-width: 0;
+}
+
+.user-name {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-email {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logout-button {
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--primary-color);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.logout-button:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
 }
