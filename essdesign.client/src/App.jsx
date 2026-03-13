@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
@@ -8,7 +8,7 @@ import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
 
-// ✅ FIXED: Load logo from Supabase Storage
+// âœ… FIXED: Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
@@ -39,31 +39,6 @@ const UserProfileIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
-
-const MoonIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-            d="M20 15.5A8.5 8.5 0 0 1 8.5 4 7 7 0 1 0 20 15.5Z"
-            stroke={color}
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-        />
-    </svg>
-);
-
-const SunIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="4" stroke={color} strokeWidth="1.8" />
-        <path d="M12 2V5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M12 19V22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M4.93 4.93L7.05 7.05" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M16.95 16.95L19.07 19.07" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M2 12H5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M19 12H22" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M4.93 19.07L7.05 16.95" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M16.95 7.05L19.07 4.93" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-);
 function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPDF }) {
     const [expanded, setExpanded] = useState(false);
     const [children, setChildren] = useState(initialChildren || null);
@@ -209,11 +184,21 @@ function App() {
         localStorage.setItem('theme', theme);
     }, [theme]);
 
-    const checkAuth = () => {
+    const checkAuth = async () => {
         const authenticated = authAPI.isAuthenticated();
         const currentUser = authAPI.getCurrentUser();
         setIsAuthenticated(authenticated);
         setUser(currentUser);
+
+        if (authenticated) {
+            try {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                setUser(refreshedUser);
+            } catch (error) {
+                console.error('Error refreshing current user:', error);
+            }
+        }
+
         setLoading(false);
     };
 
@@ -420,6 +405,7 @@ function App() {
             .map(part => part[0]?.toUpperCase())
             .join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
+    const userAvatarUrl = user?.avatarUrl || user?.avatar_url || user?.picture || user?.profileImageUrl || user?.profile_image_url || null;
 
     const handleDocumentClick = (document) => {
         // Determine which PDF to show (prioritize ESS Design Issue)
@@ -558,7 +544,7 @@ function App() {
                 </div>
                 <div className="header-right">
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-                        {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+                        {theme === 'light' ? '🌙' : '☀️'}
                     </button>
                     <div className="user-menu" ref={userMenuRef}>
                         <button
@@ -568,7 +554,11 @@ function App() {
                             aria-label="Open user menu"
                             aria-expanded={showUserMenu}
                         >
-                            <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
+                            {userAvatarUrl ? (
+                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" />
+                            ) : (
+                                <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
+                            )}
                             <span className="profile-button-icon" aria-hidden="true">
                                 <UserProfileIcon size={16} />
                             </span>
@@ -576,7 +566,13 @@ function App() {
                         {showUserMenu && (
                             <div className="user-menu-dropdown">
                                 <div className="user-menu-summary">
-                                    <div className="user-menu-avatar" aria-hidden="true">{userInitials}</div>
+                                    <div className="user-menu-avatar" aria-hidden="true">
+                                        {userAvatarUrl ? (
+                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" />
+                                        ) : (
+                                            userInitials
+                                        )}
+                                    </div>
                                     <div className="user-menu-details">
                                         <div className="user-name">{userDisplayName}</div>
                                         <div className="user-email">{user?.email}</div>

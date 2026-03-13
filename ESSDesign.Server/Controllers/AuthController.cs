@@ -38,7 +38,6 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Failed to create account" });
                 }
 
-                // Upsert into user_names table so name is always resolvable
                 try
                 {
                     await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, request.FullName);
@@ -50,14 +49,9 @@ namespace ESSDesign.Server.Controllers
 
                 return Ok(new AuthResponse
                 {
-                    AccessToken = session.AccessToken ?? "",
-                    RefreshToken = session.RefreshToken ?? "",
-                    User = new UserInfo
-                    {
-                        Id = session.User.Id,
-                        Email = session.User.Email ?? "",
-                        FullName = request.FullName
-                    }
+                    AccessToken = session.AccessToken ?? string.Empty,
+                    RefreshToken = session.RefreshToken ?? string.Empty,
+                    User = BuildUserInfo(session.User, request.FullName)
                 });
             }
             catch (Exception ex)
@@ -80,19 +74,14 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var fullName = session.User.UserMetadata?.ContainsKey("full_name") == true
-                    ? session.User.UserMetadata["full_name"]?.ToString() ?? ""
-                    : "";
+                    ? session.User.UserMetadata["full_name"]?.ToString() ?? string.Empty
+                    : string.Empty;
 
                 return Ok(new AuthResponse
                 {
-                    AccessToken = session.AccessToken ?? "",
-                    RefreshToken = session.RefreshToken ?? "",
-                    User = new UserInfo
-                    {
-                        Id = session.User.Id,
-                        Email = session.User.Email ?? "",
-                        FullName = fullName
-                    }
+                    AccessToken = session.AccessToken ?? string.Empty,
+                    RefreshToken = session.RefreshToken ?? string.Empty,
+                    User = BuildUserInfo(session.User, fullName)
                 });
             }
             catch (Exception ex)
@@ -118,33 +107,57 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("user")]
-        public async Task<ActionResult<UserInfo>> GetCurrentUser()
+        public ActionResult<UserInfo> GetCurrentUser()
         {
             try
             {
                 var user = _supabase.Auth.CurrentUser;
-                
+
                 if (user == null)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
                 var fullName = user.UserMetadata?.ContainsKey("full_name") == true
-                    ? user.UserMetadata["full_name"]?.ToString() ?? ""
-                    : "";
+                    ? user.UserMetadata["full_name"]?.ToString() ?? string.Empty
+                    : string.Empty;
 
-                return Ok(new UserInfo
-                {
-                    Id = user.Id,
-                    Email = user.Email ?? "",
-                    FullName = fullName
-                });
+                return Ok(BuildUserInfo(user, fullName));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Get user error");
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        private static UserInfo BuildUserInfo(User user, string? fallbackFullName = null)
+        {
+            var fullName = !string.IsNullOrWhiteSpace(fallbackFullName)
+                ? fallbackFullName
+                : GetMetadataValue(user, "full_name");
+
+            return new UserInfo
+            {
+                Id = user.Id,
+                Email = user.Email ?? string.Empty,
+                FullName = fullName ?? string.Empty,
+                AvatarUrl =
+                    GetMetadataValue(user, "avatar_url") ??
+                    GetMetadataValue(user, "picture") ??
+                    GetMetadataValue(user, "profile_image") ??
+                    GetMetadataValue(user, "profile_image_url")
+            };
+        }
+
+        private static string? GetMetadataValue(User user, string key)
+        {
+            if (user.UserMetadata?.ContainsKey(key) == true)
+            {
+                return user.UserMetadata[key]?.ToString();
+            }
+
+            return null;
         }
     }
 }

@@ -49,6 +49,14 @@ export const authAPI = {
         return userStr ? JSON.parse(userStr) : null;
     },
 
+
+    refreshCurrentUser: async () => {
+        const response = await apiClient.get('/auth/user');
+        if (response.data) {
+            localStorage.setItem('user', JSON.stringify(response.data));
+        }
+        return response.data;
+    },
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
     }
