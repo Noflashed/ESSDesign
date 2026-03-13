@@ -130,15 +130,15 @@ function App() {
     const [authView, setAuthView] = useState('login'); // 'login' or 'signup'
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
     const [selectedFolderId, setSelectedFolderId] = useState(() => {
-        // Check for ?folder= deep link in URL first
+        // Honor explicit deep links, otherwise always start from Home on app reopen.
         const urlParams = new URLSearchParams(window.location.search);
         const folderFromUrl = urlParams.get('folder');
         if (folderFromUrl) {
             localStorage.setItem('selectedFolderId', folderFromUrl);
             return folderFromUrl;
         }
-        const saved = localStorage.getItem('selectedFolderId');
-        return saved && saved !== 'null' ? saved : null;
+        localStorage.removeItem('selectedFolderId');
+        return null;
     });
     const [sidebarWidth, setSidebarWidth] = useState(() => {
         const saved = localStorage.getItem('sidebarWidth');
@@ -182,13 +182,15 @@ function App() {
         try {
             const prefs = await preferencesAPI.getPreferences();
 
-            // Only restore selectedFolderId from backend if there's no ?folder= deep link in the URL.
-            // A deep link (e.g. from an email) must take priority over the saved preference.
+            // Keep deep links working, but default normal app launches back to Home.
             const urlParams = new URLSearchParams(window.location.search);
             const folderFromUrl = urlParams.get('folder');
-            if (!folderFromUrl && prefs.selectedFolderId !== undefined) {
-                setSelectedFolderId(prefs.selectedFolderId);
-                localStorage.setItem('selectedFolderId', prefs.selectedFolderId || '');
+            if (folderFromUrl) {
+                setSelectedFolderId(folderFromUrl);
+                localStorage.setItem('selectedFolderId', folderFromUrl);
+            } else {
+                setSelectedFolderId(null);
+                localStorage.removeItem('selectedFolderId');
             }
             if (prefs.theme) {
                 setTheme(prefs.theme);
