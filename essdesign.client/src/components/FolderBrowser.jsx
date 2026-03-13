@@ -48,7 +48,7 @@ const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
 
 // Helper function to format file size
 const formatFileSize = (bytes) => {
-    if (!bytes || bytes === 0) return '—';
+    if (!bytes || bytes === 0) return 'â€”';
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
@@ -56,7 +56,7 @@ const formatFileSize = (bytes) => {
 
 // Helper function to format date
 const formatDate = (dateString) => {
-    if (!dateString) return '—';
+    if (!dateString) return 'â€”';
     const date = new Date(dateString);
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
@@ -210,6 +210,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, [currentFolder]);
 
     // Save view mode preference
+    useEffect(() => {
+        if (!initialViewMode || initialViewMode === viewMode) return;
+        setViewMode(initialViewMode);
+    }, [initialViewMode, viewMode]);
+
     useEffect(() => {
         localStorage.setItem('viewMode', viewMode);
         if (onViewModeChange) {
@@ -693,7 +698,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Name</span>
                                 {sortField === 'name' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -704,7 +709,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Revision</span>
                                 {sortField === 'revision' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -715,7 +720,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Owner</span>
                                 {sortField === 'owner' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -726,7 +731,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>Date Modified</span>
                                 {sortField === 'modified' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
                                 )}
                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 3)} onDoubleClick={handleResetColWidths} />
                             </div>
@@ -737,7 +742,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             >
                                 <span>File Size</span>
                                 {sortField === 'size' && (
-                                    <span className="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                                    <span className="sort-arrow">{sortDirection === 'asc' ? 'â–²' : 'â–¼'}</span>
                                 )}
                             </div>
                             <div className="list-header-actions"></div>
@@ -824,7 +829,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     {formatDate(item.updatedAt || item.createdAt)}
                                 </div>
                                 <div className="list-item-size">
-                                    {item.isDocument ? formatFileSize(item.totalFileSize) : '—'}
+                                    {item.isDocument ? formatFileSize(item.totalFileSize) : 'â€”'}
                                 </div>
                                 <div className="list-item-actions">
                                     {item.isDocument ? (
@@ -892,13 +897,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowRenameModal(true);
                                 setContextMenu(null);
                             }}>
-                                ✏️ Rename
+                                âœï¸ Rename
                             </div>
                             <div onClick={() => {
                                 handleDeleteFolder(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                🗑️ Delete
+                                ðŸ—‘ï¸ Delete
                             </div>
                         </>
                     )}
@@ -910,14 +915,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowEditDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                ✏️ Edit Revision
+                                âœï¸ Edit Revision
                             </div>
                             <div className="context-menu-divider"></div>
                             <div onClick={() => {
                                 handleDeleteDocument(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                🗑️ Delete
+                                ðŸ—‘ï¸ Delete
                             </div>
                         </>
                     )}
