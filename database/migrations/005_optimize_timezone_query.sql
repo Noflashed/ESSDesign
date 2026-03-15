@@ -50,7 +50,8 @@ CREATE INDEX idx_cached_timezone_names_utc_offset
 
 DROP VIEW IF EXISTS public.timezone_names CASCADE;
 
-CREATE VIEW public.timezone_names AS
+CREATE VIEW public.timezone_names
+WITH (security_invoker = true) AS
 SELECT name FROM public.cached_timezone_names;
 
 -- ============================================================================
@@ -112,3 +113,4 @@ COMMENT ON COLUMN public.cached_timezone_names.name IS 'Timezone name (e.g., Ame
 COMMENT ON COLUMN public.cached_timezone_names.abbrev IS 'Timezone abbreviation (e.g., EST, AEST)';
 COMMENT ON COLUMN public.cached_timezone_names.utc_offset IS 'UTC offset as interval';
 COMMENT ON COLUMN public.cached_timezone_names.is_dst IS 'Whether currently observing daylight saving time';
+

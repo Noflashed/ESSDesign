@@ -62,6 +62,16 @@ FROM pg_views
 WHERE viewname = 'timezone_names'
   AND schemaname = 'public';
 
+-- Check that the view runs with caller permissions
+SELECT
+  c.relname,
+  c.reloptions
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relname = 'timezone_names';
+-- reloptions should include security_invoker=true
+
 -- Check function
 SELECT
   n.nspname as schema,
@@ -366,3 +376,4 @@ Then update application to use `pg_timezone_names` directly.
 ✅ No application errors after deployment
 ✅ Overall database query time reduced by ~25-30%
 ✅ pg_timezone_names queries reduced or eliminated in pg_stat_statements
+

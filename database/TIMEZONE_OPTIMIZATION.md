@@ -35,7 +35,7 @@ Caches all timezone data with columns:
 - `idx_cached_timezone_names_utc_offset` - Fast filtering by UTC offset
 
 ### 2. `public.timezone_names` (View)
-Simple view that returns just timezone names from the cached data.
+Simple security-invoker view that returns just timezone names from the cached data.
 
 ### 3. `public.refresh_timezone_cache()` (Function)
 Refreshes the cached timezone data from `pg_timezone_names`.
@@ -180,3 +180,4 @@ DROP FUNCTION IF EXISTS public.refresh_timezone_cache();
 ```
 
 Then update application code to use `pg_timezone_names` directly again.
+
