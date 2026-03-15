@@ -32,6 +32,12 @@ const apiClient = axios.create({
     headers: { 'Content-Type': 'application/json' }
 });
 
+const clearStoredAuth = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+};
+
 // Add auth token to requests
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
@@ -62,10 +68,11 @@ export const authAPI = {
     },
 
     signOut: async () => {
-        await apiClient.post('/auth/signout');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
+        try {
+            await apiClient.post('/auth/signout');
+        } finally {
+            clearStoredAuth();
+        }
     },
 
     getCurrentUser: () => {
@@ -75,13 +82,20 @@ export const authAPI = {
 
 
     refreshCurrentUser: async () => {
-        const response = await apiClient.get('/auth/user');
-        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
-        const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
-        if (response.data) {
-            localStorage.setItem('user', JSON.stringify(hydratedUser));
+        try {
+            const response = await apiClient.get('/auth/user');
+            const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
+            const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
+            if (response.data) {
+                localStorage.setItem('user', JSON.stringify(hydratedUser));
+            }
+            return hydratedUser;
+        } catch (error) {
+            if (error.response?.status === 401) {
+                clearStoredAuth();
+            }
+            throw error;
         }
-        return hydratedUser;
     },
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');

@@ -240,19 +240,28 @@ function App() {
     const checkAuth = async () => {
         const authenticated = authAPI.isAuthenticated();
         const currentUser = authAPI.getCurrentUser();
-        setIsAuthenticated(authenticated);
-        setUser(currentUser);
 
-        if (authenticated) {
-            try {
-                const refreshedUser = await authAPI.refreshCurrentUser();
-                setUser(refreshedUser);
-            } catch (error) {
-                console.error('Error refreshing current user:', error);
-            }
+        if (!authenticated) {
+            setIsAuthenticated(false);
+            setUser(null);
+            setLoading(false);
+            return;
         }
 
-        setLoading(false);
+        setIsAuthenticated(true);
+        setUser(currentUser);
+
+        try {
+            const refreshedUser = await authAPI.refreshCurrentUser();
+            setUser(refreshedUser);
+        } catch (error) {
+            console.error('Error refreshing current user:', error);
+            setIsAuthenticated(false);
+            setUser(null);
+            updateAuthView('login');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const loadPreferences = async () => {
@@ -372,7 +381,15 @@ function App() {
             await authAPI.inviteUser(inviteEmail.trim());
             setInviteSuccess(`Invitation sent to ${inviteEmail.trim()}`);
         } catch (error) {
-            setInviteError(error.response?.data?.error || 'Failed to send invitation');
+            if (error.response?.status === 401) {
+                setInviteError('Your session has expired. Please sign in again and resend the invite.');
+                setShowInviteModal(false);
+                setIsAuthenticated(false);
+                setUser(null);
+                updateAuthView('login');
+            } else {
+                setInviteError(error.response?.data?.error || 'Failed to send invitation');
+            }
         } finally {
             setInviteLoading(false);
         }
