@@ -136,8 +136,8 @@
 }
 
 .pdf-spinner {
-    border: 3px solid rgba(232, 234, 237, 0.2);
-    border-top: 3px solid #e8eaed;
+    border: 3px solid rgba(246, 114, 0, 0.18);
+    border-top: 3px solid #f67200;
     border-radius: 50%;
     width: 32px;
     height: 32px;
