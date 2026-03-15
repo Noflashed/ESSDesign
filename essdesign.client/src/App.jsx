@@ -546,7 +546,10 @@ function App() {
     if (loading) {
         return (
             <div className="loading-screen">
-                <div className="spinner"></div>
+                <div className="loading-brandmark" aria-hidden="true">
+                    <div className="loading-ring"></div>
+                    <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
+                </div>
             </div>
         );
     }
