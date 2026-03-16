@@ -460,7 +460,7 @@ namespace ESSDesign.Server.Services
             {
                 var response = await _supabase
                     .From<UserRoleRecord>()
-                    .Filter("user_id", Postgrest.Constants.Operator.In, BuildInFilter(validUserIds))
+                    .Filter("user_id", Postgrest.Constants.Operator.In, validUserIds)
                     .Get();
 
                 var roles = response.Models.ToDictionary(
@@ -1526,6 +1526,7 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
+
 
 
 
