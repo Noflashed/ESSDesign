@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
@@ -8,7 +8,7 @@ import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
 
-// âœ… FIXED: Load logo from Supabase Storage
+// Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
@@ -644,33 +644,13 @@ function App() {
                                             </div>
                                         </div>
                                         <div className="search-result-contents">
-                                            {result.subFolders && result.subFolders.map(sf => (
-                                                <SearchFolderNode
-                                                    key={sf.id}
-                                                    folder={sf}
-                                                    depth={1}
-                                                    onNavigate={handleSearchNavigate}
-                                                    onViewPDF={handleSearchViewPDF}
-                                                />
-                                            ))}
-                                            {result.documents && result.documents.map(doc => (
-                                                <div key={doc.id} className="search-folder-row search-doc-row" style={{ paddingLeft: '40px' }}>
-                                                    <span className="search-doc-icon"><DocumentIcon size={16} /></span>
-                                                    <span className="search-doc-name">Revision {doc.revisionNumber}</span>
-                                                    <div className="search-doc-actions">
-                                                        {doc.essDesignIssuePath && (
-                                                            <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'ess')}>
-                                                                ESS Design
-                                                            </button>
-                                                        )}
-                                                        {doc.thirdPartyDesignPath && (
-                                                            <button className="search-doc-btn" onClick={() => handleSearchViewPDF(doc, 'thirdparty')}>
-                                                                Third-Party
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                            <div className="search-folder-row" style={{ paddingLeft: '40px' }}>
+                                                <span className="search-doc-name">
+                                                    {result.subFolderCount || 0} subfolder{(result.subFolderCount || 0) === 1 ? '' : 's'}
+                                                    {' - '}
+                                                    {result.documentCount || 0} document{(result.documentCount || 0) === 1 ? '' : 's'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))
@@ -680,7 +660,7 @@ function App() {
                 </div>
                 <div className="header-right">
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-                        {theme === 'light' ? '🌙' : '☀️'}
+                        {theme === 'light' ? 'Dark' : 'Light'}
                     </button>
                     <div className="user-menu" ref={userMenuRef}>
                         <button

@@ -160,18 +160,20 @@ namespace ESSDesign.Server.Controllers
                         // Get folder hierarchy (Client, Project, Scaffold)
                         var hierarchy = await _supabaseService.GetFolderHierarchyAsync(request.FolderId);
 
-                        // Get uploader name
-                        var uploaderName = "Unknown User";
-                        if (!string.IsNullOrEmpty(request.UserId))
-                        {
-                            var users = await _supabaseService.GetAllUsersAsync();
-                            var uploader = users.FirstOrDefault(u => u.Id == request.UserId);
-                            uploaderName = uploader?.FullName ?? "Unknown User";
-                        }
+                        // Fetch just the uploader + recipients instead of loading the entire user list.
+                        var requestedUserIds = request.RecipientIds
+                            .Concat(string.IsNullOrWhiteSpace(request.UserId)
+                                ? Enumerable.Empty<string>()
+                                : new[] { request.UserId })
+                            .Distinct()
+                            .ToList();
+                        var users = await _supabaseService.GetUsersByIdsAsync(requestedUserIds);
 
-                        // Get recipient emails
-                        var allUsers = await _supabaseService.GetAllUsersAsync();
-                        var recipientEmails = allUsers
+                        var uploaderName = users
+                            .FirstOrDefault(u => u.Id == request.UserId)?.FullName
+                            ?? "Unknown User";
+
+                        var recipientEmails = users
                             .Where(u => request.RecipientIds.Contains(u.Id))
                             .Select(u => u.Email)
                             .ToList();
@@ -299,7 +301,7 @@ namespace ESSDesign.Server.Controllers
                     var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
 
                     // Set Content-Disposition to inline so browser shows preview instead of downloading
-                    Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+                    Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
 
                     return new FileStreamResult(stream, contentType);
                 }

@@ -18,6 +18,9 @@ namespace ESSDesign.Server.Models
         [Column("user_id")]
         public string? UserId { get; set; }
 
+        [Column("total_file_size")]
+        public long TotalFileSize { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
@@ -254,6 +257,10 @@ namespace ESSDesign.Server.Models
         public string Type { get; set; } = string.Empty;
         public Guid? ParentFolderId { get; set; }
         public string Path { get; set; } = string.Empty;
+        public string? OwnerName { get; set; }
+        public long? FileSize { get; set; }
+        public int SubFolderCount { get; set; }
+        public int DocumentCount { get; set; }
         public List<FolderResponse> SubFolders { get; set; } = new();
         public List<DocumentResponse> Documents { get; set; } = new();
     }
@@ -287,4 +294,3 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 }
-

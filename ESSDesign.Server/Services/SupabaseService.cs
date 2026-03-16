@@ -3,6 +3,7 @@ using ESSDesign.Server.Models;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Net.Http;
 
 namespace ESSDesign.Server.Services
 {
@@ -15,6 +16,7 @@ namespace ESSDesign.Server.Services
         private readonly string _supabaseKey;
         private readonly string _bucketName = "design-pdfs";
         private readonly string _safetyBucketName = "project-information";
+        private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
@@ -45,7 +47,6 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                // Check root folders cache
                 if (_rootFoldersCache != null && _rootFoldersCacheExpiry > DateTime.UtcNow)
                 {
                     _logger.LogInformation("Cache hit for root folders");
@@ -58,13 +59,11 @@ namespace ESSDesign.Server.Services
                     .Order("name", Postgrest.Constants.Ordering.Ascending)
                     .Get();
 
-                var result = new List<FolderResponse>();
-                foreach (var folder in foldersResponse.Models)
-                {
-                    result.Add(await BuildFolderResponseLight(folder));
-                }
+                var userNames = await GetUserNamesAsync(foldersResponse.Models.Select(folder => folder.UserId));
+                var result = foldersResponse.Models
+                    .Select(folder => BuildFolderSummary(folder, userNames))
+                    .ToList();
 
-                // Cache the result
                 _rootFoldersCache = result;
                 _rootFoldersCacheExpiry = DateTime.UtcNow.Add(_cacheExpiration);
 
@@ -81,7 +80,6 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                // Check cache first
                 if (_folderCache.TryGetValue(folderId, out var cached))
                 {
                     if (cached.Expiry > DateTime.UtcNow)
@@ -89,10 +87,8 @@ namespace ESSDesign.Server.Services
                         _logger.LogInformation("Cache hit for folder {FolderId}", folderId);
                         return cached.Data;
                     }
-                    else
-                    {
-                        _folderCache.TryRemove(folderId, out _);
-                    }
+
+                    _folderCache.TryRemove(folderId, out _);
                 }
 
                 var folderResponse = await _supabase
@@ -100,13 +96,36 @@ namespace ESSDesign.Server.Services
                     .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
                     .Single();
 
-                if (folderResponse == null) throw new Exception("Folder not found");
+                if (folderResponse == null)
+                {
+                    throw new Exception("Folder not found");
+                }
 
-                var result = await BuildFolderResponseFull(folderResponse);
+                var subfoldersTask = _supabase
+                    .From<Folder>()
+                    .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Order("name", Postgrest.Constants.Ordering.Ascending)
+                    .Get();
 
-                // Cache the result
+                var documentsTask = _supabase
+                    .From<DesignDocument>()
+                    .Filter("folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
+                    .Get();
+
+                await Task.WhenAll(subfoldersTask, documentsTask);
+
+                var subfolders = (await subfoldersTask).Models;
+                var documents = (await documentsTask).Models;
+
+                var userIds = new List<string?> { folderResponse.UserId };
+                userIds.AddRange(subfolders.Select(folder => folder.UserId));
+                userIds.AddRange(documents.Select(document => document.UserId));
+
+                var userNames = await GetUserNamesAsync(userIds);
+                var result = BuildFolderDetail(folderResponse, subfolders, documents, userNames);
+
                 _folderCache[folderId] = (result, DateTime.UtcNow.Add(_cacheExpiration));
-
                 return result;
             }
             catch (Exception ex)
@@ -244,6 +263,70 @@ namespace ESSDesign.Server.Services
             _userNameCache[userId] = (userName, DateTime.UtcNow.Add(_cacheExpiration));
         }
 
+        private async Task<T?> InvokeRpcAsync<T>(string functionName, object payload)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/{functionName}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Content = JsonContent.Create(payload);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"RPC {functionName} failed with status {(int)response.StatusCode}: {body}");
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return default;
+            }
+
+            return JsonSerializer.Deserialize<T>(body, _jsonOptions);
+        }
+
+        private async Task<List<T>> GetRestRowsAsync<T>(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase request failed with status {(int)response.StatusCode}: {body}");
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return new List<T>();
+            }
+
+            return JsonSerializer.Deserialize<List<T>>(body, _jsonOptions) ?? new List<T>();
+        }
+
+        private static string BuildInFilter(IEnumerable<string> ids)
+        {
+            return $"({string.Join(",", ids)})";
+        }
+
         // Upsert a user name entry (called on signup as a fallback for the DB trigger)
         public async Task UpsertUserNameAsync(string userId, string email, string fullName)
         {
@@ -267,61 +350,9 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        private async Task<long?> CalculateFolderFileSizeAsync(Guid folderId)
+        private FolderResponse BuildFolderSummary(Folder folder, IReadOnlyDictionary<string, string> userNames)
         {
-            var documentsTask = _supabase
-                .From<DesignDocument>()
-                .Filter("folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
-                .Get();
-
-            var subfoldersTask = _supabase
-                .From<Folder>()
-                .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
-                .Get();
-
-            await Task.WhenAll(documentsTask, subfoldersTask);
-
-            var documents = (await documentsTask).Models;
-            var subfolders = (await subfoldersTask).Models;
-
-            long totalSize = documents.Sum(document => (document.EssDesignFileSize ?? 0) + (document.ThirdPartyDesignFileSize ?? 0));
-
-            if (subfolders.Count > 0)
-            {
-                var nestedSizes = await Task.WhenAll(subfolders.Select(subfolder => CalculateFolderFileSizeAsync(subfolder.Id)));
-                totalSize += nestedSizes.Sum(size => size ?? 0);
-            }
-
-            return totalSize > 0 ? totalSize : null;
-        }
-
-        // Light version - only gets immediate subfolders count, no documents
-        private async Task<FolderResponse> BuildFolderResponseLight(Folder folder)
-        {
-            var subfoldersResponse = await _supabase
-                .From<Folder>()
-                .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
-                .Order("name", Postgrest.Constants.Ordering.Ascending)
-                .Get();
-
-            // Collect all user IDs to fetch names in batch
-            var userIds = new List<string?> { folder.UserId };
-            userIds.AddRange(subfoldersResponse.Models.Select(sf => sf.UserId));
-            var userNames = await GetUserNamesAsync(userIds);
-
-            var subfolders = await Task.WhenAll(subfoldersResponse.Models.Select(async sf => new FolderResponse
-            {
-                Id = sf.Id,
-                Name = sf.Name,
-                ParentFolderId = sf.ParentFolderId,
-                UserId = sf.UserId,
-                OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
-                CreatedAt = sf.CreatedAt,
-                UpdatedAt = sf.UpdatedAt,
-                FileSize = await CalculateFolderFileSizeAsync(sf.Id),
-                SubFolders = new List<FolderResponse>(),
-                Documents = new List<DocumentResponse>()
-            }));
+            userNames.TryGetValue(folder.UserId ?? string.Empty, out var ownerName);
 
             return new FolderResponse
             {
@@ -329,90 +360,52 @@ namespace ESSDesign.Server.Services
                 Name = folder.Name,
                 ParentFolderId = folder.ParentFolderId,
                 UserId = folder.UserId,
-                OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
+                OwnerName = ownerName,
                 CreatedAt = folder.CreatedAt,
                 UpdatedAt = folder.UpdatedAt,
-                FileSize = await CalculateFolderFileSizeAsync(folder.Id),
-                SubFolders = subfolders.ToList(),
+                FileSize = folder.TotalFileSize > 0 ? folder.TotalFileSize : null,
+                SubFolders = new List<FolderResponse>(),
                 Documents = new List<DocumentResponse>()
             };
         }
 
-        // Full version - gets everything including documents
-        private async Task<FolderResponse> BuildFolderResponseFull(Folder folder)
+        private FolderResponse BuildFolderDetail(
+            Folder folder,
+            IEnumerable<Folder> subfolders,
+            IEnumerable<DesignDocument> documents,
+            IReadOnlyDictionary<string, string> userNames)
         {
-            // Parallel execution for subfolders and documents
-            var subfoldersTask = _supabase
-                .From<Folder>()
-                .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
-                .Order("name", Postgrest.Constants.Ordering.Ascending)
-                .Get();
+            var response = BuildFolderSummary(folder, userNames);
+            response.SubFolders = subfolders
+                .Select(subfolder => BuildFolderSummary(subfolder, userNames))
+                .ToList();
+            response.Documents = documents
+                .Select(document => BuildDocumentResponse(document, userNames))
+                .ToList();
+            return response;
+        }
 
-            var documentsTask = _supabase
-                .From<DesignDocument>()
-                .Filter("folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
-                .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
-                .Get();
+        private DocumentResponse BuildDocumentResponse(DesignDocument document, IReadOnlyDictionary<string, string> userNames)
+        {
+            userNames.TryGetValue(document.UserId ?? string.Empty, out var ownerName);
+            var totalSize = (document.EssDesignFileSize ?? 0) + (document.ThirdPartyDesignFileSize ?? 0);
 
-            await Task.WhenAll(subfoldersTask, documentsTask);
-
-            var subfoldersResult = (await subfoldersTask).Models;
-            var documentsResult = (await documentsTask).Models;
-
-            // Collect all user IDs to fetch names in batch
-            var userIds = new List<string?> { folder.UserId };
-            userIds.AddRange(subfoldersResult.Select(sf => sf.UserId));
-            userIds.AddRange(documentsResult.Select(d => d.UserId));
-            var userNames = await GetUserNamesAsync(userIds);
-
-            var subfolders = await Task.WhenAll(subfoldersResult.Select(async sf => new FolderResponse
+            return new DocumentResponse
             {
-                Id = sf.Id,
-                Name = sf.Name,
-                ParentFolderId = sf.ParentFolderId,
-                UserId = sf.UserId,
-                OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
-                CreatedAt = sf.CreatedAt,
-                UpdatedAt = sf.UpdatedAt,
-                FileSize = await CalculateFolderFileSizeAsync(sf.Id),
-                SubFolders = new List<FolderResponse>(),
-                Documents = new List<DocumentResponse>()
-            }));
-
-            var documents = documentsResult.Select(d =>
-            {
-                var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
-                return new DocumentResponse
-                {
-                    Id = d.Id,
-                    FolderId = d.FolderId,
-                    RevisionNumber = d.RevisionNumber,
-                    EssDesignIssuePath = d.EssDesignIssuePath,
-                    EssDesignIssueName = d.EssDesignIssueName,
-                    ThirdPartyDesignPath = d.ThirdPartyDesignPath,
-                    ThirdPartyDesignName = d.ThirdPartyDesignName,
-                    EssDesignFileSize = d.EssDesignFileSize,
-                    ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
-                    TotalFileSize = totalSize > 0 ? totalSize : null,
-                    UserId = d.UserId,
-                    OwnerName = d.UserId != null && userNames.ContainsKey(d.UserId) ? userNames[d.UserId] : null,
-                    CreatedAt = d.CreatedAt,
-                    UpdatedAt = d.UpdatedAt
-                };
-            }).ToList();
-
-            return new FolderResponse
-            {
-                Id = folder.Id,
-                Name = folder.Name,
-                ParentFolderId = folder.ParentFolderId,
-                UserId = folder.UserId,
-                OwnerName = folder.UserId != null && userNames.ContainsKey(folder.UserId) ? userNames[folder.UserId] : null,
-                CreatedAt = folder.CreatedAt,
-                UpdatedAt = folder.UpdatedAt,
-                FileSize = await CalculateFolderFileSizeAsync(folder.Id),
-                SubFolders = subfolders.ToList(),
-                Documents = documents
+                Id = document.Id,
+                FolderId = document.FolderId,
+                RevisionNumber = document.RevisionNumber,
+                EssDesignIssuePath = document.EssDesignIssuePath,
+                EssDesignIssueName = document.EssDesignIssueName,
+                ThirdPartyDesignPath = document.ThirdPartyDesignPath,
+                ThirdPartyDesignName = document.ThirdPartyDesignName,
+                EssDesignFileSize = document.EssDesignFileSize,
+                ThirdPartyDesignFileSize = document.ThirdPartyDesignFileSize,
+                TotalFileSize = totalSize > 0 ? totalSize : null,
+                UserId = document.UserId,
+                OwnerName = ownerName,
+                CreatedAt = document.CreatedAt,
+                UpdatedAt = document.UpdatedAt
             };
         }
 
@@ -524,54 +517,14 @@ namespace ESSDesign.Server.Services
 
         public async Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(Guid folderId)
         {
-            var breadcrumbs = new List<BreadcrumbItem>();
-            var currentId = folderId;
-
-            while (currentId != Guid.Empty)
-            {
-                var folder = await _supabase
-                    .From<Folder>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, currentId.ToString())
-                    .Single();
-
-                if (folder == null) break;
-
-                breadcrumbs.Insert(0, new BreadcrumbItem { Id = folder.Id, Name = folder.Name });
-                currentId = folder.ParentFolderId ?? Guid.Empty;
-            }
-
-            return breadcrumbs;
+            return await InvokeRpcAsync<List<BreadcrumbItem>>("get_folder_breadcrumbs", new { p_folder_id = folderId })
+                ?? new List<BreadcrumbItem>();
         }
 
         public async Task<FolderHierarchy> GetFolderHierarchyAsync(Guid folderId)
         {
-            var hierarchy = new FolderHierarchy();
-            var currentId = folderId;
-            var level = 0;
-
-            // Traverse up the folder tree
-            while (currentId != Guid.Empty && level < 3)
-            {
-                var folder = await _supabase
-                    .From<Folder>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, currentId.ToString())
-                    .Single();
-
-                if (folder == null) break;
-
-                // Assign to hierarchy based on level (0 = Scaffold, 1 = Project, 2 = Client)
-                if (level == 0)
-                    hierarchy.Scaffold = folder.Name;
-                else if (level == 1)
-                    hierarchy.Project = folder.Name;
-                else if (level == 2)
-                    hierarchy.Client = folder.Name;
-
-                currentId = folder.ParentFolderId ?? Guid.Empty;
-                level++;
-            }
-
-            return hierarchy;
+            return await InvokeRpcAsync<FolderHierarchy>("get_folder_hierarchy", new { p_folder_id = folderId })
+                ?? new FolderHierarchy();
         }
 
         public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null)
@@ -1043,97 +996,10 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                // 1. Search matching folders (1 query)
-                var foldersResponse = await _supabase
-                    .From<Folder>()
-                    .Filter("name", Postgrest.Constants.Operator.ILike, $"%{query}%")
-                    .Order("name", Postgrest.Constants.Ordering.Ascending)
-                    .Get();
-
-                if (!foldersResponse.Models.Any())
-                    return new List<SearchResult>();
-
-                // 2. Fetch ALL folders once for in-memory breadcrumb computation (1 query)
-                var allFoldersResponse = await _supabase.From<Folder>().Get();
-                var folderLookup = allFoldersResponse.Models.ToDictionary(f => f.Id);
-
-                // 3. For each match, compute breadcrumbs in-memory + fetch children in parallel
-                var tasks = foldersResponse.Models.Select(async folder =>
-                {
-                    var path = BuildBreadcrumbPath(folder, folderLookup);
-
-                    // Subfolders + documents in parallel (2 queries per result, all results concurrent)
-                    var subfoldersTask = _supabase
-                        .From<Folder>()
-                        .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
-                        .Order("name", Postgrest.Constants.Ordering.Ascending)
-                        .Get();
-
-                    var documentsTask = _supabase
-                        .From<DesignDocument>()
-                        .Filter("folder_id", Postgrest.Constants.Operator.Equals, folder.Id.ToString())
-                        .Order("revision_number", Postgrest.Constants.Ordering.Ascending)
-                        .Get();
-
-                    await Task.WhenAll(subfoldersTask, documentsTask);
-
-                    var subfoldersResult = (await subfoldersTask).Models;
-                    var documentsResult = (await documentsTask).Models;
-
-                    // Fetch user names in batch
-                    var userIds = new List<string?> { folder.UserId };
-                    userIds.AddRange(subfoldersResult.Select(sf => sf.UserId));
-                    userIds.AddRange(documentsResult.Select(d => d.UserId));
-                    var userNames = await GetUserNamesAsync(userIds);
-
-                    var subFolders = subfoldersResult.Select(sf => new FolderResponse
-                    {
-                        Id = sf.Id,
-                        Name = sf.Name,
-                        ParentFolderId = sf.ParentFolderId,
-                        UserId = sf.UserId,
-                        OwnerName = sf.UserId != null && userNames.ContainsKey(sf.UserId) ? userNames[sf.UserId] : null,
-                        CreatedAt = sf.CreatedAt,
-                        UpdatedAt = sf.UpdatedAt,
-                        SubFolders = new List<FolderResponse>(),
-                        Documents = new List<DocumentResponse>()
-                    }).ToList();
-
-                    var documents = documentsResult.Select(d =>
-                    {
-                        var totalSize = (d.EssDesignFileSize ?? 0) + (d.ThirdPartyDesignFileSize ?? 0);
-                        return new DocumentResponse
-                        {
-                            Id = d.Id,
-                            FolderId = d.FolderId,
-                            RevisionNumber = d.RevisionNumber,
-                            EssDesignIssuePath = d.EssDesignIssuePath,
-                            EssDesignIssueName = d.EssDesignIssueName,
-                            ThirdPartyDesignPath = d.ThirdPartyDesignPath,
-                            ThirdPartyDesignName = d.ThirdPartyDesignName,
-                            EssDesignFileSize = d.EssDesignFileSize,
-                            ThirdPartyDesignFileSize = d.ThirdPartyDesignFileSize,
-                            TotalFileSize = totalSize > 0 ? totalSize : null,
-                            UserId = d.UserId,
-                            OwnerName = d.UserId != null && userNames.ContainsKey(d.UserId) ? userNames[d.UserId] : null,
-                            CreatedAt = d.CreatedAt,
-                            UpdatedAt = d.UpdatedAt
-                        };
-                    }).ToList();
-
-                    return new SearchResult
-                    {
-                        Id = folder.Id,
-                        Name = folder.Name,
-                        Type = "folder",
-                        ParentFolderId = folder.ParentFolderId,
-                        Path = path,
-                        SubFolders = subFolders,
-                        Documents = documents
-                    };
-                });
-
-                return (await Task.WhenAll(tasks)).ToList();
+                return await InvokeRpcAsync<List<SearchResult>>(
+                           "search_folders",
+                           new { p_query = query, p_limit = 12 })
+                       ?? new List<SearchResult>();
             }
             catch (Exception ex)
             {
@@ -1142,17 +1008,7 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        private static string BuildBreadcrumbPath(Folder folder, Dictionary<Guid, Folder> lookup)
-        {
-            var parts = new List<string>();
-            var currentId = folder.ParentFolderId;
-            while (currentId.HasValue && lookup.TryGetValue(currentId.Value, out var parent))
-            {
-                parts.Insert(0, parent.Name);
-                currentId = parent.ParentFolderId;
-            }
-            return string.Join(" / ", parts);
-        }
+        
 
         // User Preferences Methods
         public async Task<UserPreferences?> GetUserPreferencesAsync(Guid userId)
@@ -1296,21 +1152,37 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var response = await _supabase
-                    .From<UserName>()
-                    .Order("full_name", Postgrest.Constants.Ordering.Ascending)
-                    .Get();
-
-                return response.Models.Select(u => new UserInfo
-                {
-                    Id = u.Id.ToString(),
-                    Email = u.Email,
-                    FullName = u.FullName
-                }).ToList();
+                return await GetRestRowsAsync<UserInfo>(
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&order=full_name.asc");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting all users");
+                throw;
+            }
+        }
+
+        public async Task<List<UserInfo>> GetUsersByIdsAsync(IEnumerable<string> userIds)
+        {
+            var validUserIds = userIds
+                .Where(id => TryNormalizeUserId(id, out _))
+                .Select(id => id!.ToLowerInvariant())
+                .Distinct()
+                .ToList();
+
+            if (!validUserIds.Any())
+            {
+                return new List<UserInfo>();
+            }
+
+            try
+            {
+                return await GetRestRowsAsync<UserInfo>(
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting {Count} users by id", validUserIds.Count);
                 throw;
             }
         }
@@ -1370,12 +1242,13 @@ namespace ESSDesign.Server.Services
             IEnumerable<string> userIds,
             string platform = "ios")
         {
-            var guidIds = userIds
+            var validUserIds = userIds
                 .Where(id => Guid.TryParse(id, out _))
-                .Select(Guid.Parse)
-                .ToHashSet();
+                .Select(id => Guid.Parse(id).ToString().ToLowerInvariant())
+                .Distinct()
+                .ToList();
 
-            if (!guidIds.Any())
+            if (!validUserIds.Any())
             {
                 return new List<UserPushToken>();
             }
@@ -1386,15 +1259,8 @@ namespace ESSDesign.Server.Services
                     ? "ios"
                     : platform.Trim().ToLowerInvariant();
 
-                var response = await _supabase
-                    .From<UserPushToken>()
-                    .Filter("platform", Postgrest.Constants.Operator.Equals, normalizedPlatform)
-                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
-                    .Get();
-
-                return response.Models
-                    .Where(r => guidIds.Contains(r.UserId))
-                    .ToList();
+                return await GetRestRowsAsync<UserPushToken>(
+                    $"user_push_tokens?select={Uri.EscapeDataString("id,userId:user_id,token,platform,appBundleId:app_bundle_id,isActive:is_active,createdAt:created_at,updatedAt:updated_at")}&platform=eq.{Uri.EscapeDataString(normalizedPlatform)}&is_active=eq.true&user_id=in.{BuildInFilter(validUserIds)}");
             }
             catch (Exception ex)
             {
