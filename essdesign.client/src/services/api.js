@@ -101,6 +101,11 @@ export const authAPI = {
         return !!localStorage.getItem('access_token');
     },
 
+    isAdmin: () => {
+        const user = authAPI.getCurrentUser();
+        return user?.role === 'admin';
+    },
+
     inviteUser: async (email) => {
         const response = await apiClient.post('/auth/invite', { email });
         return response.data;
@@ -259,10 +264,17 @@ export const usersAPI = {
     getAllUsers: async () => {
         const response = await apiClient.get('/users');
         return response.data;
+    },
+
+    updateUserRole: async (userId, role) => {
+        const response = await apiClient.put('/users/' + userId + '/role', { role });
+        return response.data;
     }
 };
-
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
+
+
+
 
 
 

@@ -17,6 +17,7 @@ namespace ESSDesign.Server.Services
         private readonly string _bucketName = "design-pdfs";
         private readonly string _safetyBucketName = "project-information";
         private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
+        private const string BootstrapAdminUserId = "dccf9acd-cb29-4a64-8ded-8b58da6bca74";
 
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
@@ -350,6 +351,165 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        private static string NormalizeRole(string? role)
+        {
+            return string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+                ? AppRoles.Admin
+                : AppRoles.Viewer;
+        }
+
+        private static string GetBootstrapRole(string normalizedUserId)
+        {
+            return string.Equals(normalizedUserId, BootstrapAdminUserId, StringComparison.OrdinalIgnoreCase)
+                ? AppRoles.Admin
+                : AppRoles.Viewer;
+        }
+
+        public async Task<string> EnsureUserRoleAsync(string? userId, string? desiredRole = null)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return AppRoles.Viewer;
+            }
+
+            var response = await _supabase
+                .From<UserRoleRecord>()
+                .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
+                .Get();
+
+            var existing = response.Models.FirstOrDefault();
+            if (existing != null)
+            {
+                return NormalizeRole(existing.Role);
+            }
+
+            var now = DateTime.UtcNow;
+            var assignedRole = NormalizeRole(desiredRole ?? GetBootstrapRole(normalizedUserId));
+            var record = new UserRoleRecord
+            {
+                UserId = Guid.Parse(normalizedUserId),
+                Role = assignedRole,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _supabase.From<UserRoleRecord>().Upsert(record);
+            return assignedRole;
+        }
+
+        public async Task<string> GetUserRoleAsync(string? userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return AppRoles.Viewer;
+            }
+
+            try
+            {
+                var response = await _supabase
+                    .From<UserRoleRecord>()
+                    .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
+                    .Get();
+
+                var existing = response.Models.FirstOrDefault();
+                return existing != null
+                    ? NormalizeRole(existing.Role)
+                    : await EnsureUserRoleAsync(normalizedUserId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting role for user {UserId}", normalizedUserId);
+                throw;
+            }
+        }
+
+        private async Task<Dictionary<string, string>> GetAllUserRolesAsync()
+        {
+            try
+            {
+                var response = await _supabase
+                    .From<UserRoleRecord>()
+                    .Get();
+
+                return response.Models.ToDictionary(
+                    role => role.UserId.ToString().ToLowerInvariant(),
+                    role => NormalizeRole(role.Role),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all user roles");
+                throw;
+            }
+        }
+
+        private async Task<Dictionary<string, string>> GetUserRolesByIdsAsync(IEnumerable<string> userIds)
+        {
+            var validUserIds = userIds
+                .Where(id => TryNormalizeUserId(id, out _))
+                .Select(id => id!.ToLowerInvariant())
+                .Distinct()
+                .ToList();
+
+            if (!validUserIds.Any())
+            {
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            try
+            {
+                var response = await _supabase
+                    .From<UserRoleRecord>()
+                    .Filter("user_id", Postgrest.Constants.Operator.In, BuildInFilter(validUserIds))
+                    .Get();
+
+                var roles = response.Models.ToDictionary(
+                    role => role.UserId.ToString().ToLowerInvariant(),
+                    role => NormalizeRole(role.Role),
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var userId in validUserIds.Where(userId => !roles.ContainsKey(userId)))
+                {
+                    roles[userId] = await EnsureUserRoleAsync(userId);
+                }
+
+                return roles;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user roles by id");
+                throw;
+            }
+        }
+
+        public async Task<UserInfo> UpdateUserRoleAsync(string userId, string role)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var normalizedRole = NormalizeRole(role);
+            var now = DateTime.UtcNow;
+            var record = new UserRoleRecord
+            {
+                UserId = Guid.Parse(normalizedUserId),
+                Role = normalizedRole,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _supabase.From<UserRoleRecord>().Upsert(record);
+
+            var user = (await GetUsersByIdsAsync(new[] { normalizedUserId })).FirstOrDefault();
+            if (user == null)
+            {
+                throw new InvalidOperationException("User not found");
+            }
+
+            user.Role = normalizedRole;
+            return user;
+        }
         private FolderResponse BuildFolderSummary(Folder folder, IReadOnlyDictionary<string, string> userNames)
         {
             userNames.TryGetValue(folder.UserId ?? string.Empty, out var ownerName);
@@ -1154,12 +1314,15 @@ namespace ESSDesign.Server.Services
             }
 
             var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            var role = await EnsureUserRoleAsync(id);
+
             return new UserInfo
             {
                 Id = id ?? string.Empty,
                 Email = email ?? string.Empty,
                 FullName = fullName ?? string.Empty,
-                AvatarUrl = avatarUrl
+                AvatarUrl = avatarUrl,
+                Role = role
             };
         }
 
@@ -1172,12 +1335,23 @@ namespace ESSDesign.Server.Services
 
             return null;
         }
+
         public async Task<List<UserInfo>> GetAllUsersAsync()
         {
             try
             {
-                return await GetRestRowsAsync<UserInfo>(
+                var users = await GetRestRowsAsync<UserInfo>(
                     $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&order=full_name.asc");
+                var roles = await GetAllUserRolesAsync();
+
+                foreach (var user in users)
+                {
+                    user.Role = roles.TryGetValue(user.Id, out var role)
+                        ? role
+                        : await EnsureUserRoleAsync(user.Id);
+                }
+
+                return users;
             }
             catch (Exception ex)
             {
@@ -1201,8 +1375,18 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                return await GetRestRowsAsync<UserInfo>(
+                var users = await GetRestRowsAsync<UserInfo>(
                     $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
+                var roles = await GetUserRolesByIdsAsync(validUserIds);
+
+                foreach (var user in users)
+                {
+                    user.Role = roles.TryGetValue(user.Id, out var role)
+                        ? role
+                        : await EnsureUserRoleAsync(user.Id);
+                }
+
+                return users;
             }
             catch (Exception ex)
             {
@@ -1342,6 +1526,9 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
+
+
+
 
 
 

@@ -30,6 +30,12 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
                 var folders = await _supabaseService.GetRootFoldersAsync();
                 return Ok(folders);
             }
@@ -45,6 +51,12 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
                 var folder = await _supabaseService.GetFolderByIdAsync(folderId);
                 return Ok(folder);
             }
@@ -60,6 +72,12 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
                 var breadcrumbs = await _supabaseService.GetBreadcrumbsAsync(folderId);
                 return Ok(breadcrumbs);
             }
@@ -75,12 +93,18 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 if (string.IsNullOrWhiteSpace(request.Name))
+                {
                     return BadRequest(new { error = "Folder name is required" });
+                }
 
-                var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, request.UserId);
-
-                // Fetch the complete folder object with owner name
+                var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, adminResult.User!.Id);
                 var folderResponse = await _supabaseService.GetFolderByIdAsync(folderId);
 
                 _logger.LogInformation("Created folder {FolderId} with name {Name}", folderId, request.Name);
@@ -98,8 +122,16 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 if (string.IsNullOrWhiteSpace(request.NewName))
+                {
                     return BadRequest(new { error = "New name is required" });
+                }
 
                 await _supabaseService.RenameFolderAsync(folderId, request.NewName);
                 return Ok(new { message = "Folder renamed" });
@@ -116,6 +148,12 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 await _supabaseService.DeleteFolderAsync(folderId);
                 return Ok(new { message = "Folder deleted" });
             }
@@ -127,58 +165,64 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost("documents")]
-        [RequestSizeLimit(1_000_000_000)] // 1GB limit for large file uploads
+        [RequestSizeLimit(1_000_000_000)]
         public async Task<ActionResult> UploadDocument([FromForm] UploadDocumentRequest request)
         {
             try
             {
-                if (request.FolderId == Guid.Empty)
-                    return BadRequest(new { error = "Folder ID required" });
-                if (string.IsNullOrWhiteSpace(request.RevisionNumber))
-                    return BadRequest(new { error = "Revision number required" });
-                if (request.EssDesignIssue == null && request.ThirdPartyDesign == null)
-                    return BadRequest(new { error = "At least one file required" });
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
 
+                if (request.FolderId == Guid.Empty)
+                {
+                    return BadRequest(new { error = "Folder ID required" });
+                }
+                if (string.IsNullOrWhiteSpace(request.RevisionNumber))
+                {
+                    return BadRequest(new { error = "Revision number required" });
+                }
+                if (request.EssDesignIssue == null && request.ThirdPartyDesign == null)
+                {
+                    return BadRequest(new { error = "At least one file required" });
+                }
+
+                var actingUserId = adminResult.User!.Id;
                 var documentId = await _supabaseService.UploadDocumentAsync(
                     request.FolderId,
                     request.RevisionNumber,
                     request.EssDesignIssue,
                     request.ThirdPartyDesign,
                     request.Description,
-                    request.UserId
+                    actingUserId
                 );
 
-                // Send email notifications if recipients were specified
                 if (request.RecipientIds != null && request.RecipientIds.Any())
                 {
                     try
                     {
-                        // Get folder info for document name (use nearest/current folder name)
                         var folder = await _supabaseService.GetFolderByIdAsync(request.FolderId);
                         var documentName = folder.Name;
-
-                        // Get folder hierarchy (Client, Project, Scaffold)
                         var hierarchy = await _supabaseService.GetFolderHierarchyAsync(request.FolderId);
 
-                        // Fetch just the uploader + recipients instead of loading the entire user list.
                         var requestedUserIds = request.RecipientIds
-                            .Concat(string.IsNullOrWhiteSpace(request.UserId)
-                                ? Enumerable.Empty<string>()
-                                : new[] { request.UserId })
+                            .Concat(new[] { actingUserId })
                             .Distinct()
                             .ToList();
                         var users = await _supabaseService.GetUsersByIdsAsync(requestedUserIds);
 
                         var uploaderName = users
-                            .FirstOrDefault(u => u.Id == request.UserId)?.FullName
-                            ?? "Unknown User";
+                            .FirstOrDefault(u => u.Id == actingUserId)?.FullName
+                            ?? adminResult.User.FullName
+                            ?? adminResult.User.Email;
 
                         var recipientEmails = users
                             .Where(u => request.RecipientIds.Contains(u.Id))
                             .Select(u => u.Email)
                             .ToList();
 
-                        // Send notification emails
                         await _emailService.SendDocumentUploadNotificationAsync(
                             recipientEmails,
                             documentName,
@@ -198,7 +242,6 @@ namespace ESSDesign.Server.Controllers
                         _logger.LogInformation("Sent email notifications to {Count} recipients for document {DocumentId}",
                             recipientEmails.Count, documentId);
 
-                        // Send APNs push notifications to recipient devices
                         var pushSentCount = await _pushNotificationService.SendDocumentUploadPushAsync(
                             request.RecipientIds,
                             uploaderName,
@@ -214,7 +257,6 @@ namespace ESSDesign.Server.Controllers
                     }
                     catch (Exception emailEx)
                     {
-                        // Log but don't fail the upload if email fails
                         _logger.LogError(emailEx, "Error sending notifications for document {DocumentId}", documentId);
                     }
                 }
@@ -233,6 +275,12 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 await _supabaseService.DeleteDocumentAsync(documentId);
                 return Ok(new { message = "Document deleted" });
             }
@@ -248,8 +296,16 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 if (request.TargetFolderId == Guid.Empty)
+                {
                     return BadRequest(new { error = "Target folder ID is required" });
+                }
 
                 await _supabaseService.MoveDocumentAsync(documentId, request.TargetFolderId);
                 return Ok(new { message = "Document moved" });
@@ -266,8 +322,16 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
                 if (string.IsNullOrWhiteSpace(request.NewRevisionNumber))
+                {
                     return BadRequest(new { error = "New revision number is required" });
+                }
 
                 await _supabaseService.UpdateDocumentRevisionAsync(documentId, request.NewRevisionNumber);
                 return Ok(new { message = "Document revision updated" });
@@ -284,25 +348,32 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                if (request.RecipientIds == null || !request.RecipientIds.Any())
-                    return BadRequest(new { error = "At least one recipient is required" });
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
 
+                if (request.RecipientIds == null || !request.RecipientIds.Any())
+                {
+                    return BadRequest(new { error = "At least one recipient is required" });
+                }
+
+                var actingUserId = adminResult.User!.Id;
                 var document = await _supabaseService.GetDocumentByIdAsync(documentId);
                 var folder = await _supabaseService.GetFolderByIdAsync(document.FolderId);
                 var hierarchy = await _supabaseService.GetFolderHierarchyAsync(document.FolderId);
 
                 var requestedUserIds = request.RecipientIds
-                    .Concat(string.IsNullOrWhiteSpace(request.UserId)
-                        ? Enumerable.Empty<string>()
-                        : new[] { request.UserId })
+                    .Concat(new[] { actingUserId })
                     .Distinct()
                     .ToList();
                 var users = await _supabaseService.GetUsersByIdsAsync(requestedUserIds);
 
                 var sharedByName = users
-                    .FirstOrDefault(u => u.Id == request.UserId)?.FullName
-                    ?? document.OwnerName
-                    ?? "ESS Design";
+                    .FirstOrDefault(u => u.Id == actingUserId)?.FullName
+                    ?? adminResult.User.FullName
+                    ?? adminResult.User.Email;
 
                 var recipientEmails = users
                     .Where(u => request.RecipientIds.Contains(u.Id))
@@ -312,7 +383,9 @@ namespace ESSDesign.Server.Controllers
                     .ToList();
 
                 if (!recipientEmails.Any())
+                {
                     return BadRequest(new { error = "No valid recipient emails were found" });
+                }
 
                 var documentName = document.EssDesignIssueName
                     ?? document.ThirdPartyDesignName
@@ -346,13 +419,20 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
                 if (!type.Equals("ess", StringComparison.OrdinalIgnoreCase) &&
                     !type.Equals("thirdparty", StringComparison.OrdinalIgnoreCase))
+                {
                     return BadRequest(new { error = "Type must be 'ess' or 'thirdparty'" });
+                }
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
 
-                // When accessed from email links, stream file with inline content disposition for preview
                 if (redirect)
                 {
                     using var httpClient = new HttpClient();
@@ -362,7 +442,6 @@ namespace ESSDesign.Server.Controllers
                     var stream = await response.Content.ReadAsStreamAsync();
                     var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
 
-                    // Set Content-Disposition to inline so browser shows preview instead of downloading
                     Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
 
                     return new FileStreamResult(stream, contentType);
@@ -386,8 +465,16 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
                 if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
+                {
                     return BadRequest(new { error = "Search query must be at least 2 characters" });
+                }
 
                 var results = await _supabaseService.SearchAsync(q.Trim());
                 return Ok(results);
@@ -404,7 +491,33 @@ namespace ESSDesign.Server.Controllers
         {
             return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
         }
+
+        private async Task<UserInfo?> GetCurrentUserAsync()
+        {
+            var authorizationHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+            return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        }
+
+        private async Task<(UserInfo? User, ActionResult? Error)> RequireAdminAsync()
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return (null, Unauthorized(new { error = "Not authenticated" }));
+            }
+
+            if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" }));
+            }
+
+            return (currentUser, null);
+        }
     }
 }
-
-

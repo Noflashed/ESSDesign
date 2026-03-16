@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 using Supabase.Gotrue;
@@ -43,17 +43,20 @@ namespace ESSDesign.Server.Controllers
                 try
                 {
                     await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, request.FullName);
+                    await _supabaseService.EnsureUserRoleAsync(session.User.Id);
                 }
                 catch (Exception nameEx)
                 {
-                    _logger.LogWarning(nameEx, "Failed to upsert user_names for {UserId} - trigger should handle it", session.User.Id);
+                    _logger.LogWarning(nameEx, "Failed to initialize user profile records for {UserId}", session.User.Id);
                 }
+
+                var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
 
                 return Ok(new AuthResponse
                 {
                     AccessToken = session.AccessToken ?? string.Empty,
                     RefreshToken = session.RefreshToken ?? string.Empty,
-                    User = BuildUserInfo(session.User, request.FullName)
+                    User = BuildUserInfo(session.User, request.FullName, role)
                 });
             }
             catch (Exception ex)
@@ -86,12 +89,13 @@ namespace ESSDesign.Server.Controllers
                 var fullName = session.User.UserMetadata?.ContainsKey("full_name") == true
                     ? session.User.UserMetadata["full_name"]?.ToString() ?? string.Empty
                     : string.Empty;
+                var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
 
                 return Ok(new AuthResponse
                 {
                     AccessToken = session.AccessToken ?? string.Empty,
                     RefreshToken = session.RefreshToken ?? string.Empty,
-                    User = BuildUserInfo(session.User, fullName)
+                    User = BuildUserInfo(session.User, fullName, role)
                 });
             }
             catch (Exception ex)
@@ -111,20 +115,18 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Email is required" });
                 }
 
-                var authorizationHeader = Request.Headers.Authorization.ToString();
-                if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                var currentUser = await GetCurrentUserFromRequestAsync();
+                if (currentUser == null)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
-                var inviter = await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
-                if (inviter == null)
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
                 {
-                    return Unauthorized(new { error = "Not authenticated" });
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
                 }
 
-                await _emailService.SendUserInviteAsync(request.Email.Trim(), inviter.FullName ?? inviter.Email);
+                await _emailService.SendUserInviteAsync(request.Email.Trim(), currentUser.FullName ?? currentUser.Email);
                 return Ok(new { message = "Invite email sent successfully" });
             }
             catch (Exception ex)
@@ -154,14 +156,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var authorizationHeader = Request.Headers.Authorization.ToString();
-                if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Unauthorized(new { error = "Not authenticated" });
-                }
-
-                var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
-                var user = await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+                var user = await GetCurrentUserFromRequestAsync();
                 if (user == null)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
@@ -176,7 +171,19 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
-        private static UserInfo BuildUserInfo(User user, string? fallbackFullName = null)
+        private async Task<UserInfo?> GetCurrentUserFromRequestAsync()
+        {
+            var authorizationHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+            return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        }
+
+        private static UserInfo BuildUserInfo(User user, string? fallbackFullName, string role)
         {
             var fullName = !string.IsNullOrWhiteSpace(fallbackFullName)
                 ? fallbackFullName
@@ -191,7 +198,8 @@ namespace ESSDesign.Server.Controllers
                     GetMetadataValue(user, "avatar_url") ??
                     GetMetadataValue(user, "picture") ??
                     GetMetadataValue(user, "profile_image") ??
-                    GetMetadataValue(user, "profile_image_url")
+                    GetMetadataValue(user, "profile_image_url"),
+                Role = role
             };
         }
 
@@ -206,4 +214,3 @@ namespace ESSDesign.Server.Controllers
         }
     }
 }
-

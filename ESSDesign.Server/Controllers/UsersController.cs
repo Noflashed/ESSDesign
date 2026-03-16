@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 
 namespace ESSDesign.Server.Controllers
@@ -21,6 +22,17 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
                 var users = await _supabaseService.GetAllUsersAsync();
                 return Ok(users);
             }
@@ -29,6 +41,54 @@ namespace ESSDesign.Server.Controllers
                 _logger.LogError(ex, "Error getting users");
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        [HttpPut("{userId}/role")]
+        public async Task<ActionResult<UserInfo>> UpdateUserRole(string userId, [FromBody] UpdateUserRoleRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                var normalizedRole = request.Role?.Trim().ToLowerInvariant();
+                if (normalizedRole != AppRoles.Admin && normalizedRole != AppRoles.Viewer)
+                {
+                    return BadRequest(new { error = "Role must be either admin or viewer" });
+                }
+
+                var updatedUser = await _supabaseService.UpdateUserRoleAsync(userId, normalizedRole);
+                return Ok(updatedUser);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating role for {UserId}", userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        private async Task<UserInfo?> GetCurrentUserAsync()
+        {
+            var authorizationHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+            return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
         }
     }
 }

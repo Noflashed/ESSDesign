@@ -109,7 +109,9 @@ namespace ESSDesign.Server.Models
         public string FullName { get; set; } = string.Empty;
     }
 
-    [Table("user_push_tokens")]
+    
+
+        [Table("user_push_tokens")]
     public class UserPushToken : BaseModel
     {
         [PrimaryKey("id", false)]
@@ -136,6 +138,27 @@ namespace ESSDesign.Server.Models
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; }
     }
+[Table("user_roles")]
+    public class UserRoleRecord : BaseModel
+    {
+        [PrimaryKey("user_id", false)]
+        public Guid UserId { get; set; }
+
+        [Column("role")]
+        public string Role { get; set; } = AppRoles.Viewer;
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    public static class AppRoles
+    {
+        public const string Admin = "admin";
+        public const string Viewer = "viewer";
+    }
 
     public class SignUpRequest
     {
@@ -155,6 +178,11 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
     }
 
+    public class UpdateUserRoleRequest
+    {
+        public string Role { get; set; } = string.Empty;
+    }
+
     public class AuthResponse
     {
         public string AccessToken { get; set; } = string.Empty;
@@ -168,6 +196,7 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
+        public string Role { get; set; } = AppRoles.Viewer;
     }
 
     public class CreateFolderRequest
@@ -300,3 +329,6 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 }
+
+
+

@@ -32,7 +32,7 @@ const HomeIcon = ({ size = 16, color = 'currentColor' }) => (
     </svg>
 );
 
-function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280, onResize, onDocumentClick }) {
+function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280, onResize, onDocumentClick, canManage = false }) {
     const [folders, setFolders] = useState([]);
     const [expandedFolders, setExpandedFolders] = useState(new Set());
     const [loadedFolders, setLoadedFolders] = useState(new Map());
@@ -271,6 +271,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
 
     const handleContextMenu = (e, folder) => {
         e.preventDefault();
+        if (!canManage) return;
         e.stopPropagation();
         setContextMenu({ x: e.pageX, y: e.pageY, folder });
     };
@@ -333,7 +334,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                     className={`folder-row ${isSelected ? 'selected' : ''}`}
                     style={{ paddingLeft: `${level * 20 + 12}px` }}
                     onClick={() => onFolderSelect(folder.id)}
-                    onContextMenu={(e) => handleContextMenu(e, folder)}
+                    onContextMenu={canManage ? (e) => handleContextMenu(e, folder) : undefined}
                 >
                     <span
                         className={`folder-arrow ${isExpanded ? 'expanded' : ''} ${isLoaded && !hasChildren ? 'empty' : ''}`}
@@ -386,16 +387,18 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                 >
                     <HomeIcon size={16} /> Home
                 </button>
-                <button
-                    className="new-folder-button"
-                    onClick={() => {
-                        setNewFolderParent(null);
-                        setShowNewFolderModal(true);
-                    }}
-                    title="New root folder"
-                >
-                    +
-                </button>
+                {canManage && (
+                    <button
+                        className="new-folder-button"
+                        onClick={() => {
+                            setNewFolderParent(null);
+                            setShowNewFolderModal(true);
+                        }}
+                        title="New root folder"
+                    >
+                        +
+                    </button>
+                )}
             </div>
 
             <div className="sidebar-content">
@@ -414,7 +417,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                 onMouseDown={handleMouseDown}
             />
 
-            {contextMenu && (
+            {canManage && contextMenu && (
                 <div
                     className="sidebar-context-menu"
                     style={{ top: contextMenu.y, left: contextMenu.x }}
@@ -504,3 +507,4 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
 }
 
 export default Sidebar;
+

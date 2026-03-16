@@ -5,7 +5,7 @@ import Login from './components/Login';
 import SignUp from './components/SignUp';
 import PDFViewer from './components/PDFViewer';
 import { ToastProvider } from './components/Toast';
-import { authAPI, preferencesAPI, foldersAPI } from './services/api';
+import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
 
 // Load logo from Supabase Storage
@@ -37,6 +37,16 @@ const UserProfileIcon = ({ size = 18, color = 'currentColor' }) => (
             strokeLinecap="round"
         />
         <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.8" />
+    </svg>
+);
+const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+            d="M10.325 4.317C10.751 2.561 13.249 2.561 13.675 4.317C13.95 5.451 15.221 5.988 16.22 5.372C17.768 4.417 19.583 6.232 18.628 7.78C18.012 8.779 18.549 10.05 19.683 10.325C21.439 10.751 21.439 13.249 19.683 13.675C18.549 13.95 18.012 15.221 18.628 16.22C19.583 17.768 17.768 19.583 16.22 18.628C15.221 18.012 13.95 18.549 13.675 19.683C13.249 21.439 10.751 21.439 10.325 19.683C10.05 18.549 8.779 18.012 7.78 18.628C6.232 19.583 4.417 17.768 5.372 16.22C5.988 15.221 5.451 13.95 4.317 13.675C2.561 13.249 2.561 10.751 4.317 10.325C5.451 10.05 5.988 8.779 5.372 7.78C4.417 6.232 6.232 4.417 7.78 5.372C8.779 5.988 10.05 5.451 10.325 4.317Z"
+            stroke={color}
+            strokeWidth="1.8"
+        />
+        <circle cx="12" cy="12" r="3.2" stroke={color} strokeWidth="1.8" />
     </svg>
 );
 
@@ -205,6 +215,11 @@ function App() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [managedUsers, setManagedUsers] = useState([]);
+    const [usersLoading, setUsersLoading] = useState(false);
+    const [usersError, setUsersError] = useState('');
+    const [updatingUserId, setUpdatingUserId] = useState(null);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteLoading, setInviteLoading] = useState(false);
     const [inviteError, setInviteError] = useState('');
@@ -366,6 +381,67 @@ function App() {
         setInviteEmail('');
     };
 
+    const closeSettingsModal = () => {
+        setShowSettingsModal(false);
+        setUsersError('');
+        setUpdatingUserId(null);
+    };
+
+    const loadManagedUsers = async () => {
+        setUsersLoading(true);
+        setUsersError('');
+        try {
+            const users = await usersAPI.getAllUsers();
+            setManagedUsers(users);
+        } catch (error) {
+            if (error.response?.status === 403) {
+                setUsersError('Admin access is required to manage users.');
+            } else {
+                setUsersError(error.response?.data?.error || 'Failed to load users');
+            }
+        } finally {
+            setUsersLoading(false);
+        }
+    };
+
+    const openSettingsModal = async () => {
+        setShowUserMenu(false);
+        setShowSettingsModal(true);
+        await loadManagedUsers();
+    };
+
+    const handleUserRoleChange = async (targetUserId, nextRole) => {
+        setUpdatingUserId(targetUserId);
+        setUsersError('');
+
+        try {
+            const updatedUser = await usersAPI.updateUserRole(targetUserId, nextRole);
+            setManagedUsers((prev) => prev.map((managedUser) => (
+                managedUser.id === targetUserId ? updatedUser : managedUser
+            )));
+
+            if (user?.id === targetUserId) {
+                const nextUser = { ...user, role: updatedUser.role };
+                setUser(nextUser);
+                localStorage.setItem('user', JSON.stringify(nextUser));
+
+                if (updatedUser.role !== 'admin') {
+                    setShowSettingsModal(false);
+                    setShowInviteModal(false);
+                    setShowUserMenu(false);
+                }
+            }
+        } catch (error) {
+            if (error.response?.status === 403) {
+                setUsersError('Admin access is required to update roles.');
+            } else {
+                setUsersError(error.response?.data?.error || 'Failed to update role');
+            }
+        } finally {
+            setUpdatingUserId(null);
+        }
+    };
+
     const handleInviteUser = async (e) => {
         e.preventDefault();
         setInviteError('');
@@ -525,6 +601,7 @@ function App() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+    const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userInitials = user?.fullName
         ? user.fullName
@@ -659,6 +736,11 @@ function App() {
                     )}
                 </div>
                 <div className="header-right">
+                    {isAdmin && (
+                        <button className="icon-action-button" onClick={openSettingsModal} title="Manage users" aria-label="Manage users">
+                            <SettingsIcon size={18} />
+                        </button>
+                    )}
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
                         {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                     </button>
@@ -694,9 +776,11 @@ function App() {
                                         <div className="user-email">{user?.email}</div>
                                     </div>
                                 </div>
-                                <button className="user-menu-action" onClick={openInviteModal}>
-                                    Invite user
-                                </button>
+                                {isAdmin && (
+                                    <button className="user-menu-action" onClick={openInviteModal}>
+                                        Invite user
+                                    </button>
+                                )}
                                 <button className="logout-button" onClick={handleLogout}>
                                     Logout
                                 </button>
@@ -714,6 +798,7 @@ function App() {
                     width={sidebarWidth}
                     onResize={handleSidebarResize}
                     onDocumentClick={handleDocumentClick}
+                    canManage={isAdmin}
                 />
                 <main className="app-main">
                     <FolderBrowser
@@ -722,9 +807,54 @@ function App() {
                         viewMode={viewMode}
                         onViewModeChange={handleViewModeChange}
                         onRefreshNeeded={triggerRefresh}
+                        canManage={isAdmin}
                     />
                 </main>
             </div>
+
+            {showSettingsModal && (
+                <div className="settings-modal-overlay" onClick={closeSettingsModal}>
+                    <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="settings-modal-header">
+                            <div>
+                                <h3>User Roles</h3>
+                                <p>Admins can manage files, folders, invites, and user access. Viewers can only browse folders and open PDFs.</p>
+                            </div>
+                            <button type="button" className="settings-close-btn" onClick={closeSettingsModal} aria-label="Close user role settings">
+                                x
+                            </button>
+                        </div>
+
+                        {usersError && <div className="invite-message invite-error">{usersError}</div>}
+
+                        <div className="settings-user-list">
+                            {usersLoading ? (
+                                <div className="settings-empty-state">Loading users...</div>
+                            ) : managedUsers.length === 0 ? (
+                                <div className="settings-empty-state">No users found.</div>
+                            ) : (
+                                managedUsers.map((managedUser) => (
+                                    <div key={managedUser.id} className="settings-user-row">
+                                        <div className="settings-user-info">
+                                            <div className="settings-user-name">{managedUser.fullName || managedUser.email}</div>
+                                            <div className="settings-user-email">{managedUser.email}</div>
+                                        </div>
+                                        <select
+                                            className="settings-role-select"
+                                            value={managedUser.role || 'viewer'}
+                                            onChange={(e) => handleUserRoleChange(managedUser.id, e.target.value)}
+                                            disabled={updatingUserId === managedUser.id}
+                                        >
+                                            <option value="viewer">Viewer</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showInviteModal && (
                 <div className="invite-modal-overlay" onClick={closeInviteModal}>
@@ -773,5 +903,16 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
+
 
 

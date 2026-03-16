@@ -126,7 +126,7 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
     return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
-function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
@@ -637,6 +637,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     };
 
     const handleDragStart = (e, item) => {
+        if (!canManage) return;
         draggedItemRef.current = item;
         e.dataTransfer.effectAllowed = 'move';
         // Use a tiny delay so the drag image renders before the element fades
@@ -652,6 +653,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     };
 
     const handleDragOver = (e, folder) => {
+        if (!canManage) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (draggedItemRef.current && draggedItemRef.current.isDocument) {
@@ -667,6 +669,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     };
 
     const handleDrop = (e, targetFolder) => {
+        if (!canManage) return;
         e.preventDefault();
         setDragOverFolderId(null);
         const dragged = draggedItemRef.current;
@@ -684,18 +687,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     };
 
     const handleContextMenu = (e, item) => {
+        if (!canManage) return;
         e.preventDefault();
         setContextMenu({ x: e.clientX, y: e.clientY, item });
     };
 
     const handleEmptySpaceContextMenu = (e) => {
+        if (!canManage) return;
         // Only trigger if clicking on the grid/list container itself, not on items
         if (e.target.classList.contains('items-grid') || e.target.classList.contains('items-list')) {
             e.preventDefault();
             setContextMenu({ x: e.clientX, y: e.clientY, item: null, isEmptySpace: true });
         }
     };
-
     const handleSort = (field) => {
         if (sortField === field) {
             // Toggle direction if clicking the same field
@@ -758,10 +762,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     return (
         <div className="folder-browser">
             <div className="browser-toolbar">
-                <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
-                    + New Folder
-                </button>
-                {currentFolder && (
+                {canManage && (
+                    <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
+                        + New Folder
+                    </button>
+                )}
+                {canManage && currentFolder && (
                     <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
                         <UploadIcon size={16} /> Upload Document
                     </button>
@@ -881,21 +887,21 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     )}
                     <div
                         className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
-                        onContextMenu={handleEmptySpaceContextMenu}
+                        onContextMenu={canManage ? handleEmptySpaceContextMenu : undefined}
                     >
                         {getSortedFolders().map(item => (
                         viewMode === 'grid' ? (
                             <div
                                 key={item.id}
                                 className={`item-card ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
-                                draggable={!!item.isDocument}
+                                draggable={canManage && !!item.isDocument}
                                 onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
                                 onDragEnd={item.isDocument ? handleDragEnd : undefined}
-                                onDragOver={!item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
                                 onDragLeave={!item.isDocument ? handleDragLeave : undefined}
-                                onDrop={!item.isDocument ? (e) => handleDrop(e, item) : undefined}
+                                onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                 onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                onContextMenu={(e) => handleContextMenu(e, item)}
+                                onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                             >
                                 <div className="item-icon">
                                     {item.isDocument ? <DocumentIcon size={32} /> : <FolderIcon size={32} />}
@@ -932,14 +938,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 key={item.id}
                                 className={`list-item ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
                                 style={{ gridTemplateColumns }}
-                                draggable={!!item.isDocument}
+                                draggable={canManage && !!item.isDocument}
                                 onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
                                 onDragEnd={item.isDocument ? handleDragEnd : undefined}
-                                onDragOver={!item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
                                 onDragLeave={!item.isDocument ? handleDragLeave : undefined}
-                                onDrop={!item.isDocument ? (e) => handleDrop(e, item) : undefined}
+                                onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                 onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                onContextMenu={(e) => handleContextMenu(e, item)}
+                                onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                             >
                                 <div className="list-item-icon">
                                     {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
@@ -1003,7 +1009,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 </>
             )}
 
-            {contextMenu && (
+            {canManage && contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
                     {contextMenu.isEmptySpace && (
                         <div onClick={() => {
@@ -1219,5 +1225,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 }
 
 export default FolderBrowser;
+
+
 
 
