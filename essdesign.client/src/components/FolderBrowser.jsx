@@ -82,6 +82,44 @@ const formatRevisionNumber = (revisionNumber) => {
 const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 288;
+const MIN_COL_WIDTH_FR = 0.2;
+
+const sanitizeColWidths = (value) => {
+    const next = { ...DEFAULT_COL_WIDTHS };
+
+    if (!value || typeof value !== 'object') {
+        return next;
+    }
+
+    Object.keys(DEFAULT_COL_WIDTHS).forEach((key) => {
+        const parsed = Number(value[key]);
+        if (Number.isFinite(parsed) && parsed >= MIN_COL_WIDTH_FR) {
+            next[key] = parsed;
+        }
+    });
+
+    return next;
+};
+
+const buildGridTemplateColumns = (widths, includeRevision) => {
+    const normalized = sanitizeColWidths(widths);
+    const dynamicColumns = includeRevision
+        ? [
+            `minmax(0, ${normalized.name}fr)`,
+            `minmax(0, ${normalized.revision}fr)`,
+            `minmax(0, ${normalized.owner}fr)`,
+            `minmax(0, ${normalized.modified}fr)`,
+            `minmax(0, ${normalized.size}fr)`
+        ]
+        : [
+            `minmax(0, ${normalized.name}fr)`,
+            `minmax(0, ${normalized.owner}fr)`,
+            `minmax(0, ${normalized.modified}fr)`,
+            `minmax(0, ${normalized.size}fr)`
+        ];
+
+    return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
+};
 
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
     const { showToast, updateToast } = useToast();
@@ -124,7 +162,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [colWidths, setColWidths] = useState(() => {
         try {
             const saved = localStorage.getItem('listColWidths');
-            if (saved) return JSON.parse(saved);
+            if (saved) return sanitizeColWidths(JSON.parse(saved));
         } catch { /* ignore */ }
         return { ...DEFAULT_COL_WIDTHS };
     });
@@ -136,12 +174,18 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         localStorage.setItem('listColWidths', JSON.stringify(colWidths));
     }, [colWidths]);
 
+    useEffect(() => {
+        setColWidths(prev => {
+            const normalized = sanitizeColWidths(prev);
+            const changed = Object.keys(DEFAULT_COL_WIDTHS).some(key => normalized[key] !== prev[key]);
+            return changed ? normalized : prev;
+        });
+    }, []);
+
     const showRevisionColumn = folders.some(item => item.isDocument);
 
-    // Build the grid-template-columns string from widths
-    const gridTemplateColumns = showRevisionColumn
-        ? `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr ${LIST_ACTIONS_WIDTH_PX}px`
-        : `40px ${colWidths.name}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr ${LIST_ACTIONS_WIDTH_PX}px`;
+    // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
+    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn);
 
     // Column resize handlers
     const colKeys = showRevisionColumn
