@@ -762,8 +762,8 @@ function App() {
                             <SettingsIcon size={18} />
                         </button>
                     )}
-                    <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-                        {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+                    <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
+                        <ThemeIcon theme={theme} size={18} />
                     </button>
                     <div className="user-menu" ref={userMenuRef}>
                         <button
@@ -924,6 +924,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
