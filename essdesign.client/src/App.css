@@ -414,21 +414,21 @@ body {
 }
 
 .theme-toggle {
-    border: 1px solid var(--border-color);
-    background: var(--card-bg);
-    color: var(--text-primary);
-    border-radius: 999px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 10px 14px;
-    line-height: 1;
-    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    line-height: 0;
+    transition: color 0.2s, transform 0.2s;
 }
 
 .theme-toggle:hover {
-    background: var(--hover-bg);
-    transform: translateY(-1px);
+    color: var(--text-primary);
+    transform: rotate(18deg);
 }
 
 .user-menu {
@@ -912,5 +912,6 @@ body {
     border: 1px dashed var(--border-color);
     border-radius: 12px;
 }
+
 
 
