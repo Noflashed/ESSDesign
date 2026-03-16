@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { foldersAPI, authAPI } from '../services/api';
+import { foldersAPI, authAPI, usersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
@@ -92,6 +92,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
     const [showEditDocumentModal, setShowEditDocumentModal] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [shareTarget, setShareTarget] = useState(null);
+    const [shareUsers, setShareUsers] = useState([]);
+    const [selectedShareRecipients, setSelectedShareRecipients] = useState([]);
+    const [loadingShareUsers, setLoadingShareUsers] = useState(false);
+    const [sharingDocument, setSharingDocument] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderParent, setNewFolderParent] = useState(null); // Track parent for subfolder creation
     const [renameTarget, setRenameTarget] = useState(null);
@@ -502,6 +508,57 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         }
     };
 
+    const handleOpenShareModal = async (item) => {
+        setShareTarget(item);
+        setSelectedShareRecipients([]);
+        setShowShareModal(true);
+
+        if (shareUsers.length > 0) {
+            return;
+        }
+
+        setLoadingShareUsers(true);
+        try {
+            const userList = await usersAPI.getAllUsers();
+            setShareUsers(userList);
+        } catch (error) {
+            console.error('Failed to fetch users for sharing:', error);
+            showToast('Failed to load users', 'error');
+        } finally {
+            setLoadingShareUsers(false);
+        }
+    };
+
+    const handleToggleShareRecipient = (userId) => {
+        setSelectedShareRecipients(prev => (
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
+        ));
+    };
+
+    const handleShareDocument = async () => {
+        if (!shareTarget || selectedShareRecipients.length === 0) {
+            showToast('Select at least one user to share with', 'error');
+            return;
+        }
+
+        setSharingDocument(true);
+        const toastId = showToast('Sharing PDF...', 'info', 0);
+
+        try {
+            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients);
+            updateToast(toastId, 'PDF shared successfully', 'success');
+            setShowShareModal(false);
+            setShareTarget(null);
+            setSelectedShareRecipients([]);
+        } catch (error) {
+            updateToast(toastId, 'Failed to share PDF', 'error');
+            console.error('Share document error:', error);
+        } finally {
+            setSharingDocument(false);
+        }
+    };
     const handleMoveDocument = async (document, targetFolder) => {
         if (document.id === targetFolder.id) return;
 
@@ -936,6 +993,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     {contextMenu.item && contextMenu.item.isDocument && (
                         <>
                             <div onClick={() => {
+                                handleOpenShareModal(contextMenu.item);
+                                setContextMenu(null);
+                            }}>
+                                Share PDF
+                            </div>
+                            <div onClick={() => {
                                 setEditDocumentTarget(contextMenu.item);
                                 setNewRevisionNumber(contextMenu.item.revisionNumber);
                                 setShowEditDocumentModal(true);
@@ -1018,6 +1081,64 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 </div>
             )}
 
+            {showShareModal && shareTarget && (
+                <div className="modal-overlay" onClick={() => {
+                    if (sharingDocument) return;
+                    setShowShareModal(false);
+                    setShareTarget(null);
+                    setSelectedShareRecipients([]);
+                }}>
+                    <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
+                        <h3>Share PDF</h3>
+                        <p className="share-modal-subtitle">
+                            Send <strong>{shareTarget.essDesignIssueName || shareTarget.thirdPartyDesignName || formatRevisionNumber(shareTarget.revisionNumber)}</strong> by email.
+                        </p>
+                        <div className="share-user-list">
+                            {loadingShareUsers ? (
+                                <div className="share-empty-state">Loading users...</div>
+                            ) : shareUsers.length === 0 ? (
+                                <div className="share-empty-state">No users available to share with.</div>
+                            ) : (
+                                shareUsers.map(user => (
+                                    <label key={user.id} className="share-user-row">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedShareRecipients.includes(user.id)}
+                                            onChange={() => handleToggleShareRecipient(user.id)}
+                                            disabled={sharingDocument}
+                                        />
+                                        <span className="share-user-name">{user.fullName || user.email}</span>
+                                        <span className="share-user-email">{user.email}</span>
+                                    </label>
+                                ))
+                            )}
+                        </div>
+                        <div className="share-selection-summary">
+                            {selectedShareRecipients.length} user{selectedShareRecipients.length === 1 ? '' : 's'} selected
+                        </div>
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowShareModal(false);
+                                    setShareTarget(null);
+                                    setSelectedShareRecipients([]);
+                                }}
+                                disabled={sharingDocument}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleShareDocument}
+                                disabled={sharingDocument || loadingShareUsers || selectedShareRecipients.length === 0}
+                            >
+                                {sharingDocument ? 'Sharing...' : 'Share PDF'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {showUploadModal && (
                 <UploadDocumentModal
                     folderId={currentFolder}
@@ -1044,3 +1165,4 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 }
 
 export default FolderBrowser;
+
