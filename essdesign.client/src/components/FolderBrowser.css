@@ -675,17 +675,5 @@
     font-size: 13px;
 }
 
-@media (max-width: 960px) {
-    .list-header-actions,
-    .list-item-actions {
-        min-width: 220px;
-    }
 
-    .list-item-actions {
-        gap: 8px;
-    }
 
-    .list-item-preview-buttons {
-        display: none;
-    }
-}

@@ -521,10 +521,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setLoadingShareUsers(true);
         try {
             const userList = await usersAPI.getAllUsers();
-            const filteredUsers = currentUser?.id
-                ? userList.filter(user => user.id !== currentUser.id)
-                : userList;
-            setShareUsers(filteredUsers);
+            setShareUsers(userList);
         } catch (error) {
             console.error('Failed to fetch users for sharing:', error);
             showToast('Failed to load users', 'error');
@@ -1171,6 +1168,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 }
 
 export default FolderBrowser;
+
 
 
 
