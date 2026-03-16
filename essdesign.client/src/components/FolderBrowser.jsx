@@ -78,6 +78,11 @@ const formatRevisionNumber = (revisionNumber) => {
     return `Revision ${String(revisionNumber).padStart(2, '0')}`;
 };
 
+const REVISION_OPTIONS = Array.from({ length: 15 }, (_, index) => {
+    const revision = index + 1;
+    return revision < 10 ? `0${revision}` : `${revision}`;
+});
+
 // Default column widths as fractions (must match grid-template-columns order after icon)
 const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
@@ -1111,13 +1116,17 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 <div className="modal-overlay" onClick={() => setShowEditDocumentModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <h3>Edit Document Revision</h3>
-                        <input
-                            type="text"
+                        <select
                             value={newRevisionNumber}
                             onChange={(e) => setNewRevisionNumber(e.target.value)}
-                            placeholder="Enter revision number"
                             autoFocus
-                        />
+                        >
+                            {REVISION_OPTIONS.map((revision) => (
+                                <option key={revision} value={revision}>
+                                    Revision {revision}
+                                </option>
+                            ))}
+                        </select>
                         <div className="modal-actions">
                             <button onClick={() => setShowEditDocumentModal(false)}>Cancel</button>
                             <button onClick={handleUpdateDocumentRevision}>Update</button>
