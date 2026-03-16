@@ -210,6 +210,15 @@ export const foldersAPI = {
         return response.data;
     },
 
+    shareDocument: async (documentId, recipientIds) => {
+        const user = authAPI.getCurrentUser();
+        const response = await apiClient.post(`/folders/documents/${documentId}/share`, {
+            recipientIds,
+            userId: user?.id
+        });
+        return response.data;
+    },
+
     moveDocument: async (documentId, targetFolderId) => {
         const response = await apiClient.put(`/folders/documents/${documentId}/move`, {
             targetFolderId
@@ -254,4 +263,6 @@ export const usersAPI = {
 };
 
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
+
+
 

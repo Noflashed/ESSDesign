@@ -134,6 +134,65 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task SendDocumentShareNotificationAsync(
+            List<string> recipientEmails,
+            string documentName,
+            string revisionNumber,
+            string sharedByName,
+            Guid documentId,
+            Guid folderId,
+            bool hasEssDesign,
+            bool hasThirdPartyDesign,
+            string? client = null,
+            string? project = null,
+            string? scaffold = null)
+        {
+            if (recipientEmails == null || !recipientEmails.Any())
+            {
+                _logger.LogWarning("No recipients provided for document share notification");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping share notifications.");
+                return;
+            }
+
+            var subjectParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(client))
+                subjectParts.Add(client);
+            if (!string.IsNullOrWhiteSpace(project))
+                subjectParts.Add(project);
+            if (!string.IsNullOrWhiteSpace(scaffold))
+                subjectParts.Add(scaffold);
+
+            var hierarchyString = subjectParts.Any() ? string.Join(" - ", subjectParts) + " - " : "";
+            var subject = $"Document Shared: {hierarchyString}Revision {revisionNumber}";
+            var htmlContent = BuildDocumentShareEmailContent(
+                documentName,
+                revisionNumber,
+                sharedByName,
+                documentId,
+                folderId,
+                hasEssDesign,
+                hasThirdPartyDesign,
+                client,
+                project,
+                scaffold);
+
+            foreach (var recipientEmail in recipientEmails)
+            {
+                await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            }
+
+            _logger.LogInformation(
+                "Document share summary: {RecipientCount} sent. Document: {DocumentName}, Revision: {RevisionNumber}",
+                recipientEmails.Count,
+                documentName,
+                revisionNumber);
+        }
+
         private async Task SendEmailWithRetryAsync(string recipientEmail, string subject, string htmlContent, int maxRetries = 3)
         {
             var retryDelays = new[] { 1000, 2000, 4000 }; // Exponential backoff: 1s, 2s, 4s
@@ -269,6 +328,90 @@ namespace ESSDesign.Server.Services
                                 Automated invitation from the ESS Design document management system.<br>
                                 &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
                             </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
+
+        private string BuildDocumentShareEmailContent(
+            string documentName,
+            string revisionNumber,
+            string sharedByName,
+            Guid documentId,
+            Guid folderId,
+            bool hasEssDesign,
+            bool hasThirdPartyDesign,
+            string? client,
+            string? project,
+            string? scaffold)
+        {
+            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess?redirect=true" : null;
+            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
+            var folderLink = $"{_frontendUrl}?folder={folderId}";
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
+            var safeDocumentName = System.Web.HttpUtility.HtmlEncode(documentName);
+            var safeRevision = System.Web.HttpUtility.HtmlEncode(revisionNumber);
+            var safeSharer = System.Web.HttpUtility.HtmlEncode(sharedByName);
+            var safeClient = System.Web.HttpUtility.HtmlEncode(client ?? "-");
+            var safeProject = System.Web.HttpUtility.HtmlEncode(project ?? "-");
+            var safeScaffold = System.Web.HttpUtility.HtmlEncode(scaffold ?? "-");
+            var safeFolderLink = System.Web.HttpUtility.HtmlAttributeEncode(folderLink);
+            var essButton = hasEssDesign && !string.IsNullOrWhiteSpace(essLink)
+                ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(essLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View ESS PDF</a></td></tr></table></td>"
+                : string.Empty;
+            var thirdPartyButton = hasThirdPartyDesign && !string.IsNullOrWhiteSpace(thirdPartyLink)
+                ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#2f855a;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View Third-Party PDF</a></td></tr></table></td>"
+                : string.Empty;
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+</head>
+<body style=""margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d3748;background-color:#edf2f7;"">
+    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#edf2f7;padding:40px 20px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""620"" style=""max-width:620px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;"">
+                    <tr>
+                        <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">A PDF Was Shared With You</h1>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Open the folder or preview the revision using the links below</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
+                                <strong style=""color:#2d3748;"">{safeSharer}</strong> shared <strong style=""color:#2d3748;"">{safeDocumentName}</strong> with you.
+                            </p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Revision</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Revision {safeRevision}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeClient}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeScaffold}</p></td></tr>
+                            </table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:24px 0;"">
+                                <tr>
+                                    <td align=""center"" style=""padding:8px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0""><tr><td align=""center"" style=""border-radius:100px;background-color:#FF6B35;""><a href=""{safeFolderLink}"" style=""display:inline-block;padding:14px 28px;border-radius:100px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;"">Open in ESS Design</a></td></tr></table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{essButton}{thirdPartyButton}</tr></table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align=""center"" style=""background-color:#f7fafc;padding:24px 32px;border-top:1px solid #e2e8f0;"">
+                            <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
+                            <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">Automated document share from the ESS Design system.</p>
                         </td>
                     </tr>
                 </table>
@@ -528,3 +671,7 @@ namespace ESSDesign.Server.Services
         }
     }
 }
+
+
+
+

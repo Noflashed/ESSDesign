@@ -187,6 +187,12 @@ namespace ESSDesign.Server.Models
         public string NewRevisionNumber { get; set; } = string.Empty;
     }
 
+    public class ShareDocumentRequest
+    {
+        public List<string> RecipientIds { get; set; } = new();
+        public string? UserId { get; set; }
+    }
+
     public class MoveDocumentRequest
     {
         public Guid TargetFolderId { get; set; }

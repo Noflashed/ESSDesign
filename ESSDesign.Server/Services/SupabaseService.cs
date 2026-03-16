@@ -409,6 +409,30 @@ namespace ESSDesign.Server.Services
             };
         }
 
+        public async Task<DocumentResponse> GetDocumentByIdAsync(Guid documentId)
+        {
+            try
+            {
+                var document = await _supabase
+                    .From<DesignDocument>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, documentId.ToString())
+                    .Single();
+
+                if (document == null)
+                {
+                    throw new FileNotFoundException("Document not found");
+                }
+
+                var userNames = await GetUserNamesAsync(new[] { document.UserId });
+                return BuildDocumentResponse(document, userNames);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving document {DocumentId}", documentId);
+                throw;
+            }
+        }
+
         public async Task<Guid> CreateFolderAsync(string name, Guid? parentFolderId, string? userId = null)
         {
             try
@@ -1318,4 +1342,6 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
+
+
 

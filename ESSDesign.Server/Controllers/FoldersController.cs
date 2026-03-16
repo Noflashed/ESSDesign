@@ -279,6 +279,68 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("documents/{documentId}/share")]
+        public async Task<ActionResult> ShareDocument(Guid documentId, [FromBody] ShareDocumentRequest request)
+        {
+            try
+            {
+                if (request.RecipientIds == null || !request.RecipientIds.Any())
+                    return BadRequest(new { error = "At least one recipient is required" });
+
+                var document = await _supabaseService.GetDocumentByIdAsync(documentId);
+                var folder = await _supabaseService.GetFolderByIdAsync(document.FolderId);
+                var hierarchy = await _supabaseService.GetFolderHierarchyAsync(document.FolderId);
+
+                var requestedUserIds = request.RecipientIds
+                    .Concat(string.IsNullOrWhiteSpace(request.UserId)
+                        ? Enumerable.Empty<string>()
+                        : new[] { request.UserId })
+                    .Distinct()
+                    .ToList();
+                var users = await _supabaseService.GetUsersByIdsAsync(requestedUserIds);
+
+                var sharedByName = users
+                    .FirstOrDefault(u => u.Id == request.UserId)?.FullName
+                    ?? document.OwnerName
+                    ?? "ESS Design";
+
+                var recipientEmails = users
+                    .Where(u => request.RecipientIds.Contains(u.Id))
+                    .Select(u => u.Email)
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (!recipientEmails.Any())
+                    return BadRequest(new { error = "No valid recipient emails were found" });
+
+                var documentName = document.EssDesignIssueName
+                    ?? document.ThirdPartyDesignName
+                    ?? folder.Name;
+
+                await _emailService.SendDocumentShareNotificationAsync(
+                    recipientEmails,
+                    documentName,
+                    document.RevisionNumber,
+                    sharedByName,
+                    document.Id,
+                    document.FolderId,
+                    !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
+                    !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
+                    hierarchy.Client,
+                    hierarchy.Project,
+                    hierarchy.Scaffold ?? folder.Name);
+
+                _logger.LogInformation("Shared document {DocumentId} with {Count} recipients", documentId, recipientEmails.Count);
+                return Ok(new { message = "Document shared" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sharing document {DocumentId}", documentId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("documents/{documentId}/download/{type}")]
         public async Task<ActionResult> DownloadDocument(Guid documentId, string type, [FromQuery] bool redirect = false)
         {
@@ -344,3 +406,5 @@ namespace ESSDesign.Server.Controllers
         }
     }
 }
+
+
