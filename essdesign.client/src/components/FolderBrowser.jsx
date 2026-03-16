@@ -923,13 +923,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowRenameModal(true);
                                 setContextMenu(null);
                             }}>
-                                Ã¢Å“ÂÃ¯Â¸Â Rename
+                                Rename
                             </div>
                             <div onClick={() => {
                                 handleDeleteFolder(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                Ã°Å¸â€”â€˜Ã¯Â¸Â Delete
+                                Delete
                             </div>
                         </>
                     )}
@@ -941,14 +941,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 setShowEditDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                Ã¢Å“ÂÃ¯Â¸Â Edit Revision
+                                Edit Revision
                             </div>
                             <div className="context-menu-divider"></div>
                             <div onClick={() => {
                                 handleDeleteDocument(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                Ã°Å¸â€”â€˜Ã¯Â¸Â Delete
+                                Delete
                             </div>
                         </>
                     )}
