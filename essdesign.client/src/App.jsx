@@ -660,7 +660,7 @@ function App() {
                 </div>
                 <div className="header-right">
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-                        {theme === 'light' ? 'Dark' : 'Light'}
+                        {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                     </button>
                     <div className="user-menu" ref={userMenuRef}>
                         <button

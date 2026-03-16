@@ -198,7 +198,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-    WITH matched AS (
+    WITH RECURSIVE matched AS (
         SELECT
             f.id,
             f.name,

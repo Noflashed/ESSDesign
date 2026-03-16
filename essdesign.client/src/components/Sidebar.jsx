@@ -342,7 +342,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                             toggleFolder(folder.id);
                         }}
                     >
-                        ▶
+                        {'>'}
                     </span>
                     <span className="folder-icon"><FolderIcon size={16} /></span>
                     <span className="folder-name">{folder.name}</span>
@@ -394,7 +394,7 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                     }}
                     title="New root folder"
                 >
-                    ➕
+                    +
                 </button>
             </div>
 
@@ -433,13 +433,13 @@ function Sidebar({ onFolderSelect, currentFolderId, refreshTrigger, width = 280,
                         setShowRenameModal(true);
                         setContextMenu(null);
                     }}>
-                        ✏️ Rename
+                        Rename
                     </div>
                     <div onClick={() => {
                         handleDeleteFolder(contextMenu.folder.id);
                         setContextMenu(null);
                     }}>
-                        🗑️ Delete
+                        Delete
                     </div>
                 </div>
             )}
