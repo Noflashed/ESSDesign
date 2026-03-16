@@ -791,23 +791,21 @@ body {
     cursor: wait;
 }
 .icon-action-button {
-    width: 42px;
-    height: 42px;
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    background: var(--card-bg);
-    color: var(--text-primary);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    line-height: 0;
+    transition: color 0.2s, transform 0.2s;
 }
 
 .icon-action-button:hover {
-    background: var(--hover-bg);
-    border-color: var(--primary-color);
-    transform: translateY(-1px);
+    color: var(--text-primary);
+    transform: rotate(18deg);
 }
 
 .settings-modal-overlay {
@@ -914,3 +912,5 @@ body {
     border: 1px dashed var(--border-color);
     border-radius: 12px;
 }
+
+
