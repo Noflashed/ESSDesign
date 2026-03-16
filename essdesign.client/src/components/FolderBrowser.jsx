@@ -81,6 +81,7 @@ const formatRevisionNumber = (revisionNumber) => {
 // Default column widths as fractions (must match grid-template-columns order after icon)
 const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
+const LIST_ACTIONS_WIDTH_PX = 288;
 
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded }) {
     const { showToast, updateToast } = useToast();
@@ -139,8 +140,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     // Build the grid-template-columns string from widths
     const gridTemplateColumns = showRevisionColumn
-        ? `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`
-        : `40px ${colWidths.name}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr auto`;
+        ? `40px ${colWidths.name}fr ${colWidths.revision}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr ${LIST_ACTIONS_WIDTH_PX}px`
+        : `40px ${colWidths.name}fr ${colWidths.owner}fr ${colWidths.modified}fr ${colWidths.size}fr ${LIST_ACTIONS_WIDTH_PX}px`;
 
     // Column resize handlers
     const colKeys = showRevisionColumn
@@ -1165,4 +1166,5 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 }
 
 export default FolderBrowser;
+
 
