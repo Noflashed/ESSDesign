@@ -1,4 +1,4 @@
-﻿using Supabase;
+using Supabase;
 using ESSDesign.Server.Models;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
@@ -18,6 +18,7 @@ namespace ESSDesign.Server.Services
 
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
+        private static readonly ConcurrentDictionary<string, (string Value, DateTime Expiry)> _userNameCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
 
         // Root folders cache
@@ -118,31 +119,46 @@ namespace ESSDesign.Server.Services
         // Helper method to get user name by ID
         private async Task<string?> GetUserNameAsync(string? userId)
         {
-            if (string.IsNullOrEmpty(userId)) return null;
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return null;
+            }
 
             try
             {
-                if (!Guid.TryParse(userId, out var userGuid)) return null;
+                if (TryGetCachedUserName(normalizedUserId, out var cachedUserName))
+                {
+                    return cachedUserName;
+                }
 
                 var userResponse = await _supabase
                     .From<UserName>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, userId)
+                    .Filter("id", Postgrest.Constants.Operator.Equals, normalizedUserId)
                     .Single();
 
-                return userResponse?.FullName;
+                var resolvedUserName = !string.IsNullOrWhiteSpace(userResponse?.FullName)
+                    ? userResponse.FullName
+                    : userResponse?.Email;
+
+                if (!string.IsNullOrWhiteSpace(resolvedUserName))
+                {
+                    SetCachedUserName(normalizedUserId, resolvedUserName);
+                }
+
+                return resolvedUserName;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to fetch user name for {UserId}", userId);
+                _logger.LogWarning(ex, "Failed to fetch user name for {UserId}", normalizedUserId);
                 return null;
             }
         }
 
-        // Helper method to get multiple user names at once (more efficient)
+        // Helper method to get multiple user names at once without scanning the full table
         private async Task<Dictionary<string, string>> GetUserNamesAsync(IEnumerable<string?> userIds)
         {
             var validUserIds = userIds
-                .Where(id => !string.IsNullOrEmpty(id) && Guid.TryParse(id, out _))
+                .Where(id => TryNormalizeUserId(id, out _))
                 .Select(id => id!.ToLowerInvariant())
                 .Distinct()
                 .ToList();
@@ -150,23 +166,82 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var usersResponse = await _supabase
-                    .From<UserName>()
-                    .Get();
+                var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var missingUserIds = new List<string>();
 
-                return usersResponse.Models
-                    .Where(u => validUserIds.Contains(u.Id.ToString().ToLowerInvariant()))
-                    .ToDictionary(
-                        u => u.Id.ToString().ToLowerInvariant(),
-                        u => !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName : u.Email,
-                        StringComparer.OrdinalIgnoreCase
-                    );
+                foreach (var validUserId in validUserIds)
+                {
+                    if (TryGetCachedUserName(validUserId, out var cachedUserName))
+                    {
+                        result[validUserId] = cachedUserName;
+                    }
+                    else
+                    {
+                        missingUserIds.Add(validUserId);
+                    }
+                }
+
+                if (missingUserIds.Count == 0)
+                {
+                    return result;
+                }
+
+                var lookups = missingUserIds.Select(async missingUserId => new
+                {
+                    UserId = missingUserId,
+                    UserName = await GetUserNameAsync(missingUserId)
+                });
+
+                foreach (var lookup in await Task.WhenAll(lookups))
+                {
+                    if (!string.IsNullOrWhiteSpace(lookup.UserName))
+                    {
+                        result[lookup.UserId] = lookup.UserName;
+                    }
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to fetch user names for {Count} user IDs", validUserIds.Count);
                 return new Dictionary<string, string>();
             }
+        }
+
+        private static bool TryNormalizeUserId(string? userId, out string normalizedUserId)
+        {
+            normalizedUserId = string.Empty;
+            if (string.IsNullOrWhiteSpace(userId) || !Guid.TryParse(userId, out var parsedUserId))
+            {
+                return false;
+            }
+
+            normalizedUserId = parsedUserId.ToString().ToLowerInvariant();
+            return true;
+        }
+
+        private bool TryGetCachedUserName(string userId, out string userName)
+        {
+            userName = string.Empty;
+            if (!_userNameCache.TryGetValue(userId, out var cachedUserName))
+            {
+                return false;
+            }
+
+            if (cachedUserName.Expiry <= DateTime.UtcNow)
+            {
+                _userNameCache.TryRemove(userId, out _);
+                return false;
+            }
+
+            userName = cachedUserName.Value;
+            return true;
+        }
+
+        private void SetCachedUserName(string userId, string userName)
+        {
+            _userNameCache[userId] = (userName, DateTime.UtcNow.Add(_cacheExpiration));
         }
 
         // Upsert a user name entry (called on signup as a fallback for the DB trigger)
@@ -960,6 +1035,7 @@ namespace ESSDesign.Server.Services
         public static void ClearCache()
         {
             _folderCache.Clear();
+            _userNameCache.Clear();
             _rootFoldersCache = null;
         }
 
