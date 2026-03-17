@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { foldersAPI, usersAPI } from '../services/api';
+import { useToast } from './Toast';
 
 function UploadDocumentModal({ folderId, onClose, onSuccess }) {
+    const { showToast, updateToast } = useToast();
     const [revisionNumber, setRevisionNumber] = useState('01');
     const [essDesignFile, setEssDesignFile] = useState(null);
     const [thirdPartyFile, setThirdPartyFile] = useState(null);
@@ -10,13 +12,11 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [users, setUsers] = useState([]);
     const [uploading, setUploading] = useState(false);
 
-    // Generate revision options 01 to 15
     const revisionOptions = Array.from({ length: 15 }, (_, i) => {
         const num = i + 1;
         return num < 10 ? `0${num}` : `${num}`;
     });
 
-    // Fetch users for recipient selection
     useEffect(() => {
         const fetchUsers = async () => {
             try {
@@ -42,9 +42,20 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
 
         setUploading(true);
 
-        // Retry logic for transient failures
+        const uploadFiles = [essDesignFile, thirdPartyFile].filter(Boolean);
+        const uploadLabel = uploadFiles.length === 1 ? uploadFiles[0].name : `${uploadFiles.length} files`;
+        const progressToastId = showToast({
+            type: 'info',
+            variant: 'upload-progress',
+            title: uploadLabel,
+            message: 'Uploading to ESS Design...',
+            progress: 0,
+            closable: false
+        }, 'info', 0);
+
+        onClose();
+
         const maxRetries = 2;
-        let lastError = null;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
@@ -54,33 +65,74 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     essDesignFile,
                     thirdPartyFile,
                     description,
-                    selectedRecipients
+                    selectedRecipients,
+                    {
+                        onUploadProgress: (event) => {
+                            if (!event.total) {
+                                return;
+                            }
+
+                            const progress = Math.max(0, Math.min(100, (event.loaded / event.total) * 100));
+                            updateToast(progressToastId, {
+                                type: 'info',
+                                variant: 'upload-progress',
+                                title: uploadLabel,
+                                message: progress >= 100 ? 'Finishing upload...' : 'Uploading to ESS Design...',
+                                progress,
+                                closable: false
+                            }, 'info', 0);
+                        }
+                    }
                 );
+
+                updateToast(progressToastId, {
+                    type: 'success',
+                    variant: 'upload-progress',
+                    title: uploadLabel,
+                    message: 'Upload complete',
+                    progress: 100,
+                    closable: true
+                }, 'success');
+
                 onSuccess();
-                return; // Success, exit
+                return;
             } catch (error) {
-                lastError = error;
                 const errorMsg = error.message || error.response?.data?.error || 'Unknown error';
 
-                // Don't retry on validation errors (4xx)
                 if (error.response && error.response.status >= 400 && error.response.status < 500) {
-                    alert('Upload failed: ' + errorMsg);
-                    setUploading(false);
+                    updateToast(progressToastId, {
+                        type: 'error',
+                        variant: 'upload-progress',
+                        title: uploadLabel,
+                        message: `Upload failed: ${errorMsg}`,
+                        progress: 0,
+                        closable: true
+                    }, 'error');
                     return;
                 }
 
-                // If not last attempt and it's a server error, retry
                 if (attempt < maxRetries) {
-                    console.log(`Upload attempt ${attempt + 1} failed, retrying...`, errorMsg);
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+                    updateToast(progressToastId, {
+                        type: 'info',
+                        variant: 'upload-progress',
+                        title: uploadLabel,
+                        message: `Retrying upload (${attempt + 2}/${maxRetries + 1})...`,
+                        progress: 0,
+                        closable: false
+                    }, 'info', 0);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } else {
-                    // Last attempt failed
-                    alert('Upload failed after ' + (maxRetries + 1) + ' attempts: ' + errorMsg);
+                    updateToast(progressToastId, {
+                        type: 'error',
+                        variant: 'upload-progress',
+                        title: uploadLabel,
+                        message: `Upload failed: ${errorMsg}`,
+                        progress: 0,
+                        closable: true
+                    }, 'error');
                 }
             }
         }
-
-        setUploading(false);
     };
 
     return (

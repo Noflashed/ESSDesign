@@ -1204,7 +1204,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     folderId={currentFolder}
                     onClose={() => setShowUploadModal(false)}
                     onSuccess={() => {
-                        setShowUploadModal(false);
                         clearCache();
                         loadCurrentFolder();
                         if (onRefreshNeeded) onRefreshNeeded();

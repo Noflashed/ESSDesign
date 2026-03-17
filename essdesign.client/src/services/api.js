@@ -234,7 +234,7 @@ export const foldersAPI = {
         return response.data;
     },
 
-    uploadDocument: async (folderId, revisionNumber, essDesignFile, thirdPartyFile, description = '', recipients = []) => {
+    uploadDocument: async (folderId, revisionNumber, essDesignFile, thirdPartyFile, description = '', recipients = [], options = {}) => {
         const user = authAPI.getCurrentUser();
         const formData = new FormData();
         formData.append('FolderId', folderId);
@@ -255,6 +255,7 @@ export const foldersAPI = {
                     'Content-Type': 'multipart/form-data',
                     'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                 },
+                onUploadProgress: options.onUploadProgress,
                 timeout: 120000, // 2 minutes timeout for large files
                 validateStatus: (status) => status < 500 // Don't throw on 4xx errors
             });
