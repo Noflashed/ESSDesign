@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace ESSDesign.Server.Services
 {
@@ -732,25 +733,13 @@ namespace ESSDesign.Server.Services
                 if (essDesign != null)
                 {
                     var path = $"documents/{folderId}/{document.Id}/ess_{essDesign.FileName}";
-                    uploadTasks.Add(Task.Run(async () =>
-                    {
-                        await UploadFileAsync(essDesign, path);
-                        document.EssDesignIssuePath = path;
-                        document.EssDesignIssueName = essDesign.FileName;
-                        document.EssDesignFileSize = essDesign.Length;
-                    }));
+                    uploadTasks.Add(UploadAndAssignEssFileAsync(essDesign, path, document));
                 }
 
                 if (thirdParty != null)
                 {
                     var path = $"documents/{folderId}/{document.Id}/third_party_{thirdParty.FileName}";
-                    uploadTasks.Add(Task.Run(async () =>
-                    {
-                        await UploadFileAsync(thirdParty, path);
-                        document.ThirdPartyDesignPath = path;
-                        document.ThirdPartyDesignName = thirdParty.FileName;
-                        document.ThirdPartyDesignFileSize = thirdParty.Length;
-                    }));
+                    uploadTasks.Add(UploadAndAssignThirdPartyFileAsync(thirdParty, path, document));
                 }
 
                 await Task.WhenAll(uploadTasks);
@@ -770,6 +759,22 @@ namespace ESSDesign.Server.Services
                 _logger.LogError(ex, "Error uploading document");
                 throw;
             }
+        }
+
+        private async Task UploadAndAssignEssFileAsync(IFormFile essDesign, string path, DesignDocument document)
+        {
+            await UploadFileAsync(essDesign, path);
+            document.EssDesignIssuePath = path;
+            document.EssDesignIssueName = essDesign.FileName;
+            document.EssDesignFileSize = essDesign.Length;
+        }
+
+        private async Task UploadAndAssignThirdPartyFileAsync(IFormFile thirdParty, string path, DesignDocument document)
+        {
+            await UploadFileAsync(thirdParty, path);
+            document.ThirdPartyDesignPath = path;
+            document.ThirdPartyDesignName = thirdParty.FileName;
+            document.ThirdPartyDesignFileSize = thirdParty.Length;
         }
 
         public async Task DeleteDocumentAsync(Guid documentId)
@@ -918,15 +923,35 @@ namespace ESSDesign.Server.Services
 
         private async Task<string> UploadFileAsync(IFormFile file, string path)
         {
-            using var memoryStream = new MemoryStream();
-            await file.CopyToAsync(memoryStream);
-            var fileBytes = memoryStream.ToArray();
-
-            await _supabase.Storage.From(_bucketName).Upload(fileBytes, path, new Supabase.Storage.FileOptions
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
             {
-                ContentType = file.ContentType,
-                Upsert = true
-            });
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var escapedPath = string.Join(
+                "/",
+                path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/{Uri.EscapeDataString(_bucketName)}/{escapedPath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Headers.Add("x-upsert", "true");
+
+            var stream = file.OpenReadStream();
+            var content = new StreamContent(stream);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse(
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+            request.Content = content;
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"Failed to upload '{file.FileName}' to storage. Status: {(int)response.StatusCode}. Body: {errorBody}");
+            }
 
             return path;
         }
