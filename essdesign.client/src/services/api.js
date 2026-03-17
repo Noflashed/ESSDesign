@@ -38,6 +38,24 @@ const clearStoredAuth = () => {
     localStorage.removeItem('user');
 };
 
+const storeAuthSession = (authResponse) => {
+    if (!authResponse?.accessToken) {
+        return;
+    }
+
+    if (authResponse.accessToken) {
+        localStorage.setItem('access_token', authResponse.accessToken);
+    }
+
+    if (authResponse.refreshToken) {
+        localStorage.setItem('refresh_token', authResponse.refreshToken);
+    }
+
+    if (authResponse.user) {
+        localStorage.setItem('user', JSON.stringify(authResponse.user));
+    }
+};
+
 // Add auth token to requests
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
@@ -46,6 +64,75 @@ apiClient.interceptors.request.use((config) => {
     }
     return config;
 });
+
+let refreshSessionPromise = null;
+
+const refreshAuthSession = async () => {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+        clearStoredAuth();
+        throw new Error('No refresh token available');
+    }
+
+    if (!refreshSessionPromise) {
+        refreshSessionPromise = apiClient
+            .post('/auth/refresh', { refreshToken })
+            .then(async (response) => {
+                const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+                const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
+                const refreshedSession = { ...response.data, user: hydratedUser };
+                storeAuthSession(refreshedSession);
+                return refreshedSession;
+            })
+            .catch((error) => {
+                clearStoredAuth();
+                throw error;
+            })
+            .finally(() => {
+                refreshSessionPromise = null;
+            });
+    }
+
+    return refreshSessionPromise;
+};
+
+apiClient.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+        const status = error.response?.status;
+        const requestUrl = originalRequest?.url ?? '';
+
+        if (!originalRequest || status !== 401 || originalRequest._retry) {
+            return Promise.reject(error);
+        }
+
+        const isRefreshRequest = requestUrl.includes('/auth/refresh');
+        const isSignInRequest = requestUrl.includes('/auth/signin');
+        const isSignUpRequest = requestUrl.includes('/auth/signup');
+        const isSignOutRequest = requestUrl.includes('/auth/signout');
+
+        if (isRefreshRequest || isSignInRequest || isSignUpRequest || isSignOutRequest) {
+            return Promise.reject(error);
+        }
+
+        if (!localStorage.getItem('refresh_token')) {
+            clearStoredAuth();
+            return Promise.reject(error);
+        }
+
+        originalRequest._retry = true;
+
+        try {
+            const refreshedSession = await refreshAuthSession();
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${refreshedSession.accessToken}`;
+            return apiClient(originalRequest);
+        } catch (refreshError) {
+            return Promise.reject(refreshError);
+        }
+    }
+);
 
 export const authAPI = {
     signUp: async (email, password, fullName) => {
@@ -59,12 +146,9 @@ export const authAPI = {
         const response = await apiClient.post('/auth/signin', { email, password });
         const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
-        if (response.data.accessToken) {
-            localStorage.setItem('access_token', response.data.accessToken);
-            localStorage.setItem('refresh_token', response.data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(hydratedUser));
-        }
-        return { ...response.data, user: hydratedUser };
+        const signedInSession = { ...response.data, user: hydratedUser };
+        storeAuthSession(signedInSession);
+        return signedInSession;
     },
 
     signOut: async () => {

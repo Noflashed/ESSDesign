@@ -151,6 +151,31 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("refresh")]
+        public async Task<ActionResult<AuthResponse>> Refresh([FromBody] RefreshSessionRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.RefreshToken))
+                {
+                    return Unauthorized(new { error = "Refresh token is required" });
+                }
+
+                var session = await _supabaseService.RefreshAuthSessionAsync(request.RefreshToken);
+                if (session == null)
+                {
+                    return Unauthorized(new { error = "Session refresh failed" });
+                }
+
+                return Ok(session);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Refresh session error");
+                return Unauthorized(new { error = "Session refresh failed" });
+            }
+        }
+
         [HttpGet("user")]
         public async Task<ActionResult<UserInfo>> GetCurrentUser()
         {

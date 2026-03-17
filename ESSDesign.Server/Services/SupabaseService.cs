@@ -1326,6 +1326,53 @@ namespace ESSDesign.Server.Services
             };
         }
 
+        public async Task<AuthResponse?> RefreshAuthSessionAsync(string refreshToken)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken) || string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                return null;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/token?grant_type=refresh_token";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Content = JsonContent.Create(new { refresh_token = refreshToken });
+
+            using var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            var newAccessToken = GetJsonString(root, "access_token");
+            var newRefreshToken = GetJsonString(root, "refresh_token") ?? refreshToken;
+
+            if (string.IsNullOrWhiteSpace(newAccessToken))
+            {
+                return null;
+            }
+
+            var user = await GetAuthUserInfoFromAccessTokenAsync(newAccessToken);
+            if (user == null)
+            {
+                return null;
+            }
+
+            return new AuthResponse
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken,
+                User = user
+            };
+        }
+
         private static string? GetJsonString(JsonElement obj, string propertyName)
         {
             if (obj.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String)
