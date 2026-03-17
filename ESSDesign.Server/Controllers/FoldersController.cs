@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
@@ -419,10 +420,13 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var currentUser = await GetCurrentUserAsync();
-                if (currentUser == null)
+                if (!redirect)
                 {
-                    return Unauthorized(new { error = "Not authenticated" });
+                    var currentUser = await GetCurrentUserAsync();
+                    if (currentUser == null)
+                    {
+                        return Unauthorized(new { error = "Not authenticated" });
+                    }
                 }
 
                 if (!type.Equals("ess", StringComparison.OrdinalIgnoreCase) &&
@@ -456,6 +460,42 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error downloading document");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("documents/{documentId}/public-download/{type}")]
+        public async Task<ActionResult> DownloadDocumentFromEmail(Guid documentId, string type)
+        {
+            try
+            {
+                if (!type.Equals("ess", StringComparison.OrdinalIgnoreCase) &&
+                    !type.Equals("thirdparty", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "Type must be 'ess' or 'thirdparty'" });
+                }
+
+                var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
+
+                using var httpClient = new HttpClient();
+                var response = await httpClient.GetAsync(fileInfo.Url);
+                response.EnsureSuccessStatusCode();
+
+                var stream = await response.Content.ReadAsStreamAsync();
+                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
+
+                Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+
+                return new FileStreamResult(stream, contentType);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error downloading emailed document");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -521,3 +561,5 @@ namespace ESSDesign.Server.Controllers
         }
     }
 }
+
+

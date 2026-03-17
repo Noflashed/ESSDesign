@@ -350,8 +350,8 @@ namespace ESSDesign.Server.Services
             string? project,
             string? scaffold)
         {
-            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess?redirect=true" : null;
-            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
+            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
+            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var folderLink = $"{_frontendUrl}?folder={folderId}";
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
             var safeDocumentName = System.Web.HttpUtility.HtmlEncode(documentName);
@@ -436,8 +436,8 @@ namespace ESSDesign.Server.Services
             string? scaffold,
             string? description)
         {
-            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/ess?redirect=true" : null;
-            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/download/thirdparty?redirect=true" : null;
+            var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
+            var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var folderLink = $"{_frontendUrl}?folder={folderId}";
 
             // Use white version of logo for email (upload logo-white.png to your Supabase public-assets bucket)
@@ -671,6 +671,7 @@ namespace ESSDesign.Server.Services
         }
     }
 }
+
 
 
 
