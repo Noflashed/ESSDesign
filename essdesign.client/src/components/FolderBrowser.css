@@ -432,7 +432,8 @@
     }
 
     .modal input[type="text"],
-    .modal select {
+    .modal select,
+    .modal textarea {
         width: 100%;
         padding: 10px;
         border: 1px solid var(--border-color);
@@ -444,7 +445,8 @@
     }
 
         .modal input[type="text"]:focus,
-        .modal select:focus {
+        .modal select:focus,
+        .modal textarea:focus {
             outline: none;
             border-color: var(--primary-color);
         }
@@ -536,6 +538,18 @@
     color: var(--primary-color);
     font-size: 12px;
     font-weight: 500;
+}
+
+.replace-file-hint {
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.modal-textarea {
+    resize: vertical;
+    min-height: 96px;
+    font-family: monospace;
 }
 
 .loading {

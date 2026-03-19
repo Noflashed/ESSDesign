@@ -556,6 +556,7 @@ namespace ESSDesign.Server.Services
                 Id = document.Id,
                 FolderId = document.FolderId,
                 RevisionNumber = document.RevisionNumber,
+                Description = document.Description,
                 EssDesignIssuePath = document.EssDesignIssuePath,
                 EssDesignIssueName = document.EssDesignIssueName,
                 ThirdPartyDesignPath = document.ThirdPartyDesignPath,
@@ -875,6 +876,76 @@ namespace ESSDesign.Server.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating document revision");
+                throw;
+            }
+        }
+
+        public async Task<DesignDocument> ReplaceDocumentFilesAsync(
+            Guid documentId,
+            IFormFile? essDesign,
+            IFormFile? thirdParty,
+            string? description = null,
+            string? userId = null)
+        {
+            try
+            {
+                var document = await _supabase
+                    .From<DesignDocument>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, documentId.ToString())
+                    .Single();
+
+                if (document == null)
+                {
+                    throw new FileNotFoundException("Document not found");
+                }
+
+                if (essDesign == null && thirdParty == null)
+                {
+                    throw new InvalidOperationException("At least one replacement file is required");
+                }
+
+                var replaceTasks = new List<Task>();
+
+                if (essDesign != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(document.EssDesignIssuePath))
+                    {
+                        replaceTasks.Add(DeleteFileAsync(document.EssDesignIssuePath));
+                    }
+
+                    var essPath = $"documents/{document.FolderId}/{document.Id}/ess_{essDesign.FileName}";
+                    replaceTasks.Add(UploadAndAssignEssFileAsync(essDesign, essPath, document));
+                }
+
+                if (thirdParty != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath))
+                    {
+                        replaceTasks.Add(DeleteFileAsync(document.ThirdPartyDesignPath));
+                    }
+
+                    var thirdPartyPath = $"documents/{document.FolderId}/{document.Id}/third_party_{thirdParty.FileName}";
+                    replaceTasks.Add(UploadAndAssignThirdPartyFileAsync(thirdParty, thirdPartyPath, document));
+                }
+
+                await Task.WhenAll(replaceTasks);
+
+                document.Description = description;
+                document.UserId = userId ?? document.UserId;
+                document.UpdatedAt = DateTime.UtcNow;
+
+                await _supabase
+                    .From<DesignDocument>()
+                    .Update(document);
+
+                _folderCache.TryRemove(document.FolderId, out _);
+
+                _logger.LogInformation("Replaced files for document {DocumentId}", documentId);
+                return document;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error replacing files for document {DocumentId}", documentId);
                 throw;
             }
         }

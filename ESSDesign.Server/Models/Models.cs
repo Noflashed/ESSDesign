@@ -245,6 +245,17 @@ namespace ESSDesign.Server.Models
         public long? ThirdPartyDesignFileSize { get; set; }
     }
 
+    public class ReplaceDocumentFilesRequest
+    {
+        public string? Description { get; set; }
+        public string? UserId { get; set; }
+        public IFormFile? EssDesignIssue { get; set; }
+        public IFormFile? ThirdPartyDesign { get; set; }
+        public List<string>? RecipientIds { get; set; }
+        public long? EssDesignFileSize { get; set; }
+        public long? ThirdPartyDesignFileSize { get; set; }
+    }
+
     public class FolderResponse
     {
         public Guid Id { get; set; }
@@ -264,6 +275,7 @@ namespace ESSDesign.Server.Models
         public Guid Id { get; set; }
         public Guid FolderId { get; set; }
         public string RevisionNumber { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public string? EssDesignIssuePath { get; set; }
         public string? EssDesignIssueName { get; set; }
         public string? ThirdPartyDesignPath { get; set; }

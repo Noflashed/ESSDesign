@@ -300,6 +300,53 @@ export const foldersAPI = {
         return response.data;
     },
 
+    replaceDocumentFiles: async (documentId, essDesignFile, thirdPartyFile, description = '', recipients = [], options = {}) => {
+        const user = authAPI.getCurrentUser();
+        const formData = new FormData();
+        if (user?.id) formData.append('UserId', user.id);
+        if (essDesignFile) formData.append('EssDesignIssue', essDesignFile);
+        if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
+        if (description) formData.append('Description', description);
+        if (recipients.length > 0) {
+            recipients.forEach(recipientId => {
+                formData.append('RecipientIds', recipientId);
+            });
+        }
+
+        try {
+            const response = await axios.put(`${API_BASE_URL}/folders/documents/${documentId}/replace`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                onUploadProgress: options.onUploadProgress,
+                timeout: 120000,
+                validateStatus: (status) => status < 500
+            });
+
+            if (response.status >= 400) {
+                throw new Error(response.data?.error || `Replacement failed with status ${response.status}`);
+            }
+
+            return response.data;
+        } catch (error) {
+            if (error.code === 'ECONNABORTED') {
+                throw new Error('Upload timeout while replacing PDF. Please try again.');
+            }
+            if (error.response) {
+                const contentType = error.response.headers['content-type'];
+                if (contentType && contentType.includes('text/html')) {
+                    throw new Error('Server error occurred. Please try again in a moment.');
+                }
+                throw new Error(error.response.data?.error || error.message);
+            }
+            if (error.request) {
+                throw new Error('No response from server. Please check your connection and try again.');
+            }
+            throw new Error(error.message || 'Failed to replace PDF. Please try again.');
+        }
+    },
+
     shareDocument: async (documentId, recipientIds) => {
         const user = authAPI.getCurrentUser();
         const response = await apiClient.post(`/folders/documents/${documentId}/share`, {

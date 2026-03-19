@@ -344,6 +344,98 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("documents/{documentId}/replace")]
+        [RequestSizeLimit(1_000_000_000)]
+        public async Task<ActionResult> ReplaceDocumentFiles(Guid documentId, [FromForm] ReplaceDocumentFilesRequest request)
+        {
+            try
+            {
+                var adminResult = await RequireAdminAsync();
+                if (adminResult.Error != null)
+                {
+                    return adminResult.Error;
+                }
+
+                if (request.EssDesignIssue == null && request.ThirdPartyDesign == null)
+                {
+                    return BadRequest(new { error = "At least one replacement file is required" });
+                }
+
+                var actingUserId = adminResult.User!.Id;
+                var updatedDocument = await _supabaseService.ReplaceDocumentFilesAsync(
+                    documentId,
+                    request.EssDesignIssue,
+                    request.ThirdPartyDesign,
+                    request.Description,
+                    actingUserId);
+
+                if (request.RecipientIds != null && request.RecipientIds.Any())
+                {
+                    try
+                    {
+                        var folder = await _supabaseService.GetFolderByIdAsync(updatedDocument.FolderId);
+                        var hierarchy = await _supabaseService.GetFolderHierarchyAsync(updatedDocument.FolderId);
+
+                        var requestedUserIds = request.RecipientIds
+                            .Concat(new[] { actingUserId })
+                            .Distinct()
+                            .ToList();
+                        var users = await _supabaseService.GetUsersByIdsAsync(requestedUserIds);
+
+                        var updaterName = users
+                            .FirstOrDefault(u => u.Id == actingUserId)?.FullName
+                            ?? adminResult.User.FullName
+                            ?? adminResult.User.Email;
+
+                        var recipientEmails = users
+                            .Where(u => request.RecipientIds.Contains(u.Id))
+                            .Select(u => u.Email)
+                            .Where(email => !string.IsNullOrWhiteSpace(email))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        if (recipientEmails.Any())
+                        {
+                            var documentName = updatedDocument.EssDesignIssueName
+                                ?? updatedDocument.ThirdPartyDesignName
+                                ?? folder.Name;
+
+                            await _emailService.SendDocumentRevisionReplacementNotificationAsync(
+                                recipientEmails,
+                                documentName,
+                                updatedDocument.RevisionNumber,
+                                updaterName,
+                                DateTime.UtcNow,
+                                updatedDocument.Id,
+                                updatedDocument.FolderId,
+                                !string.IsNullOrWhiteSpace(updatedDocument.EssDesignIssuePath),
+                                !string.IsNullOrWhiteSpace(updatedDocument.ThirdPartyDesignPath),
+                                hierarchy.Client,
+                                hierarchy.Project,
+                                hierarchy.Scaffold ?? folder.Name,
+                                request.Description);
+
+                            _logger.LogInformation(
+                                "Sent revision replacement notifications to {Count} recipients for document {DocumentId}",
+                                recipientEmails.Count,
+                                documentId);
+                        }
+                    }
+                    catch (Exception emailEx)
+                    {
+                        _logger.LogError(emailEx, "Error sending revision replacement notifications for document {DocumentId}", documentId);
+                    }
+                }
+
+                return Ok(new { message = "Document files replaced" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error replacing document files for {DocumentId}", documentId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPost("documents/{documentId}/share")]
         public async Task<ActionResult> ShareDocument(Guid documentId, [FromBody] ShareDocumentRequest request)
         {

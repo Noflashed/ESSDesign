@@ -134,6 +134,69 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task SendDocumentRevisionReplacementNotificationAsync(
+            List<string> recipientEmails,
+            string documentName,
+            string revisionNumber,
+            string updatedByName,
+            DateTime updatedAt,
+            Guid documentId,
+            Guid folderId,
+            bool hasEssDesign,
+            bool hasThirdPartyDesign,
+            string? client = null,
+            string? project = null,
+            string? scaffold = null,
+            string? description = null)
+        {
+            if (recipientEmails == null || !recipientEmails.Any())
+            {
+                _logger.LogWarning("No recipients provided for revision replacement notification");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping revision replacement notifications.");
+                return;
+            }
+
+            var subjectParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(client))
+                subjectParts.Add(client);
+            if (!string.IsNullOrWhiteSpace(project))
+                subjectParts.Add(project);
+            if (!string.IsNullOrWhiteSpace(scaffold))
+                subjectParts.Add(scaffold);
+
+            var hierarchyString = subjectParts.Any() ? string.Join(" - ", subjectParts) + " - " : "";
+            var subject = $"Revision Updated: {hierarchyString}Revision {revisionNumber}";
+            var htmlContent = BuildDocumentRevisionReplacementEmailContent(
+                documentName,
+                revisionNumber,
+                updatedByName,
+                updatedAt,
+                documentId,
+                folderId,
+                hasEssDesign,
+                hasThirdPartyDesign,
+                client,
+                project,
+                scaffold,
+                description);
+
+            foreach (var recipientEmail in recipientEmails)
+            {
+                await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            }
+
+            _logger.LogInformation(
+                "Revision replacement notification summary: {RecipientCount} sent. Document: {DocumentName}, Revision: {RevisionNumber}",
+                recipientEmails.Count,
+                documentName,
+                revisionNumber);
+        }
+
         public async Task SendDocumentShareNotificationAsync(
             List<string> recipientEmails,
             string documentName,
@@ -420,6 +483,51 @@ namespace ESSDesign.Server.Services
     </table>
 </body>
 </html>";
+        }
+
+        private string BuildDocumentRevisionReplacementEmailContent(
+            string documentName,
+            string revisionNumber,
+            string updatedByName,
+            DateTime updatedAt,
+            Guid documentId,
+            Guid folderId,
+            bool hasEssDesign,
+            bool hasThirdPartyDesign,
+            string? client,
+            string? project,
+            string? scaffold,
+            string? description)
+        {
+            var html = BuildHtmlEmailContent(
+                documentName,
+                revisionNumber,
+                updatedByName,
+                updatedAt,
+                documentId,
+                folderId,
+                hasEssDesign,
+                hasThirdPartyDesign,
+                client,
+                project,
+                scaffold,
+                description);
+
+            var safeUpdatedBy = System.Web.HttpUtility.HtmlEncode(updatedByName);
+
+            html = html.Replace("New Document Uploaded", "Document Revision Updated");
+            html = html.Replace(
+                "A new revision has been added to the design system",
+                "A PDF revision has been replaced in the design system");
+            html = html.Replace(
+                $"{safeUpdatedBy}</strong> has uploaded a new document revision. Here are the details:",
+                $"{safeUpdatedBy}</strong> has replaced the PDF files for this revision. Here are the updated details:");
+            html = html.Replace(">Uploaded By<", ">Updated By<");
+            html = html.Replace(">Date &amp; Time<", ">Updated At<");
+            html = html.Replace(">Download ESS version<", ">Download updated ESS version<");
+            html = html.Replace(">Download Third-Party version<", ">Download updated Third-Party version<");
+
+            return html;
         }
 
         private string BuildHtmlEmailContent(

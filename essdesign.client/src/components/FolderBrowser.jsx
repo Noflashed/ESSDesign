@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { foldersAPI, authAPI, usersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
+import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
 import './FolderBrowser.css';
@@ -135,6 +136,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [showNewFolderModal, setShowNewFolderModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
+    const [showReplaceDocumentModal, setShowReplaceDocumentModal] = useState(false);
     const [showEditDocumentModal, setShowEditDocumentModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [shareTarget, setShareTarget] = useState(null);
@@ -145,6 +147,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [newFolderName, setNewFolderName] = useState('');
     const [newFolderParent, setNewFolderParent] = useState(null); // Track parent for subfolder creation
     const [renameTarget, setRenameTarget] = useState(null);
+    const [replaceDocumentTarget, setReplaceDocumentTarget] = useState(null);
     const [editDocumentTarget, setEditDocumentTarget] = useState(null);
     const [newRevisionNumber, setNewRevisionNumber] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
@@ -556,6 +559,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             updateToast(toastId, 'Failed to update revision', 'error');
             console.error('Update revision error:', error);
         }
+    };
+
+    const handleDocumentReplacementSuccess = async () => {
+        setReplaceDocumentTarget(null);
+        setShowReplaceDocumentModal(false);
+        clearCache();
+        await loadCurrentFolder();
+        if (onRefreshNeeded) onRefreshNeeded();
     };
 
     const handleOpenShareModal = async (item) => {
@@ -1055,12 +1066,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 Share PDF
                             </div>
                             <div onClick={() => {
+                                setReplaceDocumentTarget(contextMenu.item);
+                                setShowReplaceDocumentModal(true);
+                                setContextMenu(null);
+                            }}>
+                                Edit Revision
+                            </div>
+                            <div onClick={() => {
                                 setEditDocumentTarget(contextMenu.item);
                                 setNewRevisionNumber(contextMenu.item.revisionNumber);
                                 setShowEditDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                Edit Revision
+                                Change Revision Number
                             </div>
                             <div className="context-menu-divider"></div>
                             <div onClick={() => {
@@ -1121,7 +1139,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             {showEditDocumentModal && (
                 <div className="modal-overlay" onClick={() => setShowEditDocumentModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>Edit Document Revision</h3>
+                        <h3>Change Revision Number</h3>
                         <select
                             value={newRevisionNumber}
                             onChange={(e) => setNewRevisionNumber(e.target.value)}
@@ -1139,6 +1157,17 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showReplaceDocumentModal && replaceDocumentTarget && (
+                <ReplaceDocumentModal
+                    document={replaceDocumentTarget}
+                    onClose={() => {
+                        setShowReplaceDocumentModal(false);
+                        setReplaceDocumentTarget(null);
+                    }}
+                    onSuccess={handleDocumentReplacementSuccess}
+                />
             )}
 
             {showShareModal && shareTarget && (
