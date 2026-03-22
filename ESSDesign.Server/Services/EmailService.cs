@@ -208,7 +208,8 @@ namespace ESSDesign.Server.Services
             bool hasThirdPartyDesign,
             string? client = null,
             string? project = null,
-            string? scaffold = null)
+            string? scaffold = null,
+            string? customMessage = null)
         {
             if (recipientEmails == null || !recipientEmails.Any())
             {
@@ -242,7 +243,8 @@ namespace ESSDesign.Server.Services
                 hasThirdPartyDesign,
                 client,
                 project,
-                scaffold);
+                scaffold,
+                customMessage);
 
             foreach (var recipientEmail in recipientEmails)
             {
@@ -411,11 +413,11 @@ namespace ESSDesign.Server.Services
             bool hasThirdPartyDesign,
             string? client,
             string? project,
-            string? scaffold)
+            string? scaffold,
+            string? customMessage)
         {
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
-            var folderLink = $"{_frontendUrl}?folder={folderId}";
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
             var safeDocumentName = System.Web.HttpUtility.HtmlEncode(documentName);
             var safeRevision = System.Web.HttpUtility.HtmlEncode(revisionNumber);
@@ -423,7 +425,7 @@ namespace ESSDesign.Server.Services
             var safeClient = System.Web.HttpUtility.HtmlEncode(client ?? "-");
             var safeProject = System.Web.HttpUtility.HtmlEncode(project ?? "-");
             var safeScaffold = System.Web.HttpUtility.HtmlEncode(scaffold ?? "-");
-            var safeFolderLink = System.Web.HttpUtility.HtmlAttributeEncode(folderLink);
+            var customMessageHtml = BuildCustomEmailMessageHtml(sharedByName, customMessage);
             var essButton = hasEssDesign && !string.IsNullOrWhiteSpace(essLink)
                 ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(essLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View ESS PDF</a></td></tr></table></td>"
                 : string.Empty;
@@ -455,18 +457,12 @@ namespace ESSDesign.Server.Services
                             <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
                                 <strong style=""color:#2d3748;"">{safeSharer}</strong> shared <strong style=""color:#2d3748;"">{safeDocumentName}</strong> with you.
                             </p>
+                            {customMessageHtml}
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Revision</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Revision {safeRevision}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeClient}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeScaffold}</p></td></tr>
-                            </table>
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:24px 0;"">
-                                <tr>
-                                    <td align=""center"" style=""padding:8px;"">
-                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0""><tr><td align=""center"" style=""border-radius:100px;background-color:#FF6B35;""><a href=""{safeFolderLink}"" style=""display:inline-block;padding:14px 28px;border-radius:100px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;"">Open in ESS Design</a></td></tr></table>
-                                    </td>
-                                </tr>
                             </table>
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{essButton}{thirdPartyButton}</tr></table>
                         </td>
@@ -483,6 +479,31 @@ namespace ESSDesign.Server.Services
     </table>
 </body>
 </html>";
+        }
+
+        private string BuildCustomEmailMessageHtml(string senderName, string? customMessage)
+        {
+            if (string.IsNullOrWhiteSpace(customMessage))
+            {
+                return string.Empty;
+            }
+
+            var encodedLines = customMessage
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+                .Select(line => System.Web.HttpUtility.HtmlEncode(line))
+                .ToList();
+
+            var joinedLines = string.Join("<br>", encodedLines);
+
+            return $@"
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:0 0 24px;border:1px solid #d6e4ff;border-left:3px solid #1a73e8;border-radius:8px;background-color:#f5f9ff;"">
+                                <tr>
+                                    <td style=""padding:18px 20px;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#1a73e8;font-weight:700;margin:0 0 10px;"">Message From {System.Web.HttpUtility.HtmlEncode(senderName)}</p>
+                                        <p style=""font-size:14px;color:#2d3748;line-height:1.7;margin:0;"">{joinedLines}</p>
+                                    </td>
+                                </tr>
+                            </table>";
         }
 
         private string BuildDocumentRevisionReplacementEmailContent(

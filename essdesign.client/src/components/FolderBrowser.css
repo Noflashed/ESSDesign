@@ -640,6 +640,18 @@
     font-size: 14px;
 }
 
+.share-section {
+    margin-top: 16px;
+}
+
+.share-section-title {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .share-user-list {
     max-height: 320px;
     overflow-y: auto;
@@ -682,10 +694,29 @@
     white-space: nowrap;
 }
 
+.share-external-input {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.share-helper-text,
+.share-error-text,
 .share-selection-summary,
 .share-empty-state {
     margin-top: 12px;
-    color: var(--text-secondary);
     font-size: 13px;
+}
+
+.share-helper-text {
+    color: var(--text-secondary);
+}
+
+.share-error-text {
+    color: #c62828;
+}
+
+.share-selection-summary,
+.share-empty-state {
+    color: var(--text-secondary);
 }
 

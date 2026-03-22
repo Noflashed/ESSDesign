@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
+using System.Net.Mail;
 
 namespace ESSDesign.Server.Controllers
 {
@@ -447,9 +448,30 @@ namespace ESSDesign.Server.Controllers
                     return adminResult.Error;
                 }
 
-                if (request.RecipientIds == null || !request.RecipientIds.Any())
+                var internalRecipientIds = request.RecipientIds?
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+
+                var externalRecipientEmails = request.ExternalEmails?
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Select(email => email.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList() ?? new List<string>();
+
+                var invalidExternalEmails = externalRecipientEmails
+                    .Where(email => !IsValidEmailAddress(email))
+                    .ToList();
+
+                if (!internalRecipientIds.Any() && !externalRecipientEmails.Any())
                 {
                     return BadRequest(new { error = "At least one recipient is required" });
+                }
+
+                if (invalidExternalEmails.Any())
+                {
+                    return BadRequest(new { error = $"Invalid external email address(es): {string.Join(", ", invalidExternalEmails)}" });
                 }
 
                 var actingUserId = adminResult.User!.Id;
@@ -457,7 +479,7 @@ namespace ESSDesign.Server.Controllers
                 var folder = await _supabaseService.GetFolderByIdAsync(document.FolderId);
                 var hierarchy = await _supabaseService.GetFolderHierarchyAsync(document.FolderId);
 
-                var requestedUserIds = request.RecipientIds
+                var requestedUserIds = internalRecipientIds
                     .Concat(new[] { actingUserId })
                     .Distinct()
                     .ToList();
@@ -469,13 +491,13 @@ namespace ESSDesign.Server.Controllers
                     ?? adminResult.User.Email;
 
                 var recipientEmails = users
-                    .Where(u => request.RecipientIds.Contains(u.Id))
+                    .Where(u => internalRecipientIds.Contains(u.Id))
                     .Select(u => u.Email)
                     .Where(email => !string.IsNullOrWhiteSpace(email))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                if (!recipientEmails.Any())
+                if (!recipientEmails.Any() && !externalRecipientEmails.Any())
                 {
                     return BadRequest(new { error = "No valid recipient emails were found" });
                 }
@@ -484,20 +506,40 @@ namespace ESSDesign.Server.Controllers
                     ?? document.ThirdPartyDesignName
                     ?? folder.Name;
 
-                await _emailService.SendDocumentShareNotificationAsync(
-                    recipientEmails,
-                    documentName,
-                    document.RevisionNumber,
-                    sharedByName,
-                    document.Id,
-                    document.FolderId,
-                    !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
-                    !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
-                    hierarchy.Client,
-                    hierarchy.Project,
-                    hierarchy.Scaffold ?? folder.Name);
+                if (recipientEmails.Any())
+                {
+                    await _emailService.SendDocumentShareNotificationAsync(
+                        recipientEmails,
+                        documentName,
+                        document.RevisionNumber,
+                        sharedByName,
+                        document.Id,
+                        document.FolderId,
+                        !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
+                        !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
+                        hierarchy.Client,
+                        hierarchy.Project,
+                        hierarchy.Scaffold ?? folder.Name);
+                }
 
-                _logger.LogInformation("Shared document {DocumentId} with {Count} recipients", documentId, recipientEmails.Count);
+                if (externalRecipientEmails.Any())
+                {
+                    await _emailService.SendDocumentShareNotificationAsync(
+                        externalRecipientEmails,
+                        documentName,
+                        document.RevisionNumber,
+                        sharedByName,
+                        document.Id,
+                        document.FolderId,
+                        !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
+                        !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
+                        hierarchy.Client,
+                        hierarchy.Project,
+                        hierarchy.Scaffold ?? folder.Name,
+                        request.ExternalMessage);
+                }
+
+                _logger.LogInformation("Shared document {DocumentId} with {InternalCount} internal recipients and {ExternalCount} external recipients", documentId, recipientEmails.Count, externalRecipientEmails.Count);
                 return Ok(new { message = "Document shared" });
             }
             catch (Exception ex)
@@ -622,6 +664,19 @@ namespace ESSDesign.Server.Controllers
         public ActionResult Health()
         {
             return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+        }
+
+        private static bool IsValidEmailAddress(string email)
+        {
+            try
+            {
+                _ = new MailAddress(email);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private async Task<UserInfo?> GetCurrentUserAsync()

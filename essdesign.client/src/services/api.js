@@ -347,10 +347,12 @@ export const foldersAPI = {
         }
     },
 
-    shareDocument: async (documentId, recipientIds) => {
+    shareDocument: async (documentId, recipientIds = [], externalEmails = [], externalMessage = '') => {
         const user = authAPI.getCurrentUser();
         const response = await apiClient.post(`/folders/documents/${documentId}/share`, {
             recipientIds,
+            externalEmails,
+            externalMessage,
             userId: user?.id
         });
         return response.data;

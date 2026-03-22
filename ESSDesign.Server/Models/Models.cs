@@ -224,6 +224,8 @@ namespace ESSDesign.Server.Models
     public class ShareDocumentRequest
     {
         public List<string> RecipientIds { get; set; } = new();
+        public List<string> ExternalEmails { get; set; } = new();
+        public string? ExternalMessage { get; set; }
         public string? UserId { get; set; }
     }
 

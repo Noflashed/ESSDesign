@@ -142,6 +142,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [shareTarget, setShareTarget] = useState(null);
     const [shareUsers, setShareUsers] = useState([]);
     const [selectedShareRecipients, setSelectedShareRecipients] = useState([]);
+    const [externalShareEmails, setExternalShareEmails] = useState('');
+    const [externalShareMessage, setExternalShareMessage] = useState('');
     const [loadingShareUsers, setLoadingShareUsers] = useState(false);
     const [sharingDocument, setSharingDocument] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -572,6 +574,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const handleOpenShareModal = async (item) => {
         setShareTarget(item);
         setSelectedShareRecipients([]);
+        setExternalShareEmails('');
+        setExternalShareMessage('');
         setShowShareModal(true);
 
         if (shareUsers.length > 0) {
@@ -598,9 +602,27 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         ));
     };
 
+    const parseExternalShareEmails = () => (
+        externalShareEmails
+            .split(/[\n,;]/)
+            .map(email => email.trim())
+            .filter(Boolean)
+    );
+
+    const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const parsedExternalEmails = parseExternalShareEmails();
+    const invalidExternalEmails = parsedExternalEmails.filter(email => !isValidEmail(email));
+    const totalShareRecipients = selectedShareRecipients.length + parsedExternalEmails.length;
+
     const handleShareDocument = async () => {
-        if (!shareTarget || selectedShareRecipients.length === 0) {
-            showToast('Select at least one user to share with', 'error');
+        if (!shareTarget || totalShareRecipients === 0) {
+            showToast('Select at least one recipient to share with', 'error');
+            return;
+        }
+
+        if (invalidExternalEmails.length > 0) {
+            showToast('Fix invalid external email addresses before sharing', 'error');
             return;
         }
 
@@ -608,11 +630,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         const toastId = showToast('Sharing PDF...', 'info', 0);
 
         try {
-            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients);
+            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients, parsedExternalEmails, externalShareMessage.trim());
             updateToast(toastId, 'PDF shared successfully', 'success');
             setShowShareModal(false);
             setShareTarget(null);
             setSelectedShareRecipients([]);
+            setExternalShareEmails('');
+            setExternalShareMessage('');
         } catch (error) {
             updateToast(toastId, 'Failed to share PDF', 'error');
             console.error('Share document error:', error);
@@ -1176,34 +1200,74 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     setShowShareModal(false);
                     setShareTarget(null);
                     setSelectedShareRecipients([]);
+                    setExternalShareEmails('');
+                    setExternalShareMessage('');
                 }}>
                     <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
                         <h3>Share PDF</h3>
                         <p className="share-modal-subtitle">
                             Send <strong>{shareTarget.essDesignIssueName || shareTarget.thirdPartyDesignName || formatRevisionNumber(shareTarget.revisionNumber)}</strong> by email.
                         </p>
-                        <div className="share-user-list">
-                            {loadingShareUsers ? (
-                                <div className="share-empty-state">Loading users...</div>
-                            ) : shareUsers.length === 0 ? (
-                                <div className="share-empty-state">No users available to share with.</div>
-                            ) : (
-                                shareUsers.map(user => (
-                                    <label key={user.id} className="share-user-row">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedShareRecipients.includes(user.id)}
-                                            onChange={() => handleToggleShareRecipient(user.id)}
-                                            disabled={sharingDocument}
-                                        />
-                                        <span className="share-user-name">{user.fullName || user.email}</span>
-                                        <span className="share-user-email">{user.email}</span>
-                                    </label>
-                                ))
+                        <div className="share-section">
+                            <div className="share-section-title">ESS Design users</div>
+                            <div className="share-user-list">
+                                {loadingShareUsers ? (
+                                    <div className="share-empty-state">Loading users...</div>
+                                ) : shareUsers.length === 0 ? (
+                                    <div className="share-empty-state">No users available to share with.</div>
+                                ) : (
+                                    shareUsers.map(user => (
+                                        <label key={user.id} className="share-user-row">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedShareRecipients.includes(user.id)}
+                                                onChange={() => handleToggleShareRecipient(user.id)}
+                                                disabled={sharingDocument}
+                                            />
+                                            <span className="share-user-name">{user.fullName || user.email}</span>
+                                            <span className="share-user-email">{user.email}</span>
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                        <div className="share-section">
+                            <label className="share-section-title" htmlFor="external-share-emails">External users</label>
+                            <textarea
+                                id="external-share-emails"
+                                className="share-external-input"
+                                value={externalShareEmails}
+                                onChange={(e) => setExternalShareEmails(e.target.value)}
+                                placeholder="Enter one or more email addresses, separated by commas or new lines"
+                                rows={4}
+                                disabled={sharingDocument}
+                            />
+                            <div className="share-helper-text">
+                                External recipients will receive direct PDF links and do not need an ESS Design account.
+                            </div>
+                            {invalidExternalEmails.length > 0 && (
+                                <div className="share-error-text">
+                                    Invalid email{invalidExternalEmails.length === 1 ? '' : 's'}: {invalidExternalEmails.join(', ')}
+                                </div>
                             )}
                         </div>
+                        <div className="share-section">
+                            <label className="share-section-title" htmlFor="external-share-message">Optional message for external users</label>
+                            <textarea
+                                id="external-share-message"
+                                className="share-external-input"
+                                value={externalShareMessage}
+                                onChange={(e) => setExternalShareMessage(e.target.value)}
+                                placeholder="Add a brief greeting or context for external recipients"
+                                rows={4}
+                                disabled={sharingDocument}
+                            />
+                            <div className="share-helper-text">
+                                This note appears above the usual ESS Design share email and is only sent to external recipients.
+                            </div>
+                        </div>
                         <div className="share-selection-summary">
-                            {selectedShareRecipients.length} user{selectedShareRecipients.length === 1 ? '' : 's'} selected
+                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {parsedExternalEmails.length} external recipient{parsedExternalEmails.length === 1 ? '' : 's'} added
                         </div>
                         <div className="modal-actions">
                             <button
@@ -1212,6 +1276,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     setShowShareModal(false);
                                     setShareTarget(null);
                                     setSelectedShareRecipients([]);
+                                    setExternalShareEmails('');
+                                    setExternalShareMessage('');
                                 }}
                                 disabled={sharingDocument}
                             >
@@ -1220,7 +1286,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             <button
                                 type="button"
                                 onClick={handleShareDocument}
-                                disabled={sharingDocument || loadingShareUsers || selectedShareRecipients.length === 0}
+                                disabled={sharingDocument || loadingShareUsers || totalShareRecipients === 0 || invalidExternalEmails.length > 0}
                             >
                                 {sharingDocument ? 'Sharing...' : 'Share PDF'}
                             </button>
