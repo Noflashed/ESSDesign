@@ -427,7 +427,7 @@ namespace ESSDesign.Server.Services
             var safeScaffold = System.Web.HttpUtility.HtmlEncode(scaffold ?? "-");
             var customMessageHtml = BuildCustomEmailMessageHtml(sharedByName, customMessage);
             var essButton = hasEssDesign && !string.IsNullOrWhiteSpace(essLink)
-                ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(essLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View ESS PDF</a></td></tr></table></td>"
+                ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(essLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View PDF</a></td></tr></table></td>"
                 : string.Empty;
             var thirdPartyButton = hasThirdPartyDesign && !string.IsNullOrWhiteSpace(thirdPartyLink)
                 ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#2f855a;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(thirdPartyLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View Third-Party PDF</a></td></tr></table></td>"
@@ -545,7 +545,7 @@ namespace ESSDesign.Server.Services
                 $"{safeUpdatedBy}</strong> has replaced the PDF files for this revision. Here are the updated details:");
             html = html.Replace(">Uploaded By<", ">Updated By<");
             html = html.Replace(">Date &amp; Time<", ">Updated At<");
-            html = html.Replace(">Download ESS version<", ">Download updated ESS version<");
+            html = html.Replace(">View PDF<", ">View PDF<");
             html = html.Replace(">Download Third-Party version<", ">Download updated Third-Party version<");
 
             return html;
@@ -720,7 +720,7 @@ namespace ESSDesign.Server.Services
                                         <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
                                             <tr>
                                                 <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
-                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">Download ESS version</a>
+                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(essLink!)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">View PDF</a>
                                                 </td>
                                             </tr>
                                         </table>

@@ -142,7 +142,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [shareTarget, setShareTarget] = useState(null);
     const [shareUsers, setShareUsers] = useState([]);
     const [selectedShareRecipients, setSelectedShareRecipients] = useState([]);
-    const [externalShareEmails, setExternalShareEmails] = useState('');
+    const [externalShareRecipients, setExternalShareRecipients] = useState([]);
+    const [externalShareInput, setExternalShareInput] = useState('');
     const [externalShareMessage, setExternalShareMessage] = useState('');
     const [loadingShareUsers, setLoadingShareUsers] = useState(false);
     const [sharingDocument, setSharingDocument] = useState(false);
@@ -574,7 +575,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const handleOpenShareModal = async (item) => {
         setShareTarget(item);
         setSelectedShareRecipients([]);
-        setExternalShareEmails('');
+        setExternalShareRecipients([]);
+        setExternalShareInput('');
         setExternalShareMessage('');
         setShowShareModal(true);
 
@@ -602,18 +604,66 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         ));
     };
 
-    const parseExternalShareEmails = () => (
-        externalShareEmails
-            .split(/[\n,;]/)
-            .map(email => email.trim())
-            .filter(Boolean)
-    );
-
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const pendingExternalEmails = externalShareInput
+        .split(/[\n,;]+/)
+        .map(email => email.trim())
+        .filter(Boolean);
+    const invalidExternalInput = externalShareInput.trim().length > 0 && /[\s,;]+/.test(externalShareInput.trim())
+        ? pendingExternalEmails.some(email => !isValidEmail(email))
+        : externalShareInput.trim().length > 0 && !isValidEmail(externalShareInput.trim());
+    const totalShareRecipients = selectedShareRecipients.length + externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length;
 
-    const parsedExternalEmails = parseExternalShareEmails();
-    const invalidExternalEmails = parsedExternalEmails.filter(email => !isValidEmail(email));
-    const totalShareRecipients = selectedShareRecipients.length + parsedExternalEmails.length;
+    const addExternalRecipient = (email) => {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
+            return false;
+        }
+
+        setExternalShareRecipients(prev => (
+            prev.some(existing => existing.toLowerCase() === trimmedEmail.toLowerCase())
+                ? prev
+                : [...prev, trimmedEmail]
+        ));
+        return true;
+    };
+
+    const commitExternalRecipients = (value) => {
+        const parts = value
+            .split(/[\n,;]+/)
+            .map(email => email.trim())
+            .filter(Boolean);
+
+        if (parts.length === 0) {
+            setExternalShareInput('');
+            return;
+        }
+
+        const invalidParts = [];
+        parts.forEach(part => {
+            if (!addExternalRecipient(part)) {
+                invalidParts.push(part);
+            }
+        });
+
+        setExternalShareInput(invalidParts.join(', '));
+    };
+
+    const handleExternalInputKeyDown = (e) => {
+        if (['Enter', 'Tab', ',', ';'].includes(e.key)) {
+            e.preventDefault();
+            commitExternalRecipients(externalShareInput);
+        }
+
+        if (e.key === 'Backspace' && !externalShareInput && externalShareRecipients.length > 0) {
+            e.preventDefault();
+            setExternalShareRecipients(prev => prev.slice(0, -1));
+        }
+    };
+
+    const handleRemoveExternalRecipient = (emailToRemove) => {
+        setExternalShareRecipients(prev => prev.filter(email => email !== emailToRemove));
+    };
 
     const handleShareDocument = async () => {
         if (!shareTarget || totalShareRecipients === 0) {
@@ -621,21 +671,26 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             return;
         }
 
-        if (invalidExternalEmails.length > 0) {
+        if (invalidExternalInput) {
             showToast('Fix invalid external email addresses before sharing', 'error');
             return;
         }
 
         setSharingDocument(true);
         const toastId = showToast('Sharing PDF...', 'info', 0);
+        const allExternalRecipients = [...externalShareRecipients, ...pendingExternalEmails.filter(isValidEmail)]
+            .filter((email, index, allEmails) =>
+                allEmails.findIndex(candidate => candidate.toLowerCase() === email.toLowerCase()) === index
+            );
 
         try {
-            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients, parsedExternalEmails, externalShareMessage.trim());
+            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients, allExternalRecipients, externalShareMessage.trim());
             updateToast(toastId, 'PDF shared successfully', 'success');
             setShowShareModal(false);
             setShareTarget(null);
             setSelectedShareRecipients([]);
-            setExternalShareEmails('');
+            setExternalShareRecipients([]);
+            setExternalShareInput('');
             setExternalShareMessage('');
         } catch (error) {
             updateToast(toastId, 'Failed to share PDF', 'error');
@@ -1200,7 +1255,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     setShowShareModal(false);
                     setShareTarget(null);
                     setSelectedShareRecipients([]);
-                    setExternalShareEmails('');
+                    setExternalShareRecipients([]);
+                    setExternalShareInput('');
                     setExternalShareMessage('');
                 }}>
                     <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
@@ -1233,21 +1289,38 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         </div>
                         <div className="share-section">
                             <label className="share-section-title" htmlFor="external-share-emails">External users</label>
-                            <textarea
-                                id="external-share-emails"
-                                className="share-external-input"
-                                value={externalShareEmails}
-                                onChange={(e) => setExternalShareEmails(e.target.value)}
-                                placeholder="Enter one or more email addresses, separated by commas or new lines"
-                                rows={4}
-                                disabled={sharingDocument}
-                            />
+                            <div className={`share-recipient-box${invalidExternalInput ? ' invalid' : ''}`}>
+                                {externalShareRecipients.map(email => (
+                                    <span key={email} className="share-recipient-chip">
+                                        <span className="share-recipient-chip-text">{email}</span>
+                                        <button
+                                            type="button"
+                                            className="share-recipient-chip-remove"
+                                            onClick={() => handleRemoveExternalRecipient(email)}
+                                            disabled={sharingDocument}
+                                            aria-label={`Remove ${email}`}
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
+                                ))}
+                                <input
+                                    id="external-share-emails"
+                                    className="share-recipient-input"
+                                    value={externalShareInput}
+                                    onChange={(e) => setExternalShareInput(e.target.value)}
+                                    onKeyDown={handleExternalInputKeyDown}
+                                    onBlur={() => commitExternalRecipients(externalShareInput)}
+                                    placeholder={externalShareRecipients.length === 0 ? 'Type an email and press Enter' : 'Add another email'}
+                                    disabled={sharingDocument}
+                                />
+                            </div>
                             <div className="share-helper-text">
                                 External recipients will receive direct PDF links and do not need an ESS Design account.
                             </div>
-                            {invalidExternalEmails.length > 0 && (
+                            {invalidExternalInput && (
                                 <div className="share-error-text">
-                                    Invalid email{invalidExternalEmails.length === 1 ? '' : 's'}: {invalidExternalEmails.join(', ')}
+                                    Finish or correct the invalid email address before sharing.
                                 </div>
                             )}
                         </div>
@@ -1267,7 +1340,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             </div>
                         </div>
                         <div className="share-selection-summary">
-                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {parsedExternalEmails.length} external recipient{parsedExternalEmails.length === 1 ? '' : 's'} added
+                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length} external recipient{externalShareRecipients.length === 1 ? '' : 's'} added
                         </div>
                         <div className="modal-actions">
                             <button
@@ -1276,7 +1349,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     setShowShareModal(false);
                                     setShareTarget(null);
                                     setSelectedShareRecipients([]);
-                                    setExternalShareEmails('');
+                                    setExternalShareRecipients([]);
+                                    setExternalShareInput('');
                                     setExternalShareMessage('');
                                 }}
                                 disabled={sharingDocument}
@@ -1286,7 +1360,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             <button
                                 type="button"
                                 onClick={handleShareDocument}
-                                disabled={sharingDocument || loadingShareUsers || totalShareRecipients === 0 || invalidExternalEmails.length > 0}
+                                disabled={sharingDocument || loadingShareUsers || (totalShareRecipients === 0 && !externalShareInput.trim()) || invalidExternalInput}
                             >
                                 {sharingDocument ? 'Sharing...' : 'Share PDF'}
                             </button>

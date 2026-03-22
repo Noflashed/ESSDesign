@@ -694,6 +694,73 @@
     white-space: nowrap;
 }
 
+.share-recipient-box {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-primary);
+}
+
+.share-recipient-box:focus-within {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.12);
+}
+
+.share-recipient-box.invalid {
+    border-color: #c62828;
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.08);
+}
+
+.share-recipient-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #c7d7fe;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #174ea6;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.share-recipient-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-recipient-chip-remove {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.share-recipient-input {
+    flex: 1 1 180px;
+    min-width: 160px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 14px;
+    padding: 4px 0;
+}
+
+.share-recipient-input::placeholder {
+    color: var(--text-secondary);
+}
+
 .share-external-input {
     min-height: 96px;
     resize: vertical;
