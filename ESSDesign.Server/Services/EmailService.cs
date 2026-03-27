@@ -449,7 +449,7 @@ namespace ESSDesign.Server.Services
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
                             <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
                             <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">A PDF Was Shared With You</h1>
-                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Open the folder or preview the revision using the links below</p>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Open the document using the link below</p>
                         </td>
                     </tr>
                     <tr>
