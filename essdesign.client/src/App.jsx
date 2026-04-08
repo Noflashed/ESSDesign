@@ -12,6 +12,7 @@ import ESSRosteringPage from './components/ESSRosteringPage';
 import EmployeesPage from './components/EmployeesPage';
 import WebSafetySwmsPage from './components/WebSafetySwmsPage';
 import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
+import SiteInformationPage from './components/SiteInformationPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -277,6 +278,51 @@ function App() {
     const searchTimerRef = useRef(null);
     const avatarCandidates = buildAvatarCandidates(user);
     const [avatarIndex, setAvatarIndex] = useState(0);
+
+    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }) => {
+        const url = new URL(window.location.href);
+        if (folderId) {
+            url.searchParams.set('folder', folderId);
+        } else {
+            url.searchParams.delete('folder');
+        }
+
+        if (page && page !== 'design') {
+            url.searchParams.set('page', page);
+        } else {
+            url.searchParams.delete('page');
+        }
+
+        if (nextSafetyContext.builder?.id) {
+            url.searchParams.set('builder', nextSafetyContext.builder.id);
+        } else {
+            url.searchParams.delete('builder');
+        }
+
+        if (nextSafetyContext.project?.id) {
+            url.searchParams.set('project', nextSafetyContext.project.id);
+        } else {
+            url.searchParams.delete('project');
+        }
+
+        return `${url.pathname}${url.search}`;
+    }, []);
+
+    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, { pushHistory = true } = {}) => {
+        setCurrentPage(page);
+        setSafetyContext(nextSafetyContext);
+        const state = {
+            folderId: selectedFolderId,
+            page,
+            safetyContext: nextSafetyContext
+        };
+        const targetUrl = buildAppUrl(selectedFolderId, page, nextSafetyContext);
+        if (pushHistory) {
+            window.history.pushState(state, '', targetUrl);
+        } else {
+            window.history.replaceState(state, '', targetUrl);
+        }
+    }, [buildAppUrl, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
@@ -579,12 +625,16 @@ function App() {
 
         // Push browser history so back/forward buttons work
         if (pushHistory) {
-            window.history.pushState({ folderId }, '', folderId ? `?folder=${folderId}` : window.location.pathname);
+            window.history.pushState(
+                { folderId, page: currentPage, safetyContext },
+                '',
+                buildAppUrl(folderId, currentPage, safetyContext)
+            );
         }
 
         // Save to backend
         savePreferencesToBackend({ selectedFolderId: folderId });
-    }, [savePreferencesToBackend]);
+    }, [buildAppUrl, currentPage, safetyContext, savePreferencesToBackend]);
 
     const handleSidebarResize = (newWidth) => {
         setSidebarWidth(newWidth);
@@ -652,17 +702,35 @@ function App() {
 
     // Browser back/forward button support
     useEffect(() => {
-        // Replace current entry with initial state so the first back press doesn't leave the app
-        window.history.replaceState({ folderId: selectedFolderId }, '', selectedFolderId ? `?folder=${selectedFolderId}` : window.location.pathname);
+        const urlParams = new URLSearchParams(window.location.search);
+        const pageFromUrl = urlParams.get('page') || 'design';
+        const builderFromUrl = urlParams.get('builder');
+        const projectFromUrl = urlParams.get('project');
+        const initialSafetyContext = {
+            builder: builderFromUrl ? { id: builderFromUrl } : null,
+            project: projectFromUrl ? { id: projectFromUrl } : null
+        };
+
+        setCurrentPage(pageFromUrl);
+        setSafetyContext(initialSafetyContext);
+        window.history.replaceState(
+            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext },
+            '',
+            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext)
+        );
 
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
+            const page = e.state?.page ?? 'design';
+            const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
+            setCurrentPage(page);
+            setSafetyContext(nextSafetyContext);
             handleFolderSelect(folderId, { pushHistory: false });
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -714,16 +782,17 @@ function App() {
     };
 
     const renderCurrentPage = () => {
+        if (currentPage === 'site-information') {
+            return <SiteInformationPage />;
+        }
         if (currentPage === 'safety') {
             return (
                 <ESSSafetyPage
                     onOpenScaffTags={(builder, project) => {
-                        setSafetyContext({ builder, project });
-                        setCurrentPage('safety-scaff-tags');
+                        applyPageState('safety-scaff-tags', { builder, project });
                     }}
                     onOpenSwms={(builder, project) => {
-                        setSafetyContext({ builder, project });
-                        setCurrentPage('safety-swms');
+                        applyPageState('safety-swms', { builder, project });
                     }}
                 />
             );
@@ -733,7 +802,7 @@ function App() {
                 <WebSafetyScaffTagsPage
                     builder={safetyContext.builder}
                     project={safetyContext.project}
-                    onBack={() => setCurrentPage('safety')}
+                    onBack={() => window.history.back()}
                 />
             );
         }
@@ -742,7 +811,7 @@ function App() {
                 <WebSafetySwmsPage
                     builder={safetyContext.builder}
                     project={safetyContext.project}
-                    onBack={() => setCurrentPage('safety')}
+                    onBack={() => window.history.back()}
                 />
             );
         }
@@ -905,7 +974,7 @@ function App() {
                         onToggle={() => setShowNavDrawer(prev => !prev)}
                         onClose={() => setShowNavDrawer(false)}
                         onSelect={(page) => {
-                            setCurrentPage(page);
+                            applyPageState(page, { builder: null, project: null });
                             setShowNavDrawer(false);
                         }}
                     />
@@ -1056,7 +1125,6 @@ function App() {
 }
 
 export default App;
-
 
 
 

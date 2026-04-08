@@ -22,6 +22,13 @@ export default function WebNavDrawer({
     onClose,
     onSelect
 }) {
+    const isActive = (itemKey) => {
+        if (itemKey === 'safety') {
+            return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
+        }
+        return currentPage === itemKey;
+    };
+
     return (
         <>
             <button
@@ -43,7 +50,7 @@ export default function WebNavDrawer({
                     {MENU_ITEMS.map(item => (
                         <button
                             key={item.key}
-                            className={`nav-drawer-item ${currentPage === item.key ? 'active' : ''}`}
+                            className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
                             onClick={() => onSelect(item.key)}
                         >
                             {item.label}

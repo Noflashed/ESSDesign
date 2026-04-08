@@ -494,6 +494,137 @@ export const safetyProjectsAPI = {
 
         await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
         return builders;
+    },
+
+    createBuilder: async (builderName) => {
+        const cleanBuilder = builderName.trim();
+        if (!cleanBuilder) {
+            throw new Error('Builder name is required');
+        }
+
+        const builders = await safetyProjectsAPI.getBuilders();
+        const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
+        if (duplicate) {
+            throw new Error('A builder with that name already exists');
+        }
+
+        const timestamp = nowIso();
+        builders.push({
+            id: makeId(),
+            name: cleanBuilder,
+            projects: [],
+            createdAt: timestamp,
+            updatedAt: timestamp
+        });
+        builders.sort((a, b) => a.name.localeCompare(b.name));
+        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
+        return builders;
+    },
+
+    createProject: async (builderId, projectName) => {
+        const cleanProject = projectName.trim();
+        if (!builderId) {
+            throw new Error('Builder is required');
+        }
+        if (!cleanProject) {
+            throw new Error('Project site name is required');
+        }
+
+        const builders = await safetyProjectsAPI.getBuilders();
+        const builder = builders.find(item => item.id === builderId);
+        if (!builder) {
+            throw new Error('Builder not found');
+        }
+
+        const duplicate = builder.projects.some(project => project.name.toLowerCase() === cleanProject.toLowerCase());
+        if (duplicate) {
+            throw new Error('A project with that name already exists under this builder');
+        }
+
+        const timestamp = nowIso();
+        builder.projects.push({
+            id: makeId(),
+            name: cleanProject,
+            createdAt: timestamp,
+            updatedAt: timestamp
+        });
+        builder.projects.sort((a, b) => a.name.localeCompare(b.name));
+        builder.updatedAt = timestamp;
+        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
+        return builders;
+    },
+
+    renameBuilder: async (builderId, nextName) => {
+        const clean = nextName.trim();
+        if (!clean) {
+            throw new Error('Builder name is required');
+        }
+        const builders = await safetyProjectsAPI.getBuilders();
+        const target = builders.find(builder => builder.id === builderId);
+        if (!target) {
+            throw new Error('Builder not found');
+        }
+        const duplicate = builders.some(builder => builder.id !== builderId && builder.name.toLowerCase() === clean.toLowerCase());
+        if (duplicate) {
+            throw new Error('A builder with that name already exists');
+        }
+        target.name = clean;
+        target.updatedAt = nowIso();
+        builders.sort((a, b) => a.name.localeCompare(b.name));
+        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
+        return builders;
+    },
+
+    renameProject: async (builderId, projectId, nextName) => {
+        const clean = nextName.trim();
+        if (!clean) {
+            throw new Error('Project name is required');
+        }
+        const builders = await safetyProjectsAPI.getBuilders();
+        const builder = builders.find(item => item.id === builderId);
+        if (!builder) {
+            throw new Error('Builder not found');
+        }
+        const project = builder.projects.find(item => item.id === projectId);
+        if (!project) {
+            throw new Error('Project not found');
+        }
+        const duplicate = builder.projects.some(item => item.id !== projectId && item.name.toLowerCase() === clean.toLowerCase());
+        if (duplicate) {
+            throw new Error('A project with that name already exists under this builder');
+        }
+        project.name = clean;
+        project.updatedAt = nowIso();
+        builder.projects.sort((a, b) => a.name.localeCompare(b.name));
+        builder.updatedAt = nowIso();
+        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
+        return builders;
+    },
+
+    deleteBuilder: async (builderId) => {
+        const builders = await safetyProjectsAPI.getBuilders();
+        const target = builders.find(builder => builder.id === builderId);
+        if (!target) {
+            throw new Error('Builder not found');
+        }
+        if (target.projects.length > 0) {
+            throw new Error('This builder still has project sites attached. Remove those first.');
+        }
+        const nextBuilders = builders.filter(builder => builder.id !== builderId);
+        await saveSafetyProjectsDocument({ builders: nextBuilders, updatedAt: nowIso() });
+        return nextBuilders;
+    },
+
+    deleteProject: async (builderId, projectId) => {
+        const builders = await safetyProjectsAPI.getBuilders();
+        const target = builders.find(builder => builder.id === builderId);
+        if (!target) {
+            throw new Error('Builder not found');
+        }
+        target.projects = target.projects.filter(project => project.id !== projectId);
+        target.updatedAt = nowIso();
+        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
+        return builders;
     }
 };
 
@@ -961,6 +1092,5 @@ export const usersAPI = {
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
-
 
 
