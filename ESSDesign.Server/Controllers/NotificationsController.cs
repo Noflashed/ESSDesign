@@ -28,13 +28,13 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var currentUser = await GetCurrentUserAsync();
-                if (currentUser == null)
+                var userId = GetUserIdOptional();
+                if (userId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var notifications = await _supabaseService.GetUserNotificationsAsync(currentUser.Id);
+                var notifications = await _supabaseService.GetUserNotificationsAsync(userId.ToString());
                 return Ok(notifications);
             }
             catch (Exception ex)
@@ -49,13 +49,13 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var currentUser = await GetCurrentUserAsync();
-                if (currentUser == null)
+                var userId = GetUserIdOptional();
+                if (userId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                await _supabaseService.MarkAllUserNotificationsReadAsync(currentUser.Id);
+                await _supabaseService.MarkAllUserNotificationsReadAsync(userId.ToString());
                 return Ok(new { message = "Notifications marked as read" });
             }
             catch (Exception ex)
@@ -70,13 +70,13 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var currentUser = await GetCurrentUserAsync();
-                if (currentUser == null)
+                var userId = GetUserIdOptional();
+                if (userId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                await _supabaseService.DeleteUserNotificationAsync(currentUser.Id, notificationId);
+                await _supabaseService.DeleteUserNotificationAsync(userId.ToString(), notificationId);
                 return Ok(new { message = "Notification deleted" });
             }
             catch (Exception ex)
@@ -128,18 +128,6 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
-        private async Task<UserInfo?> GetCurrentUserAsync()
-        {
-            var authHeader = Request.Headers.Authorization.ToString();
-            if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            var accessToken = authHeader["Bearer ".Length..].Trim();
-            return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
-        }
-
         private Guid GetUserIdOptional()
         {
             try
@@ -158,6 +146,7 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var payload = parts[1];
+                payload = payload.Replace('-', '+').Replace('_', '/');
                 payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
                 var jsonBytes = Convert.FromBase64String(payload);
                 var claims = JsonSerializer.Deserialize<JsonElement>(jsonBytes);
