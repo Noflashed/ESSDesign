@@ -46,6 +46,8 @@ namespace ESSDesign.Server.Services
             string scaffold,
             string document,
             string revisionNumber,
+            string documentType,
+            string documentTitle,
             Guid folderId,
             Guid documentId)
         {
@@ -81,6 +83,8 @@ namespace ESSDesign.Server.Services
                         ["scaffold"] = scaffold,
                         ["document"] = document,
                         ["revisionNumber"] = revisionNumber,
+                        ["documentType"] = documentType,
+                        ["documentTitle"] = documentTitle,
                         ["folderId"] = folderId.ToString(),
                         ["documentId"] = documentId.ToString(),
                     });
@@ -102,6 +106,8 @@ namespace ESSDesign.Server.Services
             string scaffold,
             string document,
             string revisionNumber,
+            string documentType,
+            string documentTitle,
             Guid folderId,
             Guid documentId)
         {
@@ -118,6 +124,8 @@ namespace ESSDesign.Server.Services
                     ["scaffold"] = scaffold,
                     ["document"] = document,
                     ["revisionNumber"] = revisionNumber,
+                    ["documentType"] = documentType,
+                    ["documentTitle"] = documentTitle,
                     ["folderId"] = folderId.ToString(),
                     ["documentId"] = documentId.ToString(),
                 });
@@ -131,6 +139,8 @@ namespace ESSDesign.Server.Services
             string scaffold,
             string document,
             string revisionNumber,
+            string documentType,
+            string documentTitle,
             Guid folderId,
             Guid documentId)
         {
@@ -147,6 +157,8 @@ namespace ESSDesign.Server.Services
                     ["scaffold"] = scaffold,
                     ["document"] = document,
                     ["revisionNumber"] = revisionNumber,
+                    ["documentType"] = documentType,
+                    ["documentTitle"] = documentTitle,
                     ["folderId"] = folderId.ToString(),
                     ["documentId"] = documentId.ToString(),
                 });
@@ -194,10 +206,6 @@ namespace ESSDesign.Server.Services
             {
                 var jwt = CreateOrGetJwt();
                 var bundleId = _configuration["Apns:BundleId"]!;
-                var useSandbox = bool.TryParse(_configuration["Apns:UseSandbox"], out var sandbox) && sandbox;
-                var host = useSandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
-                var url = $"https://{host}/3/device/{deviceToken}";
-
                 var payload = JsonSerializer.Serialize(new
                 {
                     aps = new
@@ -212,26 +220,38 @@ namespace ESSDesign.Server.Services
                     data
                 });
 
-                using var request = new HttpRequestMessage(HttpMethod.Post, url);
-                request.Version = new Version(2, 0);
-                request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
-                request.Headers.Authorization = new AuthenticationHeaderValue("bearer", jwt);
-                request.Headers.Add("apns-topic", bundleId);
-                request.Headers.Add("apns-push-type", "alert");
-                request.Headers.Add("apns-priority", "10");
-                request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+                var useSandbox = bool.TryParse(_configuration["Apns:UseSandbox"], out var sandbox) && sandbox;
+                var primaryHost = useSandbox ? "api.sandbox.push.apple.com" : "api.push.apple.com";
+                var fallbackHost = useSandbox ? "api.push.apple.com" : "api.sandbox.push.apple.com";
 
-                var response = await _httpClient.SendAsync(request);
-                if (response.IsSuccessStatusCode)
+                var primaryResult = await SendToHostAsync(primaryHost, deviceToken, jwt, bundleId, payload);
+                if (primaryResult.Success)
                 {
                     return true;
                 }
 
-                var reason = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("APNs send failed ({StatusCode}): {Reason}", (int)response.StatusCode, reason);
+                if (ShouldRetryAlternateEnvironment(primaryResult.StatusCode, primaryResult.Reason))
+                {
+                    _logger.LogWarning(
+                        "Retrying APNs send against alternate host after {StatusCode}: {Reason}",
+                        primaryResult.StatusCode,
+                        primaryResult.Reason);
 
-                // Invalid token cleanup hints from APNs
-                if ((int)response.StatusCode is 400 or 410)
+                    var fallbackResult = await SendToHostAsync(fallbackHost, deviceToken, jwt, bundleId, payload);
+                    if (fallbackResult.Success)
+                    {
+                        return true;
+                    }
+
+                    if (ShouldDeactivateToken(fallbackResult.StatusCode))
+                    {
+                        await _supabaseService.DeactivatePushTokenAsync(deviceToken);
+                    }
+
+                    return false;
+                }
+
+                if (ShouldDeactivateToken(primaryResult.StatusCode))
                 {
                     await _supabaseService.DeactivatePushTokenAsync(deviceToken);
                 }
@@ -244,6 +264,56 @@ namespace ESSDesign.Server.Services
                 return false;
             }
         }
+
+        private async Task<ApnsSendResult> SendToHostAsync(
+            string host,
+            string deviceToken,
+            string jwt,
+            string bundleId,
+            string payload)
+        {
+            var url = $"https://{host}/3/device/{deviceToken}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Version = new Version(2, 0);
+            request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+            request.Headers.Authorization = new AuthenticationHeaderValue("bearer", jwt);
+            request.Headers.Add("apns-topic", bundleId);
+            request.Headers.Add("apns-push-type", "alert");
+            request.Headers.Add("apns-priority", "10");
+            request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+            {
+                return new ApnsSendResult(true, (int)response.StatusCode, null);
+            }
+
+            var reason = await response.Content.ReadAsStringAsync();
+            _logger.LogWarning("APNs send failed on {Host} ({StatusCode}): {Reason}", host, (int)response.StatusCode, reason);
+            return new ApnsSendResult(false, (int)response.StatusCode, reason);
+        }
+
+        private static bool ShouldRetryAlternateEnvironment(int statusCode, string? reason)
+        {
+            if (statusCode != 400) {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(reason)) {
+                return false;
+            }
+
+            return reason.Contains("BadDeviceToken", StringComparison.OrdinalIgnoreCase) ||
+                   reason.Contains("DeviceTokenNotForTopic", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ShouldDeactivateToken(int statusCode)
+        {
+            return statusCode is 400 or 410;
+        }
+
+        private sealed record ApnsSendResult(bool Success, int StatusCode, string? Reason);
 
         private string CreateOrGetJwt()
         {

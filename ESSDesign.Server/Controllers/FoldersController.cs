@@ -263,6 +263,11 @@ namespace ESSDesign.Server.Controllers
                         _logger.LogInformation("Sent email notifications to {Count} recipients for document {DocumentId}",
                             recipientEmails.Count, documentId);
 
+                        var preferredDocumentType = request.EssDesignIssue != null ? "ess" : "thirdparty";
+                        var preferredDocumentTitle = request.EssDesignIssue?.FileName
+                            ?? request.ThirdPartyDesign?.FileName
+                            ?? documentName;
+
                         var pushSentCount = await _pushNotificationService.SendDocumentUploadPushAsync(
                             request.RecipientIds,
                             uploaderName,
@@ -271,6 +276,8 @@ namespace ESSDesign.Server.Controllers
                             hierarchy.Scaffold ?? folder.Name,
                             documentName,
                             request.RevisionNumber,
+                            preferredDocumentType,
+                            preferredDocumentTitle,
                             request.FolderId,
                             documentId
                         );
@@ -460,6 +467,13 @@ namespace ESSDesign.Server.Controllers
                                 recipientEmails.Count,
                                 documentId);
 
+                            var preferredDocumentType = !string.IsNullOrWhiteSpace(updatedDocument.EssDesignIssuePath)
+                                ? "ess"
+                                : "thirdparty";
+                            var preferredDocumentTitle = updatedDocument.EssDesignIssueName
+                                ?? updatedDocument.ThirdPartyDesignName
+                                ?? documentName;
+
                             var pushSentCount = await _pushNotificationService.SendDocumentReplacementPushAsync(
                                 request.RecipientIds!,
                                 updaterName,
@@ -468,6 +482,8 @@ namespace ESSDesign.Server.Controllers
                                 hierarchy.Scaffold ?? folder.Name,
                                 documentName,
                                 updatedDocument.RevisionNumber,
+                                preferredDocumentType,
+                                preferredDocumentTitle,
                                 updatedDocument.FolderId,
                                 updatedDocument.Id);
 
@@ -594,6 +610,13 @@ namespace ESSDesign.Server.Controllers
                         DocumentId = document.Id
                     });
 
+                    var preferredDocumentType = !string.IsNullOrWhiteSpace(document.EssDesignIssuePath)
+                        ? "ess"
+                        : "thirdparty";
+                    var preferredDocumentTitle = document.EssDesignIssueName
+                        ?? document.ThirdPartyDesignName
+                        ?? documentName;
+
                     var pushSentCount = await _pushNotificationService.SendDocumentSharePushAsync(
                         internalRecipientIds,
                         sharedByName,
@@ -602,6 +625,8 @@ namespace ESSDesign.Server.Controllers
                         hierarchy.Scaffold ?? folder.Name,
                         documentName,
                         document.RevisionNumber,
+                        preferredDocumentType,
+                        preferredDocumentTitle,
                         document.FolderId,
                         document.Id);
 
