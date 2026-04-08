@@ -3,13 +3,9 @@ import { safetyProjectsAPI } from '../services/api';
 
 export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newBuilderName, setNewBuilderName] = useState('');
-    const [newProjectName, setNewProjectName] = useState('');
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -55,27 +51,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         }
     }, [selectedBuilder, selectedProjectId]);
 
-    const handleCreateProject = async (event) => {
-        event.preventDefault();
-        setSaving(true);
-        setError('');
-        try {
-            const nextBuilders = await safetyProjectsAPI.createBuilderAndProject(newBuilderName, newProjectName);
-            setBuilders(nextBuilders);
-            const matchingBuilder = nextBuilders.find(builder => builder.name.toLowerCase() === newBuilderName.trim().toLowerCase()) || nextBuilders[0];
-            const matchingProject = matchingBuilder?.projects?.find(project => project.name.toLowerCase() === newProjectName.trim().toLowerCase()) || matchingBuilder?.projects?.[0];
-            setSelectedBuilderId(matchingBuilder?.id || '');
-            setSelectedProjectId(matchingProject?.id || '');
-            setShowCreateModal(false);
-            setNewBuilderName('');
-            setNewProjectName('');
-        } catch (err) {
-            setError(err.message || 'Could not save builder/project');
-        } finally {
-            setSaving(false);
-        }
-    };
-
     if (loading) {
         return <div className="module-page"><div className="module-empty">Loading safety data...</div></div>;
     }
@@ -88,9 +63,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                         <h2>ESS Safety</h2>
                         <p>Shared builder, project, SWMS, and Scaff-Tag data backed by the same Supabase storage as iOS.</p>
                     </div>
-                    <button className="module-primary-btn compact" onClick={() => setShowCreateModal(true)}>
-                        Add Project
-                    </button>
                 </div>
 
                 <div className="module-card">
@@ -133,31 +105,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                     </div>
                 </div>
             </div>
-
-            {showCreateModal && (
-                <div className="module-modal-backdrop" onClick={() => setShowCreateModal(false)}>
-                    <div className="module-modal compact" onClick={e => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>Add Builder / Project</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowCreateModal(false)}>×</button>
-                        </div>
-                        <form className="module-form" onSubmit={handleCreateProject}>
-                            <div className="module-field">
-                                <label>Builder Name</label>
-                                <input value={newBuilderName} onChange={e => setNewBuilderName(e.target.value)} placeholder="Built" />
-                            </div>
-                            <div className="module-field">
-                                <label>Project Site</label>
-                                <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="65 Martin Place" />
-                            </div>
-                            {error ? <div className="module-error">{error}</div> : null}
-                            <button type="submit" className="module-primary-btn" disabled={saving}>
-                                {saving ? 'Saving...' : 'Save Project'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

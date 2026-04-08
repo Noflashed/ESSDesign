@@ -2,6 +2,7 @@ import React from 'react';
 
 const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
+    { key: 'site-information', label: 'Site Information' },
     { key: 'safety', label: 'ESS Safety' },
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
