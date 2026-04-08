@@ -324,6 +324,96 @@ namespace ESSDesign.Server.Services
             return JsonSerializer.Deserialize<List<T>>(body, _jsonOptions) ?? new List<T>();
         }
 
+        private async Task<List<T>> PostRestRowsAsync<T>(string relativePath, object payload, string? prefer = null)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+            if (!string.IsNullOrWhiteSpace(prefer))
+            {
+                request.Headers.Add("Prefer", prefer);
+            }
+            request.Content = JsonContent.Create(payload);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase POST failed with status {(int)response.StatusCode}: {body}");
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return new List<T>();
+            }
+
+            return JsonSerializer.Deserialize<List<T>>(body, _jsonOptions) ?? new List<T>();
+        }
+
+        private async Task<List<T>> PatchRestRowsAsync<T>(string relativePath, object payload, string? prefer = null)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Patch, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+            if (!string.IsNullOrWhiteSpace(prefer))
+            {
+                request.Headers.Add("Prefer", prefer);
+            }
+            request.Content = JsonContent.Create(payload);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase PATCH failed with status {(int)response.StatusCode}: {body}");
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return new List<T>();
+            }
+
+            return JsonSerializer.Deserialize<List<T>>(body, _jsonOptions) ?? new List<T>();
+        }
+
+        private async Task DeleteRestRowsAsync(string relativePath)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase DELETE failed with status {(int)response.StatusCode}: {body}");
+            }
+        }
+
         private static string BuildInFilter(IEnumerable<string> ids)
         {
             return $"({string.Join(",", ids)})";
@@ -1549,38 +1639,43 @@ namespace ESSDesign.Server.Services
                 var normalizedPlatform = string.IsNullOrWhiteSpace(platform)
                     ? "ios"
                     : platform.Trim().ToLowerInvariant();
-
-                var existingResponse = await _supabase
-                    .From<UserPushToken>()
-                    .Filter("user_id", Postgrest.Constants.Operator.Equals, userId.ToString())
-                    .Filter("platform", Postgrest.Constants.Operator.Equals, normalizedPlatform)
-                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
-                    .Get();
+                var existingResponse = await GetRestRowsAsync<UserPushToken>(
+                    $"user_push_tokens?select={Uri.EscapeDataString("id,userId:user_id,token,platform,appBundleId:app_bundle_id,isActive:is_active,createdAt:created_at,updatedAt:updated_at")}&user_id=eq.{userId:D}&platform=eq.{Uri.EscapeDataString(normalizedPlatform)}&is_active=eq.true&limit=1");
 
                 var now = DateTime.UtcNow;
-                var existing = existingResponse.Models.FirstOrDefault();
+                var existing = existingResponse.FirstOrDefault();
                 if (existing != null)
                 {
-                    existing.Token = token;
-                    existing.AppBundleId = appBundleId;
-                    existing.IsActive = true;
-                    existing.UpdatedAt = now;
-                    await _supabase.From<UserPushToken>().Update(existing);
+                    await PatchRestRowsAsync<UserPushToken>(
+                        $"user_push_tokens?id=eq.{existing.Id:D}",
+                        new
+                        {
+                            token,
+                            app_bundle_id = appBundleId,
+                            is_active = true,
+                            updated_at = now
+                        },
+                        "return=representation");
                     return;
                 }
 
-                var row = new UserPushToken
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Token = token,
-                    Platform = normalizedPlatform,
-                    AppBundleId = appBundleId,
-                    IsActive = true,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-                await _supabase.From<UserPushToken>().Insert(row);
+                await PostRestRowsAsync<UserPushToken>(
+                    "user_push_tokens",
+                    new[]
+                    {
+                        new
+                        {
+                            id = Guid.NewGuid(),
+                            user_id = userId,
+                            token,
+                            platform = normalizedPlatform,
+                            app_bundle_id = appBundleId,
+                            is_active = true,
+                            created_at = now,
+                            updated_at = now
+                        }
+                    },
+                    "return=representation");
             }
             catch (Exception ex)
             {
@@ -1636,23 +1731,26 @@ namespace ESSDesign.Server.Services
             try
             {
                 var now = DateTime.UtcNow;
-                var rows = validUserIds.Select(userId => new UserNotification
+                var rows = validUserIds.Select(userId => new
                 {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Title = request.Title.Trim(),
-                    Message = request.Message?.Trim() ?? string.Empty,
-                    Type = string.IsNullOrWhiteSpace(request.Type) ? "document_update" : request.Type.Trim(),
-                    ActorName = request.ActorName,
-                    ActorImageUrl = request.ActorImageUrl,
-                    FolderId = request.FolderId,
-                    DocumentId = request.DocumentId,
-                    Read = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
+                    id = Guid.NewGuid(),
+                    user_id = userId,
+                    title = request.Title.Trim(),
+                    message = request.Message?.Trim() ?? string.Empty,
+                    type = string.IsNullOrWhiteSpace(request.Type) ? "document_update" : request.Type.Trim(),
+                    actor_name = request.ActorName,
+                    actor_image_url = request.ActorImageUrl,
+                    folder_id = request.FolderId,
+                    document_id = request.DocumentId,
+                    read = false,
+                    created_at = now,
+                    updated_at = now
                 }).ToList();
 
-                await _supabase.From<UserNotification>().Insert(rows);
+                await PostRestRowsAsync<UserNotification>(
+                    "user_notifications",
+                    rows,
+                    "return=representation");
             }
             catch (Exception ex)
             {
@@ -1689,17 +1787,19 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var response = await _supabase
-                    .From<UserNotification>()
-                    .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
-                    .Filter("read", Postgrest.Constants.Operator.Equals, "false")
-                    .Get();
+                var unreadNotifications = await GetRestRowsAsync<UserNotification>(
+                    $"user_notifications?select={Uri.EscapeDataString("id")}&user_id=eq.{normalizedUserId}&read=eq.false");
 
-                foreach (var row in response.Models)
+                foreach (var row in unreadNotifications)
                 {
-                    row.Read = true;
-                    row.UpdatedAt = DateTime.UtcNow;
-                    await _supabase.From<UserNotification>().Update(row);
+                    await PatchRestRowsAsync<UserNotification>(
+                        $"user_notifications?id=eq.{row.Id:D}&user_id=eq.{normalizedUserId}",
+                        new
+                        {
+                            read = true,
+                            updated_at = DateTime.UtcNow
+                        },
+                        "return=representation");
                 }
             }
             catch (Exception ex)
@@ -1718,11 +1818,8 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                await _supabase
-                    .From<UserNotification>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, notificationId.ToString())
-                    .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
-                    .Delete();
+                await DeleteRestRowsAsync(
+                    $"user_notifications?id=eq.{notificationId:D}&user_id=eq.{normalizedUserId}");
             }
             catch (Exception ex)
             {
@@ -1740,17 +1837,19 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var response = await _supabase
-                    .From<UserPushToken>()
-                    .Filter("token", Postgrest.Constants.Operator.Equals, token)
-                    .Filter("is_active", Postgrest.Constants.Operator.Equals, "true")
-                    .Get();
+                var response = await GetRestRowsAsync<UserPushToken>(
+                    $"user_push_tokens?select={Uri.EscapeDataString("id")}&token=eq.{Uri.EscapeDataString(token)}&is_active=eq.true");
 
-                foreach (var row in response.Models)
+                foreach (var row in response)
                 {
-                    row.IsActive = false;
-                    row.UpdatedAt = DateTime.UtcNow;
-                    await _supabase.From<UserPushToken>().Update(row);
+                    await PatchRestRowsAsync<UserPushToken>(
+                        $"user_push_tokens?id=eq.{row.Id:D}",
+                        new
+                        {
+                            is_active = false,
+                            updated_at = DateTime.UtcNow
+                        },
+                        "return=representation");
                 }
             }
             catch (Exception ex)
@@ -1780,9 +1879,6 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
-
-
-
 
 
 
