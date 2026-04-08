@@ -45,7 +45,9 @@ namespace ESSDesign.Server.Services
             string project,
             string scaffold,
             string document,
-            string revisionNumber)
+            string revisionNumber,
+            Guid folderId,
+            Guid documentId)
         {
             if (!IsConfigured())
             {
@@ -79,6 +81,8 @@ namespace ESSDesign.Server.Services
                         ["scaffold"] = scaffold,
                         ["document"] = document,
                         ["revisionNumber"] = revisionNumber,
+                        ["folderId"] = folderId.ToString(),
+                        ["documentId"] = documentId.ToString(),
                     });
 
                 if (ok)
@@ -97,7 +101,9 @@ namespace ESSDesign.Server.Services
             string project,
             string scaffold,
             string document,
-            string revisionNumber)
+            string revisionNumber,
+            Guid folderId,
+            Guid documentId)
         {
             return await SendDocumentPushAsync(
                 recipientUserIds,
@@ -112,6 +118,8 @@ namespace ESSDesign.Server.Services
                     ["scaffold"] = scaffold,
                     ["document"] = document,
                     ["revisionNumber"] = revisionNumber,
+                    ["folderId"] = folderId.ToString(),
+                    ["documentId"] = documentId.ToString(),
                 });
         }
 
@@ -122,7 +130,9 @@ namespace ESSDesign.Server.Services
             string project,
             string scaffold,
             string document,
-            string revisionNumber)
+            string revisionNumber,
+            Guid folderId,
+            Guid documentId)
         {
             return await SendDocumentPushAsync(
                 recipientUserIds,
@@ -137,6 +147,8 @@ namespace ESSDesign.Server.Services
                     ["scaffold"] = scaffold,
                     ["document"] = document,
                     ["revisionNumber"] = revisionNumber,
+                    ["folderId"] = folderId.ToString(),
+                    ["documentId"] = documentId.ToString(),
                 });
         }
 

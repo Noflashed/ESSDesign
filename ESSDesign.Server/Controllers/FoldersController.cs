@@ -270,7 +270,9 @@ namespace ESSDesign.Server.Controllers
                             hierarchy.Project ?? "Unknown Project",
                             hierarchy.Scaffold ?? folder.Name,
                             documentName,
-                            request.RevisionNumber
+                            request.RevisionNumber,
+                            request.FolderId,
+                            documentId
                         );
 
                         _logger.LogInformation("Sent APNs notifications to {Count} devices for document {DocumentId}",
@@ -465,7 +467,9 @@ namespace ESSDesign.Server.Controllers
                                 hierarchy.Project ?? "Unknown Project",
                                 hierarchy.Scaffold ?? folder.Name,
                                 documentName,
-                                updatedDocument.RevisionNumber);
+                                updatedDocument.RevisionNumber,
+                                updatedDocument.FolderId,
+                                updatedDocument.Id);
 
                             _logger.LogInformation(
                                 "Sent revision replacement APNs notifications to {Count} devices for document {DocumentId}",
@@ -597,7 +601,9 @@ namespace ESSDesign.Server.Controllers
                         hierarchy.Project ?? "Unknown Project",
                         hierarchy.Scaffold ?? folder.Name,
                         documentName,
-                        document.RevisionNumber);
+                        document.RevisionNumber,
+                        document.FolderId,
+                        document.Id);
 
                     _logger.LogInformation(
                         "Sent share APNs notifications to {Count} devices for document {DocumentId}",
