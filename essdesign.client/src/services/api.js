@@ -245,6 +245,329 @@ export const authAPI = {
     }
 };
 
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
+const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
+const SAFETY_BUCKET = 'project-information';
+const SAFETY_PROJECTS_PATH = 'projects.json';
+
+const supabaseRestHeaders = (contentType = false, upsert = false) => ({
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...(contentType ? { 'Content-Type': 'application/json' } : {}),
+    ...(upsert ? { Prefer: 'resolution=merge-duplicates,return=representation' } : {})
+});
+
+const storageHeaders = (contentType = false) => ({
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...(contentType ? { 'Content-Type': 'application/json' } : {})
+});
+
+const nowIso = () => new Date().toISOString();
+const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const safetyProjectsObjectUrl = () => `${SUPABASE_URL}/storage/v1/object/${SAFETY_BUCKET}/${SAFETY_PROJECTS_PATH}`;
+const safetyProjectsObjectUpsertUrl = () => `${safetyProjectsObjectUrl()}?upsert=true`;
+const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFETY_BUCKET}`;
+
+let verifiedSafetyBucket = false;
+
+async function ensureSafetyBucketAccess() {
+    if (verifiedSafetyBucket) {
+        return;
+    }
+
+    const response = await fetch(safetyBucketListUrl(), {
+        method: 'POST',
+        headers: storageHeaders(true),
+        body: JSON.stringify({ prefix: '', limit: 1, offset: 0 })
+    });
+
+    if (response.ok) {
+        verifiedSafetyBucket = true;
+        return;
+    }
+
+    const details = await response.text();
+    throw new Error(details || `Unable to access bucket "${SAFETY_BUCKET}"`);
+}
+
+function parseSafetyProjects(raw) {
+    if (Array.isArray(raw)) {
+        return {
+            builders: raw
+                .filter(item => item && typeof item.name === 'string')
+                .map(item => ({
+                    id: item.id || makeId(),
+                    name: item.name.trim(),
+                    projects: [],
+                    createdAt: item.createdAt || nowIso(),
+                    updatedAt: item.updatedAt || nowIso()
+                })),
+            updatedAt: nowIso()
+        };
+    }
+
+    if (raw && typeof raw === 'object' && Array.isArray(raw.builders)) {
+        return {
+            builders: raw.builders
+                .filter(builder => builder && typeof builder.name === 'string')
+                .map(builder => ({
+                    id: builder.id || makeId(),
+                    name: builder.name.trim(),
+                    projects: Array.isArray(builder.projects)
+                        ? builder.projects
+                            .filter(project => project && typeof project.name === 'string')
+                            .map(project => ({
+                                id: project.id || makeId(),
+                                name: project.name.trim(),
+                                createdAt: project.createdAt || nowIso(),
+                                updatedAt: project.updatedAt || nowIso()
+                            }))
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                        : [],
+                    createdAt: builder.createdAt || nowIso(),
+                    updatedAt: builder.updatedAt || nowIso()
+                }))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+            updatedAt: raw.updatedAt || nowIso()
+        };
+    }
+
+    return { builders: [], updatedAt: nowIso() };
+}
+
+async function saveSafetyProjectsDocument(doc) {
+    await ensureSafetyBucketAccess();
+    const payload = JSON.stringify(doc);
+    const attempts = [
+        { method: 'POST', url: safetyProjectsObjectUrl(), headers: { ...storageHeaders(true), 'x-upsert': 'true' } },
+        { method: 'POST', url: safetyProjectsObjectUpsertUrl(), headers: storageHeaders(true) },
+        { method: 'PUT', url: safetyProjectsObjectUrl(), headers: { ...storageHeaders(true), 'x-upsert': 'true' } }
+    ];
+
+    let lastError = '';
+    for (const attempt of attempts) {
+        const response = await fetch(attempt.url, {
+            method: attempt.method,
+            headers: attempt.headers,
+            body: payload
+        });
+
+        if (response.ok) {
+            return;
+        }
+
+        lastError = await response.text();
+    }
+
+    throw new Error(lastError || 'Failed to save safety projects');
+}
+
+const restEndpoint = (table, query = '') => `${SUPABASE_REST_BASE}/${table}${query}`;
+
+async function readRestRows(table, query = '') {
+    const response = await fetch(restEndpoint(table, query), {
+        method: 'GET',
+        headers: supabaseRestHeaders()
+    });
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to read ${table}`);
+    }
+    return response.json();
+}
+
+async function postRestRows(table, rows, onConflict) {
+    const query = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
+    const response = await fetch(restEndpoint(table, query), {
+        method: 'POST',
+        headers: supabaseRestHeaders(true, true),
+        body: JSON.stringify(rows)
+    });
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to write ${table}`);
+    }
+    return response.json();
+}
+
+async function patchRestRows(table, query, payload) {
+    const response = await fetch(restEndpoint(table, query), {
+        method: 'PATCH',
+        headers: { ...supabaseRestHeaders(true), Prefer: 'return=representation' },
+        body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to update ${table}`);
+    }
+    return response.json();
+}
+
+async function deleteRestRows(table, query) {
+    const response = await fetch(restEndpoint(table, query), {
+        method: 'DELETE',
+        headers: supabaseRestHeaders()
+    });
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to delete from ${table}`);
+    }
+}
+
+function mapEmployeeRow(row) {
+    return {
+        id: row.id,
+        firstName: row.first_name || '',
+        lastName: row.last_name || '',
+        phoneNumber: row.phone_number || '',
+        preferredSiteIds: [row.preferred_site_1, row.preferred_site_2, row.preferred_site_3].filter(Boolean),
+        createdAt: row.created_at || nowIso(),
+        updatedAt: row.updated_at || nowIso()
+    };
+}
+
+export const safetyProjectsAPI = {
+    getBuilders: async () => {
+        await ensureSafetyBucketAccess();
+        const response = await fetch(`${safetyProjectsObjectUrl()}?t=${Date.now()}`, {
+            method: 'GET',
+            headers: storageHeaders()
+        });
+
+        if (response.status === 404) {
+            return [];
+        }
+
+        if (!response.ok) {
+            const details = await response.text();
+            if ((details || '').toLowerCase().includes('object not found')) {
+                return [];
+            }
+            throw new Error(details || 'Failed to load projects');
+        }
+
+        const json = await response.json();
+        return parseSafetyProjects(json).builders;
+    },
+
+    createBuilderAndProject: async (builderName, projectName) => {
+        const cleanBuilder = builderName.trim();
+        const cleanProject = projectName.trim();
+        if (!cleanBuilder || !cleanProject) {
+            throw new Error('Builder and project names are required');
+        }
+
+        const builders = await safetyProjectsAPI.getBuilders();
+        const existingBuilder = builders.find(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
+        const timestamp = nowIso();
+
+        if (existingBuilder) {
+            const duplicateProject = existingBuilder.projects.some(project => project.name.toLowerCase() === cleanProject.toLowerCase());
+            if (duplicateProject) {
+                throw new Error('This project already exists under that builder');
+            }
+            existingBuilder.projects.push({
+                id: makeId(),
+                name: cleanProject,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            });
+            existingBuilder.projects.sort((a, b) => a.name.localeCompare(b.name));
+            existingBuilder.updatedAt = timestamp;
+        } else {
+            builders.push({
+                id: makeId(),
+                name: cleanBuilder,
+                projects: [{
+                    id: makeId(),
+                    name: cleanProject,
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                }],
+                createdAt: timestamp,
+                updatedAt: timestamp
+            });
+            builders.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
+        return builders;
+    }
+};
+
+export const rosteringAPI = {
+    getEmployees: async () => {
+        const rows = await readRestRows('ess_rostering_employees', '?select=*&order=last_name.asc,first_name.asc');
+        return rows.map(mapEmployeeRow);
+    },
+
+    saveEmployee: async ({ id, firstName, lastName, phoneNumber, preferredSiteIds }) => {
+        const cleanPreferred = preferredSiteIds.filter(Boolean).slice(0, 3);
+        const payload = {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            phone_number: phoneNumber.trim() || null,
+            preferred_site_1: cleanPreferred[0] || null,
+            preferred_site_2: cleanPreferred[1] || null,
+            preferred_site_3: cleanPreferred[2] || null,
+            updated_at: nowIso()
+        };
+
+        if (id) {
+            await patchRestRows('ess_rostering_employees', `?id=eq.${encodeURIComponent(id)}`, payload);
+        } else {
+            await postRestRows('ess_rostering_employees', [{
+                ...payload,
+                created_at: nowIso()
+            }]);
+        }
+
+        return rosteringAPI.getEmployees();
+    },
+
+    deleteEmployee: async (employeeId) => {
+        await deleteRestRows('ess_rostering_employees', `?id=eq.${encodeURIComponent(employeeId)}`);
+        return rosteringAPI.getEmployees();
+    },
+
+    getPlan: async () => {
+        const rows = await readRestRows('ess_rostering_plans', '?select=*&order=plan_date.desc&limit=1');
+        if (!rows.length) {
+            return null;
+        }
+        const row = rows[0];
+        return {
+            date: row.plan_date,
+            activeSiteIds: Array.isArray(row.active_site_ids) ? row.active_site_ids.filter(Boolean) : [],
+            requiredMenBySite: row.required_men_by_site && typeof row.required_men_by_site === 'object' ? row.required_men_by_site : {},
+            updatedAt: row.updated_at || nowIso(),
+            updatedByUserId: row.updated_by_user_id || undefined
+        };
+    },
+
+    savePlan: async ({ date, activeSiteIds, requiredMenBySite, updatedByUserId }) => {
+        await postRestRows('ess_rostering_plans', [{
+            plan_date: date,
+            active_site_ids: activeSiteIds.filter(Boolean),
+            required_men_by_site: requiredMenBySite,
+            updated_at: nowIso(),
+            updated_by_user_id: updatedByUserId || null
+        }], 'plan_date');
+    },
+
+    isUserSiteSupervisor: async (userId, email) => {
+        const rows = await readRestRows('ess_rostering_roles', '?select=role_name,user_id,email&role_name=eq.Site%20Supervisor');
+        const lowerUserId = (userId || '').toLowerCase();
+        const lowerEmail = (email || '').toLowerCase();
+        return rows.some(row =>
+            (!!lowerUserId && (row.user_id || '').toLowerCase() === lowerUserId) ||
+            (!!lowerEmail && (row.email || '').toLowerCase() === lowerEmail)
+        );
+    }
+};
+
 let searchAbortController = null;
 
 export const foldersAPI = {
@@ -455,7 +778,6 @@ export const usersAPI = {
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
-
 
 
 

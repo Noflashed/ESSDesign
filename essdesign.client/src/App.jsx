@@ -6,6 +6,10 @@ import SignUp from './components/SignUp';
 import RegistrationSuccess from './components/RegistrationSuccess';
 import RegistrationConfirmed from './components/RegistrationConfirmed';
 import PDFViewer from './components/PDFViewer';
+import WebNavDrawer from './components/WebNavDrawer';
+import ESSSafetyPage from './components/ESSSafetyPage';
+import ESSRosteringPage from './components/ESSRosteringPage';
+import EmployeesPage from './components/EmployeesPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -263,6 +267,8 @@ function App() {
     const [inviteError, setInviteError] = useState('');
     const [inviteSuccess, setInviteSuccess] = useState('');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [currentPage, setCurrentPage] = useState('design');
+    const [showNavDrawer, setShowNavDrawer] = useState(false);
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
@@ -704,6 +710,42 @@ function App() {
         }
     };
 
+    const renderCurrentPage = () => {
+        if (currentPage === 'safety') {
+            return <ESSSafetyPage />;
+        }
+        if (currentPage === 'rostering') {
+            return <ESSRosteringPage user={user} />;
+        }
+        if (currentPage === 'employees') {
+            return <EmployeesPage />;
+        }
+
+        return (
+            <div className="app-body">
+                <Sidebar
+                    onFolderSelect={handleFolderSelect}
+                    currentFolderId={selectedFolderId}
+                    refreshTrigger={refreshTrigger}
+                    width={sidebarWidth}
+                    onResize={handleSidebarResize}
+                    onDocumentClick={handleDocumentClick}
+                    canManage={isAdmin}
+                />
+                <main className="app-main">
+                    <FolderBrowser
+                        selectedFolderId={selectedFolderId}
+                        onFolderChange={handleFolderSelect}
+                        viewMode={viewMode}
+                        onViewModeChange={handleViewModeChange}
+                        onRefreshNeeded={triggerRefresh}
+                        canManage={isAdmin}
+                    />
+                </main>
+            </div>
+        );
+    };
+
     if (loading) {
         return (
             <div className="loading-screen">
@@ -825,6 +867,16 @@ function App() {
                     )}
                 </div>
                 <div className="header-right">
+                    <WebNavDrawer
+                        open={showNavDrawer}
+                        currentPage={currentPage}
+                        onToggle={() => setShowNavDrawer(prev => !prev)}
+                        onClose={() => setShowNavDrawer(false)}
+                        onSelect={(page) => {
+                            setCurrentPage(page);
+                            setShowNavDrawer(false);
+                        }}
+                    />
                     {isAdmin && (
                         <button className="icon-action-button" onClick={openSettingsModal} title="Manage users" aria-label="Manage users">
                             <SettingsIcon size={18} />
@@ -879,27 +931,7 @@ function App() {
                 </div>
             </header>
 
-            <div className="app-body">
-                <Sidebar
-                    onFolderSelect={handleFolderSelect}
-                    currentFolderId={selectedFolderId}
-                    refreshTrigger={refreshTrigger}
-                    width={sidebarWidth}
-                    onResize={handleSidebarResize}
-                    onDocumentClick={handleDocumentClick}
-                    canManage={isAdmin}
-                />
-                <main className="app-main">
-                    <FolderBrowser
-                        selectedFolderId={selectedFolderId}
-                        onFolderChange={handleFolderSelect}
-                        viewMode={viewMode}
-                        onViewModeChange={handleViewModeChange}
-                        onRefreshNeeded={triggerRefresh}
-                        canManage={isAdmin}
-                    />
-                </main>
-            </div>
+            {renderCurrentPage()}
 
             {showSettingsModal && (
                 <div className="settings-modal-overlay" onClick={closeSettingsModal}>
@@ -992,7 +1024,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
