@@ -300,13 +300,20 @@ function App() {
         setUser(currentUser);
 
         try {
-            const refreshedUser = await authAPI.refreshCurrentUser();
-            setUser(refreshedUser);
-        } catch (error) {
-            console.error('Error refreshing current user:', error);
-            setIsAuthenticated(false);
-            setUser(null);
-            updateAuthView('login');
+            const restoredUser = await authAPI.restoreSession();
+            setUser(restoredUser);
+        } catch (restoreError) {
+            console.error('Error restoring session:', restoreError);
+            try {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                setUser(refreshedUser);
+                return;
+            } catch (error) {
+                console.error('Error refreshing current user:', error);
+                setIsAuthenticated(false);
+                setUser(null);
+                updateAuthView('login');
+            }
         } finally {
             setLoading(false);
         }
@@ -952,7 +959,6 @@ function App() {
 }
 
 export default App;
-
 
 
 

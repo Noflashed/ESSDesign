@@ -181,6 +181,17 @@ export const authAPI = {
             throw error;
         }
     },
+
+    restoreSession: async () => {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (!refreshToken) {
+            clearStoredAuth();
+            throw new Error('No refresh token available');
+        }
+
+        const refreshedSession = await refreshAuthSession();
+        return refreshedSession.user ?? authAPI.getCurrentUser();
+    },
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
     },
@@ -406,7 +417,6 @@ export const usersAPI = {
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
-
 
 
 
