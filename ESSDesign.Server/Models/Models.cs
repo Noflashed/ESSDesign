@@ -154,6 +154,46 @@ namespace ESSDesign.Server.Models
         public DateTime UpdatedAt { get; set; }
     }
 
+    [Table("user_notifications")]
+    public class UserNotification : BaseModel
+    {
+        [PrimaryKey("id", false)]
+        public Guid Id { get; set; }
+
+        [Column("user_id")]
+        public Guid UserId { get; set; }
+
+        [Column("title")]
+        public string Title { get; set; } = string.Empty;
+
+        [Column("message")]
+        public string Message { get; set; } = string.Empty;
+
+        [Column("type")]
+        public string Type { get; set; } = "document_update";
+
+        [Column("actor_name")]
+        public string? ActorName { get; set; }
+
+        [Column("actor_image_url")]
+        public string? ActorImageUrl { get; set; }
+
+        [Column("folder_id")]
+        public Guid? FolderId { get; set; }
+
+        [Column("document_id")]
+        public Guid? DocumentId { get; set; }
+
+        [Column("read")]
+        public bool Read { get; set; }
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public static class AppRoles
     {
         public const string Admin = "admin";
@@ -202,6 +242,18 @@ namespace ESSDesign.Server.Models
         public string FullName { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
         public string Role { get; set; } = AppRoles.Viewer;
+    }
+
+    public class CreateUserNotificationRequest
+    {
+        public List<string> RecipientUserIds { get; set; } = new();
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Type { get; set; } = "document_update";
+        public string? ActorName { get; set; }
+        public string? ActorImageUrl { get; set; }
+        public Guid? FolderId { get; set; }
+        public Guid? DocumentId { get; set; }
     }
 
     public class CreateFolderRequest
@@ -348,6 +400,5 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 }
-
 
 

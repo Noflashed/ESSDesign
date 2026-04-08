@@ -23,6 +23,69 @@ namespace ESSDesign.Server.Controllers
             _logger = logger;
         }
 
+        [HttpGet]
+        public async Task<ActionResult<List<UserNotification>>> GetNotifications()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var notifications = await _supabaseService.GetUserNotificationsAsync(currentUser.Id);
+                return Ok(notifications);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting notifications");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("read-all")]
+        public async Task<ActionResult> MarkAllRead()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                await _supabaseService.MarkAllUserNotificationsReadAsync(currentUser.Id);
+                return Ok(new { message = "Notifications marked as read" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking notifications read");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{notificationId}")]
+        public async Task<ActionResult> DeleteNotification(Guid notificationId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                await _supabaseService.DeleteUserNotificationAsync(currentUser.Id, notificationId);
+                return Ok(new { message = "Notification deleted" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting notification {NotificationId}", notificationId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPost("device-token")]
         public async Task<ActionResult> RegisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
         {
@@ -63,6 +126,18 @@ namespace ESSDesign.Server.Controllers
                 _logger.LogError(ex, "Error registering device token");
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        private async Task<UserInfo?> GetCurrentUserAsync()
+        {
+            var authHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var accessToken = authHeader["Bearer ".Length..].Trim();
+            return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
         }
 
         private Guid GetUserIdOptional()

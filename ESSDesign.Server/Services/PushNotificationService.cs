@@ -90,6 +90,88 @@ namespace ESSDesign.Server.Services
             return sentCount;
         }
 
+        public async Task<int> SendDocumentReplacementPushAsync(
+            IEnumerable<string> recipientUserIds,
+            string updaterName,
+            string client,
+            string project,
+            string scaffold,
+            string document,
+            string revisionNumber)
+        {
+            return await SendDocumentPushAsync(
+                recipientUserIds,
+                "Document revision replaced",
+                $"{client} / {project} / {scaffold} - Rev {revisionNumber}",
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "document_revision_replaced",
+                    ["uploaderName"] = updaterName,
+                    ["client"] = client,
+                    ["project"] = project,
+                    ["scaffold"] = scaffold,
+                    ["document"] = document,
+                    ["revisionNumber"] = revisionNumber,
+                });
+        }
+
+        public async Task<int> SendDocumentSharePushAsync(
+            IEnumerable<string> recipientUserIds,
+            string sharedByName,
+            string client,
+            string project,
+            string scaffold,
+            string document,
+            string revisionNumber)
+        {
+            return await SendDocumentPushAsync(
+                recipientUserIds,
+                "Document shared",
+                $"{client} / {project} / {scaffold} - Rev {revisionNumber}",
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "document_shared",
+                    ["uploaderName"] = sharedByName,
+                    ["client"] = client,
+                    ["project"] = project,
+                    ["scaffold"] = scaffold,
+                    ["document"] = document,
+                    ["revisionNumber"] = revisionNumber,
+                });
+        }
+
+        private async Task<int> SendDocumentPushAsync(
+            IEnumerable<string> recipientUserIds,
+            string title,
+            string body,
+            Dictionary<string, object?> data)
+        {
+            if (!IsConfigured())
+            {
+                _logger.LogWarning("APNs not configured. Skipping push notification.");
+                return 0;
+            }
+
+            var tokens = await _supabaseService.GetActivePushTokensByUserIdsAsync(recipientUserIds, "ios");
+            if (!tokens.Any())
+            {
+                _logger.LogInformation("No active iOS device tokens for selected recipients.");
+                return 0;
+            }
+
+            var sentCount = 0;
+            foreach (var row in tokens)
+            {
+                var ok = await SendSinglePushAsync(row.Token, title, body, data);
+                if (ok)
+                {
+                    sentCount++;
+                }
+            }
+
+            return sentCount;
+        }
+
         private async Task<bool> SendSinglePushAsync(
             string deviceToken,
             string title,

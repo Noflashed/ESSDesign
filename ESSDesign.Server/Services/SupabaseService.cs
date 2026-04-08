@@ -1620,6 +1620,117 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task CreateUserNotificationsAsync(CreateUserNotificationRequest request)
+        {
+            var validUserIds = request.RecipientUserIds
+                .Where(id => Guid.TryParse(id, out _))
+                .Select(Guid.Parse)
+                .Distinct()
+                .ToList();
+
+            if (!validUserIds.Any() || string.IsNullOrWhiteSpace(request.Title))
+            {
+                return;
+            }
+
+            try
+            {
+                var now = DateTime.UtcNow;
+                var rows = validUserIds.Select(userId => new UserNotification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Title = request.Title.Trim(),
+                    Message = request.Message?.Trim() ?? string.Empty,
+                    Type = string.IsNullOrWhiteSpace(request.Type) ? "document_update" : request.Type.Trim(),
+                    ActorName = request.ActorName,
+                    ActorImageUrl = request.ActorImageUrl,
+                    FolderId = request.FolderId,
+                    DocumentId = request.DocumentId,
+                    Read = false,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                }).ToList();
+
+                await _supabase.From<UserNotification>().Insert(rows);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating notifications for {Count} users", validUserIds.Count);
+                throw;
+            }
+        }
+
+        public async Task<List<UserNotification>> GetUserNotificationsAsync(string userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return new List<UserNotification>();
+            }
+
+            try
+            {
+                return await GetRestRowsAsync<UserNotification>(
+                    $"user_notifications?select={Uri.EscapeDataString("id,userId:user_id,title,message,type,actorName:actor_name,actorImageUrl:actor_image_url,folderId:folder_id,documentId:document_id,read,createdAt:created_at,updatedAt:updated_at")}&user_id=eq.{normalizedUserId}&order=created_at.desc");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting notifications for {UserId}", normalizedUserId);
+                throw;
+            }
+        }
+
+        public async Task MarkAllUserNotificationsReadAsync(string userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return;
+            }
+
+            try
+            {
+                var response = await _supabase
+                    .From<UserNotification>()
+                    .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
+                    .Filter("read", Postgrest.Constants.Operator.Equals, "false")
+                    .Get();
+
+                foreach (var row in response.Models)
+                {
+                    row.Read = true;
+                    row.UpdatedAt = DateTime.UtcNow;
+                    await _supabase.From<UserNotification>().Update(row);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking notifications read for {UserId}", normalizedUserId);
+                throw;
+            }
+        }
+
+        public async Task DeleteUserNotificationAsync(string userId, Guid notificationId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return;
+            }
+
+            try
+            {
+                await _supabase
+                    .From<UserNotification>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, notificationId.ToString())
+                    .Filter("user_id", Postgrest.Constants.Operator.Equals, normalizedUserId)
+                    .Delete();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting notification {NotificationId} for {UserId}", notificationId, normalizedUserId);
+                throw;
+            }
+        }
+
         public async Task DeactivatePushTokenAsync(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
@@ -1669,7 +1780,6 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
-
 
 
 

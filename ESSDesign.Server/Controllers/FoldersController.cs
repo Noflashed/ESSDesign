@@ -225,6 +225,13 @@ namespace ESSDesign.Server.Controllers
                             .Select(u => u.Email)
                             .ToList();
 
+                        var notificationMessage = BuildDocumentNotificationMessage(
+                            hierarchy.Client,
+                            hierarchy.Project,
+                            hierarchy.Scaffold ?? folder.Name,
+                            documentName,
+                            request.RevisionNumber);
+
                         await _emailService.SendDocumentUploadNotificationAsync(
                             recipientEmails,
                             documentName,
@@ -240,6 +247,18 @@ namespace ESSDesign.Server.Controllers
                             hierarchy.Scaffold,
                             request.Description
                         );
+
+                        await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                        {
+                            RecipientUserIds = request.RecipientIds,
+                            Title = "New document uploaded",
+                            Message = notificationMessage,
+                            Type = "document_upload",
+                            ActorName = uploaderName,
+                            ActorImageUrl = adminResult.User.AvatarUrl,
+                            FolderId = request.FolderId,
+                            DocumentId = documentId
+                        });
 
                         _logger.LogInformation("Sent email notifications to {Count} recipients for document {DocumentId}",
                             recipientEmails.Count, documentId);
@@ -400,6 +419,12 @@ namespace ESSDesign.Server.Controllers
                             var documentName = updatedDocument.EssDesignIssueName
                                 ?? updatedDocument.ThirdPartyDesignName
                                 ?? folder.Name;
+                            var notificationMessage = BuildDocumentNotificationMessage(
+                                hierarchy.Client,
+                                hierarchy.Project,
+                                hierarchy.Scaffold ?? folder.Name,
+                                documentName,
+                                updatedDocument.RevisionNumber);
 
                             await _emailService.SendDocumentRevisionReplacementNotificationAsync(
                                 recipientEmails,
@@ -416,9 +441,35 @@ namespace ESSDesign.Server.Controllers
                                 hierarchy.Scaffold ?? folder.Name,
                                 request.Description);
 
+                            await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                            {
+                                RecipientUserIds = request.RecipientIds!,
+                                Title = "Document revision replaced",
+                                Message = notificationMessage,
+                                Type = "document_revision_replaced",
+                                ActorName = updaterName,
+                                ActorImageUrl = adminResult.User.AvatarUrl,
+                                FolderId = updatedDocument.FolderId,
+                                DocumentId = updatedDocument.Id
+                            });
+
                             _logger.LogInformation(
                                 "Sent revision replacement notifications to {Count} recipients for document {DocumentId}",
                                 recipientEmails.Count,
+                                documentId);
+
+                            var pushSentCount = await _pushNotificationService.SendDocumentReplacementPushAsync(
+                                request.RecipientIds!,
+                                updaterName,
+                                hierarchy.Client ?? "Unknown Client",
+                                hierarchy.Project ?? "Unknown Project",
+                                hierarchy.Scaffold ?? folder.Name,
+                                documentName,
+                                updatedDocument.RevisionNumber);
+
+                            _logger.LogInformation(
+                                "Sent revision replacement APNs notifications to {Count} devices for document {DocumentId}",
+                                pushSentCount,
                                 documentId);
                         }
                     }
@@ -505,6 +556,12 @@ namespace ESSDesign.Server.Controllers
                 var documentName = document.EssDesignIssueName
                     ?? document.ThirdPartyDesignName
                     ?? folder.Name;
+                var notificationMessage = BuildDocumentNotificationMessage(
+                    hierarchy.Client,
+                    hierarchy.Project,
+                    hierarchy.Scaffold ?? folder.Name,
+                    documentName,
+                    document.RevisionNumber);
 
                 if (recipientEmails.Any())
                 {
@@ -520,6 +577,32 @@ namespace ESSDesign.Server.Controllers
                         hierarchy.Client,
                         hierarchy.Project,
                         hierarchy.Scaffold ?? folder.Name);
+
+                    await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                    {
+                        RecipientUserIds = internalRecipientIds,
+                        Title = "Document shared",
+                        Message = notificationMessage,
+                        Type = "document_shared",
+                        ActorName = sharedByName,
+                        ActorImageUrl = adminResult.User.AvatarUrl,
+                        FolderId = document.FolderId,
+                        DocumentId = document.Id
+                    });
+
+                    var pushSentCount = await _pushNotificationService.SendDocumentSharePushAsync(
+                        internalRecipientIds,
+                        sharedByName,
+                        hierarchy.Client ?? "Unknown Client",
+                        hierarchy.Project ?? "Unknown Project",
+                        hierarchy.Scaffold ?? folder.Name,
+                        documentName,
+                        document.RevisionNumber);
+
+                    _logger.LogInformation(
+                        "Sent share APNs notifications to {Count} devices for document {DocumentId}",
+                        pushSentCount,
+                        documentId);
                 }
 
                 if (externalRecipientEmails.Any())
@@ -679,6 +762,29 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        private static string BuildDocumentNotificationMessage(
+            string? client,
+            string? project,
+            string? scaffold,
+            string? document,
+            string? revisionNumber)
+        {
+            var clientText = string.IsNullOrWhiteSpace(client) ? "N/A" : client.Trim();
+            var projectText = string.IsNullOrWhiteSpace(project) ? "N/A" : project.Trim();
+            var scaffoldText = string.IsNullOrWhiteSpace(scaffold) ? "N/A" : scaffold.Trim();
+            var documentText = string.IsNullOrWhiteSpace(document) ? "N/A" : document.Trim();
+            var revisionText = string.IsNullOrWhiteSpace(revisionNumber) ? "N/A" : revisionNumber.Trim();
+
+            return string.Join("\n", new[]
+            {
+                $"Client: {clientText}",
+                $"Project: {projectText}",
+                $"Scaffold: {scaffoldText}",
+                $"Document: {documentText}",
+                $"Revision Number: {revisionText}"
+            });
+        }
+
         private async Task<UserInfo?> GetCurrentUserAsync()
         {
             var authorizationHeader = Request.Headers.Authorization.ToString();
@@ -708,5 +814,3 @@ namespace ESSDesign.Server.Controllers
         }
     }
 }
-
-
