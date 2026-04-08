@@ -3,6 +3,7 @@ import FolderBrowser from './components/FolderBrowser';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
+import RegistrationSuccess from './components/RegistrationSuccess';
 import PDFViewer from './components/PDFViewer';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
@@ -12,6 +13,17 @@ import './App.css';
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
+
+const getAuthViewFromUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const auth = urlParams.get('auth');
+
+    if (auth === 'signup-success') {
+        return 'signup-success';
+    }
+
+    return auth === 'signup' ? 'signup' : 'login';
+};
 
 // Professional SVG Icons (Google Drive style)
 const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
@@ -210,7 +222,7 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [authView, setAuthView] = useState(() => new URLSearchParams(window.location.search).get('auth') === 'signup' ? 'signup' : 'login');
+    const [authView, setAuthView] = useState(getAuthViewFromUrl);
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
     const [selectedFolderId, setSelectedFolderId] = useState(() => {
         // Honor explicit deep links, otherwise always start from Home on app reopen.
@@ -269,7 +281,7 @@ function App() {
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
-        setAuthView(urlParams.get('auth') === 'signup' ? 'signup' : 'login');
+        setAuthView(getAuthViewFromUrl());
         setInviteEmail(urlParams.get('email') || '');
     }, []);
 
@@ -367,6 +379,13 @@ function App() {
             } else {
                 url.searchParams.delete('email');
             }
+        } else if (nextView === 'signup-success') {
+            url.searchParams.set('auth', 'signup-success');
+            if (nextEmail) {
+                url.searchParams.set('email', nextEmail);
+            } else {
+                url.searchParams.delete('email');
+            }
         } else {
             url.searchParams.delete('auth');
             url.searchParams.delete('email');
@@ -382,9 +401,8 @@ function App() {
         checkAuth();
     };
 
-    const handleSignUpSuccess = () => {
-        updateAuthView('login');
-        checkAuth();
+    const handleSignUpSuccess = (email = '') => {
+        updateAuthView('signup-success', email);
     };
 
     const handleSwitchToSignUp = (email = '') => {
@@ -678,6 +696,16 @@ function App() {
                     theme={theme}
                     onThemeChange={(value) => applyTheme(value, false)}
                     initialEmail={inviteEmail}
+                />
+            );
+        }
+        if (authView === 'signup-success') {
+            return (
+                <RegistrationSuccess
+                    email={inviteEmail}
+                    theme={theme}
+                    onThemeChange={(value) => applyTheme(value, false)}
+                    onContinueToLogin={handleSwitchToLogin}
                 />
             );
         }

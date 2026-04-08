@@ -13,7 +13,6 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [signupComplete, setSignupComplete] = useState(false);
 
     useEffect(() => {
         setFormData((current) => ({ ...current, email: initialEmail }));
@@ -50,7 +49,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
 
         try {
             await authAPI.signUp(formData.email, formData.password, formData.fullName);
-            setSignupComplete(true);
+            onSignUpSuccess?.(formData.email);
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to create account. Please try again.');
         } finally {
@@ -61,11 +60,6 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
     const handleThemeToggle = () => {
         const newTheme = theme === 'light' ? 'dark' : 'light';
         onThemeChange?.(newTheme);
-    };
-
-    const handleGoToLogin = () => {
-        onSignUpSuccess?.();
-        onSwitchToLogin();
     };
 
     return (
@@ -85,86 +79,73 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                     <div className="auth-logo">
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
                     </div>
-                    <h2>{signupComplete ? 'Account Created' : 'Create Account'}</h2>
-                    <p>{signupComplete ? 'Your account is ready. You can log in now.' : 'Sign up to get started'}</p>
+                    <h2>Create Account</h2>
+                    <p>Sign up to get started</p>
                 </div>
 
-                {signupComplete ? (
-                    <div className="auth-success-panel">
-                        <div className="auth-success-message">
-                            You have successfully signed up with <strong>{formData.email}</strong>.
-                        </div>
-                        <button type="button" className="auth-button" onClick={handleGoToLogin}>
-                            Go To Login
-                        </button>
+                <form onSubmit={handleSubmit} className="auth-form">
+                    <div className="form-field">
+                        <label>Full Name</label>
+                        <input
+                            type="text"
+                            name="fullName"
+                            value={formData.fullName}
+                            onChange={handleChange}
+                            placeholder="John Doe"
+                            required
+                            autoFocus
+                        />
                     </div>
-                ) : (
-                    <>
-                        <form onSubmit={handleSubmit} className="auth-form">
-                            <div className="form-field">
-                                <label>Full Name</label>
-                                <input
-                                    type="text"
-                                    name="fullName"
-                                    value={formData.fullName}
-                                    onChange={handleChange}
-                                    placeholder="John Doe"
-                                    required
-                                    autoFocus
-                                />
-                            </div>
 
-                            <div className="form-field">
-                                <label>Email</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    placeholder="you@example.com"
-                                    required
-                                />
-                            </div>
+                    <div className="form-field">
+                        <label>Email</label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            placeholder="you@example.com"
+                            required
+                        />
+                    </div>
 
-                            <div className="form-field">
-                                <label>Password</label>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    placeholder="????????"
-                                    required
-                                />
-                            </div>
+                    <div className="form-field">
+                        <label>Password</label>
+                        <input
+                            type="password"
+                            name="password"
+                            value={formData.password}
+                            onChange={handleChange}
+                            placeholder="????????"
+                            required
+                        />
+                    </div>
 
-                            <div className="form-field">
-                                <label>Confirm Password</label>
-                                <input
-                                    type="password"
-                                    name="confirmPassword"
-                                    value={formData.confirmPassword}
-                                    onChange={handleChange}
-                                    placeholder="????????"
-                                    required
-                                />
-                            </div>
+                    <div className="form-field">
+                        <label>Confirm Password</label>
+                        <input
+                            type="password"
+                            name="confirmPassword"
+                            value={formData.confirmPassword}
+                            onChange={handleChange}
+                            placeholder="????????"
+                            required
+                        />
+                    </div>
 
-                            {error && <div className="error-message">{error}</div>}
+                    {error && <div className="error-message">{error}</div>}
 
-                            <button type="submit" className="auth-button" disabled={loading}>
-                                {loading ? 'Creating account...' : 'Sign Up'}
-                            </button>
-                        </form>
+                    <button type="submit" className="auth-button" disabled={loading}>
+                        {loading ? 'Creating account...' : 'Sign Up'}
+                    </button>
+                </form>
 
-                        <div className="auth-switch">
-                            <span>Already have an account?</span>
-                            <button type="button" className="switch-button" onClick={onSwitchToLogin}>
-                                Sign In
-                            </button>
-                        </div>
-                    </>
-                )}
+                <div className="auth-switch">
+                    <span>Already have an account?</span>
+                    <button type="button" className="switch-button" onClick={onSwitchToLogin}>
+                        Sign In
+                    </button>
+                </div>
             </div>
         </div>
     );
