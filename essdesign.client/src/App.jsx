@@ -781,54 +781,6 @@ function App() {
         }
     };
 
-    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }) => {
-        const url = new URL(window.location.href);
-
-        if (folderId) {
-            url.searchParams.set('folder', folderId);
-        } else {
-            url.searchParams.delete('folder');
-        }
-
-        if (page && page !== 'design') {
-            url.searchParams.set('page', page);
-        } else {
-            url.searchParams.delete('page');
-        }
-
-        if (nextSafetyContext.builder?.id) {
-            url.searchParams.set('builder', nextSafetyContext.builder.id);
-        } else {
-            url.searchParams.delete('builder');
-        }
-
-        if (nextSafetyContext.project?.id) {
-            url.searchParams.set('project', nextSafetyContext.project.id);
-        } else {
-            url.searchParams.delete('project');
-        }
-
-        return `${url.pathname}${url.search}`;
-    }, []);
-
-    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, { pushHistory = true } = {}) => {
-        setCurrentPage(page);
-        setSafetyContext(nextSafetyContext);
-
-        const state = {
-            folderId: selectedFolderId,
-            page,
-            safetyContext: nextSafetyContext
-        };
-
-        const targetUrl = buildAppUrl(selectedFolderId, page, nextSafetyContext);
-        if (pushHistory) {
-            window.history.pushState(state, '', targetUrl);
-        } else {
-            window.history.replaceState(state, '', targetUrl);
-        }
-    }, [buildAppUrl, selectedFolderId]);
-
     const renderCurrentPage = () => {
         if (currentPage === 'site-information') {
             return <SiteInformationPage />;
@@ -1173,7 +1125,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
