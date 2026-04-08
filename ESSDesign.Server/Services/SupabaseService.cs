@@ -1569,6 +1569,18 @@ namespace ESSDesign.Server.Services
             return null;
         }
 
+        private static Guid? TryGetGuid(JsonElement obj, string propertyName)
+        {
+            var value = GetJsonString(obj, propertyName);
+            return Guid.TryParse(value, out var parsed) ? parsed : null;
+        }
+
+        private static DateTime? TryGetDateTime(JsonElement obj, string propertyName)
+        {
+            var value = GetJsonString(obj, propertyName);
+            return DateTime.TryParse(value, out var parsed) ? parsed : null;
+        }
+
         public async Task<List<UserInfo>> GetAllUsersAsync()
         {
             try
@@ -1768,8 +1780,64 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                return await GetRestRowsAsync<UserNotification>(
-                    $"user_notifications?select={Uri.EscapeDataString("id,user_id,title,message,type,actor_name,actor_image_url,folder_id,document_id,read,created_at,updated_at")}&user_id=eq.{normalizedUserId}&order=created_at.desc");
+                if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+                {
+                    throw new InvalidOperationException("Supabase URL or key not configured.");
+                }
+
+                var client = _httpClientFactory.CreateClient();
+                var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/user_notifications?select={Uri.EscapeDataString("id,user_id,title,message,type,actor_name,actor_image_url,folder_id,document_id,read,created_at,updated_at")}&user_id=eq.{normalizedUserId}&order=created_at.desc";
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("apikey", _supabaseKey);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+                using var response = await client.SendAsync(request);
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException($"Supabase notifications request failed with status {(int)response.StatusCode}: {body}");
+                }
+
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    return new List<UserNotification>();
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                {
+                    return new List<UserNotification>();
+                }
+
+                var notifications = new List<UserNotification>();
+                foreach (var item in doc.RootElement.EnumerateArray())
+                {
+                    var notificationId = TryGetGuid(item, "id");
+                    var notificationUserId = TryGetGuid(item, "user_id");
+                    if (notificationId == null || notificationUserId == null)
+                    {
+                        continue;
+                    }
+
+                    notifications.Add(new UserNotification
+                    {
+                        Id = notificationId.Value,
+                        UserId = notificationUserId.Value,
+                        Title = GetJsonString(item, "title") ?? string.Empty,
+                        Message = GetJsonString(item, "message") ?? string.Empty,
+                        Type = GetJsonString(item, "type") ?? "document_update",
+                        ActorName = GetJsonString(item, "actor_name"),
+                        ActorImageUrl = GetJsonString(item, "actor_image_url"),
+                        FolderId = TryGetGuid(item, "folder_id"),
+                        DocumentId = TryGetGuid(item, "document_id"),
+                        Read = item.TryGetProperty("read", out var readProperty) && readProperty.ValueKind == JsonValueKind.True,
+                        CreatedAt = TryGetDateTime(item, "created_at") ?? DateTime.UtcNow,
+                        UpdatedAt = TryGetDateTime(item, "updated_at") ?? DateTime.UtcNow
+                    });
+                }
+
+                return notifications;
             }
             catch (Exception ex)
             {
@@ -1879,5 +1947,4 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
-
 
