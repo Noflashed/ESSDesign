@@ -24,17 +24,17 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<UserNotification>>> GetNotifications()
+        public async Task<ActionResult<List<UserNotification>>> GetNotifications([FromQuery] string? userId = null)
         {
             try
             {
-                var userId = GetUserIdOptional();
-                if (userId == Guid.Empty)
+                var resolvedUserId = ResolveUserId(userId);
+                if (resolvedUserId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var notifications = await _supabaseService.GetUserNotificationsAsync(userId.ToString());
+                var notifications = await _supabaseService.GetUserNotificationsAsync(resolvedUserId.ToString());
                 return Ok(notifications);
             }
             catch (Exception ex)
@@ -45,17 +45,17 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpPost("read-all")]
-        public async Task<ActionResult> MarkAllRead()
+        public async Task<ActionResult> MarkAllRead([FromBody] NotificationUserRequest? request = null)
         {
             try
             {
-                var userId = GetUserIdOptional();
-                if (userId == Guid.Empty)
+                var resolvedUserId = ResolveUserId(request?.UserId);
+                if (resolvedUserId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                await _supabaseService.MarkAllUserNotificationsReadAsync(userId.ToString());
+                await _supabaseService.MarkAllUserNotificationsReadAsync(resolvedUserId.ToString());
                 return Ok(new { message = "Notifications marked as read" });
             }
             catch (Exception ex)
@@ -66,17 +66,17 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpDelete("{notificationId}")]
-        public async Task<ActionResult> DeleteNotification(Guid notificationId)
+        public async Task<ActionResult> DeleteNotification(Guid notificationId, [FromQuery] string? userId = null)
         {
             try
             {
-                var userId = GetUserIdOptional();
-                if (userId == Guid.Empty)
+                var resolvedUserId = ResolveUserId(userId);
+                if (resolvedUserId == Guid.Empty)
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                await _supabaseService.DeleteUserNotificationAsync(userId.ToString(), notificationId);
+                await _supabaseService.DeleteUserNotificationAsync(resolvedUserId.ToString(), notificationId);
                 return Ok(new { message = "Notification deleted" });
             }
             catch (Exception ex)
@@ -128,6 +128,19 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        private Guid ResolveUserId(string? fallbackUserId)
+        {
+            var userId = GetUserIdOptional();
+            if (userId != Guid.Empty)
+            {
+                return userId;
+            }
+
+            return Guid.TryParse(fallbackUserId, out var parsedUserId)
+                ? parsedUserId
+                : Guid.Empty;
+        }
+
         private Guid GetUserIdOptional()
         {
             try
@@ -162,6 +175,11 @@ namespace ESSDesign.Server.Controllers
             {
                 return Guid.Empty;
             }
+        }
+
+        public class NotificationUserRequest
+        {
+            public string? UserId { get; set; }
         }
     }
 }
