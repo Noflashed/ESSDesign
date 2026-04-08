@@ -517,12 +517,17 @@ body {
 
 .site-registry-card {
     min-height: 540px;
+    max-height: 540px;
     align-content: start;
+    overflow: hidden;
 }
 
 .site-registry-builder-list,
 .site-registry-project-list {
     align-content: start;
+    overflow-y: auto;
+    max-height: 430px;
+    padding-right: 4px;
 }
 
 .module-file-row {
@@ -560,6 +565,13 @@ body {
     display: grid;
     gap: 12px;
     min-height: 94px;
+    align-content: start;
+    flex-shrink: 0;
+}
+
+.module-list-card-archived {
+    opacity: 0.78;
+    border-style: dashed;
 }
 
 .module-list-actions {

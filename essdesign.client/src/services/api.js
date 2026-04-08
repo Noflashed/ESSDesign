@@ -321,6 +321,8 @@ function parseSafetyProjects(raw) {
                             .map(project => ({
                                 id: project.id || makeId(),
                                 name: project.name.trim(),
+                                archived: Boolean(project.archived),
+                                archivedAt: project.archivedAt || null,
                                 createdAt: project.createdAt || nowIso(),
                                 updatedAt: project.updatedAt || nowIso()
                             }))
@@ -335,6 +337,15 @@ function parseSafetyProjects(raw) {
     }
 
     return { builders: [], updatedAt: nowIso() };
+}
+
+function cloneSafetyBuilders(builders, { includeArchived = true } = {}) {
+    return builders.map(builder => ({
+        ...builder,
+        projects: builder.projects
+            .filter(project => includeArchived || !project.archived)
+            .map(project => ({ ...project }))
+    }));
 }
 
 async function saveSafetyProjectsDocument(doc) {
@@ -429,7 +440,7 @@ function mapEmployeeRow(row) {
 }
 
 export const safetyProjectsAPI = {
-    getBuilders: async () => {
+    getBuilders: async ({ includeArchived = false } = {}) => {
         await ensureSafetyBucketAccess();
         const response = await fetch(`${safetyProjectsObjectUrl()}?t=${Date.now()}`, {
             method: 'GET',
@@ -449,7 +460,7 @@ export const safetyProjectsAPI = {
         }
 
         const json = await response.json();
-        return parseSafetyProjects(json).builders;
+        return cloneSafetyBuilders(parseSafetyProjects(json).builders, { includeArchived });
     },
 
     createBuilderAndProject: async (builderName, projectName) => {
@@ -459,7 +470,7 @@ export const safetyProjectsAPI = {
             throw new Error('Builder and project names are required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const existingBuilder = builders.find(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
         const timestamp = nowIso();
 
@@ -471,6 +482,8 @@ export const safetyProjectsAPI = {
             existingBuilder.projects.push({
                 id: makeId(),
                 name: cleanProject,
+                archived: false,
+                archivedAt: null,
                 createdAt: timestamp,
                 updatedAt: timestamp
             });
@@ -483,6 +496,8 @@ export const safetyProjectsAPI = {
                 projects: [{
                     id: makeId(),
                     name: cleanProject,
+                    archived: false,
+                    archivedAt: null,
                     createdAt: timestamp,
                     updatedAt: timestamp
                 }],
@@ -502,7 +517,7 @@ export const safetyProjectsAPI = {
             throw new Error('Builder name is required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
         if (duplicate) {
             throw new Error('A builder with that name already exists');
@@ -530,7 +545,7 @@ export const safetyProjectsAPI = {
             throw new Error('Project site name is required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -545,6 +560,8 @@ export const safetyProjectsAPI = {
         builder.projects.push({
             id: makeId(),
             name: cleanProject,
+            archived: false,
+            archivedAt: null,
             createdAt: timestamp,
             updatedAt: timestamp
         });
@@ -559,7 +576,7 @@ export const safetyProjectsAPI = {
         if (!clean) {
             throw new Error('Builder name is required');
         }
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
@@ -580,7 +597,7 @@ export const safetyProjectsAPI = {
         if (!clean) {
             throw new Error('Project name is required');
         }
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -602,13 +619,13 @@ export const safetyProjectsAPI = {
     },
 
     deleteBuilder: async (builderId) => {
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
         }
         if (target.projects.length > 0) {
-            throw new Error('This builder still has project sites attached. Remove those first.');
+            throw new Error('This builder still has projects attached. Remove those first.');
         }
         const nextBuilders = builders.filter(builder => builder.id !== builderId);
         await saveSafetyProjectsDocument({ builders: nextBuilders, updatedAt: nowIso() });
@@ -616,13 +633,49 @@ export const safetyProjectsAPI = {
     },
 
     deleteProject: async (builderId, projectId) => {
-        const builders = await safetyProjectsAPI.getBuilders();
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
         }
         target.projects = target.projects.filter(project => project.id !== projectId);
         target.updatedAt = nowIso();
+        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
+        return builders;
+    },
+
+    archiveProject: async (builderId, projectId) => {
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builder = builders.find(item => item.id === builderId);
+        if (!builder) {
+            throw new Error('Builder not found');
+        }
+        const project = builder.projects.find(item => item.id === projectId);
+        if (!project) {
+            throw new Error('Project not found');
+        }
+        project.archived = true;
+        project.archivedAt = nowIso();
+        project.updatedAt = nowIso();
+        builder.updatedAt = nowIso();
+        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
+        return builders;
+    },
+
+    unarchiveProject: async (builderId, projectId) => {
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builder = builders.find(item => item.id === builderId);
+        if (!builder) {
+            throw new Error('Builder not found');
+        }
+        const project = builder.projects.find(item => item.id === projectId);
+        if (!project) {
+            throw new Error('Project not found');
+        }
+        project.archived = false;
+        project.archivedAt = null;
+        project.updatedAt = nowIso();
+        builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
     }
@@ -1092,5 +1145,3 @@ export const usersAPI = {
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
-
-

@@ -114,7 +114,7 @@ export default function ESSRosteringPage({ user }) {
                         </div>
                         <div className="module-card-title minor">Active Job Sites</div>
                         <div className="module-check-list">
-                            {sites.length === 0 ? <div className="module-empty-inline">No project sites available.</div> : null}
+                            {sites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
                             {sites.map(site => (
                                 <label key={site.id} className="module-check-row">
                                     <input type="checkbox" checked={activeSiteIds.includes(site.id)} onChange={() => toggleSite(site.id)} />

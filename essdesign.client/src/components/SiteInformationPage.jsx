@@ -16,6 +16,7 @@ export default function SiteInformationPage() {
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [showProjectModal, setShowProjectModal] = useState(false);
     const [showBuilderModal, setShowBuilderModal] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
     const [projectForm, setProjectForm] = useState(emptyProjectForm());
     const [builderForm, setBuilderForm] = useState({ id: null, name: '' });
     const [error, setError] = useState('');
@@ -24,7 +25,7 @@ export default function SiteInformationPage() {
         setLoading(true);
         setError('');
         try {
-            const nextBuilders = await safetyProjectsAPI.getBuilders();
+            const nextBuilders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
             setBuilders(nextBuilders);
             setSelectedBuilderId(prev => prev && nextBuilders.some(builder => builder.id === prev) ? prev : (nextBuilders[0]?.id || ''));
         } catch (err) {
@@ -41,6 +42,21 @@ export default function SiteInformationPage() {
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
         [builders, selectedBuilderId]
+    );
+
+    const visibleProjects = useMemo(
+        () => (selectedBuilder?.projects || []).filter(project => showArchived || !project.archived),
+        [selectedBuilder, showArchived]
+    );
+
+    const activeProjectCount = useMemo(
+        () => builders.reduce((count, builder) => count + builder.projects.filter(project => !project.archived).length, 0),
+        [builders]
+    );
+
+    const archivedProjectCount = useMemo(
+        () => builders.reduce((count, builder) => count + builder.projects.filter(project => project.archived).length, 0),
+        [builders]
     );
 
     const openCreateProject = () => {
@@ -104,7 +120,7 @@ export default function SiteInformationPage() {
     };
 
     const removeProject = async (builderId, projectId) => {
-        const confirmed = window.confirm('Delete this project site?');
+        const confirmed = window.confirm('Delete this project?');
         if (!confirmed) {
             return;
         }
@@ -116,12 +132,33 @@ export default function SiteInformationPage() {
         }
     };
 
+    const toggleArchiveProject = async (builderId, project) => {
+        const isArchiving = !project.archived;
+        const confirmed = window.confirm(
+            isArchiving
+                ? `Archive "${project.name}"? Archived jobs will be hidden from ESS Safety, rostering, and employee preferences until restored.`
+                : `Unarchive "${project.name}"?`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            const nextBuilders = isArchiving
+                ? await safetyProjectsAPI.archiveProject(builderId, project.id)
+                : await safetyProjectsAPI.unarchiveProject(builderId, project.id);
+            setBuilders(nextBuilders);
+        } catch (err) {
+            setError(err.message || `Could not ${isArchiving ? 'archive' : 'unarchive'} project`);
+        }
+    };
+
     const removeBuilder = async (builder) => {
         if (!builder) {
             return;
         }
         if (builder.projects.length > 0) {
-            window.alert('This builder cannot be deleted while project sites are still attached. Delete or move those project sites first.');
+            window.alert('This builder cannot be deleted while projects are still attached. Delete, move, or archive those projects first.');
             return;
         }
         const confirmed = window.confirm(`Delete builder "${builder.name}"?`);
@@ -144,7 +181,7 @@ export default function SiteInformationPage() {
                 <div className="module-header">
                     <div>
                         <h2>Site Registry</h2>
-                        <p>Manage shared builders and project sites for both the web app and iOS app.</p>
+                        <p>Manage shared builders and projects for both the web app and iOS app.</p>
                     </div>
                     <div className="module-list-actions">
                         <button className="module-primary-btn compact" onClick={openCreateBuilder}>Add Builder</button>
@@ -172,7 +209,10 @@ export default function SiteInformationPage() {
                                         >
                                             <div>
                                                 <div className="module-item-title">{builder.name}</div>
-                                                <div className="module-item-sub">{builder.projects.length} project{builder.projects.length === 1 ? '' : 's'}</div>
+                                                <div className="module-item-sub">
+                                                    {builder.projects.filter(project => !project.archived).length} active
+                                                    {builder.projects.some(project => project.archived) ? ` • ${builder.projects.filter(project => project.archived).length} archived` : ''}
+                                                </div>
                                             </div>
                                             <span className="module-link-arrow">Select</span>
                                         </button>
@@ -183,26 +223,41 @@ export default function SiteInformationPage() {
 
                         <section className="module-card site-registry-card">
                             <div className="module-list-header">
-                                <div className="module-card-title">Projects</div>
-                                {selectedBuilder ? (
-                                    <button className="module-secondary-btn compact" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
-                                ) : null}
+                                <div>
+                                    <div className="module-card-title">Projects</div>
+                                    <div className="module-item-sub">{activeProjectCount} active • {archivedProjectCount} archived</div>
+                                </div>
+                                <div className="module-list-actions">
+                                    <button className="module-secondary-btn compact" onClick={() => setShowArchived(prev => !prev)}>
+                                        {showArchived ? 'Hide Archived Jobs' : 'Show Archived Jobs'}
+                                    </button>
+                                    {selectedBuilder ? (
+                                        <button className="module-secondary-btn compact" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
+                                    ) : null}
+                                </div>
                             </div>
                             {!selectedBuilder ? (
                                 <div className="module-empty-inline">Select a builder to manage its projects.</div>
-                            ) : selectedBuilder.projects.length === 0 ? (
-                                <div className="module-empty-inline">This builder has no projects yet.</div>
+                            ) : visibleProjects.length === 0 ? (
+                                <div className="module-empty-inline">
+                                    {showArchived ? 'This builder has no projects yet.' : 'This builder has no active projects.'}
+                                </div>
                             ) : (
                                 <div className="module-list site-registry-project-list">
-                                    {selectedBuilder.projects.map(project => (
-                                        <div key={project.id} className="module-list-card">
+                                    {visibleProjects.map(project => (
+                                        <div key={project.id} className={`module-list-card ${project.archived ? 'module-list-card-archived' : ''}`}>
                                             <div className="module-list-header">
                                                 <div>
                                                     <div className="module-item-title">{project.name}</div>
-                                                    <div className="module-item-sub">{selectedBuilder.name}</div>
+                                                    <div className="module-item-sub">
+                                                        {selectedBuilder.name}{project.archived ? ' • Archived' : ''}
+                                                    </div>
                                                 </div>
                                                 <div className="module-list-actions">
                                                     <button className="module-secondary-btn" onClick={() => openEditProject(selectedBuilder.id, project)}>Edit</button>
+                                                    <button className="module-secondary-btn" onClick={() => toggleArchiveProject(selectedBuilder.id, project)}>
+                                                        {project.archived ? 'Unarchive' : 'Archive'}
+                                                    </button>
                                                     <button className="module-danger-btn" onClick={() => removeProject(selectedBuilder.id, project.id)}>Delete</button>
                                                 </div>
                                             </div>

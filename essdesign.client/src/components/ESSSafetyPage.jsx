@@ -75,7 +75,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                             </select>
                         </div>
                         <div className="module-field">
-                            <label>Project Site</label>
+                            <label>Project</label>
                             <select value={selectedProject?.id || ''} onChange={e => setSelectedProjectId(e.target.value)} disabled={!selectedBuilder}>
                                 {!selectedBuilder ? <option value="">Select builder</option> : null}
                                 {selectedBuilder?.projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
