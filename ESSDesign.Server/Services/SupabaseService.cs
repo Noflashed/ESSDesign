@@ -1769,7 +1769,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 return await GetRestRowsAsync<UserNotification>(
-                    $"user_notifications?select={Uri.EscapeDataString("id,userId:user_id,title,message,type,actorName:actor_name,actorImageUrl:actor_image_url,folderId:folder_id,documentId:document_id,read,createdAt:created_at,updatedAt:updated_at")}&user_id=eq.{normalizedUserId}&order=created_at.desc");
+                    $"user_notifications?select={Uri.EscapeDataString("id,user_id,title,message,type,actor_name,actor_image_url,folder_id,document_id,read,created_at,updated_at")}&user_id=eq.{normalizedUserId}&order=created_at.desc");
             }
             catch (Exception ex)
             {
@@ -1879,6 +1879,5 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
-
 
 
