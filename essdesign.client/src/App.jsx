@@ -273,6 +273,7 @@ function App() {
     const [currentPage, setCurrentPage] = useState('design');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
+    const showHeaderSearch = currentPage === 'design';
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
@@ -344,6 +345,12 @@ function App() {
         setAuthView(getAuthViewFromUrl());
         setInviteEmail(urlParams.get('email') || '');
     }, []);
+
+    useEffect(() => {
+        if (!showHeaderSearch) {
+            setShowSearchResults(false);
+        }
+    }, [showHeaderSearch]);
 
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
@@ -910,63 +917,65 @@ function App() {
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="logo-icon" />
                     </div>
                 </div>
-                <div className="header-center" ref={searchRef}>
-                    <div className="search-bar">
-                        <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input
-                            type="text"
-                            className="search-input"
-                            placeholder="Search folders..."
-                            value={searchQuery}
-                            onChange={(e) => handleSearch(e.target.value)}
-                            onFocus={() => { if (searchQuery.trim().length >= 2) setShowSearchResults(true); }}
-                        />
-                        {searchQuery && (
-                            <button className="search-clear" onClick={closeSearch}>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-                    {showSearchResults && (
-                        <div className="search-results-dropdown">
-                            {searchLoading ? (
-                                <div className="search-loading">
-                                    <div className="spinner-small"></div>
-                                    Searching...
-                                </div>
-                            ) : searchResults.length === 0 ? (
-                                <div className="search-empty">No folders found for "{searchQuery}"</div>
-                            ) : (
-                                searchResults.map(result => (
-                                    <div key={result.id} className="search-result-item">
-                                        <div className="search-result-header" onClick={() => handleSearchNavigate(result.id)}>
-                                            <span className="search-result-icon"><FolderIcon size={18} /></span>
-                                            <div className="search-result-info">
-                                                <div className="search-result-name">{result.name}</div>
-                                                {result.path && <div className="search-result-path">{result.path}</div>}
-                                            </div>
-                                        </div>
-                                        <div className="search-result-contents">
-                                            <div className="search-folder-row" style={{ paddingLeft: '40px' }}>
-                                                <span className="search-doc-name">
-                                                    {result.subFolderCount || 0} subfolder{(result.subFolderCount || 0) === 1 ? '' : 's'}
-                                                    {' - '}
-                                                    {result.documentCount || 0} document{(result.documentCount || 0) === 1 ? '' : 's'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
+                {showHeaderSearch ? (
+                    <div className="header-center" ref={searchRef}>
+                        <div className="search-bar">
+                            <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input
+                                type="text"
+                                className="search-input"
+                                placeholder="Search folders..."
+                                value={searchQuery}
+                                onChange={(e) => handleSearch(e.target.value)}
+                                onFocus={() => { if (searchQuery.trim().length >= 2) setShowSearchResults(true); }}
+                            />
+                            {searchQuery && (
+                                <button className="search-clear" onClick={closeSearch}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
                             )}
                         </div>
-                    )}
-                </div>
+                        {showSearchResults && (
+                            <div className="search-results-dropdown">
+                                {searchLoading ? (
+                                    <div className="search-loading">
+                                        <div className="spinner-small"></div>
+                                        Searching...
+                                    </div>
+                                ) : searchResults.length === 0 ? (
+                                    <div className="search-empty">No folders found for "{searchQuery}"</div>
+                                ) : (
+                                    searchResults.map(result => (
+                                        <div key={result.id} className="search-result-item">
+                                            <div className="search-result-header" onClick={() => handleSearchNavigate(result.id)}>
+                                                <span className="search-result-icon"><FolderIcon size={18} /></span>
+                                                <div className="search-result-info">
+                                                    <div className="search-result-name">{result.name}</div>
+                                                    {result.path && <div className="search-result-path">{result.path}</div>}
+                                                </div>
+                                            </div>
+                                            <div className="search-result-contents">
+                                                <div className="search-folder-row" style={{ paddingLeft: '40px' }}>
+                                                    <span className="search-doc-name">
+                                                        {result.subFolderCount || 0} subfolder{(result.subFolderCount || 0) === 1 ? '' : 's'}
+                                                        {' - '}
+                                                        {result.documentCount || 0} document{(result.documentCount || 0) === 1 ? '' : 's'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : null}
                 <div className="header-right">
                     <WebNavDrawer
                         open={showNavDrawer}
@@ -1125,7 +1134,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
