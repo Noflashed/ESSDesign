@@ -511,6 +511,20 @@ body {
     gap: 12px;
 }
 
+.site-registry-grid {
+    align-items: stretch;
+}
+
+.site-registry-card {
+    min-height: 540px;
+    align-content: start;
+}
+
+.site-registry-builder-list,
+.site-registry-project-list {
+    align-content: start;
+}
+
 .module-file-row {
     width: 100%;
     border: 1px solid var(--border-color);
@@ -524,6 +538,7 @@ body {
     cursor: pointer;
     text-align: left;
     color: var(--text-primary);
+    min-height: 72px;
 }
 
 .module-file-row.active-row {
@@ -544,6 +559,7 @@ body {
     background: var(--bg-primary);
     display: grid;
     gap: 12px;
+    min-height: 94px;
 }
 
 .module-list-actions {

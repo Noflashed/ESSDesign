@@ -143,11 +143,11 @@ export default function SiteInformationPage() {
             <div className="module-shell">
                 <div className="module-header">
                     <div>
-                        <h2>Site Information</h2>
+                        <h2>Site Registry</h2>
                         <p>Manage shared builders and project sites for both the web app and iOS app.</p>
                     </div>
                     <div className="module-list-actions">
-                        <button className="module-secondary-btn compact" onClick={openCreateBuilder}>Builders</button>
+                        <button className="module-primary-btn compact" onClick={openCreateBuilder}>Add Builder</button>
                         <button className="module-primary-btn compact" onClick={openCreateProject}>Add Project</button>
                     </div>
                 </div>
@@ -157,13 +157,13 @@ export default function SiteInformationPage() {
                 {loading ? (
                     <div className="module-empty">Loading site information...</div>
                 ) : (
-                    <div className="module-grid module-grid-two">
-                        <section className="module-card">
+                    <div className="module-grid module-grid-two site-registry-grid">
+                        <section className="module-card site-registry-card">
                             <div className="module-card-title">Builders</div>
                             {builders.length === 0 ? (
                                 <div className="module-empty-inline">No builders created yet.</div>
                             ) : (
-                                <div className="module-list">
+                                <div className="module-list site-registry-builder-list">
                                     {builders.map(builder => (
                                         <button
                                             key={builder.id}
@@ -172,7 +172,7 @@ export default function SiteInformationPage() {
                                         >
                                             <div>
                                                 <div className="module-item-title">{builder.name}</div>
-                                                <div className="module-item-sub">{builder.projects.length} site{builder.projects.length === 1 ? '' : 's'}</div>
+                                                <div className="module-item-sub">{builder.projects.length} project{builder.projects.length === 1 ? '' : 's'}</div>
                                             </div>
                                             <span className="module-link-arrow">Select</span>
                                         </button>
@@ -181,19 +181,19 @@ export default function SiteInformationPage() {
                             )}
                         </section>
 
-                        <section className="module-card">
+                        <section className="module-card site-registry-card">
                             <div className="module-list-header">
-                                <div className="module-card-title">Project Sites</div>
+                                <div className="module-card-title">Projects</div>
                                 {selectedBuilder ? (
                                     <button className="module-secondary-btn compact" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
                                 ) : null}
                             </div>
                             {!selectedBuilder ? (
-                                <div className="module-empty-inline">Select a builder to manage its project sites.</div>
+                                <div className="module-empty-inline">Select a builder to manage its projects.</div>
                             ) : selectedBuilder.projects.length === 0 ? (
-                                <div className="module-empty-inline">This builder has no project sites yet.</div>
+                                <div className="module-empty-inline">This builder has no projects yet.</div>
                             ) : (
-                                <div className="module-list">
+                                <div className="module-list site-registry-project-list">
                                     {selectedBuilder.projects.map(project => (
                                         <div key={project.id} className="module-list-card">
                                             <div className="module-list-header">
@@ -219,7 +219,7 @@ export default function SiteInformationPage() {
                 <div className="module-modal-backdrop" onClick={() => setShowProjectModal(false)}>
                     <div className="module-modal compact" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
-                            <h3>{projectForm.editingProjectId ? 'Edit Project Site' : 'Add Project Site'}</h3>
+                            <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
                             <button className="nav-drawer-close" onClick={() => setShowProjectModal(false)}>×</button>
                         </div>
                         <form className="module-form" onSubmit={saveProject}>
@@ -231,7 +231,7 @@ export default function SiteInformationPage() {
                                 </select>
                             </div>
                             <div className="module-field">
-                                <label>Project Site</label>
+                                <label>Project</label>
                                 <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="65 Martin Place" />
                             </div>
                             <button type="submit" className="module-primary-btn" disabled={saving}>
