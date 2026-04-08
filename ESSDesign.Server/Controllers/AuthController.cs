@@ -43,7 +43,7 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var frontendUrl = (_configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app").TrimEnd('/');
-                var confirmationRedirect = $"{frontendUrl}/?auth=signup-success&email={Uri.EscapeDataString(request.Email)}";
+                var confirmationRedirect = $"{frontendUrl}/?auth=signup-confirmed&email={Uri.EscapeDataString(request.Email)}";
                 var adminAuth = _supabase.AdminAuth(serviceRoleKey);
 
                 var generatedLink = await adminAuth.GenerateLink(new GenerateLinkOptions(GenerateLinkOptions.LinkType.SignUp, request.Email)

@@ -56,6 +56,43 @@ const storeAuthSession = (authResponse) => {
     }
 };
 
+const consumeAuthCallbackFromUrl = () => {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    const hash = window.location.hash?.replace(/^#/, '');
+    if (!hash) {
+        return null;
+    }
+
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const tokenType = hashParams.get('token_type');
+    const expiresIn = hashParams.get('expires_in');
+    const verificationType = hashParams.get('type');
+
+    if (!accessToken) {
+        return null;
+    }
+
+    storeAuthSession({
+        accessToken,
+        refreshToken: refreshToken || '',
+        tokenType: tokenType || '',
+        expiresIn: expiresIn ? Number(expiresIn) : 0
+    });
+
+    const url = new URL(window.location.href);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+
+    return {
+        hasSession: true,
+        verificationType
+    };
+};
+
 // Add auth token to requests
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
@@ -192,6 +229,7 @@ export const authAPI = {
         const refreshedSession = await refreshAuthSession();
         return refreshedSession.user ?? authAPI.getCurrentUser();
     },
+    consumeAuthCallbackFromUrl,
     isAuthenticated: () => {
         return !!localStorage.getItem('access_token');
     },

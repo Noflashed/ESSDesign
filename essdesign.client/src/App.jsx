@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import RegistrationSuccess from './components/RegistrationSuccess';
+import RegistrationConfirmed from './components/RegistrationConfirmed';
 import PDFViewer from './components/PDFViewer';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
@@ -17,6 +18,10 @@ const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const getAuthViewFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const auth = urlParams.get('auth');
+
+    if (auth === 'signup-confirmed') {
+        return 'signup-confirmed';
+    }
 
     if (auth === 'signup-success') {
         return 'signup-success';
@@ -286,6 +291,13 @@ function App() {
     }, []);
 
     const checkAuth = async () => {
+        const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
+        const emailFromUrl = new URLSearchParams(window.location.search).get('email') || '';
+
+        if (callbackResult?.hasSession) {
+            updateAuthView('signup-confirmed', emailFromUrl);
+        }
+
         const authenticated = authAPI.isAuthenticated();
         const currentUser = authAPI.getCurrentUser();
 
@@ -386,8 +398,8 @@ function App() {
             } else {
                 url.searchParams.delete('email');
             }
-        } else if (nextView === 'signup-success') {
-            url.searchParams.set('auth', 'signup-success');
+        } else if (nextView === 'signup-success' || nextView === 'signup-confirmed') {
+            url.searchParams.set('auth', nextView);
             if (nextEmail) {
                 url.searchParams.set('email', nextEmail);
             } else {
@@ -410,6 +422,15 @@ function App() {
 
     const handleSignUpSuccess = (email = '') => {
         updateAuthView('signup-success', email);
+    };
+
+    const handleConfirmationContinue = () => {
+        if (isAuthenticated) {
+            updateAuthView('login');
+            return;
+        }
+
+        updateAuthView('login');
     };
 
     const handleSwitchToSignUp = (email = '') => {
@@ -691,6 +712,18 @@ function App() {
                     <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
                 </div>
             </div>
+        );
+    }
+
+    if (authView === 'signup-confirmed') {
+        return (
+            <RegistrationConfirmed
+                email={inviteEmail}
+                theme={theme}
+                onThemeChange={(value) => applyTheme(value, false)}
+                isAuthenticated={isAuthenticated}
+                onContinue={handleConfirmationContinue}
+            />
         );
     }
 
