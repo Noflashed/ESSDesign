@@ -1,5 +1,6 @@
 using Resend;
 using ESSDesign.Server.Models;
+using System.Web;
 
 namespace ESSDesign.Server.Services
 {
@@ -42,6 +43,30 @@ namespace ESSDesign.Server.Services
 
             await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
             _logger.LogInformation("Invite email successfully sent to {Email}", recipientEmail);
+        }
+
+        public async Task SendRegistrationConfirmationAsync(string recipientEmail, string fullName, string confirmationLink)
+        {
+            if (string.IsNullOrWhiteSpace(recipientEmail))
+            {
+                throw new InvalidOperationException("Registration confirmation email cannot be sent without a recipient email.");
+            }
+
+            if (string.IsNullOrWhiteSpace(confirmationLink))
+            {
+                throw new InvalidOperationException("Registration confirmation email cannot be sent without a confirmation link.");
+            }
+
+            if (_resend == null)
+            {
+                throw new InvalidOperationException("Registration confirmation email cannot be sent because Resend is not configured.");
+            }
+
+            var subject = "Confirm your ESS Design account";
+            var htmlContent = BuildRegistrationConfirmationEmailContent(recipientEmail, fullName, confirmationLink);
+
+            await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            _logger.LogInformation("Registration confirmation email successfully sent to {Email}", recipientEmail);
         }
 
         public async Task SendDocumentUploadNotificationAsync(
@@ -307,9 +332,9 @@ namespace ESSDesign.Server.Services
 
         private string BuildInviteEmailContent(string recipientEmail, string inviterName, string signUpLink)
         {
-            var safeInviter = System.Web.HttpUtility.HtmlEncode(string.IsNullOrWhiteSpace(inviterName) ? "An ESS Design administrator" : inviterName);
-            var safeRecipient = System.Web.HttpUtility.HtmlEncode(recipientEmail);
-            var safeLink = System.Web.HttpUtility.HtmlAttributeEncode(signUpLink);
+            var safeInviter = HttpUtility.HtmlEncode(string.IsNullOrWhiteSpace(inviterName) ? "An ESS Design administrator" : inviterName);
+            var safeRecipient = HttpUtility.HtmlEncode(recipientEmail);
+            var safeLink = HttpUtility.HtmlAttributeEncode(signUpLink);
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
 
             return $@"
@@ -382,7 +407,7 @@ namespace ESSDesign.Server.Services
 
                             <p style=""font-size:13px;color:#718096;margin:24px 0 0;line-height:1.7;text-align:center;"">
                                 If the button above does not work, copy and paste this link into your browser:<br>
-                                <a href=""{safeLink}"" style=""color:#FF6B35;text-decoration:none;word-break:break-all;"">{System.Web.HttpUtility.HtmlEncode(signUpLink)}</a>
+                                <a href=""{safeLink}"" style=""color:#FF6B35;text-decoration:none;word-break:break-all;"">{HttpUtility.HtmlEncode(signUpLink)}</a>
                             </p>
                         </td>
                     </tr>
@@ -391,6 +416,105 @@ namespace ESSDesign.Server.Services
                             <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
                             <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">
                                 Automated invitation from the ESS Design document management system.<br>
+                                &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
+
+        private string BuildRegistrationConfirmationEmailContent(string recipientEmail, string fullName, string confirmationLink)
+        {
+            var safeRecipient = HttpUtility.HtmlEncode(recipientEmail);
+            var safeFullName = HttpUtility.HtmlEncode(string.IsNullOrWhiteSpace(fullName) ? recipientEmail : fullName);
+            var safeLink = HttpUtility.HtmlAttributeEncode(confirmationLink);
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+</head>
+<body style=""margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d3748;background-color:#edf2f7;-webkit-font-smoothing:antialiased;"">
+    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#edf2f7;padding:40px 20px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""620"" style=""max-width:620px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;"">
+                    <tr>
+                        <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">Confirm Your Account</h1>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Complete your ESS Design registration to activate your account</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
+                                Hi <strong style=""color:#2d3748;"">{safeFullName}</strong>, your account has been created for <strong style=""color:#2d3748;"">{safeRecipient}</strong>.
+                                Confirm your email address to finish setting up ESS Design access.
+                            </p>
+
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                                <tr>
+                                    <td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Account Email</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeRecipient}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding:14px 20px;"">
+                                        <p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Next Step</p>
+                                        <p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">Confirm your email and then sign in to ESS Design</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""margin:24px 0;"">
+                                <tr><td style=""height:1px;background-color:#e2e8f0;font-size:0;line-height:0;"">&nbsp;</td></tr>
+                            </table>
+
+                            <p style=""font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#a0aec0;font-weight:600;margin:0 0 20px;text-align:center;"">Confirm Email</p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
+                                <tr>
+                                    <td align=""center"" valign=""top"" style=""padding:10px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
+                                                    <a href=""{safeLink}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;"">Confirm your email</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style=""font-size:13px;color:#718096;margin:24px 0 0;line-height:1.7;text-align:center;"">
+                                If the button above does not work, copy and paste this link into your browser:<br>
+                                <a href=""{safeLink}"" style=""color:#FF6B35;text-decoration:none;word-break:break-all;"">{HttpUtility.HtmlEncode(confirmationLink)}</a>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align=""center"" style=""background-color:#f7fafc;padding:24px 32px;border-top:1px solid #e2e8f0;"">
+                            <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
+                            <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">
+                                Automated confirmation from the ESS Design document management system.<br>
                                 &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
                             </p>
                         </td>

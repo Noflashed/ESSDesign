@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 using Supabase.Gotrue;
+using Supabase.Gotrue.Responses;
 
 namespace ESSDesign.Server.Controllers
 {
@@ -13,13 +14,20 @@ namespace ESSDesign.Server.Controllers
         private readonly SupabaseService _supabaseService;
         private readonly EmailService _emailService;
         private readonly ILogger<AuthController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(Supabase.Client supabase, SupabaseService supabaseService, EmailService emailService, ILogger<AuthController> logger)
+        public AuthController(
+            Supabase.Client supabase,
+            SupabaseService supabaseService,
+            EmailService emailService,
+            ILogger<AuthController> logger,
+            IConfiguration configuration)
         {
             _supabase = supabase;
             _supabaseService = supabaseService;
             _emailService = emailService;
             _logger = logger;
+            _configuration = configuration;
         }
 
         [HttpPost("signup")]
@@ -27,36 +35,51 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var session = await _supabase.Auth.SignUp(request.Email, request.Password, new SignUpOptions
+                var serviceRoleKey = _configuration["Supabase:ServiceRoleKey"];
+                if (string.IsNullOrWhiteSpace(serviceRoleKey))
                 {
+                    _logger.LogError("Signup error: Supabase service role key is not configured");
+                    return StatusCode(500, new { error = "Signup is not configured correctly." });
+                }
+
+                var frontendUrl = (_configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app").TrimEnd('/');
+                var confirmationRedirect = $"{frontendUrl}/?auth=signup-success&email={Uri.EscapeDataString(request.Email)}";
+                var adminAuth = _supabase.AdminAuth(serviceRoleKey);
+
+                var generatedLink = await adminAuth.GenerateLink(new GenerateLinkOptions(GenerateLinkOptions.LinkType.SignUp, request.Email)
+                {
+                    Password = request.Password,
+                    RedirectTo = confirmationRedirect,
                     Data = new Dictionary<string, object>
                     {
                         { "full_name", request.FullName }
                     }
                 });
 
-                if (session?.User == null)
+                if (generatedLink == null || string.IsNullOrWhiteSpace(generatedLink.Id) || string.IsNullOrWhiteSpace(generatedLink.ActionLink))
                 {
                     return BadRequest(new { error = "Failed to create account" });
                 }
 
                 try
                 {
-                    await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, request.FullName);
-                    await _supabaseService.EnsureUserRoleAsync(session.User.Id);
+                    await _supabaseService.UpsertUserNameAsync(generatedLink.Id, generatedLink.Email ?? request.Email, request.FullName);
+                    await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
                 }
                 catch (Exception nameEx)
                 {
-                    _logger.LogWarning(nameEx, "Failed to initialize user profile records for {UserId}", session.User.Id);
+                    _logger.LogWarning(nameEx, "Failed to initialize user profile records for {UserId}", generatedLink.Id);
                 }
 
-                var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
+                await _emailService.SendRegistrationConfirmationAsync(request.Email, request.FullName, generatedLink.ActionLink);
+
+                var role = await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
 
                 return Ok(new AuthResponse
                 {
-                    AccessToken = session.AccessToken ?? string.Empty,
-                    RefreshToken = session.RefreshToken ?? string.Empty,
-                    User = BuildUserInfo(session.User, request.FullName, role)
+                    AccessToken = string.Empty,
+                    RefreshToken = string.Empty,
+                    User = BuildUserInfo(generatedLink, request.FullName, role)
                 });
             }
             catch (Exception ex)

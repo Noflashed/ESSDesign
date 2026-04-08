@@ -19,16 +19,16 @@ function RegistrationSuccess({ email = '', theme, onThemeChange, onContinueToLog
                     <div className="auth-logo">
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
                     </div>
-                    <h2>Account Created</h2>
+                    <h2>Check Your Email</h2>
                     <p>Your registration was successful.</p>
                 </div>
 
                 <div className="auth-success-panel">
                     <div className="auth-success-message">
                         {email ? (
-                            <>Your account has been created for <strong>{email}</strong>. You can sign in now.</>
+                            <>Your account has been created for <strong>{email}</strong>. We&apos;ve sent a confirmation email. Open that link to activate your account, then sign in.</>
                         ) : (
-                            <>Your account has been created successfully. You can sign in now.</>
+                            <>Your account has been created successfully. We&apos;ve sent a confirmation email. Open that link to activate your account, then sign in.</>
                         )}
                     </div>
                     <button type="button" className="auth-button" onClick={onContinueToLogin}>
