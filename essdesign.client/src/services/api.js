@@ -568,6 +568,189 @@ export const rosteringAPI = {
     }
 };
 
+const safetyModulePrefix = (builderId, projectId, kind) => `site-data/${builderId}/${projectId}/${kind}`;
+const safetyModuleObjectUrl = (path) => `${SUPABASE_URL}/storage/v1/object/${SAFETY_BUCKET}/${path}`;
+const safetyModuleSignUrl = (path) => `${SUPABASE_URL}/storage/v1/object/sign/${SAFETY_BUCKET}/${path}`;
+
+async function uploadStorageObject(path, body, contentType) {
+    const attempts = [
+        { method: 'POST', url: safetyModuleObjectUrl(path), headers: { ...storageHeaders(true), 'x-upsert': 'true' } },
+        { method: 'POST', url: `${safetyModuleObjectUrl(path)}?upsert=true`, headers: storageHeaders(true) },
+        { method: 'PUT', url: safetyModuleObjectUrl(path), headers: { ...storageHeaders(true), 'x-upsert': 'true' } }
+    ];
+
+    let lastError = '';
+    for (const attempt of attempts) {
+        const response = await fetch(attempt.url, {
+            method: attempt.method,
+            headers: {
+                ...attempt.headers,
+                'Content-Type': contentType
+            },
+            body
+        });
+        if (response.ok) {
+            return;
+        }
+        lastError = await response.text();
+    }
+
+    throw new Error(lastError || 'Upload failed');
+}
+
+async function signedStorageUrl(path, expiresIn = 3600) {
+    const response = await fetch(safetyModuleSignUrl(path), {
+        method: 'POST',
+        headers: storageHeaders(true),
+        body: JSON.stringify({ expiresIn })
+    });
+
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || 'Failed to generate signed URL');
+    }
+
+    const payload = await response.json();
+    return `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
+}
+
+async function readStorageJson(path) {
+    const response = await fetch(`${safetyModuleObjectUrl(path)}?t=${Date.now()}`, {
+        method: 'GET',
+        headers: storageHeaders()
+    });
+
+    if (response.status === 404) {
+        return null;
+    }
+
+    if (!response.ok) {
+        const details = await response.text();
+        if ((details || '').toLowerCase().includes('object not found')) {
+            return null;
+        }
+        throw new Error(details || `Failed to load ${path}`);
+    }
+
+    return response.json();
+}
+
+async function deleteStorageObject(path) {
+    const response = await fetch(safetyModuleObjectUrl(path), {
+        method: 'DELETE',
+        headers: storageHeaders()
+    });
+
+    if (response.status === 404) {
+        return;
+    }
+
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to delete ${path}`);
+    }
+}
+
+export const safetyFilesAPI = {
+    listModuleFiles: async (builderId, projectId, kind) => {
+        const prefix = safetyModulePrefix(builderId, projectId, kind);
+        const response = await fetch(safetyBucketListUrl(), {
+            method: 'POST',
+            headers: storageHeaders(true),
+            body: JSON.stringify({ prefix, limit: 200, offset: 0 })
+        });
+
+        if (!response.ok) {
+            const details = await response.text();
+            throw new Error(details || 'Failed to list files');
+        }
+
+        const rows = await response.json();
+        return rows
+            .filter(row => typeof row.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
+            .map(row => ({
+                name: row.name,
+                path: `${prefix}/${row.name}`,
+                updatedAt: row.updated_at || nowIso(),
+                size: row.metadata?.size ?? null
+            }))
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+
+    uploadModulePdf: async (builderId, projectId, kind, file) => {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const objectPath = `${safetyModulePrefix(builderId, projectId, kind)}/${Date.now()}-${safeName}`;
+        await uploadStorageObject(objectPath, file, 'application/pdf');
+    },
+
+    getSignedModuleFileUrl: async (path) => signedStorageUrl(path, 3600)
+};
+
+function parseScaffIndex(raw) {
+    if (!raw || !Array.isArray(raw.forms)) {
+        return { forms: [], updatedAt: nowIso() };
+    }
+
+    return {
+        forms: raw.forms
+            .filter(item => item && typeof item.id === 'string')
+            .map(item => ({
+                ...item,
+                scaffoldNo: item.scaffoldNo || item.tagNumber || '',
+                jobLocation: item.jobLocation || '',
+                latestInspectionDate: item.latestInspectionDate || '',
+                qrTargetUrl: item.qrTargetUrl || '',
+                updatedAt: item.updatedAt || nowIso()
+            }))
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+        updatedAt: raw.updatedAt || nowIso()
+    };
+}
+
+export const scaffTagsAPI = {
+    listForms: async (builderId, projectId) => {
+        const index = await readStorageJson(`site-data/${builderId}/${projectId}/scaff-tags/index.json`);
+        return parseScaffIndex(index).forms;
+    },
+
+    getForm: async (builderId, projectId, formId) => {
+        const form = await readStorageJson(`site-data/${builderId}/${projectId}/scaff-tags/forms/${formId}.json`);
+        if (!form) {
+            return null;
+        }
+        return {
+            ...form,
+            scaffoldNo: form.scaffoldNo || form.tagNumber || '',
+            inspectionRecords: Array.isArray(form.inspectionRecords) ? form.inspectionRecords : [],
+            photoPaths: Array.isArray(form.photoPaths) ? form.photoPaths : []
+        };
+    },
+
+    getPhotoUrl: async (path) => signedStorageUrl(path, 60 * 60 * 24 * 14),
+    getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14),
+    getShareUrl: async (form) => signedStorageUrl(form.sharePath, 60 * 60 * 24 * 365),
+
+    deleteForm: async (builderId, projectId, formId) => {
+        const existing = await scaffTagsAPI.getForm(builderId, projectId, formId);
+        const indexPath = `site-data/${builderId}/${projectId}/scaff-tags/index.json`;
+        const indexRaw = await readStorageJson(indexPath);
+        const nextIndex = {
+            forms: parseScaffIndex(indexRaw).forms.filter(item => item.id !== formId),
+            updatedAt: nowIso()
+        };
+        await uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json');
+
+        const cleanupPaths = [
+            `site-data/${builderId}/${projectId}/scaff-tags/forms/${formId}.json`,
+            existing?.sharePath || `site-data/${builderId}/${projectId}/scaff-tags/share/${formId}.html`,
+            existing?.pdfPath || `site-data/${builderId}/${projectId}/scaff-tags/pdf/${formId}.pdf`,
+            ...(existing?.photoPaths || [])
+        ];
+
+        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
+    }
+};
+
 let searchAbortController = null;
 
 export const foldersAPI = {
@@ -778,7 +961,6 @@ export const usersAPI = {
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
-
 
 
 

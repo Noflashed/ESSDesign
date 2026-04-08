@@ -10,6 +10,8 @@ import WebNavDrawer from './components/WebNavDrawer';
 import ESSSafetyPage from './components/ESSSafetyPage';
 import ESSRosteringPage from './components/ESSRosteringPage';
 import EmployeesPage from './components/EmployeesPage';
+import WebSafetySwmsPage from './components/WebSafetySwmsPage';
+import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -269,6 +271,7 @@ function App() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [currentPage, setCurrentPage] = useState('design');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
+    const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
@@ -712,7 +715,36 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'safety') {
-            return <ESSSafetyPage />;
+            return (
+                <ESSSafetyPage
+                    onOpenScaffTags={(builder, project) => {
+                        setSafetyContext({ builder, project });
+                        setCurrentPage('safety-scaff-tags');
+                    }}
+                    onOpenSwms={(builder, project) => {
+                        setSafetyContext({ builder, project });
+                        setCurrentPage('safety-swms');
+                    }}
+                />
+            );
+        }
+        if (currentPage === 'safety-scaff-tags' && safetyContext.builder && safetyContext.project) {
+            return (
+                <WebSafetyScaffTagsPage
+                    builder={safetyContext.builder}
+                    project={safetyContext.project}
+                    onBack={() => setCurrentPage('safety')}
+                />
+            );
+        }
+        if (currentPage === 'safety-swms' && safetyContext.builder && safetyContext.project) {
+            return (
+                <WebSafetySwmsPage
+                    builder={safetyContext.builder}
+                    project={safetyContext.project}
+                    onBack={() => setCurrentPage('safety')}
+                />
+            );
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} />;
@@ -1024,7 +1056,6 @@ function App() {
 }
 
 export default App;
-
 
 
 

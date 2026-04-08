@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { safetyProjectsAPI } from '../services/api';
 
-export default function ESSSafetyPage() {
+export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [newBuilderName, setNewBuilderName] = useState('');
     const [newProjectName, setNewProjectName] = useState('');
     const [error, setError] = useState('');
@@ -19,7 +20,7 @@ export default function ESSSafetyPage() {
                     return;
                 }
                 setBuilders(nextBuilders);
-                const firstBuilder = nextBuilders[0];
+                const firstBuilder = nextBuilders[0] || null;
                 setSelectedBuilderId(firstBuilder?.id || '');
                 setSelectedProjectId(firstBuilder?.projects?.[0]?.id || '');
             })
@@ -33,7 +34,6 @@ export default function ESSSafetyPage() {
                     setLoading(false);
                 }
             });
-
         return () => {
             active = false;
         };
@@ -49,7 +49,13 @@ export default function ESSSafetyPage() {
         [selectedBuilder, selectedProjectId]
     );
 
-    const handleCreate = async (event) => {
+    useEffect(() => {
+        if (selectedBuilder && !selectedBuilder.projects.some(project => project.id === selectedProjectId)) {
+            setSelectedProjectId(selectedBuilder.projects[0]?.id || '');
+        }
+    }, [selectedBuilder, selectedProjectId]);
+
+    const handleCreateProject = async (event) => {
         event.preventDefault();
         setSaving(true);
         setError('');
@@ -57,8 +63,10 @@ export default function ESSSafetyPage() {
             const nextBuilders = await safetyProjectsAPI.createBuilderAndProject(newBuilderName, newProjectName);
             setBuilders(nextBuilders);
             const matchingBuilder = nextBuilders.find(builder => builder.name.toLowerCase() === newBuilderName.trim().toLowerCase()) || nextBuilders[0];
+            const matchingProject = matchingBuilder?.projects?.find(project => project.name.toLowerCase() === newProjectName.trim().toLowerCase()) || matchingBuilder?.projects?.[0];
             setSelectedBuilderId(matchingBuilder?.id || '');
-            setSelectedProjectId(matchingBuilder?.projects?.find(project => project.name.toLowerCase() === newProjectName.trim().toLowerCase())?.id || matchingBuilder?.projects?.[0]?.id || '');
+            setSelectedProjectId(matchingProject?.id || '');
+            setShowCreateModal(false);
             setNewBuilderName('');
             setNewProjectName('');
         } catch (err) {
@@ -67,12 +75,6 @@ export default function ESSSafetyPage() {
             setSaving(false);
         }
     };
-
-    useEffect(() => {
-        if (selectedBuilder && !selectedBuilder.projects.some(project => project.id === selectedProjectId)) {
-            setSelectedProjectId(selectedBuilder.projects[0]?.id || '');
-        }
-    }, [selectedBuilder, selectedProjectId]);
 
     if (loading) {
         return <div className="module-page"><div className="module-empty">Loading safety data...</div></div>;
@@ -84,13 +86,15 @@ export default function ESSSafetyPage() {
                 <div className="module-header">
                     <div>
                         <h2>ESS Safety</h2>
-                        <p>Shared builder and project data from the same Supabase storage used by the mobile app.</p>
+                        <p>Shared builder, project, SWMS, and Scaff-Tag data backed by the same Supabase storage as iOS.</p>
                     </div>
+                    <button className="module-primary-btn compact" onClick={() => setShowCreateModal(true)}>
+                        Add Project
+                    </button>
                 </div>
 
-                <div className="module-grid module-grid-two">
-                    <section className="module-card">
-                        <div className="module-card-title">Project Information</div>
+                <div className="module-card">
+                    <div className="module-toolbar">
                         <div className="module-field">
                             <label>Builder</label>
                             <select value={selectedBuilder?.id || ''} onChange={e => setSelectedBuilderId(e.target.value)}>
@@ -105,21 +109,39 @@ export default function ESSSafetyPage() {
                                 {selectedBuilder?.projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                             </select>
                         </div>
-                        <div className="module-pill-row">
-                            <div className="module-pill">
-                                <span className="module-pill-label">Scaff-Tags</span>
-                                <span className="module-pill-value">{selectedProject ? 'Available on mobile data set' : 'Select a project'}</span>
-                            </div>
-                            <div className="module-pill">
-                                <span className="module-pill-label">SWMS</span>
-                                <span className="module-pill-value">{selectedProject ? 'Available on mobile data set' : 'Select a project'}</span>
-                            </div>
-                        </div>
-                    </section>
+                    </div>
 
-                    <section className="module-card">
-                        <div className="module-card-title">Add Builder / Project</div>
-                        <form className="module-form" onSubmit={handleCreate}>
+                    {error ? <div className="module-error">{error}</div> : null}
+
+                    <div className="module-grid module-grid-two">
+                        <button
+                            className="module-nav-card"
+                            disabled={!selectedBuilder || !selectedProject}
+                            onClick={() => onOpenScaffTags(selectedBuilder, selectedProject)}
+                        >
+                            <span className="module-nav-label">Scaff-Tags</span>
+                            <span className="module-nav-copy">Inspection forms, QR links, PDF output, and site records.</span>
+                        </button>
+                        <button
+                            className="module-nav-card"
+                            disabled={!selectedBuilder || !selectedProject}
+                            onClick={() => onOpenSwms(selectedBuilder, selectedProject)}
+                        >
+                            <span className="module-nav-label">SWMS</span>
+                            <span className="module-nav-copy">Shared PDF uploads for the selected project site.</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {showCreateModal && (
+                <div className="module-modal-backdrop" onClick={() => setShowCreateModal(false)}>
+                    <div className="module-modal compact" onClick={e => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Add Builder / Project</h3>
+                            <button className="nav-drawer-close" onClick={() => setShowCreateModal(false)}>×</button>
+                        </div>
+                        <form className="module-form" onSubmit={handleCreateProject}>
                             <div className="module-field">
                                 <label>Builder Name</label>
                                 <input value={newBuilderName} onChange={e => setNewBuilderName(e.target.value)} placeholder="Built" />
@@ -133,9 +155,9 @@ export default function ESSSafetyPage() {
                                 {saving ? 'Saving...' : 'Save Project'}
                             </button>
                         </form>
-                    </section>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }
