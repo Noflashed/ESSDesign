@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { authAPI } from '../services/api';
+import AuthThemeToggle from './AuthThemeToggle';
 import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
@@ -43,15 +44,7 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <button
-                    type="button"
-                    className="auth-theme-toggle-btn"
-                    onClick={handleThemeToggle}
-                    title="Toggle theme"
-                    aria-label="Toggle theme"
-                >
-                    {theme === 'light' ? '🌙' : '☀️'}
-                </button>
+                <AuthThemeToggle theme={theme} onToggle={handleThemeToggle} />
 
                 <div className="auth-header">
                     <div className="auth-logo">
@@ -82,7 +75,7 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
-                            placeholder="••••••••"
+                            placeholder="Enter your password"
                             required
                         />
                     </div>

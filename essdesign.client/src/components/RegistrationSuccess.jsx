@@ -1,4 +1,5 @@
 import React from 'react';
+import AuthThemeToggle from './AuthThemeToggle';
 import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
@@ -12,15 +13,7 @@ function RegistrationSuccess({ email = '', theme, onThemeChange, onContinueToLog
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <button
-                    type="button"
-                    className="auth-theme-toggle-btn"
-                    onClick={handleThemeToggle}
-                    title="Toggle theme"
-                    aria-label="Toggle theme"
-                >
-                    {theme === 'light' ? '??' : '??'}
-                </button>
+                <AuthThemeToggle theme={theme} onToggle={handleThemeToggle} />
 
                 <div className="auth-header">
                     <div className="auth-logo">

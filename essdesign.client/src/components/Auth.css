@@ -85,6 +85,12 @@
     gap: 20px;
 }
 
+.auth-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
 .form-field {
     display: flex;
     flex-direction: column;
@@ -174,6 +180,11 @@
 
     .auth-logo-image {
         height: 74px;
+    }
+
+    .auth-form-row {
+        grid-template-columns: 1fr;
+        gap: 20px;
     }
 }
 

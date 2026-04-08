@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
+import AuthThemeToggle from './AuthThemeToggle';
 import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initialEmail = '' }) {
     const [formData, setFormData] = useState({
-        fullName: '',
+        firstName: '',
+        lastName: '',
         email: initialEmail,
         password: '',
         confirmPassword: ''
@@ -30,8 +32,13 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
         e.preventDefault();
         setError('');
 
-        if (!formData.fullName.trim()) {
-            setError('Please enter your full name');
+        if (!formData.firstName.trim()) {
+            setError('Please enter your first name');
+            return;
+        }
+
+        if (!formData.lastName.trim()) {
+            setError('Please enter your last name');
             return;
         }
 
@@ -48,7 +55,8 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
         setLoading(true);
 
         try {
-            await authAPI.signUp(formData.email, formData.password, formData.fullName);
+            const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+            await authAPI.signUp(formData.email, formData.password, fullName);
             onSignUpSuccess?.(formData.email);
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to create account. Please try again.');
@@ -65,15 +73,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
     return (
         <div className="auth-container">
             <div className="auth-card">
-                <button
-                    type="button"
-                    className="auth-theme-toggle-btn"
-                    onClick={handleThemeToggle}
-                    title="Toggle theme"
-                    aria-label="Toggle theme"
-                >
-                    {theme === 'light' ? '??' : '??'}
-                </button>
+                <AuthThemeToggle theme={theme} onToggle={handleThemeToggle} />
 
                 <div className="auth-header">
                     <div className="auth-logo">
@@ -84,17 +84,31 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                 </div>
 
                 <form onSubmit={handleSubmit} className="auth-form">
-                    <div className="form-field">
-                        <label>Full Name</label>
-                        <input
-                            type="text"
-                            name="fullName"
-                            value={formData.fullName}
-                            onChange={handleChange}
-                            placeholder="John Doe"
-                            required
-                            autoFocus
-                        />
+                    <div className="auth-form-row">
+                        <div className="form-field">
+                            <label>First Name</label>
+                            <input
+                                type="text"
+                                name="firstName"
+                                value={formData.firstName}
+                                onChange={handleChange}
+                                placeholder="John"
+                                required
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="form-field">
+                            <label>Last Name</label>
+                            <input
+                                type="text"
+                                name="lastName"
+                                value={formData.lastName}
+                                onChange={handleChange}
+                                placeholder="Doe"
+                                required
+                            />
+                        </div>
                     </div>
 
                     <div className="form-field">
@@ -116,7 +130,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                             name="password"
                             value={formData.password}
                             onChange={handleChange}
-                            placeholder="????????"
+                            placeholder="Create a password"
                             required
                         />
                     </div>
@@ -128,7 +142,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
-                            placeholder="????????"
+                            placeholder="Confirm your password"
                             required
                         />
                     </div>
