@@ -194,6 +194,22 @@ namespace ESSDesign.Server.Models
         public DateTime UpdatedAt { get; set; }
     }
 
+    public class UserNotificationResponse
+    {
+        public Guid Id { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Type { get; set; } = "document_update";
+        public string? ActorName { get; set; }
+        public string? ActorImageUrl { get; set; }
+        public Guid? FolderId { get; set; }
+        public Guid? DocumentId { get; set; }
+        public bool Read { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public static class AppRoles
     {
         public const string Admin = "admin";
@@ -400,5 +416,4 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 }
-
 

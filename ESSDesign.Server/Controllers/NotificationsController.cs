@@ -24,7 +24,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<UserNotification>>> GetNotifications([FromQuery] string? userId = null)
+        public async Task<ActionResult<List<UserNotificationResponse>>> GetNotifications([FromQuery] string? userId = null)
         {
             try
             {
@@ -35,7 +35,23 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var notifications = await _supabaseService.GetUserNotificationsAsync(resolvedUserId.ToString());
-                return Ok(notifications);
+                var response = notifications.Select(notification => new UserNotificationResponse
+                {
+                    Id = notification.Id,
+                    UserId = notification.UserId.ToString(),
+                    Title = notification.Title,
+                    Message = notification.Message,
+                    Type = notification.Type,
+                    ActorName = notification.ActorName,
+                    ActorImageUrl = notification.ActorImageUrl,
+                    FolderId = notification.FolderId,
+                    DocumentId = notification.DocumentId,
+                    Read = notification.Read,
+                    CreatedAt = notification.CreatedAt,
+                    UpdatedAt = notification.UpdatedAt
+                }).ToList();
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
