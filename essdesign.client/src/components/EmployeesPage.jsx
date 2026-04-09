@@ -16,6 +16,17 @@ function normalizePreferredSiteIds(siteIds) {
     return siteIds.filter(Boolean).slice(0, 3);
 }
 
+function TreeIcon() {
+    return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+                d="M12 3.25a4.1 4.1 0 0 1 4.1 4.1c0 .37-.05.73-.15 1.08a3.6 3.6 0 0 1 2.8 3.52 3.6 3.6 0 0 1-3.6 3.6H13.2v2.35h3.15a.9.9 0 1 1 0 1.8H13.2v2.05a.9.9 0 1 1-1.8 0V19.7H8.25a.9.9 0 1 1 0-1.8h3.15v-2.35H8.85a3.6 3.6 0 0 1-3.6-3.6 3.6 3.6 0 0 1 2.8-3.52 4.1 4.1 0 0 1-.15-1.08A4.1 4.1 0 0 1 12 3.25Z"
+                fill="currentColor"
+            />
+        </svg>
+    );
+}
+
 export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -76,19 +87,6 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             return fullName.includes(q) || phone.includes(q) || prefs.includes(q) || lh.includes(q);
         });
     }, [employees, search, siteLabelById]);
-
-    const employeeSiteSummary = (employee) => {
-        const labels = employee.preferredSiteIds
-            .map((id) => siteLabelById[id])
-            .filter(Boolean)
-            .slice(0, 3);
-
-        if (labels.length === 0) {
-            return [];
-        }
-
-        return labels;
-    };
 
     const updatePreferredSite = (index, siteId) => {
         setForm(prev => {
@@ -167,6 +165,16 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                         <div className="employee-cluster-grid">
                             {filteredEmployees.map(employee => (
                                 <div key={employee.id} className="module-list-card employee-cluster-card">
+                                    {employee.leadingHand ? (
+                                        <button
+                                            className="employee-graph-icon-btn"
+                                            onClick={() => onOpenLeadingHandRelationships?.(employee)}
+                                            aria-label={`Open leading hand relationships for ${employee.firstName} ${employee.lastName}`}
+                                            title="Leading Hand Relationships"
+                                        >
+                                            <TreeIcon />
+                                        </button>
+                                    ) : null}
                                     <div className="employee-card-top">
                                         <div className="employee-card-identity">
                                             <div className="employee-card-heading">
@@ -188,32 +196,8 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                         </div>
                                     </div>
 
-                                    <div className="employee-card-body">
-                                        <div className="employee-card-section">
-                                            <div className="employee-card-section-label">Preferred Projects</div>
-                                            {employeeSiteSummary(employee).length > 0 ? (
-                                                <div className="employee-site-chip-wrap">
-                                                    {employeeSiteSummary(employee).map((siteLabel, index) => (
-                                                        <div key={`${employee.id}-${siteLabel}`} className="employee-site-chip">
-                                                            <span className="employee-site-chip-rank">{index + 1}</span>
-                                                            <span>{siteLabel}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="employee-card-placeholder">No preferred projects configured.</div>
-                                            )}
-                                        </div>
-                                    </div>
-
                                     <div className="employee-card-actions">
-                                        {employee.leadingHand ? (
-                                            <button className="module-secondary-btn employee-relationship-btn" onClick={() => onOpenLeadingHandRelationships?.(employee)}>
-                                                Leading Hand Relationships
-                                            </button>
-                                        ) : (
-                                            <div className="employee-card-spacer" />
-                                        )}
+                                        <div className="employee-card-spacer" />
                                         <div className="employee-card-action-group">
                                             <button className="module-secondary-btn" onClick={() => { setForm(employee); setShowModal(true); }}>Edit</button>
                                             <button className="module-danger-btn" onClick={() => removeEmployee(employee.id)}>Delete</button>
