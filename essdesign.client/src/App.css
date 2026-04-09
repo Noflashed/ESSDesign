@@ -2425,6 +2425,8 @@ body {
 .scroll-area .module-check-list {
     display: grid;
     gap: 10px;
+    max-height: none;
+    overflow: visible;
 }
 
 .scroll-area::-webkit-scrollbar {
