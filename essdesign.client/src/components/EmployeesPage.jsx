@@ -93,6 +93,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
+    const [saveAndInvite, setSaveAndInvite] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -165,6 +166,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         });
         setError('');
         setInviteMessage('');
+        setSaveAndInvite(false);
         setShowModal(true);
     };
 
@@ -176,16 +178,51 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         });
     };
 
-    const saveEmployee = async (event) => {
-        event.preventDefault();
+    const saveEmployee = async (event, { inviteAfterSave = false } = {}) => {
+        event?.preventDefault?.();
         setSaving(true);
         setError('');
         setInviteMessage('');
         try {
             const next = await rosteringAPI.saveEmployee(form);
             setEmployees(next);
+
+            if (inviteAfterSave) {
+                const normalizedEmail = (form.email || '').trim().toLowerCase();
+                if (!normalizedEmail) {
+                    throw new Error('Enter an email address before sending an invite.');
+                }
+
+                const savedEmployee = next.find((employee) =>
+                    (form.id ? employee.id === form.id : true)
+                    && (employee.email || '').trim().toLowerCase() === normalizedEmail
+                    && (employee.firstName || '').trim() === form.firstName.trim()
+                    && (employee.lastName || '').trim() === form.lastName.trim()
+                );
+
+                if (!savedEmployee?.id) {
+                    throw new Error('Employee was saved, but could not be matched for invite sending.');
+                }
+
+                await authAPI.inviteEmployee({
+                    employeeId: savedEmployee.id,
+                    email: normalizedEmail,
+                    firstName: form.firstName.trim(),
+                    lastName: form.lastName.trim()
+                });
+
+                const refreshedEmployees = await rosteringAPI.getEmployees();
+                setEmployees(refreshedEmployees);
+                setInviteMessage(`Invite sent to ${normalizedEmail}`);
+                setShowModal(false);
+                setForm(emptyForm());
+                setSaveAndInvite(false);
+                return;
+            }
+
             setShowModal(false);
             setForm(emptyForm());
+            setSaveAndInvite(false);
         } catch (err) {
             setError(err.message || 'Could not save employee');
         } finally {
@@ -253,7 +290,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                         <h2>Employee Directory</h2>
                         <p>Manage employee details, preferred projects, and leading hand relationships from one place.</p>
                     </div>
-                    <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); setInviteMessage(''); setError(''); }}>
+                    <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
                         Add Employee
                     </button>
                 </div>
@@ -349,7 +386,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                             <h3>{form.id ? 'Edit Employee' : 'Add Employee'}</h3>
                             <button className="nav-drawer-close" onClick={() => setShowModal(false)}>×</button>
                         </div>
-                        <form className="module-form" onSubmit={saveEmployee}>
+                        <form className="module-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: saveAndInvite })}>
                             <div className="module-grid module-grid-two">
                                 <div className="module-field">
                                     <label>First Name</label>
@@ -442,9 +479,29 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 </div>
                             ) : null}
                             {error ? <div className="module-error">{error}</div> : null}
-                            <button type="submit" className="module-primary-btn" disabled={saving}>
-                                {saving ? 'Saving...' : 'Save Employee'}
-                            </button>
+                            <div className="module-form-actions">
+                                {!form.id ? (
+                                    <button
+                                        type="button"
+                                        className="module-secondary-btn"
+                                        disabled={saving}
+                                        onClick={(event) => {
+                                            setSaveAndInvite(true);
+                                            saveEmployee(event, { inviteAfterSave: true });
+                                        }}
+                                    >
+                                        {saving && saveAndInvite ? 'Saving...' : 'Save & Invite'}
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="submit"
+                                    className="module-primary-btn"
+                                    disabled={saving}
+                                    onClick={() => setSaveAndInvite(false)}
+                                >
+                                    {saving && !saveAndInvite ? 'Saving...' : 'Save Employee'}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
