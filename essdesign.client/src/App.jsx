@@ -15,6 +15,7 @@ import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
 import SiteInformationPage from './components/SiteInformationPage';
 import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsPage';
 import EmployeePortalPage from './components/EmployeePortalPage';
+import WebLandingPage from './components/WebLandingPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -277,7 +278,7 @@ function App() {
     const [linkingEmployee, setLinkingEmployee] = useState(false);
     const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const [currentPage, setCurrentPage] = useState('design');
+    const [currentPage, setCurrentPage] = useState('landing');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
@@ -306,7 +307,7 @@ function App() {
             url.searchParams.delete('folder');
         }
 
-        if (page && page !== 'design') {
+        if (page && page !== 'landing') {
             url.searchParams.set('page', page);
         } else {
             url.searchParams.delete('page');
@@ -588,6 +589,7 @@ function App() {
 
     const handleLoginSuccess = () => {
         updateAuthView('login');
+        applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { pushHistory: false });
         checkAuth();
     };
 
@@ -819,7 +821,7 @@ function App() {
     // Browser back/forward button support
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
-        const pageFromUrl = urlParams.get('page') || 'design';
+        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : 'landing');
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
         const leadingHandFromUrl = urlParams.get('leadingHand');
@@ -842,7 +844,7 @@ function App() {
 
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
-            const page = e.state?.page ?? 'design';
+            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : 'landing');
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
             setCurrentPage(page);
@@ -853,7 +855,7 @@ function App() {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [buildAppUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl, isEmployeePortalRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -915,6 +917,10 @@ function App() {
     const renderCurrentPage = () => {
         if (isEmployeePortalRole) {
             return <EmployeePortalPage user={user} />;
+        }
+
+        if (currentPage === 'landing') {
+            return <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />;
         }
 
         if (currentPage === 'site-information') {
