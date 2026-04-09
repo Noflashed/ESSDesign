@@ -682,6 +682,7 @@ body {
 .lh-board-line {
     fill: none;
     stroke-width: 2.5;
+    stroke-dasharray: 8 7;
 }
 
 .lh-board-line-bad {
@@ -694,7 +695,6 @@ body {
 
 .lh-board-line-draft {
     stroke: rgba(255, 255, 255, 0.65);
-    stroke-dasharray: 8 6;
 }
 
 .lh-leading-card,
@@ -746,13 +746,13 @@ body {
 }
 
 .lh-leading-port {
-    width: 14px;
-    height: 14px;
+    width: 8px;
+    height: 8px;
     border-radius: 999px;
-    border: 2px solid rgba(255,255,255,0.82);
+    border: 1px solid rgba(255,255,255,0.92);
     background: #fff;
     cursor: pointer;
-    box-shadow: 0 0 0 4px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
 }
 
 .lh-leading-port-label {
@@ -801,21 +801,21 @@ body {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
+    width: 8px;
+    height: 8px;
     border-radius: 999px;
-    border: 2px solid rgba(255,255,255,0.82);
+    border: 1px solid rgba(255,255,255,0.92);
     background: #fff;
-    box-shadow: 0 0 0 4px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
     cursor: crosshair;
 }
 
 .lh-port-left {
-    left: -10px;
+    left: -6px;
 }
 
 .lh-port-right {
-    right: -10px;
+    right: -6px;
 }
 
 .lh-board-context-menu {
@@ -881,6 +881,22 @@ body {
     right: 20px;
     bottom: 18px;
     z-index: 3;
+}
+
+.lh-board-save-exit {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    z-index: 4;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.96);
+    color: #111827;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    cursor: pointer;
 }
 
 .module-list-actions {

@@ -64,7 +64,7 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, o
     );
 }
 
-export default function LeadingHandRelationshipsPage({ leadingHand }) {
+export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const viewportRef = useRef(null);
     const boardRef = useRef(null);
     const [loading, setLoading] = useState(true);
@@ -123,10 +123,10 @@ export default function LeadingHandRelationshipsPage({ leadingHand }) {
 
     useEffect(() => {
         const handleMove = (event) => {
-            if (!viewportRef.current) {
+            if (!boardRef.current) {
                 return;
             }
-            const rect = viewportRef.current.getBoundingClientRect();
+            const rect = boardRef.current.getBoundingClientRect();
             const boardX = (event.clientX - rect.left) / scale;
             const boardY = (event.clientY - rect.top) / scale;
 
@@ -294,10 +294,10 @@ export default function LeadingHandRelationshipsPage({ leadingHand }) {
     };
 
     const startConnection = (event, employeeId, side) => {
-        if (!viewportRef.current) {
+        if (!boardRef.current) {
             return;
         }
-        const rect = viewportRef.current.getBoundingClientRect();
+        const rect = boardRef.current.getBoundingClientRect();
         setConnectionDraft({
             employeeId,
             side,
@@ -310,10 +310,10 @@ export default function LeadingHandRelationshipsPage({ leadingHand }) {
 
     const openContextMenu = (event) => {
         event.preventDefault();
-        if (!viewportRef.current) {
+        if (!boardRef.current) {
             return;
         }
-        const rect = viewportRef.current.getBoundingClientRect();
+        const rect = boardRef.current.getBoundingClientRect();
         setContextMenu({
             x: clamp((event.clientX - rect.left) / scale, 40, BOARD_WIDTH - 320),
             y: clamp((event.clientY - rect.top) / scale, 40, BOARD_HEIGHT - 220)
@@ -414,6 +414,10 @@ export default function LeadingHandRelationshipsPage({ leadingHand }) {
                             </div>
                         </div>
                     ) : null}
+
+                    <button className="lh-board-save-exit" onClick={onBack}>
+                        Save
+                    </button>
 
                     {saving ? <div className="lh-board-saving">Saving...</div> : null}
                 </div>
