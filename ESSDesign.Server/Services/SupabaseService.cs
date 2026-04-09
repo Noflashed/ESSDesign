@@ -1790,6 +1790,74 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task DeleteEmployeeAndAuthAsync(Guid employeeId)
+        {
+            var employee = await GetEmployeeAuthLinkInfoAsync(employeeId);
+            if (employee == null)
+            {
+                throw new InvalidOperationException("Employee not found.");
+            }
+
+            if (employee.LinkedAuthUserId.HasValue)
+            {
+                await DeleteAuthUserAsync(employee.LinkedAuthUserId.Value.ToString());
+                await DeleteUserMetadataAsync(employee.LinkedAuthUserId.Value);
+            }
+
+            try
+            {
+                await DeleteRestRowsAsync($"ess_rostering_employees?id=eq.{employeeId:D}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting employee row {EmployeeId}", employeeId);
+                throw;
+            }
+        }
+
+        private async Task DeleteAuthUserAsync(string authUserId)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/admin/users/{Uri.EscapeDataString(authUserId)}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase auth delete failed with status {(int)response.StatusCode}: {body}");
+            }
+        }
+
+        private async Task DeleteUserMetadataAsync(Guid userId)
+        {
+            try
+            {
+                await DeleteRestRowsAsync($"user_names?id=eq.{userId:D}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed deleting user_names row for {UserId}", userId);
+            }
+
+            try
+            {
+                await DeleteRestRowsAsync($"user_roles?user_id=eq.{userId:D}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed deleting user_roles row for {UserId}", userId);
+            }
+        }
+
         public async Task UpdateEmployeeInviteAsync(Guid employeeId, string email)
         {
             try

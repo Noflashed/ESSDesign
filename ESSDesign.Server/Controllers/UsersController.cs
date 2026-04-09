@@ -79,6 +79,41 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpDelete("employees/{employeeId}")]
+        public async Task<ActionResult> DeleteEmployee(string employeeId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                if (!Guid.TryParse(employeeId, out var employeeGuid))
+                {
+                    return BadRequest(new { error = "Invalid employee ID" });
+                }
+
+                await _supabaseService.DeleteEmployeeAndAuthAsync(employeeGuid);
+                return Ok(new { message = "Employee deleted successfully" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting employee {EmployeeId}", employeeId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         private async Task<UserInfo?> GetCurrentUserAsync()
         {
             var authorizationHeader = Request.Headers.Authorization.ToString();

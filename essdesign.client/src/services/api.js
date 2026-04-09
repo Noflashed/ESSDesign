@@ -740,7 +740,7 @@ export const rosteringAPI = {
     },
 
     deleteEmployee: async (employeeId) => {
-        await deleteRestRows('ess_rostering_employees', `?id=eq.${encodeURIComponent(employeeId)}`);
+        await apiClient.delete(`/users/employees/${encodeURIComponent(employeeId)}`);
         return rosteringAPI.getEmployees();
     },
 
