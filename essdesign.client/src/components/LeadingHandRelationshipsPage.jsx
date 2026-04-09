@@ -83,7 +83,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const [search, setSearch] = useState('');
     const [scale, setScale] = useState(1);
     const [hoveredLineId, setHoveredLineId] = useState(null);
-    const [pan, setPan] = useState({ x: -1750, y: -2060 });
+    const [pan, setPan] = useState({ x: 0, y: 0 });
 
     useEffect(() => {
         let active = true;
@@ -126,6 +126,20 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             active = false;
         };
     }, [leadingHand.id]);
+
+    useEffect(() => {
+        if (!viewportRef.current) {
+            return;
+        }
+        const viewportWidth = viewportRef.current.clientWidth || 0;
+        const viewportHeight = viewportRef.current.clientHeight || 0;
+        const centerX = defaultLeadingHandPosition().x + LEADING_HAND_WIDTH / 2;
+        const centerY = defaultLeadingHandPosition().y + LEADING_HAND_HEIGHT / 2;
+        setPan({
+            x: viewportWidth / 2 - centerX * scale,
+            y: viewportHeight / 2 - centerY * scale
+        });
+    }, []);
 
     useEffect(() => {
         const handleMove = (event) => {
@@ -377,7 +391,20 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
     const handleWheel = (event) => {
         event.preventDefault();
-        setScale(prev => clamp(prev + (event.deltaY > 0 ? -0.08 : 0.08), 0.65, 1.6));
+        if (!viewportRef.current) {
+            return;
+        }
+        const rect = viewportRef.current.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left;
+        const pointerY = event.clientY - rect.top;
+        const nextScale = clamp(scale + (event.deltaY > 0 ? -0.08 : 0.08), 0.65, 1.6);
+        const worldX = (pointerX - pan.x) / scale;
+        const worldY = (pointerY - pan.y) / scale;
+        setScale(nextScale);
+        setPan({
+            x: pointerX - worldX * nextScale,
+            y: pointerY - worldY * nextScale
+        });
     };
 
     const handleViewportPointerDown = (event) => {
@@ -408,7 +435,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 <div
                     ref={boardRef}
                     className="lh-board-stage"
-                    style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
+                    style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
                 >
                     <div className="lh-board-grid" />
 
