@@ -1747,6 +1747,47 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task<int> SyncEmployeeLinkForUserAsync(string authUserId, string email)
+        {
+            if (!Guid.TryParse(authUserId, out var authUserGuid))
+            {
+                return 0;
+            }
+
+            var normalizedEmail = email?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                return 0;
+            }
+
+            var employees = await GetRestRowsAsync<EmployeeAuthRow>(
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&email=eq.{Uri.EscapeDataString(normalizedEmail)}");
+
+            if (employees.Count == 0)
+            {
+                return 0;
+            }
+
+            var syncedCount = 0;
+
+            foreach (var employee in employees)
+            {
+                var alreadyLinked = employee.LinkedAuthUserId.HasValue
+                    && employee.LinkedAuthUserId.Value == authUserGuid
+                    && employee.VerifiedAt.HasValue;
+
+                if (alreadyLinked)
+                {
+                    continue;
+                }
+
+                await LinkEmployeeAuthUserAsync(employee.Id, normalizedEmail, authUserId);
+                syncedCount += 1;
+            }
+
+            return syncedCount;
+        }
+
         public async Task<int> SyncEmployeeAuthLinksAsync()
         {
             var employees = await GetRestRowsAsync<EmployeeAuthRow>(
@@ -1758,6 +1799,7 @@ namespace ESSDesign.Server.Services
             }
 
             var confirmedUsersByEmail = await GetConfirmedAuthUsersByEmailAsync();
+            var knownUsersByEmail = await GetKnownUserNamesByEmailAsync();
             var syncedCount = 0;
 
             foreach (var employee in employees)
@@ -1768,7 +1810,8 @@ namespace ESSDesign.Server.Services
                     continue;
                 }
 
-                if (!confirmedUsersByEmail.TryGetValue(email, out var authUser))
+                if (!confirmedUsersByEmail.TryGetValue(email, out var authUser)
+                    && !knownUsersByEmail.TryGetValue(email, out authUser))
                 {
                     continue;
                 }
@@ -1788,6 +1831,34 @@ namespace ESSDesign.Server.Services
             }
 
             return syncedCount;
+        }
+
+        private async Task<Dictionary<string, AuthAdminUser>> GetKnownUserNamesByEmailAsync()
+        {
+            var users = await GetRestRowsAsync<UserInfo>(
+                $"user_names?select={Uri.EscapeDataString("id,email")}&not.email=is.null");
+
+            var usersByEmail = new Dictionary<string, AuthAdminUser>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var user in users)
+            {
+                var email = user.Email?.Trim().ToLowerInvariant();
+                var id = user.Id?.Trim();
+
+                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(id))
+                {
+                    continue;
+                }
+
+                usersByEmail[email] = new AuthAdminUser
+                {
+                    Id = id,
+                    Email = email,
+                    ConfirmedAt = DateTime.UtcNow
+                };
+            }
+
+            return usersByEmail;
         }
 
         private async Task<Dictionary<string, AuthAdminUser>> GetConfirmedAuthUsersByEmailAsync()

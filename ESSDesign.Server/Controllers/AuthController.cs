@@ -116,7 +116,9 @@ namespace ESSDesign.Server.Controllers
                 var fullName = session.User.UserMetadata?.ContainsKey("full_name") == true
                     ? session.User.UserMetadata["full_name"]?.ToString() ?? string.Empty
                     : string.Empty;
+                await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, fullName);
                 var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
+                await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email ?? request.Email);
 
                 return Ok(new AuthResponse
                 {
@@ -312,6 +314,12 @@ namespace ESSDesign.Server.Controllers
                     return Unauthorized(new { error = "Session refresh failed" });
                 }
 
+                await _supabaseService.UpsertUserNameAsync(
+                    session.User.Id,
+                    session.User.Email,
+                    session.User.FullName);
+                await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email);
+
                 return Ok(session);
             }
             catch (Exception ex)
@@ -331,6 +339,9 @@ namespace ESSDesign.Server.Controllers
                 {
                     return Unauthorized(new { error = "Not authenticated" });
                 }
+
+                await _supabaseService.UpsertUserNameAsync(user.Id, user.Email, user.FullName);
+                await _supabaseService.SyncEmployeeLinkForUserAsync(user.Id, user.Email);
 
                 return Ok(user);
             }
