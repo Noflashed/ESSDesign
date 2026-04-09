@@ -479,9 +479,20 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     };
 
     const handleViewportPointerDown = (event) => {
-        if (event.button !== 1) {
+        const interactiveTarget = event.target?.closest?.(
+            '.lh-leading-card, .lh-card, .lh-port, .lh-leading-port, .lh-board-context-menu, .lh-board-save-exit'
+        );
+        const backgroundTarget = event.target === viewportRef.current || event.target?.classList?.contains('lh-board-stage') || event.target?.classList?.contains('lh-board-lines');
+        const canPanFromHere = !interactiveTarget && backgroundTarget;
+
+        if (!canPanFromHere) {
             return;
         }
+
+        if (event.button !== 0 && event.button !== 1) {
+            return;
+        }
+
         event.preventDefault();
         setContextMenu(null);
         setActiveDrag({
@@ -508,7 +519,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             {error ? <div className="lh-board-error">{error}</div> : null}
             <div
                 ref={viewportRef}
-                className={`lh-board-viewport ${activeDrag?.kind === 'pan' ? 'is-panning' : ''}`}
+                className={`lh-board-viewport ${activeDrag?.kind === 'pan' ? 'is-panning' : ''} ${connectionDraft ? 'is-connecting' : ''}`}
                 style={gridStyle}
                 onContextMenu={openCanvasContextMenu}
                 onClick={() => setContextMenu(null)}
