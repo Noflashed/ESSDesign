@@ -2513,6 +2513,32 @@ button.stat-card {
     padding: 16px 0;
 }
 
+.rostering-plan-site {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.rostering-builder-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 237, 213, 0.95);
+    color: #c2410c;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.rostering-plan-site .job-client {
+    margin: 0;
+}
+
 .rostering-plan-actions {
     display: flex;
     align-items: center;
@@ -2565,6 +2591,11 @@ button.stat-card {
 [data-theme='dark'] .rostering-remove-btn {
     background: rgba(220, 38, 38, 0.18);
     color: #fca5a5;
+}
+
+[data-theme='dark'] .rostering-builder-pill {
+    background: rgba(124, 45, 18, 0.42);
+    color: #fdba74;
 }
 
 [data-theme='dark'] .job-card.selected {

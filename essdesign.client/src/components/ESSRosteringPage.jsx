@@ -242,7 +242,8 @@ export default function ESSRosteringPage({ user }) {
                         <div className="rostering-plan-list">
                             {activeSites.map((site) => (
                                 <div key={site.id} className="labour-row rostering-plan-row">
-                                    <div>
+                                    <div className="rostering-plan-site">
+                                        <span className="rostering-builder-pill">{site.builderName}</span>
                                         <div className="job-client">{site.projectName}</div>
                                     </div>
                                     <div className="rostering-plan-actions">
