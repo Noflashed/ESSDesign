@@ -85,6 +85,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyForm());
+    const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -165,6 +166,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         try {
             const next = await rosteringAPI.deleteEmployee(employeeId);
             setEmployees(next);
+            setEmployeePendingDelete(null);
         } catch (err) {
             setError(err.message || 'Could not delete employee');
         }
@@ -232,7 +234,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                         <EmployeeActionButton
                                             danger
                                             title={`Delete ${employee.firstName} ${employee.lastName}`}
-                                            onClick={() => removeEmployee(employee.id)}
+                                            onClick={() => setEmployeePendingDelete(employee)}
                                         >
                                             <DeleteIcon />
                                         </EmployeeActionButton>
@@ -334,6 +336,40 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 {saving ? 'Saving...' : 'Save Employee'}
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {employeePendingDelete && (
+                <div className="module-modal-backdrop" onClick={() => setEmployeePendingDelete(null)}>
+                    <div className="module-modal compact" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Delete Employee</h3>
+                            <button className="nav-drawer-close" onClick={() => setEmployeePendingDelete(null)}>×</button>
+                        </div>
+                        <div className="module-form">
+                            <p className="module-copy">
+                                Delete <strong>{employeePendingDelete.firstName} {employeePendingDelete.lastName}</strong> from the employee directory?
+                                This action cannot be undone.
+                            </p>
+                            {error ? <div className="module-error">{error}</div> : null}
+                            <div className="module-form-actions">
+                                <button
+                                    type="button"
+                                    className="module-secondary-btn"
+                                    onClick={() => setEmployeePendingDelete(null)}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="module-danger-btn"
+                                    onClick={() => removeEmployee(employeePendingDelete.id)}
+                                >
+                                    Delete Employee
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
