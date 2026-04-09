@@ -150,15 +150,10 @@ export default function ESSRosteringPage({ user }) {
         <div className="module-page">
             <div className="module-shell rostering-shell">
                 <div className="page-header">
-                    <div>
-                        <div className="page-eyebrow">ESS Workforce Planning</div>
-                        <div className="page-title">ESS Rostering</div>
-                        <div className="page-desc">Set active jobs and labour targets for the day.</div>
-                    </div>
                     <div className="header-stats">
                         <div className="stat-card">
                             <div className="stat-label">Plan Date</div>
-                            <div className="stat-val">{planDate}</div>
+                            <input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
                         </div>
                         <div className="stat-card">
                             <div className="stat-label">Active Jobs</div>
@@ -186,7 +181,6 @@ export default function ESSRosteringPage({ user }) {
                                 <span className="step-pill">Step 1</span>
                                 <div className="page-title" style={{ fontSize: 18, marginTop: 8, marginBottom: 0 }}>Choose Active Jobs</div>
                             </div>
-                            <input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
                         </div>
 
                         {groupedSites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
