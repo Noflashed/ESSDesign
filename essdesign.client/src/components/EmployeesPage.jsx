@@ -77,6 +77,19 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         });
     }, [employees, search, siteLabelById]);
 
+    const employeeSiteSummary = (employee) => {
+        const labels = employee.preferredSiteIds
+            .map((id) => siteLabelById[id])
+            .filter(Boolean)
+            .slice(0, 3);
+
+        if (labels.length === 0) {
+            return [];
+        }
+
+        return labels;
+    };
+
     const updatePreferredSite = (index, siteId) => {
         setForm(prev => {
             const next = [...prev.preferredSiteIds];
@@ -113,16 +126,37 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     return (
         <div className="module-page">
             <div className="module-shell employees-shell">
-                <div className="module-header">
+                <div className="employees-toolbar">
+                    <div className="employees-toolbar-copy">
+                        <div className="employees-toolbar-eyebrow">ESS Workforce</div>
+                        <h2>Employee Directory</h2>
+                        <p>Manage employee details, preferred projects, and leading hand relationships from one place.</p>
+                    </div>
                     <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); }}>
                         Add Employee
                     </button>
                 </div>
 
-                <div className="module-card">
-                    <div className="module-field">
-                        <label>Search</label>
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, or preferred site" />
+                <div className="module-card employees-card">
+                    <div className="employees-search-row">
+                        <div className="module-field employees-search-field">
+                            <label>Search</label>
+                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, or preferred site" />
+                        </div>
+                        <div className="employees-search-stats">
+                            <div className="employees-stat">
+                                <span className="employees-stat-value">{employees.length}</span>
+                                <span className="employees-stat-label">Total</span>
+                            </div>
+                            <div className="employees-stat">
+                                <span className="employees-stat-value">{employees.filter(employee => employee.leadingHand).length}</span>
+                                <span className="employees-stat-label">Leading Hands</span>
+                            </div>
+                            <div className="employees-stat">
+                                <span className="employees-stat-value">{filteredEmployees.length}</span>
+                                <span className="employees-stat-label">Visible</span>
+                            </div>
+                        </div>
                     </div>
                     {error ? <div className="module-error">{error}</div> : null}
                     {loading ? (
@@ -133,26 +167,57 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                         <div className="employee-cluster-grid">
                             {filteredEmployees.map(employee => (
                                 <div key={employee.id} className="module-list-card employee-cluster-card">
-                                    <div className="module-list-header">
-                                        <div>
+                                    <div className="employee-card-top">
+                                        <div className="employee-card-identity">
                                             <div className="employee-card-heading">
                                                 <div className="module-item-title">{employee.firstName} {employee.lastName}</div>
                                                 {employee.leadingHand ? <span className="employee-lh-badge">LH</span> : null}
                                             </div>
-                                            <div className="module-item-sub">{employee.phoneNumber || 'No phone number'}</div>
+                                            <div className="module-item-sub employee-phone">{employee.phoneNumber || 'No phone number'}</div>
                                         </div>
-                                        <div className="module-list-actions">
+                                        <div className="employee-card-statuses">
+                                            <div className="employee-status-pill">
+                                                <span className="employee-status-dot employee-status-dot-phone" />
+                                                Contact Ready
+                                            </div>
                                             {employee.leadingHand ? (
-                                                <button className="module-secondary-btn" onClick={() => onOpenLeadingHandRelationships?.(employee)}>
-                                                    Leading Hand Relationships
-                                                </button>
-                                            ) : null}
+                                                <div className="employee-status-pill employee-status-pill-lh">Leading Hand</div>
+                                            ) : (
+                                                <div className="employee-status-pill employee-status-pill-neutral">Crew Member</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="employee-card-body">
+                                        <div className="employee-card-section">
+                                            <div className="employee-card-section-label">Preferred Projects</div>
+                                            {employeeSiteSummary(employee).length > 0 ? (
+                                                <div className="employee-site-chip-wrap">
+                                                    {employeeSiteSummary(employee).map((siteLabel, index) => (
+                                                        <div key={`${employee.id}-${siteLabel}`} className="employee-site-chip">
+                                                            <span className="employee-site-chip-rank">{index + 1}</span>
+                                                            <span>{siteLabel}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="employee-card-placeholder">No preferred projects configured.</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="employee-card-actions">
+                                        {employee.leadingHand ? (
+                                            <button className="module-secondary-btn employee-relationship-btn" onClick={() => onOpenLeadingHandRelationships?.(employee)}>
+                                                Leading Hand Relationships
+                                            </button>
+                                        ) : (
+                                            <div className="employee-card-spacer" />
+                                        )}
+                                        <div className="employee-card-action-group">
                                             <button className="module-secondary-btn" onClick={() => { setForm(employee); setShowModal(true); }}>Edit</button>
                                             <button className="module-danger-btn" onClick={() => removeEmployee(employee.id)}>Delete</button>
                                         </div>
-                                    </div>
-                                    <div className="employee-card-meta">
-                                        <div className="module-item-sub">Preferred Sites configured in employee details.</div>
                                     </div>
                                 </div>
                             ))}
