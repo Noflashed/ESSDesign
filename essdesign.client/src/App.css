@@ -1202,48 +1202,100 @@ body {
 }
 
 .rostering-tree-table-card {
-    min-height: 220px;
+    min-height: 240px;
     padding: 0;
     align-items: stretch;
     text-align: left;
     overflow: hidden;
+    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.58);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
 }
 
 .rostering-tree-table-head {
-    padding: 18px 20px 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.rostering-tree-table-head .lh-leading-name,
-.rostering-tree-table-head .lh-leading-sub {
-    text-align: left;
+    padding: 0;
+    border-bottom: 1px solid #0f172a;
 }
 
 .rostering-tree-employee-table {
-    display: grid;
+    display: block;
     width: 100%;
 }
 
-.rostering-tree-employee-row,
+.rostering-tree-table-header-grid,
+.rostering-tree-table-grid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.rostering-tree-table-header-grid td,
+.rostering-tree-table-grid td {
+    border-right: 1px solid #0f172a;
+}
+
+.rostering-tree-table-header-grid td:last-child,
+.rostering-tree-table-grid td:last-child {
+    border-right: none;
+}
+
+.rostering-tree-header-title,
+.rostering-tree-header-code,
+.rostering-tree-header-mini {
+    background: #0ea5e9;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 8px;
+    line-height: 1.1;
+}
+
+.rostering-tree-header-title {
+    text-transform: uppercase;
+}
+
+.rostering-tree-header-code,
+.rostering-tree-header-mini {
+    text-align: center;
+    width: 56px;
+}
+
+.rostering-tree-employee-row td,
 .rostering-tree-empty-row {
-    padding: 12px 20px;
-    color: #f3f4f6;
-    font-size: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: #ffffff;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 6px;
+    border-top: 1px solid #0f172a;
+    line-height: 1.15;
     width: 100%;
 }
 
-.rostering-tree-employee-row:first-child,
-.rostering-tree-empty-row:first-child {
-    border-top: none;
+.rostering-tree-name-cell {
+    width: auto;
+}
+
+.rostering-tree-role-cell {
+    width: 34px;
+    text-align: center;
+}
+
+.rostering-tree-phone-cell {
+    width: 110px;
+    text-align: center;
+}
+
+.rostering-tree-mini-cell {
+    width: 40px;
+    text-align: center;
 }
 
 .rostering-tree-empty-row {
-    color: #9ca3af;
+    padding: 10px 12px;
+    color: #6b7280;
+    font-weight: 600;
 }
 
 .rostering-tree-back {

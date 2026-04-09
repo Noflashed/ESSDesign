@@ -3,8 +3,8 @@ import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 const BOARD_SIZE = 20000;
 const BOARD_CENTER = BOARD_SIZE / 2;
-const SITE_WIDTH = 380;
-const SITE_HEIGHT = 220;
+const SITE_WIDTH = 430;
+const SITE_HEIGHT = 240;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -29,10 +29,33 @@ function buildInitialPositions(sitePlans) {
     return positions;
 }
 
-function buildSitePlans(sites, plan) {
+function buildSitePlans(sites, employees, plan) {
     if (!plan) {
         return [];
     }
+
+    const employeePool = (employees || []).map((employee) => ({
+        id: employee.id,
+        firstName: employee.firstName || '',
+        lastName: employee.lastName || '',
+        phoneNumber: employee.phoneNumber || ''
+    }));
+
+    let poolIndex = 0;
+
+    const assignPlaceholderEmployees = (count) => {
+        if (employeePool.length === 0 || count <= 0) {
+            return [];
+        }
+
+        const assigned = [];
+        for (let index = 0; index < count; index += 1) {
+            const employee = employeePool[poolIndex % employeePool.length];
+            poolIndex += 1;
+            assigned.push(employee);
+        }
+        return assigned;
+    };
 
     return (plan.activeSiteIds || [])
         .map((siteId) => {
@@ -49,24 +72,34 @@ function buildSitePlans(sites, plan) {
                 ? assignedEmployeesRaw
                     .map((employee) => {
                         if (typeof employee === 'string') {
-                            return employee;
+                            return {
+                                firstName: employee,
+                                lastName: '',
+                                phoneNumber: ''
+                            };
                         }
                         if (employee && typeof employee === 'object') {
-                            const firstName = employee.firstName || employee.first_name || '';
-                            const lastName = employee.lastName || employee.last_name || '';
-                            return `${firstName} ${lastName}`.trim();
+                            return {
+                                firstName: employee.firstName || employee.first_name || '',
+                                lastName: employee.lastName || employee.last_name || '',
+                                phoneNumber: employee.phoneNumber || employee.phone_number || ''
+                            };
                         }
-                        return '';
+                        return null;
                     })
                     .filter(Boolean)
                 : [];
+
+            const resolvedEmployees = assignedEmployees.length > 0
+                ? assignedEmployees.slice(0, requiredCrew)
+                : assignPlaceholderEmployees(requiredCrew);
 
             return {
                 siteId,
                 builderName: site.builderName,
                 projectName: site.projectName,
                 requiredCrew,
-                assignedEmployees
+                assignedEmployees: resolvedEmployees
             };
         })
         .filter(Boolean);
@@ -88,6 +121,7 @@ export default function RosteringTreePage({ planDate, onBack }) {
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [activeDrag, setActiveDrag] = useState(null);
     const [sites, setSites] = useState([]);
+    const [employees, setEmployees] = useState([]);
     const [plan, setPlan] = useState(null);
     const [positions, setPositions] = useState({});
 
@@ -118,9 +152,10 @@ export default function RosteringTreePage({ planDate, onBack }) {
 
         Promise.all([
             safetyProjectsAPI.getBuilders(),
+            rosteringAPI.getEmployees(),
             rosteringAPI.getPlan(planDate)
         ])
-            .then(([builders, savedPlan]) => {
+            .then(([builders, employeeRows, savedPlan]) => {
                 if (!active) {
                     return;
                 }
@@ -136,9 +171,10 @@ export default function RosteringTreePage({ planDate, onBack }) {
                 );
 
                 setSites(flattenedSites);
+                setEmployees(employeeRows);
                 setPlan(savedPlan);
 
-                const nextPlans = buildSitePlans(flattenedSites, savedPlan);
+                const nextPlans = buildSitePlans(flattenedSites, employeeRows, savedPlan);
                 setPositions(buildInitialPositions(nextPlans));
             })
             .catch((err) => {
@@ -157,7 +193,7 @@ export default function RosteringTreePage({ planDate, onBack }) {
         };
     }, [planDate]);
 
-    const sitePlans = useMemo(() => buildSitePlans(sites, plan), [sites, plan]);
+    const sitePlans = useMemo(() => buildSitePlans(sites, employees, plan), [sites, employees, plan]);
 
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -314,18 +350,35 @@ export default function RosteringTreePage({ planDate, onBack }) {
                                 onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
                             >
                                 <div className="rostering-tree-table-head">
-                                    <div className="rostering-builder-pill rostering-tree-inline-pill">{sitePlan.builderName}</div>
-                                    <div className="lh-leading-name">{sitePlan.projectName}</div>
-                                    <div className="lh-leading-sub">{sitePlan.requiredCrew} required crew</div>
+                                    <table className="rostering-tree-table-header-grid">
+                                        <tbody>
+                                            <tr>
+                                                <td className="rostering-tree-header-title" colSpan="2">{sitePlan.builderName} - {sitePlan.projectName}</td>
+                                                <td className="rostering-tree-header-code">REQ</td>
+                                                <td className="rostering-tree-header-mini">HRS</td>
+                                                <td className="rostering-tree-header-mini">OT</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
 
                                 <div className="rostering-tree-employee-table">
                                     {sitePlan.assignedEmployees.length > 0 ? (
-                                        sitePlan.assignedEmployees.map((employeeName, index) => (
-                                            <div key={`${sitePlan.siteId}:employee:${index}`} className="rostering-tree-employee-row">
-                                                {employeeName}
-                                            </div>
-                                        ))
+                                        <table className="rostering-tree-table-grid">
+                                            <tbody>
+                                                {sitePlan.assignedEmployees.map((employee, index) => (
+                                                    <tr key={`${sitePlan.siteId}:employee:${index}`} className="rostering-tree-employee-row">
+                                                        <td className="rostering-tree-name-cell">
+                                                            {[employee.firstName, employee.lastName].filter(Boolean).join(' ')}
+                                                        </td>
+                                                        <td className="rostering-tree-role-cell"></td>
+                                                        <td className="rostering-tree-phone-cell"></td>
+                                                        <td className="rostering-tree-mini-cell"></td>
+                                                        <td className="rostering-tree-mini-cell"></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     ) : (
                                         <div className="rostering-tree-empty-row">No designated employees yet</div>
                                     )}
