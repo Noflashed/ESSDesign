@@ -112,12 +112,8 @@ export default function EmployeesPage() {
 
     return (
         <div className="module-page">
-            <div className="module-shell">
+            <div className="module-shell employees-shell">
                 <div className="module-header">
-                    <div>
-                        <h2>Employees</h2>
-                        <p>Shared employee register backed by the same Supabase tables as mobile.</p>
-                    </div>
                     <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); }}>
                         Add Employee
                     </button>

@@ -580,6 +580,10 @@ body {
     gap: 14px;
 }
 
+.employees-shell {
+    max-width: 1480px;
+}
+
 .employee-cluster-card {
     min-height: 220px;
 }
