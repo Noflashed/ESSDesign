@@ -176,8 +176,8 @@ export default function ESSRosteringPage({ user }) {
                             <input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
                         </div>
 
+                        {groupedSites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
                         <div className="scroll-area">
-                            {groupedSites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
                             {groupedSites.map((group) => (
                                 <div key={group.builderId} className="client-group">
                                     <div className="client-header">

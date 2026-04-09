@@ -2422,6 +2422,11 @@ body {
     padding-right: 6px;
 }
 
+.scroll-area .module-check-list {
+    display: grid;
+    gap: 10px;
+}
+
 .scroll-area::-webkit-scrollbar {
     width: 4px;
 }
