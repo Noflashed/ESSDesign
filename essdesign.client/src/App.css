@@ -712,8 +712,8 @@ body {
 }
 
 .employee-status-pill-verified {
-    background: rgba(220, 252, 231, 0.9);
-    color: #166534;
+    background: rgba(255, 237, 213, 0.95);
+    color: #c2410c;
 }
 
 .employee-status-pill-neutral {
