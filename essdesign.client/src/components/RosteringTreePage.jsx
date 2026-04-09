@@ -3,8 +3,8 @@ import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 const BOARD_SIZE = 20000;
 const BOARD_CENTER = BOARD_SIZE / 2;
-const SITE_WIDTH = 430;
-const SITE_HEIGHT = 240;
+const SITE_WIDTH = 460;
+const SITE_HEIGHT = 260;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -349,32 +349,30 @@ export default function RosteringTreePage({ planDate, onBack }) {
                                 style={{ left: sitePosition.x, top: sitePosition.y, width: SITE_WIDTH, minHeight: SITE_HEIGHT }}
                                 onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
                             >
-                                <div className="rostering-tree-table-head">
-                                    <table className="rostering-tree-table-header-grid">
-                                        <tbody>
-                                            <tr>
-                                                <td className="rostering-tree-header-title" colSpan="2">{sitePlan.builderName} - {sitePlan.projectName}</td>
-                                                <td className="rostering-tree-header-code">REQ</td>
-                                                <td className="rostering-tree-header-mini">HRS</td>
-                                                <td className="rostering-tree-header-mini">OT</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                    <div className="rostering-tree-table-head">
+                                    <div className="rostering-tree-title-row">
+                                        <div className="rostering-builder-pill rostering-tree-inline-pill">{sitePlan.builderName}</div>
+                                        <div className="rostering-tree-required-pill">{sitePlan.requiredCrew} required</div>
+                                    </div>
+                                    <div className="rostering-tree-project-name">{sitePlan.projectName}</div>
                                 </div>
 
                                 <div className="rostering-tree-employee-table">
                                     {sitePlan.assignedEmployees.length > 0 ? (
                                         <table className="rostering-tree-table-grid">
+                                            <thead>
+                                                <tr>
+                                                    <th className="rostering-tree-col-first">First Name</th>
+                                                    <th className="rostering-tree-col-last">Last Name</th>
+                                                    <th className="rostering-tree-col-phone">Phone Number</th>
+                                                </tr>
+                                            </thead>
                                             <tbody>
                                                 {sitePlan.assignedEmployees.map((employee, index) => (
                                                     <tr key={`${sitePlan.siteId}:employee:${index}`} className="rostering-tree-employee-row">
-                                                        <td className="rostering-tree-name-cell">
-                                                            {[employee.firstName, employee.lastName].filter(Boolean).join(' ')}
-                                                        </td>
-                                                        <td className="rostering-tree-role-cell"></td>
-                                                        <td className="rostering-tree-phone-cell"></td>
-                                                        <td className="rostering-tree-mini-cell"></td>
-                                                        <td className="rostering-tree-mini-cell"></td>
+                                                        <td className="rostering-tree-first-cell">{employee.firstName || ''}</td>
+                                                        <td className="rostering-tree-last-cell">{employee.lastName || ''}</td>
+                                                        <td className="rostering-tree-phone-cell">{employee.phoneNumber || 'No phone'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

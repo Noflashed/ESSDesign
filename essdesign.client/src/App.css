@@ -1207,15 +1207,16 @@ body {
     align-items: stretch;
     text-align: left;
     overflow: hidden;
-    border-radius: 4px;
-    background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.58);
-    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
 }
 
 .rostering-tree-table-head {
-    padding: 0;
-    border-bottom: 1px solid #0f172a;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    background: linear-gradient(135deg, rgba(255,247,237,0.9), rgba(255,255,255,0.85));
 }
 
 .rostering-tree-employee-table {
@@ -1223,83 +1224,115 @@ body {
     width: 100%;
 }
 
-.rostering-tree-table-header-grid,
 .rostering-tree-table-grid {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
 }
 
-.rostering-tree-table-header-grid td,
-.rostering-tree-table-grid td {
-    border-right: 1px solid #0f172a;
+.rostering-tree-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
 }
 
-.rostering-tree-table-header-grid td:last-child,
-.rostering-tree-table-grid td:last-child {
-    border-right: none;
-}
-
-.rostering-tree-header-title,
-.rostering-tree-header-code,
-.rostering-tree-header-mini {
-    background: #0ea5e9;
-    color: #ffffff;
-    font-size: 12px;
+.rostering-tree-project-name {
+    font-size: 18px;
     font-weight: 700;
-    padding: 5px 8px;
-    line-height: 1.1;
+    color: var(--text-primary);
+    line-height: 1.2;
 }
 
-.rostering-tree-header-title {
+.rostering-tree-required-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(241, 245, 249, 0.95);
+    color: #334155;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.rostering-tree-table-grid thead th {
+    background: rgba(248, 250, 252, 0.96);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    text-align: left;
 }
 
-.rostering-tree-header-code,
-.rostering-tree-header-mini {
-    text-align: center;
-    width: 56px;
-}
-
-.rostering-tree-employee-row td,
+.rostering-tree-table-grid tbody td,
 .rostering-tree-empty-row {
-    background: #ffffff;
-    color: #111827;
-    font-size: 12px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
     font-weight: 700;
-    padding: 4px 6px;
-    border-top: 1px solid #0f172a;
-    line-height: 1.15;
-    width: 100%;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+    line-height: 1.2;
 }
 
-.rostering-tree-name-cell {
-    width: auto;
+.rostering-tree-table-grid tbody tr:first-child td {
+    border-top: none;
 }
 
-.rostering-tree-role-cell {
-    width: 34px;
-    text-align: center;
+.rostering-tree-col-first,
+.rostering-tree-first-cell {
+    width: 34%;
 }
 
+.rostering-tree-col-last,
+.rostering-tree-last-cell {
+    width: 30%;
+}
+
+.rostering-tree-col-phone,
 .rostering-tree-phone-cell {
-    width: 110px;
-    text-align: center;
-}
-
-.rostering-tree-mini-cell {
-    width: 40px;
-    text-align: center;
+    width: 36%;
 }
 
 .rostering-tree-empty-row {
     padding: 10px 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 600;
 }
 
 .rostering-tree-back {
     min-width: 150px;
+}
+
+[data-theme='dark'] .rostering-tree-table-card {
+    background: rgba(15, 23, 42, 0.92);
+    border-color: rgba(148, 163, 184, 0.18);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme='dark'] .rostering-tree-table-head {
+    background: linear-gradient(135deg, rgba(124, 45, 18, 0.2), rgba(15, 23, 42, 0.2));
+    border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+[data-theme='dark'] .rostering-tree-required-pill {
+    background: rgba(30, 41, 59, 0.95);
+    color: #cbd5e1;
+}
+
+[data-theme='dark'] .rostering-tree-table-grid thead th {
+    background: rgba(15, 23, 42, 0.78);
+    border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+[data-theme='dark'] .rostering-tree-table-grid tbody td {
+    border-top-color: rgba(148, 163, 184, 0.12);
 }
 
 .module-list-actions {
