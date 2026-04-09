@@ -433,6 +433,7 @@ function mapEmployeeRow(row) {
         firstName: row.first_name || '',
         lastName: row.last_name || '',
         phoneNumber: row.phone_number || '',
+        leadingHand: Boolean(row.leading_hand),
         preferredSiteIds: [row.preferred_site_1, row.preferred_site_2, row.preferred_site_3].filter(Boolean),
         createdAt: row.created_at || nowIso(),
         updatedAt: row.updated_at || nowIso()
@@ -687,12 +688,13 @@ export const rosteringAPI = {
         return rows.map(mapEmployeeRow);
     },
 
-    saveEmployee: async ({ id, firstName, lastName, phoneNumber, preferredSiteIds }) => {
+    saveEmployee: async ({ id, firstName, lastName, phoneNumber, preferredSiteIds, leadingHand }) => {
         const cleanPreferred = preferredSiteIds.filter(Boolean).slice(0, 3);
         const payload = {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             phone_number: phoneNumber.trim() || null,
+            leading_hand: Boolean(leadingHand),
             preferred_site_1: cleanPreferred[0] || null,
             preferred_site_2: cleanPreferred[1] || null,
             preferred_site_3: cleanPreferred[2] || null,

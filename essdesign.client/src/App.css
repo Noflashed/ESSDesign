@@ -574,6 +574,45 @@ body {
     border-style: dashed;
 }
 
+.employee-cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+}
+
+.employee-cluster-card {
+    min-height: 220px;
+}
+
+.employee-card-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.employee-lh-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #dff6e8;
+    color: #146c43;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.employee-leading-hand-row {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: var(--bg-secondary);
+}
+
 .module-list-actions {
     display: flex;
     gap: 8px;

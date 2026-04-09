@@ -7,6 +7,7 @@ function emptyForm() {
         firstName: '',
         lastName: '',
         phoneNumber: '',
+        leadingHand: false,
         preferredSiteIds: []
     };
 }
@@ -66,8 +67,9 @@ export default function EmployeesPage() {
         return employees.filter(employee => {
             const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
             const phone = (employee.phoneNumber || '').toLowerCase();
+            const lh = employee.leadingHand ? 'leading hand lh' : '';
             const prefs = employee.preferredSiteIds.map(id => (siteLabelById[id] || '').toLowerCase()).join(' ');
-            return fullName.includes(q) || phone.includes(q) || prefs.includes(q);
+            return fullName.includes(q) || phone.includes(q) || prefs.includes(q) || lh.includes(q);
         });
     }, [employees, search, siteLabelById]);
 
@@ -132,12 +134,15 @@ export default function EmployeesPage() {
                     ) : filteredEmployees.length === 0 ? (
                         <div className="module-empty-inline">No employees found.</div>
                     ) : (
-                        <div className="module-list">
+                        <div className="employee-cluster-grid">
                             {filteredEmployees.map(employee => (
-                                <div key={employee.id} className="module-list-card">
+                                <div key={employee.id} className="module-list-card employee-cluster-card">
                                     <div className="module-list-header">
                                         <div>
-                                            <div className="module-item-title">{employee.firstName} {employee.lastName}</div>
+                                            <div className="employee-card-heading">
+                                                <div className="module-item-title">{employee.firstName} {employee.lastName}</div>
+                                                {employee.leadingHand ? <span className="employee-lh-badge">LH</span> : null}
+                                            </div>
                                             <div className="module-item-sub">{employee.phoneNumber || 'No phone number'}</div>
                                         </div>
                                         <div className="module-list-actions">
@@ -146,6 +151,7 @@ export default function EmployeesPage() {
                                         </div>
                                     </div>
                                     <div className="module-preferences">
+                                        <div className="module-card-title minor">Preferred Sites</div>
                                         {employee.preferredSiteIds.length === 0 ? (
                                             <div className="module-item-sub">No preferred sites selected.</div>
                                         ) : employee.preferredSiteIds.map((siteId, index) => (
@@ -181,6 +187,14 @@ export default function EmployeesPage() {
                                 <label>Phone Number</label>
                                 <input value={form.phoneNumber} onChange={e => setForm(prev => ({ ...prev, phoneNumber: e.target.value }))} />
                             </div>
+                            <label className="module-check-row employee-leading-hand-row">
+                                <input
+                                    type="checkbox"
+                                    checked={form.leadingHand}
+                                    onChange={e => setForm(prev => ({ ...prev, leadingHand: e.target.checked }))}
+                                />
+                                <span>Leading Hand</span>
+                            </label>
                             <div className="module-card-title minor">Preferred Sites (up to 3)</div>
                             <div className="module-check-list limited">
                                 {sites.map(site => (
