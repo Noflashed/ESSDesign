@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 function todayDateString() {
@@ -6,6 +6,7 @@ function todayDateString() {
 }
 
 export default function ESSRosteringPage({ user }) {
+    const dateInputRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -146,22 +147,39 @@ export default function ESSRosteringPage({ user }) {
         return <div className="module-page"><div className="module-empty">Loading rostering data...</div></div>;
     }
 
+    const openDatePicker = () => {
+        const input = dateInputRef.current;
+        if (!input) {
+            return;
+        }
+
+        if (typeof input.showPicker === 'function') {
+            input.showPicker();
+            return;
+        }
+
+        input.focus();
+        input.click();
+    };
+
     return (
         <div className="module-page">
             <div className="module-shell rostering-shell">
                 <div className="page-header">
                     <div className="header-stats">
                         <div className="stat-card stat-card-date">
-                            <div className="stat-card-date-display">
+                            <button type="button" className="stat-card-date-trigger" onClick={openDatePicker}>
                                 <div className="stat-label">Plan Date</div>
                                 <div className="stat-val stat-val-date">{planDate}</div>
                                 <div className="stat-sub">Click to change</div>
-                            </div>
+                            </button>
                             <input
+                                ref={dateInputRef}
                                 className="stat-card-date-input"
                                 type="date"
                                 value={planDate}
                                 onChange={(e) => setPlanDate(e.target.value)}
+                                tabIndex={-1}
                                 aria-label="Choose plan date"
                             />
                         </div>
