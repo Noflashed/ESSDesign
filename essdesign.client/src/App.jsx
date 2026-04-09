@@ -343,7 +343,9 @@ function App() {
     }, []);
 
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, { pushHistory = true } = {}) => {
-        const resolvedPage = isEmployeePortalRole ? 'employee-home' : page;
+        const resolvedPage = isEmployeePortalRole
+            ? (page === 'landing' || page === 'employee-home' ? page : 'employee-home')
+            : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
         setEmployeeContext(nextEmployeeContext);
