@@ -2173,6 +2173,104 @@ body {
     line-height: 1.4;
 }
 
+.web-landing-page {
+    position: relative;
+    min-height: calc(100vh - 62px);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at top right, rgba(246, 114, 0, 0.12), transparent 34%),
+        radial-gradient(circle at bottom left, rgba(15, 23, 42, 0.16), transparent 30%),
+        linear-gradient(135deg, #e5e7eb 0%, #f8fafc 52%, #e2e8f0 100%);
+}
+
+[data-theme='dark'] .web-landing-page {
+    background:
+        radial-gradient(circle at top right, rgba(246, 114, 0, 0.16), transparent 34%),
+        radial-gradient(circle at bottom left, rgba(148, 163, 184, 0.08), transparent 30%),
+        linear-gradient(135deg, #0f172a 0%, #111827 55%, #020617 100%);
+}
+
+.web-landing-backdrop,
+.web-landing-overlay,
+.web-landing-grid {
+    position: absolute;
+    inset: 0;
+}
+
+.web-landing-backdrop {
+    background-image: url('https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/Background%20image.jpg');
+    background-position: center;
+    background-size: cover;
+    filter: grayscale(1) contrast(0.9) brightness(1.05);
+    opacity: 0.22;
+    transform: scale(1.04);
+}
+
+.web-landing-overlay {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.84));
+}
+
+[data-theme='dark'] .web-landing-overlay {
+    background:
+        linear-gradient(180deg, rgba(2,6,23,0.74), rgba(2,6,23,0.86));
+}
+
+.web-landing-grid {
+    background-image:
+        linear-gradient(rgba(148, 163, 184, 0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.11) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.32;
+    mask-image: radial-gradient(circle at center, black 20%, transparent 88%);
+}
+
+.web-landing-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 48px 24px;
+}
+
+.web-landing-logo {
+    width: min(580px, 76vw);
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 20px 38px rgba(15, 23, 42, 0.18));
+}
+
+.web-landing-button {
+    border: none;
+    border-radius: 999px;
+    padding: 16px 30px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 16px 34px rgba(234, 88, 12, 0.26);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.web-landing-button:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 22px 42px rgba(234, 88, 12, 0.32);
+    filter: brightness(1.03);
+}
+
+.web-landing-button:active {
+    transform: translateY(0);
+}
+
 @media (max-width: 760px) {
     .employee-portal-shell {
         padding: 20px;
@@ -2189,5 +2287,17 @@ body {
 
     .employee-portal-card h2 {
         font-size: 28px;
+    }
+
+    .web-landing-page {
+        min-height: calc(100vh - 58px);
+    }
+
+    .web-landing-logo {
+        width: min(88vw, 460px);
+    }
+
+    .web-landing-button {
+        width: min(280px, 100%);
     }
 }
