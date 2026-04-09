@@ -7,6 +7,9 @@ function todayDateString() {
 
 export default function ESSRosteringPage({ user }) {
     const dateInputRef = useRef(null);
+    const hydratedRef = useRef(false);
+    const dirtyRef = useRef(false);
+    const saveTimeoutRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -17,6 +20,27 @@ export default function ESSRosteringPage({ user }) {
     const [activeSiteIds, setActiveSiteIds] = useState([]);
     const [requiredMenBySite, setRequiredMenBySite] = useState({});
     const [pickerSiteIds, setPickerSiteIds] = useState([]);
+
+    const applyPlanState = (plan) => {
+        if (plan) {
+            setActiveSiteIds(plan.activeSiteIds || []);
+            setRequiredMenBySite(plan.requiredMenBySite || {});
+            return;
+        }
+
+        setActiveSiteIds([]);
+        setRequiredMenBySite({});
+    };
+
+    const buildPlanSnapshot = (date, siteIds, menMap) => JSON.stringify({
+        date,
+        activeSiteIds: [...siteIds].sort(),
+        requiredMenBySite: Object.fromEntries(
+            Object.entries(menMap || {})
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([siteId, value]) => [siteId, value === '' ? '' : Math.max(0, Number(value || 0))])
+        )
+    });
 
     useEffect(() => {
         let active = true;
@@ -46,9 +70,10 @@ export default function ESSRosteringPage({ user }) {
 
                 if (plan) {
                     setPlanDate(plan.date || todayDateString());
-                    setActiveSiteIds(plan.activeSiteIds || []);
-                    setRequiredMenBySite(plan.requiredMenBySite || {});
+                    applyPlanState(plan);
                 }
+
+                hydratedRef.current = true;
             })
             .catch((err) => {
                 if (active) {
@@ -65,6 +90,33 @@ export default function ESSRosteringPage({ user }) {
             active = false;
         };
     }, [user?.email, user?.id]);
+
+    useEffect(() => {
+        if (!hydratedRef.current) {
+            return undefined;
+        }
+
+        let active = true;
+        setError('');
+
+        rosteringAPI.getPlan(planDate)
+            .then((plan) => {
+                if (!active) {
+                    return;
+                }
+                applyPlanState(plan);
+                dirtyRef.current = false;
+            })
+            .catch((err) => {
+                if (active) {
+                    setError(err.message || 'Failed to load rostering data');
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [planDate]);
 
     const groupedSites = useMemo(() => {
         const grouped = new Map();
@@ -94,7 +146,13 @@ export default function ESSRosteringPage({ user }) {
         [activeSites, requiredMenBySite]
     );
 
+    const currentSnapshot = useMemo(
+        () => buildPlanSnapshot(planDate, activeSiteIds, requiredMenBySite),
+        [planDate, activeSiteIds, requiredMenBySite]
+    );
+
     const setRequiredMen = (siteId, nextValue) => {
+        dirtyRef.current = true;
         if (nextValue === '') {
             setRequiredMenBySite((prev) => ({
                 ...prev,
@@ -110,6 +168,7 @@ export default function ESSRosteringPage({ user }) {
     };
 
     const removeActiveSite = (siteId) => {
+        dirtyRef.current = true;
         setActiveSiteIds((prev) => prev.filter((id) => id !== siteId));
     };
 
@@ -127,8 +186,47 @@ export default function ESSRosteringPage({ user }) {
     };
 
     const confirmJobPicker = () => {
+        dirtyRef.current = true;
         setActiveSiteIds(pickerSiteIds);
         setShowJobPicker(false);
+    };
+
+    const persistPlan = async (dateToSave, siteIdsToSave, menBySiteToSave, userIdToSave) => {
+        await rosteringAPI.savePlan({
+            date: dateToSave,
+            activeSiteIds: siteIdsToSave,
+            requiredMenBySite: Object.fromEntries(
+                Object.entries(menBySiteToSave).map(([siteId, value]) => [
+                    siteId,
+                    Math.max(0, Number(value || 0))
+                ])
+            ),
+            updatedByUserId: userIdToSave
+        });
+    };
+
+    const handlePlanDateChange = async (nextDate) => {
+        if (!nextDate || nextDate === planDate) {
+            return;
+        }
+
+        if (dirtyRef.current && isSupervisor) {
+            setSaving(true);
+            setError('');
+
+            try {
+                await persistPlan(planDate, activeSiteIds, requiredMenBySite, user?.id);
+                dirtyRef.current = false;
+            } catch (err) {
+                setError(err.message || 'Could not save roster plan');
+                setSaving(false);
+                return;
+            }
+
+            setSaving(false);
+        }
+
+        setPlanDate(nextDate);
     };
 
     const savePlan = async () => {
@@ -141,23 +239,77 @@ export default function ESSRosteringPage({ user }) {
         setError('');
 
         try {
-            await rosteringAPI.savePlan({
-                date: planDate,
-                activeSiteIds,
-                requiredMenBySite: Object.fromEntries(
-                    Object.entries(requiredMenBySite).map(([siteId, value]) => [
-                        siteId,
-                        Math.max(0, Number(value || 0))
-                    ])
-                ),
-                updatedByUserId: user?.id
-            });
+            await persistPlan(planDate, activeSiteIds, requiredMenBySite, user?.id);
+            dirtyRef.current = false;
         } catch (err) {
             setError(err.message || 'Could not save roster plan');
         } finally {
             setSaving(false);
         }
     };
+
+    useEffect(() => {
+        if (!hydratedRef.current || !isSupervisor) {
+            return undefined;
+        }
+
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        saveTimeoutRef.current = window.setTimeout(async () => {
+            if (!dirtyRef.current) {
+                return;
+            }
+
+            setSaving(true);
+            setError('');
+
+            try {
+                await persistPlan(planDate, activeSiteIds, requiredMenBySite, user?.id);
+                dirtyRef.current = false;
+            } catch (err) {
+                setError(err.message || 'Could not save roster plan');
+            } finally {
+                setSaving(false);
+            }
+        }, 700);
+
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, [planDate, activeSiteIds, requiredMenBySite, isSupervisor, user?.id]);
+
+    useEffect(() => {
+        if (!hydratedRef.current) {
+            return undefined;
+        }
+
+        const interval = window.setInterval(async () => {
+            if (dirtyRef.current || saving) {
+                return;
+            }
+
+            try {
+                const remotePlan = await rosteringAPI.getPlan(planDate);
+                const remoteSnapshot = buildPlanSnapshot(
+                    planDate,
+                    remotePlan?.activeSiteIds || [],
+                    remotePlan?.requiredMenBySite || {}
+                );
+
+                if (remoteSnapshot !== currentSnapshot) {
+                    applyPlanState(remotePlan);
+                }
+            } catch {
+                // Keep existing state if background sync fails.
+            }
+        }, 10000);
+
+        return () => window.clearInterval(interval);
+    }, [planDate, currentSnapshot, saving]);
 
     if (loading) {
         return <div className="module-page"><div className="module-empty">Loading rostering data...</div></div>;
@@ -194,7 +346,7 @@ export default function ESSRosteringPage({ user }) {
                                 className="stat-card-date-input"
                                 type="date"
                                 value={planDate}
-                                onChange={(e) => setPlanDate(e.target.value)}
+                                onChange={(e) => handlePlanDateChange(e.target.value)}
                                 tabIndex={-1}
                                 aria-label="Choose plan date"
                             />
@@ -271,7 +423,7 @@ export default function ESSRosteringPage({ user }) {
 
                     <div style={{ marginTop: 18 }}>
                         <button className="dev-btn" onClick={savePlan} disabled={saving || !isSupervisor}>
-                            {saving ? 'Developing...' : 'Develop Rostering Tree'}
+                            {saving ? 'Saving...' : 'Develop Rostering Tree'}
                         </button>
                     </div>
                 </section>

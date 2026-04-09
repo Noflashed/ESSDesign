@@ -744,8 +744,11 @@ export const rosteringAPI = {
         return rosteringAPI.getEmployees();
     },
 
-    getPlan: async () => {
-        const rows = await readRestRows('ess_rostering_plans', '?select=*&order=plan_date.desc&limit=1');
+    getPlan: async (planDate = null) => {
+        const query = planDate
+            ? `?select=*&plan_date=eq.${encodeURIComponent(planDate)}&limit=1`
+            : '?select=*&order=plan_date.desc&limit=1';
+        const rows = await readRestRows('ess_rostering_plans', query);
         if (!rows.length) {
             return null;
         }
