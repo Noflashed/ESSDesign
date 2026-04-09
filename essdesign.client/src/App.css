@@ -1194,7 +1194,7 @@ body {
 }
 
 .rostering-tree-card {
-    cursor: grab;
+    cursor: default;
 }
 
 .rostering-tree-inline-pill {
@@ -1208,15 +1208,20 @@ body {
     text-align: left;
     overflow: hidden;
     border-radius: 18px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96));
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+    background: linear-gradient(180deg, rgba(26, 32, 44, 0.98), rgba(15, 23, 42, 0.98));
+    border: 1px solid rgba(71, 85, 105, 0.38);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
 }
 
 .rostering-tree-table-head {
     padding: 18px 20px 14px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    background: linear-gradient(135deg, rgba(255,247,237,0.9), rgba(255,255,255,0.85));
+    border-bottom: 1px solid rgba(71, 85, 105, 0.42);
+    background: linear-gradient(135deg, rgba(51, 65, 85, 0.96), rgba(30, 41, 59, 0.96));
+    cursor: grab;
+}
+
+.rostering-tree-table-head:active {
+    cursor: grabbing;
 }
 
 .rostering-tree-employee-table {
@@ -1241,7 +1246,7 @@ body {
 .rostering-tree-project-name {
     font-size: 18px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: #f8fafc;
     line-height: 1.2;
 }
 
@@ -1251,38 +1256,46 @@ body {
     justify-content: center;
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(241, 245, 249, 0.95);
-    color: #334155;
+    background: rgba(15, 23, 42, 0.92);
+    color: #cbd5e1;
     font-size: 11px;
     font-weight: 700;
     white-space: nowrap;
 }
 
 .rostering-tree-table-grid thead th {
-    background: rgba(248, 250, 252, 0.96);
-    color: var(--text-secondary);
+    background: rgba(30, 41, 59, 0.92);
+    color: #cbd5e1;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    border-bottom: 1px solid rgba(71, 85, 105, 0.34);
     text-align: left;
 }
 
 .rostering-tree-table-grid tbody td,
 .rostering-tree-empty-row {
     background: transparent;
-    color: var(--text-primary);
+    color: #f8fafc;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
     padding: 12px 14px;
-    border-top: 1px solid rgba(148, 163, 184, 0.12);
+    border-top: 1px solid rgba(51, 65, 85, 0.52);
     line-height: 1.2;
 }
 
 .rostering-tree-table-grid tbody tr:first-child td {
     border-top: none;
+}
+
+.rostering-tree-table-grid tbody tr {
+    transition: background-color 0.16s ease;
+}
+
+.rostering-tree-table-grid tbody tr:hover td {
+    background: rgba(30, 41, 59, 0.78);
 }
 
 .rostering-tree-col-first,
@@ -1302,7 +1315,7 @@ body {
 
 .rostering-tree-empty-row {
     padding: 10px 12px;
-    color: var(--text-secondary);
+    color: #94a3b8;
     font-weight: 600;
 }
 

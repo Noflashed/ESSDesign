@@ -12,18 +12,14 @@ function clamp(value, min, max) {
 
 function buildInitialPositions(sitePlans) {
     const positions = {};
-    const startX = BOARD_CENTER - 460;
+    const startX = BOARD_CENTER - 230;
     const startY = BOARD_CENTER - 260;
-    const columnGap = 460;
-    const rowGap = 320;
+    const rowGap = 292;
 
     sitePlans.forEach((sitePlan, index) => {
-        const column = index % 2;
-        const row = Math.floor(index / 2);
-        const baseX = startX + column * columnGap;
-        const baseY = startY + row * rowGap;
+        const baseY = startY + index * rowGap;
 
-        positions[`site:${sitePlan.siteId}`] = { x: baseX, y: baseY };
+        positions[`site:${sitePlan.siteId}`] = { x: startX, y: baseY };
     });
 
     return positions;
@@ -105,9 +101,9 @@ function buildSitePlans(sites, employees, plan) {
         .filter(Boolean);
 }
 
-function TreeCard({ className, style, onPointerDown, children }) {
+function TreeCard({ className, style, children }) {
     return (
-        <div className={className} style={style} onPointerDown={onPointerDown}>
+        <div className={className} style={style}>
             {children}
         </div>
     );
@@ -347,9 +343,11 @@ export default function RosteringTreePage({ planDate, onBack }) {
                                 key={sitePlan.siteId}
                                 className="lh-leading-card rostering-tree-card rostering-tree-table-card"
                                 style={{ left: sitePosition.x, top: sitePosition.y, width: SITE_WIDTH, minHeight: SITE_HEIGHT }}
-                                onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
                             >
-                                    <div className="rostering-tree-table-head">
+                                <div
+                                    className="rostering-tree-table-head"
+                                    onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
+                                >
                                     <div className="rostering-tree-title-row">
                                         <div className="rostering-builder-pill rostering-tree-inline-pill">{sitePlan.builderName}</div>
                                         <div className="rostering-tree-required-pill">{sitePlan.requiredCrew} required</div>
