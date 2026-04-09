@@ -302,9 +302,9 @@ export default function ESSRosteringPage({ user }) {
                                                         className={`job-card ${selected ? 'selected' : ''}`}
                                                         onClick={() => togglePickerSite(site.id)}
                                                     >
-                                                        <div>
+                                                        <div className="rostering-plan-site">
+                                                            <span className="rostering-builder-pill">{site.builderName}</span>
                                                             <div className="job-client">{site.projectName}</div>
-                                                            <div className="job-addr">{site.builderName}</div>
                                                         </div>
                                                         <span className={`badge ${selected ? 'badge-count' : 'badge-standby'}`}>
                                                             {selected ? 'On' : 'Add'}
