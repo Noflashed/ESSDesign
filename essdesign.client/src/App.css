@@ -650,7 +650,12 @@ body {
     height: 100%;
     overflow: hidden;
     background: #161618;
-    cursor: default;
+    cursor: grab;
+    user-select: none;
+}
+
+.lh-board-viewport.is-panning {
+    cursor: grabbing;
 }
 
 .lh-board-stage {
@@ -660,22 +665,14 @@ body {
     transform-origin: top left;
 }
 
-.lh-board-grid {
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(circle at center, rgba(255,255,255,0.12) 1px, transparent 1px);
-    background-size: 22px 22px;
-    opacity: 0.3;
-    pointer-events: none;
-}
-
 .lh-board-lines {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 1;
+    overflow: visible;
 }
 
 .lh-board-line {
@@ -688,7 +685,7 @@ body {
 .lh-board-line-hit {
     fill: none;
     stroke: transparent;
-    stroke-width: 18;
+    stroke-width: 40;
     cursor: pointer;
 }
 
@@ -729,6 +726,9 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
     cursor: grab;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .lh-leading-name {
@@ -744,24 +744,9 @@ body {
     margin-top: 8px;
 }
 
-.lh-leading-port-group {
+.lh-leading-port {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.lh-leading-port-group-left {
-    left: -18px;
-}
-
-.lh-leading-port-group-right {
-    right: -18px;
-}
-
-.lh-leading-port {
     width: 12px;
     height: 12px;
     border-radius: 999px;
@@ -770,12 +755,15 @@ body {
     cursor: pointer;
     box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
     padding: 0;
+    transform: translateY(-50%);
 }
 
-.lh-leading-port-label {
-    color: #d1d5db;
-    font-size: 12px;
-    font-weight: 600;
+.lh-leading-port-left {
+    left: -6px;
+}
+
+.lh-leading-port-right {
+    right: -6px;
 }
 
 .lh-card {
@@ -785,6 +773,11 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 18px 36px rgba(0, 0, 0, 0.3);
     cursor: grab;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .lh-card.selected {
@@ -795,23 +788,15 @@ body {
     color: #f3f4f6;
     font-size: 15px;
     font-weight: 600;
+    margin-top: 0;
+    line-height: 1.3;
 }
 
 .lh-card-sub {
     color: #9ca3af;
     font-size: 13px;
     margin-top: 6px;
-}
-
-.lh-card-remove {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    border: none;
-    background: transparent;
-    color: #9ca3af;
-    font-size: 18px;
-    cursor: pointer;
+    line-height: 1.2;
 }
 
 .lh-port {
@@ -843,6 +828,7 @@ body {
     background: rgba(27, 27, 30, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+    z-index: 12;
 }
 
 .lh-board-context-title {
@@ -883,6 +869,11 @@ body {
     cursor: pointer;
 }
 
+.lh-board-context-item.danger {
+    justify-content: flex-start;
+    color: #fca5a5;
+}
+
 .lh-board-context-item span:last-child {
     color: #9ca3af;
     font-size: 12px;
@@ -905,7 +896,7 @@ body {
     position: absolute;
     top: 18px;
     right: 18px;
-    z-index: 4;
+    z-index: 14;
     border: 1px solid rgba(255,255,255,0.14);
     background: rgba(255,255,255,0.96);
     color: #111827;

@@ -1,19 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI } from '../services/api';
 
-const BOARD_WIDTH = 5000;
-const BOARD_HEIGHT = 5000;
+const BOARD_SIZE = 20000;
+const BOARD_CENTER = BOARD_SIZE / 2;
 const LEADING_HAND_WIDTH = 280;
 const LEADING_HAND_HEIGHT = 140;
 const EMPLOYEE_WIDTH = 220;
 const EMPLOYEE_HEIGHT = 88;
+const PORT_SIZE = 12;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
 function defaultLeadingHandPosition() {
-    return { x: 610, y: 270 };
+    return {
+        x: BOARD_CENTER - LEADING_HAND_WIDTH / 2,
+        y: BOARD_CENTER - LEADING_HAND_HEIGHT / 2
+    };
 }
 
 function cardPortPosition(position, side) {
@@ -25,25 +29,26 @@ function cardPortPosition(position, side) {
 
 function leadingHandPortPosition(position, type) {
     return {
-        x: position.x + (type === 'bad' ? 18 : LEADING_HAND_WIDTH - 18),
+        x: position.x + (type === 'bad' ? 0 : LEADING_HAND_WIDTH),
         y: position.y + LEADING_HAND_HEIGHT / 2
     };
 }
 
 function makeCurve(source, target) {
+    const direction = target.x >= source.x ? 1 : -1;
     const delta = Math.abs(target.x - source.x);
-    const handle = Math.max(60, delta * 0.45);
-    return `M ${source.x} ${source.y} C ${source.x + handle} ${source.y}, ${target.x - handle} ${target.y}, ${target.x} ${target.y}`;
+    const handle = Math.max(70, delta * 0.42);
+    return `M ${source.x} ${source.y} C ${source.x + handle * direction} ${source.y}, ${target.x - handle * direction} ${target.y}, ${target.x} ${target.y}`;
 }
 
-function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, onStartConnection }) {
+function EmployeeCard({ employee, position, selected, onPointerDown, onContextMenu, onStartConnection }) {
     return (
         <div
             className={`lh-card ${selected ? 'selected' : ''}`}
             style={{ left: position.x, top: position.y, width: EMPLOYEE_WIDTH, minHeight: EMPLOYEE_HEIGHT }}
             onPointerDown={onPointerDown}
+            onContextMenu={onContextMenu}
         >
-            <button className="lh-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(employee.id); }}>×</button>
             <button
                 className="lh-port lh-port-left"
                 data-employee-port="left"
@@ -70,12 +75,12 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, o
 
 export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const viewportRef = useRef(null);
-    const boardRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [allEmployees, setAllEmployees] = useState([]);
     const [relationships, setRelationships] = useState([]);
+    const [visibleEmployeeIds, setVisibleEmployeeIds] = useState([]);
     const [positions, setPositions] = useState({ leadingHand: defaultLeadingHandPosition() });
     const [activeDrag, setActiveDrag] = useState(null);
     const [connectionDraft, setConnectionDraft] = useState(null);
@@ -84,6 +89,28 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const [scale, setScale] = useState(1);
     const [hoveredLineId, setHoveredLineId] = useState(null);
     const [pan, setPan] = useState({ x: 0, y: 0 });
+
+    const clientToWorld = (clientX, clientY, currentPan = pan, currentScale = scale) => {
+        const rect = viewportRef.current?.getBoundingClientRect();
+        if (!rect) {
+            return { x: 0, y: 0 };
+        }
+        return {
+            x: (clientX - rect.left - currentPan.x) / currentScale,
+            y: (clientY - rect.top - currentPan.y) / currentScale
+        };
+    };
+
+    const clientToViewport = (clientX, clientY) => {
+        const rect = viewportRef.current?.getBoundingClientRect();
+        if (!rect) {
+            return { x: 0, y: 0 };
+        }
+        return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+        };
+    };
 
     useEffect(() => {
         let active = true;
@@ -97,21 +124,22 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 }
                 setAllEmployees(employeeRows);
                 setRelationships(relationshipRows);
-                setPositions(prev => {
-                    const next = { ...prev };
+                setVisibleEmployeeIds(relationshipRows.map((relationship) => relationship.employeeId));
+                setPositions((prev) => {
+                    const next = { ...prev, leadingHand: prev.leadingHand || defaultLeadingHandPosition() };
                     relationshipRows.forEach((relationship, index) => {
                         if (!next[relationship.employeeId]) {
                             next[relationship.employeeId] = relationship.relationshipType === 'good'
-                                ? { x: 1080, y: 120 + index * 108 }
+                                ? { x: BOARD_CENTER + 430, y: BOARD_CENTER - 180 + index * 108 }
                                 : relationship.relationshipType === 'bad'
-                                    ? { x: 200, y: 120 + index * 108 }
-                                    : { x: 450 + (index % 3) * 250, y: 560 + Math.floor(index / 3) * 108 };
+                                    ? { x: BOARD_CENTER - 650, y: BOARD_CENTER - 180 + index * 108 }
+                                    : { x: BOARD_CENTER - 110 + (index % 3) * 250, y: BOARD_CENTER + 290 + Math.floor(index / 3) * 108 };
                         }
                     });
                     return next;
                 });
             })
-            .catch(err => {
+            .catch((err) => {
                 if (active) {
                     setError(err.message || 'Failed to load leading hand relationships');
                 }
@@ -128,49 +156,138 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     }, [leadingHand.id]);
 
     useEffect(() => {
-        if (!viewportRef.current) {
+        const viewport = viewportRef.current;
+        if (!viewport) {
             return;
         }
-        const viewportWidth = viewportRef.current.clientWidth || 0;
-        const viewportHeight = viewportRef.current.clientHeight || 0;
-        const centerX = defaultLeadingHandPosition().x + LEADING_HAND_WIDTH / 2;
-        const centerY = defaultLeadingHandPosition().y + LEADING_HAND_HEIGHT / 2;
+        const leadingPosition = defaultLeadingHandPosition();
+        const centerX = leadingPosition.x + LEADING_HAND_WIDTH / 2;
+        const centerY = leadingPosition.y + LEADING_HAND_HEIGHT / 2;
         setPan({
-            x: viewportWidth / 2 - centerX * scale,
-            y: viewportHeight / 2 - centerY * scale
+            x: viewport.clientWidth / 2 - centerX * scale,
+            y: viewport.clientHeight / 2 - centerY * scale
         });
     }, []);
 
+    const employeeById = useMemo(
+        () => Object.fromEntries(allEmployees.map((employee) => [employee.id, employee])),
+        [allEmployees]
+    );
+
+    const resolvedLeadingHand = employeeById[leadingHand.id] || leadingHand;
+
+    const visibleEmployees = useMemo(
+        () => visibleEmployeeIds
+            .map((employeeId) => ({
+                employeeId,
+                employee: employeeById[employeeId],
+                relationship: relationships.find((item) => item.employeeId === employeeId) || null
+            }))
+            .filter((item) => item.employee),
+        [employeeById, relationships, visibleEmployeeIds]
+    );
+
+    const usedEmployeeIds = useMemo(
+        () => new Set(visibleEmployeeIds),
+        [visibleEmployeeIds]
+    );
+
+    const searchResults = useMemo(() => {
+        const candidates = allEmployees.filter((employee) => employee.id !== leadingHand.id && !usedEmployeeIds.has(employee.id));
+        const query = search.trim().toLowerCase();
+        if (!query) {
+            return candidates.slice(0, 10);
+        }
+        return candidates
+            .filter((employee) => {
+                const name = `${employee.firstName} ${employee.lastName}`.toLowerCase();
+                const phone = (employee.phoneNumber || '').toLowerCase();
+                return name.includes(query) || phone.includes(query);
+            })
+            .slice(0, 10);
+    }, [allEmployees, leadingHand.id, search, usedEmployeeIds]);
+
+    const renderedLines = useMemo(() => {
+        const leadingPosition = positions.leadingHand || defaultLeadingHandPosition();
+        const savedLines = relationships
+            .filter((item) => item.relationshipType === 'good' || item.relationshipType === 'bad')
+            .map((item) => {
+                const employeePosition = positions[item.employeeId];
+                if (!employeePosition) {
+                    return null;
+                }
+                const sourceSide = item.relationshipType === 'bad' ? 'right' : 'left';
+                return {
+                    id: item.employeeId,
+                    employeeId: item.employeeId,
+                    tone: item.relationshipType,
+                    d: makeCurve(
+                        cardPortPosition(employeePosition, sourceSide),
+                        leadingHandPortPosition(leadingPosition, item.relationshipType)
+                    )
+                };
+            })
+            .filter(Boolean);
+
+        if (!connectionDraft) {
+            return savedLines;
+        }
+
+        if (connectionDraft.sourceKind === 'employee') {
+            const employeePosition = positions[connectionDraft.employeeId];
+            if (employeePosition) {
+                savedLines.push({
+                    id: 'draft',
+                    employeeId: null,
+                    tone: 'draft',
+                    d: makeCurve(
+                        cardPortPosition(employeePosition, connectionDraft.side),
+                        connectionDraft.target
+                    )
+                });
+            }
+        }
+
+        if (connectionDraft.sourceKind === 'leadingHand' && connectionDraft.origin) {
+            savedLines.push({
+                id: 'draft',
+                employeeId: null,
+                tone: 'draft',
+                d: makeCurve(connectionDraft.origin, connectionDraft.target)
+            });
+        }
+
+        return savedLines;
+    }, [connectionDraft, positions, relationships]);
+
     useEffect(() => {
         const handleMove = (event) => {
-            if (!boardRef.current) {
+            if (!activeDrag && !connectionDraft) {
                 return;
             }
-            const rect = boardRef.current.getBoundingClientRect();
-            const boardX = (event.clientX - rect.left) / scale;
-            const boardY = (event.clientY - rect.top) / scale;
 
-            if (activeDrag) {
-                const width = activeDrag.id === 'leadingHand' ? LEADING_HAND_WIDTH : EMPLOYEE_WIDTH;
-                const height = activeDrag.id === 'leadingHand' ? LEADING_HAND_HEIGHT : EMPLOYEE_HEIGHT;
-                setPositions(prev => ({
-                    ...prev,
-                    [activeDrag.id]: {
-                        x: boardX - activeDrag.offsetX,
-                        y: boardY - activeDrag.offsetY
-                    }
-                }));
-            }
-
-            if (activeDrag?.id === 'pan') {
+            if (activeDrag?.kind === 'pan') {
                 setPan({
                     x: activeDrag.originX + (event.clientX - activeDrag.startX),
                     y: activeDrag.originY + (event.clientY - activeDrag.startY)
                 });
+                return;
+            }
+
+            const world = clientToWorld(event.clientX, event.clientY);
+
+            if (activeDrag?.kind === 'card') {
+                setPositions((prev) => ({
+                    ...prev,
+                    [activeDrag.id]: {
+                        x: world.x - activeDrag.offsetX,
+                        y: world.y - activeDrag.offsetY
+                    }
+                }));
             }
 
             if (connectionDraft) {
-                setConnectionDraft(prev => prev ? { ...prev, target: { x: boardX, y: boardY } } : null);
+                setConnectionDraft((prev) => (prev ? { ...prev, target: world } : null));
             }
         };
 
@@ -189,6 +306,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                     await saveRelationship(targetEmployeeId, connectionDraft.relationshipType);
                 }
             }
+
             setActiveDrag(null);
             setConnectionDraft(null);
         };
@@ -199,91 +317,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             window.removeEventListener('pointermove', handleMove);
             window.removeEventListener('pointerup', handleUp);
         };
-    }, [activeDrag, connectionDraft, scale]);
-
-    const employeeById = useMemo(
-        () => Object.fromEntries(allEmployees.map(employee => [employee.id, employee])),
-        [allEmployees]
-    );
-
-    const resolvedLeadingHand = employeeById[leadingHand.id] || leadingHand;
-
-    const relatedEmployees = useMemo(
-        () => relationships
-            .map(relationship => ({
-                ...relationship,
-                employee: employeeById[relationship.employeeId]
-            }))
-            .filter(item => item.employee),
-        [employeeById, relationships]
-    );
-
-    const usedEmployeeIds = useMemo(
-        () => new Set(relationships.map(item => item.employeeId)),
-        [relationships]
-    );
-
-    const searchResults = useMemo(() => {
-        const candidates = allEmployees.filter(employee => employee.id !== leadingHand.id && !usedEmployeeIds.has(employee.id));
-        const q = search.trim().toLowerCase();
-        if (!q) {
-            return candidates.slice(0, 10);
-        }
-        return candidates.filter(employee => {
-            const name = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-            const phone = (employee.phoneNumber || '').toLowerCase();
-            return name.includes(q) || phone.includes(q);
-        }).slice(0, 10);
-    }, [allEmployees, leadingHand.id, search, usedEmployeeIds]);
-
-    const renderedLines = useMemo(() => {
-        const leadingPosition = positions.leadingHand || defaultLeadingHandPosition();
-        const lines = relatedEmployees
-            .filter(item => item.relationshipType === 'good' || item.relationshipType === 'bad')
-            .map(item => {
-                const employeePosition = positions[item.employeeId];
-                if (!employeePosition) {
-                    return null;
-                }
-                const sourceSide = item.relationshipType === 'bad' ? 'right' : 'left';
-                const source = cardPortPosition(employeePosition, sourceSide);
-                const target = leadingHandPortPosition(leadingPosition, item.relationshipType);
-                return {
-                    id: item.employeeId,
-                    employeeId: item.employeeId,
-                    tone: item.relationshipType,
-                    hitTone: item.relationshipType,
-                    d: makeCurve(source, target)
-                };
-            })
-            .filter(Boolean);
-
-        if (connectionDraft) {
-            if (connectionDraft.sourceKind === 'employee') {
-                const employeePosition = positions[connectionDraft.employeeId];
-                if (employeePosition) {
-                    lines.push({
-                        id: 'draft',
-                        employeeId: connectionDraft.employeeId,
-                        tone: 'draft',
-                        hitTone: 'draft',
-                        d: makeCurve(cardPortPosition(employeePosition, connectionDraft.side), connectionDraft.target)
-                    });
-                }
-            }
-            if (connectionDraft.sourceKind === 'leadingHand' && connectionDraft.origin) {
-                lines.push({
-                    id: 'draft',
-                    employeeId: null,
-                    tone: 'draft',
-                    hitTone: 'draft',
-                    d: makeCurve(connectionDraft.origin, connectionDraft.target)
-                });
-            }
-        }
-
-        return lines;
-    }, [connectionDraft, positions, relatedEmployees]);
+    }, [activeDrag, connectionDraft, pan, scale]);
 
     const saveRelationship = async (employeeId, relationshipType) => {
         if (!employeeId) {
@@ -298,6 +332,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 relationshipType
             });
             setRelationships(nextRelationships);
+            setVisibleEmployeeIds((prev) => (prev.includes(employeeId) ? prev : [...prev, employeeId]));
         } catch (err) {
             setError(err.message || 'Could not save relationship');
         } finally {
@@ -307,14 +342,14 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
     const addEmployee = async (employeeId) => {
         await saveRelationship(employeeId, 'neutral');
-        setPositions(prev => ({
+        setPositions((prev) => ({
             ...prev,
-            [employeeId]: contextMenu
+            [employeeId]: contextMenu?.world
                 ? {
-                    x: contextMenu.x - EMPLOYEE_WIDTH / 2,
-                    y: contextMenu.y - EMPLOYEE_HEIGHT / 2
+                    x: contextMenu.world.x - EMPLOYEE_WIDTH / 2,
+                    y: contextMenu.world.y - EMPLOYEE_HEIGHT / 2
                 }
-                : { x: 430, y: 620 }
+                : { x: BOARD_CENTER - EMPLOYEE_WIDTH / 2, y: BOARD_CENTER + 300 }
         }));
         setContextMenu(null);
         setSearch('');
@@ -333,77 +368,113 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
     };
 
+    const removeEmployeeTile = async (employeeId) => {
+        const existingRelationship = relationships.find((item) => item.employeeId === employeeId);
+        if (existingRelationship) {
+            await removeRelationship(employeeId);
+        }
+        setVisibleEmployeeIds((prev) => prev.filter((id) => id !== employeeId));
+        setContextMenu(null);
+    };
+
+    const handleSaveExit = async () => {
+        const connectedIds = new Set(
+            relationships
+                .filter((relationship) => relationship.relationshipType === 'good' || relationship.relationshipType === 'bad')
+                .map((relationship) => relationship.employeeId)
+        );
+        const neutralIds = relationships
+            .filter((relationship) => visibleEmployeeIds.includes(relationship.employeeId) && !connectedIds.has(relationship.employeeId))
+            .map((relationship) => relationship.employeeId);
+
+        if (neutralIds.length > 0) {
+            setSaving(true);
+            setError('');
+            try {
+                await Promise.all(neutralIds.map((employeeId) => rosteringAPI.deleteLeadingHandRelationship(leadingHand.id, employeeId)));
+            } catch (err) {
+                setError(err.message || 'Could not save relationships');
+                setSaving(false);
+                return;
+            }
+            setSaving(false);
+        }
+
+        onBack();
+    };
+
     const startCardDrag = (id) => (event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
+        if (event.button !== 0) {
+            return;
+        }
+        event.stopPropagation();
+        const currentPosition = positions[id] || (id === 'leadingHand' ? defaultLeadingHandPosition() : { x: BOARD_CENTER, y: BOARD_CENTER });
+        const world = clientToWorld(event.clientX, event.clientY);
+        setContextMenu(null);
         setActiveDrag({
+            kind: 'card',
             id,
-            offsetX: (event.clientX - rect.left) / scale,
-            offsetY: (event.clientY - rect.top) / scale
+            offsetX: world.x - currentPosition.x,
+            offsetY: world.y - currentPosition.y
         });
     };
 
     const startConnection = (event, employeeId, side) => {
-        if (!boardRef.current) {
-            return;
-        }
-        const rect = boardRef.current.getBoundingClientRect();
+        event.preventDefault();
+        const world = clientToWorld(event.clientX, event.clientY);
         setConnectionDraft({
             sourceKind: 'employee',
             employeeId,
             side,
-            target: {
-                x: (event.clientX - rect.left) / scale,
-                y: (event.clientY - rect.top) / scale
-            }
+            target: world
         });
     };
 
     const startLeadingHandConnection = (event, relationshipType) => {
-        if (!boardRef.current) {
-            return;
-        }
-        const rect = boardRef.current.getBoundingClientRect();
+        event.preventDefault();
         const leadingPosition = positions.leadingHand || defaultLeadingHandPosition();
         setConnectionDraft({
             sourceKind: 'leadingHand',
             relationshipType,
-            employeeId: null,
-            side: null,
             origin: leadingHandPortPosition(leadingPosition, relationshipType),
-            target: {
-                x: (event.clientX - rect.left) / scale,
-                y: (event.clientY - rect.top) / scale
-            }
+            target: clientToWorld(event.clientX, event.clientY)
         });
     };
 
-    const openContextMenu = (event) => {
+    const openCanvasContextMenu = (event) => {
         event.preventDefault();
-        if (!boardRef.current) {
-            return;
-        }
-        const rect = boardRef.current.getBoundingClientRect();
+        const viewport = clientToViewport(event.clientX, event.clientY);
         setContextMenu({
-            x: (event.clientX - rect.left) / scale,
-            y: (event.clientY - rect.top) / scale
+            mode: 'add',
+            viewport,
+            world: clientToWorld(event.clientX, event.clientY)
+        });
+    };
+
+    const openEmployeeContextMenu = (event, employeeId) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const viewport = clientToViewport(event.clientX, event.clientY);
+        setContextMenu({
+            mode: 'employee',
+            employeeId,
+            viewport
         });
     };
 
     const handleWheel = (event) => {
-        event.preventDefault();
-        if (!viewportRef.current) {
+        if (event.target?.closest?.('.lh-board-context-menu')) {
             return;
         }
-        const rect = viewportRef.current.getBoundingClientRect();
-        const pointerX = event.clientX - rect.left;
-        const pointerY = event.clientY - rect.top;
-        const nextScale = clamp(scale + (event.deltaY > 0 ? -0.08 : 0.08), 0.65, 1.6);
-        const worldX = (pointerX - pan.x) / scale;
-        const worldY = (pointerY - pan.y) / scale;
+        event.preventDefault();
+        const viewport = clientToViewport(event.clientX, event.clientY);
+        const nextScale = clamp(scale + (event.deltaY > 0 ? -0.08 : 0.08), 0.55, 1.7);
+        const worldX = (viewport.x - pan.x) / scale;
+        const worldY = (viewport.y - pan.y) / scale;
         setScale(nextScale);
         setPan({
-            x: pointerX - worldX * nextScale,
-            y: pointerY - worldY * nextScale
+            x: viewport.x - worldX * nextScale,
+            y: viewport.y - worldY * nextScale
         });
     };
 
@@ -412,8 +483,9 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             return;
         }
         event.preventDefault();
+        setContextMenu(null);
         setActiveDrag({
-            id: 'pan',
+            kind: 'pan',
             startX: event.clientX,
             startY: event.clientY,
             originX: pan.x,
@@ -421,39 +493,51 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         });
     };
 
+    const gridSize = 32 * scale;
+    const gridStyle = {
+        backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)
+        `,
+        backgroundSize: `${gridSize}px ${gridSize}px, ${gridSize}px ${gridSize}px`,
+        backgroundPosition: `${pan.x}px ${pan.y}px, ${pan.x}px ${pan.y}px`
+    };
+
     return (
         <div className="lh-board-page">
             {error ? <div className="lh-board-error">{error}</div> : null}
             <div
                 ref={viewportRef}
-                className="lh-board-viewport"
-                onContextMenu={openContextMenu}
+                className={`lh-board-viewport ${activeDrag?.kind === 'pan' ? 'is-panning' : ''}`}
+                style={gridStyle}
+                onContextMenu={openCanvasContextMenu}
                 onClick={() => setContextMenu(null)}
                 onWheel={handleWheel}
                 onPointerDown={handleViewportPointerDown}
             >
-                <div
-                    ref={boardRef}
-                    className="lh-board-stage"
-                    style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
-                >
-                    <div className="lh-board-grid" />
+                <button className="lh-board-save-exit" onClick={handleSaveExit}>
+                    Save
+                </button>
 
-                    <svg className="lh-board-lines" viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`} preserveAspectRatio="none">
-                        {renderedLines.map(line => (
+                {saving ? <div className="lh-board-saving">Saving...</div> : null}
+
+                <div
+                    className="lh-board-stage"
+                    style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${scale})`, width: BOARD_SIZE, height: BOARD_SIZE }}
+                >
+                    <svg className="lh-board-lines" viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`} preserveAspectRatio="none">
+                        {renderedLines.map((line) => (
                             <g key={line.id}>
                                 <path
                                     d={line.d}
                                     className={`lh-board-line-hit ${line.tone === 'draft' ? 'draft' : ''}`}
-                                    onMouseEnter={() => line.tone !== 'draft' && setHoveredLineId(line.id)}
-                                    onMouseLeave={() => line.tone !== 'draft' && setHoveredLineId(prev => prev === line.id ? null : prev)}
+                                    onPointerEnter={() => line.tone !== 'draft' && setHoveredLineId(line.id)}
+                                    onPointerLeave={() => line.tone !== 'draft' && setHoveredLineId((prev) => (prev === line.id ? null : prev))}
                                     onClick={() => line.tone !== 'draft' && removeRelationship(line.employeeId)}
-                                    style={{ pointerEvents: line.tone === 'draft' ? 'none' : 'stroke' }}
                                 />
                                 <path
                                     d={line.d}
                                     className={`lh-board-line lh-board-line-${line.tone} ${hoveredLineId === line.id ? 'is-hovered' : ''}`}
-                                    style={{ pointerEvents: 'none' }}
                                 />
                             </g>
                         ))}
@@ -461,37 +545,31 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
                     <div
                         className="lh-leading-card"
-                        style={{ left: positions.leadingHand?.x ?? 0, top: positions.leadingHand?.y ?? 0 }}
+                        style={{ left: positions.leadingHand?.x ?? defaultLeadingHandPosition().x, top: positions.leadingHand?.y ?? defaultLeadingHandPosition().y }}
                         onPointerDown={startCardDrag('leadingHand')}
                     >
                         <div className="lh-leading-name">{resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}</div>
                         <div className="lh-leading-sub">{resolvedLeadingHand.phoneNumber || 'No phone number'}</div>
 
-                        <div className="lh-leading-port-group lh-leading-port-group-left">
-                            <button
-                                className="lh-leading-port"
-                                data-leading-hand-anchor="bad"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    startLeadingHandConnection(event, 'bad');
-                                }}
-                            />
-                            <span className="lh-leading-port-label">Bad</span>
-                        </div>
-                        <div className="lh-leading-port-group lh-leading-port-group-right">
-                            <span className="lh-leading-port-label">Good</span>
-                            <button
-                                className="lh-leading-port"
-                                data-leading-hand-anchor="good"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    startLeadingHandConnection(event, 'good');
-                                }}
-                            />
-                        </div>
+                        <button
+                            className="lh-leading-port lh-leading-port-left"
+                            data-leading-hand-anchor="bad"
+                            onPointerDown={(event) => {
+                                event.stopPropagation();
+                                startLeadingHandConnection(event, 'bad');
+                            }}
+                        />
+                        <button
+                            className="lh-leading-port lh-leading-port-right"
+                            data-leading-hand-anchor="good"
+                            onPointerDown={(event) => {
+                                event.stopPropagation();
+                                startLeadingHandConnection(event, 'good');
+                            }}
+                        />
                     </div>
 
-                    {!loading && relatedEmployees.map(item => {
+                    {!loading && visibleEmployees.map((item) => {
                         const position = positions[item.employeeId];
                         if (!position) {
                             return null;
@@ -503,49 +581,58 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                                 selected={activeDrag?.id === item.employeeId}
                                 position={position}
                                 onPointerDown={startCardDrag(item.employeeId)}
-                                onRemove={removeRelationship}
+                                onContextMenu={(event) => openEmployeeContextMenu(event, item.employeeId)}
                                 onStartConnection={startConnection}
                             />
                         );
                     })}
-
-                    {contextMenu ? (
-                        <div
-                            className="lh-board-context-menu"
-                            style={{ left: contextMenu.x, top: contextMenu.y }}
-                            onClick={event => event.stopPropagation()}
-                        >
-                            <div className="lh-board-context-title">Add Employee</div>
-                            <input
-                                autoFocus
-                                className="lh-board-context-input"
-                                value={search}
-                                onChange={event => setSearch(event.target.value)}
-                                placeholder="Search ESS employees"
-                            />
-                            <div className="lh-board-context-results">
-                                {searchResults.length === 0 ? (
-                                    <div className="lh-board-empty">No available employees</div>
-                                ) : searchResults.map(employee => (
-                                    <button
-                                        key={employee.id}
-                                        className="lh-board-context-item"
-                                        onClick={() => addEmployee(employee.id)}
-                                    >
-                                        <span>{employee.firstName} {employee.lastName}</span>
-                                        <span>{employee.phoneNumber || 'N/A'}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ) : null}
-
-                    <button className="lh-board-save-exit" onClick={onBack}>
-                        Save
-                    </button>
-
-                    {saving ? <div className="lh-board-saving">Saving...</div> : null}
                 </div>
+
+                {contextMenu ? (
+                    <div
+                        className="lh-board-context-menu"
+                        style={{ left: contextMenu.viewport.x, top: contextMenu.viewport.y }}
+                        onClick={(event) => event.stopPropagation()}
+                        onWheelCapture={(event) => event.stopPropagation()}
+                    >
+                        {contextMenu.mode === 'employee' ? (
+                            <>
+                                <div className="lh-board-context-title">Employee</div>
+                                <button
+                                    className="lh-board-context-item danger"
+                                    onClick={() => removeEmployeeTile(contextMenu.employeeId)}
+                                >
+                                    <span>Delete</span>
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="lh-board-context-title">Add Employee</div>
+                                <input
+                                    autoFocus
+                                    className="lh-board-context-input"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    placeholder="Search ESS employees"
+                                />
+                                <div className="lh-board-context-results">
+                                    {searchResults.length === 0 ? (
+                                        <div className="lh-board-empty">No available employees</div>
+                                    ) : searchResults.map((employee) => (
+                                        <button
+                                            key={employee.id}
+                                            className="lh-board-context-item"
+                                            onClick={() => addEmployee(employee.id)}
+                                        >
+                                            <span>{employee.firstName} {employee.lastName}</span>
+                                            <span>{employee.phoneNumber || 'N/A'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ) : null}
             </div>
         </div>
     );
