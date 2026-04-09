@@ -252,6 +252,11 @@ export const authAPI = {
     linkEmployee: async (employeeId) => {
         const response = await apiClient.post('/auth/link-employee', { employeeId });
         return response.data;
+    },
+
+    syncEmployeeLinks: async () => {
+        const response = await apiClient.post('/auth/sync-employee-links');
+        return response.data;
     }
 };
 

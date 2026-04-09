@@ -21,6 +21,14 @@ namespace ESSDesign.Server.Services
             public DateTime? VerifiedAt { get; set; }
         }
 
+        private sealed class AuthAdminUser
+        {
+            public string Id { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public DateTime? EmailConfirmedAt { get; set; }
+            public DateTime? ConfirmedAt { get; set; }
+        }
+
         public sealed class EmployeeAuthLinkInfo
         {
             public Guid Id { get; set; }
@@ -1737,6 +1745,119 @@ namespace ESSDesign.Server.Services
                 _logger.LogError(ex, "Error linking employee {EmployeeId} to auth user {AuthUserId}", employeeId, authUserId);
                 throw;
             }
+        }
+
+        public async Task<int> SyncEmployeeAuthLinksAsync()
+        {
+            var employees = await GetRestRowsAsync<EmployeeAuthRow>(
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&not.email=is.null");
+
+            if (employees.Count == 0)
+            {
+                return 0;
+            }
+
+            var confirmedUsersByEmail = await GetConfirmedAuthUsersByEmailAsync();
+            var syncedCount = 0;
+
+            foreach (var employee in employees)
+            {
+                var email = employee.Email?.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(email))
+                {
+                    continue;
+                }
+
+                if (!confirmedUsersByEmail.TryGetValue(email, out var authUser))
+                {
+                    continue;
+                }
+
+                var alreadyLinked = employee.LinkedAuthUserId.HasValue
+                    && Guid.TryParse(authUser.Id, out var authGuid)
+                    && employee.LinkedAuthUserId.Value == authGuid
+                    && employee.VerifiedAt.HasValue;
+
+                if (alreadyLinked)
+                {
+                    continue;
+                }
+
+                await LinkEmployeeAuthUserAsync(employee.Id, email, authUser.Id);
+                syncedCount += 1;
+            }
+
+            return syncedCount;
+        }
+
+        private async Task<Dictionary<string, AuthAdminUser>> GetConfirmedAuthUsersByEmailAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var usersByEmail = new Dictionary<string, AuthAdminUser>(StringComparer.OrdinalIgnoreCase);
+            var page = 1;
+
+            while (true)
+            {
+                var url = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/admin/users?page={page}&per_page=1000";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("apikey", _supabaseKey);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+
+                using var response = await client.SendAsync(request);
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException($"Supabase admin users request failed with status {(int)response.StatusCode}: {body}");
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                if (!doc.RootElement.TryGetProperty("users", out var usersEl) || usersEl.ValueKind != JsonValueKind.Array)
+                {
+                    break;
+                }
+
+                var count = 0;
+                foreach (var userEl in usersEl.EnumerateArray())
+                {
+                    count += 1;
+                    var email = GetJsonString(userEl, "email")?.Trim().ToLowerInvariant();
+                    var id = GetJsonString(userEl, "id");
+                    var emailConfirmedAt = TryGetDateTime(userEl, "email_confirmed_at");
+                    var confirmedAt = TryGetDateTime(userEl, "confirmed_at");
+
+                    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(id))
+                    {
+                        continue;
+                    }
+
+                    if (!emailConfirmedAt.HasValue && !confirmedAt.HasValue)
+                    {
+                        continue;
+                    }
+
+                    usersByEmail[email] = new AuthAdminUser
+                    {
+                        Id = id,
+                        Email = email,
+                        EmailConfirmedAt = emailConfirmedAt,
+                        ConfirmedAt = confirmedAt
+                    };
+                }
+
+                if (count < 1000)
+                {
+                    break;
+                }
+
+                page += 1;
+            }
+
+            return usersByEmail;
         }
 
         public async Task UpsertUserPushTokenAsync(

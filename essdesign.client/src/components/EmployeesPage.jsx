@@ -96,7 +96,15 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
 
     useEffect(() => {
         let active = true;
-        Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees()])
+        (async () => {
+            try {
+                await authAPI.syncEmployeeLinks();
+            } catch (err) {
+                console.error('Failed to sync existing employee links:', err);
+            }
+
+            return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees()]);
+        })()
             .then(([builders, employeeRows]) => {
                 if (!active) {
                     return;

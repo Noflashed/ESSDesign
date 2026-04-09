@@ -255,6 +255,32 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("sync-employee-links")]
+        public async Task<ActionResult> SyncEmployeeLinks()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserFromRequestAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                var synced = await _supabaseService.SyncEmployeeAuthLinksAsync();
+                return Ok(new { synced });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sync employee links error");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPost("signout")]
         public async Task<ActionResult> SignOut()
         {
