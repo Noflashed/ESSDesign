@@ -12,7 +12,11 @@ function emptyForm() {
     };
 }
 
-export default function EmployeesPage() {
+function normalizePreferredSiteIds(siteIds) {
+    return siteIds.filter(Boolean).slice(0, 3);
+}
+
+export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -73,15 +77,11 @@ export default function EmployeesPage() {
         });
     }, [employees, search, siteLabelById]);
 
-    const toggleSite = (siteId) => {
+    const updatePreferredSite = (index, siteId) => {
         setForm(prev => {
-            if (prev.preferredSiteIds.includes(siteId)) {
-                return { ...prev, preferredSiteIds: prev.preferredSiteIds.filter(id => id !== siteId) };
-            }
-            if (prev.preferredSiteIds.length >= 3) {
-                return prev;
-            }
-            return { ...prev, preferredSiteIds: [...prev.preferredSiteIds, siteId] };
+            const next = [...prev.preferredSiteIds];
+            next[index] = siteId || '';
+            return { ...prev, preferredSiteIds: normalizePreferredSiteIds(next) };
         });
     };
 
@@ -142,17 +142,17 @@ export default function EmployeesPage() {
                                             <div className="module-item-sub">{employee.phoneNumber || 'No phone number'}</div>
                                         </div>
                                         <div className="module-list-actions">
+                                            {employee.leadingHand ? (
+                                                <button className="module-secondary-btn" onClick={() => onOpenLeadingHandRelationships?.(employee)}>
+                                                    Leading Hand Relationships
+                                                </button>
+                                            ) : null}
                                             <button className="module-secondary-btn" onClick={() => { setForm(employee); setShowModal(true); }}>Edit</button>
                                             <button className="module-danger-btn" onClick={() => removeEmployee(employee.id)}>Delete</button>
                                         </div>
                                     </div>
-                                    <div className="module-preferences">
-                                        <div className="module-card-title minor">Preferred Sites</div>
-                                        {employee.preferredSiteIds.length === 0 ? (
-                                            <div className="module-item-sub">No preferred sites selected.</div>
-                                        ) : employee.preferredSiteIds.map((siteId, index) => (
-                                            <div key={siteId} className="module-preference-row">{index + 1}. {siteLabelById[siteId] || siteId}</div>
-                                        ))}
+                                    <div className="employee-card-meta">
+                                        <div className="module-item-sub">Preferred Sites configured in employee details.</div>
                                     </div>
                                 </div>
                             ))}
@@ -191,15 +191,40 @@ export default function EmployeesPage() {
                                 />
                                 <span>Leading Hand</span>
                             </label>
-                            <div className="module-card-title minor">Preferred Sites (up to 3)</div>
-                            <div className="module-check-list limited">
-                                {sites.map(site => (
-                                    <label key={site.id} className="module-check-row">
-                                        <input type="checkbox" checked={form.preferredSiteIds.includes(site.id)} onChange={() => toggleSite(site.id)} />
-                                        <span>{site.label}</span>
-                                    </label>
+                            <div className="employee-preferences-grid">
+                                {[0, 1, 2].map(index => (
+                                    <div key={index} className="module-field">
+                                        <label>{index + 1}</label>
+                                        <select
+                                            value={form.preferredSiteIds[index] || ''}
+                                            onChange={e => updatePreferredSite(index, e.target.value)}
+                                        >
+                                            <option value="">Select active job site</option>
+                                            {sites.map(site => (
+                                                <option
+                                                    key={site.id}
+                                                    value={site.id}
+                                                    disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
+                                                >
+                                                    {site.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 ))}
                             </div>
+                            {form.id && form.leadingHand ? (
+                                <button
+                                    type="button"
+                                    className="module-secondary-btn"
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        onOpenLeadingHandRelationships?.(form);
+                                    }}
+                                >
+                                    Leading Hand Relationships
+                                </button>
+                            ) : null}
                             {error ? <div className="module-error">{error}</div> : null}
                             <button type="submit" className="module-primary-btn" disabled={saving}>
                                 {saving ? 'Saving...' : 'Save Employee'}

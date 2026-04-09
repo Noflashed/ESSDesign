@@ -751,6 +751,54 @@ export const rosteringAPI = {
             (!!lowerUserId && (row.user_id || '').toLowerCase() === lowerUserId) ||
             (!!lowerEmail && (row.email || '').toLowerCase() === lowerEmail)
         );
+    },
+
+    getLeadingHandRelationships: async (leadingHandEmployeeId) => {
+        const rows = await readRestRows(
+            'ess_leading_hand_relationships',
+            `?select=*&leading_hand_employee_id=eq.${encodeURIComponent(leadingHandEmployeeId)}&order=updated_at.desc`
+        );
+        return rows.map(row => ({
+            id: row.id,
+            leadingHandEmployeeId: row.leading_hand_employee_id,
+            employeeId: row.employee_id,
+            relationshipType: row.relationship_type || 'neutral',
+            createdAt: row.created_at || nowIso(),
+            updatedAt: row.updated_at || nowIso()
+        }));
+    },
+
+    saveLeadingHandRelationship: async ({ leadingHandEmployeeId, employeeId, relationshipType }) => {
+        const existing = await readRestRows(
+            'ess_leading_hand_relationships',
+            `?select=id&leading_hand_employee_id=eq.${encodeURIComponent(leadingHandEmployeeId)}&employee_id=eq.${encodeURIComponent(employeeId)}&limit=1`
+        );
+
+        const payload = {
+            leading_hand_employee_id: leadingHandEmployeeId,
+            employee_id: employeeId,
+            relationship_type: relationshipType,
+            updated_at: nowIso()
+        };
+
+        if (existing.length > 0) {
+            await patchRestRows('ess_leading_hand_relationships', `?id=eq.${encodeURIComponent(existing[0].id)}`, payload);
+        } else {
+            await postRestRows('ess_leading_hand_relationships', [{
+                ...payload,
+                created_at: nowIso()
+            }]);
+        }
+
+        return rosteringAPI.getLeadingHandRelationships(leadingHandEmployeeId);
+    },
+
+    deleteLeadingHandRelationship: async (leadingHandEmployeeId, employeeId) => {
+        await deleteRestRows(
+            'ess_leading_hand_relationships',
+            `?leading_hand_employee_id=eq.${encodeURIComponent(leadingHandEmployeeId)}&employee_id=eq.${encodeURIComponent(employeeId)}`
+        );
+        return rosteringAPI.getLeadingHandRelationships(leadingHandEmployeeId);
     }
 };
 

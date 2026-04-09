@@ -13,6 +13,7 @@ import EmployeesPage from './components/EmployeesPage';
 import WebSafetySwmsPage from './components/WebSafetySwmsPage';
 import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
 import SiteInformationPage from './components/SiteInformationPage';
+import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -273,6 +274,7 @@ function App() {
     const [currentPage, setCurrentPage] = useState('design');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
+    const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
     const showHeaderSearch = currentPage === 'design';
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
@@ -280,7 +282,7 @@ function App() {
     const avatarCandidates = buildAvatarCandidates(user);
     const [avatarIndex, setAvatarIndex] = useState(0);
 
-    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }) => {
+    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }) => {
         const url = new URL(window.location.href);
         if (folderId) {
             url.searchParams.set('folder', folderId);
@@ -306,18 +308,26 @@ function App() {
             url.searchParams.delete('project');
         }
 
+        if (nextEmployeeContext.leadingHand?.id) {
+            url.searchParams.set('leadingHand', nextEmployeeContext.leadingHand.id);
+        } else {
+            url.searchParams.delete('leadingHand');
+        }
+
         return `${url.pathname}${url.search}`;
     }, []);
 
-    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, { pushHistory = true } = {}) => {
+    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, { pushHistory = true } = {}) => {
         setCurrentPage(page);
         setSafetyContext(nextSafetyContext);
+        setEmployeeContext(nextEmployeeContext);
         const state = {
             folderId: selectedFolderId,
             page,
-            safetyContext: nextSafetyContext
+            safetyContext: nextSafetyContext,
+            employeeContext: nextEmployeeContext
         };
-        const targetUrl = buildAppUrl(selectedFolderId, page, nextSafetyContext);
+        const targetUrl = buildAppUrl(selectedFolderId, page, nextSafetyContext, nextEmployeeContext);
         if (pushHistory) {
             window.history.pushState(state, '', targetUrl);
         } else {
@@ -633,15 +643,15 @@ function App() {
         // Push browser history so back/forward buttons work
         if (pushHistory) {
             window.history.pushState(
-                { folderId, page: currentPage, safetyContext },
+                { folderId, page: currentPage, safetyContext, employeeContext },
                 '',
-                buildAppUrl(folderId, currentPage, safetyContext)
+                buildAppUrl(folderId, currentPage, safetyContext, employeeContext)
             );
         }
 
         // Save to backend
         savePreferencesToBackend({ selectedFolderId: folderId });
-    }, [buildAppUrl, currentPage, safetyContext, savePreferencesToBackend]);
+    }, [buildAppUrl, currentPage, safetyContext, employeeContext, savePreferencesToBackend]);
 
     const handleSidebarResize = (newWidth) => {
         setSidebarWidth(newWidth);
@@ -713,25 +723,32 @@ function App() {
         const pageFromUrl = urlParams.get('page') || 'design';
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
+        const leadingHandFromUrl = urlParams.get('leadingHand');
         const initialSafetyContext = {
             builder: builderFromUrl ? { id: builderFromUrl } : null,
             project: projectFromUrl ? { id: projectFromUrl } : null
         };
+        const initialEmployeeContext = {
+            leadingHand: leadingHandFromUrl ? { id: leadingHandFromUrl } : null
+        };
 
         setCurrentPage(pageFromUrl);
         setSafetyContext(initialSafetyContext);
+        setEmployeeContext(initialEmployeeContext);
         window.history.replaceState(
-            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext },
+            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext, employeeContext: initialEmployeeContext },
             '',
-            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext)
+            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext, initialEmployeeContext)
         );
 
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
             const page = e.state?.page ?? 'design';
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
+            const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
             setCurrentPage(page);
             setSafetyContext(nextSafetyContext);
+            setEmployeeContext(nextEmployeeContext);
             handleFolderSelect(folderId, { pushHistory: false });
         };
 
@@ -826,7 +843,15 @@ function App() {
             return <ESSRosteringPage user={user} />;
         }
         if (currentPage === 'employees') {
-            return <EmployeesPage />;
+            return <EmployeesPage onOpenLeadingHandRelationships={(leadingHand) => applyPageState('employee-relationships', { builder: null, project: null }, { leadingHand })} />;
+        }
+        if (currentPage === 'employee-relationships' && employeeContext.leadingHand) {
+            return (
+                <LeadingHandRelationshipsPage
+                    leadingHand={employeeContext.leadingHand}
+                    onBack={() => window.history.back()}
+                />
+            );
         }
 
         return (
@@ -983,7 +1008,7 @@ function App() {
                         onToggle={() => setShowNavDrawer(prev => !prev)}
                         onClose={() => setShowNavDrawer(false)}
                         onSelect={(page) => {
-                            applyPageState(page, { builder: null, project: null });
+                            applyPageState(page, { builder: null, project: null }, { leadingHand: null });
                             setShowNavDrawer(false);
                         }}
                     />
@@ -1134,7 +1159,6 @@ function App() {
 }
 
 export default App;
-
 
 
 
