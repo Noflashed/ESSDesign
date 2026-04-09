@@ -100,6 +100,14 @@ export default function ESSRosteringPage({ user }) {
     };
 
     const setRequiredMen = (siteId, nextValue) => {
+        if (nextValue === '') {
+            setRequiredMenBySite((prev) => ({
+                ...prev,
+                [siteId]: ''
+            }));
+            return;
+        }
+
         setRequiredMenBySite((prev) => ({
             ...prev,
             [siteId]: Math.max(0, Number(nextValue || 0))
@@ -119,7 +127,12 @@ export default function ESSRosteringPage({ user }) {
             await rosteringAPI.savePlan({
                 date: planDate,
                 activeSiteIds,
-                requiredMenBySite,
+                requiredMenBySite: Object.fromEntries(
+                    Object.entries(requiredMenBySite).map(([siteId, value]) => [
+                        siteId,
+                        Math.max(0, Number(value || 0))
+                    ])
+                ),
                 updatedByUserId: user?.id
             });
         } catch (err) {

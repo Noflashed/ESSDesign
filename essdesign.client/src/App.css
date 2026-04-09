@@ -2287,6 +2287,7 @@ body {
     align-items: center;
     justify-content: flex-start;
     margin-bottom: 12px;
+    text-align: left;
 }
 
 .client-name {
@@ -2295,6 +2296,8 @@ body {
     color: var(--text-secondary);
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    text-align: left;
+    width: 100%;
 }
 
 .job-card {
@@ -2449,6 +2452,14 @@ body {
 
 .labour-row:last-child {
     border-bottom: none;
+}
+
+.labour-row .module-number-input {
+    width: 64px;
+    min-width: 64px;
+    min-height: 38px;
+    padding: 0 8px;
+    text-align: center;
 }
 
 [data-theme='dark'] .page-header {
