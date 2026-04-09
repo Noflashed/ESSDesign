@@ -18,12 +18,61 @@ function normalizePreferredSiteIds(siteIds) {
 
 function TreeIcon() {
     return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="5.25" r="2.25" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="6" cy="18" r="2.25" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="18" cy="18" r="2.25" stroke="currentColor" strokeWidth="1.8" />
             <path
-                d="M12 3.25a4.1 4.1 0 0 1 4.1 4.1c0 .37-.05.73-.15 1.08a3.6 3.6 0 0 1 2.8 3.52 3.6 3.6 0 0 1-3.6 3.6H13.2v2.35h3.15a.9.9 0 1 1 0 1.8H13.2v2.05a.9.9 0 1 1-1.8 0V19.7H8.25a.9.9 0 1 1 0-1.8h3.15v-2.35H8.85a3.6 3.6 0 0 1-3.6-3.6 3.6 3.6 0 0 1 2.8-3.52 4.1 4.1 0 0 1-.15-1.08A4.1 4.1 0 0 1 12 3.25Z"
-                fill="currentColor"
+                d="M12 7.5v4.4M12 11.9H6M12 11.9h6M6 11.9v3.85M18 11.9v3.85"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
             />
         </svg>
+    );
+}
+
+function EditIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+                d="M4 19.75h4.4L18.3 9.86a1.7 1.7 0 0 0 0-2.4L16.54 5.7a1.7 1.7 0 0 0-2.4 0L4 15.85v3.9Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+            />
+            <path d="M12.95 6.9l4.1 4.1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+function DeleteIcon() {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+                d="M5 7h14M9 7V5.9c0-.77.63-1.4 1.4-1.4h3.2c.77 0 1.4.63 1.4 1.4V7M8.1 7l.7 11.1c.04.72.64 1.29 1.36 1.29h3.74c.72 0 1.32-.57 1.36-1.29L15.9 7"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path d="M10 10.25v5.5M14 10.25v5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+function EmployeeActionButton({ title, onClick, children, danger = false }) {
+    return (
+        <button
+            type="button"
+            className={`employee-icon-btn ${danger ? 'danger' : ''}`.trim()}
+            onClick={onClick}
+            aria-label={title}
+            title={title}
+        >
+            {children}
+        </button>
     );
 }
 
@@ -44,8 +93,8 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 if (!active) {
                     return;
                 }
-                const flattenedSites = builders.flatMap(builder =>
-                    builder.projects.map(project => ({
+                const flattenedSites = builders.flatMap((builder) =>
+                    builder.projects.map((project) => ({
                         id: `${builder.id}:${project.id}`,
                         label: `${builder.name} — ${project.name}`
                     }))
@@ -53,7 +102,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 setSites(flattenedSites);
                 setEmployees(employeeRows);
             })
-            .catch(err => {
+            .catch((err) => {
                 if (active) {
                     setError(err.message || 'Failed to load employees');
                 }
@@ -69,7 +118,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     }, []);
 
     const siteLabelById = useMemo(
-        () => Object.fromEntries(sites.map(site => [site.id, site.label])),
+        () => Object.fromEntries(sites.map((site) => [site.id, site.label])),
         [sites]
     );
 
@@ -79,17 +128,17 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             return employees;
         }
 
-        return employees.filter(employee => {
+        return employees.filter((employee) => {
             const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
             const phone = (employee.phoneNumber || '').toLowerCase();
             const lh = employee.leadingHand ? 'leading hand lh' : '';
-            const prefs = employee.preferredSiteIds.map(id => (siteLabelById[id] || '').toLowerCase()).join(' ');
+            const prefs = employee.preferredSiteIds.map((id) => (siteLabelById[id] || '').toLowerCase()).join(' ');
             return fullName.includes(q) || phone.includes(q) || prefs.includes(q) || lh.includes(q);
         });
     }, [employees, search, siteLabelById]);
 
     const updatePreferredSite = (index, siteId) => {
-        setForm(prev => {
+        setForm((prev) => {
             const next = [...prev.preferredSiteIds];
             next[index] = siteId || '';
             return { ...prev, preferredSiteIds: normalizePreferredSiteIds(next) };
@@ -139,7 +188,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     <div className="employees-search-row">
                         <div className="module-field employees-search-field">
                             <label>Search</label>
-                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, phone, or preferred site" />
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, or preferred site" />
                         </div>
                         <div className="employees-search-stats">
                             <div className="employees-stat">
@@ -147,7 +196,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 <span className="employees-stat-label">Total</span>
                             </div>
                             <div className="employees-stat">
-                                <span className="employees-stat-value">{employees.filter(employee => employee.leadingHand).length}</span>
+                                <span className="employees-stat-value">{employees.filter((employee) => employee.leadingHand).length}</span>
                                 <span className="employees-stat-label">Leading Hands</span>
                             </div>
                             <div className="employees-stat">
@@ -163,18 +212,32 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                         <div className="module-empty-inline">No employees found.</div>
                     ) : (
                         <div className="employee-cluster-grid">
-                            {filteredEmployees.map(employee => (
+                            {filteredEmployees.map((employee) => (
                                 <div key={employee.id} className="module-list-card employee-cluster-card">
-                                    {employee.leadingHand ? (
-                                        <button
-                                            className="employee-graph-icon-btn"
-                                            onClick={() => onOpenLeadingHandRelationships?.(employee)}
-                                            aria-label={`Open leading hand relationships for ${employee.firstName} ${employee.lastName}`}
-                                            title="Leading Hand Relationships"
+                                    <div className="employee-card-icon-rail">
+                                        {employee.leadingHand ? (
+                                            <EmployeeActionButton
+                                                title={`Open leading hand relationships for ${employee.firstName} ${employee.lastName}`}
+                                                onClick={() => onOpenLeadingHandRelationships?.(employee)}
+                                            >
+                                                <TreeIcon />
+                                            </EmployeeActionButton>
+                                        ) : null}
+                                        <EmployeeActionButton
+                                            title={`Edit ${employee.firstName} ${employee.lastName}`}
+                                            onClick={() => { setForm(employee); setShowModal(true); }}
                                         >
-                                            <TreeIcon />
-                                        </button>
-                                    ) : null}
+                                            <EditIcon />
+                                        </EmployeeActionButton>
+                                        <EmployeeActionButton
+                                            danger
+                                            title={`Delete ${employee.firstName} ${employee.lastName}`}
+                                            onClick={() => removeEmployee(employee.id)}
+                                        >
+                                            <DeleteIcon />
+                                        </EmployeeActionButton>
+                                    </div>
+
                                     <div className="employee-card-top">
                                         <div className="employee-card-identity">
                                             <div className="employee-card-heading">
@@ -195,14 +258,6 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                             )}
                                         </div>
                                     </div>
-
-                                    <div className="employee-card-actions">
-                                        <div className="employee-card-spacer" />
-                                        <div className="employee-card-action-group">
-                                            <button className="module-secondary-btn" onClick={() => { setForm(employee); setShowModal(true); }}>Edit</button>
-                                            <button className="module-danger-btn" onClick={() => removeEmployee(employee.id)}>Delete</button>
-                                        </div>
-                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -212,7 +267,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
 
             {showModal && (
                 <div className="module-modal-backdrop" onClick={() => setShowModal(false)}>
-                    <div className="module-modal" onClick={e => e.stopPropagation()}>
+                    <div className="module-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="module-modal-header">
                             <h3>{form.id ? 'Edit Employee' : 'Add Employee'}</h3>
                             <button className="nav-drawer-close" onClick={() => setShowModal(false)}>×</button>
@@ -221,35 +276,35 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                             <div className="module-grid module-grid-two">
                                 <div className="module-field">
                                     <label>First Name</label>
-                                    <input value={form.firstName} onChange={e => setForm(prev => ({ ...prev, firstName: e.target.value }))} />
+                                    <input value={form.firstName} onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))} />
                                 </div>
                                 <div className="module-field">
                                     <label>Last Name</label>
-                                    <input value={form.lastName} onChange={e => setForm(prev => ({ ...prev, lastName: e.target.value }))} />
+                                    <input value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} />
                                 </div>
                             </div>
                             <div className="module-field">
                                 <label>Phone Number</label>
-                                <input value={form.phoneNumber} onChange={e => setForm(prev => ({ ...prev, phoneNumber: e.target.value }))} />
+                                <input value={form.phoneNumber} onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))} />
                             </div>
                             <label className="module-check-row employee-leading-hand-row">
                                 <input
                                     type="checkbox"
                                     checked={form.leadingHand}
-                                    onChange={e => setForm(prev => ({ ...prev, leadingHand: e.target.checked }))}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, leadingHand: e.target.checked }))}
                                 />
                                 <span>Leading Hand</span>
                             </label>
                             <div className="employee-preferences-grid">
-                                {[0, 1, 2].map(index => (
+                                {[0, 1, 2].map((index) => (
                                     <div key={index} className="module-field">
                                         <label>{index + 1}</label>
                                         <select
                                             value={form.preferredSiteIds[index] || ''}
-                                            onChange={e => updatePreferredSite(index, e.target.value)}
+                                            onChange={(e) => updatePreferredSite(index, e.target.value)}
                                         >
                                             <option value="">Select active job site</option>
-                                            {sites.map(site => (
+                                            {sites.map((site) => (
                                                 <option
                                                     key={site.id}
                                                     value={site.id}
