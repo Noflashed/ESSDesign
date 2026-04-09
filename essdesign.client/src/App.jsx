@@ -37,7 +37,15 @@ const getAuthViewFromUrl = () => {
         return 'signup-success';
     }
 
-    return auth === 'signup' ? 'signup' : 'login';
+    if (auth === 'signup') {
+        return 'signup';
+    }
+
+    if (auth === 'login-form') {
+        return 'login-form';
+    }
+
+    return 'landing';
 };
 
 // Professional SVG Icons (Google Drive style)
@@ -456,7 +464,7 @@ function App() {
                 console.error('Error refreshing current user:', error);
                 setIsAuthenticated(false);
                 setUser(null);
-                updateAuthView('login');
+                updateAuthView('landing');
             }
         } finally {
             setLoading(false);
@@ -570,6 +578,12 @@ function App() {
             } else {
                 url.searchParams.delete('employeeId');
             }
+        } else if (nextView === 'login-form') {
+            url.searchParams.set('auth', 'login-form');
+            url.searchParams.delete('email');
+            url.searchParams.delete('firstName');
+            url.searchParams.delete('lastName');
+            url.searchParams.delete('employeeId');
         } else {
             url.searchParams.delete('auth');
             url.searchParams.delete('email');
@@ -588,7 +602,7 @@ function App() {
     };
 
     const handleLoginSuccess = () => {
-        updateAuthView('login');
+        updateAuthView('landing');
         applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { pushHistory: false });
         checkAuth();
     };
@@ -599,11 +613,11 @@ function App() {
 
     const handleConfirmationContinue = () => {
         if (isAuthenticated) {
-            updateAuthView('login');
+            updateAuthView('landing');
             return;
         }
 
-        updateAuthView('login');
+        updateAuthView('landing');
     };
 
     const handleSwitchToSignUp = (email = '') => {
@@ -611,7 +625,7 @@ function App() {
     };
 
     const handleSwitchToLogin = () => {
-        updateAuthView('login');
+        updateAuthView('login-form');
     };
 
     const closeInviteModal = () => {
@@ -702,7 +716,7 @@ function App() {
                 setShowInviteModal(false);
                 setIsAuthenticated(false);
                 setUser(null);
-                updateAuthView('login');
+                updateAuthView('landing');
             } else {
                 setInviteError(error.response?.data?.error || 'Failed to send invitation');
             }
@@ -725,7 +739,7 @@ function App() {
             await authAPI.signOut();
             setIsAuthenticated(false);
             setUser(null);
-            updateAuthView('login');
+            updateAuthView('landing');
         } catch (error) {
             console.error('Logout error:', error);
         }
@@ -1044,12 +1058,45 @@ function App() {
                 />
             );
         }
+        if (authView === 'login-form') {
+            return (
+                <Login
+                    onLoginSuccess={handleLoginSuccess}
+                    theme={theme}
+                    onThemeChange={(value) => applyTheme(value, false)}
+                />
+            );
+        }
         return (
-            <Login
-                onLoginSuccess={handleLoginSuccess}
-                theme={theme}
-                onThemeChange={(value) => applyTheme(value, false)}
-            />
+            <div className="App">
+                <header className="app-header">
+                    <div className="header-left">
+                        <div className="logo">
+                            <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="logo-icon" />
+                        </div>
+                    </div>
+                    <div className="header-right">
+                        <WebNavDrawer
+                            open={showNavDrawer}
+                            currentPage="landing"
+                            items={[{ key: 'login-form', label: 'Sign In' }]}
+                            onToggle={() => setShowNavDrawer(prev => !prev)}
+                            onClose={() => setShowNavDrawer(false)}
+                            onSelect={() => {
+                                setShowNavDrawer(false);
+                                handleSwitchToLogin();
+                            }}
+                        />
+                        <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
+                            <ThemeIcon theme={theme} size={18} />
+                        </button>
+                        <button type="button" className="module-primary-btn compact" onClick={handleSwitchToLogin}>
+                            Sign In
+                        </button>
+                    </div>
+                </header>
+                <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />
+            </div>
         );
     }
 
