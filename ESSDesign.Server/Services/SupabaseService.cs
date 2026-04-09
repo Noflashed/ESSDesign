@@ -10,6 +10,28 @@ namespace ESSDesign.Server.Services
 {
     public class SupabaseService
     {
+        private sealed class EmployeeAuthRow
+        {
+            public Guid Id { get; set; }
+            public string? Email { get; set; }
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public Guid? LinkedAuthUserId { get; set; }
+            public DateTime? InviteSentAt { get; set; }
+            public DateTime? VerifiedAt { get; set; }
+        }
+
+        public sealed class EmployeeAuthLinkInfo
+        {
+            public Guid Id { get; set; }
+            public string Email { get; set; } = string.Empty;
+            public string FirstName { get; set; } = string.Empty;
+            public string LastName { get; set; } = string.Empty;
+            public Guid? LinkedAuthUserId { get; set; }
+            public DateTime? InviteSentAt { get; set; }
+            public DateTime? VerifiedAt { get; set; }
+        }
+
         private readonly Supabase.Client _supabase;
         private readonly ILogger<SupabaseService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
@@ -1640,6 +1662,83 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task<EmployeeAuthLinkInfo?> GetEmployeeAuthLinkInfoAsync(Guid employeeId)
+        {
+            try
+            {
+                var rows = await GetRestRowsAsync<EmployeeAuthRow>(
+                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,linkedAuthUserId:linked_auth_user_id,inviteSentAt:invite_sent_at,verifiedAt:verified_at")}&id=eq.{employeeId:D}&limit=1");
+
+                var row = rows.FirstOrDefault();
+                if (row == null)
+                {
+                    return null;
+                }
+
+                return new EmployeeAuthLinkInfo
+                {
+                    Id = row.Id,
+                    Email = row.Email?.Trim() ?? string.Empty,
+                    FirstName = row.FirstName?.Trim() ?? string.Empty,
+                    LastName = row.LastName?.Trim() ?? string.Empty,
+                    LinkedAuthUserId = row.LinkedAuthUserId,
+                    InviteSentAt = row.InviteSentAt,
+                    VerifiedAt = row.VerifiedAt
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting employee auth link info for {EmployeeId}", employeeId);
+                throw;
+            }
+        }
+
+        public async Task UpdateEmployeeInviteAsync(Guid employeeId, string email)
+        {
+            try
+            {
+                await PatchRestRowsAsync<object>(
+                    $"ess_rostering_employees?id=eq.{employeeId:D}",
+                    new
+                    {
+                        email = email.Trim().ToLowerInvariant(),
+                        invite_sent_at = DateTime.UtcNow,
+                        updated_at = DateTime.UtcNow
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating employee invite state for {EmployeeId}", employeeId);
+                throw;
+            }
+        }
+
+        public async Task LinkEmployeeAuthUserAsync(Guid employeeId, string email, string authUserId)
+        {
+            if (!Guid.TryParse(authUserId, out var authUserGuid))
+            {
+                throw new InvalidOperationException("Invalid auth user id.");
+            }
+
+            try
+            {
+                await PatchRestRowsAsync<object>(
+                    $"ess_rostering_employees?id=eq.{employeeId:D}",
+                    new
+                    {
+                        email = email.Trim().ToLowerInvariant(),
+                        linked_auth_user_id = authUserGuid,
+                        verified_at = DateTime.UtcNow,
+                        updated_at = DateTime.UtcNow
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error linking employee {EmployeeId} to auth user {AuthUserId}", employeeId, authUserId);
+                throw;
+            }
+        }
+
         public async Task UpsertUserPushTokenAsync(
             Guid userId,
             string token,
@@ -1947,4 +2046,3 @@ namespace ESSDesign.Server.Services
         public List<string> PhotoPaths { get; set; } = new();
     }
 }
-

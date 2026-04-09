@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { rosteringAPI, safetyProjectsAPI } from '../services/api';
+import { authAPI, rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyForm() {
     return {
@@ -7,7 +7,12 @@ function emptyForm() {
         firstName: '',
         lastName: '',
         phoneNumber: '',
+        email: '',
         leadingHand: false,
+        linkedAuthUserId: null,
+        inviteSentAt: null,
+        verifiedAt: null,
+        currentEmail: '',
         preferredSiteIds: []
     };
 }
@@ -79,7 +84,9 @@ function EmployeeActionButton({ title, onClick, children, danger = false }) {
 export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [inviteSending, setInviteSending] = useState(false);
     const [error, setError] = useState('');
+    const [inviteMessage, setInviteMessage] = useState('');
     const [employees, setEmployees] = useState([]);
     const [sites, setSites] = useState([]);
     const [search, setSearch] = useState('');
@@ -132,11 +139,26 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         return employees.filter((employee) => {
             const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
             const phone = (employee.phoneNumber || '').toLowerCase();
-            const lh = employee.leadingHand ? 'leading hand lh' : '';
+            const email = (employee.email || '').toLowerCase();
+            const lh = employee.leadingHand ? 'leading hand lh verified' : 'verified';
             const prefs = employee.preferredSiteIds.map((id) => (siteLabelById[id] || '').toLowerCase()).join(' ');
-            return fullName.includes(q) || phone.includes(q) || prefs.includes(q) || lh.includes(q);
+            return fullName.includes(q) || phone.includes(q) || email.includes(q) || prefs.includes(q) || lh.includes(q);
         });
     }, [employees, search, siteLabelById]);
+
+    const openEmployeeEditor = (employee) => {
+        setForm({
+            ...employee,
+            email: employee.email || '',
+            linkedAuthUserId: employee.linkedAuthUserId || null,
+            inviteSentAt: employee.inviteSentAt || null,
+            verifiedAt: employee.verifiedAt || null,
+            currentEmail: employee.email || ''
+        });
+        setError('');
+        setInviteMessage('');
+        setShowModal(true);
+    };
 
     const updatePreferredSite = (index, siteId) => {
         setForm((prev) => {
@@ -150,6 +172,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         event.preventDefault();
         setSaving(true);
         setError('');
+        setInviteMessage('');
         try {
             const next = await rosteringAPI.saveEmployee(form);
             setEmployees(next);
@@ -172,6 +195,47 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         }
     };
 
+    const sendEmployeeInvite = async () => {
+        if (!form.id) {
+            setError('Save the employee before sending an invite.');
+            return;
+        }
+        if (!form.email.trim()) {
+            setError('Enter an email address before sending an invite.');
+            return;
+        }
+
+        setInviteSending(true);
+        setError('');
+        setInviteMessage('');
+        try {
+            await authAPI.inviteEmployee({
+                employeeId: form.id,
+                email: form.email.trim(),
+                firstName: form.firstName.trim(),
+                lastName: form.lastName.trim()
+            });
+            const nextEmployees = await rosteringAPI.getEmployees();
+            setEmployees(nextEmployees);
+            const refreshed = nextEmployees.find((employee) => employee.id === form.id);
+            if (refreshed) {
+                setForm({
+                    ...refreshed,
+                    email: refreshed.email || '',
+                    linkedAuthUserId: refreshed.linkedAuthUserId || null,
+                    inviteSentAt: refreshed.inviteSentAt || null,
+                    verifiedAt: refreshed.verifiedAt || null,
+                    currentEmail: refreshed.email || ''
+                });
+            }
+            setInviteMessage(`Invite sent to ${form.email.trim()}`);
+        } catch (err) {
+            setError(err.response?.data?.error || err.message || 'Could not send employee invite');
+        } finally {
+            setInviteSending(false);
+        }
+    };
+
     return (
         <div className="module-page">
             <div className="module-shell employees-shell">
@@ -181,7 +245,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                         <h2>Employee Directory</h2>
                         <p>Manage employee details, preferred projects, and leading hand relationships from one place.</p>
                     </div>
-                    <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); }}>
+                    <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); setInviteMessage(''); setError(''); }}>
                         Add Employee
                     </button>
                 </div>
@@ -190,7 +254,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     <div className="employees-search-row">
                         <div className="module-field employees-search-field">
                             <label>Search</label>
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, or preferred site" />
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email, or preferred site" />
                         </div>
                         <div className="employees-search-stats">
                             <div className="employees-stat">
@@ -207,7 +271,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                             </div>
                         </div>
                     </div>
-                    {error ? <div className="module-error">{error}</div> : null}
+                    {error && !showModal && !employeePendingDelete ? <div className="module-error">{error}</div> : null}
                     {loading ? (
                         <div className="module-empty-inline">Loading employees...</div>
                     ) : filteredEmployees.length === 0 ? (
@@ -227,7 +291,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                         ) : null}
                                         <EmployeeActionButton
                                             title={`Edit ${employee.firstName} ${employee.lastName}`}
-                                            onClick={() => { setForm(employee); setShowModal(true); }}
+                                            onClick={() => openEmployeeEditor(employee)}
                                         >
                                             <EditIcon />
                                         </EmployeeActionButton>
@@ -253,6 +317,9 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                                 <span className="employee-status-dot employee-status-dot-phone" />
                                                 Contact Ready
                                             </div>
+                                            {employee.verified ? (
+                                                <div className="employee-status-pill employee-status-pill-verified">Verified</div>
+                                            ) : null}
                                             {employee.leadingHand ? (
                                                 <div className="employee-status-pill employee-status-pill-lh">Leading Hand</div>
                                             ) : (
@@ -285,9 +352,20 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                     <input value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} />
                                 </div>
                             </div>
-                            <div className="module-field">
-                                <label>Phone Number</label>
-                                <input value={form.phoneNumber} onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))} />
+                            <div className="module-grid module-grid-two">
+                                <div className="module-field">
+                                    <label>Phone Number</label>
+                                    <input value={form.phoneNumber} onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))} />
+                                </div>
+                                <div className="module-field">
+                                    <label>Email Address</label>
+                                    <input
+                                        type="email"
+                                        value={form.email}
+                                        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                                        placeholder="employee@company.com"
+                                    />
+                                </div>
                             </div>
                             <label className="module-check-row employee-leading-hand-row">
                                 <input
@@ -330,6 +408,30 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 >
                                     Leading Hand Relationships
                                 </button>
+                            ) : null}
+                            {form.id ? (
+                                <div className="employee-account-link-panel">
+                                    <div className="employee-account-link-copy">
+                                        <div className="employee-account-link-title">Employee Account</div>
+                                        <div className="employee-account-link-sub">
+                                            Send an account setup email using the stored name and email. The invite page will only ask for password and confirmation.
+                                        </div>
+                                    </div>
+                                    <div className="employee-account-link-actions">
+                                        {form.verifiedAt ? (
+                                            <div className="employee-status-pill employee-status-pill-verified">Verified</div>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="module-primary-btn compact"
+                                            onClick={sendEmployeeInvite}
+                                            disabled={inviteSending || !form.email.trim()}
+                                        >
+                                            {inviteSending ? 'Sending...' : 'Invite User'}
+                                        </button>
+                                    </div>
+                                    {inviteMessage ? <div className="module-success">{inviteMessage}</div> : null}
+                                </div>
                             ) : null}
                             {error ? <div className="module-error">{error}</div> : null}
                             <button type="submit" className="module-primary-btn" disabled={saving}>

@@ -44,6 +44,10 @@ namespace ESSDesign.Server.Controllers
 
                 var frontendUrl = (_configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app").TrimEnd('/');
                 var confirmationRedirect = $"{frontendUrl}/?auth=signup-confirmed&email={Uri.EscapeDataString(request.Email)}";
+                if (request.EmployeeId.HasValue)
+                {
+                    confirmationRedirect += $"&employeeId={request.EmployeeId.Value:D}";
+                }
                 var adminAuth = _supabase.AdminAuth(serviceRoleKey);
 
                 var generatedLink = await adminAuth.GenerateLink(new GenerateLinkOptions(GenerateLinkOptions.LinkType.SignUp, request.Email)
@@ -155,6 +159,98 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Invite user error");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("invite-employee")]
+        public async Task<ActionResult> InviteEmployee([FromBody] InviteEmployeeRequest request)
+        {
+            try
+            {
+                if (request.EmployeeId == Guid.Empty)
+                {
+                    return BadRequest(new { error = "Employee is required" });
+                }
+
+                var email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(email))
+                {
+                    return BadRequest(new { error = "Email is required" });
+                }
+
+                var currentUser = await GetCurrentUserFromRequestAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                var employee = await _supabaseService.GetEmployeeAuthLinkInfoAsync(request.EmployeeId);
+                if (employee == null)
+                {
+                    return NotFound(new { error = "Employee not found" });
+                }
+
+                await _supabaseService.UpdateEmployeeInviteAsync(request.EmployeeId, email);
+                await _emailService.SendEmployeeInviteAsync(
+                    email,
+                    currentUser.FullName ?? currentUser.Email,
+                    request.EmployeeId,
+                    string.IsNullOrWhiteSpace(request.FirstName) ? employee.FirstName : request.FirstName.Trim(),
+                    string.IsNullOrWhiteSpace(request.LastName) ? employee.LastName : request.LastName.Trim());
+
+                return Ok(new { message = "Employee invite sent successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Invite employee error");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("link-employee")]
+        public async Task<ActionResult> LinkEmployee([FromBody] LinkEmployeeRequest request)
+        {
+            try
+            {
+                if (request.EmployeeId == Guid.Empty)
+                {
+                    return BadRequest(new { error = "Employee is required" });
+                }
+
+                var currentUser = await GetCurrentUserFromRequestAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var employee = await _supabaseService.GetEmployeeAuthLinkInfoAsync(request.EmployeeId);
+                if (employee == null)
+                {
+                    return NotFound(new { error = "Employee not found" });
+                }
+
+                if (string.IsNullOrWhiteSpace(employee.Email))
+                {
+                    return BadRequest(new { error = "Employee does not have an email address." });
+                }
+
+                if (!string.Equals(employee.Email.Trim(), currentUser.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "This signed-in user does not match the employee email address." });
+                }
+
+                await _supabaseService.LinkEmployeeAuthUserAsync(request.EmployeeId, currentUser.Email, currentUser.Id);
+                return Ok(new { message = "Employee account linked successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Link employee error");
                 return StatusCode(500, new { error = ex.Message });
             }
         }

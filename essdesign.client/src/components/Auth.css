@@ -219,6 +219,37 @@
     border: 1px solid #d2e3fc;
 }
 
+.auth-prefilled-panel {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(248, 250, 252, 0.95);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.auth-prefilled-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+}
+
+.auth-prefilled-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary, #5f6368);
+}
+
+.auth-prefilled-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary, #202124);
+    text-align: right;
+}
+
 :root[data-theme="dark"] .auth-success-message {
     background: rgba(26, 115, 232, 0.14);
     border-color: rgba(138, 180, 248, 0.3);

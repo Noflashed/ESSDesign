@@ -45,6 +45,33 @@ namespace ESSDesign.Server.Services
             _logger.LogInformation("Invite email successfully sent to {Email}", recipientEmail);
         }
 
+        public async Task SendEmployeeInviteAsync(
+            string recipientEmail,
+            string inviterName,
+            Guid employeeId,
+            string firstName,
+            string lastName)
+        {
+            if (string.IsNullOrWhiteSpace(recipientEmail))
+            {
+                _logger.LogWarning("Employee invite email skipped because recipient email was empty");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping employee invite email.");
+                return;
+            }
+
+            var signUpLink = $"{_frontendUrl.TrimEnd('/')}/?auth=signup&email={HttpUtility.UrlEncode(recipientEmail)}&employeeId={employeeId:D}&firstName={HttpUtility.UrlEncode(firstName)}&lastName={HttpUtility.UrlEncode(lastName)}";
+            var subject = "You're invited to ESS Design";
+            var htmlContent = BuildInviteEmailContent(recipientEmail, inviterName, signUpLink);
+
+            await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            _logger.LogInformation("Employee invite email successfully sent to {Email} for employee {EmployeeId}", recipientEmail, employeeId);
+        }
+
         public async Task SendRegistrationConfirmationAsync(string recipientEmail, string fullName, string confirmationLink)
         {
             if (string.IsNullOrWhiteSpace(recipientEmail))
@@ -924,7 +951,6 @@ namespace ESSDesign.Server.Services
         }
     }
 }
-
 
 
 

@@ -267,9 +267,14 @@ function App() {
     const [usersError, setUsersError] = useState('');
     const [updatingUserId, setUpdatingUserId] = useState(null);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
+    const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
+    const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
+    const [inviteEmployeeId, setInviteEmployeeId] = useState(() => new URLSearchParams(window.location.search).get('employeeId') || '');
     const [inviteLoading, setInviteLoading] = useState(false);
     const [inviteError, setInviteError] = useState('');
     const [inviteSuccess, setInviteSuccess] = useState('');
+    const [linkingEmployee, setLinkingEmployee] = useState(false);
+    const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [currentPage, setCurrentPage] = useState('design');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
@@ -354,7 +359,31 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         setAuthView(getAuthViewFromUrl());
         setInviteEmail(urlParams.get('email') || '');
+        setInviteFirstName(urlParams.get('firstName') || '');
+        setInviteLastName(urlParams.get('lastName') || '');
+        setInviteEmployeeId(urlParams.get('employeeId') || '');
+        setEmployeeLinkAttempted(false);
     }, []);
+
+    useEffect(() => {
+        const tryLinkEmployee = async () => {
+            if (authView !== 'signup-confirmed' || !isAuthenticated || !inviteEmployeeId || linkingEmployee || employeeLinkAttempted) {
+                return;
+            }
+
+            setEmployeeLinkAttempted(true);
+            setLinkingEmployee(true);
+            try {
+                await authAPI.linkEmployee(inviteEmployeeId);
+            } catch (error) {
+                console.error('Error linking employee account:', error);
+            } finally {
+                setLinkingEmployee(false);
+            }
+        };
+
+        tryLinkEmployee();
+    }, [authView, isAuthenticated, inviteEmployeeId, linkingEmployee, employeeLinkAttempted]);
 
     useEffect(() => {
         if (!showHeaderSearch) {
@@ -480,11 +509,18 @@ function App() {
         } else {
             url.searchParams.delete('auth');
             url.searchParams.delete('email');
+            url.searchParams.delete('firstName');
+            url.searchParams.delete('lastName');
+            url.searchParams.delete('employeeId');
         }
 
         window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
         setAuthView(nextView);
         setInviteEmail(nextEmail);
+        setInviteFirstName(url.searchParams.get('firstName') || '');
+        setInviteLastName(url.searchParams.get('lastName') || '');
+        setInviteEmployeeId(url.searchParams.get('employeeId') || '');
+        setEmployeeLinkAttempted(false);
     };
 
     const handleLoginSuccess = () => {
@@ -911,6 +947,9 @@ function App() {
                     theme={theme}
                     onThemeChange={(value) => applyTheme(value, false)}
                     initialEmail={inviteEmail}
+                    initialFirstName={inviteFirstName}
+                    initialLastName={inviteLastName}
+                    employeeId={inviteEmployeeId}
                 />
             );
         }
@@ -1159,8 +1198,6 @@ function App() {
 }
 
 export default App;
-
-
 
 
 

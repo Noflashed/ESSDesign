@@ -221,6 +221,7 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
+        public Guid? EmployeeId { get; set; }
     }
 
     public class SignInRequest
@@ -237,6 +238,19 @@ namespace ESSDesign.Server.Models
     public class InviteUserRequest
     {
         public string Email { get; set; } = string.Empty;
+    }
+
+    public class InviteEmployeeRequest
+    {
+        public Guid EmployeeId { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+    }
+
+    public class LinkEmployeeRequest
+    {
+        public Guid EmployeeId { get; set; }
     }
 
     public class UpdateUserRoleRequest
@@ -416,4 +430,3 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 }
-

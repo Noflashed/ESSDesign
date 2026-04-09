@@ -5,10 +5,19 @@ import './Auth.css';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
-function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initialEmail = '' }) {
+function SignUp({
+    onSignUpSuccess,
+    onSwitchToLogin,
+    theme,
+    onThemeChange,
+    initialEmail = '',
+    initialFirstName = '',
+    initialLastName = '',
+    employeeId = ''
+}) {
     const [formData, setFormData] = useState({
-        firstName: '',
-        lastName: '',
+        firstName: initialFirstName,
+        lastName: initialLastName,
         email: initialEmail,
         password: '',
         confirmPassword: ''
@@ -17,8 +26,15 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        setFormData((current) => ({ ...current, email: initialEmail }));
-    }, [initialEmail]);
+        setFormData((current) => ({
+            ...current,
+            firstName: initialFirstName || current.firstName,
+            lastName: initialLastName || current.lastName,
+            email: initialEmail
+        }));
+    }, [initialEmail, initialFirstName, initialLastName]);
+
+    const isEmployeeInvite = Boolean(employeeId && initialEmail && initialFirstName && initialLastName);
 
     const handleChange = (e) => {
         setFormData({
@@ -56,7 +72,7 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
 
         try {
             const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
-            await authAPI.signUp(formData.email, formData.password, fullName);
+            await authAPI.signUp(formData.email, formData.password, fullName, employeeId || null);
             onSignUpSuccess?.(formData.email);
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to create account. Please try again.');
@@ -80,36 +96,49 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
                     </div>
                     <h2>Create Account</h2>
-                    <p>Sign up to get started</p>
+                    <p>{isEmployeeInvite ? 'Set your password to activate your employee account' : 'Sign up to get started'}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="auth-form">
-                    <div className="auth-form-row">
-                        <div className="form-field">
-                            <label>First Name</label>
-                            <input
-                                type="text"
-                                name="firstName"
-                                value={formData.firstName}
-                                onChange={handleChange}
-                                placeholder="John"
-                                required
-                                autoFocus
-                            />
+                    {isEmployeeInvite ? (
+                        <div className="auth-prefilled-panel">
+                            <div className="auth-prefilled-row">
+                                <span className="auth-prefilled-label">Name</span>
+                                <span className="auth-prefilled-value">{formData.firstName} {formData.lastName}</span>
+                            </div>
+                            <div className="auth-prefilled-row">
+                                <span className="auth-prefilled-label">Email</span>
+                                <span className="auth-prefilled-value">{formData.email}</span>
+                            </div>
                         </div>
+                    ) : (
+                        <div className="auth-form-row">
+                            <div className="form-field">
+                                <label>First Name</label>
+                                <input
+                                    type="text"
+                                    name="firstName"
+                                    value={formData.firstName}
+                                    onChange={handleChange}
+                                    placeholder="John"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
 
-                        <div className="form-field">
-                            <label>Last Name</label>
-                            <input
-                                type="text"
-                                name="lastName"
-                                value={formData.lastName}
-                                onChange={handleChange}
-                                placeholder="Doe"
-                                required
-                            />
+                            <div className="form-field">
+                                <label>Last Name</label>
+                                <input
+                                    type="text"
+                                    name="lastName"
+                                    value={formData.lastName}
+                                    onChange={handleChange}
+                                    placeholder="Doe"
+                                    required
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="form-field">
                         <label>Email</label>
@@ -120,6 +149,8 @@ function SignUp({ onSignUpSuccess, onSwitchToLogin, theme, onThemeChange, initia
                             onChange={handleChange}
                             placeholder="you@example.com"
                             required
+                            readOnly={isEmployeeInvite}
+                            autoFocus={!isEmployeeInvite}
                         />
                     </div>
 

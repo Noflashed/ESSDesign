@@ -172,8 +172,8 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-    signUp: async (email, password, fullName) => {
-        const response = await apiClient.post('/auth/signup', { email, password, fullName });
+    signUp: async (email, password, fullName, employeeId = null) => {
+        const response = await apiClient.post('/auth/signup', { email, password, fullName, employeeId });
         const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         return { ...response.data, user: hydratedUser };
@@ -241,6 +241,16 @@ export const authAPI = {
 
     inviteUser: async (email) => {
         const response = await apiClient.post('/auth/invite', { email });
+        return response.data;
+    },
+
+    inviteEmployee: async ({ employeeId, email, firstName, lastName }) => {
+        const response = await apiClient.post('/auth/invite-employee', { employeeId, email, firstName, lastName });
+        return response.data;
+    },
+
+    linkEmployee: async (employeeId) => {
+        const response = await apiClient.post('/auth/link-employee', { employeeId });
         return response.data;
     }
 };
@@ -433,7 +443,12 @@ function mapEmployeeRow(row) {
         firstName: row.first_name || '',
         lastName: row.last_name || '',
         phoneNumber: row.phone_number || '',
+        email: row.email || '',
         leadingHand: Boolean(row.leading_hand),
+        linkedAuthUserId: row.linked_auth_user_id || null,
+        inviteSentAt: row.invite_sent_at || null,
+        verifiedAt: row.verified_at || null,
+        verified: Boolean(row.verified_at),
         preferredSiteIds: [row.preferred_site_1, row.preferred_site_2, row.preferred_site_3].filter(Boolean),
         createdAt: row.created_at || nowIso(),
         updatedAt: row.updated_at || nowIso()
@@ -688,16 +703,22 @@ export const rosteringAPI = {
         return rows.map(mapEmployeeRow);
     },
 
-    saveEmployee: async ({ id, firstName, lastName, phoneNumber, preferredSiteIds, leadingHand }) => {
+    saveEmployee: async ({ id, firstName, lastName, phoneNumber, email, preferredSiteIds, leadingHand, linkedAuthUserId, verifiedAt, inviteSentAt, currentEmail }) => {
         const cleanPreferred = preferredSiteIds.filter(Boolean).slice(0, 3);
+        const cleanEmail = (email || '').trim().toLowerCase();
+        const preservedLink = cleanEmail && cleanEmail === (currentEmail || '').trim().toLowerCase();
         const payload = {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             phone_number: phoneNumber.trim() || null,
+            email: cleanEmail || null,
             leading_hand: Boolean(leadingHand),
             preferred_site_1: cleanPreferred[0] || null,
             preferred_site_2: cleanPreferred[1] || null,
             preferred_site_3: cleanPreferred[2] || null,
+            linked_auth_user_id: preservedLink ? (linkedAuthUserId || null) : null,
+            invite_sent_at: preservedLink ? (inviteSentAt || null) : null,
+            verified_at: preservedLink ? (verifiedAt || null) : null,
             updated_at: nowIso()
         };
 
