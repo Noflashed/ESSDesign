@@ -54,6 +54,9 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onContextMe
                 data-employee-port="left"
                 data-employee-id={employee.id}
                 onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                        return;
+                    }
                     event.stopPropagation();
                     onStartConnection(event, employee.id, 'left');
                 }}
@@ -63,6 +66,9 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onContextMe
                 data-employee-port="right"
                 data-employee-id={employee.id}
                 onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                        return;
+                    }
                     event.stopPropagation();
                     onStartConnection(event, employee.id, 'right');
                 }}
@@ -478,6 +484,27 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         });
     };
 
+    const handleViewportPointerDownCapture = (event) => {
+        if (event.button !== 1) {
+            return;
+        }
+
+        const blockedTarget = event.target?.closest?.('.lh-board-context-menu, .lh-board-save-exit');
+        if (blockedTarget) {
+            return;
+        }
+
+        event.preventDefault();
+        setContextMenu(null);
+        setActiveDrag({
+            kind: 'pan',
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: pan.x,
+            originY: pan.y
+        });
+    };
+
     const handleViewportPointerDown = (event) => {
         const interactiveTarget = event.target?.closest?.(
             '.lh-leading-card, .lh-card, .lh-port, .lh-leading-port, .lh-board-context-menu, .lh-board-save-exit'
@@ -524,6 +551,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 onContextMenu={openCanvasContextMenu}
                 onClick={() => setContextMenu(null)}
                 onWheel={handleWheel}
+                onPointerDownCapture={handleViewportPointerDownCapture}
                 onPointerDown={handleViewportPointerDown}
             >
                 <button className="lh-board-save-exit" onClick={handleSaveExit}>
@@ -566,6 +594,9 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                             className="lh-leading-port lh-leading-port-left"
                             data-leading-hand-anchor="bad"
                             onPointerDown={(event) => {
+                                if (event.button !== 0) {
+                                    return;
+                                }
                                 event.stopPropagation();
                                 startLeadingHandConnection(event, 'bad');
                             }}
@@ -574,6 +605,9 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                             className="lh-leading-port lh-leading-port-right"
                             data-leading-hand-anchor="good"
                             onPointerDown={(event) => {
+                                if (event.button !== 0) {
+                                    return;
+                                }
                                 event.stopPropagation();
                                 startLeadingHandConnection(event, 'good');
                             }}
