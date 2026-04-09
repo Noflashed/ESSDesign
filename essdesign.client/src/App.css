@@ -1197,24 +1197,53 @@ body {
     cursor: grab;
 }
 
-.rostering-tree-builder-card {
-    min-height: 76px;
-    padding: 14px 16px;
-    background: rgba(41, 41, 45, 0.98);
-}
-
-.rostering-tree-project-card {
-    min-height: 122px;
-    gap: 8px;
-}
-
 .rostering-tree-inline-pill {
     margin-bottom: 2px;
 }
 
-.rostering-tree-crew-card {
-    min-height: 82px;
-    background: rgba(28, 28, 31, 0.98);
+.rostering-tree-table-card {
+    min-height: 220px;
+    padding: 0;
+    align-items: stretch;
+    text-align: left;
+    overflow: hidden;
+}
+
+.rostering-tree-table-head {
+    padding: 18px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rostering-tree-table-head .lh-leading-name,
+.rostering-tree-table-head .lh-leading-sub {
+    text-align: left;
+}
+
+.rostering-tree-employee-table {
+    display: grid;
+    width: 100%;
+}
+
+.rostering-tree-employee-row,
+.rostering-tree-empty-row {
+    padding: 12px 20px;
+    color: #f3f4f6;
+    font-size: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    width: 100%;
+}
+
+.rostering-tree-employee-row:first-child,
+.rostering-tree-empty-row:first-child {
+    border-top: none;
+}
+
+.rostering-tree-empty-row {
+    color: #9ca3af;
 }
 
 .rostering-tree-back {

@@ -3,12 +3,8 @@ import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 const BOARD_SIZE = 20000;
 const BOARD_CENTER = BOARD_SIZE / 2;
-const SITE_WIDTH = 280;
-const SITE_HEIGHT = 122;
-const BUILDER_WIDTH = 180;
-const BUILDER_HEIGHT = 76;
-const CREW_WIDTH = 210;
-const CREW_HEIGHT = 82;
+const SITE_WIDTH = 380;
+const SITE_HEIGHT = 220;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -16,10 +12,10 @@ function clamp(value, min, max) {
 
 function buildInitialPositions(sitePlans) {
     const positions = {};
-    const startX = BOARD_CENTER - 620;
+    const startX = BOARD_CENTER - 460;
     const startY = BOARD_CENTER - 260;
-    const columnGap = 620;
-    const rowGap = 420;
+    const columnGap = 460;
+    const rowGap = 320;
 
     sitePlans.forEach((sitePlan, index) => {
         const column = index % 2;
@@ -27,15 +23,7 @@ function buildInitialPositions(sitePlans) {
         const baseX = startX + column * columnGap;
         const baseY = startY + row * rowGap;
 
-        positions[`builder:${sitePlan.siteId}`] = { x: baseX, y: baseY + 18 };
-        positions[`site:${sitePlan.siteId}`] = { x: baseX + 220, y: baseY };
-
-        sitePlan.crewSlots.forEach((slot, slotIndex) => {
-            positions[`crew:${sitePlan.siteId}:${slot.slot}`] = {
-                x: baseX + (slotIndex % 3) * 236,
-                y: baseY + 190 + Math.floor(slotIndex / 3) * 114
-            };
-        });
+        positions[`site:${sitePlan.siteId}`] = { x: baseX, y: baseY };
     });
 
     return positions;
@@ -54,16 +42,31 @@ function buildSitePlans(sites, plan) {
             }
 
             const requiredCrew = Math.max(0, Number(plan.requiredMenBySite?.[siteId] || 0));
+            const assignedEmployeesRaw = plan.assignedEmployeesBySite?.[siteId]
+                || plan.assigned_employees_by_site?.[siteId]
+                || [];
+            const assignedEmployees = Array.isArray(assignedEmployeesRaw)
+                ? assignedEmployeesRaw
+                    .map((employee) => {
+                        if (typeof employee === 'string') {
+                            return employee;
+                        }
+                        if (employee && typeof employee === 'object') {
+                            const firstName = employee.firstName || employee.first_name || '';
+                            const lastName = employee.lastName || employee.last_name || '';
+                            return `${firstName} ${lastName}`.trim();
+                        }
+                        return '';
+                    })
+                    .filter(Boolean)
+                : [];
 
             return {
                 siteId,
                 builderName: site.builderName,
                 projectName: site.projectName,
                 requiredCrew,
-                crewSlots: Array.from({ length: requiredCrew }, (_, index) => ({
-                    slot: index + 1,
-                    label: `Crew ${index + 1}`
-                }))
+                assignedEmployees
             };
         })
         .filter(Boolean);
@@ -301,46 +304,33 @@ export default function RosteringTreePage({ planDate, onBack }) {
                     {sitePlans.length === 0 ? <div className="lh-board-empty">No saved jobs found for this plan date.</div> : null}
 
                     {sitePlans.map((sitePlan) => {
-                        const builderPosition = positions[`builder:${sitePlan.siteId}`] || { x: BOARD_CENTER, y: BOARD_CENTER };
-                        const sitePosition = positions[`site:${sitePlan.siteId}`] || { x: BOARD_CENTER + 240, y: BOARD_CENTER };
+                        const sitePosition = positions[`site:${sitePlan.siteId}`] || { x: BOARD_CENTER, y: BOARD_CENTER };
 
                         return (
-                            <React.Fragment key={sitePlan.siteId}>
-                                <TreeCard
-                                    className="lh-card rostering-tree-card rostering-tree-builder-card"
-                                    style={{ left: builderPosition.x, top: builderPosition.y, width: BUILDER_WIDTH, minHeight: BUILDER_HEIGHT }}
-                                    onPointerDown={startCardDrag(`builder:${sitePlan.siteId}`)}
-                                >
-                                    <div className="lh-card-name">{sitePlan.builderName}</div>
-                                    <div className="lh-card-sub">Builder</div>
-                                </TreeCard>
-
-                                <TreeCard
-                                    className="lh-leading-card rostering-tree-card rostering-tree-project-card"
-                                    style={{ left: sitePosition.x, top: sitePosition.y, width: SITE_WIDTH, minHeight: SITE_HEIGHT }}
-                                    onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
-                                >
+                            <TreeCard
+                                key={sitePlan.siteId}
+                                className="lh-leading-card rostering-tree-card rostering-tree-table-card"
+                                style={{ left: sitePosition.x, top: sitePosition.y, width: SITE_WIDTH, minHeight: SITE_HEIGHT }}
+                                onPointerDown={startCardDrag(`site:${sitePlan.siteId}`)}
+                            >
+                                <div className="rostering-tree-table-head">
                                     <div className="rostering-builder-pill rostering-tree-inline-pill">{sitePlan.builderName}</div>
                                     <div className="lh-leading-name">{sitePlan.projectName}</div>
                                     <div className="lh-leading-sub">{sitePlan.requiredCrew} required crew</div>
-                                </TreeCard>
+                                </div>
 
-                                {sitePlan.crewSlots.map((slot) => {
-                                    const slotKey = `crew:${sitePlan.siteId}:${slot.slot}`;
-                                    const slotPosition = positions[slotKey] || { x: sitePosition.x, y: sitePosition.y + 180 };
-                                    return (
-                                        <TreeCard
-                                            key={slotKey}
-                                            className="lh-card rostering-tree-card rostering-tree-crew-card"
-                                            style={{ left: slotPosition.x, top: slotPosition.y, width: CREW_WIDTH, minHeight: CREW_HEIGHT }}
-                                            onPointerDown={startCardDrag(slotKey)}
-                                        >
-                                            <div className="lh-card-name">{slot.label}</div>
-                                            <div className="lh-card-sub">Crew slot</div>
-                                        </TreeCard>
-                                    );
-                                })}
-                            </React.Fragment>
+                                <div className="rostering-tree-employee-table">
+                                    {sitePlan.assignedEmployees.length > 0 ? (
+                                        sitePlan.assignedEmployees.map((employeeName, index) => (
+                                            <div key={`${sitePlan.siteId}:employee:${index}`} className="rostering-tree-employee-row">
+                                                {employeeName}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="rostering-tree-empty-row">No designated employees yet</div>
+                                    )}
+                                </div>
+                            </TreeCard>
                         );
                     })}
                 </div>
