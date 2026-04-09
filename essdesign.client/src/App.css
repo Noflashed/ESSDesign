@@ -148,6 +148,13 @@ body {
     gap: 12px;
 }
 
+.logo-home-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+}
+
 .logo-icon {
     height: 45px;
     width: auto;

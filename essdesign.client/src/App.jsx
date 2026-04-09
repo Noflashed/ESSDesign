@@ -412,16 +412,6 @@ function App() {
         }
     }, [showHeaderSearch]);
 
-    useEffect(() => {
-        if (!isEmployeePortalRole) {
-            return;
-        }
-
-        if (currentPage !== 'employee-home') {
-            applyPageState('employee-home', { builder: null, project: null }, { leadingHand: null }, { pushHistory: false });
-        }
-    }, [applyPageState, currentPage, isEmployeePortalRole]);
-
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
         const authUrlParams = new URLSearchParams(window.location.search);
@@ -929,12 +919,12 @@ function App() {
     };
 
     const renderCurrentPage = () => {
-        if (isEmployeePortalRole) {
-            return <EmployeePortalPage user={user} />;
-        }
-
         if (currentPage === 'landing') {
             return <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />;
+        }
+
+        if (currentPage === 'employee-home' && isEmployeePortalRole) {
+            return <EmployeePortalPage user={user} />;
         }
 
         if (currentPage === 'site-information') {
@@ -1105,9 +1095,15 @@ function App() {
             <div className="App">
             <header className="app-header">
                 <div className="header-left">
-                    <div className="logo">
+                    <button
+                        type="button"
+                        className="logo logo-home-btn"
+                        onClick={() => applyPageState('landing', { builder: null, project: null }, { leadingHand: null })}
+                        aria-label="Go to home page"
+                        title="Home"
+                    >
                         <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="logo-icon" />
-                    </div>
+                    </button>
                 </div>
                 {showHeaderSearch ? (
                     <div className="header-center" ref={searchRef}>
