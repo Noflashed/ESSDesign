@@ -1,46 +1,83 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI } from '../services/api';
 
-const CANVAS_WIDTH = 1500;
-const CANVAS_HEIGHT = 920;
+const BOARD_WIDTH = 1500;
+const BOARD_HEIGHT = 880;
+const LEADING_HAND_WIDTH = 280;
+const LEADING_HAND_HEIGHT = 140;
+const EMPLOYEE_WIDTH = 220;
+const EMPLOYEE_HEIGHT = 88;
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
-function makeDefaultPositions() {
+function defaultLeadingHandPosition() {
+    return { x: 610, y: 270 };
+}
+
+function cardPortPosition(position, side) {
     return {
-        leadingHand: { x: 610, y: 280 },
-        badAnchor: { x: 570, y: 390 },
-        goodAnchor: { x: 880, y: 390 }
+        x: position.x + (side === 'left' ? 0 : EMPLOYEE_WIDTH),
+        y: position.y + EMPLOYEE_HEIGHT / 2
     };
 }
 
-function EmployeeCard({ employee, selected, style, onPointerDown, onRemove }) {
+function leadingHandPortPosition(position, type) {
+    return {
+        x: position.x + (type === 'bad' ? 18 : LEADING_HAND_WIDTH - 18),
+        y: position.y + LEADING_HAND_HEIGHT / 2
+    };
+}
+
+function makeCurve(source, target) {
+    const delta = Math.abs(target.x - source.x);
+    const handle = Math.max(60, delta * 0.45);
+    return `M ${source.x} ${source.y} C ${source.x + handle} ${source.y}, ${target.x - handle} ${target.y}, ${target.x} ${target.y}`;
+}
+
+function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, onStartConnection }) {
     return (
         <div
-            className={`lh-free-card ${selected ? 'selected' : ''}`}
-            style={style}
+            className={`lh-card ${selected ? 'selected' : ''}`}
+            style={{ left: position.x, top: position.y, width: EMPLOYEE_WIDTH, minHeight: EMPLOYEE_HEIGHT }}
             onPointerDown={onPointerDown}
         >
-            <button className="lh-free-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(employee.id); }}>×</button>
-            <div className="lh-free-card-name">{employee.firstName} {employee.lastName}</div>
-            <div className="lh-free-card-sub">{employee.phoneNumber || 'No phone number'}</div>
+            <button className="lh-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(employee.id); }}>×</button>
+            <button
+                className="lh-port lh-port-left"
+                onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onStartConnection(event, employee.id, 'left');
+                }}
+            />
+            <button
+                className="lh-port lh-port-right"
+                onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onStartConnection(event, employee.id, 'right');
+                }}
+            />
+            <div className="lh-card-name">{employee.firstName} {employee.lastName}</div>
+            <div className="lh-card-sub">{employee.phoneNumber || 'No phone number'}</div>
         </div>
     );
 }
 
-export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
-    const canvasRef = useRef(null);
+export default function LeadingHandRelationshipsPage({ leadingHand }) {
+    const viewportRef = useRef(null);
+    const boardRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [allEmployees, setAllEmployees] = useState([]);
     const [relationships, setRelationships] = useState([]);
-    const [positions, setPositions] = useState(makeDefaultPositions());
+    const [positions, setPositions] = useState({ leadingHand: defaultLeadingHandPosition() });
     const [activeDrag, setActiveDrag] = useState(null);
+    const [connectionDraft, setConnectionDraft] = useState(null);
     const [contextMenu, setContextMenu] = useState(null);
     const [search, setSearch] = useState('');
+    const [scale, setScale] = useState(1);
 
     useEffect(() => {
         let active = true;
@@ -58,11 +95,11 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                     const next = { ...prev };
                     relationshipRows.forEach((relationship, index) => {
                         if (!next[relationship.employeeId]) {
-                            next[relationship.employeeId] = relationship.relationshipType === 'bad'
-                                ? { x: 160, y: 120 + index * 120 }
-                                : relationship.relationshipType === 'good'
-                                    ? { x: 1100, y: 120 + index * 120 }
-                                    : { x: 620 + (index % 2) * 220, y: 620 + Math.floor(index / 2) * 120 };
+                            next[relationship.employeeId] = relationship.relationshipType === 'good'
+                                ? { x: 1080, y: 120 + index * 108 }
+                                : relationship.relationshipType === 'bad'
+                                    ? { x: 200, y: 120 + index * 108 }
+                                    : { x: 450 + (index % 3) * 250, y: 560 + Math.floor(index / 3) * 108 };
                         }
                     });
                     return next;
@@ -86,20 +123,40 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
     useEffect(() => {
         const handleMove = (event) => {
-            if (!activeDrag || !canvasRef.current) {
+            if (!viewportRef.current) {
                 return;
             }
-            const rect = canvasRef.current.getBoundingClientRect();
-            const x = clamp(event.clientX - rect.left - activeDrag.offsetX, 24, CANVAS_WIDTH - 236);
-            const y = clamp(event.clientY - rect.top - activeDrag.offsetY, 24, CANVAS_HEIGHT - 116);
-            setPositions(prev => ({
-                ...prev,
-                [activeDrag.id]: { x, y }
-            }));
+            const rect = viewportRef.current.getBoundingClientRect();
+            const boardX = (event.clientX - rect.left) / scale;
+            const boardY = (event.clientY - rect.top) / scale;
+
+            if (activeDrag) {
+                const width = activeDrag.id === 'leadingHand' ? LEADING_HAND_WIDTH : EMPLOYEE_WIDTH;
+                const height = activeDrag.id === 'leadingHand' ? LEADING_HAND_HEIGHT : EMPLOYEE_HEIGHT;
+                setPositions(prev => ({
+                    ...prev,
+                    [activeDrag.id]: {
+                        x: clamp(boardX - activeDrag.offsetX, 16, BOARD_WIDTH - width - 16),
+                        y: clamp(boardY - activeDrag.offsetY, 16, BOARD_HEIGHT - height - 16)
+                    }
+                }));
+            }
+
+            if (connectionDraft) {
+                setConnectionDraft(prev => prev ? { ...prev, target: { x: boardX, y: boardY } } : null);
+            }
         };
 
-        const handleUp = () => {
+        const handleUp = async (event) => {
+            if (connectionDraft) {
+                const anchor = event.target?.closest?.('[data-leading-hand-anchor]');
+                const relationshipType = anchor?.getAttribute('data-leading-hand-anchor');
+                if (relationshipType === 'good' || relationshipType === 'bad') {
+                    await saveRelationship(connectionDraft.employeeId, relationshipType);
+                }
+            }
             setActiveDrag(null);
+            setConnectionDraft(null);
         };
 
         window.addEventListener('pointermove', handleMove);
@@ -108,7 +165,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             window.removeEventListener('pointermove', handleMove);
             window.removeEventListener('pointerup', handleUp);
         };
-    }, [activeDrag]);
+    }, [activeDrag, connectionDraft, scale]);
 
     const employeeById = useMemo(
         () => Object.fromEntries(allEmployees.map(employee => [employee.id, employee])),
@@ -145,36 +202,44 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }).slice(0, 10);
     }, [allEmployees, leadingHand.id, search, usedEmployeeIds]);
 
-    const getAnchorPoint = (relationshipType) => {
-        if (relationshipType === 'bad') {
-            const bad = positions.badAnchor;
-            return { x: bad.x + 28, y: bad.y + 28 };
-        }
-        if (relationshipType === 'good') {
-            const good = positions.goodAnchor;
-            return { x: good.x + 28, y: good.y + 28 };
-        }
-        const center = positions.leadingHand;
-        return { x: center.x + 130, y: center.y + 180 };
-    };
+    const renderedLines = useMemo(() => {
+        const leadingPosition = positions.leadingHand || defaultLeadingHandPosition();
+        const lines = relatedEmployees
+            .filter(item => item.relationshipType === 'good' || item.relationshipType === 'bad')
+            .map(item => {
+                const employeePosition = positions[item.employeeId];
+                if (!employeePosition) {
+                    return null;
+                }
+                const sourceSide = item.relationshipType === 'bad' ? 'right' : 'left';
+                const source = cardPortPosition(employeePosition, sourceSide);
+                const target = leadingHandPortPosition(leadingPosition, item.relationshipType);
+                return {
+                    id: item.employeeId,
+                    tone: item.relationshipType,
+                    d: makeCurve(source, target)
+                };
+            })
+            .filter(Boolean);
 
-    const connectorPaths = relatedEmployees.map(item => {
-        const card = positions[item.employeeId];
-        if (!card) {
-            return null;
+        if (connectionDraft) {
+            const employeePosition = positions[connectionDraft.employeeId];
+            if (employeePosition) {
+                lines.push({
+                    id: 'draft',
+                    tone: 'draft',
+                    d: makeCurve(cardPortPosition(employeePosition, connectionDraft.side), connectionDraft.target)
+                });
+            }
         }
-        const source = getAnchorPoint(item.relationshipType);
-        const target = { x: card.x + 110, y: card.y + 44 };
-        const c1x = source.x + (target.x - source.x) * 0.35;
-        const c2x = source.x + (target.x - source.x) * 0.7;
-        return {
-            id: item.employeeId,
-            tone: item.relationshipType,
-            d: `M ${source.x} ${source.y} C ${c1x} ${source.y}, ${c2x} ${target.y}, ${target.x} ${target.y}`
-        };
-    }).filter(Boolean);
+
+        return lines;
+    }, [connectionDraft, positions, relatedEmployees]);
 
     const saveRelationship = async (employeeId, relationshipType) => {
+        if (!employeeId) {
+            return;
+        }
         setSaving(true);
         setError('');
         try {
@@ -195,10 +260,12 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         await saveRelationship(employeeId, 'neutral');
         setPositions(prev => ({
             ...prev,
-            [employeeId]: contextMenu ? {
-                x: clamp(contextMenu.x - 110, 24, CANVAS_WIDTH - 236),
-                y: clamp(contextMenu.y - 44, 24, CANVAS_HEIGHT - 116)
-            } : { x: 640, y: 640 }
+            [employeeId]: contextMenu
+                ? {
+                    x: clamp(contextMenu.x - EMPLOYEE_WIDTH / 2, 16, BOARD_WIDTH - EMPLOYEE_WIDTH - 16),
+                    y: clamp(contextMenu.y - EMPLOYEE_HEIGHT / 2, 16, BOARD_HEIGHT - EMPLOYEE_HEIGHT - 16)
+                }
+                : { x: 430, y: 620 }
         }));
         setContextMenu(null);
         setSearch('');
@@ -217,81 +284,85 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
     };
 
-    const startDrag = (id) => (event) => {
+    const startCardDrag = (id) => (event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         setActiveDrag({
             id,
-            offsetX: event.clientX - rect.left,
-            offsetY: event.clientY - rect.top
+            offsetX: (event.clientX - rect.left) / scale,
+            offsetY: (event.clientY - rect.top) / scale
+        });
+    };
+
+    const startConnection = (event, employeeId, side) => {
+        if (!viewportRef.current) {
+            return;
+        }
+        const rect = viewportRef.current.getBoundingClientRect();
+        setConnectionDraft({
+            employeeId,
+            side,
+            target: {
+                x: (event.clientX - rect.left) / scale,
+                y: (event.clientY - rect.top) / scale
+            }
         });
     };
 
     const openContextMenu = (event) => {
         event.preventDefault();
-        if (!canvasRef.current) {
+        if (!viewportRef.current) {
             return;
         }
-        const rect = canvasRef.current.getBoundingClientRect();
+        const rect = viewportRef.current.getBoundingClientRect();
         setContextMenu({
-            x: clamp(event.clientX - rect.left, 40, CANVAS_WIDTH - 320),
-            y: clamp(event.clientY - rect.top, 40, CANVAS_HEIGHT - 220)
+            x: clamp((event.clientX - rect.left) / scale, 40, BOARD_WIDTH - 320),
+            y: clamp((event.clientY - rect.top) / scale, 40, BOARD_HEIGHT - 220)
         });
     };
 
+    const handleWheel = (event) => {
+        event.preventDefault();
+        setScale(prev => clamp(prev + (event.deltaY > 0 ? -0.08 : 0.08), 0.65, 1.6));
+    };
+
     return (
-        <div className="module-page lh-free-page">
-            <div className="module-shell lh-free-shell">
-                <div className="module-header lh-free-header">
-                    <div>
-                        <h2>Leading Hand Relationships</h2>
-                        <p>Right click on the board to add an employee. Drag cards freely and connect them to good or bad.</p>
-                    </div>
-                    <button className="module-secondary-btn" onClick={onBack}>Back</button>
-                </div>
-
-                {error ? <div className="module-error">{error}</div> : null}
-
+        <div className="lh-board-page">
+            {error ? <div className="lh-board-error">{error}</div> : null}
+            <div
+                ref={viewportRef}
+                className="lh-board-viewport"
+                onContextMenu={openContextMenu}
+                onClick={() => setContextMenu(null)}
+                onWheel={handleWheel}
+            >
                 <div
-                    ref={canvasRef}
-                    className="lh-free-canvas"
-                    onContextMenu={openContextMenu}
-                    onClick={() => setContextMenu(null)}
+                    ref={boardRef}
+                    className="lh-board-stage"
+                    style={{ transform: `scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
                 >
-                    <div className="lh-free-grid" />
+                    <div className="lh-board-grid" />
 
-                    <svg className="lh-free-lines" viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} preserveAspectRatio="none">
-                        {connectorPaths.map(path => (
-                            <path
-                                key={path.id}
-                                d={path.d}
-                                className={`lh-free-path lh-free-path-${path.tone}`}
-                            />
+                    <svg className="lh-board-lines" viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`} preserveAspectRatio="none">
+                        {renderedLines.map(line => (
+                            <path key={line.id} d={line.d} className={`lh-board-line lh-board-line-${line.tone}`} />
                         ))}
                     </svg>
 
                     <div
-                        className="lh-free-leading-card"
-                        style={{ left: positions.leadingHand.x, top: positions.leadingHand.y }}
-                        onPointerDown={startDrag('leadingHand')}
+                        className="lh-leading-card"
+                        style={{ left: positions.leadingHand?.x ?? 0, top: positions.leadingHand?.y ?? 0 }}
+                        onPointerDown={startCardDrag('leadingHand')}
                     >
-                        <div className="lh-free-leading-name">{resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}</div>
-                        <div className="lh-free-leading-sub">{resolvedLeadingHand.phoneNumber || 'No phone number'}</div>
+                        <div className="lh-leading-name">{resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}</div>
+                        <div className="lh-leading-sub">{resolvedLeadingHand.phoneNumber || 'No phone number'}</div>
 
-                        <div
-                            className="lh-free-anchor lh-free-anchor-bad"
-                            style={{ left: positions.badAnchor.x - positions.leadingHand.x, top: positions.badAnchor.y - positions.leadingHand.y }}
-                            onPointerDown={startDrag('badAnchor')}
-                            onDoubleClick={() => saveRelationship(relatedEmployees.find(item => item.relationshipType === 'neutral')?.employeeId || '', 'bad')}
-                        >
-                            Bad
+                        <div className="lh-leading-port-group lh-leading-port-group-left">
+                            <button className="lh-leading-port" data-leading-hand-anchor="bad" />
+                            <span className="lh-leading-port-label">Bad</span>
                         </div>
-                        <div
-                            className="lh-free-anchor lh-free-anchor-good"
-                            style={{ left: positions.goodAnchor.x - positions.leadingHand.x, top: positions.goodAnchor.y - positions.leadingHand.y }}
-                            onPointerDown={startDrag('goodAnchor')}
-                            onDoubleClick={() => saveRelationship(relatedEmployees.find(item => item.relationshipType === 'neutral')?.employeeId || '', 'good')}
-                        >
-                            Good
+                        <div className="lh-leading-port-group lh-leading-port-group-right">
+                            <span className="lh-leading-port-label">Good</span>
+                            <button className="lh-leading-port" data-leading-hand-anchor="good" />
                         </div>
                     </div>
 
@@ -305,35 +376,35 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                                 key={item.employeeId}
                                 employee={item.employee}
                                 selected={activeDrag?.id === item.employeeId}
-                                style={{ left: position.x, top: position.y }}
-                                onPointerDown={startDrag(item.employeeId)}
+                                position={position}
+                                onPointerDown={startCardDrag(item.employeeId)}
                                 onRemove={removeRelationship}
+                                onStartConnection={startConnection}
                             />
                         );
                     })}
 
                     {contextMenu ? (
                         <div
-                            className="lh-free-context-menu"
+                            className="lh-board-context-menu"
                             style={{ left: contextMenu.x, top: contextMenu.y }}
                             onClick={event => event.stopPropagation()}
                         >
-                            <div className="module-field">
-                                <label>Add Employee</label>
-                                <input
-                                    autoFocus
-                                    value={search}
-                                    onChange={event => setSearch(event.target.value)}
-                                    placeholder="Search ESS employees"
-                                />
-                            </div>
-                            <div className="lh-free-context-results">
+                            <div className="lh-board-context-title">Add Employee</div>
+                            <input
+                                autoFocus
+                                className="lh-board-context-input"
+                                value={search}
+                                onChange={event => setSearch(event.target.value)}
+                                placeholder="Search ESS employees"
+                            />
+                            <div className="lh-board-context-results">
                                 {searchResults.length === 0 ? (
-                                    <div className="lh-free-empty">No available employees</div>
+                                    <div className="lh-board-empty">No available employees</div>
                                 ) : searchResults.map(employee => (
                                     <button
                                         key={employee.id}
-                                        className="lh-free-context-item"
+                                        className="lh-board-context-item"
                                         onClick={() => addEmployee(employee.id)}
                                     >
                                         <span>{employee.firstName} {employee.lastName}</span>
@@ -344,8 +415,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                         </div>
                     ) : null}
 
-                    {loading ? <div className="lh-free-loading">Loading relationships...</div> : null}
-                    {saving ? <div className="lh-free-saving">Saving...</div> : null}
+                    {saving ? <div className="lh-board-saving">Saving...</div> : null}
                 </div>
             </div>
         </div>
