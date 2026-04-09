@@ -1208,15 +1208,15 @@ body {
     text-align: left;
     overflow: hidden;
     border-radius: 18px;
-    background: linear-gradient(180deg, rgba(26, 32, 44, 0.98), rgba(15, 23, 42, 0.98));
-    border: 1px solid rgba(71, 85, 105, 0.38);
-    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+    background: linear-gradient(180deg, rgba(47, 55, 65, 0.98), rgba(35, 43, 53, 0.98));
+    border: 1px solid rgba(100, 116, 139, 0.34);
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
 }
 
 .rostering-tree-table-head {
     padding: 18px 20px 14px;
-    border-bottom: 1px solid rgba(71, 85, 105, 0.42);
-    background: linear-gradient(135deg, rgba(51, 65, 85, 0.96), rgba(30, 41, 59, 0.96));
+    border-bottom: 1px solid rgba(100, 116, 139, 0.3);
+    background: linear-gradient(135deg, rgba(76, 85, 96, 0.96), rgba(58, 66, 77, 0.96));
     cursor: grab;
 }
 
@@ -1256,22 +1256,22 @@ body {
     justify-content: center;
     padding: 6px 10px;
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.92);
-    color: #cbd5e1;
+    background: rgba(31, 41, 55, 0.88);
+    color: #dbe4ee;
     font-size: 11px;
     font-weight: 700;
     white-space: nowrap;
 }
 
 .rostering-tree-table-grid thead th {
-    background: rgba(30, 41, 59, 0.92);
-    color: #cbd5e1;
+    background: rgba(54, 63, 74, 0.92);
+    color: #d5dee7;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     padding: 10px 14px;
-    border-bottom: 1px solid rgba(71, 85, 105, 0.34);
+    border-bottom: 1px solid rgba(100, 116, 139, 0.28);
     text-align: left;
 }
 
@@ -1282,7 +1282,7 @@ body {
     font-size: 13px;
     font-weight: 600;
     padding: 12px 14px;
-    border-top: 1px solid rgba(51, 65, 85, 0.52);
+    border-top: 1px solid rgba(100, 116, 139, 0.22);
     line-height: 1.2;
 }
 
@@ -1295,7 +1295,7 @@ body {
 }
 
 .rostering-tree-table-grid tbody tr:hover td {
-    background: rgba(30, 41, 59, 0.78);
+    background: rgba(66, 74, 85, 0.62);
 }
 
 .rostering-tree-col-first,
@@ -1324,28 +1324,28 @@ body {
 }
 
 [data-theme='dark'] .rostering-tree-table-card {
-    background: rgba(15, 23, 42, 0.92);
-    border-color: rgba(148, 163, 184, 0.18);
+    background: linear-gradient(180deg, rgba(47, 55, 65, 0.98), rgba(35, 43, 53, 0.98));
+    border-color: rgba(100, 116, 139, 0.34);
     box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24);
 }
 
 [data-theme='dark'] .rostering-tree-table-head {
-    background: linear-gradient(135deg, rgba(124, 45, 18, 0.2), rgba(15, 23, 42, 0.2));
-    border-bottom-color: rgba(148, 163, 184, 0.16);
+    background: linear-gradient(135deg, rgba(76, 85, 96, 0.96), rgba(58, 66, 77, 0.96));
+    border-bottom-color: rgba(100, 116, 139, 0.3);
 }
 
 [data-theme='dark'] .rostering-tree-required-pill {
-    background: rgba(30, 41, 59, 0.95);
-    color: #cbd5e1;
+    background: rgba(31, 41, 55, 0.88);
+    color: #dbe4ee;
 }
 
 [data-theme='dark'] .rostering-tree-table-grid thead th {
-    background: rgba(15, 23, 42, 0.78);
-    border-bottom-color: rgba(148, 163, 184, 0.16);
+    background: rgba(54, 63, 74, 0.92);
+    border-bottom-color: rgba(100, 116, 139, 0.28);
 }
 
 [data-theme='dark'] .rostering-tree-table-grid tbody td {
-    border-top-color: rgba(148, 163, 184, 0.12);
+    border-top-color: rgba(100, 116, 139, 0.22);
 }
 
 .module-list-actions {

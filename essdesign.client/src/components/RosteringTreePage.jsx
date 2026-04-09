@@ -12,14 +12,19 @@ function clamp(value, min, max) {
 
 function buildInitialPositions(sitePlans) {
     const positions = {};
-    const startX = BOARD_CENTER - 230;
-    const startY = BOARD_CENTER - 260;
+    const startX = BOARD_CENTER - 520;
+    const startY = BOARD_CENTER - 420;
+    const maxRowsPerColumn = 4;
+    const columnGap = 520;
     const rowGap = 292;
 
     sitePlans.forEach((sitePlan, index) => {
-        const baseY = startY + index * rowGap;
+        const columnIndex = Math.floor(index / maxRowsPerColumn);
+        const rowIndex = index % maxRowsPerColumn;
+        const baseX = startX + columnIndex * columnGap;
+        const baseY = startY + rowIndex * rowGap;
 
-        positions[`site:${sitePlan.siteId}`] = { x: startX, y: baseY };
+        positions[`site:${sitePlan.siteId}`] = { x: baseX, y: baseY };
     });
 
     return positions;
