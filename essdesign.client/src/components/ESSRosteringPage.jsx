@@ -10,11 +10,13 @@ export default function ESSRosteringPage({ user }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [showJobPicker, setShowJobPicker] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
     const [sites, setSites] = useState([]);
     const [planDate, setPlanDate] = useState(todayDateString());
     const [activeSiteIds, setActiveSiteIds] = useState([]);
     const [requiredMenBySite, setRequiredMenBySite] = useState({});
+    const [pickerSiteIds, setPickerSiteIds] = useState([]);
 
     useEffect(() => {
         let active = true;
@@ -92,14 +94,6 @@ export default function ESSRosteringPage({ user }) {
         [activeSites, requiredMenBySite]
     );
 
-    const toggleSite = (siteId) => {
-        setActiveSiteIds((prev) => (
-            prev.includes(siteId)
-                ? prev.filter((id) => id !== siteId)
-                : [...prev, siteId]
-        ));
-    };
-
     const setRequiredMen = (siteId, nextValue) => {
         if (nextValue === '') {
             setRequiredMenBySite((prev) => ({
@@ -113,6 +107,28 @@ export default function ESSRosteringPage({ user }) {
             ...prev,
             [siteId]: Math.max(0, Number(nextValue || 0))
         }));
+    };
+
+    const removeActiveSite = (siteId) => {
+        setActiveSiteIds((prev) => prev.filter((id) => id !== siteId));
+    };
+
+    const togglePickerSite = (siteId) => {
+        setPickerSiteIds((prev) => (
+            prev.includes(siteId)
+                ? prev.filter((id) => id !== siteId)
+                : [...prev, siteId]
+        ));
+    };
+
+    const openJobPicker = () => {
+        setPickerSiteIds(activeSiteIds);
+        setShowJobPicker(true);
+    };
+
+    const confirmJobPicker = () => {
+        setActiveSiteIds(pickerSiteIds);
+        setShowJobPicker(false);
     };
 
     const savePlan = async () => {
@@ -202,71 +218,35 @@ export default function ESSRosteringPage({ user }) {
                     </div>
                 ) : null}
 
-                <div className="module-grid module-grid-two">
-                    <section className="section-card">
-                        <div className="module-split-row" style={{ marginBottom: 16, alignItems: 'center' }}>
-                            <div>
-                                <span className="step-pill">Step 1</span>
-                                <div className="page-title" style={{ fontSize: 18, marginTop: 8, marginBottom: 0 }}>Choose Active Jobs</div>
-                            </div>
+                <section className="section-card rostering-plan-card">
+                    <div className="module-split-row rostering-plan-header">
+                        <div>
+                            <span className="step-pill">Planner</span>
+                            <div className="page-title" style={{ fontSize: 18, marginTop: 8, marginBottom: 0 }}>Active Jobs</div>
                         </div>
+                        <button
+                            type="button"
+                            className="module-secondary-btn rostering-add-jobs-btn"
+                            onClick={openJobPicker}
+                        >
+                            Add Jobs
+                        </button>
+                    </div>
 
-                        {groupedSites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
-                        <div className="scroll-area">
-                            {groupedSites.map((group) => (
-                                <div key={group.builderId} className="client-group">
-                                    <div className="client-header">
-                                        <div className="client-name">{group.builderName}</div>
+                    {activeSites.length === 0 ? (
+                        <div className="empty-state">
+                            <div className="empty-icon">+</div>
+                            <div className="page-desc">Add one or more jobs to start building the plan.</div>
+                        </div>
+                    ) : (
+                        <div className="rostering-plan-list">
+                            {activeSites.map((site) => (
+                                <div key={site.id} className="labour-row rostering-plan-row">
+                                    <div>
+                                        <div className="job-client">{site.projectName}</div>
+                                        <div className="job-addr">{site.builderName}</div>
                                     </div>
-
-                                    <div className="module-check-list">
-                                        {group.sites.map((site) => {
-                                            const selected = activeSiteIds.includes(site.id);
-                                            return (
-                                                <button
-                                                    key={site.id}
-                                                    type="button"
-                                                    className={`job-card ${selected ? 'selected' : ''}`}
-                                                    onClick={() => toggleSite(site.id)}
-                                                >
-                                                    <div>
-                                                        <div className="job-client">{site.projectName}</div>
-                                                        <div className="job-addr">{site.builderName}</div>
-                                                    </div>
-                                                    <span className={`badge ${selected ? 'badge-count' : 'badge-standby'}`}>
-                                                        {selected ? 'On' : 'Standby'}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-
-                    <section className="section-card">
-                        <div className="module-split-row" style={{ marginBottom: 16, alignItems: 'center' }}>
-                            <div>
-                                <span className="step-pill">Step 2</span>
-                                <div className="page-title" style={{ fontSize: 18, marginTop: 8, marginBottom: 0 }}>Set Labour Targets</div>
-                            </div>
-                            <span className="badge badge-standby">{totalRequiredMen} crew</span>
-                        </div>
-
-                        {activeSites.length === 0 ? (
-                            <div className="empty-state">
-                                <div className="empty-icon">+</div>
-                                <div className="page-desc">Select at least one job to begin planning.</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {activeSites.map((site) => (
-                                    <div key={site.id} className="labour-row">
-                                        <div>
-                                            <div className="job-client">{site.projectName}</div>
-                                            <div className="job-addr">{site.builderName}</div>
-                                        </div>
+                                    <div className="rostering-plan-actions">
                                         <input
                                             className="module-number-input"
                                             type="number"
@@ -274,21 +254,80 @@ export default function ESSRosteringPage({ user }) {
                                             value={requiredMenBySite[site.id] ?? 0}
                                             onChange={(e) => setRequiredMen(site.id, e.target.value)}
                                         />
+                                        <button
+                                            type="button"
+                                            className="rostering-remove-btn"
+                                            onClick={() => removeActiveSite(site.id)}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {error ? <div className="module-error" style={{ marginTop: 12 }}>{error}</div> : null}
+
+                    <div style={{ marginTop: 18 }}>
+                        <button className="dev-btn" onClick={savePlan} disabled={saving || !isSupervisor}>
+                            {saving ? 'Developing...' : 'Develop Rostering Tree'}
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            {showJobPicker ? (
+                <div className="module-modal-backdrop" onClick={() => setShowJobPicker(false)}>
+                    <div className="module-modal rostering-job-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Add Active Jobs</h3>
+                            <button className="nav-drawer-close" onClick={() => setShowJobPicker(false)}>×</button>
+                        </div>
+                        <div className="rostering-job-modal-body">
+                            {groupedSites.length === 0 ? <div className="module-empty-inline">No projects available.</div> : null}
+                            <div className="scroll-area rostering-job-picker-scroll">
+                                {groupedSites.map((group) => (
+                                    <div key={group.builderId} className="client-group">
+                                        <div className="client-header">
+                                            <div className="client-name">{group.builderName}</div>
+                                        </div>
+                                        <div className="module-check-list">
+                                            {group.sites.map((site) => {
+                                                const selected = pickerSiteIds.includes(site.id);
+                                                return (
+                                                    <button
+                                                        key={site.id}
+                                                        type="button"
+                                                        className={`job-card ${selected ? 'selected' : ''}`}
+                                                        onClick={() => togglePickerSite(site.id)}
+                                                    >
+                                                        <div>
+                                                            <div className="job-client">{site.projectName}</div>
+                                                            <div className="job-addr">{site.builderName}</div>
+                                                        </div>
+                                                        <span className={`badge ${selected ? 'badge-count' : 'badge-standby'}`}>
+                                                            {selected ? 'On' : 'Add'}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                        )}
-
-                        {error ? <div className="module-error" style={{ marginTop: 12 }}>{error}</div> : null}
-
-                        <div style={{ marginTop: 18 }}>
-                            <button className="dev-btn" onClick={savePlan} disabled={saving || !isSupervisor}>
-                                {saving ? 'Developing...' : 'Develop Rostering Tree'}
+                        </div>
+                        <div className="module-form-actions">
+                            <button type="button" className="module-secondary-btn" onClick={() => setShowJobPicker(false)}>
+                                Cancel
+                            </button>
+                            <button type="button" className="module-primary-btn" onClick={confirmJobPicker}>
+                                Add Selected Jobs
                             </button>
                         </div>
-                    </section>
+                    </div>
                 </div>
-            </div>
+            ) : null}
         </div>
     );
 }
