@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI } from '../services/api';
 
-const BOARD_WIDTH = 1500;
-const BOARD_HEIGHT = 880;
+const BOARD_WIDTH = 5000;
+const BOARD_HEIGHT = 5000;
 const LEADING_HAND_WIDTH = 280;
 const LEADING_HAND_HEIGHT = 140;
 const EMPLOYEE_WIDTH = 220;
@@ -83,6 +83,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const [search, setSearch] = useState('');
     const [scale, setScale] = useState(1);
     const [hoveredLineId, setHoveredLineId] = useState(null);
+    const [pan, setPan] = useState({ x: -1750, y: -2060 });
 
     useEffect(() => {
         let active = true;
@@ -141,10 +142,17 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 setPositions(prev => ({
                     ...prev,
                     [activeDrag.id]: {
-                        x: clamp(boardX - activeDrag.offsetX, 16, BOARD_WIDTH - width - 16),
-                        y: clamp(boardY - activeDrag.offsetY, 16, BOARD_HEIGHT - height - 16)
+                        x: boardX - activeDrag.offsetX,
+                        y: boardY - activeDrag.offsetY
                     }
                 }));
+            }
+
+            if (activeDrag?.id === 'pan') {
+                setPan({
+                    x: activeDrag.originX + (event.clientX - activeDrag.startX),
+                    y: activeDrag.originY + (event.clientY - activeDrag.startY)
+                });
             }
 
             if (connectionDraft) {
@@ -230,6 +238,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                     id: item.employeeId,
                     employeeId: item.employeeId,
                     tone: item.relationshipType,
+                    hitTone: item.relationshipType,
                     d: makeCurve(source, target)
                 };
             })
@@ -243,6 +252,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                         id: 'draft',
                         employeeId: connectionDraft.employeeId,
                         tone: 'draft',
+                        hitTone: 'draft',
                         d: makeCurve(cardPortPosition(employeePosition, connectionDraft.side), connectionDraft.target)
                     });
                 }
@@ -252,6 +262,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                     id: 'draft',
                     employeeId: null,
                     tone: 'draft',
+                    hitTone: 'draft',
                     d: makeCurve(connectionDraft.origin, connectionDraft.target)
                 });
             }
@@ -286,8 +297,8 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             ...prev,
             [employeeId]: contextMenu
                 ? {
-                    x: clamp(contextMenu.x - EMPLOYEE_WIDTH / 2, 16, BOARD_WIDTH - EMPLOYEE_WIDTH - 16),
-                    y: clamp(contextMenu.y - EMPLOYEE_HEIGHT / 2, 16, BOARD_HEIGHT - EMPLOYEE_HEIGHT - 16)
+                    x: contextMenu.x - EMPLOYEE_WIDTH / 2,
+                    y: contextMenu.y - EMPLOYEE_HEIGHT / 2
                 }
                 : { x: 430, y: 620 }
         }));
@@ -359,14 +370,28 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
         const rect = boardRef.current.getBoundingClientRect();
         setContextMenu({
-            x: clamp((event.clientX - rect.left) / scale, 40, BOARD_WIDTH - 320),
-            y: clamp((event.clientY - rect.top) / scale, 40, BOARD_HEIGHT - 220)
+            x: (event.clientX - rect.left) / scale,
+            y: (event.clientY - rect.top) / scale
         });
     };
 
     const handleWheel = (event) => {
         event.preventDefault();
         setScale(prev => clamp(prev + (event.deltaY > 0 ? -0.08 : 0.08), 0.65, 1.6));
+    };
+
+    const handleViewportPointerDown = (event) => {
+        if (event.button !== 1) {
+            return;
+        }
+        event.preventDefault();
+        setActiveDrag({
+            id: 'pan',
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: pan.x,
+            originY: pan.y
+        });
     };
 
     return (
@@ -378,25 +403,32 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 onContextMenu={openContextMenu}
                 onClick={() => setContextMenu(null)}
                 onWheel={handleWheel}
+                onPointerDown={handleViewportPointerDown}
             >
                 <div
                     ref={boardRef}
                     className="lh-board-stage"
-                    style={{ transform: `scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
+                    style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, width: BOARD_WIDTH, height: BOARD_HEIGHT }}
                 >
                     <div className="lh-board-grid" />
 
                     <svg className="lh-board-lines" viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`} preserveAspectRatio="none">
                         {renderedLines.map(line => (
-                            <path
-                                key={line.id}
-                                d={line.d}
-                                className={`lh-board-line lh-board-line-${line.tone} ${hoveredLineId === line.id ? 'is-hovered' : ''}`}
-                                onMouseEnter={() => line.tone !== 'draft' && setHoveredLineId(line.id)}
-                                onMouseLeave={() => line.tone !== 'draft' && setHoveredLineId(prev => prev === line.id ? null : prev)}
-                                onClick={() => line.tone !== 'draft' && removeRelationship(line.employeeId)}
-                                style={{ pointerEvents: line.tone === 'draft' ? 'none' : 'stroke' }}
-                            />
+                            <g key={line.id}>
+                                <path
+                                    d={line.d}
+                                    className={`lh-board-line-hit ${line.tone === 'draft' ? 'draft' : ''}`}
+                                    onMouseEnter={() => line.tone !== 'draft' && setHoveredLineId(line.id)}
+                                    onMouseLeave={() => line.tone !== 'draft' && setHoveredLineId(prev => prev === line.id ? null : prev)}
+                                    onClick={() => line.tone !== 'draft' && removeRelationship(line.employeeId)}
+                                    style={{ pointerEvents: line.tone === 'draft' ? 'none' : 'stroke' }}
+                                />
+                                <path
+                                    d={line.d}
+                                    className={`lh-board-line lh-board-line-${line.tone} ${hoveredLineId === line.id ? 'is-hovered' : ''}`}
+                                    style={{ pointerEvents: 'none' }}
+                                />
+                            </g>
                         ))}
                     </svg>
 

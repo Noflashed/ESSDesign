@@ -650,15 +650,14 @@ body {
     height: 100%;
     overflow: hidden;
     background: #161618;
+    cursor: default;
 }
 
 .lh-board-stage {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 0;
+    left: 0;
     transform-origin: top left;
-    margin-left: -750px;
-    margin-top: -440px;
 }
 
 .lh-board-grid {
@@ -684,6 +683,17 @@ body {
     stroke-width: 2.5;
     stroke-dasharray: 8 7;
     transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.lh-board-line-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18;
+    cursor: pointer;
+}
+
+.lh-board-line-hit.draft {
+    cursor: default;
 }
 
 .lh-board-line-bad {
@@ -752,13 +762,13 @@ body {
 }
 
 .lh-leading-port {
-    width: 4px;
-    height: 4px;
+    width: 12px;
+    height: 12px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.98);
     background: #fff;
     cursor: pointer;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
     padding: 0;
 }
 
@@ -808,22 +818,22 @@ body {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 4px;
-    height: 4px;
+    width: 12px;
+    height: 12px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.98);
     background: #fff;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
     cursor: crosshair;
     padding: 0;
 }
 
 .lh-port-left {
-    left: -2px;
+    left: -6px;
 }
 
 .lh-port-right {
-    right: -2px;
+    right: -6px;
 }
 
 .lh-board-context-menu {
