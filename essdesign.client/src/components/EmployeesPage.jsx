@@ -362,6 +362,9 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                                 <span className="employee-status-dot employee-status-dot-phone" />
                                                 Contact Ready
                                             </div>
+                                            {!employee.verified && employee.inviteSentAt ? (
+                                                <div className="employee-status-pill employee-status-pill-invited">Invited</div>
+                                            ) : null}
                                             {employee.verified ? (
                                                 <div className="employee-status-pill employee-status-pill-verified">Verified</div>
                                             ) : null}
