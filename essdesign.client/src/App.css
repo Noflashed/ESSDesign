@@ -2187,9 +2187,9 @@ body {
 .rostering-hero {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.9fr);
-    gap: 24px;
-    padding: 28px;
-    border-radius: 28px;
+    gap: 18px;
+    padding: 20px 22px;
+    border-radius: 22px;
     background:
         radial-gradient(circle at top right, rgba(249, 115, 22, 0.16), transparent 30%),
         linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,252,0.94));
@@ -2216,30 +2216,29 @@ body {
 }
 
 .rostering-hero-copy h2 {
-    margin: 12px 0 14px;
-    font-size: 42px;
+    margin: 8px 0 10px;
+    font-size: 32px;
     line-height: 1;
     color: var(--text-primary);
 }
 
 .rostering-hero-copy p {
-    max-width: 720px;
     color: var(--text-secondary);
-    font-size: 16px;
-    line-height: 1.7;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 .rostering-hero-stats {
     display: grid;
-    gap: 14px;
+    gap: 10px;
 }
 
 .rostering-stat-card {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 18px 20px;
-    border-radius: 22px;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 16px;
     background: rgba(255,255,255,0.74);
     border: 1px solid rgba(148, 163, 184, 0.18);
 }
@@ -2258,23 +2257,23 @@ body {
 
 .rostering-stat-card strong {
     color: var(--text-primary);
-    font-size: 28px;
+    font-size: 22px;
     line-height: 1;
 }
 
 .rostering-layout {
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
-    gap: 24px;
-    margin-top: 24px;
+    gap: 18px;
+    margin-top: 18px;
 }
 
 .rostering-panel {
-    border-radius: 28px;
+    border-radius: 20px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
-    padding: 24px;
+    padding: 18px;
 }
 
 [data-theme='dark'] .rostering-panel {
@@ -2285,14 +2284,14 @@ body {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 22px;
+    gap: 14px;
+    margin-bottom: 16px;
 }
 
 .rostering-panel-head h3 {
-    margin: 8px 0 0;
+    margin: 6px 0 0;
     color: var(--text-primary);
-    font-size: 26px;
+    font-size: 22px;
     line-height: 1.1;
 }
 
@@ -2303,18 +2302,18 @@ body {
 .rostering-builder-columns {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 18px;
+    gap: 14px;
 }
 
 .rostering-builder-card {
-    border-radius: 22px;
+    border-radius: 16px;
     border: 1px solid var(--border-color);
     background: linear-gradient(180deg, rgba(248,250,252,0.86), rgba(255,255,255,0.98));
-    padding: 18px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    min-height: 320px;
+    gap: 12px;
+    min-height: 0;
 }
 
 [data-theme='dark'] .rostering-builder-card {
@@ -2331,20 +2330,20 @@ body {
 .rostering-builder-head h4 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 18px;
+    font-size: 16px;
 }
 
 .rostering-site-list {
     display: grid;
-    gap: 12px;
+    gap: 10px;
 }
 
 .rostering-site-card {
     border: 1px solid rgba(148, 163, 184, 0.18);
     background: rgba(255,255,255,0.9);
     color: var(--text-primary);
-    border-radius: 18px;
-    padding: 14px;
+    border-radius: 14px;
+    padding: 12px;
     text-align: left;
     cursor: pointer;
     transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -2378,7 +2377,7 @@ body {
 .rostering-site-name,
 .rostering-demand-title {
     color: var(--text-primary);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     line-height: 1.3;
 }
@@ -2432,8 +2431,8 @@ body {
 
 .rostering-empty-state {
     border: 1px dashed var(--border-color);
-    border-radius: 24px;
-    padding: 32px 24px;
+    border-radius: 18px;
+    padding: 20px 18px;
     text-align: center;
     background: rgba(248,250,252,0.58);
 }
@@ -2444,28 +2443,22 @@ body {
 
 .rostering-empty-title {
     color: var(--text-primary);
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
-    margin-bottom: 8px;
-}
-
-.rostering-empty-state p {
-    color: var(--text-secondary);
-    line-height: 1.6;
 }
 
 .rostering-demand-grid {
     display: grid;
-    gap: 14px;
+    gap: 10px;
 }
 
 .rostering-demand-card {
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--border-color);
     background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.9));
-    padding: 18px;
+    padding: 14px;
     display: grid;
-    gap: 16px;
+    gap: 12px;
 }
 
 [data-theme='dark'] .rostering-demand-card {
@@ -2486,20 +2479,20 @@ body {
 }
 
 .rostering-demand-input {
-    width: 110px;
+    width: 92px;
     border: 1px solid var(--border-color);
-    border-radius: 14px;
-    padding: 12px 14px;
+    border-radius: 12px;
+    padding: 10px 12px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     text-align: center;
 }
 
 .rostering-actions {
-    margin-top: 20px;
-    padding-top: 18px;
+    margin-top: 14px;
+    padding-top: 14px;
     border-top: 1px solid var(--border-color);
 }
 
@@ -2514,7 +2507,7 @@ body {
 }
 
 .rostering-action-btn {
-    min-width: 240px;
+    min-width: 210px;
 }
 
 .web-landing-page {

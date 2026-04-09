@@ -152,10 +152,7 @@ export default function ESSRosteringPage({ user }) {
                     <div className="rostering-hero-copy">
                         <div className="rostering-eyebrow">ESS Workforce Planning</div>
                         <h2>ESS Rostering</h2>
-                        <p>
-                            Build a clearer site coverage plan with an interface that shows active jobs,
-                            labour demand, and the current day plan in one place.
-                        </p>
+                        <p>Set active jobs and crew targets for the day.</p>
                     </div>
 
                     <div className="rostering-hero-stats">
@@ -249,7 +246,6 @@ export default function ESSRosteringPage({ user }) {
                         {activeSites.length === 0 ? (
                             <div className="rostering-empty-state">
                                 <div className="rostering-empty-title">No active jobs selected</div>
-                                <p>Select at least one job from the left panel to start building the roster tree.</p>
                             </div>
                         ) : (
                             <div className="rostering-demand-grid">
@@ -285,7 +281,7 @@ export default function ESSRosteringPage({ user }) {
                         <div className="rostering-actions">
                             <div className="rostering-actions-copy">
                                 <strong>Planning Summary</strong>
-                                <span>{formatSiteCountLabel(activeSiteIds.length)} selected with {totalRequiredMen} workers required.</span>
+                                <span>{activeSiteIds.length} jobs, {totalRequiredMen} crew</span>
                             </div>
                             <button className="module-primary-btn rostering-action-btn" onClick={savePlan} disabled={saving || !isSupervisor}>
                                 {saving ? 'Developing...' : 'Develop Rostering Tree'}
