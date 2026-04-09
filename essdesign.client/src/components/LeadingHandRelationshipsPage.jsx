@@ -46,6 +46,8 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, o
             <button className="lh-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(employee.id); }}>×</button>
             <button
                 className="lh-port lh-port-left"
+                data-employee-port="left"
+                data-employee-id={employee.id}
                 onPointerDown={(event) => {
                     event.stopPropagation();
                     onStartConnection(event, employee.id, 'left');
@@ -53,6 +55,8 @@ function EmployeeCard({ employee, position, selected, onPointerDown, onRemove, o
             />
             <button
                 className="lh-port lh-port-right"
+                data-employee-port="right"
+                data-employee-id={employee.id}
                 onPointerDown={(event) => {
                     event.stopPropagation();
                     onStartConnection(event, employee.id, 'right');
@@ -78,6 +82,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
     const [contextMenu, setContextMenu] = useState(null);
     const [search, setSearch] = useState('');
     const [scale, setScale] = useState(1);
+    const [hoveredLineId, setHoveredLineId] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -151,8 +156,15 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             if (connectionDraft) {
                 const anchor = event.target?.closest?.('[data-leading-hand-anchor]');
                 const relationshipType = anchor?.getAttribute('data-leading-hand-anchor');
-                if (relationshipType === 'good' || relationshipType === 'bad') {
+                const employeePort = event.target?.closest?.('[data-employee-port]');
+                const targetEmployeeId = employeePort?.getAttribute('data-employee-id');
+
+                if (connectionDraft.sourceKind === 'employee' && (relationshipType === 'good' || relationshipType === 'bad')) {
                     await saveRelationship(connectionDraft.employeeId, relationshipType);
+                }
+
+                if (connectionDraft.sourceKind === 'leadingHand' && targetEmployeeId && connectionDraft.relationshipType) {
+                    await saveRelationship(targetEmployeeId, connectionDraft.relationshipType);
                 }
             }
             setActiveDrag(null);
@@ -216,6 +228,7 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 const target = leadingHandPortPosition(leadingPosition, item.relationshipType);
                 return {
                     id: item.employeeId,
+                    employeeId: item.employeeId,
                     tone: item.relationshipType,
                     d: makeCurve(source, target)
                 };
@@ -223,12 +236,23 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
             .filter(Boolean);
 
         if (connectionDraft) {
-            const employeePosition = positions[connectionDraft.employeeId];
-            if (employeePosition) {
+            if (connectionDraft.sourceKind === 'employee') {
+                const employeePosition = positions[connectionDraft.employeeId];
+                if (employeePosition) {
+                    lines.push({
+                        id: 'draft',
+                        employeeId: connectionDraft.employeeId,
+                        tone: 'draft',
+                        d: makeCurve(cardPortPosition(employeePosition, connectionDraft.side), connectionDraft.target)
+                    });
+                }
+            }
+            if (connectionDraft.sourceKind === 'leadingHand' && connectionDraft.origin) {
                 lines.push({
                     id: 'draft',
+                    employeeId: null,
                     tone: 'draft',
-                    d: makeCurve(cardPortPosition(employeePosition, connectionDraft.side), connectionDraft.target)
+                    d: makeCurve(connectionDraft.origin, connectionDraft.target)
                 });
             }
         }
@@ -299,8 +323,28 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
         const rect = boardRef.current.getBoundingClientRect();
         setConnectionDraft({
+            sourceKind: 'employee',
             employeeId,
             side,
+            target: {
+                x: (event.clientX - rect.left) / scale,
+                y: (event.clientY - rect.top) / scale
+            }
+        });
+    };
+
+    const startLeadingHandConnection = (event, relationshipType) => {
+        if (!boardRef.current) {
+            return;
+        }
+        const rect = boardRef.current.getBoundingClientRect();
+        const leadingPosition = positions.leadingHand || defaultLeadingHandPosition();
+        setConnectionDraft({
+            sourceKind: 'leadingHand',
+            relationshipType,
+            employeeId: null,
+            side: null,
+            origin: leadingHandPortPosition(leadingPosition, relationshipType),
             target: {
                 x: (event.clientX - rect.left) / scale,
                 y: (event.clientY - rect.top) / scale
@@ -344,7 +388,15 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
                     <svg className="lh-board-lines" viewBox={`0 0 ${BOARD_WIDTH} ${BOARD_HEIGHT}`} preserveAspectRatio="none">
                         {renderedLines.map(line => (
-                            <path key={line.id} d={line.d} className={`lh-board-line lh-board-line-${line.tone}`} />
+                            <path
+                                key={line.id}
+                                d={line.d}
+                                className={`lh-board-line lh-board-line-${line.tone} ${hoveredLineId === line.id ? 'is-hovered' : ''}`}
+                                onMouseEnter={() => line.tone !== 'draft' && setHoveredLineId(line.id)}
+                                onMouseLeave={() => line.tone !== 'draft' && setHoveredLineId(prev => prev === line.id ? null : prev)}
+                                onClick={() => line.tone !== 'draft' && removeRelationship(line.employeeId)}
+                                style={{ pointerEvents: line.tone === 'draft' ? 'none' : 'stroke' }}
+                            />
                         ))}
                     </svg>
 
@@ -357,12 +409,26 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                         <div className="lh-leading-sub">{resolvedLeadingHand.phoneNumber || 'No phone number'}</div>
 
                         <div className="lh-leading-port-group lh-leading-port-group-left">
-                            <button className="lh-leading-port" data-leading-hand-anchor="bad" />
+                            <button
+                                className="lh-leading-port"
+                                data-leading-hand-anchor="bad"
+                                onPointerDown={(event) => {
+                                    event.stopPropagation();
+                                    startLeadingHandConnection(event, 'bad');
+                                }}
+                            />
                             <span className="lh-leading-port-label">Bad</span>
                         </div>
                         <div className="lh-leading-port-group lh-leading-port-group-right">
                             <span className="lh-leading-port-label">Good</span>
-                            <button className="lh-leading-port" data-leading-hand-anchor="good" />
+                            <button
+                                className="lh-leading-port"
+                                data-leading-hand-anchor="good"
+                                onPointerDown={(event) => {
+                                    event.stopPropagation();
+                                    startLeadingHandConnection(event, 'good');
+                                }}
+                            />
                         </div>
                     </div>
 

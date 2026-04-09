@@ -683,6 +683,7 @@ body {
     fill: none;
     stroke-width: 2.5;
     stroke-dasharray: 8 7;
+    transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
 .lh-board-line-bad {
@@ -695,6 +696,11 @@ body {
 
 .lh-board-line-draft {
     stroke: rgba(255, 255, 255, 0.65);
+}
+
+.lh-board-line.is-hovered {
+    stroke: #ef4444;
+    stroke-width: 3.5;
 }
 
 .lh-leading-card,
@@ -746,13 +752,14 @@ body {
 }
 
 .lh-leading-port {
-    width: 8px;
-    height: 8px;
+    width: 4px;
+    height: 4px;
     border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.92);
+    border: 1px solid rgba(255,255,255,0.98);
     background: #fff;
     cursor: pointer;
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    padding: 0;
 }
 
 .lh-leading-port-label {
@@ -801,21 +808,22 @@ body {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 8px;
-    height: 8px;
+    width: 4px;
+    height: 4px;
     border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.92);
+    border: 1px solid rgba(255,255,255,0.98);
     background: #fff;
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
     cursor: crosshair;
+    padding: 0;
 }
 
 .lh-port-left {
-    left: -6px;
+    left: -2px;
 }
 
 .lh-port-right {
-    right: -6px;
+    right: -2px;
 }
 
 .lh-board-context-menu {
