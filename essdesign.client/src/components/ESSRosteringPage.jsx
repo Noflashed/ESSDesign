@@ -244,7 +244,6 @@ export default function ESSRosteringPage({ user }) {
                                 <div key={site.id} className="labour-row rostering-plan-row">
                                     <div>
                                         <div className="job-client">{site.projectName}</div>
-                                        <div className="job-addr">{site.builderName}</div>
                                     </div>
                                     <div className="rostering-plan-actions">
                                         <input
