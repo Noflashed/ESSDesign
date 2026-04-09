@@ -6,10 +6,10 @@ function todayDateString() {
 }
 
 export default function ESSRosteringPage({ user }) {
-    const dateInputRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [showDateEditor, setShowDateEditor] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
     const [sites, setSites] = useState([]);
     const [planDate, setPlanDate] = useState(todayDateString());
@@ -147,39 +147,20 @@ export default function ESSRosteringPage({ user }) {
         return <div className="module-page"><div className="module-empty">Loading rostering data...</div></div>;
     }
 
-    const openDatePicker = () => {
-        const input = dateInputRef.current;
-        if (!input) {
-            return;
-        }
-
-        if (typeof input.showPicker === 'function') {
-            input.showPicker();
-            return;
-        }
-
-        input.focus();
-        input.click();
-    };
+    const openDatePicker = () => setShowDateEditor(true);
 
     return (
         <div className="module-page">
             <div className="module-shell rostering-shell">
                 <div className="page-header">
                     <div className="header-stats">
-                        <button type="button" className="stat-card stat-card-date" onClick={openDatePicker}>
-                            <div className="stat-label">Plan Date</div>
-                            <div className="stat-val stat-val-date">{planDate}</div>
-                            <div className="stat-sub">Click to change</div>
-                            <input
-                                ref={dateInputRef}
-                                type="date"
-                                value={planDate}
-                                onChange={(e) => setPlanDate(e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                tabIndex={-1}
-                            />
-                        </button>
+                        <div className="stat-card stat-card-date">
+                            <button type="button" className="stat-card-date-trigger" onClick={openDatePicker}>
+                                <div className="stat-label">Plan Date</div>
+                                <div className="stat-val stat-val-date">{planDate}</div>
+                                <div className="stat-sub">Click to change</div>
+                            </button>
+                        </div>
                         <div className="stat-card">
                             <div className="stat-label">Active Jobs</div>
                             <div className="stat-val">{activeSiteIds.length}</div>
@@ -286,6 +267,36 @@ export default function ESSRosteringPage({ user }) {
                     </section>
                 </div>
             </div>
+
+            {showDateEditor ? (
+                <div className="module-modal-backdrop" onClick={() => setShowDateEditor(false)}>
+                    <div className="module-modal compact" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Choose Plan Date</h3>
+                            <button className="nav-drawer-close" onClick={() => setShowDateEditor(false)}>×</button>
+                        </div>
+                        <div className="module-form">
+                            <div className="module-field">
+                                <label>Date</label>
+                                <input
+                                    type="date"
+                                    value={planDate}
+                                    onChange={(e) => setPlanDate(e.target.value)}
+                                />
+                            </div>
+                            <div className="module-form-actions">
+                                <button
+                                    type="button"
+                                    className="module-primary-btn"
+                                    onClick={() => setShowDateEditor(false)}
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }
