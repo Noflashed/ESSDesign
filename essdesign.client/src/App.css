@@ -2261,7 +2261,7 @@ body {
     background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94));
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 18px;
-    padding: 20px;
+    padding: 22px;
     box-shadow: 0 18px 38px rgba(15, 23, 42, 0.06);
 }
 
@@ -2278,14 +2278,15 @@ body {
 }
 
 .client-group {
-    margin-bottom: 18px;
+    margin-bottom: 22px;
+    padding-bottom: 4px;
 }
 
 .client-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .client-name {
@@ -2302,7 +2303,7 @@ body {
     justify-content: space-between;
     gap: 12px;
     width: 100%;
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-radius: 12px;
     border: 1px solid rgba(148, 163, 184, 0.16);
     background: rgba(255,255,255,0.9);
@@ -2334,12 +2335,14 @@ body {
     font-size: 13px;
     font-weight: 700;
     color: var(--text-primary);
+    line-height: 1.35;
 }
 
 .job-addr {
     font-size: 11px;
     color: var(--text-secondary);
-    margin-top: 1px;
+    margin-top: 4px;
+    line-height: 1.35;
 }
 
 .badge {
@@ -2416,7 +2419,7 @@ body {
 .scroll-area {
     max-height: 520px;
     overflow-y: auto;
-    padding-right: 2px;
+    padding-right: 6px;
 }
 
 .scroll-area::-webkit-scrollbar {

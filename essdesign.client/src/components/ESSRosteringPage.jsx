@@ -182,9 +182,6 @@ export default function ESSRosteringPage({ user }) {
                                 <div key={group.builderId} className="client-group">
                                     <div className="client-header">
                                         <div className="client-name">{group.builderName}</div>
-                                        <span className="badge-count">
-                                            {group.sites.filter((site) => activeSiteIds.includes(site.id)).length}
-                                        </span>
                                     </div>
 
                                     <div className="module-check-list">
