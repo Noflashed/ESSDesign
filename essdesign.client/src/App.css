@@ -1193,6 +1193,34 @@ body {
     cursor: pointer;
 }
 
+.rostering-tree-card {
+    cursor: grab;
+}
+
+.rostering-tree-builder-card {
+    min-height: 76px;
+    padding: 14px 16px;
+    background: rgba(41, 41, 45, 0.98);
+}
+
+.rostering-tree-project-card {
+    min-height: 122px;
+    gap: 8px;
+}
+
+.rostering-tree-inline-pill {
+    margin-bottom: 2px;
+}
+
+.rostering-tree-crew-card {
+    min-height: 82px;
+    background: rgba(28, 28, 31, 0.98);
+}
+
+.rostering-tree-back {
+    min-width: 150px;
+}
+
 .module-list-actions {
     display: flex;
     gap: 8px;

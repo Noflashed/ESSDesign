@@ -28,6 +28,9 @@ export default function WebNavDrawer({
         if (itemKey === 'safety') {
             return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
         }
+        if (itemKey === 'rostering') {
+            return currentPage === 'rostering' || currentPage === 'rostering-tree';
+        }
         return currentPage === itemKey;
     };
 

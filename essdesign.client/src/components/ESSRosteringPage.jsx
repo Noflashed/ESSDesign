@@ -5,7 +5,7 @@ function todayDateString() {
     return new Date().toISOString().slice(0, 10);
 }
 
-export default function ESSRosteringPage({ user }) {
+export default function ESSRosteringPage({ user, onViewTree }) {
     const dateInputRef = useRef(null);
     const hydratedRef = useRef(false);
     const dirtyRef = useRef(false);
@@ -14,6 +14,7 @@ export default function ESSRosteringPage({ user }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [showJobPicker, setShowJobPicker] = useState(false);
+    const [hasSavedPlan, setHasSavedPlan] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
     const [sites, setSites] = useState([]);
     const [planDate, setPlanDate] = useState(todayDateString());
@@ -25,11 +26,13 @@ export default function ESSRosteringPage({ user }) {
         if (plan) {
             setActiveSiteIds(plan.activeSiteIds || []);
             setRequiredMenBySite(plan.requiredMenBySite || {});
+            setHasSavedPlan((plan.activeSiteIds || []).length > 0);
             return;
         }
 
         setActiveSiteIds([]);
         setRequiredMenBySite({});
+        setHasSavedPlan(false);
     };
 
     const buildPlanSnapshot = (date, siteIds, menMap) => JSON.stringify({
@@ -203,6 +206,7 @@ export default function ESSRosteringPage({ user }) {
             ),
             updatedByUserId: userIdToSave
         });
+        setHasSavedPlan(siteIdsToSave.filter(Boolean).length > 0);
     };
 
     const handlePlanDateChange = async (nextDate) => {
@@ -426,6 +430,17 @@ export default function ESSRosteringPage({ user }) {
                             {saving ? 'Saving...' : 'Develop Rostering Tree'}
                         </button>
                     </div>
+                    {hasSavedPlan ? (
+                        <div style={{ marginTop: 10 }}>
+                            <button
+                                type="button"
+                                className="module-secondary-btn"
+                                onClick={() => onViewTree?.(planDate)}
+                            >
+                                View Rostering Tree
+                            </button>
+                        </div>
+                    ) : null}
                 </section>
             </div>
 

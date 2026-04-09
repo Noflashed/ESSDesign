@@ -14,6 +14,7 @@ import WebSafetySwmsPage from './components/WebSafetySwmsPage';
 import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
 import SiteInformationPage from './components/SiteInformationPage';
 import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsPage';
+import RosteringTreePage from './components/RosteringTreePage';
 import EmployeePortalPage from './components/EmployeePortalPage';
 import WebLandingPage from './components/WebLandingPage';
 import { ToastProvider } from './components/Toast';
@@ -290,6 +291,7 @@ function App() {
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
+    const [rosteringContext, setRosteringContext] = useState({ planDate: null });
     const isEmployeePortalRole = user?.role === 'general_scaffolder' || user?.role === 'leading_hand';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
@@ -307,7 +309,7 @@ function App() {
     const avatarCandidates = buildAvatarCandidates(user);
     const [avatarIndex, setAvatarIndex] = useState(0);
 
-    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }) => {
+    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
         const url = new URL(window.location.href);
         if (folderId) {
             url.searchParams.set('folder', folderId);
@@ -339,23 +341,31 @@ function App() {
             url.searchParams.delete('leadingHand');
         }
 
+        if (nextRosteringContext.planDate) {
+            url.searchParams.set('rosterDate', nextRosteringContext.planDate);
+        } else {
+            url.searchParams.delete('rosterDate');
+        }
+
         return `${url.pathname}${url.search}`;
     }, []);
 
-    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, { pushHistory = true } = {}) => {
+    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' ? page : 'employee-home')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
         setEmployeeContext(nextEmployeeContext);
+        setRosteringContext(nextRosteringContext);
         const state = {
             folderId: selectedFolderId,
             page: resolvedPage,
             safetyContext: nextSafetyContext,
-            employeeContext: nextEmployeeContext
+            employeeContext: nextEmployeeContext,
+            rosteringContext: nextRosteringContext
         };
-        const targetUrl = buildAppUrl(selectedFolderId, resolvedPage, nextSafetyContext, nextEmployeeContext);
+        const targetUrl = buildAppUrl(selectedFolderId, resolvedPage, nextSafetyContext, nextEmployeeContext, nextRosteringContext);
         if (pushHistory) {
             window.history.pushState(state, '', targetUrl);
         } else {
@@ -595,7 +605,7 @@ function App() {
 
     const handleLoginSuccess = () => {
         updateAuthView('landing');
-        applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { pushHistory: false });
+        applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
         checkAuth();
     };
 
@@ -831,6 +841,7 @@ function App() {
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
         const leadingHandFromUrl = urlParams.get('leadingHand');
+        const rosterDateFromUrl = urlParams.get('rosterDate');
         const initialSafetyContext = {
             builder: builderFromUrl ? { id: builderFromUrl } : null,
             project: projectFromUrl ? { id: projectFromUrl } : null
@@ -838,14 +849,18 @@ function App() {
         const initialEmployeeContext = {
             leadingHand: leadingHandFromUrl ? { id: leadingHandFromUrl } : null
         };
+        const initialRosteringContext = {
+            planDate: rosterDateFromUrl || null
+        };
 
         setCurrentPage(pageFromUrl);
         setSafetyContext(initialSafetyContext);
         setEmployeeContext(initialEmployeeContext);
+        setRosteringContext(initialRosteringContext);
         window.history.replaceState(
-            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext, employeeContext: initialEmployeeContext },
+            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext, employeeContext: initialEmployeeContext, rosteringContext: initialRosteringContext },
             '',
-            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext, initialEmployeeContext)
+            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext, initialEmployeeContext, initialRosteringContext)
         );
 
         const handlePopState = (e) => {
@@ -853,9 +868,11 @@ function App() {
             const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : 'landing');
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
+            const nextRosteringContext = e.state?.rosteringContext ?? { planDate: null };
             setCurrentPage(page);
             setSafetyContext(nextSafetyContext);
             setEmployeeContext(nextEmployeeContext);
+            setRosteringContext(nextRosteringContext);
             handleFolderSelect(folderId, { pushHistory: false });
         };
 
@@ -963,7 +980,15 @@ function App() {
             );
         }
         if (currentPage === 'rostering') {
-            return <ESSRosteringPage user={user} />;
+            return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;
+        }
+        if (currentPage === 'rostering-tree') {
+            return (
+                <RosteringTreePage
+                    planDate={rosteringContext.planDate}
+                    onBack={() => window.history.back()}
+                />
+            );
         }
         if (currentPage === 'employees') {
             return <EmployeesPage onOpenLeadingHandRelationships={(leadingHand) => applyPageState('employee-relationships', { builder: null, project: null }, { leadingHand })} />;
