@@ -140,19 +140,20 @@ function SignUp({
                         </div>
                     )}
 
-                    <div className="form-field">
-                        <label>Email</label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            placeholder="you@example.com"
-                            required
-                            readOnly={isEmployeeInvite}
-                            autoFocus={!isEmployeeInvite}
-                        />
-                    </div>
+                    {!isEmployeeInvite ? (
+                        <div className="form-field">
+                            <label>Email</label>
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                placeholder="you@example.com"
+                                required
+                                autoFocus
+                            />
+                        </div>
+                    ) : null}
 
                     <div className="form-field">
                         <label>Password</label>
