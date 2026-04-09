@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 function todayDateString() {
@@ -9,7 +9,6 @@ export default function ESSRosteringPage({ user }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const [showDateEditor, setShowDateEditor] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
     const [sites, setSites] = useState([]);
     const [planDate, setPlanDate] = useState(todayDateString());
@@ -147,19 +146,24 @@ export default function ESSRosteringPage({ user }) {
         return <div className="module-page"><div className="module-empty">Loading rostering data...</div></div>;
     }
 
-    const openDatePicker = () => setShowDateEditor(true);
-
     return (
         <div className="module-page">
             <div className="module-shell rostering-shell">
                 <div className="page-header">
                     <div className="header-stats">
                         <div className="stat-card stat-card-date">
-                            <button type="button" className="stat-card-date-trigger" onClick={openDatePicker}>
+                            <div className="stat-card-date-display">
                                 <div className="stat-label">Plan Date</div>
                                 <div className="stat-val stat-val-date">{planDate}</div>
                                 <div className="stat-sub">Click to change</div>
-                            </button>
+                            </div>
+                            <input
+                                className="stat-card-date-input"
+                                type="date"
+                                value={planDate}
+                                onChange={(e) => setPlanDate(e.target.value)}
+                                aria-label="Choose plan date"
+                            />
                         </div>
                         <div className="stat-card">
                             <div className="stat-label">Active Jobs</div>
@@ -267,36 +271,6 @@ export default function ESSRosteringPage({ user }) {
                     </section>
                 </div>
             </div>
-
-            {showDateEditor ? (
-                <div className="module-modal-backdrop" onClick={() => setShowDateEditor(false)}>
-                    <div className="module-modal compact" onClick={(e) => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>Choose Plan Date</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowDateEditor(false)}>×</button>
-                        </div>
-                        <div className="module-form">
-                            <div className="module-field">
-                                <label>Date</label>
-                                <input
-                                    type="date"
-                                    value={planDate}
-                                    onChange={(e) => setPlanDate(e.target.value)}
-                                />
-                            </div>
-                            <div className="module-form-actions">
-                                <button
-                                    type="button"
-                                    className="module-primary-btn"
-                                    onClick={() => setShowDateEditor(false)}
-                                >
-                                    Done
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
         </div>
     );
 }

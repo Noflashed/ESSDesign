@@ -2243,14 +2243,18 @@ button.stat-card {
     position: relative;
 }
 
-.stat-card-date-trigger {
-    border: none;
-    background: transparent;
+.stat-card-date-display {
+    pointer-events: none;
+}
+
+.stat-card-date-input {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    text-align: left;
+    height: 100%;
+    opacity: 0;
     cursor: pointer;
-    padding: 0;
-    color: inherit;
+    border: none;
 }
 
 .stat-val-date {
