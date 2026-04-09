@@ -14,6 +14,7 @@ import WebSafetySwmsPage from './components/WebSafetySwmsPage';
 import WebSafetyScaffTagsPage from './components/WebSafetyScaffTagsPage';
 import SiteInformationPage from './components/SiteInformationPage';
 import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsPage';
+import EmployeePortalPage from './components/EmployeePortalPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -280,6 +281,16 @@ function App() {
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
+    const isEmployeePortalRole = user?.role === 'general_scaffolder' || user?.role === 'leading_hand';
+    const allowedNavItems = isEmployeePortalRole
+        ? [{ key: 'employee-home', label: 'ESS App' }]
+        : [
+            { key: 'design', label: 'ESS Design' },
+            { key: 'site-information', label: 'Site Registry' },
+            { key: 'safety', label: 'ESS Safety' },
+            { key: 'rostering', label: 'ESS Rostering' },
+            { key: 'employees', label: 'Employees' }
+        ];
     const showHeaderSearch = currentPage === 'design';
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
@@ -323,22 +334,23 @@ function App() {
     }, []);
 
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, { pushHistory = true } = {}) => {
-        setCurrentPage(page);
+        const resolvedPage = isEmployeePortalRole ? 'employee-home' : page;
+        setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
         setEmployeeContext(nextEmployeeContext);
         const state = {
             folderId: selectedFolderId,
-            page,
+            page: resolvedPage,
             safetyContext: nextSafetyContext,
             employeeContext: nextEmployeeContext
         };
-        const targetUrl = buildAppUrl(selectedFolderId, page, nextSafetyContext, nextEmployeeContext);
+        const targetUrl = buildAppUrl(selectedFolderId, resolvedPage, nextSafetyContext, nextEmployeeContext);
         if (pushHistory) {
             window.history.pushState(state, '', targetUrl);
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, selectedFolderId]);
+    }, [buildAppUrl, isEmployeePortalRole, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
@@ -391,12 +403,30 @@ function App() {
         }
     }, [showHeaderSearch]);
 
+    useEffect(() => {
+        if (!isEmployeePortalRole) {
+            return;
+        }
+
+        if (currentPage !== 'employee-home') {
+            applyPageState('employee-home', { builder: null, project: null }, { leadingHand: null }, { pushHistory: false });
+        }
+    }, [applyPageState, currentPage, isEmployeePortalRole]);
+
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
-        const emailFromUrl = new URLSearchParams(window.location.search).get('email') || '';
+        const authUrlParams = new URLSearchParams(window.location.search);
+        const emailFromUrl = authUrlParams.get('email') || '';
+        const firstNameFromUrl = authUrlParams.get('firstName') || '';
+        const lastNameFromUrl = authUrlParams.get('lastName') || '';
+        const employeeIdFromUrl = authUrlParams.get('employeeId') || '';
 
         if (callbackResult?.hasSession) {
-            updateAuthView('signup-confirmed', emailFromUrl);
+            updateAuthView('signup-confirmed', emailFromUrl, {
+                firstName: firstNameFromUrl,
+                lastName: lastNameFromUrl,
+                employeeId: employeeIdFromUrl
+            });
         }
 
         const authenticated = authAPI.isAuthenticated();
@@ -489,8 +519,11 @@ function App() {
         applyTheme(newTheme, true);
     };
 
-    const updateAuthView = (nextView, nextEmail = '') => {
+    const updateAuthView = (nextView, nextEmail = '', { firstName = null, lastName = null, employeeId = null } = {}) => {
         const url = new URL(window.location.href);
+        const resolvedFirstName = firstName ?? url.searchParams.get('firstName') ?? '';
+        const resolvedLastName = lastName ?? url.searchParams.get('lastName') ?? '';
+        const resolvedEmployeeId = employeeId ?? url.searchParams.get('employeeId') ?? '';
 
         if (nextView === 'signup') {
             url.searchParams.set('auth', 'signup');
@@ -499,12 +532,42 @@ function App() {
             } else {
                 url.searchParams.delete('email');
             }
+            if (resolvedFirstName) {
+                url.searchParams.set('firstName', resolvedFirstName);
+            } else {
+                url.searchParams.delete('firstName');
+            }
+            if (resolvedLastName) {
+                url.searchParams.set('lastName', resolvedLastName);
+            } else {
+                url.searchParams.delete('lastName');
+            }
+            if (resolvedEmployeeId) {
+                url.searchParams.set('employeeId', resolvedEmployeeId);
+            } else {
+                url.searchParams.delete('employeeId');
+            }
         } else if (nextView === 'signup-success' || nextView === 'signup-confirmed') {
             url.searchParams.set('auth', nextView);
             if (nextEmail) {
                 url.searchParams.set('email', nextEmail);
             } else {
                 url.searchParams.delete('email');
+            }
+            if (resolvedFirstName) {
+                url.searchParams.set('firstName', resolvedFirstName);
+            } else {
+                url.searchParams.delete('firstName');
+            }
+            if (resolvedLastName) {
+                url.searchParams.set('lastName', resolvedLastName);
+            } else {
+                url.searchParams.delete('lastName');
+            }
+            if (resolvedEmployeeId) {
+                url.searchParams.set('employeeId', resolvedEmployeeId);
+            } else {
+                url.searchParams.delete('employeeId');
             }
         } else {
             url.searchParams.delete('auth');
@@ -807,6 +870,14 @@ function App() {
     }, []);
     const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
+    const userTitle = user?.employeeTitle
+        || (user?.role === 'leading_hand'
+            ? 'Leading Hand'
+            : user?.role === 'general_scaffolder'
+                ? 'General Scaffolder'
+                : user?.role === 'admin'
+                    ? 'Admin'
+                    : 'Viewer');
     const userInitials = user?.fullName
         ? user.fullName
             .split(' ')
@@ -842,6 +913,10 @@ function App() {
     };
 
     const renderCurrentPage = () => {
+        if (isEmployeePortalRole) {
+            return <EmployeePortalPage user={user} />;
+        }
+
         if (currentPage === 'site-information') {
             return <SiteInformationPage />;
         }
@@ -1044,6 +1119,7 @@ function App() {
                     <WebNavDrawer
                         open={showNavDrawer}
                         currentPage={currentPage}
+                        items={allowedNavItems}
                         onToggle={() => setShowNavDrawer(prev => !prev)}
                         onClose={() => setShowNavDrawer(false)}
                         onSelect={(page) => {
@@ -1089,6 +1165,7 @@ function App() {
                                     <div className="user-menu-details">
                                         <div className="user-name">{userDisplayName}</div>
                                         <div className="user-email">{user?.email}</div>
+                                        <div className="user-title">{userTitle}</div>
                                     </div>
                                 </div>
                                 {isAdmin && (
@@ -1198,7 +1275,3 @@ function App() {
 }
 
 export default App;
-
-
-
-

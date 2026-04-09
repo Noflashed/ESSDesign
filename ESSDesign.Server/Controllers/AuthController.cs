@@ -79,11 +79,14 @@ namespace ESSDesign.Server.Controllers
 
                 var role = await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
 
+                var userInfo = BuildUserInfo(generatedLink, request.FullName, role);
+                await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(userInfo);
+
                 return Ok(new AuthResponse
                 {
                     AccessToken = string.Empty,
                     RefreshToken = string.Empty,
-                    User = BuildUserInfo(generatedLink, request.FullName, role)
+                    User = userInfo
                 });
             }
             catch (Exception ex)
@@ -120,11 +123,14 @@ namespace ESSDesign.Server.Controllers
                 var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
                 await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email ?? request.Email);
 
+                var userInfo = BuildUserInfo(session.User, fullName, role);
+                await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(userInfo);
+
                 return Ok(new AuthResponse
                 {
                     AccessToken = session.AccessToken ?? string.Empty,
                     RefreshToken = session.RefreshToken ?? string.Empty,
-                    User = BuildUserInfo(session.User, fullName, role)
+                    User = userInfo
                 });
             }
             catch (Exception ex)
@@ -320,6 +326,7 @@ namespace ESSDesign.Server.Controllers
                     session.User.FullName);
                 await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email);
 
+                await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(session.User);
                 return Ok(session);
             }
             catch (Exception ex)
@@ -343,6 +350,7 @@ namespace ESSDesign.Server.Controllers
                 await _supabaseService.UpsertUserNameAsync(user.Id, user.Email, user.FullName);
                 await _supabaseService.SyncEmployeeLinkForUserAsync(user.Id, user.Email);
 
+                await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(user);
                 return Ok(user);
             }
             catch (Exception ex)

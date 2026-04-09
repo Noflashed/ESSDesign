@@ -21,6 +21,18 @@ namespace ESSDesign.Server.Services
             public DateTime? VerifiedAt { get; set; }
         }
 
+        private sealed class EmployeeRoleRow
+        {
+            public Guid Id { get; set; }
+            public string? Email { get; set; }
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public string? PhoneNumber { get; set; }
+            public bool LeadingHand { get; set; }
+            public Guid? LinkedAuthUserId { get; set; }
+            public DateTime? VerifiedAt { get; set; }
+        }
+
         private sealed class AuthAdminUser
         {
             public string Id { get; set; } = string.Empty;
@@ -501,7 +513,10 @@ namespace ESSDesign.Server.Services
             var existing = response.Models.FirstOrDefault();
             if (existing != null)
             {
-                return NormalizeRole(existing.Role);
+                var storedRole = NormalizeRole(existing.Role);
+                return storedRole == AppRoles.Admin
+                    ? AppRoles.Admin
+                    : await GetEmployeeDerivedRoleAsync(normalizedUserId);
             }
 
             var now = DateTime.UtcNow;
@@ -515,7 +530,9 @@ namespace ESSDesign.Server.Services
             };
 
             await _supabase.From<UserRoleRecord>().Upsert(record);
-            return assignedRole;
+            return assignedRole == AppRoles.Admin
+                ? AppRoles.Admin
+                : await GetEmployeeDerivedRoleAsync(normalizedUserId);
         }
 
         public async Task<string> GetUserRoleAsync(string? userId)
@@ -533,15 +550,87 @@ namespace ESSDesign.Server.Services
                     .Get();
 
                 var existing = response.Models.FirstOrDefault();
-                return existing != null
-                    ? NormalizeRole(existing.Role)
-                    : await EnsureUserRoleAsync(normalizedUserId);
+                if (existing != null)
+                {
+                    var storedRole = NormalizeRole(existing.Role);
+                    return storedRole == AppRoles.Admin
+                        ? AppRoles.Admin
+                        : await GetEmployeeDerivedRoleAsync(normalizedUserId);
+                }
+
+                return await EnsureUserRoleAsync(normalizedUserId);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting role for user {UserId}", normalizedUserId);
                 throw;
             }
+        }
+
+        private async Task<string> GetEmployeeDerivedRoleAsync(string userId)
+        {
+            var employee = await GetLinkedEmployeeRoleInfoAsync(userId, null);
+            if (employee == null)
+            {
+                return AppRoles.Viewer;
+            }
+
+            return employee.LeadingHand
+                ? AppRoles.LeadingHand
+                : AppRoles.GeneralScaffolder;
+        }
+
+        private async Task<EmployeeRoleRow?> GetLinkedEmployeeRoleInfoAsync(string? userId, string? email)
+        {
+            if (TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                var linkedRows = await GetRestRowsAsync<EmployeeRoleRow>(
+                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&linked_auth_user_id=eq.{normalizedUserId}&limit=1");
+
+                var linkedEmployee = linkedRows.FirstOrDefault();
+                if (linkedEmployee != null)
+                {
+                    return linkedEmployee;
+                }
+            }
+
+            var normalizedEmail = email?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                return null;
+            }
+
+            var emailRows = await GetRestRowsAsync<EmployeeRoleRow>(
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&email=eq.{Uri.EscapeDataString(normalizedEmail)}&limit=1");
+
+            return emailRows.FirstOrDefault();
+        }
+
+        public async Task EnrichUserInfoWithEmployeeRoleAsync(UserInfo user)
+        {
+            if (user == null)
+            {
+                return;
+            }
+
+            var employee = await GetLinkedEmployeeRoleInfoAsync(user.Id, user.Email);
+            if (employee == null)
+            {
+                return;
+            }
+
+            user.EmployeeId = employee.Id;
+            user.EmployeeFirstName = employee.FirstName?.Trim();
+            user.EmployeeLastName = employee.LastName?.Trim();
+            user.EmployeePhoneNumber = employee.PhoneNumber?.Trim();
+            user.LeadingHand = employee.LeadingHand;
+
+            if (!string.Equals(user.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                user.Role = employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
+            }
+
+            user.EmployeeTitle = employee.LeadingHand ? "Leading Hand" : "General Scaffolder";
         }
 
         private async Task<Dictionary<string, string>> GetAllUserRolesAsync()

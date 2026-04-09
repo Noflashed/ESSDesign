@@ -21,7 +21,8 @@ export default function WebNavDrawer({
     currentPage,
     onToggle,
     onClose,
-    onSelect
+    onSelect,
+    items = MENU_ITEMS
 }) {
     const isActive = (itemKey) => {
         if (itemKey === 'safety') {
@@ -48,7 +49,7 @@ export default function WebNavDrawer({
                     <button className="nav-drawer-close" onClick={onClose} aria-label="Close navigation">×</button>
                 </div>
                 <div className="nav-drawer-list">
-                    {MENU_ITEMS.map(item => (
+                    {items.map(item => (
                         <button
                             key={item.key}
                             className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}

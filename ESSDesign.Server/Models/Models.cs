@@ -214,6 +214,8 @@ namespace ESSDesign.Server.Models
     {
         public const string Admin = "admin";
         public const string Viewer = "viewer";
+        public const string GeneralScaffolder = "general_scaffolder";
+        public const string LeadingHand = "leading_hand";
     }
 
     public class SignUpRequest
@@ -272,6 +274,12 @@ namespace ESSDesign.Server.Models
         public string FullName { get; set; } = string.Empty;
         public string? AvatarUrl { get; set; }
         public string Role { get; set; } = AppRoles.Viewer;
+        public Guid? EmployeeId { get; set; }
+        public string? EmployeeFirstName { get; set; }
+        public string? EmployeeLastName { get; set; }
+        public string? EmployeePhoneNumber { get; set; }
+        public string? EmployeeTitle { get; set; }
+        public bool LeadingHand { get; set; }
     }
 
     public class CreateUserNotificationRequest
