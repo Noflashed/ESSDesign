@@ -1,29 +1,45 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI } from '../services/api';
 
-function EmployeeNode({ employee, tone = 'neutral', draggable = false, onDragStart, onRemove }) {
+const CANVAS_WIDTH = 1500;
+const CANVAS_HEIGHT = 920;
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function makeDefaultPositions() {
+    return {
+        leadingHand: { x: 610, y: 280 },
+        badAnchor: { x: 570, y: 390 },
+        goodAnchor: { x: 880, y: 390 }
+    };
+}
+
+function EmployeeCard({ employee, selected, style, onPointerDown, onRemove }) {
     return (
         <div
-            className={`lh-schema-node lh-schema-node-${tone}`}
-            draggable={draggable}
-            onDragStart={onDragStart}
+            className={`lh-free-card ${selected ? 'selected' : ''}`}
+            style={style}
+            onPointerDown={onPointerDown}
         >
-            <div className="lh-schema-node-row"><span className="lh-schema-key">id</span><span className="lh-schema-value">{employee.id?.slice(0, 8)}</span></div>
-            <div className="lh-schema-node-row"><span className="lh-schema-key">name</span><span className="lh-schema-value">"{employee.firstName} {employee.lastName}"</span></div>
-            <div className="lh-schema-node-row"><span className="lh-schema-key">phone</span><span className="lh-schema-value">"{employee.phoneNumber || 'N/A'}"</span></div>
-            {onRemove ? (
-                <button className="lh-schema-remove" onClick={() => onRemove(employee.id)}>×</button>
-            ) : null}
+            <button className="lh-free-card-remove" onClick={(event) => { event.stopPropagation(); onRemove(employee.id); }}>×</button>
+            <div className="lh-free-card-name">{employee.firstName} {employee.lastName}</div>
+            <div className="lh-free-card-sub">{employee.phoneNumber || 'No phone number'}</div>
         </div>
     );
 }
 
 export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
+    const canvasRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [allEmployees, setAllEmployees] = useState([]);
     const [relationships, setRelationships] = useState([]);
+    const [positions, setPositions] = useState(makeDefaultPositions());
+    const [activeDrag, setActiveDrag] = useState(null);
+    const [contextMenu, setContextMenu] = useState(null);
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -38,6 +54,19 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
                 }
                 setAllEmployees(employeeRows);
                 setRelationships(relationshipRows);
+                setPositions(prev => {
+                    const next = { ...prev };
+                    relationshipRows.forEach((relationship, index) => {
+                        if (!next[relationship.employeeId]) {
+                            next[relationship.employeeId] = relationship.relationshipType === 'bad'
+                                ? { x: 160, y: 120 + index * 120 }
+                                : relationship.relationshipType === 'good'
+                                    ? { x: 1100, y: 120 + index * 120 }
+                                    : { x: 620 + (index % 2) * 220, y: 620 + Math.floor(index / 2) * 120 };
+                        }
+                    });
+                    return next;
+                });
             })
             .catch(err => {
                 if (active) {
@@ -55,6 +84,32 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         };
     }, [leadingHand.id]);
 
+    useEffect(() => {
+        const handleMove = (event) => {
+            if (!activeDrag || !canvasRef.current) {
+                return;
+            }
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = clamp(event.clientX - rect.left - activeDrag.offsetX, 24, CANVAS_WIDTH - 236);
+            const y = clamp(event.clientY - rect.top - activeDrag.offsetY, 24, CANVAS_HEIGHT - 116);
+            setPositions(prev => ({
+                ...prev,
+                [activeDrag.id]: { x, y }
+            }));
+        };
+
+        const handleUp = () => {
+            setActiveDrag(null);
+        };
+
+        window.addEventListener('pointermove', handleMove);
+        window.addEventListener('pointerup', handleUp);
+        return () => {
+            window.removeEventListener('pointermove', handleMove);
+            window.removeEventListener('pointerup', handleUp);
+        };
+    }, [activeDrag]);
+
     const employeeById = useMemo(
         () => Object.fromEntries(allEmployees.map(employee => [employee.id, employee])),
         [allEmployees]
@@ -62,19 +117,15 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
 
     const resolvedLeadingHand = employeeById[leadingHand.id] || leadingHand;
 
-    const relationshipGroups = useMemo(() => {
-        const mapRelationship = (relationshipType) =>
-            relationships
-                .filter(item => item.relationshipType === relationshipType)
-                .map(item => employeeById[item.employeeId])
-                .filter(Boolean);
-
-        return {
-            bad: mapRelationship('bad'),
-            neutral: mapRelationship('neutral'),
-            good: mapRelationship('good')
-        };
-    }, [employeeById, relationships]);
+    const relatedEmployees = useMemo(
+        () => relationships
+            .map(relationship => ({
+                ...relationship,
+                employee: employeeById[relationship.employeeId]
+            }))
+            .filter(item => item.employee),
+        [employeeById, relationships]
+    );
 
     const usedEmployeeIds = useMemo(
         () => new Set(relationships.map(item => item.employeeId)),
@@ -94,6 +145,35 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }).slice(0, 10);
     }, [allEmployees, leadingHand.id, search, usedEmployeeIds]);
 
+    const getAnchorPoint = (relationshipType) => {
+        if (relationshipType === 'bad') {
+            const bad = positions.badAnchor;
+            return { x: bad.x + 28, y: bad.y + 28 };
+        }
+        if (relationshipType === 'good') {
+            const good = positions.goodAnchor;
+            return { x: good.x + 28, y: good.y + 28 };
+        }
+        const center = positions.leadingHand;
+        return { x: center.x + 130, y: center.y + 180 };
+    };
+
+    const connectorPaths = relatedEmployees.map(item => {
+        const card = positions[item.employeeId];
+        if (!card) {
+            return null;
+        }
+        const source = getAnchorPoint(item.relationshipType);
+        const target = { x: card.x + 110, y: card.y + 44 };
+        const c1x = source.x + (target.x - source.x) * 0.35;
+        const c2x = source.x + (target.x - source.x) * 0.7;
+        return {
+            id: item.employeeId,
+            tone: item.relationshipType,
+            d: `M ${source.x} ${source.y} C ${c1x} ${source.y}, ${c2x} ${target.y}, ${target.x} ${target.y}`
+        };
+    }).filter(Boolean);
+
     const saveRelationship = async (employeeId, relationshipType) => {
         setSaving(true);
         setError('');
@@ -111,6 +191,19 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
     };
 
+    const addEmployee = async (employeeId) => {
+        await saveRelationship(employeeId, 'neutral');
+        setPositions(prev => ({
+            ...prev,
+            [employeeId]: contextMenu ? {
+                x: clamp(contextMenu.x - 110, 24, CANVAS_WIDTH - 236),
+                y: clamp(contextMenu.y - 44, 24, CANVAS_HEIGHT - 116)
+            } : { x: 640, y: 640 }
+        }));
+        setContextMenu(null);
+        setSearch('');
+    };
+
     const removeRelationship = async (employeeId) => {
         setSaving(true);
         setError('');
@@ -124,119 +217,135 @@ export default function LeadingHandRelationshipsPage({ leadingHand, onBack }) {
         }
     };
 
-    const addEmployee = async (employeeId) => {
-        await saveRelationship(employeeId, 'neutral');
-        setSearch('');
+    const startDrag = (id) => (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setActiveDrag({
+            id,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top
+        });
     };
 
-    const handleDrop = async (event, relationshipType) => {
+    const openContextMenu = (event) => {
         event.preventDefault();
-        const employeeId = event.dataTransfer.getData('text/plain');
-        if (!employeeId) {
+        if (!canvasRef.current) {
             return;
         }
-        await saveRelationship(employeeId, relationshipType);
+        const rect = canvasRef.current.getBoundingClientRect();
+        setContextMenu({
+            x: clamp(event.clientX - rect.left, 40, CANVAS_WIDTH - 320),
+            y: clamp(event.clientY - rect.top, 40, CANVAS_HEIGHT - 220)
+        });
     };
-
-    const allowDrop = (event) => {
-        event.preventDefault();
-    };
-
-    const renderNode = (employee, tone, relationType) => (
-        <div key={employee.id} className={`lh-schema-node-wrap lh-schema-node-wrap-${tone}`}>
-            <div className={`lh-schema-connector lh-schema-connector-${tone}`} />
-            <EmployeeNode
-                employee={employee}
-                tone={tone}
-                draggable
-                onDragStart={event => event.dataTransfer.setData('text/plain', employee.id)}
-                onRemove={() => removeRelationship(employee.id)}
-            />
-            {relationType ? <div className={`lh-schema-tag lh-schema-tag-${tone}`}>{relationType}</div> : null}
-        </div>
-    );
 
     return (
-        <div className="module-page lh-schema-page">
-            <div className="module-shell lh-schema-shell">
-                <div className="module-header lh-schema-header">
+        <div className="module-page lh-free-page">
+            <div className="module-shell lh-free-shell">
+                <div className="module-header lh-free-header">
                     <div>
                         <h2>Leading Hand Relationships</h2>
-                        <p>Schema map for {resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}</p>
+                        <p>Right click on the board to add an employee. Drag cards freely and connect them to good or bad.</p>
                     </div>
                     <button className="module-secondary-btn" onClick={onBack}>Back</button>
                 </div>
 
-                <div className="lh-schema-toolbar">
-                    <div className="module-field lh-schema-search-field">
-                        <label>Search ESS Employees</label>
-                        <input
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            placeholder="Search and add to the schema"
-                        />
-                    </div>
-                    <div className="lh-schema-search-results">
-                        {searchResults.map(employee => (
-                            <button
-                                key={employee.id}
-                                className="lh-schema-search-chip"
-                                onClick={() => addEmployee(employee.id)}
-                            >
-                                {employee.firstName} {employee.lastName}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 {error ? <div className="module-error">{error}</div> : null}
 
-                <div className="lh-schema-canvas">
-                    <div className="lh-schema-dot-grid" />
-                    {loading ? (
-                        <div className="module-empty-inline">Loading relationships...</div>
-                    ) : (
-                        <div className="lh-schema-board">
-                            <div
-                                className="lh-schema-column lh-schema-column-left"
-                                onDragOver={allowDrop}
-                                onDrop={event => handleDrop(event, 'bad')}
-                            >
-                                {relationshipGroups.bad.map(employee => renderNode(employee, 'bad', 'Bad'))}
+                <div
+                    ref={canvasRef}
+                    className="lh-free-canvas"
+                    onContextMenu={openContextMenu}
+                    onClick={() => setContextMenu(null)}
+                >
+                    <div className="lh-free-grid" />
+
+                    <svg className="lh-free-lines" viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} preserveAspectRatio="none">
+                        {connectorPaths.map(path => (
+                            <path
+                                key={path.id}
+                                d={path.d}
+                                className={`lh-free-path lh-free-path-${path.tone}`}
+                            />
+                        ))}
+                    </svg>
+
+                    <div
+                        className="lh-free-leading-card"
+                        style={{ left: positions.leadingHand.x, top: positions.leadingHand.y }}
+                        onPointerDown={startDrag('leadingHand')}
+                    >
+                        <div className="lh-free-leading-name">{resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}</div>
+                        <div className="lh-free-leading-sub">{resolvedLeadingHand.phoneNumber || 'No phone number'}</div>
+
+                        <div
+                            className="lh-free-anchor lh-free-anchor-bad"
+                            style={{ left: positions.badAnchor.x - positions.leadingHand.x, top: positions.badAnchor.y - positions.leadingHand.y }}
+                            onPointerDown={startDrag('badAnchor')}
+                            onDoubleClick={() => saveRelationship(relatedEmployees.find(item => item.relationshipType === 'neutral')?.employeeId || '', 'bad')}
+                        >
+                            Bad
+                        </div>
+                        <div
+                            className="lh-free-anchor lh-free-anchor-good"
+                            style={{ left: positions.goodAnchor.x - positions.leadingHand.x, top: positions.goodAnchor.y - positions.leadingHand.y }}
+                            onPointerDown={startDrag('goodAnchor')}
+                            onDoubleClick={() => saveRelationship(relatedEmployees.find(item => item.relationshipType === 'neutral')?.employeeId || '', 'good')}
+                        >
+                            Good
+                        </div>
+                    </div>
+
+                    {!loading && relatedEmployees.map(item => {
+                        const position = positions[item.employeeId];
+                        if (!position) {
+                            return null;
+                        }
+                        return (
+                            <EmployeeCard
+                                key={item.employeeId}
+                                employee={item.employee}
+                                selected={activeDrag?.id === item.employeeId}
+                                style={{ left: position.x, top: position.y }}
+                                onPointerDown={startDrag(item.employeeId)}
+                                onRemove={removeRelationship}
+                            />
+                        );
+                    })}
+
+                    {contextMenu ? (
+                        <div
+                            className="lh-free-context-menu"
+                            style={{ left: contextMenu.x, top: contextMenu.y }}
+                            onClick={event => event.stopPropagation()}
+                        >
+                            <div className="module-field">
+                                <label>Add Employee</label>
+                                <input
+                                    autoFocus
+                                    value={search}
+                                    onChange={event => setSearch(event.target.value)}
+                                    placeholder="Search ESS employees"
+                                />
                             </div>
-
-                            <div className="lh-schema-center">
-                                <div
-                                    className="lh-schema-core-card"
-                                    onDragOver={allowDrop}
-                                    onDrop={event => handleDrop(event, 'neutral')}
-                                >
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">id</span><span className="lh-schema-value">{resolvedLeadingHand.id?.slice(0, 8)}</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">name</span><span className="lh-schema-value">"{resolvedLeadingHand.firstName || ''} {resolvedLeadingHand.lastName || ''}"</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">phone</span><span className="lh-schema-value">"{resolvedLeadingHand.phoneNumber || 'N/A'}"</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">leading_hand</span><span className="lh-schema-value">true</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">good_relationships</span><span className="lh-schema-value">[{relationshipGroups.good.length}]</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">bad_relationships</span><span className="lh-schema-value">[{relationshipGroups.bad.length}]</span></div>
-                                    <div className="lh-schema-core-line"><span className="lh-schema-key">staging</span><span className="lh-schema-value">[{relationshipGroups.neutral.length}]</span></div>
-                                </div>
-
-                                <div className="lh-schema-neutral-strip" onDragOver={allowDrop} onDrop={event => handleDrop(event, 'neutral')}>
-                                    {relationshipGroups.neutral.length === 0 ? (
-                                        <div className="lh-schema-neutral-empty">Add an employee, then drag them left or right.</div>
-                                    ) : relationshipGroups.neutral.map(employee => renderNode(employee, 'neutral', null))}
-                                </div>
-                            </div>
-
-                            <div
-                                className="lh-schema-column lh-schema-column-right"
-                                onDragOver={allowDrop}
-                                onDrop={event => handleDrop(event, 'good')}
-                            >
-                                {relationshipGroups.good.map(employee => renderNode(employee, 'good', 'Good'))}
+                            <div className="lh-free-context-results">
+                                {searchResults.length === 0 ? (
+                                    <div className="lh-free-empty">No available employees</div>
+                                ) : searchResults.map(employee => (
+                                    <button
+                                        key={employee.id}
+                                        className="lh-free-context-item"
+                                        onClick={() => addEmployee(employee.id)}
+                                    >
+                                        <span>{employee.firstName} {employee.lastName}</span>
+                                        <span>{employee.phoneNumber || 'N/A'}</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
-                    )}
-                    {saving ? <div className="lh-schema-saving">Saving relationship changes...</div> : null}
+                    ) : null}
+
+                    {loading ? <div className="lh-free-loading">Loading relationships...</div> : null}
+                    {saving ? <div className="lh-free-saving">Saving...</div> : null}
                 </div>
             </div>
         </div>
