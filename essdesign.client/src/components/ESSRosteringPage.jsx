@@ -151,10 +151,12 @@ export default function ESSRosteringPage({ user }) {
             <div className="module-shell rostering-shell">
                 <div className="page-header">
                     <div className="header-stats">
-                        <div className="stat-card">
+                        <label className="stat-card stat-card-date">
                             <div className="stat-label">Plan Date</div>
+                            <div className="stat-val stat-val-date">{planDate}</div>
+                            <div className="stat-sub">Click to change</div>
                             <input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
-                        </div>
+                        </label>
                         <div className="stat-card">
                             <div className="stat-label">Active Jobs</div>
                             <div className="stat-val">{activeSiteIds.length}</div>
