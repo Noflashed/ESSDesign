@@ -31,15 +31,25 @@ namespace ESSDesign.Server.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<MaterialOrderingAiService> _logger;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+
         private static readonly Regex QuantityMeasurementPattern = new(
             @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+)(?=(?:\band\b)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex QuantityBeforeLabelPattern = new(
             @"\b(?<qty>\d{1,3})\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)\s+(?:at\s+)?(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex MergedDecimalMeasurementPattern = new(
             @"\b(?<merged>\d+\.\d+)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+)(?=(?:\band\b)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Handles "20 3m standards", "6 2.4m ledgers", "12 1.8m transoms" —
+        // quantity and measurement are already separate tokens, label follows.
+        private static readonly Regex QuantityThenMeasureLabelPattern = new(
+            @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)(?=\s+(?:and\b|\d)|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
             (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
@@ -376,6 +386,12 @@ Catalog:
                 AppendHeuristicMatch(result, seenKeys, match);
             }
 
+            // Handles "20 3m standards", "6 2.4m ledgers" — qty and measure already separate tokens
+            foreach (Match match in QuantityThenMeasureLabelPattern.Matches(normalizedTranscript))
+            {
+                AppendHeuristicMatch(result, seenKeys, match);
+            }
+
             foreach (Match match in MergedDecimalMeasurementPattern.Matches(normalizedTranscript))
             {
                 AppendMergedDecimalMatch(result, seenKeys, match);
@@ -472,6 +488,15 @@ Catalog:
         private static string RepairMergedQuantity(string quantity, string rawMeasure)
         {
             if (string.IsNullOrWhiteSpace(quantity) || !quantity.All(char.IsDigit))
+            {
+                return quantity;
+            }
+
+            // If the quantity string doesn't end with any digit signature from the measure,
+            // it was already a clean separate token — return it unchanged.
+            bool anySignatureMatch = BuildMeasurementDigitSignatures(rawMeasure)
+                .Any(sig => !string.IsNullOrWhiteSpace(sig) && quantity.EndsWith(sig, StringComparison.Ordinal));
+            if (!anySignatureMatch)
             {
                 return quantity;
             }
