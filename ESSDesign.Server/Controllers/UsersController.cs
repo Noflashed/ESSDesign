@@ -60,9 +60,12 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var normalizedRole = request.Role?.Trim().ToLowerInvariant();
-                if (normalizedRole != AppRoles.Admin && normalizedRole != AppRoles.Viewer)
+                if (normalizedRole != AppRoles.Admin
+                    && normalizedRole != AppRoles.Viewer
+                    && normalizedRole != AppRoles.GeneralScaffolder
+                    && normalizedRole != AppRoles.LeadingHand)
                 {
-                    return BadRequest(new { error = "Role must be either admin or viewer" });
+                    return BadRequest(new { error = "Role must be admin, viewer, general scaffolder, or leading hand" });
                 }
 
                 var updatedUser = await _supabaseService.UpdateUserRoleAsync(userId, normalizedRole);

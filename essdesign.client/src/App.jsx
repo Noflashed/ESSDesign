@@ -18,6 +18,7 @@ import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsP
 import RosteringTreePage from './components/RosteringTreePage';
 import EmployeePortalPage from './components/EmployeePortalPage';
 import WebLandingPage from './components/WebLandingPage';
+import SettingsPage from './components/SettingsPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
@@ -354,7 +355,7 @@ function App() {
 
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
         const resolvedPage = isEmployeePortalRole
-            ? (page === 'landing' || page === 'employee-home' ? page : 'employee-home')
+            ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -948,6 +949,19 @@ function App() {
             return <EmployeePortalPage user={user} />;
         }
 
+        if (currentPage === 'settings') {
+            return (
+                <SettingsPage
+                    user={user}
+                    isAdmin={isAdmin}
+                    onOpenRoleSettings={openSettingsModal}
+                    onOpenInviteUser={openInviteModal}
+                    onToggleTheme={(value) => applyTheme(value, true)}
+                    theme={theme}
+                />
+            );
+        }
+
         if (currentPage === 'site-information') {
             return <SiteInformationPage />;
         }
@@ -1208,11 +1222,17 @@ function App() {
                             setShowNavDrawer(false);
                         }}
                     />
-                    {isAdmin && (
-                        <button className="icon-action-button" onClick={openSettingsModal} title="Manage users" aria-label="Manage users">
+                    <button
+                        className="icon-action-button"
+                        onClick={() => {
+                            setShowUserMenu(false);
+                            applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                        }}
+                        title="Open settings"
+                        aria-label="Open settings"
+                    >
                             <SettingsIcon size={18} />
-                        </button>
-                    )}
+                    </button>
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
                         <ThemeIcon theme={theme} size={18} />
                     </button>
@@ -1271,7 +1291,7 @@ function App() {
                         <div className="settings-modal-header">
                             <div>
                                 <h3>User Roles</h3>
-                                <p>Admins can manage files, folders, invites, and user access. Viewers can only browse folders and open PDFs.</p>
+                                <p>Assign Admin, Viewer, Scaffolder, and Leading Hand access from one place.</p>
                             </div>
                             <button type="button" className="settings-close-btn" onClick={closeSettingsModal} aria-label="Close user role settings">
                                 x
@@ -1299,6 +1319,8 @@ function App() {
                                             disabled={updatingUserId === managedUser.id}
                                         >
                                             <option value="viewer">Viewer</option>
+                                            <option value="general_scaffolder">Scaffolder</option>
+                                            <option value="leading_hand">Leading Hand</option>
                                             <option value="admin">Admin</option>
                                         </select>
                                     </div>
