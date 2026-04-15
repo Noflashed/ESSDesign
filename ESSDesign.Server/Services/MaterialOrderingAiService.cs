@@ -40,6 +40,26 @@ namespace ESSDesign.Server.Services
         private static readonly Regex QuantityBeforeLabelPattern = new(
             @"\b(?<qty>\d{1,3})\s+(?<label>[a-z0-9/\-\s]+?)\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
+        {
+            (new Regex(@"\bscrew\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "screwjacks"),
+            (new Regex(@"\bu\s*head\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "u head jack"),
+            (new Regex(@"\bswivel\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "swivel jack"),
+            (new Regex(@"\bhop\s*up\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "hop-up"),
+            (new Regex(@"\bhopup\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "hop-up"),
+            (new Regex(@"\bledger\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
+            (new Regex(@"\btransom\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "transoms"),
+            (new Regex(@"\bbrace\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "braces"),
+            (new Regex(@"\bboard\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "boards"),
+            (new Regex(@"\bput\s*log\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "putlog"),
+            (new Regex(@"\bin\s*fill\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "infill"),
+            (new Regex(@"\bunit\s*beam\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "unit beams"),
+            (new Regex(@"\bsole\s*board\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "sole boards"),
+            (new Regex(@"\bscaff\s*tube\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold tube"),
+            (new Regex(@"\bscaff\s*ladder\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold ladder"),
+            (new Regex(@"\bscaff\s*stairs\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold stairs"),
+            (new Regex(@"\bshade\s*cloth\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "shade"),
+        };
 
         private static readonly HashSet<string> ValidSides = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -247,6 +267,8 @@ Rules:
 - Measurements/specs matter. If an item name exists in multiple sizes, do not match it unless the size/spec is clear.
 - Decimal sizes matter, for example 3.0M, 2.4M, 0.745, 0.95M, 0.6MM.
 - Support natural speech like 'put 10 standards at 3 metres', '20 two point four ledgers', 'add 6 screwjacks and 4 swivels'.
+- Correct likely speech-to-text mistakes and near-miss terms to the closest scaffold item when the intent is clear.
+- Be lenient with singular/plural, spacing, hyphenation, and common site shorthand.
 - Return only confident matches.
 - Quantity must be an integer string.
 - Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}]}
@@ -357,7 +379,9 @@ Catalog:
 
         private void AppendHeuristicMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
         {
-            var quantity = match.Groups["qty"].Value.Trim();
+            var quantity = RepairMergedQuantity(
+                match.Groups["qty"].Value.Trim(),
+                match.Groups["measure"].Value.Trim());
             var label = NormalizeCatalogText(match.Groups["label"].Value);
             var measure = NormalizeMeasurement(match.Groups["measure"].Value, match.Groups["unit"].Value);
 
@@ -398,6 +422,68 @@ Catalog:
             });
         }
 
+        private static string RepairMergedQuantity(string quantity, string rawMeasure)
+        {
+            if (string.IsNullOrWhiteSpace(quantity) || !quantity.All(char.IsDigit))
+            {
+                return quantity;
+            }
+
+            foreach (var signature in BuildMeasurementDigitSignatures(rawMeasure))
+            {
+                if (string.IsNullOrWhiteSpace(signature) ||
+                    !quantity.EndsWith(signature, StringComparison.Ordinal) ||
+                    quantity.Length <= signature.Length)
+                {
+                    continue;
+                }
+
+                var prefix = quantity[..^signature.Length];
+                if (string.IsNullOrWhiteSpace(prefix))
+                {
+                    continue;
+                }
+
+                if (signature.Length == 1 && prefix.Length == 1)
+                {
+                    return $"{prefix}0";
+                }
+
+                return prefix.TrimStart('0') is { Length: > 0 } trimmed ? trimmed : "0";
+            }
+
+            return quantity;
+        }
+
+        private static IEnumerable<string> BuildMeasurementDigitSignatures(string rawMeasure)
+        {
+            var normalized = rawMeasure.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                yield break;
+            }
+
+            var compact = new string(normalized.Where(char.IsDigit).ToArray()).TrimStart('0');
+            if (!string.IsNullOrWhiteSpace(compact))
+            {
+                yield return compact;
+            }
+
+            if (Regex.IsMatch(normalized, @"^\d+\.0+$"))
+            {
+                yield return normalized.Split('.')[0];
+            }
+
+            if (Regex.IsMatch(normalized, @"^0\.\d+$"))
+            {
+                var trimmed = normalized[2..];
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                {
+                    yield return trimmed;
+                }
+            }
+        }
+
         private static string NormalizeTranscript(string transcript)
         {
             var normalized = transcript
@@ -409,12 +495,18 @@ Catalog:
                 .Replace(" meters ", " meter ")
                 .Replace(" millimetres ", " millimetre ");
 
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+            foreach (var (pattern, replacement) in VoiceAliases)
+            {
+                normalized = pattern.Replace(normalized, replacement);
+            }
+
             return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
 
         private static string NormalizeCatalogText(string value)
         {
-            return value
+            var normalized = value
                 .ToLowerInvariant()
                 .Replace("/", " ")
                 .Replace("-", " ")
@@ -422,6 +514,13 @@ Catalog:
                 .Replace(")", " ")
                 .Replace("  ", " ")
                 .Trim();
+
+            foreach (var (pattern, replacement) in VoiceAliases)
+            {
+                normalized = pattern.Replace(normalized, replacement);
+            }
+
+            return normalized;
         }
 
         private static string NormalizeMeasurement(string measure, string unit)
