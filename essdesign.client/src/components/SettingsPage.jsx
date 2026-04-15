@@ -14,6 +14,7 @@ export default function SettingsPage({
     onOpenInviteUser
 }) {
     const [activeTab, setActiveTab] = useState('general');
+    const [rolesLoaded, setRolesLoaded] = useState(false);
     const displayName = user?.fullName || user?.email || 'User';
     const displayRole = user?.employeeTitle
         || (user?.role === 'leading_hand'
@@ -25,10 +26,11 @@ export default function SettingsPage({
                     : 'Viewer');
 
     useEffect(() => {
-        if (activeTab === 'roles' && isAdmin) {
+        if (activeTab === 'roles' && isAdmin && !rolesLoaded) {
             onLoadRoleSettings?.();
+            setRolesLoaded(true);
         }
-    }, [activeTab, isAdmin, onLoadRoleSettings]);
+    }, [activeTab, isAdmin, onLoadRoleSettings, rolesLoaded]);
 
     const tabs = useMemo(() => ([
         { key: 'general', label: 'General settings' },

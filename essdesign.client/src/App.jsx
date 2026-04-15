@@ -646,7 +646,7 @@ function App() {
         setUpdatingUserId(null);
     };
 
-    const loadManagedUsers = async () => {
+    const loadManagedUsers = useCallback(async () => {
         setUsersLoading(true);
         setUsersError('');
         try {
@@ -661,7 +661,7 @@ function App() {
         } finally {
             setUsersLoading(false);
         }
-    };
+    }, []);
 
     const openSettingsModal = async () => {
         setShowUserMenu(false);
