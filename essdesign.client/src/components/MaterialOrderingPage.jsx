@@ -138,7 +138,9 @@ function ItemCell({ entry, value, onChange }) {
             <td className={`picking-item-label ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>{label || ''}</td>
             <td className={`picking-item-spec ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>{spec || ''}</td>
             <td className={`picking-item-qty ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>
-                {!empty && !isSectionHeader ? (
+                {isSectionHeader ? (
+                    <span className="picking-inline-qty-label">QTY'S</span>
+                ) : !empty ? (
                     <input
                         type="number"
                         min="0"

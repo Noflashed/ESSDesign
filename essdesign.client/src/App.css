@@ -1460,18 +1460,18 @@ body {
 
 .picking-sheet-table {
     width: 100%;
-    min-width: 980px;
+    min-width: 1080px;
     border-collapse: collapse;
     table-layout: fixed;
     background: #fff;
 }
 
 .picking-sheet-table .w-label {
-    width: 17%;
+    width: 18%;
 }
 
 .picking-sheet-table .w-spec {
-    width: 6%;
+    width: 5%;
 }
 
 .picking-sheet-table .w-qty {
@@ -1560,6 +1560,7 @@ body {
 .picking-item-spec {
     padding: 7px 8px !important;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .picking-item-spec {
@@ -1576,6 +1577,18 @@ body {
 
 .picking-item-spec.is-section-header {
     text-align: left;
+}
+
+.picking-inline-qty-label {
+    width: 100%;
+    min-height: 33px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 .picking-item-qty input {
