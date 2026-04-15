@@ -40,8 +40,12 @@ namespace ESSDesign.Server.Services
         private static readonly Regex QuantityBeforeLabelPattern = new(
             @"\b(?<qty>\d{1,3})\s+(?<label>[a-z0-9/\-\s]+?)\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex MergedDecimalMeasurementPattern = new(
+            @"\b(?<merged>\d+\.\d+)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>[a-z0-9/\-\s]+?)(?=(?:\band\b)|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
+            (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
             (new Regex(@"\bscrew\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "screwjacks"),
             (new Regex(@"\bu\s*head\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "u head jack"),
             (new Regex(@"\bswivel\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "swivel jack"),
@@ -374,6 +378,11 @@ Catalog:
                 AppendHeuristicMatch(result, seenKeys, match);
             }
 
+            foreach (Match match in MergedDecimalMeasurementPattern.Matches(normalizedTranscript))
+            {
+                AppendMergedDecimalMatch(result, seenKeys, match);
+            }
+
             return result;
         }
 
@@ -422,6 +431,46 @@ Catalog:
             });
         }
 
+        private void AppendMergedDecimalMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
+        {
+            var label = NormalizeCatalogText(match.Groups["label"].Value);
+            var merged = match.Groups["merged"].Value.Trim();
+
+            if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(merged))
+            {
+                return;
+            }
+
+            var catalogCandidates = Catalog.Where(item =>
+                !string.IsNullOrWhiteSpace(item.Label) &&
+                (NormalizeCatalogText(item.Label).Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                 label.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            foreach (var catalogItem in catalogCandidates)
+            {
+                var repairedQuantity = RepairMergedDecimalQuantity(merged, catalogItem.Spec);
+                if (string.IsNullOrWhiteSpace(repairedQuantity))
+                {
+                    continue;
+                }
+
+                var key = $"{catalogItem.RowId}:{catalogItem.Side}";
+                if (!seenKeys.Add(key))
+                {
+                    return;
+                }
+
+                result.Updates.Add(new VoiceUpdate
+                {
+                    RowId = catalogItem.RowId,
+                    Side = catalogItem.Side,
+                    Quantity = repairedQuantity
+                });
+                return;
+            }
+        }
+
         private static string RepairMergedQuantity(string quantity, string rawMeasure)
         {
             if (string.IsNullOrWhiteSpace(quantity) || !quantity.All(char.IsDigit))
@@ -455,6 +504,38 @@ Catalog:
             return quantity;
         }
 
+        private static string? RepairMergedDecimalQuantity(string mergedValue, string rawMeasure)
+        {
+            var cleanMerged = mergedValue.Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(cleanMerged, @"^\d+\.\d+$"))
+            {
+                return null;
+            }
+
+            foreach (var rawVariant in BuildMeasurementRawVariants(rawMeasure))
+            {
+                if (!cleanMerged.EndsWith(rawVariant, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var prefix = cleanMerged[..^rawVariant.Length].TrimEnd('.');
+                if (string.IsNullOrWhiteSpace(prefix))
+                {
+                    continue;
+                }
+
+                if (prefix.Length == 1 && rawVariant.Contains('.'))
+                {
+                    return $"{prefix}0";
+                }
+
+                return prefix.TrimStart('0') is { Length: > 0 } trimmed ? trimmed : "0";
+            }
+
+            return null;
+        }
+
         private static IEnumerable<string> BuildMeasurementDigitSignatures(string rawMeasure)
         {
             var normalized = rawMeasure.Trim().ToLowerInvariant();
@@ -481,6 +562,25 @@ Catalog:
                 {
                     yield return trimmed;
                 }
+            }
+        }
+
+        private static IEnumerable<string> BuildMeasurementRawVariants(string rawMeasure)
+        {
+            var normalized = rawMeasure.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                yield break;
+            }
+
+            if (Regex.IsMatch(normalized, @"\d"))
+            {
+                yield return normalized.Replace("mm", string.Empty).Replace("m", string.Empty).Trim();
+            }
+
+            if (Regex.IsMatch(normalized, @"^\d+\.0+$"))
+            {
+                yield return normalized.Split('.')[0];
             }
         }
 
