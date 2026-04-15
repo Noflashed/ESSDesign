@@ -702,6 +702,72 @@ export const safetyProjectsAPI = {
     }
 };
 
+function mapMaterialOrderRow(row) {
+    return {
+        id: row.id,
+        builderId: row.builder_id || '',
+        builderName: row.builder_name || '',
+        projectId: row.project_id || '',
+        projectName: row.project_name || '',
+        requestedByUserId: row.requested_by_user_id || null,
+        requestedByName: row.requested_by_name || '',
+        orderDate: row.order_date || new Date().toISOString().slice(0, 10),
+        notes: row.notes || '',
+        itemValues: row.item_values && typeof row.item_values === 'object' ? row.item_values : {},
+        createdAt: row.created_at || nowIso(),
+        updatedAt: row.updated_at || nowIso()
+    };
+}
+
+export const materialOrdersAPI = {
+    getOrders: async () => {
+        const rows = await readRestRows('ess_material_orders', '?select=*&order=updated_at.desc');
+        return rows.map(mapMaterialOrderRow);
+    },
+
+    saveOrder: async ({
+        id,
+        builderId,
+        builderName,
+        projectId,
+        projectName,
+        requestedByUserId,
+        requestedByName,
+        orderDate,
+        notes,
+        itemValues
+    }) => {
+        const payload = {
+            builder_id: builderId || null,
+            builder_name: (builderName || '').trim(),
+            project_id: projectId || null,
+            project_name: (projectName || '').trim(),
+            requested_by_user_id: requestedByUserId || null,
+            requested_by_name: (requestedByName || '').trim(),
+            order_date: orderDate,
+            notes: (notes || '').trim() || null,
+            item_values: itemValues || {},
+            updated_at: nowIso()
+        };
+
+        if (id) {
+            await patchRestRows('ess_material_orders', `?id=eq.${encodeURIComponent(id)}`, payload);
+        } else {
+            await postRestRows('ess_material_orders', [{
+                ...payload,
+                created_at: nowIso()
+            }]);
+        }
+
+        return materialOrdersAPI.getOrders();
+    },
+
+    deleteOrder: async (orderId) => {
+        await deleteRestRows('ess_material_orders', `?id=eq.${encodeURIComponent(orderId)}`);
+        return materialOrdersAPI.getOrders();
+    }
+};
+
 export const rosteringAPI = {
     getEmployees: async () => {
         const rows = await readRestRows('ess_rostering_employees', '?select=*&order=last_name.asc,first_name.asc');

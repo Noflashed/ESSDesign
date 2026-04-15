@@ -8,6 +8,7 @@ import RegistrationConfirmed from './components/RegistrationConfirmed';
 import PDFViewer from './components/PDFViewer';
 import WebNavDrawer from './components/WebNavDrawer';
 import ESSSafetyPage from './components/ESSSafetyPage';
+import MaterialOrderingPage from './components/MaterialOrderingPage';
 import ESSRosteringPage from './components/ESSRosteringPage';
 import EmployeesPage from './components/EmployeesPage';
 import WebSafetySwmsPage from './components/WebSafetySwmsPage';
@@ -299,6 +300,7 @@ function App() {
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
+            { key: 'material-ordering', label: 'ESS Material Ordering' },
             { key: 'rostering', label: 'ESS Rostering' },
             { key: 'employees', label: 'Employees' }
         ];
@@ -978,6 +980,9 @@ function App() {
                     onBack={() => window.history.back()}
                 />
             );
+        }
+        if (currentPage === 'material-ordering') {
+            return <MaterialOrderingPage user={user} />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;

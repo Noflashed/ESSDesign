@@ -4,6 +4,7 @@ const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
     { key: 'safety', label: 'ESS Safety' },
+    { key: 'material-ordering', label: 'ESS Material Ordering' },
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
 ];
