@@ -89,6 +89,7 @@ function createBlankOrder(user) {
         notes: '',
         itemValues: {
             __time: '',
+            __details: '',
             __scaffoldingSystem: 'Kwikstage'
         }
     };
@@ -104,6 +105,7 @@ function normalizeOrder(order, user) {
         orderDate: order?.orderDate || fallback.orderDate,
         itemValues: {
             __time: order?.itemValues?.__time || '',
+            __details: order?.itemValues?.__details || '',
             __scaffoldingSystem: order?.itemValues?.__scaffoldingSystem || 'Kwikstage',
             ...(order?.itemValues || {})
         }
@@ -319,6 +321,33 @@ export default function MaterialOrderingPage({ user }) {
         }
     };
 
+    const deleteOrderById = async (orderId) => {
+        if (!orderId) {
+            return;
+        }
+
+        setSaving(true);
+        setError('');
+
+        try {
+            const nextOrders = await materialOrdersAPI.deleteOrder(orderId);
+            setOrders(nextOrders);
+
+            if (form.id === orderId) {
+                if (nextOrders[0]) {
+                    setSelectedOrderId(nextOrders[0].id);
+                    setForm(normalizeOrder(nextOrders[0], user));
+                } else {
+                    startNewOrder();
+                }
+            }
+        } catch (err) {
+            setError(err.message || 'Failed to delete material order');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return <div className="module-page"><div className="module-empty">Loading material ordering...</div></div>;
     }
@@ -343,16 +372,32 @@ export default function MaterialOrderingPage({ user }) {
                                 <div className="module-empty-inline">No saved picking cards yet.</div>
                             ) : (
                                 orders.map((order) => (
-                                    <button
+                                    <div
                                         key={order.id}
-                                        type="button"
                                         className={`material-ordering-order-item ${selectedOrderId === order.id ? 'active' : ''}`}
-                                        onClick={() => selectOrder(order)}
                                     >
+                                        <button
+                                            type="button"
+                                            className="material-ordering-order-main"
+                                            onClick={() => selectOrder(order)}
+                                        >
                                         <span className="material-ordering-order-builder">{order.builderName}</span>
                                         <span className="material-ordering-order-project">{order.projectName}</span>
+                                        <span className="material-ordering-order-details">
+                                            {order.itemValues?.__details || 'No details entered'}
+                                        </span>
                                         <span className="material-ordering-order-meta">{order.orderDate}</span>
-                                    </button>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="material-ordering-order-delete"
+                                            aria-label={`Delete ${order.projectName}`}
+                                            onClick={() => deleteOrderById(order.id)}
+                                            disabled={saving}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
                                 ))
                             )}
                         </div>
@@ -411,7 +456,7 @@ export default function MaterialOrderingPage({ user }) {
                                         )}
                                     />
                                     <MetadataRow
-                                        label="SCAFFOLDING SYSTEM :"
+                                        label="SCAFFOLD TYPE :"
                                         control={(
                                             <select
                                                 value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
@@ -422,12 +467,18 @@ export default function MaterialOrderingPage({ user }) {
                                                 <option value="Layher">Layher</option>
                                             </select>
                                         )}
-                                        sideLabel="TOTAL QTY"
-                                        sideValue={<span className="picking-static-value">{totalQuantity}</span>}
+                                        sideLabel="ESS REP"
+                                        sideValue={<span className="picking-static-value">{form.requestedByName}</span>}
                                     />
                                     <MetadataRow
                                         label="DETAILS"
-                                        control={<span className="picking-static-value">{form.requestedByName}</span>}
+                                        control={(
+                                            <input
+                                                value={form.itemValues.__details || ''}
+                                                onChange={(e) => handleQuantityChange('__details', e.target.value)}
+                                                placeholder="Enter picking card details"
+                                            />
+                                        )}
                                         sideLabel="DATE"
                                         sideValue={(
                                             <input
