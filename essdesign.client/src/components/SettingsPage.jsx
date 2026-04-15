@@ -15,6 +15,7 @@ export default function SettingsPage({
 }) {
     const [activeTab, setActiveTab] = useState('general');
     const [rolesLoaded, setRolesLoaded] = useState(false);
+    const [roleSearch, setRoleSearch] = useState('');
     const displayName = user?.fullName || user?.email || 'User';
     const displayRole = user?.employeeTitle
         || (user?.role === 'leading_hand'
@@ -36,6 +37,18 @@ export default function SettingsPage({
         { key: 'general', label: 'General settings' },
         { key: 'roles', label: 'User role settings' }
     ]), []);
+    const filteredManagedUsers = useMemo(() => {
+        const query = roleSearch.trim().toLowerCase();
+        if (!query) {
+            return managedUsers;
+        }
+
+        return managedUsers.filter((managedUser) => {
+            const name = (managedUser.fullName || '').toLowerCase();
+            const email = (managedUser.email || '').toLowerCase();
+            return name.includes(query) || email.includes(query);
+        });
+    }, [managedUsers, roleSearch]);
 
     return (
         <div className="module-page settings-page">
@@ -128,6 +141,13 @@ export default function SettingsPage({
                             {isAdmin ? (
                                 <>
                                     <div className="settings-role-toolbar">
+                                        <input
+                                            type="text"
+                                            className="settings-role-search"
+                                            placeholder="Search users"
+                                            value={roleSearch}
+                                            onChange={(e) => setRoleSearch(e.target.value)}
+                                        />
                                         <button type="button" className="module-secondary-btn" onClick={onOpenInviteUser}>
                                             Invite User
                                         </button>
@@ -138,10 +158,10 @@ export default function SettingsPage({
                                     <div className="settings-role-list">
                                         {usersLoading ? (
                                             <div className="settings-role-empty">Loading users...</div>
-                                        ) : managedUsers.length === 0 ? (
+                                        ) : filteredManagedUsers.length === 0 ? (
                                             <div className="settings-role-empty">No users found.</div>
                                         ) : (
-                                            managedUsers.map((managedUser) => (
+                                            filteredManagedUsers.map((managedUser) => (
                                                 <div key={managedUser.id} className="settings-role-row">
                                                     <div className="settings-role-user">
                                                         <strong>{managedUser.fullName || managedUser.email}</strong>

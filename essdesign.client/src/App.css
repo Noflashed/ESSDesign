@@ -2812,7 +2812,23 @@ body {
 .settings-role-toolbar {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 16px;
+}
+
+.settings-role-search {
+    width: min(320px, 100%);
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.settings-role-search::placeholder {
+    color: var(--text-secondary);
 }
 
 .settings-role-user {
@@ -2928,6 +2944,15 @@ body {
     .settings-role-select {
         width: 100%;
         justify-self: stretch;
+    }
+
+    .settings-role-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .settings-role-search {
+        width: 100%;
     }
 }
 
