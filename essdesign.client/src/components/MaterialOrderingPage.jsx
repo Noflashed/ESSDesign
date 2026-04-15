@@ -1,45 +1,70 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { materialOrdersAPI, safetyProjectsAPI } from '../services/api';
 
-const MATERIAL_SECTIONS = [
-    {
-        key: 'modular_scaffold',
-        title: 'Modular Scaffold',
-        items: [
-            { key: 'sole_boards', label: 'Sole Boards' },
-            { key: 'standards_3_0m', label: 'Standards 3.0m' },
-            { key: 'standards_2_5m', label: 'Standards 2.5m' },
-            { key: 'standards_2_0m', label: 'Standards 2.0m' },
-            { key: 'standards_1_5m', label: 'Standards 1.5m' },
-            { key: 'standards_1_0m', label: 'Standards 1.0m' },
-            { key: 'standards_0_5m', label: 'Standards 0.5m' },
-            { key: 'screwjacks', label: 'Screwjacks' },
-            { key: 'u_head_jack', label: 'U Head Jack' },
-            { key: 'swivel_jack', label: 'Swivel Jack' },
-            { key: 'open_end', label: 'Open / End' }
-        ]
-    },
-    {
-        key: 'timber_boards',
-        title: 'Timber Boards',
-        items: [
-            { key: 'timber_boards_3_6m', label: '3.6m' },
-            { key: 'timber_boards_2_4m', label: '2.4m' },
-            { key: 'timber_boards_1_8m', label: '1.8m' }
-        ]
-    },
-    {
-        key: 'sundry_items',
-        title: 'Sundry Items',
-        items: [
-            { key: 'corner_bracket', label: 'Corner Bracket' },
-            { key: 'counter_weights', label: 'Counter Weights' }
-        ]
-    }
+const PICKING_CARD_ROWS = [
+    { id: 'r09', left: ['STANDARDS', '3.0M'], middle: ['HARDWOOD S/BDS', '0.5M'], right: ['6m / 5.4m', ''] },
+    { id: 'r10', left: ['STANDARDS', '2.5M'], middle: ['HARDWOOD S/BDS', '1.5M'], right: ['4.8m / 4.2m', ''] },
+    { id: 'r11', left: ['STANDARDS', '2.0M'], middle: ['SCREWJACKS', ''], right: ['3.6m', ''] },
+    { id: 'r12', left: ['STANDARDS', '1.5M'], middle: ['U HEAD JACK', ''], right: ['3m', ''] },
+    { id: 'r13', left: ['STANDARDS', '1.0M'], middle: ['SWIVEL JACK', ''], right: ['2.4m', ''] },
+    { id: 'r14', left: ['STANDARDS', '0.5M'], middle: ['TIMBER BOARDS', ''], right: ['LADDER HATCHERS', ''] },
+    { id: 'r15', left: ['STD INTERMED 2M', 'LOCK'], middle: ['TIMBER BRDS', '3.6M'], right: ['CORNER BRACKET', '1 X 2'] },
+    { id: 'r16', left: ['OPEN/END', '3.0M'], middle: ['TIMBER BRDS', '3.0M'], right: ['CORNER BRACKET', '2 X 2'] },
+    { id: 'r17', left: ['OPEN/END', '2.5M'], middle: ['TIMBER BRDS', '2.4M'], right: ['CORNER BRACKET', '2 X 3'] },
+    { id: 'r18', left: ['OPEN/END', '2.0M'], middle: ['TIMBER BRDS', '1.8M'], right: ['HANDRAIL POST (STD)', '1M'] },
+    { id: 'r19', left: ['OPEN/END', '1.5M'], middle: ['TIMBER BRDS', '1.5M'], right: ['H/RAIL TIE POST', '0.75'] },
+    { id: 'r20', left: ['OPEN/END', '1.0M'], middle: ['TIMBER BRDS', '1.2M'], right: ['H/RAIL TIE POST', '0.3'] },
+    { id: 'r21', left: ['STD 1 STAR O/E', '0.5M'], middle: ['SCAFFOLD CILPS', ''], right: ['WALL TIE BRKETS', ''] },
+    { id: 'r22', left: ['LEDGERS', '2.4M'], middle: ['DOUBLE CLIP 90\'S', ''], right: ['WALL TIE DOUBLE', ''] },
+    { id: 'r23', left: ['LEDGERS', '1.8M'], middle: ['DOUBLE SAFETY', ''], right: ['WALL TIE SAFETY', ''] },
+    { id: 'r24', left: ['LEDGERS', '1.2M'], middle: ['SWIVEL', ''], right: ['LADDER BEAMS', '6.3'] },
+    { id: 'r25', left: ['LEDGERS', '9.5M'], middle: ['SWIVEL SAFETY', ''], right: ['LADDER BEAMS', '5m'] },
+    { id: 'r26', left: ['LEDGERS', '0.7M'], middle: ['PUTLOG CLIPS', ''], right: ['LADDER BEAMS', '4.2'] },
+    { id: 'r27', left: ['LEDGERS', '1BD'], middle: ['JOINERS INT / EXT', ''], right: ['LADDER BEAMS', '3m'] },
+    { id: 'r28', left: ['TRANSOMS', '2.4M'], middle: ['BEAM CLAMPS', ''], right: ['PALLET CAGE', ''] },
+    { id: 'r29', left: ['TRANSOMS', '1.8M'], middle: ['TOE BOARD CLIPS', ''], right: ['PALLETS', ''] },
+    { id: 'r30', left: ['TRANSOMS', '1.2M'], middle: ['CC CLIPS', ''], right: ['PALLET CASTOR', ''] },
+    { id: 'r31', left: ['TRANSOMS', '9.50M'], middle: ['TOE BOARD SPADES', ''], right: ["UB'S", ''] },
+    { id: 'r32', left: ['TRANSOMS', '0.7M'], middle: ['V CLIPS', ''], right: ["UB'S", ''] },
+    { id: 'r33', left: ['TRANSOMS 2 BRD', '0.51'], middle: ['', ''], right: ["UB'S", ''] },
+    { id: 'r34', left: ['TRANSOM 2 BRD', '0.48'], middle: ['', ''], right: ['UNIT BEAMS', '3.6M'] },
+    { id: 'r35', left: ['TRANSOM 1 BRD', '1BD'], middle: ['SCAFFOLD TUBE', ''], right: ['TRANSOM TRUSS', '2.4M'] },
+    { id: 'r36', left: ['LADDER TRANNYS', ''], middle: ['6', 'M'], right: ['TRANSOM TRUSS', '1.8M'] },
+    { id: 'r37', left: ['LADDER TRANNYS', '1.2M'], middle: ['5.4', 'M'], right: ['TRANSOM TRUSS', '1.2M'] },
+    { id: 'r38', left: ['DIA/BRACES', '3.6M'], middle: ['4.8', 'M'], right: ['LAP PLATES', '2B'] },
+    { id: 'r39', left: ['DIA/BRACES', '3.2M'], middle: ['4.2', 'M'], right: ['LAP PLATES', '3B'] },
+    { id: 'r40', left: ['DIA/BRACES', '2.7M'], middle: ['3.6', 'M'], right: ['CASTOR WHEELS', ''] },
+    { id: 'r41', left: ['DIA/BRACES', '1.9M'], middle: ['3', 'M'], right: ['SALE ITEMS', ''] },
+    { id: 'r42', left: ['STEEL BOARDS', '2.4M'], middle: ['2.4', 'M'], right: ['CHAIN/SHADE BLUE', '15M'] },
+    { id: 'r43', left: ['STEEL BOARDS', '1.8M'], middle: ['1.8', 'M'], right: ['CHAIN/SHADE GREEN', '15M'] },
+    { id: 'r44', left: ['STEEL BOARDS', '1.2M'], middle: ['1.5', 'M'], right: ['CHAIN/SHADE BLACK', '15M'] },
+    { id: 'r45', left: ['STEEL BOARDS', '0.95M'], middle: ['1.2', 'M'], right: ['CHAIN/SHADE', '0.9 mm'] },
+    { id: 'r46', left: ['STEEL BOARDS', '0.745'], middle: ['0.9', 'mm'], right: ['CHAIN WIRE 15M / SHADE 50M', ''] },
+    { id: 'r47', left: ['INFILL BRDS', '2.4M'], middle: ['0.6', 'mm'], right: ['SCREW BOLTS 100mm', '12 mm'] },
+    { id: 'r48', left: ['INFILL BRDS', '1.8M'], middle: ['0.3', 'mm'], right: ['SCREW BOLTS 75mm', '12 mm'] },
+    { id: 'r49', left: ['INFILL BRDS', '1.2M'], middle: ['SCAFFOLD STAIRS', ''], right: ['TECH SCREWS', '90 mm'] },
+    { id: 'r50', left: ['HOP-UP 3 SPIGETS', ''], middle: ['ALUMINIUM STAIRS', ''], right: ['TECH SCREWS', '45 mm'] },
+    { id: 'r51', left: ['HOP-UP 2 SPIGETS', ''], middle: ['ALUMINIUM HANDRAIL', ''], right: ['TECH SCREWS TIMBER', '45 mm'] },
+    { id: 'r52', left: ['HOP-UP BRKETS 3', '3BRD'], middle: ['ALUMINIUM TOP RAIL', ''], right: ['PLYWOOD 17mm / 12mm', ''] },
+    { id: 'r53', left: ['HOP-UP BRKETS 2', '2BRD'], middle: ['STAIR BOLTS', ''], right: ['3/2 TIMBERS', ''] },
+    { id: 'r54', left: ['HOP-UP BRKETS 1', '1BRD'], middle: ['STAIR STRINGER', ''], right: ['TIE WIRE', ''] },
+    { id: 'r55', left: ['TIE BARS', '2.4M'], middle: ['1 BRD STEP DOWNS', '1 BRD'], right: ['INCOMPLETES SIGNS', ''] },
+    { id: 'r56', left: ['TIE BARS', '1.8M'], middle: ['2 BRD STEP DOWNS', '2BRD'], right: ['SCAFF TAGS', ''] },
+    { id: 'r57', left: ['TIE BARS', '1.2M'], middle: ['ALUMIN STAIR RISER', '2.0M'], right: ['M20 TREAD ROD', ''] },
+    { id: 'r58', left: ['TIE BARS', '0.745'], middle: ['ALUMIN STAIR RISER', '1.0M'], right: ['UB BRACKETS', ''] },
+    { id: 'r59', left: ['LEDGER', '3m'], middle: ['STAIR BOTS', ''], right: ['', ''] },
+    { id: 'r60', left: ['STEEL BOARDS', '3M'], middle: ['STAIR DOOR', ''], right: ['', ''] }
 ];
 
 function todayDate() {
     return new Date().toISOString().slice(0, 10);
+}
+
+function formatDayLabel(dateValue) {
+    if (!dateValue) return '';
+    const date = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-AU', { weekday: 'long' });
 }
 
 function createBlankOrder(user) {
@@ -53,8 +78,60 @@ function createBlankOrder(user) {
         requestedByName: user?.fullName || user?.email || '',
         orderDate: todayDate(),
         notes: '',
-        itemValues: {}
+        itemValues: { __time: '' }
     };
+}
+
+function normalizeOrder(order, user) {
+    const fallback = createBlankOrder(user);
+    return {
+        ...fallback,
+        ...order,
+        requestedByUserId: order?.requestedByUserId || fallback.requestedByUserId,
+        requestedByName: order?.requestedByName || fallback.requestedByName,
+        orderDate: order?.orderDate || fallback.orderDate,
+        itemValues: {
+            __time: order?.itemValues?.__time || '',
+            ...(order?.itemValues || {})
+        }
+    };
+}
+
+function quantityKey(rowId, side) {
+    return `${rowId}_${side}_qty`;
+}
+
+function MetadataRow({ label, control, sideLabel, sideValue }) {
+    return (
+        <tr>
+            <th className="picking-meta-label">{label}</th>
+            <td className="picking-meta-value" colSpan={5}>{control}</td>
+            <th className="picking-meta-label picking-meta-label-right">{sideLabel}</th>
+            <td className="picking-meta-value picking-meta-value-right" colSpan={2}>{sideValue}</td>
+        </tr>
+    );
+}
+
+function ItemCell({ entry, value, onChange }) {
+    const [label, spec] = entry;
+    const empty = !label && !spec;
+
+    return (
+        <>
+            <td className={`picking-item-label ${empty ? 'is-empty' : ''}`}>{label || ''}</td>
+            <td className={`picking-item-spec ${empty ? 'is-empty' : ''}`}>{spec || ''}</td>
+            <td className={`picking-item-qty ${empty ? 'is-empty' : ''}`}>
+                {!empty ? (
+                    <input
+                        type="number"
+                        min="0"
+                        value={value ?? ''}
+                        onChange={(e) => onChange(e.target.value)}
+                    />
+                ) : null}
+            </td>
+        </>
+    );
 }
 
 export default function MaterialOrderingPage({ user }) {
@@ -70,33 +147,26 @@ export default function MaterialOrderingPage({ user }) {
         let active = true;
 
         Promise.all([
-            safetyProjectsAPI.getBuilders(),
+            safetyProjectsAPI.getBuilders({ includeArchived: true }),
             materialOrdersAPI.getOrders()
         ])
             .then(([nextBuilders, nextOrders]) => {
-                if (!active) {
-                    return;
-                }
-
+                if (!active) return;
                 setBuilders(nextBuilders);
                 setOrders(nextOrders);
                 if (nextOrders[0]) {
                     setSelectedOrderId(nextOrders[0].id);
-                    setForm(nextOrders[0]);
+                    setForm(normalizeOrder(nextOrders[0], user));
                 } else {
                     setSelectedOrderId('new');
                     setForm(createBlankOrder(user));
                 }
             })
             .catch((err) => {
-                if (active) {
-                    setError(err.message || 'Failed to load material orders');
-                }
+                if (active) setError(err.message || 'Failed to load material orders');
             })
             .finally(() => {
-                if (active) {
-                    setLoading(false);
-                }
+                if (active) setLoading(false);
             });
 
         return () => {
@@ -109,16 +179,24 @@ export default function MaterialOrderingPage({ user }) {
         [builders, form.builderId]
     );
 
-    const availableProjects = selectedBuilder?.projects || [];
+    const availableProjects = useMemo(
+        () => (selectedBuilder?.projects || []).filter((project) => !project.archived),
+        [selectedBuilder]
+    );
+
+    const dayLabel = useMemo(() => formatDayLabel(form.orderDate), [form.orderDate]);
 
     const totalQuantity = useMemo(
-        () => Object.values(form.itemValues || {}).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
+        () => Object.entries(form.itemValues || {}).reduce((sum, [key, value]) => {
+            if (String(key).startsWith('__')) return sum;
+            return sum + Math.max(0, Number(value || 0));
+        }, 0),
         [form.itemValues]
     );
 
     const selectOrder = (order) => {
         setSelectedOrderId(order.id);
-        setForm(order);
+        setForm(normalizeOrder(order, user));
         setError('');
     };
 
@@ -130,7 +208,7 @@ export default function MaterialOrderingPage({ user }) {
 
     const handleBuilderChange = (builderId) => {
         const builder = builders.find((item) => item.id === builderId) || null;
-        const nextProject = builder?.projects?.[0] || null;
+        const nextProject = (builder?.projects || []).find((project) => !project.archived) || null;
         setForm((prev) => ({
             ...prev,
             builderId: builder?.id || '',
@@ -149,12 +227,12 @@ export default function MaterialOrderingPage({ user }) {
         }));
     };
 
-    const handleItemChange = (itemKey, value) => {
+    const handleQuantityChange = (key, value) => {
         setForm((prev) => ({
             ...prev,
             itemValues: {
                 ...prev.itemValues,
-                [itemKey]: value
+                [key]: value
             }
         }));
     };
@@ -173,17 +251,15 @@ export default function MaterialOrderingPage({ user }) {
             setOrders(nextOrders);
             const saved = nextOrders.find((order) =>
                 order.id === form.id ||
-                (
-                    order.builderId === form.builderId &&
+                (order.builderId === form.builderId &&
                     order.projectId === form.projectId &&
                     order.orderDate === form.orderDate &&
-                    order.requestedByName === form.requestedByName
-                )
+                    order.requestedByName === form.requestedByName)
             ) || nextOrders[0];
 
             if (saved) {
                 setSelectedOrderId(saved.id);
-                setForm(saved);
+                setForm(normalizeOrder(saved, user));
             }
         } catch (err) {
             setError(err.message || 'Failed to save material order');
@@ -206,7 +282,7 @@ export default function MaterialOrderingPage({ user }) {
             setOrders(nextOrders);
             if (nextOrders[0]) {
                 setSelectedOrderId(nextOrders[0].id);
-                setForm(nextOrders[0]);
+                setForm(normalizeOrder(nextOrders[0], user));
             } else {
                 startNewOrder();
             }
@@ -257,94 +333,100 @@ export default function MaterialOrderingPage({ user }) {
                     </aside>
 
                     <section className="material-ordering-canvas">
-                        <div className="material-ordering-toolbar">
-                            <div className="material-ordering-toolbar-group">
-                                <div className="module-field">
-                                    <label>Builder</label>
-                                    <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
-                                        <option value="">Select builder</option>
-                                        {builders.map((builder) => (
-                                            <option key={builder.id} value={builder.id}>{builder.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="module-field">
-                                    <label>Jobsite</label>
-                                    <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
-                                        <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
-                                        {availableProjects.map((project) => (
-                                            <option key={project.id} value={project.id}>{project.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="material-ordering-toolbar-group">
-                                <div className="module-field">
-                                    <label>Requested By</label>
-                                    <input
-                                        value={form.requestedByName}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, requestedByName: e.target.value }))}
+                        <div className="picking-sheet-card">
+                            <table className="picking-sheet-table">
+                                <colgroup>
+                                    <col className="w-label" />
+                                    <col className="w-spec" />
+                                    <col className="w-qty" />
+                                    <col className="w-label" />
+                                    <col className="w-spec" />
+                                    <col className="w-qty" />
+                                    <col className="w-label" />
+                                    <col className="w-spec" />
+                                    <col className="w-qty" />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th className="picking-title" colSpan={9}>PICKING CARD</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <MetadataRow
+                                        label="CUSTOMER :"
+                                        control={(
+                                            <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
+                                                <option value="">Select builder</option>
+                                                {builders.map((builder) => (
+                                                    <option key={builder.id} value={builder.id}>{builder.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        sideLabel="DAY"
+                                        sideValue={dayLabel}
                                     />
-                                </div>
-                                <div className="module-field">
-                                    <label>Date</label>
-                                    <input
-                                        type="date"
-                                        value={form.orderDate}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
+                                    <MetadataRow
+                                        label="SITE ADDRESS :"
+                                        control={(
+                                            <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
+                                                <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
+                                                {availableProjects.map((project) => (
+                                                    <option key={project.id} value={project.id}>{project.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        sideLabel="TIME"
+                                        sideValue={(
+                                            <input
+                                                value={form.itemValues.__time || ''}
+                                                onChange={(e) => handleQuantityChange('__time', e.target.value)}
+                                                placeholder="7am"
+                                            />
+                                        )}
                                     />
-                                </div>
-                            </div>
-                        </div>
+                                    <MetadataRow
+                                        label="DETAILS"
+                                        control={<span className="picking-static-value">{form.requestedByName}</span>}
+                                        sideLabel="DATE"
+                                        sideValue={(
+                                            <input
+                                                type="date"
+                                                value={form.orderDate}
+                                                onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
+                                            />
+                                        )}
+                                    />
 
-                        <div className="material-order-card">
-                            <div className="material-order-card-head">
-                                <div>
-                                    <div className="material-order-card-eyebrow">Picking Card</div>
-                                    <div className="material-order-card-title">{form.projectName || 'Select a jobsite'}</div>
-                                    <div className="material-order-card-subtitle">{form.builderName || 'Builder will appear here'}</div>
-                                </div>
-                                <div className="material-order-card-meta">
-                                    <span>{form.requestedByName || 'Requester'}</span>
-                                    <span>{form.orderDate || todayDate()}</span>
-                                </div>
-                            </div>
+                                    <tr className="picking-section-row">
+                                        <th className="picking-section-title" colSpan={2}>MODULAR SCAFFOLD</th>
+                                        <th className="picking-qty-head">QTY'S</th>
+                                        <th className="picking-section-item" colSpan={2}>SOLE BOARDS</th>
+                                        <th className="picking-qty-head">QTY'S</th>
+                                        <th className="picking-section-item" colSpan={2}>SCAFFOLD LADDER</th>
+                                        <th className="picking-qty-head">QTY'S</th>
+                                    </tr>
 
-                            <div className="material-order-sections">
-                                {MATERIAL_SECTIONS.map((section) => (
-                                    <div key={section.key} className="material-order-section">
-                                        <div className="material-order-section-title">{section.title}</div>
-                                        <div className="material-order-table">
-                                            <div className="material-order-table-head">
-                                                <span>Item</span>
-                                                <span>Qty</span>
-                                            </div>
-                                            {section.items.map((item) => (
-                                                <div key={item.key} className="material-order-row">
-                                                    <span>{item.label}</span>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={form.itemValues[item.key] ?? ''}
-                                                        onChange={(e) => handleItemChange(item.key, e.target.value)}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="material-order-notes">
-                                <label>Notes</label>
-                                <textarea
-                                    rows={4}
-                                    value={form.notes}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                                    placeholder="Site notes, delivery timing, or extra material instructions..."
-                                />
-                            </div>
+                                    {PICKING_CARD_ROWS.map((row) => (
+                                        <tr key={row.id}>
+                                            <ItemCell
+                                                entry={row.left}
+                                                value={form.itemValues[quantityKey(row.id, 'left')]}
+                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'left'), value)}
+                                            />
+                                            <ItemCell
+                                                entry={row.middle}
+                                                value={form.itemValues[quantityKey(row.id, 'middle')]}
+                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'middle'), value)}
+                                            />
+                                            <ItemCell
+                                                entry={row.right}
+                                                value={form.itemValues[quantityKey(row.id, 'right')]}
+                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'right'), value)}
+                                            />
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
 
                         {error ? <div className="module-error">{error}</div> : null}
