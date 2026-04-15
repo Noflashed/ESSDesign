@@ -954,10 +954,15 @@ function App() {
                 <SettingsPage
                     user={user}
                     isAdmin={isAdmin}
-                    onOpenRoleSettings={openSettingsModal}
                     onOpenInviteUser={openInviteModal}
                     onToggleTheme={(value) => applyTheme(value, true)}
                     theme={theme}
+                    managedUsers={managedUsers}
+                    usersLoading={usersLoading}
+                    usersError={usersError}
+                    updatingUserId={updatingUserId}
+                    onRoleChange={handleUserRoleChange}
+                    onLoadRoleSettings={loadManagedUsers}
                 />
             );
         }
@@ -1284,52 +1289,6 @@ function App() {
             </header>
 
             {renderCurrentPage()}
-
-            {showSettingsModal && (
-                <div className="settings-modal-overlay" onClick={closeSettingsModal}>
-                    <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="settings-modal-header">
-                            <div>
-                                <h3>User Roles</h3>
-                                <p>Assign Admin, Viewer, Scaffolder, and Leading Hand access from one place.</p>
-                            </div>
-                            <button type="button" className="settings-close-btn" onClick={closeSettingsModal} aria-label="Close user role settings">
-                                x
-                            </button>
-                        </div>
-
-                        {usersError && <div className="invite-message invite-error">{usersError}</div>}
-
-                        <div className="settings-user-list">
-                            {usersLoading ? (
-                                <div className="settings-empty-state">Loading users...</div>
-                            ) : managedUsers.length === 0 ? (
-                                <div className="settings-empty-state">No users found.</div>
-                            ) : (
-                                managedUsers.map((managedUser) => (
-                                    <div key={managedUser.id} className="settings-user-row">
-                                        <div className="settings-user-info">
-                                            <div className="settings-user-name">{managedUser.fullName || managedUser.email}</div>
-                                            <div className="settings-user-email">{managedUser.email}</div>
-                                        </div>
-                                        <select
-                                            className="settings-role-select"
-                                            value={managedUser.role || 'viewer'}
-                                            onChange={(e) => handleUserRoleChange(managedUser.id, e.target.value)}
-                                            disabled={updatingUserId === managedUser.id}
-                                        >
-                                            <option value="viewer">Viewer</option>
-                                            <option value="general_scaffolder">Scaffolder</option>
-                                            <option value="leading_hand">Leading Hand</option>
-                                            <option value="admin">Admin</option>
-                                        </select>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {showInviteModal && (
                 <div className="invite-modal-overlay" onClick={closeInviteModal}>
