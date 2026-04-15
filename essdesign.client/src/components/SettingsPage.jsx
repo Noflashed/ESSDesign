@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
 export default function SettingsPage({ user, isAdmin, onOpenRoleSettings, onOpenInviteUser, onToggleTheme, theme }) {
+    const [activeTab, setActiveTab] = useState('general');
     const displayName = user?.fullName || user?.email || 'User';
     const displayRole = user?.employeeTitle
         || (user?.role === 'leading_hand'
@@ -15,6 +16,18 @@ export default function SettingsPage({ user, isAdmin, onOpenRoleSettings, onOpen
         { label: 'Access', value: displayRole },
         { label: 'Account', value: user?.email || 'Not available' }
     ];
+    const tabs = useMemo(() => ([
+        {
+            key: 'general',
+            label: 'General settings',
+            description: 'Theme, account, and workspace basics'
+        },
+        {
+            key: 'roles',
+            label: 'User role settings',
+            description: 'Manage invites and access permissions'
+        }
+    ]), []);
 
     return (
         <div className="module-page">
@@ -43,93 +56,125 @@ export default function SettingsPage({ user, isAdmin, onOpenRoleSettings, onOpen
 
                 <div className="settings-layout-grid">
                     <aside className="settings-nav-rail">
-                        <div className="settings-nav-card active">
-                            <div className="settings-nav-title">Appearance</div>
-                            <div className="settings-nav-copy">Theme and interface feel</div>
-                        </div>
-                        <div className="settings-nav-card">
-                            <div className="settings-nav-title">Profile</div>
-                            <div className="settings-nav-copy">Your account details</div>
-                        </div>
-                        {isAdmin ? (
-                            <div className="settings-nav-card">
-                                <div className="settings-nav-title">Administration</div>
-                                <div className="settings-nav-copy">Invites and role access</div>
-                            </div>
-                        ) : null}
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.key}
+                                type="button"
+                                className={`settings-nav-card ${activeTab === tab.key ? 'active' : ''}`}
+                                onClick={() => setActiveTab(tab.key)}
+                            >
+                                <div className="settings-nav-title">{tab.label}</div>
+                                <div className="settings-nav-copy">{tab.description}</div>
+                            </button>
+                        ))}
                     </aside>
 
                     <div className="settings-section-stack">
-                        <section className="settings-section-card">
-                            <div className="settings-section-head">
-                                <div>
-                                    <div className="settings-panel-eyebrow">Appearance</div>
-                                    <h2>Theme mode</h2>
-                                </div>
-                            </div>
-                            <p className="settings-panel-copy">Pick the interface mode that suits how you work.</p>
-                            <div className="settings-theme-row">
-                                <button
-                                    type="button"
-                                    className={`settings-theme-chip ${theme === 'light' ? 'active' : ''}`}
-                                    onClick={() => onToggleTheme('light')}
-                                >
-                                    <span className="settings-theme-chip-title">Light</span>
-                                    <span className="settings-theme-chip-copy">Bright, crisp workspace</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`settings-theme-chip ${theme === 'dark' ? 'active' : ''}`}
-                                    onClick={() => onToggleTheme('dark')}
-                                >
-                                    <span className="settings-theme-chip-title">Dark</span>
-                                    <span className="settings-theme-chip-copy">Lower-glare late sessions</span>
-                                </button>
-                            </div>
-                        </section>
+                        {activeTab === 'general' ? (
+                            <>
+                                <section className="settings-section-card">
+                                    <div className="settings-section-head">
+                                        <div>
+                                            <div className="settings-panel-eyebrow">General settings</div>
+                                            <h2>Theme mode</h2>
+                                        </div>
+                                    </div>
+                                    <p className="settings-panel-copy">Pick the interface mode that suits how you work.</p>
+                                    <div className="settings-theme-row">
+                                        <button
+                                            type="button"
+                                            className={`settings-theme-chip ${theme === 'light' ? 'active' : ''}`}
+                                            onClick={() => onToggleTheme('light')}
+                                        >
+                                            <span className="settings-theme-chip-title">Light</span>
+                                            <span className="settings-theme-chip-copy">Bright, crisp workspace</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`settings-theme-chip ${theme === 'dark' ? 'active' : ''}`}
+                                            onClick={() => onToggleTheme('dark')}
+                                        >
+                                            <span className="settings-theme-chip-title">Dark</span>
+                                            <span className="settings-theme-chip-copy">Lower-glare late sessions</span>
+                                        </button>
+                                    </div>
+                                </section>
 
-                        <section className="settings-section-card">
-                            <div className="settings-section-head">
-                                <div>
-                                    <div className="settings-panel-eyebrow">Account</div>
-                                    <h2>Profile details</h2>
-                                </div>
-                            </div>
-                            <div className="settings-detail-list">
-                                <div className="settings-detail-row">
-                                    <span>Name</span>
-                                    <strong>{displayName}</strong>
-                                </div>
-                                <div className="settings-detail-row">
-                                    <span>Email</span>
-                                    <strong>{user?.email || 'Not available'}</strong>
-                                </div>
-                                <div className="settings-detail-row">
-                                    <span>Role</span>
-                                    <strong>{displayRole}</strong>
-                                </div>
-                            </div>
-                        </section>
-
-                        {isAdmin ? (
+                                <section className="settings-section-card">
+                                    <div className="settings-section-head">
+                                        <div>
+                                            <div className="settings-panel-eyebrow">Account</div>
+                                            <h2>Profile details</h2>
+                                        </div>
+                                    </div>
+                                    <div className="settings-detail-list">
+                                        <div className="settings-detail-row">
+                                            <span>Name</span>
+                                            <strong>{displayName}</strong>
+                                        </div>
+                                        <div className="settings-detail-row">
+                                            <span>Email</span>
+                                            <strong>{user?.email || 'Not available'}</strong>
+                                        </div>
+                                        <div className="settings-detail-row">
+                                            <span>Role</span>
+                                            <strong>{displayRole}</strong>
+                                        </div>
+                                    </div>
+                                </section>
+                            </>
+                        ) : (
                             <section className="settings-section-card settings-admin-section">
                                 <div className="settings-section-head">
                                     <div>
-                                        <div className="settings-panel-eyebrow">Administration</div>
-                                        <h2>User access</h2>
+                                        <div className="settings-panel-eyebrow">User role settings</div>
+                                        <h2>Access management</h2>
                                     </div>
                                 </div>
-                                <p className="settings-panel-copy">Control invites and assign Admin, Viewer, Scaffolder, or Leading Hand permissions.</p>
-                                <div className="settings-admin-actions">
-                                    <button type="button" className="module-secondary-btn" onClick={onOpenInviteUser}>
-                                        Invite User
-                                    </button>
-                                    <button type="button" className="module-primary-btn" onClick={onOpenRoleSettings}>
-                                        Manage Roles
-                                    </button>
+                                {isAdmin ? (
+                                    <>
+                                        <p className="settings-panel-copy">Invite people into ESS Design and manage Admin, Viewer, Scaffolder, or Leading Hand permissions.</p>
+                                        <div className="settings-admin-actions">
+                                            <button type="button" className="module-secondary-btn" onClick={onOpenInviteUser}>
+                                                Invite User
+                                            </button>
+                                            <button type="button" className="module-primary-btn" onClick={onOpenRoleSettings}>
+                                                Manage Roles
+                                            </button>
+                                        </div>
+                                        <div className="settings-role-summary-grid">
+                                            <div className="settings-role-summary-card">
+                                                <span>Admin</span>
+                                                <strong>Full workspace control</strong>
+                                            </div>
+                                            <div className="settings-role-summary-card">
+                                                <span>Viewer</span>
+                                                <strong>Standard office access</strong>
+                                            </div>
+                                            <div className="settings-role-summary-card">
+                                                <span>Scaffolder</span>
+                                                <strong>ESS App employee access</strong>
+                                            </div>
+                                            <div className="settings-role-summary-card">
+                                                <span>Leading Hand</span>
+                                                <strong>Field lead employee access</strong>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="settings-readonly-message">
+                                        <strong>Admin access required</strong>
+                                        <p>Your account can view current role information, but only admins can invite users or change access.</p>
+                                    </div>
+                                )}
+                                <div className="settings-detail-list">
+                                    <div className="settings-detail-row">
+                                        <span>Your current role</span>
+                                        <strong>{displayRole}</strong>
+                                    </div>
                                 </div>
                             </section>
-                        ) : null}
+                        )}
                     </div>
                 </div>
             </div>
