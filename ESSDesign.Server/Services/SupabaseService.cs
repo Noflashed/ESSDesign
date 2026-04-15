@@ -735,6 +735,7 @@ namespace ESSDesign.Server.Services
             };
 
             await _supabase.From<UserRoleRecord>().Upsert(record);
+            await SyncLinkedEmployeeRoleAsync(normalizedUserId, normalizedRole);
 
             var user = (await GetUsersByIdsAsync(new[] { normalizedUserId })).FirstOrDefault();
             if (user == null)
@@ -742,8 +743,43 @@ namespace ESSDesign.Server.Services
                 throw new InvalidOperationException("User not found");
             }
 
-            user.Role = normalizedRole;
             return user;
+        }
+
+        private async Task SyncLinkedEmployeeRoleAsync(string normalizedUserId, string normalizedRole)
+        {
+            if (normalizedRole != AppRoles.LeadingHand && normalizedRole != AppRoles.GeneralScaffolder)
+            {
+                return;
+            }
+
+            var linkedEmployee = await GetLinkedEmployeeRoleInfoAsync(normalizedUserId, null);
+            if (linkedEmployee == null)
+            {
+                return;
+            }
+
+            var shouldBeLeadingHand = normalizedRole == AppRoles.LeadingHand;
+            if (linkedEmployee.LeadingHand == shouldBeLeadingHand)
+            {
+                return;
+            }
+
+            try
+            {
+                await PatchRestRowsAsync<object>(
+                    $"ess_rostering_employees?id=eq.{linkedEmployee.Id:D}",
+                    new
+                    {
+                        leading_hand = shouldBeLeadingHand,
+                        updated_at = DateTime.UtcNow
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error syncing linked employee role for user {UserId}", normalizedUserId);
+                throw;
+            }
         }
         private FolderResponse BuildFolderSummary(Folder folder, IReadOnlyDictionary<string, string> userNames)
         {
