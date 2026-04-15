@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using System.Text;
 using System.Text.Json;
 
@@ -33,6 +34,12 @@ namespace ESSDesign.Server.Services
         {
             PropertyNameCaseInsensitive = true
         };
+        private static readonly Regex QuantityMeasurementPattern = new(
+            @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>[a-z0-9/\-\s]+?)(?=(?:\band\b)|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex QuantityBeforeLabelPattern = new(
+            @"\b(?<qty>\d{1,3})\s+(?<label>[a-z0-9/\-\s]+?)\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly HashSet<string> ValidSides = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -214,6 +221,12 @@ namespace ESSDesign.Server.Services
                 return new InterpretationResult();
             }
 
+            var heuristicResult = TryInterpretWithHeuristics(transcript);
+            if (heuristicResult.Updates.Count > 0)
+            {
+                return heuristicResult;
+            }
+
             var apiKey = _configuration["OpenAI:ApiKey"];
             var model = _configuration["OpenAI:Model"] ?? "gpt-5-mini";
 
@@ -321,6 +334,135 @@ Catalog:
             }
 
             return result;
+        }
+
+        private InterpretationResult TryInterpretWithHeuristics(string transcript)
+        {
+            var normalizedTranscript = NormalizeTranscript(transcript);
+            var result = new InterpretationResult();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match match in QuantityMeasurementPattern.Matches(normalizedTranscript))
+            {
+                AppendHeuristicMatch(result, seenKeys, match);
+            }
+
+            foreach (Match match in QuantityBeforeLabelPattern.Matches(normalizedTranscript))
+            {
+                AppendHeuristicMatch(result, seenKeys, match);
+            }
+
+            return result;
+        }
+
+        private void AppendHeuristicMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
+        {
+            var quantity = match.Groups["qty"].Value.Trim();
+            var label = NormalizeCatalogText(match.Groups["label"].Value);
+            var measure = NormalizeMeasurement(match.Groups["measure"].Value, match.Groups["unit"].Value);
+
+            if (string.IsNullOrWhiteSpace(quantity) || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(measure))
+            {
+                return;
+            }
+
+            var catalogItem = Catalog.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.Label) &&
+                NormalizeCatalogText(item.Label).Contains(label, StringComparison.OrdinalIgnoreCase) &&
+                NormalizeMeasurement(item.Spec, string.Empty) == measure);
+
+            if (catalogItem == null)
+            {
+                catalogItem = Catalog.FirstOrDefault(item =>
+                    !string.IsNullOrWhiteSpace(item.Label) &&
+                    label.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase) &&
+                    NormalizeMeasurement(item.Spec, string.Empty) == measure);
+            }
+
+            if (catalogItem == null)
+            {
+                return;
+            }
+
+            var key = $"{catalogItem.RowId}:{catalogItem.Side}";
+            if (!seenKeys.Add(key))
+            {
+                return;
+            }
+
+            result.Updates.Add(new VoiceUpdate
+            {
+                RowId = catalogItem.RowId,
+                Side = catalogItem.Side,
+                Quantity = quantity
+            });
+        }
+
+        private static string NormalizeTranscript(string transcript)
+        {
+            var normalized = transcript
+                .ToLowerInvariant()
+                .Replace(",", " ")
+                .Replace(";", " ")
+                .Replace(":", " ")
+                .Replace(" metres ", " metre ")
+                .Replace(" meters ", " meter ")
+                .Replace(" millimetres ", " millimetre ");
+
+            return Regex.Replace(normalized, @"\s+", " ").Trim();
+        }
+
+        private static string NormalizeCatalogText(string value)
+        {
+            return value
+                .ToLowerInvariant()
+                .Replace("/", " ")
+                .Replace("-", " ")
+                .Replace("(", " ")
+                .Replace(")", " ")
+                .Replace("  ", " ")
+                .Trim();
+        }
+
+        private static string NormalizeMeasurement(string measure, string unit)
+        {
+            var cleanMeasure = measure.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(cleanMeasure))
+            {
+                return string.Empty;
+            }
+
+            var normalizedUnit = unit.Trim().ToLowerInvariant();
+            if (normalizedUnit.StartsWith("met"))
+            {
+                normalizedUnit = "m";
+            }
+            else if (normalizedUnit.StartsWith("mill"))
+            {
+                normalizedUnit = "mm";
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedUnit))
+            {
+                if (cleanMeasure.EndsWith("mm"))
+                {
+                    return cleanMeasure;
+                }
+
+                if (cleanMeasure.EndsWith("m"))
+                {
+                    return cleanMeasure;
+                }
+
+                return cleanMeasure;
+            }
+
+            if (normalizedUnit == "m" && !cleanMeasure.Contains('.'))
+            {
+                cleanMeasure = $"{cleanMeasure}.0";
+            }
+
+            return $"{cleanMeasure}{normalizedUnit}";
         }
     }
 }
