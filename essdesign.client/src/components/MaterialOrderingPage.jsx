@@ -1,20 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { materialOrdersAPI, safetyProjectsAPI } from '../services/api';
 
+const SECTION_HEADER_LABELS = new Set([
+    'TIMBER BOARDS',
+    'SCAFFOLD CLIPS',
+    'SCAFFOLD TUBE',
+    'SCAFFOLD STAIRS',
+    'LADDER HATCHES',
+    'SALE ITEMS'
+]);
+
 const PICKING_CARD_ROWS = [
     { id: 'r09', left: ['STANDARDS', '3.0M'], middle: ['HARDWOOD S/BDS', '0.5M'], right: ['6m / 5.4m', ''] },
     { id: 'r10', left: ['STANDARDS', '2.5M'], middle: ['HARDWOOD S/BDS', '1.5M'], right: ['4.8m / 4.2m', ''] },
     { id: 'r11', left: ['STANDARDS', '2.0M'], middle: ['SCREWJACKS', ''], right: ['3.6m', ''] },
     { id: 'r12', left: ['STANDARDS', '1.5M'], middle: ['U HEAD JACK', ''], right: ['3m', ''] },
     { id: 'r13', left: ['STANDARDS', '1.0M'], middle: ['SWIVEL JACK', ''], right: ['2.4m', ''] },
-    { id: 'r14', left: ['STANDARDS', '0.5M'], middle: ['TIMBER BOARDS', ''], right: ['LADDER HATCHERS', ''] },
+    { id: 'r14', left: ['STANDARDS', '0.5M'], middle: ['TIMBER BOARDS', ''], right: ['LADDER HATCHES', ''] },
     { id: 'r15', left: ['STD INTERMED 2M', 'LOCK'], middle: ['TIMBER BRDS', '3.6M'], right: ['CORNER BRACKET', '1 X 2'] },
     { id: 'r16', left: ['OPEN/END', '3.0M'], middle: ['TIMBER BRDS', '3.0M'], right: ['CORNER BRACKET', '2 X 2'] },
     { id: 'r17', left: ['OPEN/END', '2.5M'], middle: ['TIMBER BRDS', '2.4M'], right: ['CORNER BRACKET', '2 X 3'] },
     { id: 'r18', left: ['OPEN/END', '2.0M'], middle: ['TIMBER BRDS', '1.8M'], right: ['HANDRAIL POST (STD)', '1M'] },
     { id: 'r19', left: ['OPEN/END', '1.5M'], middle: ['TIMBER BRDS', '1.5M'], right: ['H/RAIL TIE POST', '0.75'] },
     { id: 'r20', left: ['OPEN/END', '1.0M'], middle: ['TIMBER BRDS', '1.2M'], right: ['H/RAIL TIE POST', '0.3'] },
-    { id: 'r21', left: ['STD 1 STAR O/E', '0.5M'], middle: ['SCAFFOLD CILPS', ''], right: ['WALL TIE BRKETS', ''] },
+    { id: 'r21', left: ['STD 1 STAR O/E', '0.5M'], middle: ['SCAFFOLD CLIPS', ''], right: ['WALL TIE BRKETS', ''] },
     { id: 'r22', left: ['LEDGERS', '2.4M'], middle: ['DOUBLE CLIP 90\'S', ''], right: ['WALL TIE DOUBLE', ''] },
     { id: 'r23', left: ['LEDGERS', '1.8M'], middle: ['DOUBLE SAFETY', ''], right: ['WALL TIE SAFETY', ''] },
     { id: 'r24', left: ['LEDGERS', '1.2M'], middle: ['SWIVEL', ''], right: ['LADDER BEAMS', '6.3'] },
@@ -78,7 +87,10 @@ function createBlankOrder(user) {
         requestedByName: user?.fullName || user?.email || '',
         orderDate: todayDate(),
         notes: '',
-        itemValues: { __time: '' }
+        itemValues: {
+            __time: '',
+            __scaffoldingSystem: 'Kwikstage'
+        }
     };
 }
 
@@ -92,6 +104,7 @@ function normalizeOrder(order, user) {
         orderDate: order?.orderDate || fallback.orderDate,
         itemValues: {
             __time: order?.itemValues?.__time || '',
+            __scaffoldingSystem: order?.itemValues?.__scaffoldingSystem || 'Kwikstage',
             ...(order?.itemValues || {})
         }
     };
@@ -115,13 +128,15 @@ function MetadataRow({ label, control, sideLabel, sideValue }) {
 function ItemCell({ entry, value, onChange }) {
     const [label, spec] = entry;
     const empty = !label && !spec;
+    const normalizedLabel = (label || '').trim().toUpperCase();
+    const isSectionHeader = SECTION_HEADER_LABELS.has(normalizedLabel) && !spec;
 
     return (
         <>
-            <td className={`picking-item-label ${empty ? 'is-empty' : ''}`}>{label || ''}</td>
-            <td className={`picking-item-spec ${empty ? 'is-empty' : ''}`}>{spec || ''}</td>
-            <td className={`picking-item-qty ${empty ? 'is-empty' : ''}`}>
-                {!empty ? (
+            <td className={`picking-item-label ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>{label || ''}</td>
+            <td className={`picking-item-spec ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>{spec || ''}</td>
+            <td className={`picking-item-qty ${empty ? 'is-empty' : ''} ${isSectionHeader ? 'is-section-header' : ''}`}>
+                {!empty && !isSectionHeader ? (
                     <input
                         type="number"
                         min="0"
@@ -146,14 +161,19 @@ export default function MaterialOrderingPage({ user }) {
     useEffect(() => {
         let active = true;
 
-        Promise.all([
+        Promise.allSettled([
             safetyProjectsAPI.getBuilders({ includeArchived: true }),
             materialOrdersAPI.getOrders()
         ])
-            .then(([nextBuilders, nextOrders]) => {
+            .then(([buildersResult, ordersResult]) => {
                 if (!active) return;
+
+                const nextBuilders = buildersResult.status === 'fulfilled' ? buildersResult.value : [];
+                const nextOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
+
                 setBuilders(nextBuilders);
                 setOrders(nextOrders);
+
                 if (nextOrders[0]) {
                     setSelectedOrderId(nextOrders[0].id);
                     setForm(normalizeOrder(nextOrders[0], user));
@@ -161,9 +181,15 @@ export default function MaterialOrderingPage({ user }) {
                     setSelectedOrderId('new');
                     setForm(createBlankOrder(user));
                 }
-            })
-            .catch((err) => {
-                if (active) setError(err.message || 'Failed to load material orders');
+
+                if (buildersResult.status === 'rejected') {
+                    setError(buildersResult.reason?.message || 'Failed to load builders');
+                    return;
+                }
+
+                if (ordersResult.status === 'rejected') {
+                    setError(`${ordersResult.reason?.message || 'Failed to load material orders'}. Run migration 015 to create public.ess_material_orders.`);
+                }
             })
             .finally(() => {
                 if (active) setLoading(false);
@@ -353,7 +379,7 @@ export default function MaterialOrderingPage({ user }) {
                                 </thead>
                                 <tbody>
                                     <MetadataRow
-                                        label="CUSTOMER :"
+                                        label="BUILDER :"
                                         control={(
                                             <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
                                                 <option value="">Select builder</option>
@@ -366,7 +392,7 @@ export default function MaterialOrderingPage({ user }) {
                                         sideValue={dayLabel}
                                     />
                                     <MetadataRow
-                                        label="SITE ADDRESS :"
+                                        label="PROJECT :"
                                         control={(
                                             <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
                                                 <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
@@ -383,6 +409,21 @@ export default function MaterialOrderingPage({ user }) {
                                                 placeholder="7am"
                                             />
                                         )}
+                                    />
+                                    <MetadataRow
+                                        label="SCAFFOLDING SYSTEM :"
+                                        control={(
+                                            <select
+                                                value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
+                                                onChange={(e) => handleQuantityChange('__scaffoldingSystem', e.target.value)}
+                                            >
+                                                <option value="Kwikstage">Kwikstage</option>
+                                                <option value="AT-PAC">AT-PAC</option>
+                                                <option value="Layher">Layher</option>
+                                            </select>
+                                        )}
+                                        sideLabel="TOTAL QTY"
+                                        sideValue={<span className="picking-static-value">{totalQuantity}</span>}
                                     />
                                     <MetadataRow
                                         label="DETAILS"

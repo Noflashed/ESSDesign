@@ -1424,22 +1424,22 @@ body {
 
 .picking-sheet-table {
     width: 100%;
-    min-width: 1120px;
+    min-width: 980px;
     border-collapse: collapse;
     table-layout: fixed;
     background: #fff;
 }
 
 .picking-sheet-table .w-label {
-    width: 18%;
+    width: 17%;
 }
 
 .picking-sheet-table .w-spec {
-    width: 7%;
+    width: 6%;
 }
 
 .picking-sheet-table .w-qty {
-    width: 8.33%;
+    width: 10.33%;
 }
 
 .picking-sheet-table th,
@@ -1529,6 +1529,17 @@ body {
 .picking-item-spec {
     text-align: center;
     font-weight: 700;
+}
+
+.picking-item-label.is-section-header,
+.picking-item-spec.is-section-header,
+.picking-item-qty.is-section-header {
+    background: #0b7dc0;
+    color: #fff;
+}
+
+.picking-item-spec.is-section-header {
+    text-align: left;
 }
 
 .picking-item-qty input {
@@ -1630,6 +1641,13 @@ body {
 [data-theme='dark'] .picking-item-spec.is-empty,
 [data-theme='dark'] .picking-item-qty.is-empty {
     background: rgba(30, 41, 59, 0.72);
+}
+
+[data-theme='dark'] .picking-item-label.is-section-header,
+[data-theme='dark'] .picking-item-spec.is-section-header,
+[data-theme='dark'] .picking-item-qty.is-section-header {
+    background: #075985;
+    color: #e0f2fe;
 }
 
 @media (max-width: 1180px) {
