@@ -30,18 +30,15 @@ namespace ESSDesign.Server.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<MaterialOrderingAiService> _logger;
-        private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
         private static readonly Regex QuantityMeasurementPattern = new(
-            @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>[a-z0-9/\-\s]+?)(?=(?:\band\b)|$)",
+            @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+)(?=(?:\band\b)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex QuantityBeforeLabelPattern = new(
-            @"\b(?<qty>\d{1,3})\s+(?<label>[a-z0-9/\-\s]+?)\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
+            @"\b(?<qty>\d{1,3})\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)\s+(?:at\s+)?(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex MergedDecimalMeasurementPattern = new(
-            @"\b(?<merged>\d+\.\d+)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>[a-z0-9/\-\s]+?)(?=(?:\band\b)|$)",
+            @"\b(?<merged>\d+\.\d+)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+)(?=(?:\band\b)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
@@ -252,7 +249,8 @@ namespace ESSDesign.Server.Services
             }
 
             var apiKey = _configuration["OpenAI:ApiKey"];
-            var model = _configuration["OpenAI:Model"] ?? "gpt-5-mini";
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+            var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
@@ -283,7 +281,7 @@ Transcript:
 {transcript}
 
 Catalog:
-{JsonSerializer.Serialize(Catalog, _jsonOptions)}
+{JsonSerializer.Serialize(promptCatalog, _jsonOptions)}
 """;
 
             var payload = new
@@ -332,7 +330,7 @@ Catalog:
                 return new InterpretationResult();
             }
 
-            var validRowKeys = Catalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
             var result = new InterpretationResult();
 
             foreach (var updateElement in updatesElement.EnumerateArray())
@@ -458,7 +456,7 @@ Catalog:
                 var key = $"{catalogItem.RowId}:{catalogItem.Side}";
                 if (!seenKeys.Add(key))
                 {
-                    return;
+                    continue;
                 }
 
                 result.Updates.Add(new VoiceUpdate
@@ -493,7 +491,9 @@ Catalog:
                     continue;
                 }
 
-                if (signature.Length == 1 && prefix.Length == 1)
+                if (signature.Length == 1 &&
+                    prefix.Length == 1 &&
+                    Regex.IsMatch(rawMeasure, @"^\s*\d+(?:\.0+)?\s*(m|mm|metre|metres|meter|meters)?\s*$", RegexOptions.IgnoreCase))
                 {
                     return $"{prefix}0";
                 }
@@ -586,14 +586,16 @@ Catalog:
 
         private static string NormalizeTranscript(string transcript)
         {
-            var normalized = transcript
+            var normalized = CanonicalizeNumberWords(transcript
                 .ToLowerInvariant()
                 .Replace(",", " ")
                 .Replace(";", " ")
                 .Replace(":", " ")
-                .Replace(" metres ", " metre ")
-                .Replace(" meters ", " meter ")
-                .Replace(" millimetres ", " millimetre ");
+                .Replace("&", " and "));
+
+            normalized = Regex.Replace(normalized, @"\bmetres?\b", "metre");
+            normalized = Regex.Replace(normalized, @"\bmillimetres?\b", "millimetre");
+            normalized = Regex.Replace(normalized, @"\bmeters?\b", "meter");
 
             normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
             foreach (var (pattern, replacement) in VoiceAliases)
@@ -612,7 +614,6 @@ Catalog:
                 .Replace("-", " ")
                 .Replace("(", " ")
                 .Replace(")", " ")
-                .Replace("  ", " ")
                 .Trim();
 
             foreach (var (pattern, replacement) in VoiceAliases)
@@ -620,18 +621,52 @@ Catalog:
                 normalized = pattern.Replace(normalized, replacement);
             }
 
-            return normalized;
+            return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
 
         private static string NormalizeMeasurement(string measure, string unit)
         {
-            var cleanMeasure = measure.Trim().ToLowerInvariant();
+            var cleanMeasure = measure.Trim().ToLowerInvariant().Replace(" ", string.Empty);
             if (string.IsNullOrWhiteSpace(cleanMeasure))
             {
                 return string.Empty;
             }
 
-            var normalizedUnit = unit.Trim().ToLowerInvariant();
+            var normalizedUnit = unit.Trim().ToLowerInvariant().Replace(" ", string.Empty);
+            if (string.IsNullOrWhiteSpace(normalizedUnit))
+            {
+                if (cleanMeasure.EndsWith("millimetre"))
+                {
+                    cleanMeasure = cleanMeasure[..^"millimetre".Length];
+                    normalizedUnit = "mm";
+                }
+                else if (cleanMeasure.EndsWith("millimetres"))
+                {
+                    cleanMeasure = cleanMeasure[..^"millimetres".Length];
+                    normalizedUnit = "mm";
+                }
+                else if (cleanMeasure.EndsWith("mm"))
+                {
+                    cleanMeasure = cleanMeasure[..^2];
+                    normalizedUnit = "mm";
+                }
+                else if (cleanMeasure.EndsWith("metre"))
+                {
+                    cleanMeasure = cleanMeasure[..^"metre".Length];
+                    normalizedUnit = "m";
+                }
+                else if (cleanMeasure.EndsWith("meter"))
+                {
+                    cleanMeasure = cleanMeasure[..^"meter".Length];
+                    normalizedUnit = "m";
+                }
+                else if (cleanMeasure.EndsWith("m"))
+                {
+                    cleanMeasure = cleanMeasure[..^1];
+                    normalizedUnit = "m";
+                }
+            }
+
             if (normalizedUnit.StartsWith("met"))
             {
                 normalizedUnit = "m";
@@ -643,16 +678,6 @@ Catalog:
 
             if (string.IsNullOrWhiteSpace(normalizedUnit))
             {
-                if (cleanMeasure.EndsWith("mm"))
-                {
-                    return cleanMeasure;
-                }
-
-                if (cleanMeasure.EndsWith("m"))
-                {
-                    return cleanMeasure;
-                }
-
                 return cleanMeasure;
             }
 
@@ -662,6 +687,89 @@ Catalog:
             }
 
             return $"{cleanMeasure}{normalizedUnit}";
+        }
+
+        private static string CanonicalizeNumberWords(string input)
+        {
+            var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["zero"] = 0,
+                ["one"] = 1,
+                ["two"] = 2,
+                ["three"] = 3,
+                ["four"] = 4,
+                ["five"] = 5,
+                ["six"] = 6,
+                ["seven"] = 7,
+                ["eight"] = 8,
+                ["nine"] = 9,
+                ["ten"] = 10,
+                ["eleven"] = 11,
+                ["twelve"] = 12,
+                ["thirteen"] = 13,
+                ["fourteen"] = 14,
+                ["fifteen"] = 15,
+                ["sixteen"] = 16,
+                ["seventeen"] = 17,
+                ["eighteen"] = 18,
+                ["nineteen"] = 19,
+                ["twenty"] = 20,
+                ["thirty"] = 30,
+                ["forty"] = 40,
+                ["fifty"] = 50,
+                ["sixty"] = 60,
+                ["seventy"] = 70,
+                ["eighty"] = 80,
+                ["ninety"] = 90,
+            };
+
+            var tokens = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var output = new List<string>();
+
+            for (var index = 0; index < tokens.Length;)
+            {
+                if (!numberWords.ContainsKey(tokens[index]))
+                {
+                    output.Add(tokens[index]);
+                    index += 1;
+                    continue;
+                }
+
+                var value = 0;
+                var consumed = 0;
+                while (index + consumed < tokens.Length && numberWords.TryGetValue(tokens[index + consumed], out var tokenValue))
+                {
+                    value += tokenValue;
+                    consumed += 1;
+                    if (index + consumed < tokens.Length && string.Equals(tokens[index + consumed], "and", StringComparison.OrdinalIgnoreCase))
+                    {
+                        consumed += 1;
+                    }
+                }
+
+                if (index + consumed < tokens.Length && string.Equals(tokens[index + consumed], "point", StringComparison.OrdinalIgnoreCase))
+                {
+                    var decimalDigits = new StringBuilder();
+                    consumed += 1;
+                    while (index + consumed < tokens.Length && numberWords.TryGetValue(tokens[index + consumed], out var decimalValue))
+                    {
+                        decimalDigits.Append(decimalValue);
+                        consumed += 1;
+                    }
+
+                    if (decimalDigits.Length > 0)
+                    {
+                        output.Add($"{value}.{decimalDigits}");
+                        index += consumed;
+                        continue;
+                    }
+                }
+
+                output.Add(value.ToString());
+                index += consumed;
+            }
+
+            return string.Join(' ', output);
         }
     }
 }
