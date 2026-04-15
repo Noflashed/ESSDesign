@@ -2634,6 +2634,8 @@ body {
 
 .settings-page {
     padding-top: 18px;
+    background: #ffffff;
+    min-height: calc(100vh - 88px);
 }
 
 .settings-layout {
@@ -2647,6 +2649,7 @@ body {
 
 .settings-sidebar {
     padding-top: 2px;
+    background: #ffffff;
 }
 
 .settings-sidebar-title {
@@ -2689,6 +2692,7 @@ body {
 .settings-content {
     min-width: 0;
     padding-top: 12px;
+    background: #ffffff;
 }
 
 .settings-section-header {
@@ -2719,7 +2723,7 @@ body {
 
 .settings-divider {
     height: 1px;
-    background: var(--border-color);
+    background: rgba(148, 163, 184, 0.28);
     margin: 26px 0;
 }
 
@@ -2817,6 +2821,19 @@ body {
     margin-bottom: 16px;
 }
 
+.settings-role-toolbar .module-secondary-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(249, 115, 22, 0.35);
+    color: #c25500;
+    background: #fff7ed;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.settings-role-toolbar .module-secondary-btn:hover {
+    background: #ffedd5;
+    border-color: rgba(249, 115, 22, 0.48);
+}
+
 .settings-role-search {
     width: min(320px, 100%);
     padding: 10px 14px;
@@ -2833,6 +2850,28 @@ body {
 
 .settings-role-user {
     min-width: 0;
+}
+
+.settings-role-table-head {
+    display: grid;
+    grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: center;
+    padding: 0 0 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+    margin-bottom: 2px;
+}
+
+.settings-role-table-head span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.settings-role-table-head span:last-child {
+    justify-self: end;
 }
 
 .settings-role-user strong {
@@ -2883,6 +2922,50 @@ body {
 
 [data-theme='dark'] .settings-sidebar-item.active {
     background: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme='dark'] .settings-page,
+[data-theme='dark'] .settings-sidebar,
+[data-theme='dark'] .settings-content {
+    background: #ffffff;
+}
+
+[data-theme='dark'] .settings-sidebar-title,
+[data-theme='dark'] .settings-sidebar-item,
+[data-theme='dark'] .settings-sidebar-item:hover,
+[data-theme='dark'] .settings-sidebar-item.active,
+[data-theme='dark'] .settings-section-kicker,
+[data-theme='dark'] .settings-section-header h1,
+[data-theme='dark'] .settings-row-label h2,
+[data-theme='dark'] .settings-account-line span,
+[data-theme='dark'] .settings-role-user strong,
+[data-theme='dark'] .settings-role-select {
+    color: #111827;
+}
+
+[data-theme='dark'] .settings-section-header p,
+[data-theme='dark'] .settings-row-label p,
+[data-theme='dark'] .settings-account-line strong,
+[data-theme='dark'] .settings-role-user span,
+[data-theme='dark'] .settings-inline-message,
+[data-theme='dark'] .settings-role-empty,
+[data-theme='dark'] .settings-role-search::placeholder,
+[data-theme='dark'] .settings-role-table-head span {
+    color: #6b7280;
+}
+
+[data-theme='dark'] .settings-role-search,
+[data-theme='dark'] .settings-theme-toggle,
+[data-theme='dark'] .settings-theme-option.active {
+    background: #ffffff;
+    color: #111827;
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+[data-theme='dark'] .settings-role-toolbar .module-secondary-btn {
+    color: #c25500;
+    background: #fff7ed;
+    border-color: rgba(249, 115, 22, 0.35);
 }
 
 [data-theme='dark'] .settings-theme-toggle {

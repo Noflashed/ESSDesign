@@ -156,6 +156,10 @@ export default function SettingsPage({
                                     {usersError ? <div className="settings-inline-message error">{usersError}</div> : null}
 
                                     <div className="settings-role-list">
+                                        <div className="settings-role-table-head">
+                                            <span>User</span>
+                                            <span>Role</span>
+                                        </div>
                                         {usersLoading ? (
                                             <div className="settings-role-empty">Loading users...</div>
                                         ) : filteredManagedUsers.length === 0 ? (
