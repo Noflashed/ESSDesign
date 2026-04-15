@@ -1738,6 +1738,7 @@ namespace ESSDesign.Server.Services
                     user.Role = roles.TryGetValue(user.Id, out var role)
                         ? role
                         : await EnsureUserRoleAsync(user.Id);
+                    await EnrichUserInfoWithEmployeeRoleAsync(user);
                 }
 
                 return users;
@@ -1773,6 +1774,7 @@ namespace ESSDesign.Server.Services
                     user.Role = roles.TryGetValue(user.Id, out var role)
                         ? role
                         : await EnsureUserRoleAsync(user.Id);
+                    await EnrichUserInfoWithEmployeeRoleAsync(user);
                 }
 
                 return users;
