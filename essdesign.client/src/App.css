@@ -1460,18 +1460,18 @@ body {
 
 .picking-sheet-table {
     width: 100%;
-    min-width: 1080px;
+    min-width: 980px;
     border-collapse: collapse;
     table-layout: fixed;
     background: #fff;
 }
 
 .picking-sheet-table .w-label {
-    width: 18%;
+    width: 17%;
 }
 
 .picking-sheet-table .w-spec {
-    width: 5%;
+    width: 6%;
 }
 
 .picking-sheet-table .w-qty {
