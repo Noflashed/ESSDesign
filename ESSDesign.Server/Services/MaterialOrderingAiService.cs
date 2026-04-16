@@ -84,6 +84,8 @@ namespace ESSDesign.Server.Services
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
             (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
+            (new Regex(@"\bthai\s*bars?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
+            (new Regex(@"\bthai\s*wire\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie wire"),
             (new Regex(@"\bscrew\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "screwjacks"),
             (new Regex(@"\bu\s*head\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "u head jack"),
             (new Regex(@"\bswivel\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "swivel jack"),
@@ -289,7 +291,6 @@ namespace ESSDesign.Server.Services
             var normalizedTranscript = NormalizeTranscript(transcript);
             var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
             var heuristicResult = TryInterpretWithHeuristics(transcript);
-            var preAiResult = MergeInterpretationResults(rememberedResult, heuristicResult);
 
             var apiKey = _configuration["OpenAI:ApiKey"];
             var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
@@ -298,7 +299,7 @@ namespace ESSDesign.Server.Services
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return preAiResult;
+                return MergeInterpretationResults(rememberedResult, heuristicResult);
             }
 
             var client = _httpClientFactory.CreateClient();
@@ -313,13 +314,19 @@ Rules:
 - Measurements/specs matter. If an item name exists in multiple sizes, do not match it unless the size/spec is clear.
 - Decimal sizes matter, for example 3.0M, 2.4M, 0.745, 0.95M, 0.6MM.
 - Support natural speech like 'put 10 standards at 3 metres', '20 two point four ledgers', 'add 6 screwjacks and 4 swivels'.
+- Scan the whole transcript for the most plausible scaffold item and row, even when the wording is imperfect.
 - Correct likely speech-to-text mistakes and near-miss terms to the closest scaffold item when the intent is clear.
 - Be lenient with singular/plural, spacing, hyphenation, and common site shorthand.
 - Infer likely intended terms from messy transcripts, for example:
   - 'free metre standards' -> '3 metre standards'
+  - '18 3 metre standards' -> quantity 18, standards 3.0M
+  - '28 2.4 metre ledges' -> quantity 28, ledgers 2.4M
+  - '20 1.2 metre infill boards' -> quantity 20, infill boards 1.2M
+  - 'thai bar 1.2' -> 'tie bars 1.2M'
   - '2 board hop up' -> 'HOP-UP BRACKETS 2'
-  - 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
+- 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
 - If an item has no measurement/spec, choose the most plausible row for that named item from the catalog.
+- If the transcript says '3 metre', 'three metre', or '3m', treat them as the same measurement where the catalog uses 3.0M.
 - If confidence is low but you have a strong guess, return it in suggestions instead of updates.
 - Quantity must be an integer string.
 - Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}],"suggestions":[{"heardPhrase":"free metre standards","rowId":"r09","side":"left","quantity":"3","label":"STANDARDS","spec":"3.0M","confidence":0.62}]}
@@ -359,9 +366,10 @@ Helpful item phrases:
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("OpenAI interpretation failed: {StatusCode} {Body}", response.StatusCode, responseContent);
-                if (preAiResult.Updates.Count > 0 || preAiResult.Suggestions.Count > 0)
+                var fallbackResult = MergeInterpretationResults(rememberedResult, heuristicResult);
+                if (fallbackResult.Updates.Count > 0 || fallbackResult.Suggestions.Count > 0)
                 {
-                    return preAiResult;
+                    return fallbackResult;
                 }
 
                 throw new InvalidOperationException("Voice interpretation failed on the backend.");
@@ -377,21 +385,21 @@ Helpful item phrases:
 
             if (string.IsNullOrWhiteSpace(content))
             {
-                return preAiResult;
+                return MergeInterpretationResults(rememberedResult, heuristicResult);
             }
 
             using var structuredDocument = JsonDocument.Parse(content);
             var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
             var result = new InterpretationResult();
             var seenKeys = new HashSet<string>(
-                preAiResult.Updates.Select(update => $"{update.RowId}:{update.Side}"),
+                rememberedResult.Updates.Select(update => $"{update.RowId}:{update.Side}"),
                 StringComparer.OrdinalIgnoreCase);
             var seenSuggestionKeys = new HashSet<string>(
-                preAiResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}"),
+                rememberedResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}"),
                 StringComparer.OrdinalIgnoreCase);
 
-            result.Updates.AddRange(preAiResult.Updates);
-            result.Suggestions.AddRange(preAiResult.Suggestions);
+            result.Updates.AddRange(rememberedResult.Updates);
+            result.Suggestions.AddRange(rememberedResult.Suggestions);
 
             if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
                 updatesElement.ValueKind == JsonValueKind.Array)
@@ -474,7 +482,7 @@ Helpful item phrases:
                 }
             }
 
-            return result;
+            return MergeInterpretationResults(result, heuristicResult);
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
@@ -1156,6 +1164,12 @@ Helpful item phrases:
                         aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count} board hop up" });
                         aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"hop up {count} board" });
                     }
+                }
+
+                if (label.StartsWith("tie bars", StringComparison.OrdinalIgnoreCase))
+                {
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"tie bar {spec}".Trim() });
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"thai bar {spec}".Trim() });
                 }
             }
 
