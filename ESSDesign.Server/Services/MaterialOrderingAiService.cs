@@ -24,6 +24,7 @@ namespace ESSDesign.Server.Services
         public sealed class InterpretationDebug
         {
             public string NormalizedTranscript { get; set; } = string.Empty;
+            public List<string> Segments { get; set; } = new();
             public List<string> AnchoredRows { get; set; } = new();
             public List<string> UpdatesBeforePrune { get; set; } = new();
             public List<string> UpdatesAfterPrune { get; set; } = new();
@@ -83,6 +84,14 @@ namespace ESSDesign.Server.Services
             @"\b(?<qty>\d{1,3})\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)\s+(?:at\s+)?(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly Regex QuantityOfTheMeasureLabelPattern = new(
+            @"\b(?<qty>\d{1,3})\s+(?:of\s+)?(?:the\s+)?(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)(?=\s+(?:and\b|\d)|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex QuantityBoardLabelPattern = new(
+            @"\b(?<qty>\d{1,3})\s+(?:of\s+)?(?:the\s+)?(?<measure>\d+)\s+(?<unit>board|boards)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)(?=\s+(?:and\b|\d)|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex MergedDecimalMeasurementPattern = new(
             @"\b(?<merged>\d+\.\d+)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+)(?=(?:\band\b)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -93,12 +102,22 @@ namespace ESSDesign.Server.Services
             @"\b(?<qty>\d{1,3})\s+(?<measure>\d+(?:\.\d+)?)\s*(?<unit>m|mm|metre|metres|meter|meters|millimetre|millimetres)\s+(?<label>(?:[a-z0-9/\-]+\s+){0,5}[a-z0-9/\-]+?)(?=\s+(?:and\b|\d)|$)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private static readonly Regex SegmentNoisePattern = new(
+            @"\b(?:also\s+put\s+in\s+there|also\s+put\s+in|also\s+put|put\s+in\s+there|put\s+in|if\s+you\s+can|as\s+well|we\s+also\s+need|we\s+need|i\s+need|give\s+me|can\s+you|please)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex QuantityStartPattern = new(
+            @"(^|\s)(?<qty>\d{1,3})(?=\s)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
             (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
             (new Regex(@"\bthai\s*bars?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
             (new Regex(@"\bthai\s*bales?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
             (new Regex(@"\bthai\s*wire\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie wire"),
+            (new Regex(@"\b(\d+)\s+wood(?=\s+pop[\s-]*ups?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled), "$1 board"),
+            (new Regex(@"\bpop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "hop up"),
             (new Regex(@"\binfield\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "infill"),
             (new Regex(@"\bfree\s*meat\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3 metre"),
             (new Regex(@"\bfree\s*meter\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3 metre"),
@@ -304,9 +323,11 @@ namespace ESSDesign.Server.Services
             }
 
             var normalizedTranscript = NormalizeTranscript(transcript);
+            var segments = SegmentInstructions(normalizedTranscript);
             var debug = new InterpretationDebug
             {
-                NormalizedTranscript = normalizedTranscript
+                NormalizedTranscript = normalizedTranscript,
+                Segments = segments
             };
             var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
             var heuristicResult = TryInterpretWithHeuristics(transcript);
@@ -341,6 +362,12 @@ Rules:
 - Scan the whole transcript for the most plausible scaffold item and row, even when the wording is imperfect.
 - Correct likely speech-to-text mistakes and near-miss terms to the closest scaffold item when the intent is clear.
 - Be lenient with singular/plural, spacing, hyphenation, and common site shorthand.
+- Parse the transcript as a sequence of scaffold item instructions, not as one bag of words.
+- Treat filler words like 'also', 'put in', 'of the', 'if you can', 'as well', 'we also need' as noise between item instructions.
+- If two adjacent spoken numbers likely represent quantity + measurement, split them intelligently. Example:
+  - 'thirty three metre standards' means quantity 30 of 3.0M standards, not 33 of an impossible 33-metre standard.
+  - 'twenty one point two metre infill boards' means quantity 20 of 1.2M infill boards when 21.2M is not a valid catalog measurement.
+- Never infer quantity from the measurement itself. A measurement token should only become quantity if splitting adjacent spoken numbers makes the catalog match clearer.
 - Infer likely intended terms from messy transcripts, for example:
   - 'free metre standards' -> '3 metre standards'
   - '18 3 metre standards' -> quantity 18, standards 3.0M
@@ -359,6 +386,9 @@ Rules:
             var userPrompt = $"""
 Transcript:
 {transcript}
+
+Normalized segmented instructions:
+{JsonSerializer.Serialize(segments, _jsonOptions)}
 
 Catalog:
 {JsonSerializer.Serialize(promptCatalog, _jsonOptions)}
@@ -533,28 +563,40 @@ Helpful item phrases:
             var result = new InterpretationResult();
             var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (Match match in QuantityMeasurementPattern.Matches(normalizedTranscript))
+            foreach (var segment in SegmentInstructions(normalizedTranscript))
             {
-                AppendHeuristicMatch(result, seenKeys, match);
-            }
+                foreach (Match match in QuantityMeasurementPattern.Matches(segment))
+                {
+                    AppendHeuristicMatch(result, seenKeys, match);
+                }
 
-            foreach (Match match in QuantityBeforeLabelPattern.Matches(normalizedTranscript))
-            {
-                AppendHeuristicMatch(result, seenKeys, match);
-            }
+                foreach (Match match in QuantityBeforeLabelPattern.Matches(segment))
+                {
+                    AppendHeuristicMatch(result, seenKeys, match);
+                }
 
-            // Handles "20 3m standards", "6 2.4m ledgers" — qty and measure already separate tokens
-            foreach (Match match in QuantityThenMeasureLabelPattern.Matches(normalizedTranscript))
-            {
-                AppendHeuristicMatch(result, seenKeys, match);
-            }
+                foreach (Match match in QuantityOfTheMeasureLabelPattern.Matches(segment))
+                {
+                    AppendHeuristicMatch(result, seenKeys, match);
+                }
 
-            foreach (Match match in MergedDecimalMeasurementPattern.Matches(normalizedTranscript))
-            {
-                AppendMergedDecimalMatch(result, seenKeys, match);
-            }
+                foreach (Match match in QuantityThenMeasureLabelPattern.Matches(segment))
+                {
+                    AppendHeuristicMatch(result, seenKeys, match);
+                }
 
-            AppendAliasOnlyMatches(result, seenKeys, normalizedTranscript);
+                foreach (Match match in QuantityBoardLabelPattern.Matches(segment))
+                {
+                    AppendHeuristicMatch(result, seenKeys, match);
+                }
+
+                foreach (Match match in MergedDecimalMeasurementPattern.Matches(segment))
+                {
+                    AppendMergedDecimalMatch(result, seenKeys, match);
+                }
+
+                AppendAliasOnlyMatches(result, seenKeys, segment);
+            }
 
             return result;
         }
@@ -642,22 +684,71 @@ Helpful item phrases:
                 anchoredItems.Add(catalogItem);
             }
 
-            foreach (Match match in QuantityMeasurementPattern.Matches(normalizedTranscript))
+            foreach (var segment in SegmentInstructions(normalizedTranscript))
             {
-                AppendAnchoredMatch(match);
-            }
+                foreach (Match match in QuantityMeasurementPattern.Matches(segment))
+                {
+                    AppendAnchoredMatch(match);
+                }
 
-            foreach (Match match in QuantityBeforeLabelPattern.Matches(normalizedTranscript))
-            {
-                AppendAnchoredMatch(match);
-            }
+                foreach (Match match in QuantityBeforeLabelPattern.Matches(segment))
+                {
+                    AppendAnchoredMatch(match);
+                }
 
-            foreach (Match match in QuantityThenMeasureLabelPattern.Matches(normalizedTranscript))
-            {
-                AppendAnchoredMatch(match);
+                foreach (Match match in QuantityOfTheMeasureLabelPattern.Matches(segment))
+                {
+                    AppendAnchoredMatch(match);
+                }
+
+                foreach (Match match in QuantityThenMeasureLabelPattern.Matches(segment))
+                {
+                    AppendAnchoredMatch(match);
+                }
+
+                foreach (Match match in QuantityBoardLabelPattern.Matches(segment))
+                {
+                    AppendAnchoredMatch(match);
+                }
             }
 
             return anchoredItems;
+        }
+
+        private static List<string> SegmentInstructions(string normalizedTranscript)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedTranscript))
+            {
+                return new List<string>();
+            }
+
+            var prepared = SegmentNoisePattern.Replace(normalizedTranscript, " | ");
+            prepared = Regex.Replace(prepared, @"\s+\|\s+", " | ").Trim();
+
+            var starts = new List<int>();
+            foreach (Match match in QuantityStartPattern.Matches(prepared))
+            {
+                var startIndex = match.Index + match.Groups[1].Length;
+                if (starts.Count == 0 || startIndex > starts[^1])
+                {
+                    starts.Add(startIndex);
+                }
+            }
+
+            var rawSegments = starts.Count > 0
+                ? starts.Select((start, index) =>
+                {
+                    var end = index + 1 < starts.Count ? starts[index + 1] : prepared.Length;
+                    return prepared[start..end];
+                })
+                : new[] { prepared };
+
+            var segments = rawSegments
+                .Select(segment => Regex.Replace(segment.Replace("|", " "), @"\s+", " ").Trim())
+                .Where(segment => Regex.IsMatch(segment, @"\d") && Regex.IsMatch(segment, @"[a-z]", RegexOptions.IgnoreCase))
+                .ToList();
+
+            return segments.Count > 0 ? segments : new List<string> { normalizedTranscript };
         }
 
         private void AppendHeuristicMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
@@ -1054,6 +1145,7 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\bfree\s+(?=(?:m|meter|metre|millimetre|mm|board))", "3 ", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bto\s+board\b", "2 board", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bfor\s+board\b", "4 board", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bfor\s+met(?:er|re)\b", "4 metre", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:meter|metre|m)\b", "$1m", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:millimetre|mm)\b", "$1mm", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+)\s+boards?\b", "$1 board", RegexOptions.IgnoreCase);
@@ -1129,6 +1221,16 @@ Helpful item phrases:
                     cleanMeasure = cleanMeasure[..^1];
                     normalizedUnit = "m";
                 }
+                else if (cleanMeasure.EndsWith("boards"))
+                {
+                    cleanMeasure = cleanMeasure[..^"boards".Length];
+                    normalizedUnit = "board";
+                }
+                else if (cleanMeasure.EndsWith("board"))
+                {
+                    cleanMeasure = cleanMeasure[..^"board".Length];
+                    normalizedUnit = "board";
+                }
             }
 
             if (normalizedUnit.StartsWith("met"))
@@ -1139,6 +1241,10 @@ Helpful item phrases:
             {
                 normalizedUnit = "mm";
             }
+            else if (normalizedUnit.StartsWith("board"))
+            {
+                normalizedUnit = "board";
+            }
 
             if (string.IsNullOrWhiteSpace(normalizedUnit))
             {
@@ -1148,6 +1254,10 @@ Helpful item phrases:
             if (normalizedUnit == "m" && !cleanMeasure.Contains('.'))
             {
                 cleanMeasure = $"{cleanMeasure}.0";
+            }
+            else if (normalizedUnit == "board")
+            {
+                return $"{cleanMeasure} board";
             }
 
             return $"{cleanMeasure}{normalizedUnit}";
