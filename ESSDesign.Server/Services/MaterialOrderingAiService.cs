@@ -18,6 +18,18 @@ namespace ESSDesign.Server.Services
         {
             public List<VoiceUpdate> Updates { get; set; } = new();
             public List<VoiceSuggestion> Suggestions { get; set; } = new();
+            public InterpretationDebug? Debug { get; set; }
+        }
+
+        public sealed class InterpretationDebug
+        {
+            public string NormalizedTranscript { get; set; } = string.Empty;
+            public List<string> AnchoredRows { get; set; } = new();
+            public List<string> UpdatesBeforePrune { get; set; } = new();
+            public List<string> UpdatesAfterPrune { get; set; } = new();
+            public List<string> SuggestionsAfterPrune { get; set; } = new();
+            public string AiContent { get; set; } = string.Empty;
+            public string Source { get; set; } = string.Empty;
         }
 
         public sealed class VoiceSuggestion
@@ -299,6 +311,10 @@ namespace ESSDesign.Server.Services
             }
 
             var normalizedTranscript = NormalizeTranscript(transcript);
+            var debug = new InterpretationDebug
+            {
+                NormalizedTranscript = normalizedTranscript
+            };
             var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
             var heuristicResult = TryInterpretWithHeuristics(transcript);
 
@@ -309,7 +325,12 @@ namespace ESSDesign.Server.Services
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return MergeInterpretationResults(rememberedResult, heuristicResult);
+                var fallback = MergeInterpretationResults(rememberedResult, heuristicResult);
+                fallback.Debug = debug;
+                fallback.Debug.Source = "no openai key";
+                fallback.Debug.UpdatesAfterPrune = fallback.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                fallback.Debug.SuggestionsAfterPrune = fallback.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+                return fallback;
             }
 
             var client = _httpClientFactory.CreateClient();
@@ -377,8 +398,12 @@ Helpful item phrases:
             {
                 _logger.LogError("OpenAI interpretation failed: {StatusCode} {Body}", response.StatusCode, responseContent);
                 var fallbackResult = MergeInterpretationResults(rememberedResult, heuristicResult);
+                fallbackResult.Debug = debug;
+                fallbackResult.Debug.Source = $"openai error {(int)response.StatusCode}";
                 if (fallbackResult.Updates.Count > 0 || fallbackResult.Suggestions.Count > 0)
                 {
+                    fallbackResult.Debug.UpdatesAfterPrune = fallbackResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                    fallbackResult.Debug.SuggestionsAfterPrune = fallbackResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
                     return fallbackResult;
                 }
 
@@ -395,8 +420,15 @@ Helpful item phrases:
 
             if (string.IsNullOrWhiteSpace(content))
             {
-                return MergeInterpretationResults(rememberedResult, heuristicResult);
+                var emptyResult = MergeInterpretationResults(rememberedResult, heuristicResult);
+                emptyResult.Debug = debug;
+                emptyResult.Debug.Source = "empty ai content";
+                emptyResult.Debug.UpdatesAfterPrune = emptyResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                emptyResult.Debug.SuggestionsAfterPrune = emptyResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+                return emptyResult;
             }
+
+            debug.AiContent = content;
 
             using var structuredDocument = JsonDocument.Parse(content);
             var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -492,7 +524,14 @@ Helpful item phrases:
                 }
             }
 
-            return PruneMeasuredFamilyUpdates(normalizedTranscript, MergeInterpretationResults(result, heuristicResult));
+            var mergedResult = MergeInterpretationResults(result, heuristicResult);
+            debug.UpdatesBeforePrune = mergedResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+            var prunedResult = PruneMeasuredFamilyUpdates(normalizedTranscript, mergedResult, debug);
+            debug.UpdatesAfterPrune = prunedResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+            debug.SuggestionsAfterPrune = prunedResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+            debug.Source = "openai+heuristic";
+            prunedResult.Debug = debug;
+            return prunedResult;
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
@@ -527,9 +566,15 @@ Helpful item phrases:
             return result;
         }
 
-        private InterpretationResult PruneMeasuredFamilyUpdates(string normalizedTranscript, InterpretationResult result)
+        private InterpretationResult PruneMeasuredFamilyUpdates(string normalizedTranscript, InterpretationResult result, InterpretationDebug? debug = null)
         {
             var anchoredItems = CollectAnchoredCatalogItems(normalizedTranscript);
+            if (debug != null)
+            {
+                debug.AnchoredRows = anchoredItems
+                    .Select(item => $"{item.RowId}:{item.Side}:{item.Label}:{item.Spec}")
+                    .ToList();
+            }
             if (anchoredItems.Count == 0)
             {
                 return result;
