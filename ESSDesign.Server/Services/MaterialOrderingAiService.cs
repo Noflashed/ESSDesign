@@ -17,6 +17,19 @@ namespace ESSDesign.Server.Services
         public sealed class InterpretationResult
         {
             public List<VoiceUpdate> Updates { get; set; } = new();
+            public List<VoiceSuggestion> Suggestions { get; set; } = new();
+        }
+
+        public sealed class VoiceSuggestion
+        {
+            public string HeardPhrase { get; set; } = string.Empty;
+            public string RowId { get; set; } = string.Empty;
+            public string Side { get; set; } = string.Empty;
+            public string Quantity { get; set; } = string.Empty;
+            public string Label { get; set; } = string.Empty;
+            public string? Spec { get; set; }
+            public double Confidence { get; set; }
+            public bool NeedsConfirmation { get; set; } = true;
         }
 
         private sealed class CatalogItem
@@ -25,6 +38,24 @@ namespace ESSDesign.Server.Services
             public string Side { get; set; } = string.Empty;
             public string Label { get; set; } = string.Empty;
             public string Spec { get; set; } = string.Empty;
+        }
+
+        private sealed class CatalogAlias
+        {
+            public string RowId { get; set; } = string.Empty;
+            public string Side { get; set; } = string.Empty;
+            public string Phrase { get; set; } = string.Empty;
+        }
+
+        private sealed class VoiceMemoryRow
+        {
+            public Guid? UserId { get; set; }
+            public string HeardPhraseNormalized { get; set; } = string.Empty;
+            public string RowId { get; set; } = string.Empty;
+            public string Side { get; set; } = string.Empty;
+            public string Label { get; set; } = string.Empty;
+            public string? Spec { get; set; }
+            public int ConfirmedCount { get; set; }
         }
 
         private readonly IHttpClientFactory _httpClientFactory;
@@ -62,6 +93,7 @@ namespace ESSDesign.Server.Services
             (new Regex(@"\btransom\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "transoms"),
             (new Regex(@"\bbrace\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "braces"),
             (new Regex(@"\bboard\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "boards"),
+            (new Regex(@"\btoe\s*board\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "toe board"),
             (new Regex(@"\bput\s*log\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "putlog"),
             (new Regex(@"\bin\s*fill\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "infill"),
             (new Regex(@"\bunit\s*beam\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "unit beams"),
@@ -235,6 +267,8 @@ namespace ESSDesign.Server.Services
             new() { RowId = "r60", Side = "middle", Label = "STAIR DOOR", Spec = "" }
         };
 
+        private static readonly List<CatalogAlias> CatalogAliases = BuildCatalogAliases();
+
         public MaterialOrderingAiService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
@@ -245,26 +279,26 @@ namespace ESSDesign.Server.Services
             _logger = logger;
         }
 
-        public async Task<InterpretationResult> InterpretAsync(string transcript, CancellationToken cancellationToken)
+        public async Task<InterpretationResult> InterpretAsync(string transcript, Guid? userId, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(transcript))
             {
                 return new InterpretationResult();
             }
 
+            var normalizedTranscript = NormalizeTranscript(transcript);
+            var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
             var heuristicResult = TryInterpretWithHeuristics(transcript);
-            if (heuristicResult.Updates.Count > 0)
-            {
-                return heuristicResult;
-            }
+            var preAiResult = MergeInterpretationResults(rememberedResult, heuristicResult);
 
             var apiKey = _configuration["OpenAI:ApiKey"];
             var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
             var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
+            var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                throw new InvalidOperationException("OpenAI API key is not configured on the backend.");
+                return preAiResult;
             }
 
             var client = _httpClientFactory.CreateClient();
@@ -281,9 +315,14 @@ Rules:
 - Support natural speech like 'put 10 standards at 3 metres', '20 two point four ledgers', 'add 6 screwjacks and 4 swivels'.
 - Correct likely speech-to-text mistakes and near-miss terms to the closest scaffold item when the intent is clear.
 - Be lenient with singular/plural, spacing, hyphenation, and common site shorthand.
-- Return only confident matches.
+- Infer likely intended terms from messy transcripts, for example:
+  - 'free metre standards' -> '3 metre standards'
+  - '2 board hop up' -> 'HOP-UP BRACKETS 2'
+  - 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
+- If an item has no measurement/spec, choose the most plausible row for that named item from the catalog.
+- If confidence is low but you have a strong guess, return it in suggestions instead of updates.
 - Quantity must be an integer string.
-- Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}]}
+- Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}],"suggestions":[{"heardPhrase":"free metre standards","rowId":"r09","side":"left","quantity":"3","label":"STANDARDS","spec":"3.0M","confidence":0.62}]}
 """;
 
             var userPrompt = $"""
@@ -292,6 +331,9 @@ Transcript:
 
 Catalog:
 {JsonSerializer.Serialize(promptCatalog, _jsonOptions)}
+
+Helpful item phrases:
+{JsonSerializer.Serialize(promptAliases, _jsonOptions)}
 """;
 
             var payload = new
@@ -317,6 +359,11 @@ Catalog:
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("OpenAI interpretation failed: {StatusCode} {Body}", response.StatusCode, responseContent);
+                if (preAiResult.Updates.Count > 0 || preAiResult.Suggestions.Count > 0)
+                {
+                    return preAiResult;
+                }
+
                 throw new InvalidOperationException("Voice interpretation failed on the backend.");
             }
 
@@ -330,41 +377,101 @@ Catalog:
 
             if (string.IsNullOrWhiteSpace(content))
             {
-                return new InterpretationResult();
+                return preAiResult;
             }
 
             using var structuredDocument = JsonDocument.Parse(content);
-            if (!structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) ||
-                updatesElement.ValueKind != JsonValueKind.Array)
-            {
-                return new InterpretationResult();
-            }
-
             var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
             var result = new InterpretationResult();
+            var seenKeys = new HashSet<string>(
+                preAiResult.Updates.Select(update => $"{update.RowId}:{update.Side}"),
+                StringComparer.OrdinalIgnoreCase);
+            var seenSuggestionKeys = new HashSet<string>(
+                preAiResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}"),
+                StringComparer.OrdinalIgnoreCase);
 
-            foreach (var updateElement in updatesElement.EnumerateArray())
+            result.Updates.AddRange(preAiResult.Updates);
+            result.Suggestions.AddRange(preAiResult.Suggestions);
+
+            if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
+                updatesElement.ValueKind == JsonValueKind.Array)
             {
-                var rowId = updateElement.TryGetProperty("rowId", out var rowIdEl) ? rowIdEl.GetString() : null;
-                var side = updateElement.TryGetProperty("side", out var sideEl) ? sideEl.GetString() : null;
-                var quantity = updateElement.TryGetProperty("quantity", out var quantityEl) ? quantityEl.GetString() : null;
-
-                if (string.IsNullOrWhiteSpace(rowId) ||
-                    string.IsNullOrWhiteSpace(side) ||
-                    string.IsNullOrWhiteSpace(quantity) ||
-                    !ValidSides.Contains(side) ||
-                    !quantity.All(char.IsDigit) ||
-                    !validRowKeys.Contains($"{rowId}:{side}"))
+                foreach (var updateElement in updatesElement.EnumerateArray())
                 {
-                    continue;
+                    var rowId = updateElement.TryGetProperty("rowId", out var rowIdEl) ? rowIdEl.GetString() : null;
+                    var side = updateElement.TryGetProperty("side", out var sideEl) ? sideEl.GetString() : null;
+                    var quantity = updateElement.TryGetProperty("quantity", out var quantityEl) ? quantityEl.GetString() : null;
+
+                    if (string.IsNullOrWhiteSpace(rowId) ||
+                        string.IsNullOrWhiteSpace(side) ||
+                        string.IsNullOrWhiteSpace(quantity) ||
+                        !ValidSides.Contains(side) ||
+                        !quantity.All(char.IsDigit) ||
+                        !validRowKeys.Contains($"{rowId}:{side}"))
+                    {
+                        continue;
+                    }
+
+                    var key = $"{rowId}:{side}";
+                    if (!seenKeys.Add(key))
+                    {
+                        continue;
+                    }
+
+                    result.Updates.Add(new VoiceUpdate
+                    {
+                        RowId = rowId,
+                        Side = side.ToLowerInvariant(),
+                        Quantity = quantity
+                    });
                 }
+            }
 
-                result.Updates.Add(new VoiceUpdate
+            if (structuredDocument.RootElement.TryGetProperty("suggestions", out var suggestionsElement) &&
+                suggestionsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var suggestionElement in suggestionsElement.EnumerateArray())
                 {
-                    RowId = rowId,
-                    Side = side.ToLowerInvariant(),
-                    Quantity = quantity
-                });
+                    var rowId = suggestionElement.TryGetProperty("rowId", out var rowIdEl) ? rowIdEl.GetString() : null;
+                    var side = suggestionElement.TryGetProperty("side", out var sideEl) ? sideEl.GetString() : null;
+                    var quantity = suggestionElement.TryGetProperty("quantity", out var quantityEl) ? quantityEl.GetString() : null;
+                    var heardPhrase = suggestionElement.TryGetProperty("heardPhrase", out var heardEl) ? heardEl.GetString() : null;
+                    var label = suggestionElement.TryGetProperty("label", out var labelEl) ? labelEl.GetString() : null;
+                    var spec = suggestionElement.TryGetProperty("spec", out var specEl) ? specEl.GetString() : null;
+                    var confidence = suggestionElement.TryGetProperty("confidence", out var confidenceEl) && confidenceEl.TryGetDouble(out var parsedConfidence)
+                        ? parsedConfidence
+                        : 0.0;
+
+                    if (string.IsNullOrWhiteSpace(rowId) ||
+                        string.IsNullOrWhiteSpace(side) ||
+                        string.IsNullOrWhiteSpace(quantity) ||
+                        string.IsNullOrWhiteSpace(heardPhrase) ||
+                        string.IsNullOrWhiteSpace(label) ||
+                        !ValidSides.Contains(side) ||
+                        !quantity.All(char.IsDigit) ||
+                        !validRowKeys.Contains($"{rowId}:{side}"))
+                    {
+                        continue;
+                    }
+
+                    var suggestionKey = $"{rowId}:{side}:{quantity}";
+                    if (!seenSuggestionKeys.Add(suggestionKey) || seenKeys.Contains($"{rowId}:{side}"))
+                    {
+                        continue;
+                    }
+
+                    result.Suggestions.Add(new VoiceSuggestion
+                    {
+                        HeardPhrase = heardPhrase,
+                        RowId = rowId,
+                        Side = side.ToLowerInvariant(),
+                        Quantity = quantity,
+                        Label = label,
+                        Spec = spec,
+                        Confidence = confidence,
+                        NeedsConfirmation = true
+                    });
+                }
             }
 
             return result;
@@ -396,6 +503,8 @@ Catalog:
             {
                 AppendMergedDecimalMatch(result, seenKeys, match);
             }
+
+            AppendAliasOnlyMatches(result, seenKeys, normalizedTranscript);
 
             return result;
         }
@@ -483,6 +592,169 @@ Catalog:
                 });
                 return;
             }
+        }
+
+        private void AppendAliasOnlyMatches(InterpretationResult result, HashSet<string> seenKeys, string normalizedTranscript)
+        {
+            foreach (var alias in CatalogAliases.OrderByDescending(item => item.Phrase.Length))
+            {
+                if (!normalizedTranscript.Contains(alias.Phrase, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var index = normalizedTranscript.IndexOf(alias.Phrase, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var quantity = FindNearestQuantityValue(normalizedTranscript, index, index + alias.Phrase.Length, alias.Phrase);
+                if (string.IsNullOrWhiteSpace(quantity) || !quantity.All(char.IsDigit))
+                {
+                    continue;
+                }
+
+                var key = $"{alias.RowId}:{alias.Side}";
+                if (!seenKeys.Add(key))
+                {
+                    continue;
+                }
+
+                result.Updates.Add(new VoiceUpdate
+                {
+                    RowId = alias.RowId,
+                    Side = alias.Side,
+                    Quantity = quantity
+                });
+            }
+        }
+
+        public async Task SaveConfirmedCorrectionAsync(
+            Guid userId,
+            string heardPhrase,
+            string rowId,
+            string side,
+            string label,
+            string? spec,
+            CancellationToken cancellationToken)
+        {
+            var normalizedPhrase = NormalizeCatalogText(NormalizeTranscript(heardPhrase));
+            if (string.IsNullOrWhiteSpace(normalizedPhrase))
+            {
+                throw new InvalidOperationException("Heard phrase could not be normalized.");
+            }
+
+            var existing = await GetRememberedCorrectionsAsync(userId, cancellationToken);
+            var current = existing.FirstOrDefault(item =>
+                string.Equals(item.HeardPhraseNormalized, normalizedPhrase, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.RowId, rowId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.Side, side, StringComparison.OrdinalIgnoreCase));
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["user_id"] = userId,
+                ["heard_phrase_normalized"] = normalizedPhrase,
+                ["row_id"] = rowId,
+                ["side"] = side.ToLowerInvariant(),
+                ["label"] = label,
+                ["spec"] = spec,
+                ["confirmed_count"] = (current?.ConfirmedCount ?? 0) + 1,
+                ["updated_at"] = DateTime.UtcNow,
+            };
+
+            if (current == null)
+            {
+                payload["created_at"] = DateTime.UtcNow;
+            }
+
+            await UpsertVoiceMemoryAsync(payload, cancellationToken);
+        }
+
+        private async Task<InterpretationResult> ApplyRememberedCorrectionsAsync(
+            string normalizedTranscript,
+            Guid? userId,
+            CancellationToken cancellationToken)
+        {
+            var result = new InterpretationResult();
+            if (userId == null)
+            {
+                return result;
+            }
+
+            var rows = await GetRememberedCorrectionsAsync(userId.Value, cancellationToken);
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in rows.OrderByDescending(item => item.HeardPhraseNormalized.Length))
+            {
+                if (string.IsNullOrWhiteSpace(row.HeardPhraseNormalized) ||
+                    !normalizedTranscript.Contains(row.HeardPhraseNormalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var index = normalizedTranscript.IndexOf(row.HeardPhraseNormalized, StringComparison.OrdinalIgnoreCase);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var quantity = FindNearestQuantityValue(
+                    normalizedTranscript,
+                    index,
+                    index + row.HeardPhraseNormalized.Length,
+                    row.HeardPhraseNormalized);
+
+                if (string.IsNullOrWhiteSpace(quantity) || !quantity.All(char.IsDigit))
+                {
+                    continue;
+                }
+
+                var key = $"{row.RowId}:{row.Side}";
+                if (!seenKeys.Add(key))
+                {
+                    continue;
+                }
+
+                result.Updates.Add(new VoiceUpdate
+                {
+                    RowId = row.RowId,
+                    Side = row.Side.ToLowerInvariant(),
+                    Quantity = quantity
+                });
+            }
+
+            return result;
+        }
+
+        private InterpretationResult MergeInterpretationResults(InterpretationResult first, InterpretationResult second)
+        {
+            var result = new InterpretationResult();
+            var seenUpdateKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenSuggestionKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var update in first.Updates.Concat(second.Updates))
+            {
+                var key = $"{update.RowId}:{update.Side}";
+                if (!seenUpdateKeys.Add(key))
+                {
+                    continue;
+                }
+
+                result.Updates.Add(update);
+            }
+
+            foreach (var suggestion in first.Suggestions.Concat(second.Suggestions))
+            {
+                var key = $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}";
+                if (!seenSuggestionKeys.Add(key))
+                {
+                    continue;
+                }
+
+                result.Suggestions.Add(suggestion);
+            }
+
+            return result;
         }
 
         private static string RepairMergedQuantity(string quantity, string rawMeasure)
@@ -621,6 +893,9 @@ Catalog:
             normalized = Regex.Replace(normalized, @"\bmetres?\b", "metre");
             normalized = Regex.Replace(normalized, @"\bmillimetres?\b", "millimetre");
             normalized = Regex.Replace(normalized, @"\bmeters?\b", "meter");
+            normalized = Regex.Replace(normalized, @"\bfree\s+(?=(?:m|meter|metre|millimetre|mm|board))", "3 ", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bto\s+board\b", "2 board", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bfor\s+board\b", "4 board", RegexOptions.IgnoreCase);
 
             normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
             foreach (var (pattern, replacement) in VoiceAliases)
@@ -714,6 +989,62 @@ Catalog:
             return $"{cleanMeasure}{normalizedUnit}";
         }
 
+        private async Task<List<VoiceMemoryRow>> GetRememberedCorrectionsAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            var url = BuildRestUrl($"ess_material_ordering_voice_memory?select=user_id,heard_phrase_normalized,row_id,side,label,spec,confirmed_count&user_id=eq.{userId:D}&order=confirmed_count.desc");
+            using var request = CreateRestRequest(HttpMethod.Get, url);
+            using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed loading remembered material ordering corrections: {StatusCode} {Body}", response.StatusCode, body);
+                return new List<VoiceMemoryRow>();
+            }
+
+            return JsonSerializer.Deserialize<List<VoiceMemoryRow>>(body, _jsonOptions) ?? new List<VoiceMemoryRow>();
+        }
+
+        private async Task UpsertVoiceMemoryAsync(object payload, CancellationToken cancellationToken)
+        {
+            var url = BuildRestUrl("ess_material_ordering_voice_memory?on_conflict=user_id,heard_phrase_normalized,row_id,side");
+            using var request = CreateRestRequest(HttpMethod.Post, url, "resolution=merge-duplicates");
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
+            using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Failed saving material ordering voice correction: {(int)response.StatusCode} {body}");
+            }
+        }
+
+        private HttpRequestMessage CreateRestRequest(HttpMethod method, string url, string? prefer = null)
+        {
+            var apiKey = _configuration["Supabase:ServiceRoleKey"]
+                ?? _configuration["Supabase:Key"]
+                ?? throw new InvalidOperationException("Supabase key is not configured.");
+
+            var request = new HttpRequestMessage(method, url);
+            request.Headers.Add("apikey", apiKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            if (!string.IsNullOrWhiteSpace(prefer))
+            {
+                request.Headers.TryAddWithoutValidation("Prefer", prefer);
+            }
+
+            return request;
+        }
+
+        private string BuildRestUrl(string relativePath)
+        {
+            var supabaseUrl = _configuration["Supabase:Url"];
+            if (string.IsNullOrWhiteSpace(supabaseUrl))
+            {
+                throw new InvalidOperationException("Supabase URL is not configured.");
+            }
+
+            return $"{supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
+        }
+
         private static string CanonicalizeNumberWords(string input)
         {
             var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
@@ -795,6 +1126,75 @@ Catalog:
             }
 
             return string.Join(' ', output);
+        }
+
+        private static List<CatalogAlias> BuildCatalogAliases()
+        {
+            var aliases = new List<CatalogAlias>();
+
+            foreach (var item in Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)))
+            {
+                var label = NormalizeCatalogText(item.Label);
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = label });
+                }
+
+                var spec = NormalizeCatalogText(item.Spec);
+                if (!string.IsNullOrWhiteSpace(spec) && !string.IsNullOrWhiteSpace(label))
+                {
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{label} {spec}" });
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{spec} {label}" });
+                }
+
+                if (label.StartsWith("hop up brackets", StringComparison.OrdinalIgnoreCase))
+                {
+                    var boardMatch = Regex.Match(spec, @"(?<count>\d+)\s+board", RegexOptions.IgnoreCase);
+                    if (boardMatch.Success)
+                    {
+                        var count = boardMatch.Groups["count"].Value;
+                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count} board hop up" });
+                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"hop up {count} board" });
+                    }
+                }
+            }
+
+            return aliases
+                .Where(item => !string.IsNullOrWhiteSpace(item.Phrase))
+                .GroupBy(item => $"{item.RowId}:{item.Side}:{item.Phrase}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+        }
+
+        private static string? FindNearestQuantityValue(string normalizedText, int candidateStart, int candidateEnd, string candidateText)
+        {
+            var windowSize = Math.Max(36, candidateText.Length + 12);
+            var beforeWindow = normalizedText[Math.Max(0, candidateStart - windowSize)..candidateStart];
+            var mergedDecimalMatch = Regex.Match(beforeWindow, @"(\d+\.\d+)\s*(?:m|mm)?\s*$", RegexOptions.IgnoreCase);
+            if (mergedDecimalMatch.Success)
+            {
+                var repaired = RepairMergedDecimalQuantity(mergedDecimalMatch.Groups[1].Value, candidateText);
+                if (!string.IsNullOrWhiteSpace(repaired))
+                {
+                    return repaired;
+                }
+            }
+
+            var beforeMatches = Regex.Matches(beforeWindow, @"\b(\d+)\b");
+            if (beforeMatches.Count > 0)
+            {
+                return beforeMatches[^1].Groups[1].Value;
+            }
+
+            var afterEnd = Math.Min(normalizedText.Length, candidateEnd + windowSize);
+            var afterWindow = normalizedText[candidateEnd..afterEnd];
+            var afterMatch = Regex.Match(afterWindow, @"\b(\d+)\b");
+            if (afterMatch.Success)
+            {
+                return afterMatch.Groups[1].Value;
+            }
+
+            return null;
         }
     }
 }

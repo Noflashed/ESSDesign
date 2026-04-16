@@ -13,6 +13,15 @@ namespace ESSDesign.Server.Controllers
             public string Transcript { get; set; } = string.Empty;
         }
 
+        public sealed class ConfirmVoiceCorrectionRequest
+        {
+            public string HeardPhrase { get; set; } = string.Empty;
+            public string RowId { get; set; } = string.Empty;
+            public string Side { get; set; } = string.Empty;
+            public string Label { get; set; } = string.Empty;
+            public string? Spec { get; set; }
+        }
+
         private readonly MaterialOrderingAiService _materialOrderingAiService;
         private readonly SupabaseService _supabaseService;
         private readonly ILogger<MaterialOrderingController> _logger;
@@ -45,7 +54,8 @@ namespace ESSDesign.Server.Controllers
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var result = await _materialOrderingAiService.InterpretAsync(request.Transcript, cancellationToken);
+                Guid? currentUserId = Guid.TryParse(currentUser.Id, out var parsedUserId) ? parsedUserId : null;
+                var result = await _materialOrderingAiService.InterpretAsync(request.Transcript, currentUserId, cancellationToken);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -57,6 +67,55 @@ namespace ESSDesign.Server.Controllers
             {
                 _logger.LogError(ex, "Unexpected material ordering interpretation error");
                 return StatusCode(500, new { error = "Voice interpretation failed" });
+            }
+        }
+
+        [HttpPost("confirm-voice-correction")]
+        public async Task<ActionResult> ConfirmVoiceCorrection(
+            [FromBody] ConfirmVoiceCorrectionRequest request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!Guid.TryParse(currentUser.Id, out var userId))
+                {
+                    return BadRequest(new { error = "Invalid user context" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.HeardPhrase) ||
+                    string.IsNullOrWhiteSpace(request.RowId) ||
+                    string.IsNullOrWhiteSpace(request.Side) ||
+                    string.IsNullOrWhiteSpace(request.Label))
+                {
+                    return BadRequest(new { error = "Heard phrase, row, side, and label are required" });
+                }
+
+                await _materialOrderingAiService.SaveConfirmedCorrectionAsync(
+                    userId,
+                    request.HeardPhrase,
+                    request.RowId,
+                    request.Side,
+                    request.Label,
+                    request.Spec,
+                    cancellationToken);
+
+                return Ok(new { success = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Material ordering voice correction save failed");
+                return StatusCode(500, new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected material ordering correction error");
+                return StatusCode(500, new { error = "Voice correction save failed" });
             }
         }
 
