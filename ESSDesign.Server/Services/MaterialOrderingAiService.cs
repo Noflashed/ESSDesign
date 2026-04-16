@@ -329,29 +329,31 @@ namespace ESSDesign.Server.Services
                 NormalizedTranscript = normalizedTranscript,
                 Segments = segments
             };
-            var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
-            var heuristicResult = TryInterpretWithHeuristics(transcript);
-
-            var apiKey = _configuration["OpenAI:ApiKey"];
-            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
-            var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
-            var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
-
-            if (string.IsNullOrWhiteSpace(apiKey))
+            try
             {
-                var fallback = MergeInterpretationResults(rememberedResult, heuristicResult);
-                fallback.Debug = debug;
-                fallback.Debug.Source = "no openai key";
-                fallback.Debug.UpdatesAfterPrune = fallback.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
-                fallback.Debug.SuggestionsAfterPrune = fallback.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
-                return fallback;
-            }
+                var rememberedResult = await ApplyRememberedCorrectionsAsync(normalizedTranscript, userId, cancellationToken);
+                var heuristicResult = TryInterpretWithHeuristics(transcript);
 
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(20);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                var apiKey = _configuration["OpenAI:ApiKey"];
+                var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+                var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
+                var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
 
-            var systemPrompt = """
+                if (string.IsNullOrWhiteSpace(apiKey))
+                {
+                    var fallback = MergeInterpretationResults(rememberedResult, heuristicResult);
+                    fallback.Debug = debug;
+                    fallback.Debug.Source = "no openai key";
+                    fallback.Debug.UpdatesAfterPrune = fallback.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                    fallback.Debug.SuggestionsAfterPrune = fallback.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+                    return fallback;
+                }
+
+                var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(20);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+                var systemPrompt = """
 You convert speech transcripts for a scaffold picking card into exact row updates.
 
 Rules:
@@ -383,7 +385,7 @@ Rules:
 - Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}],"suggestions":[{"heardPhrase":"free metre standards","rowId":"r09","side":"left","quantity":"3","label":"STANDARDS","spec":"3.0M","confidence":0.62}]}
 """;
 
-            var userPrompt = $"""
+                var userPrompt = $"""
 Transcript:
 {transcript}
 
@@ -397,74 +399,74 @@ Helpful item phrases:
 {JsonSerializer.Serialize(promptAliases, _jsonOptions)}
 """;
 
-            var payload = new
-            {
-                model,
-                temperature = 0.1,
-                response_format = new { type = "json_object" },
-                messages = new object[]
+                var payload = new
                 {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = userPrompt }
-                }
-            };
+                    model,
+                    temperature = 0.1,
+                    response_format = new { type = "json_object" },
+                    messages = new object[]
+                    {
+                        new { role = "system", content = systemPrompt },
+                        new { role = "user", content = userPrompt }
+                    }
+                };
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
-            {
-                Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
-            };
-
-            using var response = await client.SendAsync(request, cancellationToken);
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("OpenAI interpretation failed: {StatusCode} {Body}", response.StatusCode, responseContent);
-                var fallbackResult = MergeInterpretationResults(rememberedResult, heuristicResult);
-                fallbackResult.Debug = debug;
-                fallbackResult.Debug.Source = $"openai error {(int)response.StatusCode}";
-                if (fallbackResult.Updates.Count > 0 || fallbackResult.Suggestions.Count > 0)
+                using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
                 {
-                    fallbackResult.Debug.UpdatesAfterPrune = fallbackResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
-                    fallbackResult.Debug.SuggestionsAfterPrune = fallbackResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
-                    return fallbackResult;
+                    Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
+                };
+
+                using var response = await client.SendAsync(request, cancellationToken);
+                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("OpenAI interpretation failed: {StatusCode} {Body}", response.StatusCode, responseContent);
+                    var fallbackResult = MergeInterpretationResults(rememberedResult, heuristicResult);
+                    fallbackResult.Debug = debug;
+                    fallbackResult.Debug.Source = $"openai error {(int)response.StatusCode}";
+                    if (fallbackResult.Updates.Count > 0 || fallbackResult.Suggestions.Count > 0)
+                    {
+                        fallbackResult.Debug.UpdatesAfterPrune = fallbackResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                        fallbackResult.Debug.SuggestionsAfterPrune = fallbackResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+                        return fallbackResult;
+                    }
+
+                    throw new InvalidOperationException("Voice interpretation failed on the backend.");
                 }
 
-                throw new InvalidOperationException("Voice interpretation failed on the backend.");
-            }
+                using var completionDocument = JsonDocument.Parse(responseContent);
+                var root = completionDocument.RootElement;
+                var content = root
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
+                    .GetProperty("content")
+                    .GetString();
 
-            using var completionDocument = JsonDocument.Parse(responseContent);
-            var root = completionDocument.RootElement;
-            var content = root
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    var emptyResult = MergeInterpretationResults(rememberedResult, heuristicResult);
+                    emptyResult.Debug = debug;
+                    emptyResult.Debug.Source = "empty ai content";
+                    emptyResult.Debug.UpdatesAfterPrune = emptyResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
+                    emptyResult.Debug.SuggestionsAfterPrune = emptyResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
+                    return emptyResult;
+                }
 
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                var emptyResult = MergeInterpretationResults(rememberedResult, heuristicResult);
-                emptyResult.Debug = debug;
-                emptyResult.Debug.Source = "empty ai content";
-                emptyResult.Debug.UpdatesAfterPrune = emptyResult.Updates.Select(update => $"{update.RowId}:{update.Side}={update.Quantity}").ToList();
-                emptyResult.Debug.SuggestionsAfterPrune = emptyResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}={suggestion.Quantity}").ToList();
-                return emptyResult;
-            }
+                debug.AiContent = content;
 
-            debug.AiContent = content;
+                using var structuredDocument = JsonDocument.Parse(content);
+                var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var result = new InterpretationResult();
+                var seenKeys = new HashSet<string>(
+                    rememberedResult.Updates.Select(update => $"{update.RowId}:{update.Side}"),
+                    StringComparer.OrdinalIgnoreCase);
+                var seenSuggestionKeys = new HashSet<string>(
+                    rememberedResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}"),
+                    StringComparer.OrdinalIgnoreCase);
 
-            using var structuredDocument = JsonDocument.Parse(content);
-            var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var result = new InterpretationResult();
-            var seenKeys = new HashSet<string>(
-                rememberedResult.Updates.Select(update => $"{update.RowId}:{update.Side}"),
-                StringComparer.OrdinalIgnoreCase);
-            var seenSuggestionKeys = new HashSet<string>(
-                rememberedResult.Suggestions.Select(suggestion => $"{suggestion.RowId}:{suggestion.Side}:{suggestion.Quantity}"),
-                StringComparer.OrdinalIgnoreCase);
-
-            result.Updates.AddRange(rememberedResult.Updates);
-            result.Suggestions.AddRange(rememberedResult.Suggestions);
+                result.Updates.AddRange(rememberedResult.Updates);
+                result.Suggestions.AddRange(rememberedResult.Suggestions);
 
             if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
                 updatesElement.ValueKind == JsonValueKind.Array)
@@ -555,6 +557,21 @@ Helpful item phrases:
             debug.Source = "openai+heuristic";
             prunedResult.Debug = debug;
             return prunedResult;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Material ordering interpretation crashed.");
+                return new InterpretationResult
+                {
+                    Debug = new InterpretationDebug
+                    {
+                        NormalizedTranscript = normalizedTranscript,
+                        Segments = segments,
+                        Source = $"interpret exception: {ex.GetType().Name}",
+                        AiContent = ex.Message
+                    }
+                };
+            }
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
@@ -729,6 +746,11 @@ Helpful item phrases:
             foreach (Match match in QuantityStartPattern.Matches(prepared))
             {
                 var startIndex = match.Index + match.Groups[1].Length;
+                var quantityToken = match.Groups["qty"].Value;
+                if (IsSpecLikeQuantityStart(prepared, startIndex, quantityToken))
+                {
+                    continue;
+                }
                 if (starts.Count == 0 || startIndex > starts[^1])
                 {
                     starts.Add(startIndex);
@@ -749,6 +771,25 @@ Helpful item phrases:
                 .ToList();
 
             return segments.Count > 0 ? segments : new List<string> { normalizedTranscript };
+        }
+
+        private static bool IsSpecLikeQuantityStart(string value, int startIndex, string quantityToken)
+        {
+            var previousToken = GetPreviousToken(value, startIndex);
+            if (!Regex.IsMatch(previousToken, @"^\d{1,3}$"))
+            {
+                return false;
+            }
+
+            var after = value[(startIndex + quantityToken.Length)..];
+            return Regex.IsMatch(after, @"^\s*(?:board|boards|m|mm|meter|meters|metre|metres|millimetre|millimetres)\b", RegexOptions.IgnoreCase);
+        }
+
+        private static string GetPreviousToken(string value, int startIndex)
+        {
+            var before = value[..startIndex].TrimEnd();
+            var match = Regex.Match(before, @"([a-z0-9.]+)$", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : string.Empty;
         }
 
         private void AppendHeuristicMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
@@ -1145,6 +1186,7 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\bfree\s+(?=(?:m|meter|metre|millimetre|mm|board))", "3 ", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bto\s+board\b", "2 board", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bfor\s+board\b", "4 board", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bfor\s+a\s+met(?:er|re)\b", "4 metre", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bfor\s+met(?:er|re)\b", "4 metre", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:meter|metre|m)\b", "$1m", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:millimetre|mm)\b", "$1mm", RegexOptions.IgnoreCase);
