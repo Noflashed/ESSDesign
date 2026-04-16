@@ -653,7 +653,7 @@ Helpful item phrases:
                 })
                 .ToList();
 
-            var systemPrompt = $"""
+            var systemPrompt = $$"""
 You are a warm, conversational scaffold material ordering assistant for {userName}.
 
 Your job:
@@ -680,11 +680,11 @@ Rules:
 - Return the full current draft updates after applying the user's latest changes, not only the delta.
 - Quantity must be an integer string.
 - Return JSON only with shape:
-  {{
+  {
     "assistantReply": "I've got 28 of the 2.4 metre ledgers and 17 of the 1 board hop-ups. Is that everything?",
-    "updates": [{{"rowId":"r23","side":"left","quantity":"28"}}],
+    "updates": [{"rowId":"r23","side":"left","quantity":"28"}],
     "readyToApply": false
-  }}
+  }
 """;
 
             var messageList = new List<object>
