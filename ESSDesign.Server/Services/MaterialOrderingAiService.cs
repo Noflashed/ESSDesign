@@ -492,7 +492,7 @@ Helpful item phrases:
                 }
             }
 
-            return MergeInterpretationResults(result, heuristicResult);
+            return PruneMeasuredFamilyUpdates(normalizedTranscript, MergeInterpretationResults(result, heuristicResult));
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
@@ -527,6 +527,101 @@ Helpful item phrases:
             return result;
         }
 
+        private InterpretationResult PruneMeasuredFamilyUpdates(string normalizedTranscript, InterpretationResult result)
+        {
+            var anchoredItems = CollectAnchoredCatalogItems(normalizedTranscript);
+            if (anchoredItems.Count == 0)
+            {
+                return result;
+            }
+
+            var anchoredKeys = anchoredItems
+                .Select(item => $"{item.RowId}:{item.Side}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var anchoredFamilies = anchoredItems
+                .Select(item => NormalizeCatalogText(item.Label))
+                .Where(label => !string.IsNullOrWhiteSpace(label))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            result.Updates = result.Updates
+                .Where(update =>
+                {
+                    var catalogItem = Catalog.FirstOrDefault(item =>
+                        string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase));
+                    if (catalogItem == null)
+                    {
+                        return true;
+                    }
+
+                    var family = NormalizeCatalogText(catalogItem.Label);
+                    if (!anchoredFamilies.Contains(family))
+                    {
+                        return true;
+                    }
+
+                    return anchoredKeys.Contains($"{update.RowId}:{update.Side}");
+                })
+                .ToList();
+
+            result.Suggestions = result.Suggestions
+                .Where(suggestion =>
+                {
+                    var family = NormalizeCatalogText(suggestion.Label);
+                    if (!anchoredFamilies.Contains(family))
+                    {
+                        return true;
+                    }
+
+                    return anchoredKeys.Contains($"{suggestion.RowId}:{suggestion.Side}");
+                })
+                .ToList();
+
+            return result;
+        }
+
+        private List<CatalogItem> CollectAnchoredCatalogItems(string normalizedTranscript)
+        {
+            var anchoredItems = new List<CatalogItem>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AppendAnchoredMatch(Match match)
+            {
+                var label = NormalizeCatalogText(match.Groups["label"].Value);
+                var measure = NormalizeMeasurement(match.Groups["measure"].Value, match.Groups["unit"].Value);
+                var catalogItem = FindCatalogItemForMeasuredLabel(label, measure);
+                if (catalogItem == null)
+                {
+                    return;
+                }
+
+                var key = $"{catalogItem.RowId}:{catalogItem.Side}";
+                if (!seenKeys.Add(key))
+                {
+                    return;
+                }
+
+                anchoredItems.Add(catalogItem);
+            }
+
+            foreach (Match match in QuantityMeasurementPattern.Matches(normalizedTranscript))
+            {
+                AppendAnchoredMatch(match);
+            }
+
+            foreach (Match match in QuantityBeforeLabelPattern.Matches(normalizedTranscript))
+            {
+                AppendAnchoredMatch(match);
+            }
+
+            foreach (Match match in QuantityThenMeasureLabelPattern.Matches(normalizedTranscript))
+            {
+                AppendAnchoredMatch(match);
+            }
+
+            return anchoredItems;
+        }
+
         private void AppendHeuristicMatch(InterpretationResult result, HashSet<string> seenKeys, Match match)
         {
             var quantity = RepairMergedQuantity(
@@ -540,18 +635,7 @@ Helpful item phrases:
                 return;
             }
 
-            var catalogItem = Catalog.FirstOrDefault(item =>
-                !string.IsNullOrWhiteSpace(item.Label) &&
-                NormalizeCatalogText(item.Label).Contains(label, StringComparison.OrdinalIgnoreCase) &&
-                NormalizeMeasurement(item.Spec, string.Empty) == measure);
-
-            if (catalogItem == null)
-            {
-                catalogItem = Catalog.FirstOrDefault(item =>
-                    !string.IsNullOrWhiteSpace(item.Label) &&
-                    label.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase) &&
-                    NormalizeMeasurement(item.Spec, string.Empty) == measure);
-            }
+            var catalogItem = FindCatalogItemForMeasuredLabel(label, measure);
 
             if (catalogItem == null)
             {
@@ -610,6 +694,24 @@ Helpful item phrases:
                 });
                 return;
             }
+        }
+
+        private CatalogItem? FindCatalogItemForMeasuredLabel(string normalizedLabel, string normalizedMeasure)
+        {
+            var catalogItem = Catalog.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.Label) &&
+                NormalizeCatalogText(item.Label).Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) &&
+                NormalizeMeasurement(item.Spec, string.Empty) == normalizedMeasure);
+
+            if (catalogItem != null)
+            {
+                return catalogItem;
+            }
+
+            return Catalog.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.Label) &&
+                normalizedLabel.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase) &&
+                NormalizeMeasurement(item.Spec, string.Empty) == normalizedMeasure);
         }
 
         private void AppendAliasOnlyMatches(InterpretationResult result, HashSet<string> seenKeys, string normalizedTranscript)
