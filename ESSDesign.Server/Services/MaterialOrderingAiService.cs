@@ -21,6 +21,19 @@ namespace ESSDesign.Server.Services
             public InterpretationDebug? Debug { get; set; }
         }
 
+        public sealed class AssistantMessage
+        {
+            public string Role { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
+        }
+
+        public sealed class AssistantTurnResult
+        {
+            public string AssistantReply { get; set; } = string.Empty;
+            public List<VoiceUpdate> Updates { get; set; } = new();
+            public bool ReadyToApply { get; set; }
+        }
+
         public sealed class InterpretationDebug
         {
             public string NormalizedTranscript { get; set; } = string.Empty;
@@ -587,6 +600,213 @@ Helpful item phrases:
                     }
                 };
             }
+        }
+
+        public async Task<AssistantTurnResult> RunAssistantTurnAsync(
+            string userName,
+            string transcript,
+            List<AssistantMessage>? history,
+            List<VoiceUpdate>? currentUpdates,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(transcript))
+            {
+                throw new InvalidOperationException("Transcript is required.");
+            }
+
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                throw new InvalidOperationException("OpenAI API key is not configured.");
+            }
+
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+            var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
+            var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
+
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(12);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            var currentDraft = (currentUpdates ?? new List<VoiceUpdate>())
+                .Where(update =>
+                    !string.IsNullOrWhiteSpace(update.RowId) &&
+                    !string.IsNullOrWhiteSpace(update.Side) &&
+                    !string.IsNullOrWhiteSpace(update.Quantity))
+                .Select(update => new
+                {
+                    update.RowId,
+                    update.Side,
+                    update.Quantity,
+                    Item = Catalog.FirstOrDefault(item =>
+                        string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase))
+                })
+                .Where(item => item.Item != null)
+                .Select(item => new
+                {
+                    item.RowId,
+                    item.Side,
+                    item.Quantity,
+                    label = item.Item!.Label,
+                    spec = item.Item!.Spec
+                })
+                .ToList();
+
+            var systemPrompt = $"""
+You are a warm, conversational scaffold material ordering assistant for {userName}.
+
+Your job:
+- listen to the user's latest spoken request
+- maintain a draft list of picking-card items
+- speak back naturally and clearly
+- ask if the draft is correct
+- allow the user to make corrections in follow-up turns
+- only mark readyToApply true when the user clearly confirms the list is final
+
+Rules:
+- Keep the response conversational, brief, and helpful.
+- Use the provided catalog only.
+- Understand reversed phrasing like 'truss transom 2.4 28' as quantity 28 of 2.4M truss transoms.
+- Understand likely speech mistakes and site shorthand, for example:
+  - ledges -> ledgers
+  - tie/thai bar -> tie bars
+  - cast wheels -> castor wheels
+  - stringer treads / stair strings -> stair stringer
+  - wall brackets -> wall tie brackets
+  - open ended standards / standards open end -> standard open/end
+  - side boards / side woods -> sole boards
+- If a number blob is implausible like '33 metre standards', split it intelligently into quantity plus measurement when that better matches the catalog.
+- Return the full current draft updates after applying the user's latest changes, not only the delta.
+- Quantity must be an integer string.
+- Return JSON only with shape:
+  {{
+    "assistantReply": "I've got 28 of the 2.4 metre ledgers and 17 of the 1 board hop-ups. Is that everything?",
+    "updates": [{{"rowId":"r23","side":"left","quantity":"28"}}],
+    "readyToApply": false
+  }}
+""";
+
+            var messageList = new List<object>
+            {
+                new { role = "system", content = systemPrompt }
+            };
+
+            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(8))
+            {
+                var role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+                    ? "assistant"
+                    : "user";
+                if (string.IsNullOrWhiteSpace(message.Content))
+                {
+                    continue;
+                }
+
+                messageList.Add(new { role, content = message.Content.Trim() });
+            }
+
+            var userPrompt = $"""
+Latest user transcript:
+{transcript}
+
+Current draft updates:
+{JsonSerializer.Serialize(currentDraft, _jsonOptions)}
+
+Catalog:
+{JsonSerializer.Serialize(promptCatalog, _jsonOptions)}
+
+Helpful item phrases:
+{JsonSerializer.Serialize(promptAliases, _jsonOptions)}
+""";
+
+            messageList.Add(new { role = "user", content = userPrompt });
+
+            var payload = new
+            {
+                model,
+                temperature = 0.2,
+                response_format = new { type = "json_object" },
+                messages = messageList.ToArray()
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
+            };
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("OpenAI assistant failed: {StatusCode} {Body}", response.StatusCode, responseContent);
+                throw new InvalidOperationException($"Assistant request failed with {(int)response.StatusCode}.");
+            }
+
+            using var completionDocument = JsonDocument.Parse(responseContent);
+            var content = completionDocument.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                throw new InvalidOperationException("Assistant returned empty content.");
+            }
+
+            using var structuredDocument = JsonDocument.Parse(content);
+            var validRowKeys = promptCatalog.Select(item => $"{item.RowId}:{item.Side}").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var result = new AssistantTurnResult
+            {
+                AssistantReply = structuredDocument.RootElement.TryGetProperty("assistantReply", out var replyElement)
+                    ? (replyElement.GetString() ?? string.Empty)
+                    : string.Empty,
+                ReadyToApply = structuredDocument.RootElement.TryGetProperty("readyToApply", out var readyElement) &&
+                    readyElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                    readyElement.GetBoolean()
+            };
+
+            if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
+                updatesElement.ValueKind == JsonValueKind.Array)
+            {
+                var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var updateElement in updatesElement.EnumerateArray())
+                {
+                    var rowId = updateElement.TryGetProperty("rowId", out var rowIdEl) ? rowIdEl.GetString() : null;
+                    var side = updateElement.TryGetProperty("side", out var sideEl) ? sideEl.GetString() : null;
+                    var quantity = updateElement.TryGetProperty("quantity", out var quantityEl) ? quantityEl.GetString() : null;
+
+                    if (string.IsNullOrWhiteSpace(rowId) ||
+                        string.IsNullOrWhiteSpace(side) ||
+                        string.IsNullOrWhiteSpace(quantity) ||
+                        !ValidSides.Contains(side) ||
+                        !quantity.All(char.IsDigit) ||
+                        !validRowKeys.Contains($"{rowId}:{side}"))
+                    {
+                        continue;
+                    }
+
+                    var key = $"{rowId}:{side}";
+                    if (!seenKeys.Add(key))
+                    {
+                        continue;
+                    }
+
+                    result.Updates.Add(new VoiceUpdate
+                    {
+                        RowId = rowId,
+                        Side = side.ToLowerInvariant(),
+                        Quantity = quantity
+                    });
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(result.AssistantReply))
+            {
+                result.AssistantReply = "I’ve updated the draft. Let me know what you’d like to change, or tell me if it’s all good.";
+            }
+
+            return result;
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)

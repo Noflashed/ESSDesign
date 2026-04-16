@@ -22,6 +22,27 @@ namespace ESSDesign.Server.Controllers
             public string? Spec { get; set; }
         }
 
+        public sealed class AssistantHistoryMessage
+        {
+            public string Role { get; set; } = string.Empty;
+            public string Content { get; set; } = string.Empty;
+        }
+
+        public sealed class AssistantDraftUpdate
+        {
+            public string RowId { get; set; } = string.Empty;
+            public string Side { get; set; } = string.Empty;
+            public string Quantity { get; set; } = string.Empty;
+        }
+
+        public sealed class AssistantTurnRequest
+        {
+            public string Transcript { get; set; } = string.Empty;
+            public string UserName { get; set; } = string.Empty;
+            public List<AssistantHistoryMessage> History { get; set; } = new();
+            public List<AssistantDraftUpdate> CurrentUpdates { get; set; } = new();
+        }
+
         private readonly MaterialOrderingAiService _materialOrderingAiService;
         private readonly SupabaseService _supabaseService;
         private readonly ILogger<MaterialOrderingController> _logger;
@@ -116,6 +137,71 @@ namespace ESSDesign.Server.Controllers
             {
                 _logger.LogError(ex, "Unexpected material ordering correction error");
                 return StatusCode(500, new { error = "Voice correction save failed" });
+            }
+        }
+
+        [HttpPost("assistant-turn")]
+        public async Task<ActionResult<MaterialOrderingAiService.AssistantTurnResult>> AssistantTurn(
+            [FromBody] AssistantTurnRequest request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Transcript))
+                {
+                    return BadRequest(new { error = "Transcript is required" });
+                }
+
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var userName = string.IsNullOrWhiteSpace(request.UserName)
+                    ? (currentUser.FullName ?? currentUser.Email ?? "there")
+                    : request.UserName.Trim();
+
+                var history = request.History
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Role) && !string.IsNullOrWhiteSpace(item.Content))
+                    .Select(item => new MaterialOrderingAiService.AssistantMessage
+                    {
+                        Role = item.Role,
+                        Content = item.Content
+                    })
+                    .ToList();
+
+                var currentUpdates = request.CurrentUpdates
+                    .Where(item =>
+                        !string.IsNullOrWhiteSpace(item.RowId) &&
+                        !string.IsNullOrWhiteSpace(item.Side) &&
+                        !string.IsNullOrWhiteSpace(item.Quantity))
+                    .Select(item => new MaterialOrderingAiService.VoiceUpdate
+                    {
+                        RowId = item.RowId,
+                        Side = item.Side,
+                        Quantity = item.Quantity
+                    })
+                    .ToList();
+
+                var result = await _materialOrderingAiService.RunAssistantTurnAsync(
+                    userName,
+                    request.Transcript,
+                    history,
+                    currentUpdates,
+                    cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Material ordering assistant turn failed");
+                return StatusCode(500, new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected material ordering assistant error");
+                return StatusCode(500, new { error = "Assistant turn failed" });
             }
         }
 
