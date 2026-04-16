@@ -103,7 +103,7 @@ namespace ESSDesign.Server.Services
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex SegmentNoisePattern = new(
-            @"\b(?:also\s+put\s+in\s+there|also\s+put\s+in|also\s+put|put\s+in\s+there|put\s+in|if\s+you\s+can|as\s+well|we\s+also\s+need|we\s+need|i\s+need|give\s+me|can\s+you|please)\b",
+            @"\b(?:also\s+put\s+in\s+there|also\s+put\s+in|also\s+put|also\s+check\s+in|also\s+chuck\s+in\s+another|also\s+chuck\s+in|chuck\s+in\s+another|chuck\s+in|put\s+in\s+there|put\s+in|if\s+you\s+can|as\s+well|we\s+also\s+need|we\s+need|i\s+need|give\s+me|can\s+you|please)\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex QuantityStartPattern = new(
@@ -112,13 +112,17 @@ namespace ESSDesign.Server.Services
 
         private static readonly (Regex Pattern, string Replacement)[] VoiceAliases =
         {
+            (new Regex(@"\bopening\s+standards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "open end standards"),
+            (new Regex(@"\bopen\s*ended\s+standards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "open end standards"),
             (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
             (new Regex(@"\bthai\s*bars?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
             (new Regex(@"\bthai\s*bales?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
             (new Regex(@"\bthai\s*wire\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie wire"),
+            (new Regex(@"\btawa\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie wire"),
             (new Regex(@"\b(\d+)\s+wood(?=\s+pop[\s-]*ups?\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled), "$1 board"),
             (new Regex(@"\bpop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "hop up"),
             (new Regex(@"\binfield\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "infill"),
+            (new Regex(@"\bfree\s+me\s+to\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3 metre"),
             (new Regex(@"\bfree\s*meat\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3 metre"),
             (new Regex(@"\bfree\s*meter\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3 metre"),
             (new Regex(@"\bopen[\s-]*ended\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "open end"),
@@ -127,9 +131,13 @@ namespace ESSDesign.Server.Services
             (new Regex(@"\btax\s*screws?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tech screws"),
             (new Regex(@"\btrash\s*transoms?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "transoms"),
             (new Regex(@"\btransom\s*trust\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "transom truss"),
+            (new Regex(@"\btrust\s*transoms?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "truss transom"),
             (new Regex(@"\bcastle\s*wheels?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "castor wheels"),
+            (new Regex(@"\bcast\s*wheels?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "castor wheels"),
             (new Regex(@"\bold\s*boards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "sole boards"),
             (new Regex(@"\bsoul\s*boards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "sole boards"),
+            (new Regex(@"\bside\s*boards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "sole boards"),
+            (new Regex(@"\bside\s*woods?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "sole boards"),
             (new Regex(@"\bmil\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "mm"),
             (new Regex(@"\bscrew\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "screwjacks"),
             (new Regex(@"\bu\s*head\s*jacks?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "u head jack"),
@@ -148,6 +156,13 @@ namespace ESSDesign.Server.Services
             (new Regex(@"\bscaff\s*tube\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold tube"),
             (new Regex(@"\bscaff\s*ladder\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold ladder"),
             (new Regex(@"\bscaff\s*stairs\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaffold stairs"),
+            (new Regex(@"\blatter\s*beams?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ladder beams"),
+            (new Regex(@"\bstring\s*treads?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "stair stringer"),
+            (new Regex(@"\bstair\s*strings?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "stair stringer"),
+            (new Regex(@"\bwall\s*brackets?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "wall tie brackets"),
+            (new Regex(@"\bdouble\s*couples?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "double couplers"),
+            (new Regex(@"\bswirl\s*couplers?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "swivel coupler"),
+            (new Regex(@"\bscaff\s*dogs?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "scaff tags"),
             (new Regex(@"\bshade\s*cloth\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "shade"),
         };
 
@@ -776,6 +791,10 @@ Helpful item phrases:
         private static bool IsSpecLikeQuantityStart(string value, int startIndex, string quantityToken)
         {
             var previousToken = GetPreviousToken(value, startIndex);
+            if (string.Equals(previousToken, "x", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
             if (!Regex.IsMatch(previousToken, @"^\d{1,3}$"))
             {
                 return false;
