@@ -83,6 +83,13 @@ namespace ESSDesign.Server.Services
             public string Phrase { get; set; } = string.Empty;
         }
 
+        private sealed class NormalizedCatalogItem
+        {
+            public CatalogItem Item { get; init; } = new();
+            public string NormalizedLabel { get; init; } = string.Empty;
+            public string NormalizedSpec { get; init; } = string.Empty;
+        }
+
         private sealed class VoiceMemoryRow
         {
             public Guid? UserId { get; set; }
@@ -341,7 +348,23 @@ namespace ESSDesign.Server.Services
             new() { RowId = "r60", Side = "middle", Label = "STAIR DOOR", Spec = "" }
         };
 
-        private static readonly List<CatalogAlias> CatalogAliases = BuildCatalogAliases();
+        private static readonly List<CatalogAlias> CatalogAliases;
+        private static readonly List<NormalizedCatalogItem> NormalizedCatalog;
+
+        static MaterialOrderingAiService()
+        {
+            NormalizedCatalog = Catalog
+                .Where(item => !string.IsNullOrWhiteSpace(item.Label))
+                .Select(item => new NormalizedCatalogItem
+                {
+                    Item = item,
+                    NormalizedLabel = NormalizeCatalogText(item.Label),
+                    NormalizedSpec = NormalizeMeasurement(item.Spec, string.Empty)
+                })
+                .ToList();
+
+            CatalogAliases = BuildCatalogAliases();
+        }
 
         public MaterialOrderingAiService(
             IHttpClientFactory httpClientFactory,
@@ -506,9 +529,16 @@ Helpful item phrases:
                 result.Updates.AddRange(rememberedResult.Updates);
                 result.Suggestions.AddRange(rememberedResult.Suggestions);
 
-            if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
-                updatesElement.ValueKind == JsonValueKind.Array)
-            {
+                if (!structuredDocument.RootElement.TryGetProperty("updates", out _) &&
+                    !structuredDocument.RootElement.TryGetProperty("suggestions", out _))
+                {
+                    _logger.LogWarning("OpenAI returned JSON without updates or suggestions: {Content}", content);
+                    debug.Source = "ai-no-fields";
+                }
+
+                if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
+                    updatesElement.ValueKind == JsonValueKind.Array)
+                {
                 foreach (var updateElement in updatesElement.EnumerateArray())
                 {
                     var rowId = updateElement.TryGetProperty("rowId", out var rowIdEl) ? rowIdEl.GetString() : null;
@@ -724,7 +754,7 @@ Rules:
                 new { role = "system", content = systemPrompt }
             };
 
-            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(3))
+            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(8))
             {
                 var role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
                     ? "assistant"
@@ -1248,21 +1278,21 @@ Helpful item phrases:
                 return;
             }
 
-            var catalogCandidates = Catalog.Where(item =>
-                !string.IsNullOrWhiteSpace(item.Label) &&
-                (NormalizeCatalogText(item.Label).Contains(label, StringComparison.OrdinalIgnoreCase) ||
-                 label.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase)))
+            var catalogCandidates = NormalizedCatalog.Where(item =>
+                !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                (item.NormalizedLabel.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                 label.Contains(item.NormalizedLabel, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
             foreach (var catalogItem in catalogCandidates)
             {
-                var repairedQuantity = RepairMergedDecimalQuantity(merged, catalogItem.Spec);
+                var repairedQuantity = RepairMergedDecimalQuantity(merged, catalogItem.Item.Spec);
                 if (string.IsNullOrWhiteSpace(repairedQuantity))
                 {
                     continue;
                 }
 
-                var key = $"{catalogItem.RowId}:{catalogItem.Side}";
+                var key = $"{catalogItem.Item.RowId}:{catalogItem.Item.Side}";
                 if (!seenKeys.Add(key))
                 {
                     continue;
@@ -1270,8 +1300,8 @@ Helpful item phrases:
 
                 result.Updates.Add(new VoiceUpdate
                 {
-                    RowId = catalogItem.RowId,
-                    Side = catalogItem.Side,
+                    RowId = catalogItem.Item.RowId,
+                    Side = catalogItem.Item.Side,
                     Quantity = repairedQuantity
                 });
                 return;
@@ -1280,20 +1310,20 @@ Helpful item phrases:
 
         private CatalogItem? FindCatalogItemForMeasuredLabel(string normalizedLabel, string normalizedMeasure)
         {
-            var catalogItem = Catalog.FirstOrDefault(item =>
-                !string.IsNullOrWhiteSpace(item.Label) &&
-                NormalizeCatalogText(item.Label).Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) &&
-                NormalizeMeasurement(item.Spec, string.Empty) == normalizedMeasure);
+            var catalogItem = NormalizedCatalog.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                item.NormalizedLabel.Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) &&
+                item.NormalizedSpec == normalizedMeasure);
 
             if (catalogItem != null)
             {
-                return catalogItem;
+                return catalogItem.Item;
             }
 
-            return Catalog.FirstOrDefault(item =>
-                !string.IsNullOrWhiteSpace(item.Label) &&
-                normalizedLabel.Contains(NormalizeCatalogText(item.Label), StringComparison.OrdinalIgnoreCase) &&
-                NormalizeMeasurement(item.Spec, string.Empty) == normalizedMeasure);
+            return NormalizedCatalog.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                normalizedLabel.Contains(item.NormalizedLabel, StringComparison.OrdinalIgnoreCase) &&
+                item.NormalizedSpec == normalizedMeasure)?.Item;
         }
 
         private void AppendAliasOnlyMatches(InterpretationResult result, HashSet<string> seenKeys, string normalizedTranscript)
@@ -1490,6 +1520,12 @@ Helpful item phrases:
                     continue;
                 }
 
+                var normalizedPrefix = prefix.TrimStart('0') is { Length: > 0 } trimmedPrefix ? trimmedPrefix : "0";
+                if (!int.TryParse(normalizedPrefix, out var parsedPrefix) || parsedPrefix <= 0 || parsedPrefix > 999)
+                {
+                    continue;
+                }
+
                 if (signature.Length == 1 &&
                     prefix.Length == 1 &&
                     Regex.IsMatch(rawMeasure, @"^\s*\d+(?:\.0+)?\s*(m|mm|metre|metres|meter|meters)?\s*$", RegexOptions.IgnoreCase))
@@ -1497,7 +1533,7 @@ Helpful item phrases:
                     return $"{prefix}0";
                 }
 
-                return prefix.TrimStart('0') is { Length: > 0 } trimmed ? trimmed : "0";
+                return parsedPrefix.ToString();
             }
 
             return quantity;
@@ -1524,12 +1560,18 @@ Helpful item phrases:
                     continue;
                 }
 
+                var normalizedPrefix = prefix.TrimStart('0') is { Length: > 0 } trimmedPrefix ? trimmedPrefix : "0";
+                if (!int.TryParse(normalizedPrefix, out var parsedPrefix) || parsedPrefix <= 0 || parsedPrefix > 999)
+                {
+                    continue;
+                }
+
                 if (prefix.Length == 1 && rawVariant.Contains('.'))
                 {
                     return $"{prefix}0";
                 }
 
-                return prefix.TrimStart('0') is { Length: > 0 } trimmed ? trimmed : "0";
+                return parsedPrefix.ToString();
             }
 
             return null;
