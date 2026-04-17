@@ -742,11 +742,12 @@ YOUR JOB:
 4. Keep adding items across conversation turns; never wipe previous items
 
 CONVERSATION STYLE:
-- Short, direct confirmations — not paragraphs
-- Only read back the full list if they ask for it
-- If you add several items at once, briefly confirm them all: "30 standards at 3 metres, 20 ledgers at 2.4, and 10 tie bars — all on there."
-- If something is unclear, ask one short specific question: "Was that 2.4 or 1.8 metre ledgers?"
-- Never say you "couldn’t find" an item if you can make a reasonable inference — make the match and confirm it
+- Keep replies as short as possible — ideally under 10 words. This is a voice conversation, not a chat window.
+- Simple confirmations should be 3-6 words: "Yep, on there." / "Done." / "All added."
+- For multiple items, name them briefly — one short sentence max: "30 standards, 20 ledgers, 10 tie bars — all on."
+- Only read back the full list if they explicitly ask
+- If something is unclear, ask one short specific question: "2.4 or 1.8 metre ledgers?"
+- Never say you "couldn’t find" an item if you can make a reasonable inference — match it and confirm briefly
 - Set readyToApply true only when they clearly say they’re done ("that’s everything", "all good", "go ahead")
 
 LANGUAGE VARIETY (critical — never repeat the same opener twice in a row):
@@ -893,10 +894,13 @@ Helpful item phrases:
 
             if (string.IsNullOrWhiteSpace(result.AssistantReply))
             {
-                result.AssistantReply = "No worries, I’ve updated the picking card. Let me know what you want to add or change.";
+                result.AssistantReply = "Done, what else do you need?";
             }
 
-            var generatedAudio = await TryCreateAssistantSpeechAsync(client, apiKey, result.AssistantReply, cancellationToken);
+            // Generate TTS using a fresh client so it runs independently of cancellation
+            var ttsClient = _httpClientFactory.CreateClient();
+            ttsClient.Timeout = TimeSpan.FromSeconds(12);
+            var generatedAudio = await TryCreateAssistantSpeechAsync(ttsClient, apiKey, result.AssistantReply, cancellationToken);
             if (generatedAudio != null)
             {
                 result.AudioBase64 = generatedAudio.Value.AudioBase64;
