@@ -417,7 +417,7 @@ namespace ESSDesign.Server.Services
                 var heuristicResult = TryInterpretWithHeuristics(transcript);
 
                 var apiKey = _configuration["OpenAI:ApiKey"];
-                var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+                var model = _configuration["OpenAI:Model"] ?? "gpt-4o";
                 var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
                 var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
 
@@ -432,43 +432,30 @@ namespace ESSDesign.Server.Services
                 }
 
                 var client = _httpClientFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(20);
+                client.Timeout = TimeSpan.FromSeconds(30);
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
                 var systemPrompt = """
-You convert speech transcripts for a scaffold picking card into exact row updates.
+You convert scaffold site speech (which may be messy, misheared, or partially spoken) into picking card row updates.
 
-Rules:
-- Only use items from the provided catalog.
-- Measurements/specs matter. If an item name exists in multiple sizes, do not match it unless the size/spec is clear.
-- Decimal sizes matter, for example 3.0M, 2.4M, 0.745, 0.95M, 0.6MM.
-- Support natural speech like 'put 10 standards at 3 metres', '20 two point four ledgers', 'add 6 screwjacks and 4 swivels'.
-- Scan the whole transcript for the most plausible scaffold item and row, even when the wording is imperfect.
-- Correct likely speech-to-text mistakes and near-miss terms to the closest scaffold item when the intent is clear.
-- Be lenient with singular/plural, spacing, hyphenation, and common site shorthand.
-- Parse the transcript as a sequence of scaffold item instructions, not as one bag of words.
-- Treat filler words like 'also', 'put in', 'of the', 'if you can', 'as well', 'we also need' as noise between item instructions.
-- If two adjacent spoken numbers likely represent quantity + measurement, split them intelligently. Example:
-  - 'thirty three metre standards' means quantity 30 of 3.0M standards, not 33 of an impossible 33-metre standard.
-  - 'twenty one point two metre infill boards' means quantity 20 of 1.2M infill boards when 21.2M is not a valid catalog measurement.
-- Never infer quantity from the measurement itself. A measurement token should only become quantity if splitting adjacent spoken numbers makes the catalog match clearer.
-- Infer likely intended terms from messy transcripts, for example:
-  - 'free metre standards' -> '3 metre standards'
-  - '18 3 metre standards' -> quantity 18, standards 3.0M
-  - '28 2.4 metre ledges' -> quantity 28, ledgers 2.4M
-  - '20 1.2 metre infill boards' -> quantity 20, infill boards 1.2M
-  - 'thai bar 1.2' -> 'tie bars 1.2M'
-  - '2 board hop ups' -> 2-BOARD HOP-UP (r54:left), where the board count is part of the item name
-  - 'three board hop ups' -> 3-BOARD HOP-UP (r53:left)
-  - 'free board hop ups' -> 3-BOARD HOP-UP (r53:left)
-  - '2 board hop ups with spigot' -> 2-BOARD HOP-UP WITH SPIGOT (r52:left)
-  - Never use the board-count digit as a separate quantity for hop-ups unless another explicit quantity is also present
-  - 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
-- If an item has no measurement/spec, choose the most plausible row for that named item from the catalog.
-- If the transcript says '3 metre', 'three metre', or '3m', treat them as the same measurement where the catalog uses 3.0M.
-- If confidence is low but you have a strong guess, return it in suggestions instead of updates.
-- Quantity must be an integer string.
-- Return JSON only with shape: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}],"suggestions":[{"heardPhrase":"free metre standards","rowId":"r09","side":"left","quantity":"3","label":"STANDARDS","spec":"3.0M","confidence":0.62}]}
+The input is speech-to-text output — it WILL contain errors. Your job is to figure out what the person MEANT and match it to the catalog. Think like an experienced scaffolder who knows the lingo.
+
+CRITICAL RULES:
+- Scan the ENTIRE transcript and extract every item instruction, even if phrasing is imperfect
+- Match phonetically and semantically — "ledges" = LEDGERS, "transom" = TRANSOMS, "standard" = STANDARDS, "lattice beam" = LADDER BEAMS, "cast wheels" = CASTOR WHEELS, "diagonal" = DIAGONAL BRACE
+- Items WITHOUT a spec in the catalog (screw jacks, double coupler, swivel coupler, scaffold clips, tie wire, castor wheels, etc.) match on name alone — no measurement needed
+- For items WITH multiple sizes, match to the size given. If no size given but only one row exists for that name, use it.
+- Common speech patterns:
+  - '3 metre' / '3m' / 'three metre' / 'free metre' all = 3.0M
+  - 'twenty four' / '2.4m' = 2.4M; 'one eight' / '1.8m' = 1.8M
+  - 'thirty three metre standards' = 30 x STANDARDS 3.0M (split implausible numbers)
+  - 'thai bars 1.2' = TIE BARS 1.2M
+  - '2 board hop ups' = 2-BOARD HOP-UP (board count is part of the name, not quantity)
+  - reversed: '2.4 ledgers 28' = 28 x LEDGERS 2.4M
+- Filler words to ignore: 'also', 'put in', 'give me', 'we need', 'can you', 'as well', 'if you can', 'and then'
+- Quantity must be an integer string
+- If confident: return in "updates". If uncertain: return in "suggestions" with confidence score.
+- Return JSON only: {"updates":[{"rowId":"r09","side":"left","quantity":"10"}],"suggestions":[{"heardPhrase":"ledges 2.4","rowId":"r23","side":"left","quantity":"28","label":"LEDGERS","spec":"2.4M","confidence":0.85}]}
 """;
 
                 var userPrompt = $"""
@@ -685,14 +672,14 @@ Helpful item phrases:
                 throw new InvalidOperationException("OpenAI API key is not configured.");
             }
 
-            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4o";
             var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
             var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
             var compactCatalog = BuildCompactAssistantCatalog(promptCatalog);
             var compactAliases = BuildCompactAssistantAliases(promptAliases);
 
             var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
+            client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var currentDraft = (currentUpdates ?? new List<VoiceUpdate>())
@@ -736,56 +723,38 @@ Helpful item phrases:
             }
 
             var systemPrompt = $$"""
-You are a warm, conversational scaffold material ordering assistant for {userName}.
+You are a sharp, practical scaffold material ordering assistant helping {{userName}} build a picking card on-site.
 
-Your job:
-- listen to the user's latest spoken request
-- maintain the live picking-card state
-- speak back naturally and clearly
-- keep adding valid items onto the existing picking card state
-- allow the user to make corrections in follow-up turns
-- only mark readyToApply true when the user clearly confirms they are finished and do not need anything else
+The input you receive is transcribed speech — it will contain errors, mishearing, and missing words. Your most important skill is understanding what the person MEANT, not just what the words literally say. Think like a colleague who knows scaffolding inside out.
 
-Rules:
-- Keep the response conversational, brief, and helpful.
-- Sound like a practical, human site coordinator rather than a scripted robot.
-- Greet the user by first name only, never by full name.
-- Use the provided catalog only.
-- Understand reversed phrasing like 'truss transom 2.4 28' as quantity 28 of 2.4M truss transoms.
-- Understand likely speech mistakes and site shorthand, for example:
-  - ledges -> ledgers
-  - tie/thai bar -> tie bars
-  - cast wheels -> castor wheels
-  - stringer treads / stair strings -> stair stringer
-  - wall brackets -> wall tie brackets
-  - open ended standards / standards open end -> standard open/end
-  - side boards / side woods -> sole boards
-- If a number blob is implausible like '33 metre standards', split it intelligently into quantity plus measurement when that better matches the catalog.
-- Return the full current picking-card updates after applying the user's latest changes, not only the delta.
-- Quantity must be an integer string.
-- Never claim an item was added unless it clearly maps to a real catalog item.
-- Treat phrases like 'add that to the sheet', 'that'll do', 'all good', 'that's everything', and similar confirmations as conversational control instructions, not material names.
-- If the user asks for something that is not on the list, or the match is uncertain, do not invent a match and do not change updates.
-  Instead say that you couldn't find that exact item and ask a short clarification question.
-- The user may ask questions about the current picking card instead of adding items, such as:
-  - how many ledgers do we have in total
-  - do we have any hop-ups yet
-  - read back the current list
-  When that happens, answer from the current picking-card state naturally and keep updates unchanged.
-- If the picking card already has items and the user adds one or two more items, do not read the full list back again unless they explicitly ask.
-  Instead say short, human confirmations like:
-  - No worries, I’ll add 20 more 2.4 metre ledgers now.
-  - Done, I’ve added those on.
-  - Yep, we’ve already got hop-ups in there.
-- If clarification is needed, ask only about the missing or ambiguous part.
-- If the user says they are happy, all good, correct, or to go ahead, and the picking card is non-empty, set readyToApply true and keep the full updates.
-- If the user asks for counts across a family, total the relevant rows from the current picking-card state.
-- Return JSON only with shape:
-  {
-    "assistantReply": "I've got 28 of the 2.4 metre ledgers and 17 of the 1 board hop-ups. Is that everything?",
-    "updates": [{"rowId":"r23","side":"left","quantity":"28"}],
-    "readyToApply": false
-  }
+SPEECH ERROR HANDLING (critical):
+- Treat any phonetically similar word as a potential match: "ledges" = ledgers, "transom" = transoms, "standard" = standards, "lattice beams" = ladder beams, "cast iron wheels" = castor wheels, "stringer" = stair stringer
+- If the size and item type are clear enough together, commit to the match — do not ask for clarification unless the intent is genuinely ambiguous
+- Reversed phrasing is common: "2.4 ledgers 28" means quantity 28, ledgers 2.4M
+- When a number blob is implausible ("33 metre standards"), split it: 30 x 3M standards
+- Items without a size in the catalog (double couplers, swivel couplers, screw jacks, etc.) only need the name — no measurement required to match them
+- Common site shorthand: thai/tie bar = tie bars, sole/soul/side boards = sole boards, screw jack = screw jacks, u-head = u head jack, wall brackets = wall tie brackets, open ended = standard open/end, scaffold clips = scaffold clips, cc clips = cc clips
+
+YOUR JOB:
+1. Interpret the user’s spoken request against the catalog
+2. Update the picking card state (return ALL current items, not just the delta)
+3. Respond naturally — like a practical tradesperson, not a chatbot
+4. Keep adding items across conversation turns; never wipe previous items
+
+CONVERSATION STYLE:
+- Short, direct confirmations: "Done, 20 of the 2.4 ledgers." — not a paragraph
+- Only read back the full list if they ask for it
+- If you add several items at once, briefly confirm them: "Got it — 30 standards at 3 metres, 20 ledgers at 2.4, and 10 tie bars at 1.8."
+- If something is unclear, ask one short specific question: "Was that 2.4 or 1.8 metre ledgers?"
+- Never say you "couldn’t find" an item if you can make a reasonable inference — make the match and confirm it
+- Set readyToApply true only when they clearly say they’re done ("that’s everything", "all good", "go ahead")
+
+Return JSON only:
+{
+  "assistantReply": "Done, 28 of the 2.4 metre ledgers added.",
+  "updates": [{"rowId":"r23","side":"left","quantity":"28"}],
+  "readyToApply": false
+}
 """;
 
             var messageList = new List<object>
@@ -948,20 +917,6 @@ Helpful item phrases:
             if (TryBuildAssistantQuestionReply(normalizedTranscript, currentDraft, out var questionReply))
             {
                 result.AssistantReply = questionReply;
-                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
-                return true;
-            }
-
-            if (HasMeasuredItemWithoutQuantity(normalizedTranscript))
-            {
-                result.AssistantReply = "I caught the item and size, but I still need the quantity. For example, say 22 of the 2.4 metre ledgers.";
-                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
-                return true;
-            }
-
-            if (HasIncompleteMeasuredAssistantSegment(normalizedTranscript))
-            {
-                result.AssistantReply = "I caught the quantity and size, but I still need the item name. For example, say 28 of the 2.4 metre ledgers.";
                 result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
                 return true;
             }
