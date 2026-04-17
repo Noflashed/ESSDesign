@@ -969,10 +969,21 @@ Helpful item phrases:
             }
 
             var ttsModel = _configuration["OpenAI:TtsModel"] ?? "gpt-4o-mini-tts";
-            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "onyx";
+            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "echo";
             var audioFormat = _configuration["OpenAI:TtsFormat"] ?? "wav";
             var speechInstructions = _configuration["OpenAI:TtsInstructions"] ??
-                "Speak in a warm, natural, masculine Australian voice for a scaffold materials assistant. Sound human, calm, practical, and conversational. Avoid sounding robotic or overly formal. Keep the pacing brisk but clear.";
+                """
+                You are an experienced Australian scaffolding site coordinator talking to a colleague on a job site.
+                Speak naturally and conversationally — like a real person, not a text-to-speech system.
+                Use genuine Australian speech rhythms: slightly relaxed, direct, unhurried but not slow.
+                Vary your pace naturally — a little quicker when confirming something short, slightly slower when listing multiple items so each one lands clearly.
+                Put natural weight on quantities and item names so they stand out: "I've got TWENTY of the two-point-four ledgers" not a flat monotone list.
+                Use natural breath pauses between items in a list — don't rush through them.
+                Sound genuinely engaged and helpful, like you actually care about getting the order right.
+                Never sound like you are reading. Never sound robotic or overly formal.
+                Slight warmth and personality is fine — this is a practical working relationship.
+                """;
+
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech")
             {
