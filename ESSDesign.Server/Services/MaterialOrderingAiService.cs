@@ -952,6 +952,13 @@ Helpful item phrases:
                 return true;
             }
 
+            if (HasMeasuredItemWithoutQuantity(normalizedTranscript))
+            {
+                result.AssistantReply = "I caught the item and size, but I still need the quantity. For example, say 22 of the 2.4 metre ledgers.";
+                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                return true;
+            }
+
             if (HasIncompleteMeasuredAssistantSegment(normalizedTranscript))
             {
                 result.AssistantReply = "I caught the quantity and size, but I still need the item name. For example, say 28 of the 2.4 metre ledgers.";
@@ -1147,6 +1154,12 @@ Helpful item phrases:
         {
             return SegmentInstructions(normalizedTranscript)
                 .Any(segment => Regex.IsMatch(segment, @"\b\d{1,3}\s+\d+(?:\.\d+)?m\b\s*$", RegexOptions.IgnoreCase));
+        }
+
+        private static bool HasMeasuredItemWithoutQuantity(string normalizedTranscript)
+        {
+            return SegmentInstructions(normalizedTranscript)
+                .Any(segment => Regex.IsMatch(segment, @"^\d+(?:\.\d+)?m\s+[a-z]", RegexOptions.IgnoreCase));
         }
 
         private static bool LooksLikeAmbiguousFamilySpread(InterpretationResult result)
@@ -2246,16 +2259,34 @@ Helpful item phrases:
             }
 
             var beforeMatches = Regex.Matches(beforeWindow, @"\b(\d+)\b");
-            if (beforeMatches.Count > 0)
+            for (var index = beforeMatches.Count - 1; index >= 0; index--)
             {
-                return beforeMatches[^1].Groups[1].Value;
+                var match = beforeMatches[index];
+                var matchStart = match.Index;
+                var matchEnd = match.Index + match.Groups[1].Length;
+                var charBefore = matchStart > 0 ? beforeWindow[matchStart - 1] : '\0';
+                var charAfter = matchEnd < beforeWindow.Length ? beforeWindow[matchEnd] : '\0';
+                if (charBefore == '.' || charAfter == '.')
+                {
+                    continue;
+                }
+
+                return match.Groups[1].Value;
             }
 
             var afterEnd = Math.Min(normalizedText.Length, candidateEnd + windowSize);
             var afterWindow = normalizedText[candidateEnd..afterEnd];
-            var afterMatch = Regex.Match(afterWindow, @"\b(\d+)\b");
-            if (afterMatch.Success)
+            foreach (Match afterMatch in Regex.Matches(afterWindow, @"\b(\d+)\b"))
             {
+                var matchStart = afterMatch.Index;
+                var matchEnd = afterMatch.Index + afterMatch.Groups[1].Length;
+                var charBefore = matchStart > 0 ? afterWindow[matchStart - 1] : '\0';
+                var charAfter = matchEnd < afterWindow.Length ? afterWindow[matchEnd] : '\0';
+                if (charBefore == '.' || charAfter == '.')
+                {
+                    continue;
+                }
+
                 return afterMatch.Groups[1].Value;
             }
 
