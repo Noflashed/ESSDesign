@@ -952,10 +952,23 @@ Helpful item phrases:
                 return true;
             }
 
+            if (HasIncompleteMeasuredAssistantSegment(normalizedTranscript))
+            {
+                result.AssistantReply = "I caught the quantity and size, but I still need the item name. For example, say 28 of the 2.4 metre ledgers.";
+                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                return true;
+            }
+
             var heuristic = TryInterpretWithHeuristics(rawTranscript);
             if (heuristic.Updates.Count > 0)
             {
                 var prunedHeuristic = PruneMeasuredFamilyUpdates(normalizedTranscript, heuristic);
+                if (LooksLikeAmbiguousFamilySpread(prunedHeuristic))
+                {
+                    result.AssistantReply = "I need a bit more detail on that item so I don’t add the wrong size. Can you say the quantity, size, and item name together?";
+                    result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                    return true;
+                }
                 var merged = MergeAssistantCurrentState(currentDraft, prunedHeuristic.Updates);
                 result.Updates = merged;
                 result.AssistantReply = BuildAssistantAddConfirmation(prunedHeuristic.Updates);
@@ -1128,6 +1141,25 @@ Helpful item phrases:
                 normalizedTranscript,
                 @"\b(?:all\s+good|that(?:'s| is)?\s+(?:all|everything)|that(?:'ll| will)\s+do|i(?:'m| am)\s+happy|go\s+ahead|looks\s+good|we(?:'re| are)\s+done)\b",
                 RegexOptions.IgnoreCase);
+        }
+
+        private static bool HasIncompleteMeasuredAssistantSegment(string normalizedTranscript)
+        {
+            return SegmentInstructions(normalizedTranscript)
+                .Any(segment => Regex.IsMatch(segment, @"\b\d{1,3}\s+\d+(?:\.\d+)?m\b\s*$", RegexOptions.IgnoreCase));
+        }
+
+        private static bool LooksLikeAmbiguousFamilySpread(InterpretationResult result)
+        {
+            var repeatedFamilies = result.Updates
+                .Select(update => Catalog.FirstOrDefault(item =>
+                    string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase)))
+                .Where(item => item != null)
+                .GroupBy(item => NormalizeCatalogText(item!.Label))
+                .Any(group => group.Count() > 1);
+
+            return repeatedFamilies;
         }
 
         private static bool TryBuildAssistantQuestionReply(
