@@ -921,22 +921,6 @@ Helpful item phrases:
                 return true;
             }
 
-            var heuristic = TryInterpretWithHeuristics(rawTranscript);
-            if (heuristic.Updates.Count > 0)
-            {
-                var prunedHeuristic = PruneMeasuredFamilyUpdates(normalizedTranscript, heuristic);
-                if (LooksLikeAmbiguousFamilySpread(prunedHeuristic))
-                {
-                    result.AssistantReply = "I need a bit more detail on that item so I don’t add the wrong size. Can you say the quantity, size, and item name together?";
-                    result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
-                    return true;
-                }
-                var merged = MergeAssistantCurrentState(currentDraft, prunedHeuristic.Updates);
-                result.Updates = merged;
-                result.AssistantReply = BuildAssistantAddConfirmation(prunedHeuristic.Updates);
-                return true;
-            }
-
             return false;
         }
 
