@@ -637,7 +637,7 @@ Helpful item phrases:
             var compactAliases = BuildCompactAssistantAliases(promptAliases);
 
             var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(12);
+            client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var currentDraft = (currentUpdates ?? new List<VoiceUpdate>())
@@ -664,17 +664,18 @@ Helpful item phrases:
                     spec = item.Item!.Spec
                 })
                 .ToList();
+            var compactCurrentState = BuildCompactAssistantCurrentState(currentDraft);
 
             var systemPrompt = $$"""
 You are a warm, conversational scaffold material ordering assistant for {userName}.
 
 Your job:
 - listen to the user's latest spoken request
-- maintain a draft list of picking-card items
+- maintain the live picking-card state
 - speak back naturally and clearly
-- ask if the draft is correct
+- keep adding valid items onto the existing picking card state
 - allow the user to make corrections in follow-up turns
-- only mark readyToApply true when the user clearly confirms the list is final
+- only mark readyToApply true when the user clearly confirms they are finished and do not need anything else
 
 Rules:
 - Keep the response conversational, brief, and helpful.
@@ -691,24 +692,25 @@ Rules:
   - open ended standards / standards open end -> standard open/end
   - side boards / side woods -> sole boards
 - If a number blob is implausible like '33 metre standards', split it intelligently into quantity plus measurement when that better matches the catalog.
-- Return the full current draft updates after applying the user's latest changes, not only the delta.
+- Return the full current picking-card updates after applying the user's latest changes, not only the delta.
 - Quantity must be an integer string.
 - Never claim an item was added unless it clearly maps to a real catalog item.
+- Treat phrases like 'add that to the sheet', 'that'll do', 'all good', 'that's everything', and similar confirmations as conversational control instructions, not material names.
 - If the user asks for something that is not on the list, or the match is uncertain, do not invent a match and do not change updates.
   Instead say that you couldn't find that exact item and ask a short clarification question.
-- The user may ask questions about the draft instead of adding items, such as:
+- The user may ask questions about the current picking card instead of adding items, such as:
   - how many ledgers do we have in total
   - do we have any hop-ups yet
   - read back the current list
-  When that happens, answer from the current draft naturally and keep the draft unchanged.
-- If the draft already exists and the user adds one or two more items, do not read the full list back again unless they explicitly ask.
+  When that happens, answer from the current picking-card state naturally and keep updates unchanged.
+- If the picking card already has items and the user adds one or two more items, do not read the full list back again unless they explicitly ask.
   Instead say short, human confirmations like:
   - No worries, I’ll add 20 more 2.4 metre ledgers now.
   - Done, I’ve added those on.
   - Yep, we’ve already got hop-ups in there.
 - If clarification is needed, ask only about the missing or ambiguous part.
-- If the user says they are happy, all good, correct, or to go ahead, and the draft is non-empty, set readyToApply true and keep the full draft in updates.
-- If the user asks for counts across a family, total the relevant rows from the current draft.
+- If the user says they are happy, all good, correct, or to go ahead, and the picking card is non-empty, set readyToApply true and keep the full updates.
+- If the user asks for counts across a family, total the relevant rows from the current picking-card state.
 - Return JSON only with shape:
   {
     "assistantReply": "I've got 28 of the 2.4 metre ledgers and 17 of the 1 board hop-ups. Is that everything?",
@@ -722,7 +724,7 @@ Rules:
                 new { role = "system", content = systemPrompt }
             };
 
-            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(4))
+            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(3))
             {
                 var role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
                     ? "assistant"
@@ -739,8 +741,8 @@ Rules:
 Latest user transcript:
 {transcript}
 
-Current draft updates:
-{JsonSerializer.Serialize(currentDraft, _jsonOptions)}
+Current picking-card state:
+{compactCurrentState}
 
 Catalog:
 {compactCatalog}
@@ -833,7 +835,7 @@ Helpful item phrases:
 
             if (string.IsNullOrWhiteSpace(result.AssistantReply))
             {
-                result.AssistantReply = "I’ve updated the draft. Let me know what you’d like to change, or tell me if it’s all good.";
+                result.AssistantReply = "No worries, I’ve updated the picking card. Let me know what you want to add or change.";
             }
 
             var generatedAudio = await TryCreateAssistantSpeechAsync(client, apiKey, result.AssistantReply, cancellationToken);
@@ -957,6 +959,27 @@ Helpful item phrases:
                 aliases
                     .Take(120)
                     .Select(alias => $"{alias.Phrase} -> {alias.RowId}:{alias.Side}"));
+        }
+
+        private static string BuildCompactAssistantCurrentState(IEnumerable<object> currentState)
+        {
+            var lines = currentState
+                .Select(item =>
+                {
+                    var rowId = item.GetType().GetProperty("RowId")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var side = item.GetType().GetProperty("Side")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var quantity = item.GetType().GetProperty("Quantity")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var label = item.GetType().GetProperty("label")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var spec = item.GetType().GetProperty("spec")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var specSuffix = string.IsNullOrWhiteSpace(spec) ? string.Empty : $" [{spec}]";
+                    return string.IsNullOrWhiteSpace(rowId) || string.IsNullOrWhiteSpace(side) || string.IsNullOrWhiteSpace(quantity)
+                        ? string.Empty
+                        : $"{rowId}:{side}:{quantity}:{label}{specSuffix}";
+                })
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList();
+
+            return lines.Count == 0 ? "(empty)" : string.Join("\n", lines);
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
