@@ -633,6 +633,8 @@ Helpful item phrases:
             var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
             var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
             var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
+            var compactCatalog = BuildCompactAssistantCatalog(promptCatalog);
+            var compactAliases = BuildCompactAssistantAliases(promptAliases);
 
             var client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(12);
@@ -720,7 +722,7 @@ Rules:
                 new { role = "system", content = systemPrompt }
             };
 
-            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(8))
+            foreach (var message in (history ?? new List<AssistantMessage>()).TakeLast(4))
             {
                 var role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
                     ? "assistant"
@@ -741,10 +743,10 @@ Current draft updates:
 {JsonSerializer.Serialize(currentDraft, _jsonOptions)}
 
 Catalog:
-{JsonSerializer.Serialize(promptCatalog, _jsonOptions)}
+{compactCatalog}
 
 Helpful item phrases:
-{JsonSerializer.Serialize(promptAliases, _jsonOptions)}
+{compactAliases}
 """;
 
             messageList.Add(new { role = "user", content = userPrompt });
@@ -938,6 +940,23 @@ Helpful item phrases:
                 _logger.LogWarning(ex, "OpenAI assistant speech generation request failed");
                 return null;
             }
+        }
+
+        private static string BuildCompactAssistantCatalog(IEnumerable<CatalogItem> items)
+        {
+            return string.Join(
+                "\n",
+                items.Select(item =>
+                    $"{item.RowId}:{item.Side}:{item.Label}{(string.IsNullOrWhiteSpace(item.Spec) ? string.Empty : $" [{item.Spec}]")}"));
+        }
+
+        private static string BuildCompactAssistantAliases(IEnumerable<CatalogAlias> aliases)
+        {
+            return string.Join(
+                "\n",
+                aliases
+                    .Take(120)
+                    .Select(alias => $"{alias.Phrase} -> {alias.RowId}:{alias.Side}"));
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
