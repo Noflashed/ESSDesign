@@ -417,7 +417,7 @@ namespace ESSDesign.Server.Services
                 var heuristicResult = TryInterpretWithHeuristics(transcript);
 
                 var apiKey = _configuration["OpenAI:ApiKey"];
-                var model = _configuration["OpenAI:Model"] ?? "gpt-4o";
+                var model = _configuration["OpenAI:Model"] ?? "gpt-4.1-mini";
                 var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
                 var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
 
@@ -672,7 +672,7 @@ Helpful item phrases:
                 throw new InvalidOperationException("OpenAI API key is not configured.");
             }
 
-            var model = _configuration["OpenAI:Model"] ?? "gpt-4o";
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4.1-mini";
             var promptCatalog = Catalog.Where(item => !string.IsNullOrWhiteSpace(item.Label)).ToList();
             var promptAliases = CatalogAliases.Where(item => !string.IsNullOrWhiteSpace(item.Phrase)).ToList();
             var compactCatalog = BuildCompactAssistantCatalog(promptCatalog);
