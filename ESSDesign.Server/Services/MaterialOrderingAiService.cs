@@ -153,6 +153,18 @@ namespace ESSDesign.Server.Services
         {
             (new Regex(@"\bopening\s+standards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "open end standards"),
             (new Regex(@"\bopen\s*ended\s+standards?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "open end standards"),
+            (new Regex(@"\bfree[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up with spigot"),
+            (new Regex(@"\bthree[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up with spigot"),
+            (new Regex(@"\b3[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up with spigot"),
+            (new Regex(@"\btwo[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "2-board hop-up with spigot"),
+            (new Regex(@"\b2[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "2-board hop-up with spigot"),
+            (new Regex(@"\bfree[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up"),
+            (new Regex(@"\bthree[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up"),
+            (new Regex(@"\b3[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "3-board hop-up"),
+            (new Regex(@"\btwo[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "2-board hop-up"),
+            (new Regex(@"\b2[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "2-board hop-up"),
+            (new Regex(@"\bone[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "1-board hop-up"),
+            (new Regex(@"\b1[\s-]*board[\s-]*hop[\s-]*ups?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "1-board hop-up"),
             (new Regex(@"\bledges\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "ledgers"),
             (new Regex(@"\bthai\s*bars?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
             (new Regex(@"\bthai\s*bales?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "tie bars"),
@@ -446,8 +458,12 @@ Rules:
   - '28 2.4 metre ledges' -> quantity 28, ledgers 2.4M
   - '20 1.2 metre infill boards' -> quantity 20, infill boards 1.2M
   - 'thai bar 1.2' -> 'tie bars 1.2M'
-  - '2 board hop up' -> 'HOP-UP BRACKETS 2'
-- 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
+  - '2 board hop ups' -> 2-BOARD HOP-UP (r54:left), where the board count is part of the item name
+  - 'three board hop ups' -> 3-BOARD HOP-UP (r53:left)
+  - 'free board hop ups' -> 3-BOARD HOP-UP (r53:left)
+  - '2 board hop ups with spigot' -> 2-BOARD HOP-UP WITH SPIGOT (r52:left)
+  - Never use the board-count digit as a separate quantity for hop-ups unless another explicit quantity is also present
+  - 'stair bolts', 'stair door', 'aluminium top rail' should still match even without a measurement.
 - If an item has no measurement/spec, choose the most plausible row for that named item from the catalog.
 - If the transcript says '3 metre', 'three metre', or '3m', treat them as the same measurement where the catalog uses 3.0M.
 - If confidence is low but you have a strong guess, return it in suggestions instead of updates.
@@ -1453,7 +1469,12 @@ Helpful item phrases:
             }
 
             var after = value[(startIndex + quantityToken.Length)..];
-            return Regex.IsMatch(after, @"^\s*(?:board|boards|m|mm|meter|meters|metre|metres|millimetre|millimetres)\b", RegexOptions.IgnoreCase);
+            if (Regex.IsMatch(after, @"^\s*boards?\s+(?:hop|step|lap)", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            return Regex.IsMatch(after, @"^\s*(?:m|mm|meter|meters|metre|metres|millimetre|millimetres)\b", RegexOptions.IgnoreCase);
         }
 
         private static string GetPreviousToken(string value, int startIndex)
@@ -1866,6 +1887,8 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\bmetres?\b", "metre");
             normalized = Regex.Replace(normalized, @"\bmillimetres?\b", "millimetre");
             normalized = Regex.Replace(normalized, @"\bmeters?\b", "meter");
+            normalized = Regex.Replace(normalized, @"\bfree[\s-]*board[\s-]*hop[\s-]*ups?\s+with\s+spigots?\b", "3-board hop-up with spigot", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"\bfree[\s-]*board[\s-]*hop[\s-]*ups?\b", "3-board hop-up", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bfree\s+(?=(?:m|meter|metre|millimetre|mm|board))", "3 ", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bto\s+board\b", "2 board", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\bfor\s+board\b", "4 board", RegexOptions.IgnoreCase);
@@ -1976,11 +1999,12 @@ Helpful item phrases:
                 return cleanMeasure;
             }
 
-            if (normalizedUnit == "m" && !cleanMeasure.Contains('.'))
+            if (decimal.TryParse(cleanMeasure, out var parsedMeasure))
             {
-                cleanMeasure = $"{cleanMeasure}.0";
+                cleanMeasure = parsedMeasure.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
             }
-            else if (normalizedUnit == "board")
+
+            if (normalizedUnit == "board")
             {
                 return $"{cleanMeasure} board";
             }
@@ -2146,14 +2170,17 @@ Helpful item phrases:
                     aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{spec} {label}" });
                 }
 
-                if (label.StartsWith("hop up brackets", StringComparison.OrdinalIgnoreCase))
+                var hopUpMatch = Regex.Match(label, @"^(?<count>\d+)\s+boards?\s+hop\s+up(?:\s+with\s+spigot)?$", RegexOptions.IgnoreCase);
+                if (hopUpMatch.Success)
                 {
-                    var boardMatch = Regex.Match(spec, @"(?<count>\d+)\s+board", RegexOptions.IgnoreCase);
-                    if (boardMatch.Success)
+                    var count = hopUpMatch.Groups["count"].Value;
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count} board hop up" });
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"hop up {count} board" });
+                    aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count}-board hop-up" });
+                    if (label.Contains("with spigot", StringComparison.OrdinalIgnoreCase))
                     {
-                        var count = boardMatch.Groups["count"].Value;
-                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count} board hop up" });
-                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"hop up {count} board" });
+                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count} board hop up with spigot" });
+                        aliases.Add(new CatalogAlias { RowId = item.RowId, Side = item.Side, Phrase = $"{count}-board hop-up with spigot" });
                     }
                 }
 
