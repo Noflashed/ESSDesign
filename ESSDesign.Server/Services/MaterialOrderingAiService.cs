@@ -691,6 +691,9 @@ Rules:
 - If a number blob is implausible like '33 metre standards', split it intelligently into quantity plus measurement when that better matches the catalog.
 - Return the full current draft updates after applying the user's latest changes, not only the delta.
 - Quantity must be an integer string.
+- Never claim an item was added unless it clearly maps to a real catalog item.
+- If the user asks for something that is not on the list, or the match is uncertain, do not invent a match and do not change updates.
+  Instead say that you couldn't find that exact item and ask a short clarification question.
 - The user may ask questions about the draft instead of adding items, such as:
   - how many ledgers do we have in total
   - do we have any hop-ups yet
