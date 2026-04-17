@@ -32,6 +32,9 @@ namespace ESSDesign.Server.Services
             public string AssistantReply { get; set; } = string.Empty;
             public List<VoiceUpdate> Updates { get; set; } = new();
             public bool ReadyToApply { get; set; }
+            public string? AudioBase64 { get; set; }
+            public string AudioFormat { get; set; } = "mp3";
+            public bool UsesAiVoice { get; set; }
         }
 
         public sealed class InterpretationDebug
@@ -806,7 +809,78 @@ Helpful item phrases:
                 result.AssistantReply = "I’ve updated the draft. Let me know what you’d like to change, or tell me if it’s all good.";
             }
 
+            var generatedAudio = await TryCreateAssistantSpeechAsync(client, apiKey, result.AssistantReply, cancellationToken);
+            if (generatedAudio != null)
+            {
+                result.AudioBase64 = generatedAudio.Value.AudioBase64;
+                result.AudioFormat = generatedAudio.Value.AudioFormat;
+                result.UsesAiVoice = true;
+            }
+
             return result;
+        }
+
+        private async Task<(string AudioBase64, string AudioFormat)?> TryCreateAssistantSpeechAsync(
+            HttpClient client,
+            string apiKey,
+            string assistantReply,
+            CancellationToken cancellationToken)
+        {
+            var trimmedReply = assistantReply.Trim();
+            if (string.IsNullOrWhiteSpace(trimmedReply))
+            {
+                return null;
+            }
+
+            var ttsModel = _configuration["OpenAI:TtsModel"] ?? "gpt-4o-mini-tts";
+            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "coral";
+            var audioFormat = _configuration["OpenAI:TtsFormat"] ?? "mp3";
+            var speechInstructions = _configuration["OpenAI:TtsInstructions"] ??
+                "Speak in a warm, friendly, conversational Australian tone for a scaffold materials assistant. Sound natural, clear, and supportive. Keep the pacing steady and easy to follow.";
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new
+                    {
+                        model = ttsModel,
+                        voice = ttsVoice,
+                        input = trimmedReply,
+                        instructions = speechInstructions,
+                        response_format = audioFormat
+                    }, _jsonOptions),
+                    Encoding.UTF8,
+                    "application/json")
+            };
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            try
+            {
+                using var response = await client.SendAsync(request, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogWarning(
+                        "OpenAI assistant speech generation failed: {StatusCode} {Body}",
+                        response.StatusCode,
+                        responseBody);
+                    return null;
+                }
+
+                var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                if (audioBytes.Length == 0)
+                {
+                    return null;
+                }
+
+                return (Convert.ToBase64String(audioBytes), audioFormat);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "OpenAI assistant speech generation request failed");
+                return null;
+            }
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
