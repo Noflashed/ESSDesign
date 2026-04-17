@@ -955,9 +955,10 @@ Helpful item phrases:
             var heuristic = TryInterpretWithHeuristics(rawTranscript);
             if (heuristic.Updates.Count > 0)
             {
-                var merged = MergeAssistantCurrentState(currentDraft, heuristic.Updates);
+                var prunedHeuristic = PruneMeasuredFamilyUpdates(normalizedTranscript, heuristic);
+                var merged = MergeAssistantCurrentState(currentDraft, prunedHeuristic.Updates);
                 result.Updates = merged;
-                result.AssistantReply = BuildAssistantAddConfirmation(heuristic.Updates);
+                result.AssistantReply = BuildAssistantAddConfirmation(prunedHeuristic.Updates);
                 return true;
             }
 
