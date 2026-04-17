@@ -695,6 +695,20 @@ Helpful item phrases:
                 })
                 .ToList();
             var compactCurrentState = BuildCompactAssistantCurrentState(currentDraft);
+            var normalizedTranscript = NormalizeTranscript(transcript);
+
+            if (TryBuildAssistantFastPathResult(normalizedTranscript, transcript, currentDraft, out var fastPathResult))
+            {
+                var generatedFastAudio = await TryCreateAssistantSpeechAsync(client, apiKey, fastPathResult.AssistantReply, cancellationToken);
+                if (generatedFastAudio != null)
+                {
+                    fastPathResult.AudioBase64 = generatedFastAudio.Value.AudioBase64;
+                    fastPathResult.AudioFormat = generatedFastAudio.Value.AudioFormat;
+                    fastPathResult.UsesAiVoice = true;
+                }
+
+                return fastPathResult;
+            }
 
             var systemPrompt = $$"""
 You are a warm, conversational scaffold material ordering assistant for {userName}.
@@ -879,6 +893,52 @@ Helpful item phrases:
             return result;
         }
 
+        private bool TryBuildAssistantFastPathResult(
+            string normalizedTranscript,
+            string rawTranscript,
+            List<object> currentDraft,
+            out AssistantTurnResult result)
+        {
+            result = new AssistantTurnResult();
+
+            if (IsAssistantSheetConfirmation(normalizedTranscript))
+            {
+                result.AssistantReply = currentDraft.Count > 0
+                    ? "No worries, I’ve kept those items on the picking card. What else do you need?"
+                    : "I haven’t added any materials yet. Tell me what you want on the picking card.";
+                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                return true;
+            }
+
+            if (IsAssistantFinishedConfirmation(normalizedTranscript))
+            {
+                result.AssistantReply = currentDraft.Count > 0
+                    ? "No worries, that’s all set. The picking card is ready."
+                    : "No worries. There’s nothing on the picking card yet, so just tell me what materials you need.";
+                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                result.ReadyToApply = currentDraft.Count > 0;
+                return true;
+            }
+
+            if (TryBuildAssistantQuestionReply(normalizedTranscript, currentDraft, out var questionReply))
+            {
+                result.AssistantReply = questionReply;
+                result.Updates = ConvertCurrentDraftToVoiceUpdates(currentDraft);
+                return true;
+            }
+
+            var heuristic = TryInterpretWithHeuristics(rawTranscript);
+            if (heuristic.Updates.Count > 0)
+            {
+                var merged = MergeAssistantCurrentState(currentDraft, heuristic.Updates);
+                result.Updates = merged;
+                result.AssistantReply = BuildAssistantAddConfirmation(heuristic.Updates);
+                return true;
+            }
+
+            return false;
+        }
+
         public async Task<AssistantSpeechResult> GenerateAssistantSpeechAsync(string text, CancellationToken cancellationToken)
         {
             var trimmed = text.Trim();
@@ -1010,6 +1070,166 @@ Helpful item phrases:
                 .ToList();
 
             return lines.Count == 0 ? "(empty)" : string.Join("\n", lines);
+        }
+
+        private static List<VoiceUpdate> ConvertCurrentDraftToVoiceUpdates(IEnumerable<object> currentState)
+        {
+            return currentState
+                .Select(item => new VoiceUpdate
+                {
+                    RowId = item.GetType().GetProperty("RowId")?.GetValue(item)?.ToString() ?? string.Empty,
+                    Side = item.GetType().GetProperty("Side")?.GetValue(item)?.ToString() ?? string.Empty,
+                    Quantity = item.GetType().GetProperty("Quantity")?.GetValue(item)?.ToString() ?? string.Empty
+                })
+                .Where(update =>
+                    !string.IsNullOrWhiteSpace(update.RowId) &&
+                    !string.IsNullOrWhiteSpace(update.Side) &&
+                    !string.IsNullOrWhiteSpace(update.Quantity))
+                .ToList();
+        }
+
+        private static bool IsAssistantSheetConfirmation(string normalizedTranscript)
+        {
+            return Regex.IsMatch(
+                normalizedTranscript,
+                @"\b(add|put|keep)\s+(that|those|it)\s+(?:on|onto|to)\s+(?:the\s+)?(?:sheet|card|picking\s+card)\b",
+                RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsAssistantFinishedConfirmation(string normalizedTranscript)
+        {
+            return Regex.IsMatch(
+                normalizedTranscript,
+                @"\b(?:all\s+good|that(?:'s| is)?\s+(?:all|everything)|that(?:'ll| will)\s+do|i(?:'m| am)\s+happy|go\s+ahead|looks\s+good|we(?:'re| are)\s+done)\b",
+                RegexOptions.IgnoreCase);
+        }
+
+        private static bool TryBuildAssistantQuestionReply(
+            string normalizedTranscript,
+            List<object> currentState,
+            out string reply)
+        {
+            reply = string.Empty;
+            var currentUpdates = ConvertCurrentDraftToVoiceUpdates(currentState);
+            if (currentUpdates.Count == 0)
+            {
+                if (Regex.IsMatch(normalizedTranscript, @"\b(?:how many|do we have|read back|current list|what(?:'s| is)\s+on)\b", RegexOptions.IgnoreCase))
+                {
+                    reply = "There’s nothing on the picking card yet. Tell me what materials you want and I’ll add them on.";
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (Regex.IsMatch(normalizedTranscript, @"\bhow many\b.*\bledgers?\b|\btotal\b.*\bledgers?\b", RegexOptions.IgnoreCase))
+            {
+                var total = SumMatchingFamily(currentUpdates, "LEDGERS");
+                reply = total > 0
+                    ? $"We currently have {total} ledgers on the picking card. Want me to add any more?"
+                    : "We don’t have any ledgers on the picking card yet. Want me to add some?";
+                return true;
+            }
+
+            if (Regex.IsMatch(normalizedTranscript, @"\b(?:do we have|any)\b.*\bhop[\s-]*ups?\b", RegexOptions.IgnoreCase))
+            {
+                var total = SumMatchingFamily(currentUpdates, "HOP-UP");
+                reply = total > 0
+                    ? $"Yep, we’ve already got {total} hop-ups on the picking card."
+                    : "Not yet, there aren’t any hop-ups on the picking card.";
+                return true;
+            }
+
+            if (Regex.IsMatch(normalizedTranscript, @"\b(?:read back|current list|what(?:'s| is)\s+on\s+(?:the\s+)?(?:sheet|card)|give me the current list)\b", RegexOptions.IgnoreCase))
+            {
+                var summary = string.Join(", ", currentUpdates
+                    .Take(8)
+                    .Select(DescribeAssistantUpdate));
+                reply = $"At the moment we’ve got {summary}.{(currentUpdates.Count > 8 ? " There are a few more items on there as well." : string.Empty)}";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static int SumMatchingFamily(IEnumerable<VoiceUpdate> updates, string familyToken)
+        {
+            return updates
+                .Select(update => new
+                {
+                    Update = update,
+                    Item = Catalog.FirstOrDefault(item =>
+                        string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase))
+                })
+                .Where(item => item.Item != null && NormalizeCatalogText(item.Item.Label).Contains(familyToken, StringComparison.OrdinalIgnoreCase))
+                .Sum(item => int.TryParse(item.Update.Quantity, out var parsed) ? parsed : 0);
+        }
+
+        private static List<VoiceUpdate> MergeAssistantCurrentState(List<object> currentState, IEnumerable<VoiceUpdate> additions)
+        {
+            var merged = ConvertCurrentDraftToVoiceUpdates(currentState)
+                .ToDictionary(update => $"{update.RowId}:{update.Side}", StringComparer.OrdinalIgnoreCase);
+
+            foreach (var addition in additions)
+            {
+                if (string.IsNullOrWhiteSpace(addition.RowId) ||
+                    string.IsNullOrWhiteSpace(addition.Side) ||
+                    string.IsNullOrWhiteSpace(addition.Quantity))
+                {
+                    continue;
+                }
+
+                merged[$"{addition.RowId}:{addition.Side}"] = new VoiceUpdate
+                {
+                    RowId = addition.RowId,
+                    Side = addition.Side,
+                    Quantity = addition.Quantity
+                };
+            }
+
+            return merged.Values.ToList();
+        }
+
+        private static string BuildAssistantAddConfirmation(IEnumerable<VoiceUpdate> additions)
+        {
+            var descriptions = additions
+                .Take(3)
+                .Select(DescribeAssistantUpdate)
+                .ToList();
+
+            if (descriptions.Count == 0)
+            {
+                return "No worries, I’ve updated the picking card. What else do you need?";
+            }
+
+            if (descriptions.Count == 1)
+            {
+                return $"No worries, I’ll add {descriptions[0]} now.";
+            }
+
+            if (descriptions.Count == 2)
+            {
+                return $"No worries, I’ll add {descriptions[0]} and {descriptions[1]} now.";
+            }
+
+            return $"No worries, I’ll add {descriptions[0]}, {descriptions[1]}, and {descriptions[2]} now.";
+        }
+
+        private static string DescribeAssistantUpdate(VoiceUpdate update)
+        {
+            var item = Catalog.FirstOrDefault(catalogItem =>
+                string.Equals(catalogItem.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(catalogItem.Side, update.Side, StringComparison.OrdinalIgnoreCase));
+
+            if (item == null)
+            {
+                return $"{update.Quantity} items";
+            }
+
+            var label = item.Label.ToLowerInvariant();
+            var spec = string.IsNullOrWhiteSpace(item.Spec) ? string.Empty : $" {item.Spec.ToLowerInvariant()}";
+            return $"{update.Quantity} {label}{spec}";
         }
 
         private InterpretationResult TryInterpretWithHeuristics(string transcript)
