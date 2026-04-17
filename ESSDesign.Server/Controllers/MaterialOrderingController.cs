@@ -43,6 +43,11 @@ namespace ESSDesign.Server.Controllers
             public List<AssistantDraftUpdate> CurrentUpdates { get; set; } = new();
         }
 
+        public sealed class AssistantSpeechRequest
+        {
+            public string Text { get; set; } = string.Empty;
+        }
+
         private readonly MaterialOrderingAiService _materialOrderingAiService;
         private readonly SupabaseService _supabaseService;
         private readonly ILogger<MaterialOrderingController> _logger;
@@ -202,6 +207,39 @@ namespace ESSDesign.Server.Controllers
             {
                 _logger.LogError(ex, "Unexpected material ordering assistant error");
                 return StatusCode(500, new { error = "Assistant turn failed" });
+            }
+        }
+
+        [HttpPost("assistant-voice")]
+        public async Task<ActionResult<MaterialOrderingAiService.AssistantSpeechResult>> AssistantVoice(
+            [FromBody] AssistantSpeechRequest request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Text))
+                {
+                    return BadRequest(new { error = "Text is required" });
+                }
+
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var result = await _materialOrderingAiService.GenerateAssistantSpeechAsync(request.Text, cancellationToken);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Material ordering assistant voice failed");
+                return StatusCode(500, new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected material ordering assistant voice error");
+                return StatusCode(500, new { error = "Assistant voice failed" });
             }
         }
 

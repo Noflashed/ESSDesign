@@ -37,6 +37,13 @@ namespace ESSDesign.Server.Services
             public bool UsesAiVoice { get; set; }
         }
 
+        public sealed class AssistantSpeechResult
+        {
+            public string? AudioBase64 { get; set; }
+            public string AudioFormat { get; set; } = "mp3";
+            public bool UsesAiVoice { get; set; }
+        }
+
         public sealed class InterpretationDebug
         {
             public string NormalizedTranscript { get; set; } = string.Empty;
@@ -818,6 +825,38 @@ Helpful item phrases:
             }
 
             return result;
+        }
+
+        public async Task<AssistantSpeechResult> GenerateAssistantSpeechAsync(string text, CancellationToken cancellationToken)
+        {
+            var trimmed = text.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return new AssistantSpeechResult();
+            }
+
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                throw new InvalidOperationException("OpenAI API key is not configured.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(12);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            var generatedAudio = await TryCreateAssistantSpeechAsync(client, apiKey, trimmed, cancellationToken);
+            if (generatedAudio == null)
+            {
+                return new AssistantSpeechResult();
+            }
+
+            return new AssistantSpeechResult
+            {
+                AudioBase64 = generatedAudio.Value.AudioBase64,
+                AudioFormat = generatedAudio.Value.AudioFormat,
+                UsesAiVoice = true
+            };
         }
 
         private async Task<(string AudioBase64, string AudioFormat)?> TryCreateAssistantSpeechAsync(
