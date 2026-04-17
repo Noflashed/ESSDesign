@@ -676,6 +676,8 @@ Your job:
 
 Rules:
 - Keep the response conversational, brief, and helpful.
+- Sound like a practical, human site coordinator rather than a scripted robot.
+- Greet the user by first name only, never by full name.
 - Use the provided catalog only.
 - Understand reversed phrasing like 'truss transom 2.4 28' as quantity 28 of 2.4M truss transoms.
 - Understand likely speech mistakes and site shorthand, for example:
@@ -689,6 +691,13 @@ Rules:
 - If a number blob is implausible like '33 metre standards', split it intelligently into quantity plus measurement when that better matches the catalog.
 - Return the full current draft updates after applying the user's latest changes, not only the delta.
 - Quantity must be an integer string.
+- The user may ask questions about the draft instead of adding items, such as:
+  - how many ledgers do we have in total
+  - do we have any hop-ups yet
+  - read back the current list
+  When that happens, answer from the current draft naturally and keep the draft unchanged.
+- If the user says they are happy, all good, correct, or to go ahead, and the draft is non-empty, set readyToApply true and keep the full draft in updates.
+- If the user asks for counts across a family, total the relevant rows from the current draft.
 - Return JSON only with shape:
   {
     "assistantReply": "I've got 28 of the 2.4 metre ledgers and 17 of the 1 board hop-ups. Is that everything?",
@@ -872,10 +881,10 @@ Helpful item phrases:
             }
 
             var ttsModel = _configuration["OpenAI:TtsModel"] ?? "gpt-4o-mini-tts";
-            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "coral";
-            var audioFormat = _configuration["OpenAI:TtsFormat"] ?? "mp3";
+            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "ash";
+            var audioFormat = _configuration["OpenAI:TtsFormat"] ?? "wav";
             var speechInstructions = _configuration["OpenAI:TtsInstructions"] ??
-                "Speak in a warm, friendly, conversational Australian tone for a scaffold materials assistant. Sound natural, clear, and supportive. Keep the pacing steady and easy to follow.";
+                "Speak in a warm, natural, masculine Australian voice for a scaffold materials assistant. Sound human, calm, practical, and conversational. Avoid sounding robotic or overly formal. Keep the pacing brisk but clear.";
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech")
             {
