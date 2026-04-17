@@ -101,6 +101,15 @@ namespace ESSDesign.Server.Services
             public int ConfirmedCount { get; set; }
         }
 
+        private sealed class AssistantCurrentStateItem
+        {
+            public string RowId { get; init; } = string.Empty;
+            public string Side { get; init; } = string.Empty;
+            public string Quantity { get; init; } = string.Empty;
+            public string Label { get; init; } = string.Empty;
+            public string Spec { get; init; } = string.Empty;
+        }
+
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<MaterialOrderingAiService> _logger;
@@ -685,13 +694,13 @@ Helpful item phrases:
                         string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase))
                 })
                 .Where(item => item.Item != null)
-                .Select(item => new
+                .Select(item => new AssistantCurrentStateItem
                 {
-                    item.RowId,
-                    item.Side,
-                    item.Quantity,
-                    label = item.Item!.Label,
-                    spec = item.Item!.Spec
+                    RowId = item.RowId,
+                    Side = item.Side,
+                    Quantity = item.Quantity,
+                    Label = item.Item!.Label,
+                    Spec = item.Item!.Spec
                 })
                 .ToList();
             var compactCurrentState = BuildCompactAssistantCurrentState(currentDraft);
@@ -896,7 +905,7 @@ Helpful item phrases:
         private bool TryBuildAssistantFastPathResult(
             string normalizedTranscript,
             string rawTranscript,
-            List<object> currentDraft,
+            List<AssistantCurrentStateItem> currentDraft,
             out AssistantTurnResult result)
         {
             result = new AssistantTurnResult();
@@ -1051,16 +1060,16 @@ Helpful item phrases:
                     .Select(alias => $"{alias.Phrase} -> {alias.RowId}:{alias.Side}"));
         }
 
-        private static string BuildCompactAssistantCurrentState(IEnumerable<object> currentState)
+        private static string BuildCompactAssistantCurrentState(IEnumerable<AssistantCurrentStateItem> currentState)
         {
             var lines = currentState
                 .Select(item =>
                 {
-                    var rowId = item.GetType().GetProperty("RowId")?.GetValue(item)?.ToString() ?? string.Empty;
-                    var side = item.GetType().GetProperty("Side")?.GetValue(item)?.ToString() ?? string.Empty;
-                    var quantity = item.GetType().GetProperty("Quantity")?.GetValue(item)?.ToString() ?? string.Empty;
-                    var label = item.GetType().GetProperty("label")?.GetValue(item)?.ToString() ?? string.Empty;
-                    var spec = item.GetType().GetProperty("spec")?.GetValue(item)?.ToString() ?? string.Empty;
+                    var rowId = item.RowId;
+                    var side = item.Side;
+                    var quantity = item.Quantity;
+                    var label = item.Label;
+                    var spec = item.Spec;
                     var specSuffix = string.IsNullOrWhiteSpace(spec) ? string.Empty : $" [{spec}]";
                     return string.IsNullOrWhiteSpace(rowId) || string.IsNullOrWhiteSpace(side) || string.IsNullOrWhiteSpace(quantity)
                         ? string.Empty
@@ -1072,14 +1081,14 @@ Helpful item phrases:
             return lines.Count == 0 ? "(empty)" : string.Join("\n", lines);
         }
 
-        private static List<VoiceUpdate> ConvertCurrentDraftToVoiceUpdates(IEnumerable<object> currentState)
+        private static List<VoiceUpdate> ConvertCurrentDraftToVoiceUpdates(IEnumerable<AssistantCurrentStateItem> currentState)
         {
             return currentState
                 .Select(item => new VoiceUpdate
                 {
-                    RowId = item.GetType().GetProperty("RowId")?.GetValue(item)?.ToString() ?? string.Empty,
-                    Side = item.GetType().GetProperty("Side")?.GetValue(item)?.ToString() ?? string.Empty,
-                    Quantity = item.GetType().GetProperty("Quantity")?.GetValue(item)?.ToString() ?? string.Empty
+                    RowId = item.RowId,
+                    Side = item.Side,
+                    Quantity = item.Quantity
                 })
                 .Where(update =>
                     !string.IsNullOrWhiteSpace(update.RowId) &&
@@ -1106,7 +1115,7 @@ Helpful item phrases:
 
         private static bool TryBuildAssistantQuestionReply(
             string normalizedTranscript,
-            List<object> currentState,
+            List<AssistantCurrentStateItem> currentState,
             out string reply)
         {
             reply = string.Empty;
@@ -1166,7 +1175,7 @@ Helpful item phrases:
                 .Sum(item => int.TryParse(item.Update.Quantity, out var parsed) ? parsed : 0);
         }
 
-        private static List<VoiceUpdate> MergeAssistantCurrentState(List<object> currentState, IEnumerable<VoiceUpdate> additions)
+        private static List<VoiceUpdate> MergeAssistantCurrentState(List<AssistantCurrentStateItem> currentState, IEnumerable<VoiceUpdate> additions)
         {
             var merged = ConvertCurrentDraftToVoiceUpdates(currentState)
                 .ToDictionary(update => $"{update.RowId}:{update.Side}", StringComparer.OrdinalIgnoreCase);
