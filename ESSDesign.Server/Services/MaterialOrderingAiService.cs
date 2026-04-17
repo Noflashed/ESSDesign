@@ -696,6 +696,12 @@ Rules:
   - do we have any hop-ups yet
   - read back the current list
   When that happens, answer from the current draft naturally and keep the draft unchanged.
+- If the draft already exists and the user adds one or two more items, do not read the full list back again unless they explicitly ask.
+  Instead say short, human confirmations like:
+  - No worries, I’ll add 20 more 2.4 metre ledgers now.
+  - Done, I’ve added those on.
+  - Yep, we’ve already got hop-ups in there.
+- If clarification is needed, ask only about the missing or ambiguous part.
 - If the user says they are happy, all good, correct, or to go ahead, and the draft is non-empty, set readyToApply true and keep the full draft in updates.
 - If the user asks for counts across a family, total the relevant rows from the current draft.
 - Return JSON only with shape:
@@ -881,7 +887,7 @@ Helpful item phrases:
             }
 
             var ttsModel = _configuration["OpenAI:TtsModel"] ?? "gpt-4o-mini-tts";
-            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "ash";
+            var ttsVoice = _configuration["OpenAI:TtsVoice"] ?? "onyx";
             var audioFormat = _configuration["OpenAI:TtsFormat"] ?? "wav";
             var speechInstructions = _configuration["OpenAI:TtsInstructions"] ??
                 "Speak in a warm, natural, masculine Australian voice for a scaffold materials assistant. Sound human, calm, practical, and conversational. Avoid sounding robotic or overly formal. Keep the pacing brisk but clear.";
