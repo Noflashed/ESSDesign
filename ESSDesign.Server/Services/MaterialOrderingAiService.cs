@@ -1369,26 +1369,36 @@ Helpful item phrases:
                 .Where(label => !string.IsNullOrWhiteSpace(label))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            result.Updates = result.Updates
-                .Where(update =>
+            var newUpdates = new List<VoiceUpdate>();
+            foreach (var update in result.Updates)
+            {
+                var catalogItem = Catalog.FirstOrDefault(item =>
+                    string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase));
+                if (catalogItem == null)
                 {
-                    var catalogItem = Catalog.FirstOrDefault(item =>
-                        string.Equals(item.RowId, update.RowId, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(item.Side, update.Side, StringComparison.OrdinalIgnoreCase));
-                    if (catalogItem == null)
-                    {
-                        return true;
-                    }
+                    newUpdates.Add(update);
+                    continue;
+                }
 
-                    var family = NormalizeCatalogText(catalogItem.Label);
-                    if (!anchoredFamilies.Contains(family))
-                    {
-                        return true;
-                    }
+                var family = NormalizeCatalogText(catalogItem.Label);
+                if (!anchoredFamilies.Contains(family))
+                {
+                    newUpdates.Add(update);
+                    continue;
+                }
 
-                    return anchoredKeys.Contains($"{update.RowId}:{update.Side}");
-                })
-                .ToList();
+                if (anchoredKeys.Contains($"{update.RowId}:{update.Side}"))
+                {
+                    newUpdates.Add(update);
+                }
+                else
+                {
+                    // Explicitly zero this row so the frontend clears any stale value.
+                    newUpdates.Add(new VoiceUpdate { RowId = update.RowId, Side = update.Side, Quantity = "0" });
+                }
+            }
+            result.Updates = newUpdates;
 
             result.Suggestions = result.Suggestions
                 .Where(suggestion =>
