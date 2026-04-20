@@ -448,10 +448,16 @@ CRITICAL RULES:
 - Common speech patterns:
   - '3 metre' / '3m' / 'three metre' / 'free metre' all = 3.0M
   - 'twenty four' / '2.4m' = 2.4M; 'one eight' / '1.8m' = 1.8M
-  - 'thirty three metre standards' = 30 x STANDARDS 3.0M (split implausible numbers)
   - 'thai bars 1.2' = TIE BARS 1.2M
   - '2 board hop ups' = 2-BOARD HOP-UP (board count is part of the name, not quantity)
   - reversed: '2.4 ledgers 28' = 28 x LEDGERS 2.4M
+- CRITICAL — round quantity + measurement: when a round number (20, 30, 40, 50, 60, 70, 80) is followed by a small number and a unit, the round number is ALWAYS the quantity and the small number is ALWAYS the measurement size. Examples:
+  - '50 3m standards' = 50 × STANDARDS 3.0M (NOT 53m)
+  - '20 3m standards' = 20 × STANDARDS 3.0M (NOT 23m)
+  - '30 2.4m ledgers' = 30 × LEDGERS 2.4M (NOT 32.4m)
+  - '40 1.8m transoms' = 40 × TRANSOMS 1.8M (NOT 41.8m)
+  - If you see a normalized value like '53m standards' that has no catalog match, it almost certainly came from '50 × 3m' being spoken — interpret it as quantity=50, spec=3.0M
+- No catalog item in the standards, ledgers, transoms, braces, tie bars, or scaffold tube families exists without a measurement size. If the transcript mentions 'standards' or 'ledgers' etc. without any size, ask which size rather than guessing the whole family.
 - Filler words to ignore: 'also', 'put in', 'give me', 'we need', 'can you', 'as well', 'if you can', 'and then'
 - Quantity must be an integer string
 - If confident: return in "updates". If uncertain: return in "suggestions" with confidence score.
@@ -731,9 +737,15 @@ SPEECH ERROR HANDLING (critical):
 - Treat any phonetically similar word as a potential match: "ledges" = ledgers, "transom" = transoms, "standard" = standards, "lattice beams" = ladder beams, "cast iron wheels" = castor wheels, "stringer" = stair stringer
 - If the size and item type are clear enough together, commit to the match — do not ask for clarification unless the intent is genuinely ambiguous
 - Reversed phrasing is common: "2.4 ledgers 28" means quantity 28, ledgers 2.4M
-- When a number blob is implausible ("33 metre standards"), split it: 30 x 3M standards
 - Items without a size in the catalog (double couplers, swivel couplers, screw jacks, etc.) only need the name — no measurement required to match them
 - Common site shorthand: thai/tie bar = tie bars, sole/soul/side boards = sole boards, screw jack = screw jacks, u-head = u head jack, wall brackets = wall tie brackets, open ended = standard open/end, scaffold clips = scaffold clips, cc clips = cc clips
+- CRITICAL — round quantity + measurement size: a round number (20, 30, 40, 50, 60, 70, 80) followed immediately by a small number + unit is ALWAYS quantity + measurement — never a single merged number:
+  - "50 3m standards" = 50 × STANDARDS 3.0M (not 53m — there is no 53m standard)
+  - "20 3m standards" = 20 × STANDARDS 3.0M
+  - "30 2.4 ledgers" = 30 × LEDGERS 2.4M
+  - "40 1.8 transoms" = 40 × TRANSOMS 1.8M
+  - If the normalized input shows a merged value like "53m standards" that has no catalog match, split it: interpret as quantity=50, spec=3.0M
+- Every item in measured families (standards, ledgers, transoms, braces, tie bars, scaffold tube, etc.) ALWAYS has a specific size in the catalog. There is no such thing as an unspecified "standard" — they are all 3.0M, 2.5M, 2.0M etc. If no size is mentioned, ask which length.
 
 YOUR JOB:
 1. Interpret the user’s spoken request against the catalog
@@ -2087,6 +2099,9 @@ Helpful item phrases:
             return $"{supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
         }
 
+        private static bool IsMeasurementUnitToken(string token) =>
+            Regex.IsMatch(token, @"^(?:m|mm|metre|metres|meter|meters|millimetre|millimetres)$", RegexOptions.IgnoreCase);
+
         private static string CanonicalizeNumberWords(string input)
         {
             var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
@@ -2137,6 +2152,19 @@ Helpful item phrases:
                 var consumed = 0;
                 while (index + consumed < tokens.Length && numberWords.TryGetValue(tokens[index + consumed], out var tokenValue))
                 {
+                    // "fifty three metre" → the "three" is a measurement (3m), not part of 53.
+                    // When we've already accumulated a round multiple of 10 and the next word
+                    // is a small integer (1–9) immediately followed by a measurement unit word,
+                    // stop here so the quantity stays as the round-ten value.
+                    if (value > 0 && value % 10 == 0 && tokenValue >= 1 && tokenValue <= 9)
+                    {
+                        var afterIndex = index + consumed + 1;
+                        if (afterIndex < tokens.Length && IsMeasurementUnitToken(tokens[afterIndex]))
+                        {
+                            break;
+                        }
+                    }
+
                     value += tokenValue;
                     consumed += 1;
                     if (index + consumed < tokens.Length && string.Equals(tokens[index + consumed], "and", StringComparison.OrdinalIgnoreCase))
