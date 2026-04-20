@@ -1941,6 +1941,9 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:meter|metre|m)\b", "$1m", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:millimetre|mm)\b", "$1mm", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+)\s+boards?\b", "$1 board", RegexOptions.IgnoreCase);
+            // iOS STT inserts "or" between a quantity and measurement when there is a
+            // natural pause: "forty or one metre" → "40 or 1m". Strip it so regex patterns match.
+            normalized = Regex.Replace(normalized, @"\b(\d+)\s+or\s+(\d+(?:\.\d+)?m)\b", "$1 $2", RegexOptions.IgnoreCase);
             normalized = SplitImplausibleMergedMeasurements(normalized);
             return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
