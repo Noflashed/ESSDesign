@@ -453,6 +453,7 @@ CRITICAL RULES:
   - '2 board hop ups' = 2-BOARD HOP-UP (board count is part of the name, not quantity)
   - reversed: '2.4 ledgers 28' = 28 x LEDGERS 2.4M
 - CRITICAL — item type beats exact measurement: if the user says "2.5m transoms", match to the closest TRANSOMS spec (TRANSOMS 2.4M), NOT to a different item type that happens to have an exact 2.5M spec (e.g. STANDARDS 2.5M). The spoken item name always determines the catalog family.
+- CRITICAL — foot/feet measurements are pre-converted to metres before you see the transcript: "8 foot" → "2.44m", "6 foot" → "1.83m", "4 foot" → "1.22m". Always match the converted metric value to the nearest catalog spec using the item-type-beats-exact-measurement rule above.
 - CRITICAL — round quantity + measurement: when a round number (20, 30, 40, 50, 60, 70, 80) is followed by a small number and a unit, the round number is ALWAYS the quantity and the small number is ALWAYS the measurement size. Examples:
   - '50 3m standards' = 50 × STANDARDS 3.0M (NOT 53m)
   - '20 3m standards' = 20 × STANDARDS 3.0M (NOT 23m)
@@ -745,6 +746,7 @@ SPEECH ERROR HANDLING (critical):
   - "50 3m standards" = 50 × STANDARDS 3.0M (not 53m — there is no 53m standard)
   - "20 3m standards" = 20 × STANDARDS 3.0M
   - "30 2.4 ledgers" = 30 × LEDGERS 2.4M
+- CRITICAL — foot/feet measurements are pre-converted to metres before you see the transcript (8 foot → 2.44m, 6 foot → 1.83m, 4 foot → 1.22m). Match the converted metric value to the nearest catalog spec using item-type priority.
   - "40 1.8 transoms" = 40 × TRANSOMS 1.8M
   - If the normalized input shows a merged value like "53m standards" that has no catalog match, split it: interpret as quantity=50, spec=3.0M
 - Every item in measured families (standards, ledgers, transoms, braces, tie bars, scaffold tube, etc.) ALWAYS has a specific size in the catalog. There is no such thing as an unspecified "standard" — they are all 3.0M, 2.5M, 2.0M etc. If no size is mentioned, ask which length.
@@ -1965,6 +1967,7 @@ Helpful item phrases:
                 .Replace(":", " ")
                 .Replace("&", " and "));
 
+            normalized = ConvertFeetToMetres(normalized);
             normalized = Regex.Replace(normalized, @"\bmetres?\b", "metre");
             normalized = Regex.Replace(normalized, @"\bmillimetres?\b", "millimetre");
             normalized = Regex.Replace(normalized, @"\bmeters?\b", "meter");
@@ -2215,6 +2218,22 @@ Helpful item phrases:
 
         private static bool IsMeasurementUnitToken(string token) =>
             Regex.IsMatch(token, @"^(?:m|mm|metre|metres|meter|meters|millimetre|millimetres)$", RegexOptions.IgnoreCase);
+
+        // Converts foot/feet/ft measurements to metres so the rest of the pipeline works uniformly.
+        // e.g. "8 foot" → "2.44m", "6ft" → "1.83m" — the closest-match fallback handles the last ~cm to catalog spec.
+        private static string ConvertFeetToMetres(string input)
+        {
+            return Regex.Replace(input, @"\b(\d+(?:\.\d+)?)\s*(?:foot|feet|ft)\b", match =>
+            {
+                if (!decimal.TryParse(match.Groups[1].Value,
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var feet))
+                    return match.Value;
+                var metres = Math.Round(feet * 0.3048m, 2);
+                return $"{metres}m";
+            }, RegexOptions.IgnoreCase);
+        }
 
         private static string CanonicalizeNumberWords(string input)
         {
