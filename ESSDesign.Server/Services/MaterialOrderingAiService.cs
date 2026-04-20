@@ -466,10 +466,9 @@ CRITICAL RULES:
 """;
 
                 var userPrompt = $"""
-Transcript:
-{transcript}
+Transcript: {normalizedTranscript}
 
-Normalized segmented instructions:
+Segmented instructions:
 {JsonSerializer.Serialize(segments, _jsonOptions)}
 
 Catalog:
@@ -1296,7 +1295,13 @@ Helpful item phrases:
             var result = new InterpretationResult();
             var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var segment in SegmentInstructions(normalizedTranscript))
+            var segments = SegmentInstructions(normalizedTranscript);
+
+            // First pass: structured pattern matches across all segments.
+            // Must complete before alias-only matching so that a later segment's
+            // pattern match (e.g. r13:left=40) isn't poisoned by an earlier
+            // segment's alias match filling the same key with the wrong quantity.
+            foreach (var segment in segments)
             {
                 foreach (Match match in QuantityMeasurementPattern.Matches(segment))
                 {
@@ -1327,7 +1332,12 @@ Helpful item phrases:
                 {
                     AppendMergedDecimalMatch(result, seenKeys, match);
                 }
+            }
 
+            // Second pass: alias-only matches (lower priority, fills rows not
+            // already anchored by a structured pattern match above).
+            foreach (var segment in segments)
+            {
                 AppendAliasOnlyMatches(result, seenKeys, segment);
             }
 
