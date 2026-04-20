@@ -35,6 +35,7 @@ namespace ESSDesign.Server.Services
             public string? AudioBase64 { get; set; }
             public string AudioFormat { get; set; } = "mp3";
             public bool UsesAiVoice { get; set; }
+            public string? NormalizedTranscript { get; set; }
         }
 
         public sealed class AssistantSpeechResult
@@ -717,6 +718,7 @@ Helpful item phrases:
 
             if (TryBuildAssistantFastPathResult(normalizedTranscript, transcript, currentDraft, out var fastPathResult))
             {
+                fastPathResult.NormalizedTranscript = normalizedTranscript;
                 var generatedFastAudio = await TryCreateAssistantSpeechAsync(client, apiKey, fastPathResult.AssistantReply, cancellationToken);
                 if (generatedFastAudio != null)
                 {
@@ -867,7 +869,8 @@ Helpful item phrases:
                     : string.Empty,
                 ReadyToApply = structuredDocument.RootElement.TryGetProperty("readyToApply", out var readyElement) &&
                     readyElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
-                    readyElement.GetBoolean()
+                    readyElement.GetBoolean(),
+                NormalizedTranscript = normalizedTranscript
             };
 
             if (structuredDocument.RootElement.TryGetProperty("updates", out var updatesElement) &&
