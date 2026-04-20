@@ -812,8 +812,8 @@ If the user said "20 transoms at 2.4", updates must contain ONLY r29:left — no
             }
 
             var userPrompt = $"""
-Latest user transcript:
-{transcript}
+Latest user transcript (raw): {transcript}
+Normalized (use this for quantities and measurements): {normalizedTranscript}
 
 Current picking-card state:
 {compactCurrentState}
@@ -1941,7 +1941,68 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:meter|metre|m)\b", "$1m", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:millimetre|mm)\b", "$1mm", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+)\s+boards?\b", "$1 board", RegexOptions.IgnoreCase);
+            normalized = SplitImplausibleMergedMeasurements(normalized);
             return Regex.Replace(normalized, @"\s+", " ").Trim();
+        }
+
+        // Splits merged qty+measurement tokens that have no catalog match.
+        // e.g. "33m" → "30 3m", "32.4m" → "30 2.4m"
+        // iOS STT merges "thirty 3m" into "33 meter" before the backend sees it.
+        private static string SplitImplausibleMergedMeasurements(string normalized)
+        {
+            return Regex.Replace(normalized, @"\b(\d{2,3}(?:\.\d+)?)m\b", match =>
+            {
+                var raw = match.Groups[1].Value;
+                if (!decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out _))
+                {
+                    return match.Value;
+                }
+
+                // Leave it alone if it already corresponds to a catalog spec.
+                var asSpec = NormalizeMeasurement(raw, "m");
+                if (NormalizedCatalog.Any(item => item.NormalizedSpec == asSpec))
+                {
+                    return match.Value;
+                }
+
+                if (!raw.Contains('.'))
+                {
+                    // Integer case: "33m" → try last digit as whole-metre measurement.
+                    if (!int.TryParse(raw, out var intVal)) return match.Value;
+                    var lastDigit = intVal % 10;
+                    if (lastDigit > 0)
+                    {
+                        var measureSpec = NormalizeMeasurement(lastDigit.ToString(), "m");
+                        if (NormalizedCatalog.Any(item => item.NormalizedSpec == measureSpec))
+                        {
+                            var qty = intVal - lastDigit;
+                            if (qty >= 10) return $"{qty} {lastDigit}m";
+                        }
+                    }
+                }
+                else
+                {
+                    // Decimal case: "32.4m" → try (last digit of int part + decimal) as measurement.
+                    var parts = raw.Split('.');
+                    if (parts.Length == 2 && int.TryParse(parts[0], out var intPart))
+                    {
+                        var lastDigit = intPart % 10;
+                        if (lastDigit > 0)
+                        {
+                            var candidateMeasure = $"{lastDigit}.{parts[1]}";
+                            var measureSpec = NormalizeMeasurement(candidateMeasure, "m");
+                            if (NormalizedCatalog.Any(item => item.NormalizedSpec == measureSpec))
+                            {
+                                var qty = intPart - lastDigit;
+                                if (qty >= 10) return $"{qty} {candidateMeasure}m";
+                            }
+                        }
+                    }
+                }
+
+                return match.Value;
+            }, RegexOptions.IgnoreCase);
         }
 
         private static string NormalizeCatalogText(string value)
