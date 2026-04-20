@@ -812,8 +812,7 @@ If the user said "20 transoms at 2.4", updates must contain ONLY r29:left — no
             }
 
             var userPrompt = $"""
-Latest user transcript (raw): {transcript}
-Normalized (use this for quantities and measurements): {normalizedTranscript}
+User request: {normalizedTranscript}
 
 Current picking-card state:
 {compactCurrentState}
