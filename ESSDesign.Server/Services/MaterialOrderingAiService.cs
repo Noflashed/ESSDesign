@@ -1967,6 +1967,7 @@ Helpful item phrases:
                 .Replace(":", " ")
                 .Replace("&", " and "));
 
+            normalized = SplitImplausibleMergedFeetMeasurements(normalized);
             normalized = ConvertFeetToMetres(normalized);
             normalized = Regex.Replace(normalized, @"\bmetres?\b", "metre");
             normalized = Regex.Replace(normalized, @"\bmillimetres?\b", "millimetre");
@@ -1991,6 +1992,7 @@ Helpful item phrases:
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:meter|metre|m)\b", "$1m", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+(?:\.\d+)?)\s+(?:millimetre|mm)\b", "$1mm", RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"\b(\d+)\s+boards?\b", "$1 board", RegexOptions.IgnoreCase);
+            normalized = SplitImplausibleMergedBoardMeasurements(normalized);
             // iOS STT inserts "or" between a quantity and measurement when there is a
             // natural pause: "forty or one metre" → "40 or 1m". Strip it so regex patterns match.
             normalized = Regex.Replace(normalized, @"\b(\d+)\s+or\s+(\d+(?:\.\d+)?m)\b", "$1 $2", RegexOptions.IgnoreCase);
@@ -2218,6 +2220,56 @@ Helpful item phrases:
 
         private static bool IsMeasurementUnitToken(string token) =>
             Regex.IsMatch(token, @"^(?:m|mm|metre|metres|meter|meters|millimetre|millimetres)$", RegexOptions.IgnoreCase);
+
+        // Before converting feet→metres, split STT-merged qty+feet tokens.
+        // "78 foot" (meant "70 8-foot") → "70 8ft", then ConvertFeetToMetres handles each part.
+        private static string SplitImplausibleMergedFeetMeasurements(string input)
+        {
+            return Regex.Replace(input, @"\b(\d{2,3})\s*(?:foot|feet|ft)\b", match =>
+            {
+                if (!int.TryParse(match.Groups[1].Value, out var combined)) return match.Value;
+                var totalMetres = Math.Round(combined * 0.3048m, 2);
+                if (IsNearCatalogMetricSpec(totalMetres)) return match.Value;
+                var lastDigit = combined % 10;
+                if (lastDigit == 0) return match.Value;
+                var qty = combined - lastDigit;
+                if (qty < 10) return match.Value;
+                var partMetres = Math.Round(lastDigit * 0.3048m, 2);
+                if (!IsNearCatalogMetricSpec(partMetres)) return match.Value;
+                return $"{qty} {lastDigit}ft";
+            }, RegexOptions.IgnoreCase);
+        }
+
+        // Splits STT-merged qty+board-count tokens.
+        // "71 board" (meant "70 1-board") → "70 1 board".
+        private static string SplitImplausibleMergedBoardMeasurements(string input)
+        {
+            return Regex.Replace(input, @"\b(\d{2,3})\s+boards?\b", match =>
+            {
+                if (!int.TryParse(match.Groups[1].Value, out var combined)) return match.Value;
+                var lastDigit = combined % 10;
+                if (lastDigit < 1 || lastDigit > 3) return match.Value;
+                var qty = combined - lastDigit;
+                if (qty < 10) return match.Value;
+                var boardSpec = $"{lastDigit} board";
+                if (!NormalizedCatalog.Any(item =>
+                        item.NormalizedSpec.Equals(boardSpec, StringComparison.OrdinalIgnoreCase)))
+                    return match.Value;
+                return $"{qty} {lastDigit} board";
+            }, RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsNearCatalogMetricSpec(decimal metres)
+        {
+            const decimal tolerance = 0.2m;
+            return NormalizedCatalog.Any(item =>
+                item.NormalizedSpec.EndsWith("m", StringComparison.OrdinalIgnoreCase) &&
+                decimal.TryParse(item.NormalizedSpec[..^1],
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var catalogMetres) &&
+                Math.Abs(catalogMetres - metres) <= tolerance);
+        }
 
         // Converts foot/feet/ft measurements to metres so the rest of the pipeline works uniformly.
         // e.g. "8 foot" → "2.44m", "6ft" → "1.83m" — the closest-match fallback handles the last ~cm to catalog spec.
