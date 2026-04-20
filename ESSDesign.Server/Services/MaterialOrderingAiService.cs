@@ -452,6 +452,7 @@ CRITICAL RULES:
   - 'thai bars 1.2' = TIE BARS 1.2M
   - '2 board hop ups' = 2-BOARD HOP-UP (board count is part of the name, not quantity)
   - reversed: '2.4 ledgers 28' = 28 x LEDGERS 2.4M
+- CRITICAL — item type beats exact measurement: if the user says "2.5m transoms", match to the closest TRANSOMS spec (TRANSOMS 2.4M), NOT to a different item type that happens to have an exact 2.5M spec (e.g. STANDARDS 2.5M). The spoken item name always determines the catalog family.
 - CRITICAL — round quantity + measurement: when a round number (20, 30, 40, 50, 60, 70, 80) is followed by a small number and a unit, the round number is ALWAYS the quantity and the small number is ALWAYS the measurement size. Examples:
   - '50 3m standards' = 50 × STANDARDS 3.0M (NOT 53m)
   - '20 3m standards' = 20 × STANDARDS 3.0M (NOT 23m)
@@ -1603,20 +1604,57 @@ Helpful item phrases:
 
         private CatalogItem? FindCatalogItemForMeasuredLabel(string normalizedLabel, string normalizedMeasure)
         {
-            var catalogItem = NormalizedCatalog.FirstOrDefault(item =>
+            // Exact label+spec match (either direction of containment).
+            var exactItem = NormalizedCatalog.FirstOrDefault(item =>
                 !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
                 item.NormalizedLabel.Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) &&
-                item.NormalizedSpec == normalizedMeasure);
+                item.NormalizedSpec == normalizedMeasure)
+                ?? NormalizedCatalog.FirstOrDefault(item =>
+                    !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                    normalizedLabel.Contains(item.NormalizedLabel, StringComparison.OrdinalIgnoreCase) &&
+                    item.NormalizedSpec == normalizedMeasure);
 
-            if (catalogItem != null)
+            if (exactItem != null)
             {
-                return catalogItem.Item;
+                return exactItem.Item;
             }
 
-            return NormalizedCatalog.FirstOrDefault(item =>
-                !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
-                normalizedLabel.Contains(item.NormalizedLabel, StringComparison.OrdinalIgnoreCase) &&
-                item.NormalizedSpec == normalizedMeasure)?.Item;
+            // Closest-measurement fallback within the same label family (≤ 0.2 m).
+            // Handles STT rounding errors like "2.5m transoms" → TRANSOMS 2.4M.
+            // Item type (label) must match — never cross families for measurement proximity.
+            if (!normalizedMeasure.EndsWith("m", StringComparison.OrdinalIgnoreCase) ||
+                !decimal.TryParse(
+                    normalizedMeasure[..^1],
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var requestedMetres))
+            {
+                return null;
+            }
+
+            const decimal tolerance = 0.2m;
+            return NormalizedCatalog
+                .Where(item =>
+                    !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                    (item.NormalizedLabel.Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) ||
+                     normalizedLabel.Contains(item.NormalizedLabel, StringComparison.OrdinalIgnoreCase)) &&
+                    item.NormalizedSpec.EndsWith("m", StringComparison.OrdinalIgnoreCase) &&
+                    decimal.TryParse(
+                        item.NormalizedSpec[..^1],
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out _))
+                .Select(item => new
+                {
+                    item.Item,
+                    Distance = Math.Abs(decimal.Parse(
+                        item.NormalizedSpec[..^1],
+                        System.Globalization.CultureInfo.InvariantCulture) - requestedMetres)
+                })
+                .Where(x => x.Distance <= tolerance)
+                .OrderBy(x => x.Distance)
+                .FirstOrDefault()
+                ?.Item;
         }
 
         private void AppendAliasOnlyMatches(InterpretationResult result, HashSet<string> seenKeys, string normalizedTranscript)
