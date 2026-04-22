@@ -295,11 +295,13 @@ function App() {
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
     const [rosteringContext, setRosteringContext] = useState({ planDate: null });
     const isEmployeePortalRole = user?.role === 'general_scaffolder'
-        || user?.role === 'leading_hand'
-        || user?.role === 'transport_management';
+        || user?.role === 'leading_hand';
+    const isTransportManagement = user?.role === 'transport_management';
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
+        : isTransportManagement
+        ? [{ key: 'material-ordering', label: 'ESS Material Ordering' }]
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
@@ -361,6 +363,8 @@ function App() {
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
+            : isTransportManagement
+            ? (page === 'material-ordering' || page === 'settings' ? page : 'material-ordering')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -379,7 +383,7 @@ function App() {
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, isEmployeePortalRole, selectedFolderId]);
+    }, [buildAppUrl, isEmployeePortalRole, isTransportManagement, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
@@ -613,7 +617,7 @@ function App() {
 
     const handleLoginSuccess = () => {
         updateAuthView('landing');
-        applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
+        applyPageState(isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
         checkAuth();
     };
 
@@ -845,7 +849,7 @@ function App() {
     // Browser back/forward button support
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
-        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : 'landing');
+        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing');
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
         const leadingHandFromUrl = urlParams.get('leadingHand');
@@ -873,7 +877,7 @@ function App() {
 
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
-            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : 'landing');
+            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing');
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
             const nextRosteringContext = e.state?.rosteringContext ?? { planDate: null };
