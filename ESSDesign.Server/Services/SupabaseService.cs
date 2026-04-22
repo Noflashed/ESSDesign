@@ -1744,7 +1744,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 var users = await GetRestRowsAsync<UserInfo>(
-                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&order=full_name.asc");
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&order=full_name.asc");
                 var roles = await GetAllUserRolesAsync();
 
                 foreach (var user in users)
@@ -1780,7 +1780,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 var users = await GetRestRowsAsync<UserInfo>(
-                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
                 var roles = await GetUserRolesByIdsAsync(validUserIds);
 
                 foreach (var user in users)
