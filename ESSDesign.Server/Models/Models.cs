@@ -107,6 +107,9 @@ namespace ESSDesign.Server.Models
 
         [Column("full_name")]
         public string FullName { get; set; } = string.Empty;
+
+        [Column("phone_number")]
+        public string? PhoneNumber { get; set; }
     }
 
     
@@ -278,6 +281,7 @@ namespace ESSDesign.Server.Models
     {
         public string? FullName { get; set; }
         public string? Role { get; set; }
+        public string? PhoneNumber { get; set; }
     }
 
     public class AuthResponse
@@ -292,6 +296,7 @@ namespace ESSDesign.Server.Models
         public string Id { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
         public string? AvatarUrl { get; set; }
         public string Role { get; set; } = AppRoles.Viewer;
         public Guid? EmployeeId { get; set; }

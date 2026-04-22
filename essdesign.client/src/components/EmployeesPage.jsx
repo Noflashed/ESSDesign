@@ -18,7 +18,7 @@ function emptyEmployeeForm() {
 }
 
 function emptyAppUserForm() {
-    return { id: '', fullName: '', email: '', role: 'viewer' };
+    return { id: '', fullName: '', email: '', role: 'viewer', phoneNumber: '' };
 }
 
 function normalizePreferredSiteIds(siteIds) {
@@ -173,6 +173,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         for (const emp of employees) {
             const appUser = emp.linkedAuthUserId ? (appUserById[emp.linkedAuthUserId] ?? null) : null;
             if (appUser) linkedUserIds.add(appUser.id);
+            const effectiveRole = appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder');
             result.push({
                 key: `emp-${emp.id}`,
                 type: 'employee',
@@ -182,8 +183,8 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 displayPhone: emp.phoneNumber || null,
                 displayEmail: emp.email || null,
                 isVerified: !!emp.verifiedAt,
-                role: appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder'),
-                leadingHand: emp.leadingHand,
+                role: effectiveRole,
+                leadingHand: effectiveRole === 'leading_hand',
             });
         }
 
@@ -195,11 +196,11 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     employee: null,
                     appUser: u,
                     displayName: u.fullName || u.email,
-                    displayPhone: null,
+                    displayPhone: u.phoneNumber || null,
                     displayEmail: u.email,
                     isVerified: true,
                     role: u.role,
-                    leadingHand: false,
+                    leadingHand: u.role === 'leading_hand',
                 });
             }
         }
@@ -238,7 +239,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     };
 
     const openAppUserEditor = (appUser) => {
-        setAppUserForm({ id: appUser.id, fullName: appUser.fullName || '', email: appUser.email, role: appUser.role || 'viewer' });
+        setAppUserForm({ id: appUser.id, fullName: appUser.fullName || '', email: appUser.email, role: appUser.role || 'viewer', phoneNumber: appUser.phoneNumber || '' });
         setError('');
         setShowAppUserModal(true);
     };
@@ -304,9 +305,10 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         setSavingAppUser(true);
         setError('');
         try {
-            await usersAPI.updateUser(appUserForm.id, { fullName: appUserForm.fullName, role: appUserForm.role });
-            const userRows = await usersAPI.getAllUsers();
+            await usersAPI.updateUser(appUserForm.id, { fullName: appUserForm.fullName, role: appUserForm.role, phoneNumber: appUserForm.phoneNumber });
+            const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
             setAppUsers(userRows || []);
+            setEmployees(employeeRows);
             setShowAppUserModal(false);
         } catch (err) {
             setError(err.message || 'Could not save user');
@@ -456,7 +458,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                             <div className="module-item-sub employee-phone">
                                                 {entry.type === 'employee'
                                                     ? (entry.displayPhone || 'No phone number')
-                                                    : (entry.displayEmail || '')}
+                                                    : (entry.displayPhone || entry.displayEmail || '')}
                                             </div>
                                         </div>
                                         <div className="employee-card-statuses">
@@ -622,9 +624,19 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                     placeholder="Full name"
                                 />
                             </div>
-                            <div className="module-field">
-                                <label>Email</label>
-                                <input value={appUserForm.email} disabled />
+                            <div className="module-grid module-grid-two">
+                                <div className="module-field">
+                                    <label>Email</label>
+                                    <input value={appUserForm.email} disabled />
+                                </div>
+                                <div className="module-field">
+                                    <label>Phone Number</label>
+                                    <input
+                                        value={appUserForm.phoneNumber}
+                                        onChange={(e) => setAppUserForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                                        placeholder="e.g. 0400 000 000"
+                                    />
+                                </div>
                             </div>
                             <div className="module-field">
                                 <label>Role</label>

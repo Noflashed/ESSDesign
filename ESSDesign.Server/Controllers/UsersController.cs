@@ -104,7 +104,7 @@ namespace ESSDesign.Server.Controllers
                     }
                 }
 
-                var updatedUser = await _supabaseService.UpdateAppUserAsync(userId, request.FullName, request.Role);
+                var updatedUser = await _supabaseService.UpdateAppUserAsync(userId, request.FullName, request.Role, request.PhoneNumber);
                 return Ok(updatedUser);
             }
             catch (ArgumentException ex)

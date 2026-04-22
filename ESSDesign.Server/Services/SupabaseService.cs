@@ -731,11 +731,6 @@ namespace ESSDesign.Server.Services
 
         private async Task SyncLinkedEmployeeRoleAsync(string normalizedUserId, string normalizedRole)
         {
-            if (normalizedRole != AppRoles.LeadingHand && normalizedRole != AppRoles.GeneralScaffolder)
-            {
-                return;
-            }
-
             var linkedEmployee = await GetLinkedEmployeeRoleInfoAsync(normalizedUserId, null);
             if (linkedEmployee == null)
             {
@@ -1749,7 +1744,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 var users = await GetRestRowsAsync<UserInfo>(
-                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&order=full_name.asc");
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&order=full_name.asc");
                 var roles = await GetAllUserRolesAsync();
 
                 foreach (var user in users)
@@ -1785,7 +1780,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 var users = await GetRestRowsAsync<UserInfo>(
-                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
+                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
                 var roles = await GetUserRolesByIdsAsync(validUserIds);
 
                 foreach (var user in users)
@@ -1836,18 +1831,24 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        public async Task<UserInfo> UpdateAppUserAsync(string userId, string? fullName, string? role)
+        public async Task<UserInfo> UpdateAppUserAsync(string userId, string? fullName, string? role, string? phoneNumber = null)
         {
             if (!TryNormalizeUserId(userId, out var normalizedUserId))
             {
                 throw new ArgumentException("Invalid user ID", nameof(userId));
             }
 
-            if (!string.IsNullOrWhiteSpace(fullName))
+            var namePatches = new Dictionary<string, object?>();
+            if (fullName != null)
+                namePatches["full_name"] = string.IsNullOrWhiteSpace(fullName) ? null : fullName.Trim();
+            if (phoneNumber != null)
+                namePatches["phone_number"] = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
+
+            if (namePatches.Count > 0)
             {
                 await PatchRestRowsAsync<object>(
                     $"user_names?id=eq.{normalizedUserId}",
-                    new { full_name = fullName.Trim() });
+                    namePatches);
             }
 
             if (!string.IsNullOrWhiteSpace(role))
