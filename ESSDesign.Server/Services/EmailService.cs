@@ -570,6 +570,7 @@ namespace ESSDesign.Server.Services
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var viewInAppLink = $"{_frontendUrl}/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
+            var openInAppLink = $"essdesign://document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
             var safeDocumentName = System.Web.HttpUtility.HtmlEncode(documentName);
             var safeRevision = System.Web.HttpUtility.HtmlEncode(revisionNumber);
@@ -578,7 +579,8 @@ namespace ESSDesign.Server.Services
             var safeProject = System.Web.HttpUtility.HtmlEncode(project ?? "-");
             var safeScaffold = System.Web.HttpUtility.HtmlEncode(scaffold ?? "-");
             var customMessageHtml = BuildCustomEmailMessageHtml(sharedByName, customMessage);
-            var viewInAppButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#FF6B35;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(viewInAppLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View in ESS Design</a></td></tr></table></td>";
+            var openInAppButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#FF6B35;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(openInAppLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">Open in ESS App</a></td></tr></table></td>";
+            var viewInAppButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a1a2e;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(viewInAppLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View in ESS Design</a></td></tr></table></td>";
             var essButton = hasEssDesign && !string.IsNullOrWhiteSpace(essLink)
                 ? $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{System.Web.HttpUtility.HtmlAttributeEncode(essLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;\">View PDF</a></td></tr></table></td>"
                 : string.Empty;
@@ -617,7 +619,7 @@ namespace ESSDesign.Server.Services
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeScaffold}</p></td></tr>
                             </table>
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{viewInAppButton}{essButton}{thirdPartyButton}</tr></table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{openInAppButton}{viewInAppButton}{essButton}{thirdPartyButton}</tr></table>
                         </td>
                     </tr>
                     <tr>
@@ -721,6 +723,7 @@ namespace ESSDesign.Server.Services
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var viewInAppLink = $"{_frontendUrl}/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
+            var openInAppLink = $"essdesign://document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
 
             // Use white version of logo for email (upload logo-white.png to your Supabase public-assets bucket)
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
@@ -854,12 +857,23 @@ namespace ESSDesign.Server.Services
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
                                 <tr>";
 
-            // View in ESS Design button — Universal Link: opens ESSApp on iOS, web fallback otherwise
+            // Open in ESS App — custom URL scheme, works from any email client including Outlook
             html += $@"
                                     <td align=""center"" valign=""top"" style=""padding:10px;"">
                                         <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
                                             <tr>
                                                 <td align=""center"" style=""border-radius:100px;background-color:#FF6B35;"">
+                                                    <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(openInAppLink)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">Open in ESS App</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>";
+            // View in ESS Design — web fallback for users without the app
+            html += $@"
+                                    <td align=""center"" valign=""top"" style=""padding:10px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#1a1a2e;"">
                                                     <a href=""{System.Web.HttpUtility.HtmlAttributeEncode(viewInAppLink)}"" style=""display:inline-block;padding:16px 32px;border-radius:100px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">View in ESS Design</a>
                                                 </td>
                                             </tr>
