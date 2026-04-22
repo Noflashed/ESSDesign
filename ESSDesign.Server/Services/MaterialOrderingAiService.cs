@@ -450,7 +450,9 @@ CRITICAL RULES:
   - '3 metre' / '3m' / 'three metre' / 'free metre' all = 3.0M
   - 'twenty four' / '2.4m' = 2.4M; 'one eight' / '1.8m' = 1.8M
   - 'thai bars 1.2' = TIE BARS 1.2M
-  - '2 board hop ups' = 2-BOARD HOP-UP (board count is part of the name, not quantity)
+  - '60 1 board hop ups' = 60 × 1-BOARD HOP-UP (the digit before "board" is the TYPE, the number before it is the QUANTITY)
+  - '2 board hop ups' = 2-BOARD HOP-UP with no explicit quantity
+  - CRITICAL — board count determines the exact hop-up type: "1 board hop up" = 1-BOARD HOP-UP (r55), "2 board hop up" = 2-BOARD HOP-UP (r54), "3 board hop up" = 3-BOARD HOP-UP (r53). Never substitute one board count for another.
   - reversed: '2.4 ledgers 28' = 28 x LEDGERS 2.4M
 - CRITICAL — item type beats exact measurement: if the user says "2.5m transoms", match to the closest TRANSOMS spec (TRANSOMS 2.4M), NOT to a different item type that happens to have an exact 2.5M spec (e.g. STANDARDS 2.5M). The spoken item name always determines the catalog family.
 - CRITICAL — foot/feet measurements are pre-converted to metres before you see the transcript: "8 foot" → "2.44m", "6 foot" → "1.83m", "4 foot" → "1.22m". Always match the converted metric value to the nearest catalog spec using the item-type-beats-exact-measurement rule above.
@@ -1368,6 +1370,12 @@ Helpful item phrases:
                 .Select(item => NormalizeCatalogText(item.Label))
                 .Where(label => !string.IsNullOrWhiteSpace(label))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Base families strip leading "N board(s)" prefix so that anchoring "1-BOARD HOP-UP"
+            // also prunes "2-BOARD HOP-UP" and "3-BOARD HOP-UP" from the same super-family.
+            var anchoredBaseFamilies = anchoredFamilies
+                .Select(GetBaseLabelFamily)
+                .Where(label => !string.IsNullOrWhiteSpace(label))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var newUpdates = new List<VoiceUpdate>();
             foreach (var update in result.Updates)
@@ -1382,7 +1390,8 @@ Helpful item phrases:
                 }
 
                 var family = NormalizeCatalogText(catalogItem.Label);
-                if (!anchoredFamilies.Contains(family))
+                var baseFamily = GetBaseLabelFamily(family);
+                if (!anchoredFamilies.Contains(family) && !anchoredBaseFamilies.Contains(baseFamily))
                 {
                     newUpdates.Add(update);
                     continue;
@@ -1404,7 +1413,8 @@ Helpful item phrases:
                 .Where(suggestion =>
                 {
                     var family = NormalizeCatalogText(suggestion.Label);
-                    if (!anchoredFamilies.Contains(family))
+                    var baseFamily = GetBaseLabelFamily(family);
+                    if (!anchoredFamilies.Contains(family) && !anchoredBaseFamilies.Contains(baseFamily))
                     {
                         return true;
                     }
@@ -1629,6 +1639,17 @@ Helpful item phrases:
             if (exactItem != null)
             {
                 return exactItem.Item;
+            }
+
+            // Board-in-label fallback: for items like "1-BOARD HOP-UP" / "N-BOARD STEP-DOWN"
+            // where the board count is encoded in the label and the spec is empty.
+            if (normalizedMeasure.EndsWith(" board", StringComparison.OrdinalIgnoreCase))
+            {
+                var boardCountStr = normalizedMeasure[..^" board".Length].Trim();
+                return NormalizedCatalog.FirstOrDefault(item =>
+                    !string.IsNullOrWhiteSpace(item.NormalizedLabel) &&
+                    item.NormalizedLabel.Contains(normalizedLabel, StringComparison.OrdinalIgnoreCase) &&
+                    item.NormalizedLabel.Contains(boardCountStr + " board", StringComparison.OrdinalIgnoreCase))?.Item;
             }
 
             // Closest-measurement fallback within the same label family (≤ 0.2 m).
@@ -2267,6 +2288,14 @@ Helpful item phrases:
                     return match.Value;
                 return $"{qty} {lastDigit} board";
             }, RegexOptions.IgnoreCase);
+        }
+
+        // Strips leading "N board(s)" prefix to get the base family name.
+        // "1 boards hop up" → "hop up", "ledgers" → "ledgers"
+        private static string GetBaseLabelFamily(string normalizedLabel)
+        {
+            var stripped = Regex.Replace(normalizedLabel.Trim(), @"^\d+\s+boards?\s+", string.Empty, RegexOptions.IgnoreCase);
+            return stripped.Trim();
         }
 
         private static bool IsNearCatalogMetricSpec(decimal metres)
