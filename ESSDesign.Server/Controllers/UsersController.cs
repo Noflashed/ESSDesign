@@ -60,12 +60,9 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var normalizedRole = request.Role?.Trim().ToLowerInvariant();
-                if (normalizedRole != AppRoles.Admin
-                    && normalizedRole != AppRoles.Viewer
-                    && normalizedRole != AppRoles.GeneralScaffolder
-                    && normalizedRole != AppRoles.LeadingHand)
+                if (!AppRoles.All.Contains(normalizedRole ?? ""))
                 {
-                    return BadRequest(new { error = "Role must be admin, viewer, general scaffolder, or leading hand" });
+                    return BadRequest(new { error = $"Invalid role. Must be one of: {string.Join(", ", AppRoles.All)}" });
                 }
 
                 var updatedUser = await _supabaseService.UpdateUserRoleAsync(userId, normalizedRole);
@@ -113,6 +110,30 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting employee {EmployeeId}", employeeId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("notification-recipients")]
+        public async Task<ActionResult> GetNotificationRecipients()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var allUsers = await _supabaseService.GetAllUsersAsync();
+                var recipients = allUsers
+                    .Where(u => AppRoles.NotificationRecipientRoles.Contains(u.Role ?? ""))
+                    .ToList();
+                return Ok(recipients);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting notification recipients");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
