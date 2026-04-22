@@ -1284,6 +1284,11 @@ export const usersAPI = {
         return response.data;
     },
 
+    getNotificationRecipients: async () => {
+        const response = await apiClient.get('/users/notification-recipients');
+        return response.data;
+    },
+
     updateUserRole: async (userId, role) => {
         const response = await apiClient.put('/users/' + userId + '/role', { role });
         return response.data;
