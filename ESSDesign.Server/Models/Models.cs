@@ -214,8 +214,22 @@ namespace ESSDesign.Server.Models
     {
         public const string Admin = "admin";
         public const string Viewer = "viewer";
-        public const string GeneralScaffolder = "general_scaffolder";
+        public const string SiteSupervisor = "site_supervisor";
+        public const string ProjectManager = "project_manager";
         public const string LeadingHand = "leading_hand";
+        public const string GeneralScaffolder = "general_scaffolder";
+        public const string TransportManagement = "transport_management";
+
+        public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+        {
+            Admin, Viewer, SiteSupervisor, ProjectManager,
+            LeadingHand, GeneralScaffolder, TransportManagement,
+        };
+
+        public static readonly HashSet<string> NotificationRecipientRoles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            Admin, SiteSupervisor, LeadingHand,
+        };
     }
 
     public class SignUpRequest
