@@ -20,7 +20,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const userList = await usersAPI.getAllUsers();
+                const userList = await usersAPI.getNotificationRecipients();
                 setUsers(userList);
             } catch (error) {
                 console.error('Failed to fetch users:', error);
