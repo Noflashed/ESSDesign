@@ -274,6 +274,12 @@ namespace ESSDesign.Server.Models
         public string Role { get; set; } = string.Empty;
     }
 
+    public class UpdateUserRequest
+    {
+        public string? FullName { get; set; }
+        public string? Role { get; set; }
+    }
+
     public class AuthResponse
     {
         public string AccessToken { get; set; } = string.Empty;

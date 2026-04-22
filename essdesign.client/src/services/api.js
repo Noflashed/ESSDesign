@@ -1292,6 +1292,16 @@ export const usersAPI = {
     updateUserRole: async (userId, role) => {
         const response = await apiClient.put('/users/' + userId + '/role', { role });
         return response.data;
+    },
+
+    updateUser: async (userId, { fullName, role } = {}) => {
+        const response = await apiClient.put('/users/' + userId, { fullName, role });
+        return response.data;
+    },
+
+    deleteUser: async (userId) => {
+        const response = await apiClient.delete('/users/' + userId);
+        return response.data;
     }
 };
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI };

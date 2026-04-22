@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { authAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
-function emptyForm() {
+function emptyEmployeeForm() {
     return {
         id: null,
         firstName: '',
@@ -17,6 +17,10 @@ function emptyForm() {
     };
 }
 
+function emptyAppUserForm() {
+    return { id: '', fullName: '', email: '', role: 'viewer' };
+}
+
 function normalizePreferredSiteIds(siteIds) {
     return siteIds.filter(Boolean).slice(0, 3);
 }
@@ -28,18 +32,20 @@ function getRoleLabel(role) {
         case 'project_manager': return 'Project Manager';
         case 'leading_hand': return 'Leading Hand';
         case 'general_scaffolder': return 'Scaffolder';
-        case 'transport_management': return 'Transport Management';
+        case 'transport_management': return 'Transport Mgmt';
         default: return 'Viewer';
     }
 }
 
 function getRolePillClass(role) {
     switch (role) {
-        case 'admin': return 'employee-status-pill-lh';
-        case 'site_supervisor': return 'employee-status-pill-lh';
-        case 'project_manager': return 'employee-status-pill-lh';
-        case 'leading_hand': return 'employee-status-pill-lh';
-        default: return 'employee-status-pill-neutral';
+        case 'admin':
+        case 'site_supervisor':
+        case 'project_manager':
+        case 'leading_hand':
+            return 'employee-status-pill-lh';
+        default:
+            return 'employee-status-pill-neutral';
     }
 }
 
@@ -106,6 +112,7 @@ function EmployeeActionButton({ title, onClick, children, danger = false }) {
 export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingAppUser, setSavingAppUser] = useState(false);
     const [inviteSending, setInviteSending] = useState(false);
     const [error, setError] = useState('');
     const [inviteMessage, setInviteMessage] = useState('');
@@ -114,9 +121,12 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [sites, setSites] = useState([]);
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState(emptyForm());
+    const [form, setForm] = useState(emptyEmployeeForm());
     const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
     const [saveAndInvite, setSaveAndInvite] = useState(false);
+    const [showAppUserModal, setShowAppUserModal] = useState(false);
+    const [appUserForm, setAppUserForm] = useState(emptyAppUserForm());
+    const [appUserPendingDelete, setAppUserPendingDelete] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -130,9 +140,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
         })()
             .then(([builders, employeeRows, userRows]) => {
-                if (!active) {
-                    return;
-                }
+                if (!active) return;
                 const flattenedSites = builders.flatMap((builder) =>
                     builder.projects.map((project) => ({
                         id: `${builder.id}:${project.id}`,
@@ -144,18 +152,12 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 setAppUsers(userRows || []);
             })
             .catch((err) => {
-                if (active) {
-                    setError(err.message || 'Failed to load employees');
-                }
+                if (active) setError(err.message || 'Failed to load employees');
             })
             .finally(() => {
-                if (active) {
-                    setLoading(false);
-                }
+                if (active) setLoading(false);
             });
-        return () => {
-            active = false;
-        };
+        return () => { active = false; };
     }, []);
 
     const siteLabelById = useMemo(
@@ -163,32 +165,62 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         [sites]
     );
 
-    const filteredEmployees = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) {
-            return employees;
+    const mergedEntries = useMemo(() => {
+        const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
+        const linkedUserIds = new Set();
+        const result = [];
+
+        for (const emp of employees) {
+            const appUser = emp.linkedAuthUserId ? (appUserById[emp.linkedAuthUserId] ?? null) : null;
+            if (appUser) linkedUserIds.add(appUser.id);
+            result.push({
+                key: `emp-${emp.id}`,
+                type: 'employee',
+                employee: emp,
+                appUser,
+                displayName: `${emp.firstName} ${emp.lastName}`,
+                displayPhone: emp.phoneNumber || null,
+                displayEmail: emp.email || null,
+                isVerified: !!emp.verifiedAt,
+                role: appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder'),
+                leadingHand: emp.leadingHand,
+            });
         }
 
-        return employees.filter((employee) => {
-            const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-            const phone = (employee.phoneNumber || '').toLowerCase();
-            const email = (employee.email || '').toLowerCase();
-            const lh = employee.leadingHand ? 'leading hand lh verified' : 'verified';
-            const prefs = employee.preferredSiteIds.map((id) => (siteLabelById[id] || '').toLowerCase()).join(' ');
-            return fullName.includes(q) || phone.includes(q) || email.includes(q) || prefs.includes(q) || lh.includes(q);
-        });
-    }, [employees, search, siteLabelById]);
+        for (const u of appUsers) {
+            if (!linkedUserIds.has(u.id)) {
+                result.push({
+                    key: `user-${u.id}`,
+                    type: 'app-user',
+                    employee: null,
+                    appUser: u,
+                    displayName: u.fullName || u.email,
+                    displayPhone: null,
+                    displayEmail: u.email,
+                    isVerified: true,
+                    role: u.role,
+                    leadingHand: false,
+                });
+            }
+        }
 
-    const filteredAppUsers = useMemo(() => {
+        return result;
+    }, [employees, appUsers]);
+
+    const filteredEntries = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return appUsers;
-        return appUsers.filter((u) => {
-            const name = (u.fullName || '').toLowerCase();
-            const email = (u.email || '').toLowerCase();
-            const role = getRoleLabel(u.role).toLowerCase();
-            return name.includes(q) || email.includes(q) || role.includes(q);
+        if (!q) return mergedEntries;
+        return mergedEntries.filter((entry) => {
+            const name = entry.displayName.toLowerCase();
+            const phone = (entry.displayPhone || '').toLowerCase();
+            const email = (entry.displayEmail || '').toLowerCase();
+            const role = getRoleLabel(entry.role).toLowerCase();
+            const prefs = entry.employee
+                ? entry.employee.preferredSiteIds.map((id) => (siteLabelById[id] || '').toLowerCase()).join(' ')
+                : '';
+            return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || prefs.includes(q);
         });
-    }, [appUsers, search]);
+    }, [mergedEntries, search, siteLabelById]);
 
     const openEmployeeEditor = (employee) => {
         setForm({
@@ -203,6 +235,12 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         setInviteMessage('');
         setSaveAndInvite(false);
         setShowModal(true);
+    };
+
+    const openAppUserEditor = (appUser) => {
+        setAppUserForm({ id: appUser.id, fullName: appUser.fullName || '', email: appUser.email, role: appUser.role || 'viewer' });
+        setError('');
+        setShowAppUserModal(true);
     };
 
     const updatePreferredSite = (index, siteId) => {
@@ -224,9 +262,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
 
             if (inviteAfterSave) {
                 const normalizedEmail = (form.email || '').trim().toLowerCase();
-                if (!normalizedEmail) {
-                    throw new Error('Enter an email address before sending an invite.');
-                }
+                if (!normalizedEmail) throw new Error('Enter an email address before sending an invite.');
 
                 const savedEmployee = next.find((employee) =>
                     (form.id ? employee.id === form.id : true)
@@ -235,9 +271,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     && (employee.lastName || '').trim() === form.lastName.trim()
                 );
 
-                if (!savedEmployee?.id) {
-                    throw new Error('Employee was saved, but could not be matched for invite sending.');
-                }
+                if (!savedEmployee?.id) throw new Error('Employee was saved, but could not be matched for invite sending.');
 
                 await authAPI.inviteEmployee({
                     employeeId: savedEmployee.id,
@@ -250,18 +284,34 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 setEmployees(refreshedEmployees);
                 setInviteMessage(`Invite sent to ${normalizedEmail}`);
                 setShowModal(false);
-                setForm(emptyForm());
+                setForm(emptyEmployeeForm());
                 setSaveAndInvite(false);
                 return;
             }
 
             setShowModal(false);
-            setForm(emptyForm());
+            setForm(emptyEmployeeForm());
             setSaveAndInvite(false);
         } catch (err) {
             setError(err.message || 'Could not save employee');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const saveAppUser = async (e) => {
+        e.preventDefault();
+        setSavingAppUser(true);
+        setError('');
+        try {
+            await usersAPI.updateUser(appUserForm.id, { fullName: appUserForm.fullName, role: appUserForm.role });
+            const userRows = await usersAPI.getAllUsers();
+            setAppUsers(userRows || []);
+            setShowAppUserModal(false);
+        } catch (err) {
+            setError(err.message || 'Could not save user');
+        } finally {
+            setSavingAppUser(false);
         }
     };
 
@@ -275,15 +325,20 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         }
     };
 
+    const removeAppUser = async (userId) => {
+        try {
+            await usersAPI.deleteUser(userId);
+            const userRows = await usersAPI.getAllUsers();
+            setAppUsers(userRows || []);
+            setAppUserPendingDelete(null);
+        } catch (err) {
+            setError(err.message || 'Could not delete user');
+        }
+    };
+
     const sendEmployeeInvite = async () => {
-        if (!form.id) {
-            setError('Save the employee before sending an invite.');
-            return;
-        }
-        if (!form.email.trim()) {
-            setError('Enter an email address before sending an invite.');
-            return;
-        }
+        if (!form.id) { setError('Save the employee before sending an invite.'); return; }
+        if (!form.email.trim()) { setError('Enter an email address before sending an invite.'); return; }
 
         setInviteSending(true);
         setError('');
@@ -323,9 +378,9 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     <div className="employees-toolbar-copy">
                         <div className="employees-toolbar-eyebrow">ESS Workforce</div>
                         <h2>Employee Directory</h2>
-                        <p>Manage employee details, preferred projects, and leading hand relationships from one place.</p>
+                        <p>Manage employee details, preferred projects, leading hand relationships, and app accounts from one place.</p>
                     </div>
-                    <button className="module-primary-btn" onClick={() => { setForm(emptyForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
+                    <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
                         Add Employee
                     </button>
                 </div>
@@ -334,51 +389,59 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                     <div className="employees-search-row">
                         <div className="module-field employees-search-field">
                             <label>Search</label>
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email, or preferred site" />
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email, role, or preferred site" />
                         </div>
                         <div className="employees-search-stats">
                             <div className="employees-stat">
-                                <span className="employees-stat-value">{employees.length}</span>
+                                <span className="employees-stat-value">{mergedEntries.length}</span>
                                 <span className="employees-stat-label">Total</span>
                             </div>
                             <div className="employees-stat">
-                                <span className="employees-stat-value">{employees.filter((employee) => employee.leadingHand).length}</span>
+                                <span className="employees-stat-value">{mergedEntries.filter((e) => e.leadingHand).length}</span>
                                 <span className="employees-stat-label">Leading Hands</span>
                             </div>
                             <div className="employees-stat">
-                                <span className="employees-stat-value">{filteredEmployees.length}</span>
-                                <span className="employees-stat-label">Visible</span>
+                                <span className="employees-stat-value">{mergedEntries.filter((e) => e.isVerified).length}</span>
+                                <span className="employees-stat-label">Verified</span>
                             </div>
                         </div>
                     </div>
-                    {error && !showModal && !employeePendingDelete ? <div className="module-error">{error}</div> : null}
+                    {error && !showModal && !showAppUserModal && !employeePendingDelete && !appUserPendingDelete ? (
+                        <div className="module-error">{error}</div>
+                    ) : null}
                     {loading ? (
                         <div className="module-empty-inline">Loading employees...</div>
-                    ) : filteredEmployees.length === 0 ? (
+                    ) : filteredEntries.length === 0 ? (
                         <div className="module-empty-inline">No employees found.</div>
                     ) : (
                         <div className="employee-cluster-grid">
-                            {filteredEmployees.map((employee) => (
-                                <div key={employee.id} className="module-list-card employee-cluster-card">
+                            {filteredEntries.map((entry) => (
+                                <div key={entry.key} className="module-list-card employee-cluster-card">
                                     <div className="employee-card-icon-rail">
-                                        {employee.leadingHand ? (
+                                        {entry.leadingHand && entry.type === 'employee' ? (
                                             <EmployeeActionButton
-                                                title={`Open leading hand relationships for ${employee.firstName} ${employee.lastName}`}
-                                                onClick={() => onOpenLeadingHandRelationships?.(employee)}
+                                                title={`Open leading hand relationships for ${entry.displayName}`}
+                                                onClick={() => onOpenLeadingHandRelationships?.(entry.employee)}
                                             >
                                                 <TreeIcon />
                                             </EmployeeActionButton>
                                         ) : null}
                                         <EmployeeActionButton
-                                            title={`Edit ${employee.firstName} ${employee.lastName}`}
-                                            onClick={() => openEmployeeEditor(employee)}
+                                            title={`Edit ${entry.displayName}`}
+                                            onClick={() => {
+                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee);
+                                                else openAppUserEditor(entry.appUser);
+                                            }}
                                         >
                                             <EditIcon />
                                         </EmployeeActionButton>
                                         <EmployeeActionButton
                                             danger
-                                            title={`Delete ${employee.firstName} ${employee.lastName}`}
-                                            onClick={() => setEmployeePendingDelete(employee)}
+                                            title={`Delete ${entry.displayName}`}
+                                            onClick={() => {
+                                                if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
+                                                else setAppUserPendingDelete(entry.appUser);
+                                            }}
                                         >
                                             <DeleteIcon />
                                         </EmployeeActionButton>
@@ -387,74 +450,30 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                     <div className="employee-card-top">
                                         <div className="employee-card-identity">
                                             <div className="employee-card-heading">
-                                                <div className="module-item-title">{employee.firstName} {employee.lastName}</div>
-                                                {employee.leadingHand ? <span className="employee-lh-badge">LH</span> : null}
+                                                <div className="module-item-title">{entry.displayName}</div>
+                                                {entry.leadingHand ? <span className="employee-lh-badge">LH</span> : null}
                                             </div>
-                                            <div className="module-item-sub employee-phone">{employee.phoneNumber || 'No phone number'}</div>
+                                            <div className="module-item-sub employee-phone">
+                                                {entry.type === 'employee'
+                                                    ? (entry.displayPhone || 'No phone number')
+                                                    : (entry.displayEmail || '')}
+                                            </div>
                                         </div>
                                         <div className="employee-card-statuses">
-                                            <div className="employee-status-pill">
-                                                <span className="employee-status-dot employee-status-dot-phone" />
-                                                Contact Ready
-                                            </div>
-                                            {!employee.verified && employee.inviteSentAt ? (
+                                            {entry.type === 'employee' ? (
+                                                <div className="employee-status-pill">
+                                                    <span className="employee-status-dot employee-status-dot-phone" />
+                                                    Contact Ready
+                                                </div>
+                                            ) : null}
+                                            {entry.type === 'employee' && !entry.isVerified && entry.employee.inviteSentAt ? (
                                                 <div className="employee-status-pill employee-status-pill-invited">Invited</div>
                                             ) : null}
-                                            {employee.verified ? (
+                                            {entry.isVerified ? (
                                                 <div className="employee-status-pill employee-status-pill-verified">Verified</div>
                                             ) : null}
-                                            {employee.leadingHand ? (
-                                                <div className="employee-status-pill employee-status-pill-lh">Leading Hand</div>
-                                            ) : (
-                                                <div className="employee-status-pill employee-status-pill-neutral">Crew Member</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className="module-card employees-card" style={{ marginTop: '1.5rem' }}>
-                    <div className="employees-search-row">
-                        <div className="employees-toolbar-copy" style={{ flex: 1 }}>
-                            <div className="employees-toolbar-eyebrow">ESS App</div>
-                            <h2 style={{ margin: 0 }}>Registered Users</h2>
-                            <p style={{ margin: 0 }}>All accounts registered in the ESS application.</p>
-                        </div>
-                        <div className="employees-search-stats">
-                            <div className="employees-stat">
-                                <span className="employees-stat-value">{appUsers.length}</span>
-                                <span className="employees-stat-label">Total</span>
-                            </div>
-                            <div className="employees-stat">
-                                <span className="employees-stat-value">{filteredAppUsers.length}</span>
-                                <span className="employees-stat-label">Visible</span>
-                            </div>
-                        </div>
-                    </div>
-                    {loading ? (
-                        <div className="module-empty-inline">Loading users...</div>
-                    ) : filteredAppUsers.length === 0 ? (
-                        <div className="module-empty-inline">No users found.</div>
-                    ) : (
-                        <div className="employee-cluster-grid">
-                            {filteredAppUsers.map((u) => (
-                                <div key={u.id} className="module-list-card employee-cluster-card">
-                                    <div className="employee-card-top">
-                                        <div className="employee-card-identity">
-                                            <div className="employee-card-heading">
-                                                <div className="module-item-title">{u.fullName || u.email}</div>
-                                            </div>
-                                            <div className="module-item-sub employee-phone">{u.email}</div>
-                                        </div>
-                                        <div className="employee-card-statuses">
-                                            <div className="employee-status-pill employee-status-pill-verified">
-                                                Registered
-                                            </div>
-                                            <div className={`employee-status-pill ${getRolePillClass(u.role)}`}>
-                                                {getRoleLabel(u.role)}
+                                            <div className={`employee-status-pill ${getRolePillClass(entry.role)}`}>
+                                                {getRoleLabel(entry.role)}
                                             </div>
                                         </div>
                                     </div>
@@ -532,10 +551,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 <button
                                     type="button"
                                     className="module-secondary-btn"
-                                    onClick={() => {
-                                        setShowModal(false);
-                                        onOpenLeadingHandRelationships?.(form);
-                                    }}
+                                    onClick={() => { setShowModal(false); onOpenLeadingHandRelationships?.(form); }}
                                 >
                                     Leading Hand Relationships
                                 </button>
@@ -571,10 +587,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                         type="button"
                                         className="module-secondary-btn"
                                         disabled={saving}
-                                        onClick={(event) => {
-                                            setSaveAndInvite(true);
-                                            saveEmployee(event, { inviteAfterSave: true });
-                                        }}
+                                        onClick={(event) => { setSaveAndInvite(true); saveEmployee(event, { inviteAfterSave: true }); }}
                                     >
                                         {saving && saveAndInvite ? 'Saving...' : 'Save & Invite'}
                                     </button>
@@ -586,6 +599,53 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                     onClick={() => setSaveAndInvite(false)}
                                 >
                                     {saving && !saveAndInvite ? 'Saving...' : 'Save Employee'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showAppUserModal && (
+                <div className="module-modal-backdrop" onClick={() => setShowAppUserModal(false)}>
+                    <div className="module-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Edit User</h3>
+                            <button className="nav-drawer-close" onClick={() => setShowAppUserModal(false)}>×</button>
+                        </div>
+                        <form className="module-form" onSubmit={saveAppUser}>
+                            <div className="module-field">
+                                <label>Full Name</label>
+                                <input
+                                    value={appUserForm.fullName}
+                                    onChange={(e) => setAppUserForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                                    placeholder="Full name"
+                                />
+                            </div>
+                            <div className="module-field">
+                                <label>Email</label>
+                                <input value={appUserForm.email} disabled />
+                            </div>
+                            <div className="module-field">
+                                <label>Role</label>
+                                <select
+                                    value={appUserForm.role}
+                                    onChange={(e) => setAppUserForm((prev) => ({ ...prev, role: e.target.value }))}
+                                >
+                                    <option value="viewer">Viewer</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="site_supervisor">Site Supervisor</option>
+                                    <option value="project_manager">Project Manager</option>
+                                    <option value="leading_hand">Leading Hand</option>
+                                    <option value="general_scaffolder">Scaffolder</option>
+                                    <option value="transport_management">Transport Management</option>
+                                </select>
+                            </div>
+                            {error ? <div className="module-error">{error}</div> : null}
+                            <div className="module-form-actions">
+                                <button type="button" className="module-secondary-btn" onClick={() => setShowAppUserModal(false)}>Cancel</button>
+                                <button type="submit" className="module-primary-btn" disabled={savingAppUser}>
+                                    {savingAppUser ? 'Saving...' : 'Save User'}
                                 </button>
                             </div>
                         </form>
@@ -607,20 +667,30 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                             </p>
                             {error ? <div className="module-error">{error}</div> : null}
                             <div className="module-form-actions">
-                                <button
-                                    type="button"
-                                    className="module-secondary-btn"
-                                    onClick={() => setEmployeePendingDelete(null)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    className="module-danger-btn"
-                                    onClick={() => removeEmployee(employeePendingDelete.id)}
-                                >
-                                    Delete Employee
-                                </button>
+                                <button type="button" className="module-secondary-btn" onClick={() => setEmployeePendingDelete(null)}>Cancel</button>
+                                <button type="button" className="module-danger-btn" onClick={() => removeEmployee(employeePendingDelete.id)}>Delete Employee</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {appUserPendingDelete && (
+                <div className="module-modal-backdrop" onClick={() => setAppUserPendingDelete(null)}>
+                    <div className="module-modal compact" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Delete User</h3>
+                            <button className="nav-drawer-close" onClick={() => setAppUserPendingDelete(null)}>×</button>
+                        </div>
+                        <div className="module-form">
+                            <p className="module-copy">
+                                Delete <strong>{appUserPendingDelete.fullName || appUserPendingDelete.email}</strong> from the application?
+                                This will remove their account and cannot be undone.
+                            </p>
+                            {error ? <div className="module-error">{error}</div> : null}
+                            <div className="module-form-actions">
+                                <button type="button" className="module-secondary-btn" onClick={() => setAppUserPendingDelete(null)}>Cancel</button>
+                                <button type="button" className="module-danger-btn" onClick={() => removeAppUser(appUserPendingDelete.id)}>Delete User</button>
                             </div>
                         </div>
                     </div>

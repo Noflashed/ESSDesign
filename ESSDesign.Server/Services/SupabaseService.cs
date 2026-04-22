@@ -630,7 +630,10 @@ namespace ESSDesign.Server.Services
             user.EmployeePhoneNumber = employee.PhoneNumber?.Trim();
             user.LeadingHand = employee.LeadingHand;
 
-            if (!string.Equals(user.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            var isExplicitRole = AppRoles.All.Contains(user.Role ?? "")
+                && !string.Equals(user.Role, AppRoles.Viewer, StringComparison.OrdinalIgnoreCase);
+
+            if (!isExplicitRole)
             {
                 user.Role = employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
             }
@@ -1831,6 +1834,41 @@ namespace ESSDesign.Server.Services
                 _logger.LogError(ex, "Error getting employee auth link info for {EmployeeId}", employeeId);
                 throw;
             }
+        }
+
+        public async Task<UserInfo> UpdateAppUserAsync(string userId, string? fullName, string? role)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                await PatchRestRowsAsync<object>(
+                    $"user_names?id=eq.{normalizedUserId}",
+                    new { full_name = fullName.Trim() });
+            }
+
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var normalizedRole = NormalizeRole(role);
+                await UpdateUserRoleAsync(normalizedUserId, normalizedRole);
+            }
+
+            var users = await GetUsersByIdsAsync(new[] { normalizedUserId });
+            return users.FirstOrDefault() ?? throw new InvalidOperationException("User not found");
+        }
+
+        public async Task DeleteAppUserAsync(string userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            await DeleteAuthUserAsync(normalizedUserId);
+            await DeleteUserMetadataAsync(Guid.Parse(normalizedUserId));
         }
 
         public async Task DeleteEmployeeAndAuthAsync(Guid employeeId)

@@ -79,6 +79,79 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("{userId}")]
+        public async Task<ActionResult<UserInfo>> UpdateUser(string userId, [FromBody] UpdateUserRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.Role))
+                {
+                    var normalizedRole = request.Role.Trim().ToLowerInvariant();
+                    if (!AppRoles.All.Contains(normalizedRole))
+                    {
+                        return BadRequest(new { error = $"Invalid role. Must be one of: {string.Join(", ", AppRoles.All)}" });
+                    }
+                }
+
+                var updatedUser = await _supabaseService.UpdateAppUserAsync(userId, request.FullName, request.Role);
+                return Ok(updatedUser);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating user {UserId}", userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{userId}")]
+        public async Task<ActionResult> DeleteUser(string userId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                await _supabaseService.DeleteAppUserAsync(userId);
+                return Ok(new { message = "User deleted successfully" });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting user {UserId}", userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("employees/{employeeId}")]
         public async Task<ActionResult> DeleteEmployee(string employeeId)
         {
