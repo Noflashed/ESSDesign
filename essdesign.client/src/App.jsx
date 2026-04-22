@@ -294,7 +294,10 @@ function App() {
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
     const [rosteringContext, setRosteringContext] = useState({ planDate: null });
-    const isEmployeePortalRole = user?.role === 'general_scaffolder' || user?.role === 'leading_hand';
+    const isEmployeePortalRole = user?.role === 'general_scaffolder'
+        || user?.role === 'leading_hand'
+        || user?.role === 'transport_management';
+    const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
         : [
@@ -302,8 +305,10 @@ function App() {
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
             { key: 'material-ordering', label: 'ESS Material Ordering' },
-            { key: 'rostering', label: 'ESS Rostering' },
-            { key: 'employees', label: 'Employees' }
+            ...(showRosteringAndEmployees ? [
+                { key: 'rostering', label: 'ESS Rostering' },
+                { key: 'employees', label: 'Employees' },
+            ] : []),
         ];
     const showHeaderSearch = currentPage === 'design';
     const searchRef = useRef(null);
@@ -899,13 +904,13 @@ function App() {
     const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = user?.employeeTitle
-        || (user?.role === 'leading_hand'
-            ? 'Leading Hand'
-            : user?.role === 'general_scaffolder'
-                ? 'General Scaffolder'
-                : user?.role === 'admin'
-                    ? 'Admin'
-                    : 'Viewer');
+        || (user?.role === 'leading_hand' ? 'Leading Hand'
+            : user?.role === 'general_scaffolder' ? 'General Scaffolder'
+            : user?.role === 'site_supervisor' ? 'Site Supervisor'
+            : user?.role === 'project_manager' ? 'Project Manager'
+            : user?.role === 'transport_management' ? 'Transport Management'
+            : user?.role === 'admin' ? 'Admin'
+            : 'Viewer');
     const userInitials = user?.fullName
         ? user.fullName
             .split(' ')
