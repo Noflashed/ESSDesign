@@ -18,13 +18,13 @@ export default function SettingsPage({
     const [roleSearch, setRoleSearch] = useState('');
     const displayName = user?.fullName || user?.email || 'User';
     const displayRole = user?.employeeTitle
-        || (user?.role === 'leading_hand'
-            ? 'Leading Hand'
-            : user?.role === 'general_scaffolder'
-                ? 'Scaffolder'
-                : user?.role === 'admin'
-                    ? 'Admin'
-                    : 'Viewer');
+        || (user?.role === 'leading_hand' ? 'Leading Hand'
+            : user?.role === 'general_scaffolder' ? 'Scaffolder'
+            : user?.role === 'site_supervisor' ? 'Site Supervisor'
+            : user?.role === 'project_manager' ? 'Project Manager'
+            : user?.role === 'transport_management' ? 'Transport Management'
+            : user?.role === 'admin' ? 'Admin'
+            : 'Viewer');
 
     useEffect(() => {
         if (activeTab === 'roles' && isAdmin && !rolesLoaded) {
@@ -180,6 +180,9 @@ export default function SettingsPage({
                                                         <option value="viewer">Viewer</option>
                                                         <option value="general_scaffolder">Scaffolder</option>
                                                         <option value="leading_hand">Leading Hand</option>
+                                                        <option value="transport_management">Transport Management</option>
+                                                        <option value="site_supervisor">Site Supervisor</option>
+                                                        <option value="project_manager">Project Manager</option>
                                                         <option value="admin">Admin</option>
                                                     </select>
                                                 </div>
