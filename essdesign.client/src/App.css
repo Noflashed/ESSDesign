@@ -2209,10 +2209,12 @@ body {
     justify-content: flex-end;
     padding: 10px 14px;
     border: none;
+    border-bottom: 1px solid var(--border-color);
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     width: 100%;
+    margin-bottom: 6px;
     transition: color 0.15s;
 }
 

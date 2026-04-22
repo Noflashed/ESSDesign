@@ -390,7 +390,13 @@ function App() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [navSidebarOpen, setNavSidebarOpen] = useState(true);
+    const [navSidebarOpen, setNavSidebarOpen] = useState(false);
+
+    useEffect(() => {
+        if (currentPage === 'landing') {
+            setNavSidebarOpen(false);
+        }
+    }, [currentPage]);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
     const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
@@ -1002,7 +1008,7 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />;
+            return <WebLandingPage onOpenDirectory={() => setNavSidebarOpen(true)} />;
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
