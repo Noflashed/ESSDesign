@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { authAPI, rosteringAPI, safetyProjectsAPI } from '../services/api';
+import { authAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
 function emptyForm() {
     return {
@@ -19,6 +19,28 @@ function emptyForm() {
 
 function normalizePreferredSiteIds(siteIds) {
     return siteIds.filter(Boolean).slice(0, 3);
+}
+
+function getRoleLabel(role) {
+    switch (role) {
+        case 'admin': return 'Admin';
+        case 'site_supervisor': return 'Site Supervisor';
+        case 'project_manager': return 'Project Manager';
+        case 'leading_hand': return 'Leading Hand';
+        case 'general_scaffolder': return 'Scaffolder';
+        case 'transport_management': return 'Transport Management';
+        default: return 'Viewer';
+    }
+}
+
+function getRolePillClass(role) {
+    switch (role) {
+        case 'admin': return 'employee-status-pill-lh';
+        case 'site_supervisor': return 'employee-status-pill-lh';
+        case 'project_manager': return 'employee-status-pill-lh';
+        case 'leading_hand': return 'employee-status-pill-lh';
+        default: return 'employee-status-pill-neutral';
+    }
 }
 
 function TreeIcon() {
@@ -88,6 +110,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     const [error, setError] = useState('');
     const [inviteMessage, setInviteMessage] = useState('');
     const [employees, setEmployees] = useState([]);
+    const [appUsers, setAppUsers] = useState([]);
     const [sites, setSites] = useState([]);
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -104,9 +127,9 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 console.error('Failed to sync existing employee links:', err);
             }
 
-            return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees()]);
+            return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
         })()
-            .then(([builders, employeeRows]) => {
+            .then(([builders, employeeRows, userRows]) => {
                 if (!active) {
                     return;
                 }
@@ -118,6 +141,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 );
                 setSites(flattenedSites);
                 setEmployees(employeeRows);
+                setAppUsers(userRows || []);
             })
             .catch((err) => {
                 if (active) {
@@ -154,6 +178,17 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             return fullName.includes(q) || phone.includes(q) || email.includes(q) || prefs.includes(q) || lh.includes(q);
         });
     }, [employees, search, siteLabelById]);
+
+    const filteredAppUsers = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return appUsers;
+        return appUsers.filter((u) => {
+            const name = (u.fullName || '').toLowerCase();
+            const email = (u.email || '').toLowerCase();
+            const role = getRoleLabel(u.role).toLowerCase();
+            return name.includes(q) || email.includes(q) || role.includes(q);
+        });
+    }, [appUsers, search]);
 
     const openEmployeeEditor = (employee) => {
         setForm({
@@ -373,6 +408,54 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                             ) : (
                                                 <div className="employee-status-pill employee-status-pill-neutral">Crew Member</div>
                                             )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="module-card employees-card" style={{ marginTop: '1.5rem' }}>
+                    <div className="employees-search-row">
+                        <div className="employees-toolbar-copy" style={{ flex: 1 }}>
+                            <div className="employees-toolbar-eyebrow">ESS App</div>
+                            <h2 style={{ margin: 0 }}>Registered Users</h2>
+                            <p style={{ margin: 0 }}>All accounts registered in the ESS application.</p>
+                        </div>
+                        <div className="employees-search-stats">
+                            <div className="employees-stat">
+                                <span className="employees-stat-value">{appUsers.length}</span>
+                                <span className="employees-stat-label">Total</span>
+                            </div>
+                            <div className="employees-stat">
+                                <span className="employees-stat-value">{filteredAppUsers.length}</span>
+                                <span className="employees-stat-label">Visible</span>
+                            </div>
+                        </div>
+                    </div>
+                    {loading ? (
+                        <div className="module-empty-inline">Loading users...</div>
+                    ) : filteredAppUsers.length === 0 ? (
+                        <div className="module-empty-inline">No users found.</div>
+                    ) : (
+                        <div className="employee-cluster-grid">
+                            {filteredAppUsers.map((u) => (
+                                <div key={u.id} className="module-list-card employee-cluster-card">
+                                    <div className="employee-card-top">
+                                        <div className="employee-card-identity">
+                                            <div className="employee-card-heading">
+                                                <div className="module-item-title">{u.fullName || u.email}</div>
+                                            </div>
+                                            <div className="module-item-sub employee-phone">{u.email}</div>
+                                        </div>
+                                        <div className="employee-card-statuses">
+                                            <div className="employee-status-pill employee-status-pill-verified">
+                                                Registered
+                                            </div>
+                                            <div className={`employee-status-pill ${getRolePillClass(u.role)}`}>
+                                                {getRoleLabel(u.role)}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
