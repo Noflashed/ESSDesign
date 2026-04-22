@@ -486,22 +486,8 @@ namespace ESSDesign.Server.Services
 
         private static string NormalizeRole(string? role)
         {
-            if (string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
-            {
-                return AppRoles.Admin;
-            }
-
-            if (string.Equals(role, AppRoles.LeadingHand, StringComparison.OrdinalIgnoreCase))
-            {
-                return AppRoles.LeadingHand;
-            }
-
-            if (string.Equals(role, AppRoles.GeneralScaffolder, StringComparison.OrdinalIgnoreCase))
-            {
-                return AppRoles.GeneralScaffolder;
-            }
-
-            return AppRoles.Viewer;
+            var normalized = role?.Trim().ToLowerInvariant() ?? "";
+            return AppRoles.All.Contains(normalized) ? normalized : AppRoles.Viewer;
         }
 
         private static string GetBootstrapRole(string normalizedUserId)
@@ -527,13 +513,11 @@ namespace ESSDesign.Server.Services
             if (existing != null)
             {
                 var storedRole = NormalizeRole(existing.Role);
-                return storedRole switch
+                if (storedRole != AppRoles.Viewer)
                 {
-                    AppRoles.Admin => AppRoles.Admin,
-                    AppRoles.LeadingHand => AppRoles.LeadingHand,
-                    AppRoles.GeneralScaffolder => AppRoles.GeneralScaffolder,
-                    _ => await GetEmployeeDerivedRoleAsync(normalizedUserId)
-                };
+                    return storedRole;
+                }
+                return await GetEmployeeDerivedRoleAsync(normalizedUserId);
             }
 
             var now = DateTime.UtcNow;
@@ -547,13 +531,11 @@ namespace ESSDesign.Server.Services
             };
 
             await _supabase.From<UserRoleRecord>().Upsert(record);
-            return assignedRole switch
+            if (assignedRole != AppRoles.Viewer)
             {
-                AppRoles.Admin => AppRoles.Admin,
-                AppRoles.LeadingHand => AppRoles.LeadingHand,
-                AppRoles.GeneralScaffolder => AppRoles.GeneralScaffolder,
-                _ => await GetEmployeeDerivedRoleAsync(normalizedUserId)
-            };
+                return assignedRole;
+            }
+            return await GetEmployeeDerivedRoleAsync(normalizedUserId);
         }
 
         public async Task<string> GetUserRoleAsync(string? userId)
@@ -574,13 +556,11 @@ namespace ESSDesign.Server.Services
                 if (existing != null)
                 {
                     var storedRole = NormalizeRole(existing.Role);
-                    return storedRole switch
+                    if (storedRole != AppRoles.Viewer)
                     {
-                        AppRoles.Admin => AppRoles.Admin,
-                        AppRoles.LeadingHand => AppRoles.LeadingHand,
-                        AppRoles.GeneralScaffolder => AppRoles.GeneralScaffolder,
-                        _ => await GetEmployeeDerivedRoleAsync(normalizedUserId)
-                    };
+                        return storedRole;
+                    }
+                    return await GetEmployeeDerivedRoleAsync(normalizedUserId);
                 }
 
                 return await EnsureUserRoleAsync(normalizedUserId);
