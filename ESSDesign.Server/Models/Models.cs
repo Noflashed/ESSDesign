@@ -231,7 +231,7 @@ namespace ESSDesign.Server.Models
 
         public static readonly HashSet<string> NotificationRecipientRoles = new(StringComparer.OrdinalIgnoreCase)
         {
-            Admin, SiteSupervisor, LeadingHand,
+            Admin, SiteSupervisor, ProjectManager, LeadingHand,
         };
     }
 
