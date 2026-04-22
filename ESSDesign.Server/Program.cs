@@ -185,6 +185,68 @@ app.UseAuthorization();
 // Health check endpoints
 app.MapGet("/", () => Results.Ok(new { status = "API is running", timestamp = DateTime.UtcNow }));
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+// Deep link redirect — serves a page that fires essdesign:// then falls back to the web app.
+// Used by email buttons so they work from Outlook and any email client (https only).
+app.MapGet("/open/document/{documentId}", (string documentId, string? folder, string? title, string? type, IConfiguration config) =>
+{
+    var frontendUrl = config["AppSettings:FrontendUrl"] ?? "https://essdesign.app";
+    var safeId = Uri.EscapeDataString(documentId);
+    var queryParts = new List<string>();
+    if (!string.IsNullOrWhiteSpace(folder)) queryParts.Add($"folder={Uri.EscapeDataString(folder)}");
+    if (!string.IsNullOrWhiteSpace(type)) queryParts.Add($"type={Uri.EscapeDataString(type)}");
+    if (!string.IsNullOrWhiteSpace(title)) queryParts.Add($"title={Uri.EscapeDataString(title)}");
+    var queryString = queryParts.Any() ? "?" + string.Join("&", queryParts) : string.Empty;
+
+    var appSchemeUrl = $"essdesign://document/{safeId}{queryString}";
+    var webFallbackUrl = $"{frontendUrl}/document/{safeId}{queryString}";
+    var safeAppUrl = System.Net.WebUtility.HtmlEncode(appSchemeUrl);
+    var safeWebUrl = System.Net.WebUtility.HtmlEncode(webFallbackUrl);
+    var safeTitle = System.Net.WebUtility.HtmlEncode(title ?? "Document");
+
+    var html = $"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Opening ESS App…</title>
+            <style>
+                body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                       background: #1a1a2e; color: #fff; display: flex; align-items: center;
+                       justify-content: center; min-height: 100vh; text-align: center; padding: 24px; }}
+                .card {{ max-width: 360px; }}
+                h1 {{ font-size: 20px; margin: 0 0 8px; }}
+                p {{ color: #9a9ab0; font-size: 14px; margin: 0 0 24px; }}
+                a.btn {{ display: inline-block; padding: 14px 32px; border-radius: 100px;
+                         background: #FF6B35; color: #fff; text-decoration: none;
+                         font-weight: 600; font-size: 15px; }}
+                a.web {{ display: block; margin-top: 16px; color: #9a9ab0; font-size: 13px; }}
+            </style>
+            <script>
+                window.onload = function() {{
+                    window.location = '{appSchemeUrl}';
+                    setTimeout(function() {{
+                        document.getElementById('fallback').style.display = 'block';
+                    }}, 1500);
+                }};
+            </script>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Opening ESS App…</h1>
+                <p>{safeTitle}</p>
+                <div id="fallback" style="display:none">
+                    <a class="btn" href="{safeAppUrl}">Open in ESS App</a>
+                    <a class="web" href="{safeWebUrl}">Don't have the app? View in browser</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """;
+
+    return Results.Content(html, "text/html; charset=utf-8");
+});
 app.MapGet("/t/{tagRef}", async (string tagRef, SupabaseService supabaseService, ILogger<Program> logger) =>
 {
     if (string.IsNullOrWhiteSpace(tagRef))

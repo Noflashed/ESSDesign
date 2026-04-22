@@ -570,7 +570,7 @@ namespace ESSDesign.Server.Services
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var viewInAppLink = $"{_frontendUrl}/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
-            var openInAppLink = $"essdesign://document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
+            var openInAppLink = $"{_appBaseUrl}/open/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
             var safeDocumentName = System.Web.HttpUtility.HtmlEncode(documentName);
             var safeRevision = System.Web.HttpUtility.HtmlEncode(revisionNumber);
@@ -723,7 +723,7 @@ namespace ESSDesign.Server.Services
             var essLink = hasEssDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/ess" : null;
             var thirdPartyLink = hasThirdPartyDesign ? $"{_appBaseUrl}/api/folders/documents/{documentId}/public-download/thirdparty" : null;
             var viewInAppLink = $"{_frontendUrl}/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
-            var openInAppLink = $"essdesign://document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
+            var openInAppLink = $"{_appBaseUrl}/open/document/{documentId}?folder={folderId}&type=ess&title={HttpUtility.UrlEncode(documentName)}";
 
             // Use white version of logo for email (upload logo-white.png to your Supabase public-assets bucket)
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
