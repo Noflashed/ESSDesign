@@ -9,6 +9,7 @@ function emptyEmployeeForm() {
         phoneNumber: '',
         email: '',
         leadingHand: false,
+        selectedRole: 'general_scaffolder',
         linkedAuthUserId: null,
         inviteSentAt: null,
         verifiedAt: null,
@@ -225,6 +226,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
     }, [mergedEntries, search, siteLabelById]);
 
     const openEmployeeEditor = (employee, effectiveRole) => {
+        const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
         setForm({
             ...employee,
             email: employee.email || '',
@@ -232,7 +234,8 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             inviteSentAt: employee.inviteSentAt || null,
             verifiedAt: employee.verifiedAt || null,
             currentEmail: employee.email || '',
-            effectiveRole: effectiveRole || null
+            effectiveRole: resolvedRole,
+            selectedRole: resolvedRole
         });
         setError('');
         setInviteMessage('');
@@ -260,12 +263,20 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         setError('');
         setInviteMessage('');
         try {
-            const showPreferredSites = !form.effectiveRole
-                || form.effectiveRole === 'leading_hand'
-                || form.effectiveRole === 'general_scaffolder';
-            const saveForm = showPreferredSites ? form : { ...form, preferredSiteIds: [] };
+            const showPreferredSites = form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder';
+            const saveForm = {
+                ...form,
+                leadingHand: form.selectedRole === 'leading_hand',
+                preferredSiteIds: showPreferredSites ? form.preferredSiteIds : []
+            };
             const next = await rosteringAPI.saveEmployee(saveForm);
             setEmployees(next);
+
+            if (form.linkedAuthUserId && form.selectedRole !== form.effectiveRole) {
+                await usersAPI.updateUser(form.linkedAuthUserId, { role: form.selectedRole });
+                const userRows = await usersAPI.getAllUsers();
+                setAppUsers(userRows || []);
+            }
 
             if (inviteAfterSave) {
                 const normalizedEmail = (form.email || '').trim().toLowerCase();
@@ -525,44 +536,46 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                     />
                                 </div>
                             </div>
-                            <label className="module-check-row employee-leading-hand-row">
-                                <input
-                                    type="checkbox"
-                                    checked={form.leadingHand}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, leadingHand: e.target.checked }))}
-                                />
-                                <span>Leading Hand</span>
-                            </label>
-                            {(() => {
-                                const showPreferredSites = !form.effectiveRole
-                                    || form.effectiveRole === 'leading_hand'
-                                    || form.effectiveRole === 'general_scaffolder';
-                                return showPreferredSites ? (
-                                    <div className="employee-preferences-grid">
-                                        {[0, 1, 2].map((index) => (
-                                            <div key={index} className="module-field">
-                                                <label>{index + 1}</label>
-                                                <select
-                                                    value={form.preferredSiteIds[index] || ''}
-                                                    onChange={(e) => updatePreferredSite(index, e.target.value)}
-                                                >
-                                                    <option value="">Select active job site</option>
-                                                    {sites.map((site) => (
-                                                        <option
-                                                            key={site.id}
-                                                            value={site.id}
-                                                            disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
-                                                        >
-                                                            {site.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : null;
-                            })()}
-                            {form.id && form.leadingHand ? (
+                            <div className="module-field">
+                                <label>Role</label>
+                                <select
+                                    value={form.selectedRole}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, selectedRole: e.target.value }))}
+                                >
+                                    <option value="general_scaffolder">Scaffolder</option>
+                                    <option value="leading_hand">Leading Hand</option>
+                                    <option value="site_supervisor">Site Supervisor</option>
+                                    <option value="project_manager">Project Manager</option>
+                                    <option value="transport_management">Transport Management</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="viewer">Viewer</option>
+                                </select>
+                            </div>
+                            {(form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder') ? (
+                                <div className="employee-preferences-grid">
+                                    {[0, 1, 2].map((index) => (
+                                        <div key={index} className="module-field">
+                                            <label>{index + 1}</label>
+                                            <select
+                                                value={form.preferredSiteIds[index] || ''}
+                                                onChange={(e) => updatePreferredSite(index, e.target.value)}
+                                            >
+                                                <option value="">Select active job site</option>
+                                                {sites.map((site) => (
+                                                    <option
+                                                        key={site.id}
+                                                        value={site.id}
+                                                        disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
+                                                    >
+                                                        {site.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {form.id && form.selectedRole === 'leading_hand' ? (
                                 <button
                                     type="button"
                                     className="module-secondary-btn"

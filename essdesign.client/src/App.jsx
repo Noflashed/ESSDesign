@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FolderBrowser from './components/FolderBrowser';
-import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import RegistrationSuccess from './components/RegistrationSuccess';
@@ -109,14 +108,10 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
-const ChevronLeftIcon = ({ size = 16 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="15 18 9 12 15 6" />
-    </svg>
-);
-const ChevronRightIcon = ({ size = 16 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="9 18 15 12 9 6" />
+const SidebarToggleIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1.5" y="2" width="5" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="8.5" y="2" width="10" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
     </svg>
 );
 const HomeNavIcon = ({ size = 18 }) => (
@@ -180,7 +175,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -198,7 +193,7 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
                 title={open ? 'Collapse sidebar' : 'Expand sidebar'}
                 aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
             >
-                {open ? <ChevronLeftIcon size={16} /> : <ChevronRightIcon size={16} />}
+                <SidebarToggleIcon size={18} />
             </button>
 
             <nav className="app-nav-sidebar-nav">
@@ -1084,26 +1079,15 @@ function App() {
         }
 
         return (
-            <div className="app-body">
-                <Sidebar
-                    onFolderSelect={handleFolderSelect}
-                    currentFolderId={selectedFolderId}
-                    refreshTrigger={refreshTrigger}
-                    width={sidebarWidth}
-                    onResize={handleSidebarResize}
-                    onDocumentClick={handleDocumentClick}
+            <div className="module-page">
+                <FolderBrowser
+                    selectedFolderId={selectedFolderId}
+                    onFolderChange={handleFolderSelect}
+                    viewMode={viewMode}
+                    onViewModeChange={handleViewModeChange}
+                    onRefreshNeeded={triggerRefresh}
                     canManage={isAdmin}
                 />
-                <main className="app-main">
-                    <FolderBrowser
-                        selectedFolderId={selectedFolderId}
-                        onFolderChange={handleFolderSelect}
-                        viewMode={viewMode}
-                        onViewModeChange={handleViewModeChange}
-                        onRefreshNeeded={triggerRefresh}
-                        canManage={isAdmin}
-                    />
-                </main>
             </div>
         );
     };

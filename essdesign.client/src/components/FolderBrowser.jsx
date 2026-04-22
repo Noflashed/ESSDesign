@@ -864,6 +864,16 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 )}
                 <div className="view-toggle">
                     <button
+                        className="view-btn"
+                        onClick={() => handleBreadcrumbClick(null)}
+                        title="Home"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+                            <path d="M9 21V12h6v9" />
+                        </svg>
+                    </button>
+                    <button
                         className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
                         onClick={() => handleViewModeSelect('grid')}
                         title="Grid view"
