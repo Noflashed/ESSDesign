@@ -111,7 +111,7 @@ function EmployeeActionButton({ title, onClick, children, danger = false }) {
     );
 }
 
-export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
+export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingAppUser, setSavingAppUser] = useState(false);
@@ -269,20 +269,25 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                 leadingHand: form.selectedRole === 'leading_hand',
                 preferredSiteIds: showPreferredSites ? form.preferredSiteIds : []
             };
-            const next = await rosteringAPI.saveEmployee(saveForm);
-            setEmployees(next);
-
             if (form.linkedAuthUserId && form.selectedRole !== form.effectiveRole) {
                 await usersAPI.updateUser(form.linkedAuthUserId, { role: form.selectedRole });
-                const userRows = await usersAPI.getAllUsers();
-                setAppUsers(userRows || []);
+            }
+
+            await rosteringAPI.saveEmployee(saveForm);
+            const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
+            setAppUsers(userRows || []);
+            setEmployees(employeeRows);
+
+            if (form.linkedAuthUserId && form.linkedAuthUserId === currentUserId) {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                onCurrentUserUpdated?.(refreshedUser);
             }
 
             if (inviteAfterSave) {
                 const normalizedEmail = (form.email || '').trim().toLowerCase();
                 if (!normalizedEmail) throw new Error('Enter an email address before sending an invite.');
 
-                const savedEmployee = next.find((employee) =>
+                const savedEmployee = employeeRows.find((employee) =>
                     (form.id ? employee.id === form.id : true)
                     && (employee.email || '').trim().toLowerCase() === normalizedEmail
                     && (employee.firstName || '').trim() === form.firstName.trim()
@@ -326,6 +331,10 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
             const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
             setAppUsers(userRows || []);
             setEmployees(employeeRows);
+            if (appUserForm.id === currentUserId) {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                onCurrentUserUpdated?.(refreshedUser);
+            }
             setShowAppUserModal(false);
         } catch (err) {
             setError(err.message || 'Could not save user');

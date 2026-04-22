@@ -497,6 +497,20 @@ namespace ESSDesign.Server.Services
                 : AppRoles.Viewer;
         }
 
+        private static string GetRoleDisplayName(string? role)
+        {
+            return NormalizeRole(role) switch
+            {
+                AppRoles.Admin => "Admin",
+                AppRoles.SiteSupervisor => "Site Supervisor",
+                AppRoles.ProjectManager => "Project Manager",
+                AppRoles.LeadingHand => "Leading Hand",
+                AppRoles.GeneralScaffolder => "General Scaffolder",
+                AppRoles.TransportManagement => "Transport Management",
+                _ => "Viewer"
+            };
+        }
+
         public async Task<string> EnsureUserRoleAsync(string? userId, string? desiredRole = null)
         {
             if (!TryNormalizeUserId(userId, out var normalizedUserId))
@@ -638,7 +652,7 @@ namespace ESSDesign.Server.Services
                 user.Role = employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
             }
 
-            user.EmployeeTitle = employee.LeadingHand ? "Leading Hand" : "General Scaffolder";
+            user.EmployeeTitle = GetRoleDisplayName(user.Role);
         }
 
         private async Task<Dictionary<string, string>> GetAllUserRolesAsync()

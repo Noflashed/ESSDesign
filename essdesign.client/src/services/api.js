@@ -1294,8 +1294,8 @@ export const usersAPI = {
         return response.data;
     },
 
-    updateUser: async (userId, { fullName, role } = {}) => {
-        const response = await apiClient.put('/users/' + userId, { fullName, role });
+    updateUser: async (userId, { fullName, role, phoneNumber } = {}) => {
+        const response = await apiClient.put('/users/' + userId, { fullName, role, phoneNumber });
         return response.data;
     },
 

@@ -184,6 +184,18 @@ function isPageActive(itemKey, currentPage) {
     return currentPage === itemKey;
 }
 
+function getRoleDisplayName(role) {
+    switch (role) {
+        case 'admin': return 'Admin';
+        case 'site_supervisor': return 'Site Supervisor';
+        case 'project_manager': return 'Project Manager';
+        case 'leading_hand': return 'Leading Hand';
+        case 'general_scaffolder': return 'General Scaffolder';
+        case 'transport_management': return 'Transport Management';
+        default: return 'Viewer';
+    }
+}
+
 function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
@@ -964,14 +976,7 @@ function App() {
     }, []);
     const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
-    const userTitle = user?.employeeTitle
-        || (user?.role === 'leading_hand' ? 'Leading Hand'
-            : user?.role === 'general_scaffolder' ? 'General Scaffolder'
-            : user?.role === 'site_supervisor' ? 'Site Supervisor'
-            : user?.role === 'project_manager' ? 'Project Manager'
-            : user?.role === 'transport_management' ? 'Transport Management'
-            : user?.role === 'admin' ? 'Admin'
-            : 'Viewer');
+    const userTitle = getRoleDisplayName(user?.role);
     const userInitials = user?.fullName
         ? user.fullName
             .split(' ')
@@ -1073,7 +1078,13 @@ function App() {
             );
         }
         if (currentPage === 'employees') {
-            return <EmployeesPage onOpenLeadingHandRelationships={(leadingHand) => applyPageState('employee-relationships', { builder: null, project: null }, { leadingHand })} />;
+            return (
+                <EmployeesPage
+                    currentUserId={user?.id}
+                    onCurrentUserUpdated={setUser}
+                    onOpenLeadingHandRelationships={(leadingHand) => applyPageState('employee-relationships', { builder: null, project: null }, { leadingHand })}
+                />
+            );
         }
         if (currentPage === 'employee-relationships' && employeeContext.leadingHand) {
             return (

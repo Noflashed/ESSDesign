@@ -1,15 +1,20 @@
 import React from 'react';
 
+function getRoleDisplayName(role) {
+    switch (role) {
+        case 'admin': return 'Admin';
+        case 'site_supervisor': return 'Site Supervisor';
+        case 'project_manager': return 'Project Manager';
+        case 'leading_hand': return 'Leading Hand';
+        case 'general_scaffolder': return 'Scaffolder';
+        case 'transport_management': return 'Transport Management';
+        default: return 'Viewer';
+    }
+}
+
 export default function SettingsPage({ user, onToggleTheme, theme }) {
     const displayName = user?.fullName || user?.email || 'User';
-    const displayRole = user?.employeeTitle
-        || (user?.role === 'leading_hand' ? 'Leading Hand'
-            : user?.role === 'general_scaffolder' ? 'Scaffolder'
-            : user?.role === 'site_supervisor' ? 'Site Supervisor'
-            : user?.role === 'project_manager' ? 'Project Manager'
-            : user?.role === 'transport_management' ? 'Transport Management'
-            : user?.role === 'admin' ? 'Admin'
-            : 'Viewer');
+    const displayRole = getRoleDisplayName(user?.role);
 
     return (
         <div className="module-page settings-page">
