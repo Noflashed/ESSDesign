@@ -204,41 +204,41 @@ app.MapGet("/open/document/{documentId}", (string documentId, string? folder, st
     var safeWebUrl = System.Net.WebUtility.HtmlEncode(webFallbackUrl);
     var safeTitle = System.Net.WebUtility.HtmlEncode(title ?? "Document");
 
-    var html = $"""
+    var html = $$"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>Opening ESS App…</title>
+            <title>Opening ESS App...</title>
             <style>
-                body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                        background: #1a1a2e; color: #fff; display: flex; align-items: center;
-                       justify-content: center; min-height: 100vh; text-align: center; padding: 24px; }}
-                .card {{ max-width: 360px; }}
-                h1 {{ font-size: 20px; margin: 0 0 8px; }}
-                p {{ color: #9a9ab0; font-size: 14px; margin: 0 0 24px; }}
-                a.btn {{ display: inline-block; padding: 14px 32px; border-radius: 100px;
-                         background: #FF6B35; color: #fff; text-decoration: none;
-                         font-weight: 600; font-size: 15px; }}
-                a.web {{ display: block; margin-top: 16px; color: #9a9ab0; font-size: 13px; }}
+                       justify-content: center; min-height: 100vh; text-align: center; padding: 24px; }
+                .card { max-width: 360px; }
+                h1 { font-size: 20px; margin: 0 0 8px; }
+                p { color: #9a9ab0; font-size: 14px; margin: 0 0 24px; }
+                a.btn { display: inline-block; padding: 14px 32px; border-radius: 100px;
+                        background: #FF6B35; color: #fff; text-decoration: none;
+                        font-weight: 600; font-size: 15px; }
+                a.web { display: block; margin-top: 16px; color: #9a9ab0; font-size: 13px; }
             </style>
             <script>
-                window.onload = function() {{
-                    window.location = '{appSchemeUrl}';
-                    setTimeout(function() {{
+                window.onload = function() {
+                    window.location = '{{appSchemeUrl}}';
+                    setTimeout(function() {
                         document.getElementById('fallback').style.display = 'block';
-                    }}, 1500);
-                }};
+                    }, 1500);
+                };
             </script>
         </head>
         <body>
             <div class="card">
-                <h1>Opening ESS App…</h1>
-                <p>{safeTitle}</p>
+                <h1>Opening ESS App...</h1>
+                <p>{{safeTitle}}</p>
                 <div id="fallback" style="display:none">
-                    <a class="btn" href="{safeAppUrl}">Open in ESS App</a>
-                    <a class="web" href="{safeWebUrl}">Don't have the app? View in browser</a>
+                    <a class="btn" href="{{safeAppUrl}}">Open in ESS App</a>
+                    <a class="web" href="{{safeWebUrl}}">Don't have the app? View in browser</a>
                 </div>
             </div>
         </body>
