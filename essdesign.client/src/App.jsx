@@ -391,12 +391,6 @@ function App() {
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [navSidebarOpen, setNavSidebarOpen] = useState(false);
-
-    useEffect(() => {
-        if (currentPage === 'landing') {
-            setNavSidebarOpen(false);
-        }
-    }, [currentPage]);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
     const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
@@ -409,6 +403,12 @@ function App() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [currentPage, setCurrentPage] = useState('landing');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
+
+    useEffect(() => {
+        if (currentPage === 'landing') {
+            setNavSidebarOpen(false);
+        }
+    }, [currentPage]);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
     const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
     const [rosteringContext, setRosteringContext] = useState({ planDate: null });
