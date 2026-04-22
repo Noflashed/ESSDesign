@@ -13,7 +13,8 @@ function emptyEmployeeForm() {
         inviteSentAt: null,
         verifiedAt: null,
         currentEmail: '',
-        preferredSiteIds: []
+        preferredSiteIds: [],
+        effectiveRole: null
     };
 }
 
@@ -223,14 +224,15 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         });
     }, [mergedEntries, search, siteLabelById]);
 
-    const openEmployeeEditor = (employee) => {
+    const openEmployeeEditor = (employee, effectiveRole) => {
         setForm({
             ...employee,
             email: employee.email || '',
             linkedAuthUserId: employee.linkedAuthUserId || null,
             inviteSentAt: employee.inviteSentAt || null,
             verifiedAt: employee.verifiedAt || null,
-            currentEmail: employee.email || ''
+            currentEmail: employee.email || '',
+            effectiveRole: effectiveRole || null
         });
         setError('');
         setInviteMessage('');
@@ -258,7 +260,11 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
         setError('');
         setInviteMessage('');
         try {
-            const next = await rosteringAPI.saveEmployee(form);
+            const showPreferredSites = !form.effectiveRole
+                || form.effectiveRole === 'leading_hand'
+                || form.effectiveRole === 'general_scaffolder';
+            const saveForm = showPreferredSites ? form : { ...form, preferredSiteIds: [] };
+            const next = await rosteringAPI.saveEmployee(saveForm);
             setEmployees(next);
 
             if (inviteAfterSave) {
@@ -431,7 +437,7 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                         <EmployeeActionButton
                                             title={`Edit ${entry.displayName}`}
                                             onClick={() => {
-                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee);
+                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
                                                 else openAppUserEditor(entry.appUser);
                                             }}
                                         >
@@ -527,28 +533,35 @@ export default function EmployeesPage({ onOpenLeadingHandRelationships }) {
                                 />
                                 <span>Leading Hand</span>
                             </label>
-                            <div className="employee-preferences-grid">
-                                {[0, 1, 2].map((index) => (
-                                    <div key={index} className="module-field">
-                                        <label>{index + 1}</label>
-                                        <select
-                                            value={form.preferredSiteIds[index] || ''}
-                                            onChange={(e) => updatePreferredSite(index, e.target.value)}
-                                        >
-                                            <option value="">Select active job site</option>
-                                            {sites.map((site) => (
-                                                <option
-                                                    key={site.id}
-                                                    value={site.id}
-                                                    disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
+                            {(() => {
+                                const showPreferredSites = !form.effectiveRole
+                                    || form.effectiveRole === 'leading_hand'
+                                    || form.effectiveRole === 'general_scaffolder';
+                                return showPreferredSites ? (
+                                    <div className="employee-preferences-grid">
+                                        {[0, 1, 2].map((index) => (
+                                            <div key={index} className="module-field">
+                                                <label>{index + 1}</label>
+                                                <select
+                                                    value={form.preferredSiteIds[index] || ''}
+                                                    onChange={(e) => updatePreferredSite(index, e.target.value)}
                                                 >
-                                                    {site.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                                    <option value="">Select active job site</option>
+                                                    {sites.map((site) => (
+                                                        <option
+                                                            key={site.id}
+                                                            value={site.id}
+                                                            disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
+                                                        >
+                                                            {site.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                ) : null;
+                            })()}
                             {form.id && form.leadingHand ? (
                                 <button
                                     type="button"

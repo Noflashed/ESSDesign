@@ -2179,6 +2179,126 @@ body {
         border-color: var(--primary-color);
     }
 
+.app-content-wrapper {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.app-nav-sidebar {
+    width: 224px;
+    min-width: 224px;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.2s ease, min-width 0.2s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.app-nav-sidebar.collapsed {
+    width: 56px;
+    min-width: 56px;
+}
+
+.app-nav-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 100%;
+    transition: color 0.15s;
+}
+
+.app-nav-sidebar.collapsed .app-nav-sidebar-toggle {
+    justify-content: center;
+}
+
+.app-nav-sidebar-toggle:hover {
+    color: var(--text-primary);
+}
+
+.app-nav-sidebar-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 8px;
+    gap: 2px;
+    overflow-y: auto;
+}
+
+.app-nav-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    width: 100%;
+}
+
+.app-nav-sidebar.collapsed .app-nav-sidebar-item {
+    justify-content: center;
+    padding: 10px;
+}
+
+.app-nav-sidebar-item:hover {
+    background: var(--hover-bg);
+    border-color: var(--border-color);
+}
+
+.app-nav-sidebar-item.active {
+    background: rgba(246, 114, 0, 0.12);
+    border-color: rgba(246, 114, 0, 0.28);
+    color: #c25500;
+}
+
+.app-nav-sidebar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+.app-nav-sidebar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-nav-sidebar-bottom {
+    padding: 4px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.app-nav-sidebar-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 2px 6px;
+}
+
+.app-page-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+}
+
 .app-body {
     display: flex;
     flex: 1;

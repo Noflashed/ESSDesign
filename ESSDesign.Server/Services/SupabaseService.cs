@@ -738,20 +738,38 @@ namespace ESSDesign.Server.Services
             }
 
             var shouldBeLeadingHand = normalizedRole == AppRoles.LeadingHand;
-            if (linkedEmployee.LeadingHand == shouldBeLeadingHand)
+            var isFieldRole = normalizedRole == AppRoles.LeadingHand || normalizedRole == AppRoles.GeneralScaffolder;
+
+            if (linkedEmployee.LeadingHand == shouldBeLeadingHand && isFieldRole)
             {
                 return;
             }
 
             try
             {
-                await PatchRestRowsAsync<object>(
-                    $"ess_rostering_employees?id=eq.{linkedEmployee.Id:D}",
-                    new
-                    {
-                        leading_hand = shouldBeLeadingHand,
-                        updated_at = DateTime.UtcNow
-                    });
+                if (isFieldRole)
+                {
+                    await PatchRestRowsAsync<object>(
+                        $"ess_rostering_employees?id=eq.{linkedEmployee.Id:D}",
+                        new
+                        {
+                            leading_hand = shouldBeLeadingHand,
+                            updated_at = DateTime.UtcNow
+                        });
+                }
+                else
+                {
+                    await PatchRestRowsAsync<object>(
+                        $"ess_rostering_employees?id=eq.{linkedEmployee.Id:D}",
+                        new
+                        {
+                            leading_hand = false,
+                            preferred_site_1 = (string?)null,
+                            preferred_site_2 = (string?)null,
+                            preferred_site_3 = (string?)null,
+                            updated_at = DateTime.UtcNow
+                        });
+                }
             }
             catch (Exception ex)
             {

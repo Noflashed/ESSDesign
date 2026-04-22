@@ -20,7 +20,7 @@ import EmployeePortalPage from './components/EmployeePortalPage';
 import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
 import { ToastProvider } from './components/Toast';
-import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
+import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
 
 // Load logo from Supabase Storage
@@ -108,6 +108,127 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
         />
     </svg>
 );
+
+const ChevronLeftIcon = ({ size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 18 9 12 15 6" />
+    </svg>
+);
+const ChevronRightIcon = ({ size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 18 15 12 9 6" />
+    </svg>
+);
+const HomeNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+        <path d="M9 21V12h6v9" />
+    </svg>
+);
+const DesignNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+);
+const MapNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+        <circle cx="12" cy="9" r="2.5" />
+    </svg>
+);
+const ShieldNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+);
+const BoxNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+);
+const CalendarNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+);
+const UsersNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+);
+
+const NAV_PAGE_ICONS = {
+    'employee-home': HomeNavIcon,
+    'design': DesignNavIcon,
+    'site-information': MapNavIcon,
+    'safety': ShieldNavIcon,
+    'material-ordering': BoxNavIcon,
+    'rostering': CalendarNavIcon,
+    'employees': UsersNavIcon,
+};
+
+function NavPageIcon({ pageKey, size = 18 }) {
+    const Icon = NAV_PAGE_ICONS[pageKey] || DesignNavIcon;
+    return <Icon size={size} />;
+}
+
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships']);
+
+function isPageActive(itemKey, currentPage) {
+    if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
+    if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
+    if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
+    return currentPage === itemKey;
+}
+
+function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
+    return (
+        <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
+            <button
+                className="app-nav-sidebar-toggle"
+                onClick={onToggle}
+                title={open ? 'Collapse sidebar' : 'Expand sidebar'}
+                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+                {open ? <ChevronLeftIcon size={16} /> : <ChevronRightIcon size={16} />}
+            </button>
+
+            <nav className="app-nav-sidebar-nav">
+                {navItems.map(item => (
+                    <button
+                        key={item.key}
+                        className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
+                        onClick={() => onNavigate(item.key)}
+                        title={!open ? item.label : undefined}
+                    >
+                        <span className="app-nav-sidebar-icon"><NavPageIcon pageKey={item.key} size={18} /></span>
+                        {open && <span className="app-nav-sidebar-label">{item.label}</span>}
+                    </button>
+                ))}
+            </nav>
+
+            <div className="app-nav-sidebar-bottom">
+                <div className="app-nav-sidebar-divider" />
+                <button
+                    className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
+                    onClick={onGoSettings}
+                    title={!open ? 'Settings' : undefined}
+                >
+                    <span className="app-nav-sidebar-icon"><SettingsIcon size={18} /></span>
+                    {open && <span className="app-nav-sidebar-label">Settings</span>}
+                </button>
+            </div>
+        </aside>
+    );
+}
 
 function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPDF }) {
     const [expanded, setExpanded] = useState(false);
@@ -274,11 +395,7 @@ function App() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [managedUsers, setManagedUsers] = useState([]);
-    const [usersLoading, setUsersLoading] = useState(false);
-    const [usersError, setUsersError] = useState('');
-    const [updatingUserId, setUpdatingUserId] = useState(null);
+    const [navSidebarOpen, setNavSidebarOpen] = useState(true);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
     const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
@@ -649,67 +766,6 @@ function App() {
         setInviteEmail('');
     };
 
-    const closeSettingsModal = () => {
-        setShowSettingsModal(false);
-        setUsersError('');
-        setUpdatingUserId(null);
-    };
-
-    const loadManagedUsers = useCallback(async () => {
-        setUsersLoading(true);
-        setUsersError('');
-        try {
-            const users = await usersAPI.getAllUsers();
-            setManagedUsers(users);
-        } catch (error) {
-            if (error.response?.status === 403) {
-                setUsersError('Admin access is required to manage users.');
-            } else {
-                setUsersError(error.response?.data?.error || 'Failed to load users');
-            }
-        } finally {
-            setUsersLoading(false);
-        }
-    }, []);
-
-    const openSettingsModal = async () => {
-        setShowUserMenu(false);
-        setShowSettingsModal(true);
-        await loadManagedUsers();
-    };
-
-    const handleUserRoleChange = async (targetUserId, nextRole) => {
-        setUpdatingUserId(targetUserId);
-        setUsersError('');
-
-        try {
-            const updatedUser = await usersAPI.updateUserRole(targetUserId, nextRole);
-            setManagedUsers((prev) => prev.map((managedUser) => (
-                managedUser.id === targetUserId ? updatedUser : managedUser
-            )));
-
-            if (user?.id === targetUserId) {
-                const nextUser = { ...user, role: updatedUser.role };
-                setUser(nextUser);
-                localStorage.setItem('user', JSON.stringify(nextUser));
-
-                if (updatedUser.role !== 'admin') {
-                    setShowSettingsModal(false);
-                    setShowInviteModal(false);
-                    setShowUserMenu(false);
-                }
-            }
-        } catch (error) {
-            if (error.response?.status === 403) {
-                setUsersError('Admin access is required to update roles.');
-            } else {
-                setUsersError(error.response?.data?.error || 'Failed to update role');
-            }
-        } finally {
-            setUpdatingUserId(null);
-        }
-    };
-
     const handleInviteUser = async (e) => {
         e.preventDefault();
         setInviteError('');
@@ -962,16 +1018,8 @@ function App() {
             return (
                 <SettingsPage
                     user={user}
-                    isAdmin={isAdmin}
-                    onOpenInviteUser={openInviteModal}
                     onToggleTheme={(value) => applyTheme(value, true)}
                     theme={theme}
-                    managedUsers={managedUsers}
-                    usersLoading={usersLoading}
-                    usersError={usersError}
-                    updatingUserId={updatingUserId}
-                    onRoleChange={handleUserRoleChange}
-                    onLoadRoleSettings={loadManagedUsers}
                 />
             );
         }
@@ -1225,28 +1273,32 @@ function App() {
                     </div>
                 ) : null}
                 <div className="header-right">
-                    <WebNavDrawer
-                        open={showNavDrawer}
-                        currentPage={currentPage}
-                        items={allowedNavItems}
-                        onToggle={() => setShowNavDrawer(prev => !prev)}
-                        onClose={() => setShowNavDrawer(false)}
-                        onSelect={(page) => {
-                            applyPageState(page, { builder: null, project: null }, { leadingHand: null });
-                            setShowNavDrawer(false);
-                        }}
-                    />
-                    <button
-                        className="icon-action-button"
-                        onClick={() => {
-                            setShowUserMenu(false);
-                            applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
-                        }}
-                        title="Open settings"
-                        aria-label="Open settings"
-                    >
+                    {!DESIGN_PAGE_KEYS.has(currentPage) && (
+                        <WebNavDrawer
+                            open={showNavDrawer}
+                            currentPage={currentPage}
+                            items={allowedNavItems}
+                            onToggle={() => setShowNavDrawer(prev => !prev)}
+                            onClose={() => setShowNavDrawer(false)}
+                            onSelect={(page) => {
+                                applyPageState(page, { builder: null, project: null }, { leadingHand: null });
+                                setShowNavDrawer(false);
+                            }}
+                        />
+                    )}
+                    {!DESIGN_PAGE_KEYS.has(currentPage) && (
+                        <button
+                            className="icon-action-button"
+                            onClick={() => {
+                                setShowUserMenu(false);
+                                applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                            }}
+                            title="Open settings"
+                            aria-label="Open settings"
+                        >
                             <SettingsIcon size={18} />
-                    </button>
+                        </button>
+                    )}
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
                         <ThemeIcon theme={theme} size={18} />
                     </button>
@@ -1297,7 +1349,28 @@ function App() {
                 </div>
             </header>
 
-            {renderCurrentPage()}
+            {DESIGN_PAGE_KEYS.has(currentPage) ? (
+                <div className="app-content-wrapper">
+                    <NavSidebar
+                        open={navSidebarOpen}
+                        onToggle={() => setNavSidebarOpen(prev => !prev)}
+                        navItems={allowedNavItems}
+                        currentPage={currentPage}
+                        onNavigate={(page) => {
+                            applyPageState(page, { builder: null, project: null }, { leadingHand: null });
+                        }}
+                        onGoSettings={() => {
+                            setShowUserMenu(false);
+                            applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                        }}
+                    />
+                    <div className="app-page-content">
+                        {renderCurrentPage()}
+                    </div>
+                </div>
+            ) : (
+                renderCurrentPage()
+            )}
 
             {showInviteModal && (
                 <div className="invite-modal-overlay" onClick={closeInviteModal}>
