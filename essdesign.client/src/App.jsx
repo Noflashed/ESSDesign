@@ -109,9 +109,9 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
 );
 
 const SidebarToggleIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="1.5" y="2" width="5" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-        <rect x="8.5" y="2" width="10" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
     </svg>
 );
 const HomeNavIcon = ({ size = 18 }) => (
