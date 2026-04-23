@@ -263,6 +263,7 @@ export const authAPI = {
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const SAFETY_BUCKET = 'project-information';
+const ESS_NEWS_BUCKET = 'ess-news';
 const SAFETY_PROJECTS_PATH = 'projects.json';
 
 const supabaseRestHeaders = (contentType = false, upsert = false) => ({
@@ -1278,6 +1279,63 @@ export const preferencesAPI = {
     }
 };
 
+export const essNewsAPI = {
+    getAll: async () => {
+        const rows = await readRestRows('ess_news', '?order=created_at.desc');
+        return rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle || '',
+            mediaUrl: row.media_url || null,
+            mediaType: row.media_type || 'image',
+            createdAt: row.created_at
+        }));
+    },
+
+    create: async ({ title, subtitle, mediaUrl, mediaType }) => {
+        const rows = await postRestRows('ess_news', [{ title, subtitle: subtitle || '', media_url: mediaUrl || null, media_type: mediaType || 'image' }]);
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        return {
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle || '',
+            mediaUrl: row.media_url || null,
+            mediaType: row.media_type || 'image',
+            createdAt: row.created_at
+        };
+    },
+
+    delete: async (id) => {
+        await deleteRestRows('ess_news', `?id=eq.${id}`);
+    },
+
+    uploadMedia: async (file) => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${ESS_NEWS_BUCKET}/${path}`, {
+            method: 'POST',
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': file.type },
+            body: file
+        });
+        if (!response.ok) {
+            const details = await response.text();
+            throw new Error(details || 'Failed to upload media');
+        }
+        return `${SUPABASE_URL}/storage/v1/object/public/${ESS_NEWS_BUCKET}/${path}`;
+    },
+
+    deleteMedia: async (mediaUrl) => {
+        const marker = `/${ESS_NEWS_BUCKET}/`;
+        const idx = mediaUrl.indexOf(marker);
+        if (idx < 0) return;
+        const path = mediaUrl.slice(idx + marker.length);
+        await fetch(`${SUPABASE_URL}/storage/v1/object/${ESS_NEWS_BUCKET}/${path}`, {
+            method: 'DELETE',
+            headers: storageHeaders()
+        });
+    }
+};
+
 export const usersAPI = {
     getAllUsers: async () => {
         const response = await apiClient.get('/users');
@@ -1304,4 +1362,4 @@ export const usersAPI = {
         return response.data;
     }
 };
-export default { authAPI, foldersAPI, preferencesAPI, usersAPI };
+export default { authAPI, foldersAPI, preferencesAPI, usersAPI, essNewsAPI };

@@ -18,6 +18,7 @@ import RosteringTreePage from './components/RosteringTreePage';
 import EmployeePortalPage from './components/EmployeePortalPage';
 import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
+import ESSNewsPage from './components/ESSNewsPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
@@ -159,6 +160,13 @@ const UsersNavIcon = ({ size = 18 }) => (
         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
 );
+const NewsNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10l6 6v8a2 2 0 0 1-2 2z" />
+        <line x1="8" y1="10" x2="16" y2="10" />
+        <line x1="8" y1="14" x2="13" y2="14" />
+    </svg>
+);
 
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
@@ -168,6 +176,7 @@ const NAV_PAGE_ICONS = {
     'material-ordering': BoxNavIcon,
     'rostering': CalendarNavIcon,
     'employees': UsersNavIcon,
+    'ess-news': NewsNavIcon,
 };
 
 function NavPageIcon({ pageKey, size = 18 }) {
@@ -175,7 +184,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -441,6 +450,7 @@ function App() {
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
             ] : []),
+            ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
     const showHeaderSearch = currentPage === 'design';
     const searchRef = useRef(null);
@@ -1093,6 +1103,10 @@ function App() {
                     onBack={() => window.history.back()}
                 />
             );
+        }
+
+        if (currentPage === 'ess-news' && isAdmin) {
+            return <ESSNewsPage />;
         }
 
         return (
