@@ -10,11 +10,14 @@ export default function ESSNewsPage() {
     const [formSubtitle, setFormSubtitle] = useState('');
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaPreview, setMediaPreview] = useState(null);
+    const [thumbFile, setThumbFile] = useState(null);
+    const [thumbPreview, setThumbPreview] = useState(null);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
     const [deletingId, setDeletingId] = useState(null);
     const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef(null);
+    const thumbInputRef = useRef(null);
 
     useEffect(() => {
         load();
@@ -59,18 +62,25 @@ export default function ESSNewsPage() {
         if (!formTitle.trim()) { setSaveError('Title is required'); return; }
         setSaving(true);
         setSaveError('');
+        const isVideo = mediaFile?.type.startsWith('video/');
+        if (isVideo && !thumbFile) { setSaveError('A cover image is required for video items'); setSaving(false); return; }
         try {
             let mediaUrl = null;
             let mediaType = 'image';
+            let thumbnailUrl = null;
             if (mediaFile) {
                 mediaUrl = await essNewsAPI.uploadMedia(mediaFile);
-                mediaType = mediaFile.type.startsWith('video/') ? 'video' : 'image';
+                mediaType = isVideo ? 'video' : 'image';
+            }
+            if (thumbFile) {
+                thumbnailUrl = await essNewsAPI.uploadMedia(thumbFile);
             }
             const created = await essNewsAPI.create({
                 title: formTitle.trim(),
                 subtitle: formSubtitle.trim(),
                 mediaUrl,
-                mediaType
+                mediaType,
+                thumbnailUrl,
             });
             setItems(prev => [created, ...prev]);
             resetForm();
@@ -86,6 +96,8 @@ export default function ESSNewsPage() {
         setFormSubtitle('');
         setMediaFile(null);
         setMediaPreview(null);
+        setThumbFile(null);
+        setThumbPreview(null);
         setSaveError('');
         setShowForm(false);
     };
@@ -202,6 +214,39 @@ export default function ESSNewsPage() {
                                     </button>
                                 )}
                             </div>
+
+                            {mediaPreview?.type === 'video' && (
+                                <div className="module-field">
+                                    <label>Cover image <span style={{ color: '#b91c1c' }}>*</span> <span style={{ fontWeight: 400, opacity: 0.7 }}>(shown as carousel background on mobile)</span></label>
+                                    <div
+                                        className={`ess-news-upload-zone${thumbPreview ? ' has-preview' : ''}`}
+                                        onClick={() => !thumbPreview && thumbInputRef.current?.click()}
+                                        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { setThumbFile(f); const r = new FileReader(); r.onload = ev => setThumbPreview(ev.target.result); r.readAsDataURL(f); } }}
+                                        onDragOver={e => e.preventDefault()}
+                                    >
+                                        {thumbPreview ? (
+                                            <img src={thumbPreview} className="ess-news-upload-preview" alt="Cover" />
+                                        ) : (
+                                            <div className="ess-news-upload-placeholder">
+                                                <div className="ess-news-upload-icon">
+                                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                                    </svg>
+                                                </div>
+                                                <div>Upload a cover image for the carousel</div>
+                                                <div className="ess-news-upload-hint">JPG, PNG</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <input ref={thumbInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) { setThumbFile(f); const r = new FileReader(); r.onload = ev => setThumbPreview(ev.target.result); r.readAsDataURL(f); } }} />
+                                    {thumbPreview && (
+                                        <button type="button" className="module-secondary-btn compact" style={{ marginTop: 8 }} onClick={() => { setThumbFile(null); setThumbPreview(null); }}>
+                                            Remove cover image
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
                             {saveError && <p style={{ color: '#b91c1c', fontSize: 13 }}>{saveError}</p>}
                             <div style={{ display: 'flex', gap: 10 }}>
                                 <button type="submit" className="module-primary-btn compact" disabled={saving}>

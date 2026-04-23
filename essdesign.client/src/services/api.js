@@ -1288,12 +1288,13 @@ export const essNewsAPI = {
             subtitle: row.subtitle || '',
             mediaUrl: row.media_url || null,
             mediaType: row.media_type || 'image',
+            thumbnailUrl: row.thumbnail_url || null,
             createdAt: row.created_at
         }));
     },
 
-    create: async ({ title, subtitle, mediaUrl, mediaType }) => {
-        const rows = await postRestRows('ess_news', [{ title, subtitle: subtitle || '', media_url: mediaUrl || null, media_type: mediaType || 'image' }]);
+    create: async ({ title, subtitle, mediaUrl, mediaType, thumbnailUrl }) => {
+        const rows = await postRestRows('ess_news', [{ title, subtitle: subtitle || '', media_url: mediaUrl || null, media_type: mediaType || 'image', thumbnail_url: thumbnailUrl || null }]);
         const row = Array.isArray(rows) ? rows[0] : rows;
         return {
             id: row.id,
@@ -1301,6 +1302,7 @@ export const essNewsAPI = {
             subtitle: row.subtitle || '',
             mediaUrl: row.media_url || null,
             mediaType: row.media_type || 'image',
+            thumbnailUrl: row.thumbnail_url || null,
             createdAt: row.created_at
         };
     },
