@@ -702,7 +702,7 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
     );
 
     const renderListTable = () => {
-        const isActive = pageView === 'active';
+        const isActive = isActiveQueueView;
         const rows = isActive ? visibleOrders : archivedRequests;
 
         return (

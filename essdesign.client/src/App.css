@@ -249,6 +249,36 @@ body {
     gap: 6px;
 }
 
+.nav-drawer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-drawer-row .nav-drawer-item {
+    flex: 1;
+}
+
+.nav-drawer-subtoggle {
+    width: 34px;
+    height: 34px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.nav-drawer-subtoggle:hover {
+    background: var(--hover-bg);
+    border-color: var(--border-color);
+}
+
+.nav-drawer-subtoggle.open {
+    color: #c25500;
+}
+
 .nav-drawer-sublist {
     display: grid;
     gap: 6px;
@@ -1459,7 +1489,7 @@ body {
 }
 
 .material-ordering-shell-wide {
-    max-width: 1880px;
+    max-width: 1680px;
 }
 
 .material-ordering-list-shell {
@@ -1495,8 +1525,8 @@ body {
 
 .material-ordering-browser {
     display: grid;
-    grid-template-columns: 340px minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 18px;
     align-items: start;
 }
 
@@ -1521,7 +1551,7 @@ body {
 }
 
 .material-ordering-canvas-wide {
-    padding: 28px 30px;
+    padding: 22px 24px;
     min-height: calc(100vh - 240px);
 }
 
@@ -1658,7 +1688,7 @@ body {
 
 .picking-sheet-table {
     width: 100%;
-    min-width: 980px;
+    min-width: 920px;
     border-collapse: collapse;
     table-layout: fixed;
     background: #fff;
@@ -1686,20 +1716,20 @@ body {
     background: #0b7dc0;
     color: #fff;
     text-align: center;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 800;
     letter-spacing: 0.08em;
-    padding: 14px 16px !important;
+    padding: 12px 14px !important;
 }
 
 .picking-meta-label {
     background: #dbeafe;
     color: #12324e;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.05em;
     text-align: left;
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
 }
 
 .picking-meta-label-right {
@@ -1715,11 +1745,11 @@ body {
 .picking-meta-value input,
 .picking-static-value {
     width: 100%;
-    min-height: 34px;
+    min-height: 32px;
     border: none;
     background: transparent;
     color: #0f172a;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     padding: 0 8px;
     outline: none;
@@ -1733,11 +1763,11 @@ body {
 .picking-section-row th {
     background: #0b7dc0;
     color: #fff;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 8px 10px !important;
+    padding: 7px 9px !important;
     text-align: left;
 }
 
@@ -1750,13 +1780,13 @@ body {
 .picking-item-qty {
     background: #fff;
     color: #111827;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.1;
 }
 
 .picking-item-label,
 .picking-item-spec {
-    padding: 7px 8px !important;
+    padding: 6px 7px !important;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -1779,11 +1809,11 @@ body {
 
 .picking-inline-qty-label {
     width: 100%;
-    min-height: 33px;
+    min-height: 31px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1791,12 +1821,12 @@ body {
 
 .picking-item-qty input {
     width: 100%;
-    min-height: 33px;
+    min-height: 31px;
     border: none;
     background: #fff7ed;
     color: #9a3412;
     text-align: center;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
     outline: none;
 }
@@ -1807,13 +1837,13 @@ body {
 
 .picking-item-qty-static {
     width: 100%;
-    min-height: 33px;
+    min-height: 31px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #fff7ed;
     color: #9a3412;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
 }
 

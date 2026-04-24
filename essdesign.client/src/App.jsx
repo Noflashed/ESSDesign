@@ -207,7 +207,7 @@ function getRoleDisplayName(role) {
 }
 
 function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
-    const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': true }));
+    const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
 
     const toggleGroup = (key) => {
         setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));

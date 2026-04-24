@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
@@ -25,6 +25,12 @@ export default function WebNavDrawer({
     onSelect,
     items = MENU_ITEMS
 }) {
+    const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
+
+    const toggleGroup = (key) => {
+        setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+    };
+
     const isActive = (itemKey) => {
         if (itemKey === 'safety') {
             return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -56,29 +62,45 @@ export default function WebNavDrawer({
                     <button className="nav-drawer-close" onClick={onClose} aria-label="Close navigation">×</button>
                 </div>
                 <div className="nav-drawer-list">
-                    {items.map(item => (
-                        <div key={item.key} className="nav-drawer-group">
-                            <button
-                                className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
-                                onClick={() => onSelect(item.key)}
-                            >
-                                {item.label}
-                            </button>
-                            {Array.isArray(item.children) ? (
-                                <div className="nav-drawer-sublist">
-                                    {item.children.map((child) => (
+                    {items.map(item => {
+                        const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+                        const expanded = expandedKeys[item.key];
+                        return (
+                            <div key={item.key} className="nav-drawer-group">
+                                <div className="nav-drawer-row">
+                                    <button
+                                        className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
+                                        onClick={() => onSelect(item.key)}
+                                    >
+                                        {item.label}
+                                    </button>
+                                    {hasChildren ? (
                                         <button
-                                            key={child.key}
-                                            className={`nav-drawer-subitem ${currentPage === child.key ? 'active' : ''}`}
-                                            onClick={() => onSelect(child.key)}
+                                            type="button"
+                                            className={`nav-drawer-subtoggle ${expanded ? 'open' : ''}`}
+                                            onClick={() => toggleGroup(item.key)}
+                                            aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
                                         >
-                                            {child.label}
+                                            ▾
                                         </button>
-                                    ))}
+                                    ) : null}
                                 </div>
-                            ) : null}
-                        </div>
-                    ))}
+                                {hasChildren && expanded ? (
+                                    <div className="nav-drawer-sublist">
+                                        {item.children.map((child) => (
+                                            <button
+                                                key={child.key}
+                                                className={`nav-drawer-subitem ${currentPage === child.key ? 'active' : ''}`}
+                                                onClick={() => onSelect(child.key)}
+                                            >
+                                                {child.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                        );
+                    })}
                 </div>
             </aside>
         </>
