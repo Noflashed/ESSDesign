@@ -769,6 +769,76 @@ export const materialOrdersAPI = {
     }
 };
 
+
+function buildMaterialOrderRequestScheduleIso(item) {
+    if (!item?.scheduledDate || typeof item.scheduledHour !== 'number' || typeof item.scheduledMinute !== 'number') {
+        return item?.scheduledAtIso || null;
+    }
+
+    return `${item.scheduledDate}T${String(item.scheduledHour).padStart(2, '0')}:${String(item.scheduledMinute).padStart(2, '0')}:00`;
+}
+
+function normalizeMaterialOrderRequestListItem(item) {
+    const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
+    const archivedAt = item?.archivedAt || null;
+    const shouldArchive = !archivedAt && scheduledAtIso && new Date(scheduledAtIso).getTime() <= Date.now();
+
+    return {
+        id: item?.id || '',
+        builderName: item?.builderName || '',
+        projectName: item?.projectName || '',
+        requestedByName: item?.requestedByName || '',
+        submittedAt: item?.submittedAt || nowIso(),
+        orderDate: item?.orderDate || new Date().toISOString().slice(0, 10),
+        sourceOrderId: item?.sourceOrderId || null,
+        pdfPath: item?.pdfPath || '',
+        scaffoldingSystem: item?.scaffoldingSystem || '',
+        details: item?.details || '',
+        scheduledDate: item?.scheduledDate || null,
+        scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
+        scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
+        scheduledAtIso,
+        archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
+    };
+}
+
+function normalizeMaterialOrderRequestRecord(record) {
+    if (!record) {
+        return null;
+    }
+
+    const scheduledAtIso = buildMaterialOrderRequestScheduleIso(record);
+    const archivedAt = record.archivedAt || null;
+    const shouldArchive = !archivedAt && scheduledAtIso && new Date(scheduledAtIso).getTime() <= Date.now();
+
+    return {
+        ...record,
+        scheduledDate: record.scheduledDate || null,
+        scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
+        scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
+        scheduledAtIso,
+        archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
+    };
+}
+
+export const materialOrderRequestsAPI = {
+    listArchivedRequests: async () => {
+        const raw = await readStorageJson('material-order-requests/index.json');
+        const items = Array.isArray(raw?.requests) ? raw.requests : [];
+        return items
+            .map(normalizeMaterialOrderRequestListItem)
+            .filter(item => item.id && item.archivedAt)
+            .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
+    },
+
+    getRequest: async (requestId) => {
+        const request = await readStorageJson(`material-order-requests/requests/${requestId}.json`);
+        return normalizeMaterialOrderRequestRecord(request);
+    },
+
+    getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14)
+};
+
 export const rosteringAPI = {
     getEmployees: async () => {
         const rows = await readRestRows('ess_rostering_employees', '?select=*&order=last_name.asc,first_name.asc');

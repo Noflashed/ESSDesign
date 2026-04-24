@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { materialOrdersAPI, safetyProjectsAPI } from '../services/api';
+import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 
 const SECTION_HEADER_LABELS = new Set([
     'TIMBER BOARDS',
@@ -76,6 +76,19 @@ function formatDayLabel(dateValue) {
     return date.toLocaleDateString('en-AU', { weekday: 'long' });
 }
 
+function formatDateTime(value) {
+    if (!value) return 'Not scheduled';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 function createBlankOrder(user) {
     return {
         id: null,
@@ -112,6 +125,21 @@ function normalizeOrder(order, user) {
     };
 }
 
+function mapArchivedRequestToOrder(request) {
+    return {
+        id: null,
+        builderId: request?.builderId || '',
+        builderName: request?.builderName || '',
+        projectId: request?.projectId || '',
+        projectName: request?.projectName || '',
+        requestedByUserId: request?.requestedByUserId || null,
+        requestedByName: request?.requestedByName || '',
+        orderDate: request?.orderDate || todayDate(),
+        notes: request?.notes || '',
+        itemValues: request?.itemValues || {}
+    };
+}
+
 function quantityKey(rowId, side) {
     return `${rowId}_${side}_qty`;
 }
@@ -127,7 +155,7 @@ function MetadataRow({ label, control, sideLabel, sideValue }) {
     );
 }
 
-function ItemCell({ entry, value, onChange }) {
+function ItemCell({ entry, value, onChange, readOnly = false }) {
     const [label, spec] = entry;
     const empty = !label && !spec;
     const normalizedLabel = (label || '').trim().toUpperCase();
@@ -141,12 +169,16 @@ function ItemCell({ entry, value, onChange }) {
                 {isSectionHeader ? (
                     <span className="picking-inline-qty-label">QTY'S</span>
                 ) : !empty ? (
-                    <input
-                        type="number"
-                        min="0"
-                        value={value ?? ''}
-                        onChange={(e) => onChange(e.target.value)}
-                    />
+                    readOnly ? (
+                        <span className="picking-item-qty-static">{value ?? ''}</span>
+                    ) : (
+                        <input
+                            type="number"
+                            min="0"
+                            value={value ?? ''}
+                            onChange={(e) => onChange(e.target.value)}
+                        />
+                    )
                 ) : null}
             </td>
         </>
@@ -159,7 +191,10 @@ export default function MaterialOrderingPage({ user }) {
     const [error, setError] = useState('');
     const [builders, setBuilders] = useState([]);
     const [orders, setOrders] = useState([]);
+    const [archivedRequests, setArchivedRequests] = useState([]);
     const [selectedOrderId, setSelectedOrderId] = useState('new');
+    const [selectedArchivedRequest, setSelectedArchivedRequest] = useState(null);
+    const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
 
     useEffect(() => {
@@ -167,22 +202,27 @@ export default function MaterialOrderingPage({ user }) {
 
         Promise.allSettled([
             safetyProjectsAPI.getBuilders({ includeArchived: true }),
-            materialOrdersAPI.getOrders()
+            materialOrdersAPI.getOrders(),
+            materialOrderRequestsAPI.listArchivedRequests()
         ])
-            .then(([buildersResult, ordersResult]) => {
+            .then(([buildersResult, ordersResult, archivedResult]) => {
                 if (!active) return;
 
                 const nextBuilders = buildersResult.status === 'fulfilled' ? buildersResult.value : [];
                 const nextOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
+                const nextArchivedRequests = archivedResult.status === 'fulfilled' ? archivedResult.value : [];
 
                 setBuilders(nextBuilders);
                 setOrders(nextOrders);
+                setArchivedRequests(nextArchivedRequests);
 
                 if (nextOrders[0]) {
                     setSelectedOrderId(nextOrders[0].id);
+                    setSelectedArchivedRequest(null);
                     setForm(normalizeOrder(nextOrders[0], user));
                 } else {
                     setSelectedOrderId('new');
+                    setSelectedArchivedRequest(null);
                     setForm(createBlankOrder(user));
                 }
 
@@ -193,6 +233,11 @@ export default function MaterialOrderingPage({ user }) {
 
                 if (ordersResult.status === 'rejected') {
                     setError(`${ordersResult.reason?.message || 'Failed to load material orders'}. Run migration 015 to create public.ess_material_orders.`);
+                    return;
+                }
+
+                if (archivedResult.status === 'rejected') {
+                    setError(archivedResult.reason?.message || 'Failed to load archived material requests.');
                 }
             })
             .finally(() => {
@@ -203,6 +248,8 @@ export default function MaterialOrderingPage({ user }) {
             active = false;
         };
     }, [user]);
+
+    const isArchivedView = Boolean(selectedArchivedRequest);
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -225,13 +272,31 @@ export default function MaterialOrderingPage({ user }) {
     );
 
     const selectOrder = (order) => {
+        setSelectedArchivedRequest(null);
         setSelectedOrderId(order.id);
         setForm(normalizeOrder(order, user));
         setError('');
     };
 
+    const selectArchivedRequest = async (request) => {
+        setSaving(true);
+        setError('');
+        try {
+            const fullRequest = await materialOrderRequestsAPI.getRequest(request.id);
+            const resolvedRequest = fullRequest || request;
+            setSelectedArchivedRequest(resolvedRequest);
+            setSelectedOrderId(`archived:${request.id}`);
+            setForm(normalizeOrder(mapArchivedRequestToOrder(resolvedRequest), user));
+        } catch (err) {
+            setError(err.message || 'Failed to load archived material request');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const startNewOrder = () => {
         setSelectedOrderId('new');
+        setSelectedArchivedRequest(null);
         setForm(createBlankOrder(user));
         setError('');
     };
@@ -268,6 +333,10 @@ export default function MaterialOrderingPage({ user }) {
     };
 
     const saveOrder = async () => {
+        if (isArchivedView) {
+            return;
+        }
+
         if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
             setError('Builder, jobsite, requester, and date are required.');
             return;
@@ -288,6 +357,7 @@ export default function MaterialOrderingPage({ user }) {
             ) || nextOrders[0];
 
             if (saved) {
+                setSelectedArchivedRequest(null);
                 setSelectedOrderId(saved.id);
                 setForm(normalizeOrder(saved, user));
             }
@@ -299,7 +369,7 @@ export default function MaterialOrderingPage({ user }) {
     };
 
     const deleteOrder = async () => {
-        if (!form.id) {
+        if (isArchivedView || !form.id) {
             startNewOrder();
             return;
         }
@@ -311,6 +381,7 @@ export default function MaterialOrderingPage({ user }) {
             const nextOrders = await materialOrdersAPI.deleteOrder(form.id);
             setOrders(nextOrders);
             if (nextOrders[0]) {
+                setSelectedArchivedRequest(null);
                 setSelectedOrderId(nextOrders[0].id);
                 setForm(normalizeOrder(nextOrders[0], user));
             } else {
@@ -337,6 +408,7 @@ export default function MaterialOrderingPage({ user }) {
 
             if (form.id === orderId) {
                 if (nextOrders[0]) {
+                    setSelectedArchivedRequest(null);
                     setSelectedOrderId(nextOrders[0].id);
                     setForm(normalizeOrder(nextOrders[0], user));
                 } else {
@@ -347,6 +419,20 @@ export default function MaterialOrderingPage({ user }) {
             setError(err.message || 'Failed to delete material order');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const openArchivedPdf = async (request, event) => {
+        event.stopPropagation();
+        setOpeningArchivedPdfId(request.id);
+        setError('');
+        try {
+            const url = await materialOrderRequestsAPI.getPdfUrl(request);
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (err) {
+            setError(err.message || 'Failed to open archived PDF');
+        } finally {
+            setOpeningArchivedPdfId(null);
         }
     };
 
@@ -362,7 +448,7 @@ export default function MaterialOrderingPage({ user }) {
                         <div className="material-ordering-sidebar-head">
                             <div>
                                 <h2>ESS Material Ordering</h2>
-                                <p>Saved picking cards linked to your site registry.</p>
+                                <p>Saved picking cards linked to your site registry, plus archived transport requests.</p>
                             </div>
                             <button type="button" className="module-primary-btn" onClick={startNewOrder}>
                                 New Card
@@ -383,12 +469,12 @@ export default function MaterialOrderingPage({ user }) {
                                             className="material-ordering-order-main"
                                             onClick={() => selectOrder(order)}
                                         >
-                                        <span className="material-ordering-order-builder">{order.builderName}</span>
-                                        <span className="material-ordering-order-project">{order.projectName}</span>
-                                        <span className="material-ordering-order-details">
-                                            {order.itemValues?.__details || 'No details entered'}
-                                        </span>
-                                        <span className="material-ordering-order-meta">{order.orderDate}</span>
+                                            <span className="material-ordering-order-builder">{order.builderName}</span>
+                                            <span className="material-ordering-order-project">{order.projectName}</span>
+                                            <span className="material-ordering-order-details">
+                                                {order.itemValues?.__details || 'No details entered'}
+                                            </span>
+                                            <span className="material-ordering-order-meta">{order.orderDate}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -403,9 +489,83 @@ export default function MaterialOrderingPage({ user }) {
                                 ))
                             )}
                         </div>
+
+                        <div className="material-ordering-archive-panel">
+                            <div className="material-ordering-archive-head">
+                                <div>
+                                    <h3>Archived Material Lists</h3>
+                                    <p>Requests move here automatically after their scheduled delivery time passes.</p>
+                                </div>
+                                <span>{archivedRequests.length}</span>
+                            </div>
+                            {archivedRequests.length === 0 ? (
+                                <div className="module-empty-inline">No archived requests yet.</div>
+                            ) : (
+                                <div className="material-ordering-archive-table-wrap">
+                                    <table className="material-ordering-archive-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Builder</th>
+                                                <th>Project</th>
+                                                <th>Scheduled</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {archivedRequests.map((request) => (
+                                                <tr
+                                                    key={request.id}
+                                                    className={selectedArchivedRequest?.id === request.id ? 'active' : ''}
+                                                >
+                                                    <td>{request.builderName}</td>
+                                                    <td>{request.projectName}</td>
+                                                    <td>{formatDateTime(request.scheduledAtIso || request.archivedAt || request.submittedAt)}</td>
+                                                    <td>
+                                                        <div className="material-ordering-archive-actions">
+                                                            <button type="button" className="module-secondary-btn" onClick={() => selectArchivedRequest(request)}>
+                                                                Open
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="module-secondary-btn"
+                                                                onClick={(event) => openArchivedPdf(request, event)}
+                                                                disabled={openingArchivedPdfId === request.id}
+                                                            >
+                                                                {openingArchivedPdfId === request.id ? 'Opening...' : 'PDF'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </aside>
 
                     <section className="material-ordering-canvas">
+                        {isArchivedView ? (
+                            <div className="material-ordering-archive-banner">
+                                <div>
+                                    <strong>Viewing archived transport request</strong>
+                                    <span>
+                                        Scheduled for {formatDateTime(selectedArchivedRequest?.scheduledAtIso || selectedArchivedRequest?.archivedAt || selectedArchivedRequest?.submittedAt)}
+                                    </span>
+                                </div>
+                                {selectedArchivedRequest?.pdfPath ? (
+                                    <button
+                                        type="button"
+                                        className="module-secondary-btn"
+                                        onClick={(event) => openArchivedPdf(selectedArchivedRequest, event)}
+                                        disabled={openingArchivedPdfId === selectedArchivedRequest.id}
+                                    >
+                                        {openingArchivedPdfId === selectedArchivedRequest.id ? 'Opening PDF...' : 'Open PDF'}
+                                    </button>
+                                ) : null}
+                            </div>
+                        ) : null}
+
                         <div className="picking-sheet-card">
                             <table className="picking-sheet-table">
                                 <colgroup>
@@ -427,7 +587,9 @@ export default function MaterialOrderingPage({ user }) {
                                 <tbody>
                                     <MetadataRow
                                         label="BUILDER :"
-                                        control={(
+                                        control={isArchivedView ? (
+                                            <span className="picking-static-value">{form.builderName}</span>
+                                        ) : (
                                             <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
                                                 <option value="">Select builder</option>
                                                 {builders.map((builder) => (
@@ -440,7 +602,9 @@ export default function MaterialOrderingPage({ user }) {
                                     />
                                     <MetadataRow
                                         label="PROJECT :"
-                                        control={(
+                                        control={isArchivedView ? (
+                                            <span className="picking-static-value">{form.projectName}</span>
+                                        ) : (
                                             <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
                                                 <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
                                                 {availableProjects.map((project) => (
@@ -449,7 +613,9 @@ export default function MaterialOrderingPage({ user }) {
                                             </select>
                                         )}
                                         sideLabel="TIME"
-                                        sideValue={(
+                                        sideValue={isArchivedView ? (
+                                            <span className="picking-static-value">{form.itemValues.__time || ''}</span>
+                                        ) : (
                                             <input
                                                 value={form.itemValues.__time || ''}
                                                 onChange={(e) => handleQuantityChange('__time', e.target.value)}
@@ -459,7 +625,9 @@ export default function MaterialOrderingPage({ user }) {
                                     />
                                     <MetadataRow
                                         label="SCAFFOLD TYPE :"
-                                        control={(
+                                        control={isArchivedView ? (
+                                            <span className="picking-static-value">{form.itemValues.__scaffoldingSystem || ''}</span>
+                                        ) : (
                                             <select
                                                 value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
                                                 onChange={(e) => handleQuantityChange('__scaffoldingSystem', e.target.value)}
@@ -474,7 +642,9 @@ export default function MaterialOrderingPage({ user }) {
                                     />
                                     <MetadataRow
                                         label="DETAILS"
-                                        control={(
+                                        control={isArchivedView ? (
+                                            <span className="picking-static-value">{form.itemValues.__details || ''}</span>
+                                        ) : (
                                             <input
                                                 value={form.itemValues.__details || ''}
                                                 onChange={(e) => handleQuantityChange('__details', e.target.value)}
@@ -482,7 +652,9 @@ export default function MaterialOrderingPage({ user }) {
                                             />
                                         )}
                                         sideLabel="DATE"
-                                        sideValue={(
+                                        sideValue={isArchivedView ? (
+                                            <span className="picking-static-value">{form.orderDate}</span>
+                                        ) : (
                                             <input
                                                 type="date"
                                                 value={form.orderDate}
@@ -506,16 +678,19 @@ export default function MaterialOrderingPage({ user }) {
                                                 entry={row.left}
                                                 value={form.itemValues[quantityKey(row.id, 'left')]}
                                                 onChange={(value) => handleQuantityChange(quantityKey(row.id, 'left'), value)}
+                                                readOnly={isArchivedView}
                                             />
                                             <ItemCell
                                                 entry={row.middle}
                                                 value={form.itemValues[quantityKey(row.id, 'middle')]}
                                                 onChange={(value) => handleQuantityChange(quantityKey(row.id, 'middle'), value)}
+                                                readOnly={isArchivedView}
                                             />
                                             <ItemCell
                                                 entry={row.right}
                                                 value={form.itemValues[quantityKey(row.id, 'right')]}
                                                 onChange={(value) => handleQuantityChange(quantityKey(row.id, 'right'), value)}
+                                                readOnly={isArchivedView}
                                             />
                                         </tr>
                                     ))}
@@ -530,16 +705,20 @@ export default function MaterialOrderingPage({ user }) {
                                 <span>Total Quantity</span>
                                 <strong>{totalQuantity}</strong>
                             </div>
-                            <div className="module-form-actions">
-                                {form.id ? (
-                                    <button type="button" className="module-danger-btn" onClick={deleteOrder} disabled={saving}>
-                                        Delete
+                            {isArchivedView ? (
+                                <div className="material-ordering-readonly-note">Archived requests are view-only on web.</div>
+                            ) : (
+                                <div className="module-form-actions">
+                                    {form.id ? (
+                                        <button type="button" className="module-danger-btn" onClick={deleteOrder} disabled={saving}>
+                                            Delete
+                                        </button>
+                                    ) : null}
+                                    <button type="button" className="module-primary-btn" onClick={saveOrder} disabled={saving}>
+                                        {saving ? 'Saving...' : 'Save Picking Card'}
                                     </button>
-                                ) : null}
-                                <button type="button" className="module-primary-btn" onClick={saveOrder} disabled={saving}>
-                                    {saving ? 'Saving...' : 'Save Picking Card'}
-                                </button>
-                            </div>
+                                </div>
+                            )}
                         </div>
                     </section>
                 </div>
