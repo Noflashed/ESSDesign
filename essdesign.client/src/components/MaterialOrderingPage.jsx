@@ -216,10 +216,11 @@ export default function MaterialOrderingPage({ user }) {
                 setOrders(nextOrders);
                 setArchivedRequests(nextArchivedRequests);
 
-                if (nextOrders[0]) {
-                    setSelectedOrderId(nextOrders[0].id);
+                const firstVisibleOrder = nextOrders.find((order) => !nextArchivedRequests.some((request) => request.sourceOrderId === order.id));
+                if (firstVisibleOrder) {
+                    setSelectedOrderId(firstVisibleOrder.id);
                     setSelectedArchivedRequest(null);
-                    setForm(normalizeOrder(nextOrders[0], user));
+                    setForm(normalizeOrder(firstVisibleOrder, user));
                 } else {
                     setSelectedOrderId('new');
                     setSelectedArchivedRequest(null);
@@ -269,6 +270,16 @@ export default function MaterialOrderingPage({ user }) {
             return sum + Math.max(0, Number(value || 0));
         }, 0),
         [form.itemValues]
+    );
+
+    const archivedSourceOrderIds = useMemo(
+        () => new Set(archivedRequests.map((request) => request.sourceOrderId).filter(Boolean)),
+        [archivedRequests]
+    );
+
+    const visibleOrders = useMemo(
+        () => orders.filter((order) => !archivedSourceOrderIds.has(order.id)),
+        [orders, archivedSourceOrderIds]
     );
 
     const selectOrder = (order) => {
@@ -456,10 +467,10 @@ export default function MaterialOrderingPage({ user }) {
                         </div>
 
                         <div className="material-ordering-order-list">
-                            {orders.length === 0 ? (
-                                <div className="module-empty-inline">No saved picking cards yet.</div>
+                            {visibleOrders.length === 0 ? (
+                                <div className="module-empty-inline">No active picking cards right now.</div>
                             ) : (
-                                orders.map((order) => (
+                                visibleOrders.map((order) => (
                                     <div
                                         key={order.id}
                                         className={`material-ordering-order-item ${selectedOrderId === order.id ? 'active' : ''}`}
