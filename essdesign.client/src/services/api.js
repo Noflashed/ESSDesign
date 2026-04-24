@@ -266,16 +266,18 @@ const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
 const SAFETY_PROJECTS_PATH = 'projects.json';
 
+const currentSupabaseBearer = () => localStorage.getItem('access_token') || SUPABASE_ANON_KEY;
+
 const supabaseRestHeaders = (contentType = false, upsert = false) => ({
     apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    Authorization: `Bearer ${currentSupabaseBearer()}`,
     ...(contentType ? { 'Content-Type': 'application/json' } : {}),
     ...(upsert ? { Prefer: 'resolution=merge-duplicates,return=representation' } : {})
 });
 
 const storageHeaders = (contentType = false) => ({
     apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    Authorization: `Bearer ${currentSupabaseBearer()}`,
     ...(contentType ? { 'Content-Type': 'application/json' } : {})
 });
 
