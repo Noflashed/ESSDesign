@@ -140,6 +140,18 @@ function mapArchivedRequestToOrder(request) {
     };
 }
 
+
+function archivedRequestMatchesOrder(request, order) {
+    if (!request || !order) return false;
+    if (request.sourceOrderId && request.sourceOrderId === order.id) return true;
+
+    const sameBuilder = (request.builderName || '').trim().toLowerCase() === (order.builderName || '').trim().toLowerCase();
+    const sameProject = (request.projectName || '').trim().toLowerCase() === (order.projectName || '').trim().toLowerCase();
+    const sameDate = (request.orderDate || '') === (order.orderDate || '');
+    const sameDetails = (request.details || '').trim().toLowerCase() === ((order.itemValues?.__details) || '').trim().toLowerCase();
+    return sameBuilder && sameProject && sameDate && sameDetails;
+}
+
 function quantityKey(rowId, side) {
     return `${rowId}_${side}_qty`;
 }
@@ -216,7 +228,7 @@ export default function MaterialOrderingPage({ user }) {
                 setOrders(nextOrders);
                 setArchivedRequests(nextArchivedRequests);
 
-                const nextVisibleOrders = nextOrders.filter((order) => !nextArchivedRequests.some((request) => request.sourceOrderId === order.id));
+                const nextVisibleOrders = nextOrders.filter((order) => !nextArchivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
 
                 if (preserveSelection && selectedArchivedRequest) {
                     const refreshedArchived = nextArchivedRequests.find((request) => request.id === selectedArchivedRequest.id);
@@ -315,14 +327,9 @@ export default function MaterialOrderingPage({ user }) {
         [form.itemValues]
     );
 
-    const archivedSourceOrderIds = useMemo(
-        () => new Set(archivedRequests.map((request) => request.sourceOrderId).filter(Boolean)),
-        [archivedRequests]
-    );
-
     const visibleOrders = useMemo(
-        () => orders.filter((order) => !archivedSourceOrderIds.has(order.id)),
-        [orders, archivedSourceOrderIds]
+        () => orders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order))),
+        [orders, archivedRequests]
     );
 
     const selectOrder = (order) => {
