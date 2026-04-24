@@ -184,12 +184,13 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-active', 'material-ordering-archived', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
+    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
     return currentPage === itemKey;
 }
 
@@ -206,6 +207,12 @@ function getRoleDisplayName(role) {
 }
 
 function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
+    const [expandedKeys, setExpandedKeys] = useState(() => ({ material-ordering: true }));
+
+    const toggleGroup = (key) => {
+        setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+    };
+
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
             <button
@@ -218,17 +225,46 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
             </button>
 
             <nav className="app-nav-sidebar-nav">
-                {navItems.map(item => (
-                    <button
-                        key={item.key}
-                        className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
-                        onClick={() => onNavigate(item.key)}
-                        title={!open ? item.label : undefined}
-                    >
-                        <span className="app-nav-sidebar-icon"><NavPageIcon pageKey={item.key} size={18} /></span>
-                        {open && <span className="app-nav-sidebar-label">{item.label}</span>}
-                    </button>
-                ))}
+                {navItems.map(item => {
+                    const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+                    const expanded = expandedKeys[item.key];
+                    return (
+                        <div key={item.key} className={`app-nav-sidebar-group${isPageActive(item.key, currentPage) ? ' active' : ''}`}>
+                            <button
+                                className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
+                                onClick={() => onNavigate(item.key)}
+                                title={!open ? item.label : undefined}
+                            >
+                                <span className="app-nav-sidebar-icon"><NavPageIcon pageKey={item.key} size={18} /></span>
+                                {open && <span className="app-nav-sidebar-label">{item.label}</span>}
+                            </button>
+                            {open && hasChildren ? (
+                                <button
+                                    type="button"
+                                    className={`app-nav-sidebar-subtoggle${expanded ? ' open' : ''}`}
+                                    onClick={() => toggleGroup(item.key)}
+                                    aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+                                >
+                                    <span className={`app-nav-sidebar-caret${expanded ? ' open' : ''}`}>▾</span>
+                                </button>
+                            ) : null}
+                            {open && hasChildren && expanded ? (
+                                <div className="app-nav-sidebar-submenu">
+                                    {item.children.map((child) => (
+                                        <button
+                                            key={child.key}
+                                            className={`app-nav-sidebar-subitem${currentPage === child.key ? ' active' : ''}`}
+                                            onClick={() => onNavigate(child.key)}
+                                        >
+                                            <span className="app-nav-sidebar-subdot" />
+                                            <span>{child.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
             </nav>
 
             <div className="app-nav-sidebar-bottom">
@@ -440,12 +476,12 @@ function App() {
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
         : isTransportManagement
-        ? [{ key: 'material-ordering', label: 'ESS Material Ordering' }]
+        ? [{ key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] }]
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
-            { key: 'material-ordering', label: 'ESS Material Ordering' },
+            { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] },
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
@@ -504,7 +540,7 @@ function App() {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : isTransportManagement
-            ? (page === 'material-ordering' || page === 'settings' ? page : 'material-ordering')
+            ? ((page === 'material-ordering' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'settings') ? page : 'material-ordering')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -1074,7 +1110,13 @@ function App() {
             );
         }
         if (currentPage === 'material-ordering') {
-            return <MaterialOrderingPage user={user} />;
+            return <MaterialOrderingPage user={user} view="form" />;
+        }
+        if (currentPage === 'material-ordering-active') {
+            return <MaterialOrderingPage user={user} view="active" />;
+        }
+        if (currentPage === 'material-ordering-archived') {
+            return <MaterialOrderingPage user={user} view="archived" />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;

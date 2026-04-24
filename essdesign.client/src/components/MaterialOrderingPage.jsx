@@ -197,7 +197,7 @@ function ItemCell({ entry, value, onChange, readOnly = false }) {
     );
 }
 
-export default function MaterialOrderingPage({ user }) {
+export default function MaterialOrderingPage({ user, view = 'form' }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -206,9 +206,38 @@ export default function MaterialOrderingPage({ user }) {
     const [archivedRequests, setArchivedRequests] = useState([]);
     const [selectedOrderId, setSelectedOrderId] = useState('new');
     const [selectedArchivedRequest, setSelectedArchivedRequest] = useState(null);
-    const [listView, setListView] = useState('active');
     const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
+
+    const selectedBuilder = useMemo(
+        () => builders.find((builder) => builder.id === form.builderId) || null,
+        [builders, form.builderId]
+    );
+
+    const availableProjects = useMemo(
+        () => (selectedBuilder?.projects || []).filter((project) => !project.archived),
+        [selectedBuilder]
+    );
+
+    const dayLabel = useMemo(() => formatDayLabel(form.orderDate), [form.orderDate]);
+
+    const visibleOrders = useMemo(
+        () => orders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order))),
+        [orders, archivedRequests]
+    );
+
+    const isFormOnlyView = view === 'form';
+    const isActiveQueueView = view === 'active';
+    const isArchivedQueueView = view === 'archived';
+    const isArchivedView = isArchivedQueueView && Boolean(selectedArchivedRequest);
+
+    const totalQuantity = useMemo(
+        () => Object.entries(form.itemValues || {}).reduce((sum, [key, value]) => {
+            if (String(key).startsWith('__')) return sum;
+            return sum + Math.max(0, Number(value || 0));
+        }, 0),
+        [form.itemValues]
+    );
 
     const loadPageData = React.useCallback((preserveSelection = true) => {
         let active = true;
@@ -224,14 +253,13 @@ export default function MaterialOrderingPage({ user }) {
                 const nextBuilders = buildersResult.status === 'fulfilled' ? buildersResult.value : [];
                 const nextOrders = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
                 const nextArchivedRequests = archivedResult.status === 'fulfilled' ? archivedResult.value : [];
+                const nextVisibleOrders = nextOrders.filter((order) => !nextArchivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
 
                 setBuilders(nextBuilders);
                 setOrders(nextOrders);
                 setArchivedRequests(nextArchivedRequests);
 
-                const nextVisibleOrders = nextOrders.filter((order) => !nextArchivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
-
-                if (preserveSelection && selectedArchivedRequest) {
+                if (preserveSelection && isArchivedQueueView && selectedArchivedRequest) {
                     const refreshedArchived = nextArchivedRequests.find((request) => request.id === selectedArchivedRequest.id);
                     if (refreshedArchived) {
                         setSelectedArchivedRequest(refreshedArchived);
@@ -239,7 +267,7 @@ export default function MaterialOrderingPage({ user }) {
                     }
                 }
 
-                if (preserveSelection && selectedOrderId && selectedOrderId !== 'new') {
+                if (preserveSelection && isActiveQueueView && selectedOrderId && selectedOrderId !== 'new') {
                     const refreshedOrder = nextVisibleOrders.find((order) => order.id === selectedOrderId);
                     if (refreshedOrder) {
                         setForm(normalizeOrder(refreshedOrder, user));
@@ -247,15 +275,28 @@ export default function MaterialOrderingPage({ user }) {
                     }
                 }
 
-                const firstVisibleOrder = nextVisibleOrders[0];
-                if (firstVisibleOrder) {
-                    setSelectedOrderId(firstVisibleOrder.id);
-                    setSelectedArchivedRequest(null);
-                    setForm(normalizeOrder(firstVisibleOrder, user));
-                } else {
-                    setSelectedOrderId('new');
-                    setSelectedArchivedRequest(null);
-                    setForm(createBlankOrder(user));
+                if (isActiveQueueView) {
+                    if (nextVisibleOrders[0]) {
+                        setSelectedOrderId(nextVisibleOrders[0].id);
+                        setSelectedArchivedRequest(null);
+                        setForm(normalizeOrder(nextVisibleOrders[0], user));
+                    } else {
+                        setSelectedOrderId('new');
+                        setSelectedArchivedRequest(null);
+                        setForm(createBlankOrder(user));
+                    }
+                }
+
+                if (isArchivedQueueView) {
+                    if (nextArchivedRequests[0]) {
+                        setSelectedArchivedRequest(nextArchivedRequests[0]);
+                        setSelectedOrderId(`archived:${nextArchivedRequests[0].id}`);
+                        setForm(normalizeOrder(mapArchivedRequestToOrder(nextArchivedRequests[0]), user));
+                    } else {
+                        setSelectedArchivedRequest(null);
+                        setSelectedOrderId('new');
+                        setForm(createBlankOrder(user));
+                    }
                 }
 
                 if (buildersResult.status === 'rejected') {
@@ -281,7 +322,7 @@ export default function MaterialOrderingPage({ user }) {
         return () => {
             active = false;
         };
-    }, [selectedArchivedRequest, selectedOrderId, user]);
+    }, [isActiveQueueView, isArchivedQueueView, selectedArchivedRequest, selectedOrderId, user]);
 
     useEffect(() => {
         setLoading(true);
@@ -306,35 +347,13 @@ export default function MaterialOrderingPage({ user }) {
         };
     }, [loadPageData]);
 
-    const isArchivedView = Boolean(selectedArchivedRequest);
-
-    const selectedBuilder = useMemo(
-        () => builders.find((builder) => builder.id === form.builderId) || null,
-        [builders, form.builderId]
-    );
-
-    const availableProjects = useMemo(
-        () => (selectedBuilder?.projects || []).filter((project) => !project.archived),
-        [selectedBuilder]
-    );
-
-    const dayLabel = useMemo(() => formatDayLabel(form.orderDate), [form.orderDate]);
-
-    const totalQuantity = useMemo(
-        () => Object.entries(form.itemValues || {}).reduce((sum, [key, value]) => {
-            if (String(key).startsWith('__')) return sum;
-            return sum + Math.max(0, Number(value || 0));
-        }, 0),
-        [form.itemValues]
-    );
-
-    const visibleOrders = useMemo(
-        () => orders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order))),
-        [orders, archivedRequests]
-    );
+    const setStartState = () => {
+        setSelectedOrderId('new');
+        setSelectedArchivedRequest(null);
+        setForm(createBlankOrder(user));
+    };
 
     const selectOrder = (order) => {
-        setListView('active');
         setSelectedArchivedRequest(null);
         setSelectedOrderId(order.id);
         setForm(normalizeOrder(order, user));
@@ -347,7 +366,6 @@ export default function MaterialOrderingPage({ user }) {
         try {
             const fullRequest = await materialOrderRequestsAPI.getRequest(request.id);
             const resolvedRequest = fullRequest || request;
-            setListView('archived');
             setSelectedArchivedRequest(resolvedRequest);
             setSelectedOrderId(`archived:${request.id}`);
             setForm(normalizeOrder(mapArchivedRequestToOrder(resolvedRequest), user));
@@ -359,10 +377,7 @@ export default function MaterialOrderingPage({ user }) {
     };
 
     const startNewOrder = () => {
-        setListView('active');
-        setSelectedOrderId('new');
-        setSelectedArchivedRequest(null);
-        setForm(createBlankOrder(user));
+        setStartState();
         setError('');
     };
 
@@ -413,13 +428,14 @@ export default function MaterialOrderingPage({ user }) {
         try {
             const nextOrders = await materialOrdersAPI.saveOrder(form);
             setOrders(nextOrders);
-            const saved = nextOrders.find((order) =>
+            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
+            const saved = nextVisibleOrders.find((order) =>
                 order.id === form.id ||
                 (order.builderId === form.builderId &&
                     order.projectId === form.projectId &&
                     order.orderDate === form.orderDate &&
                     order.requestedByName === form.requestedByName)
-            ) || nextOrders[0];
+            ) || nextVisibleOrders[0];
 
             if (saved) {
                 setSelectedArchivedRequest(null);
@@ -445,10 +461,11 @@ export default function MaterialOrderingPage({ user }) {
         try {
             const nextOrders = await materialOrdersAPI.deleteOrder(form.id);
             setOrders(nextOrders);
-            if (nextOrders[0]) {
+            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
+            if (nextVisibleOrders[0]) {
                 setSelectedArchivedRequest(null);
-                setSelectedOrderId(nextOrders[0].id);
-                setForm(normalizeOrder(nextOrders[0], user));
+                setSelectedOrderId(nextVisibleOrders[0].id);
+                setForm(normalizeOrder(nextVisibleOrders[0], user));
             } else {
                 startNewOrder();
             }
@@ -470,12 +487,13 @@ export default function MaterialOrderingPage({ user }) {
         try {
             const nextOrders = await materialOrdersAPI.deleteOrder(orderId);
             setOrders(nextOrders);
+            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
 
             if (form.id === orderId) {
-                if (nextOrders[0]) {
+                if (nextVisibleOrders[0]) {
                     setSelectedArchivedRequest(null);
-                    setSelectedOrderId(nextOrders[0].id);
-                    setForm(normalizeOrder(nextOrders[0], user));
+                    setSelectedOrderId(nextVisibleOrders[0].id);
+                    setForm(normalizeOrder(nextVisibleOrders[0], user));
                 } else {
                     startNewOrder();
                 }
@@ -488,7 +506,9 @@ export default function MaterialOrderingPage({ user }) {
     };
 
     const openArchivedPdf = async (request, event) => {
-        event.stopPropagation();
+        if (event) {
+            event.stopPropagation();
+        }
         setOpeningArchivedPdfId(request.id);
         setError('');
         try {
@@ -501,113 +521,248 @@ export default function MaterialOrderingPage({ user }) {
         }
     };
 
-    if (loading) {
-        return <div className="module-page"><div className="module-empty">Loading material ordering...</div></div>;
-    }
+    const renderPickingSheet = () => (
+        <>
+            {isArchivedView ? (
+                <div className="material-ordering-archive-banner">
+                    <div>
+                        <strong>Viewing archived transport request</strong>
+                        <span>
+                            Scheduled for {formatDateTime(selectedArchivedRequest?.scheduledAtIso || selectedArchivedRequest?.archivedAt || selectedArchivedRequest?.submittedAt)}
+                        </span>
+                    </div>
+                    {selectedArchivedRequest?.pdfPath ? (
+                        <button
+                            type="button"
+                            className="module-secondary-btn"
+                            onClick={(event) => openArchivedPdf(selectedArchivedRequest, event)}
+                            disabled={openingArchivedPdfId === selectedArchivedRequest.id}
+                        >
+                            {openingArchivedPdfId === selectedArchivedRequest.id ? 'Opening PDF...' : 'Open PDF'}
+                        </button>
+                    ) : null}
+                </div>
+            ) : null}
 
-    return (
-        <div className="module-page">
-            <div className="module-shell material-ordering-shell">
-                <div className="material-ordering-layout">
-                    <aside className="material-ordering-sidebar">
-                        <div className="material-ordering-sidebar-head">
-                            <div>
-                                <h2>ESS Material Ordering</h2>
-                                <p>Switch between active and archived material lists using the tabs below.</p>
-                            </div>
-                            <button type="button" className="module-primary-btn" onClick={startNewOrder}>
-                                New Card
+            <div className="picking-sheet-card">
+                <table className="picking-sheet-table">
+                    <colgroup>
+                        <col className="w-label" />
+                        <col className="w-spec" />
+                        <col className="w-qty" />
+                        <col className="w-label" />
+                        <col className="w-spec" />
+                        <col className="w-qty" />
+                        <col className="w-label" />
+                        <col className="w-spec" />
+                        <col className="w-qty" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th className="picking-title" colSpan={9}>PICKING CARD</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <MetadataRow
+                            label="BUILDER :"
+                            control={isArchivedView ? (
+                                <span className="picking-static-value">{form.builderName}</span>
+                            ) : (
+                                <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
+                                    <option value="">Select builder</option>
+                                    {builders.map((builder) => (
+                                        <option key={builder.id} value={builder.id}>{builder.name}</option>
+                                    ))}
+                                </select>
+                            )}
+                            sideLabel="DAY"
+                            sideValue={dayLabel}
+                        />
+                        <MetadataRow
+                            label="PROJECT :"
+                            control={isArchivedView ? (
+                                <span className="picking-static-value">{form.projectName}</span>
+                            ) : (
+                                <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
+                                    <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
+                                    {availableProjects.map((project) => (
+                                        <option key={project.id} value={project.id}>{project.name}</option>
+                                    ))}
+                                </select>
+                            )}
+                            sideLabel="TIME"
+                            sideValue={isArchivedView ? (
+                                <span className="picking-static-value">{form.itemValues.__time || ''}</span>
+                            ) : (
+                                <input
+                                    value={form.itemValues.__time || ''}
+                                    onChange={(e) => handleQuantityChange('__time', e.target.value)}
+                                    placeholder="7am"
+                                />
+                            )}
+                        />
+                        <MetadataRow
+                            label="SCAFFOLD TYPE :"
+                            control={isArchivedView ? (
+                                <span className="picking-static-value">{form.itemValues.__scaffoldingSystem || ''}</span>
+                            ) : (
+                                <select
+                                    value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
+                                    onChange={(e) => handleQuantityChange('__scaffoldingSystem', e.target.value)}
+                                >
+                                    <option value="Kwikstage">Kwikstage</option>
+                                    <option value="AT-PAC">AT-PAC</option>
+                                    <option value="Layher">Layher</option>
+                                </select>
+                            )}
+                            sideLabel="ESS REP"
+                            sideValue={<span className="picking-static-value">{form.requestedByName}</span>}
+                        />
+                        <MetadataRow
+                            label="DETAILS"
+                            control={isArchivedView ? (
+                                <span className="picking-static-value">{form.itemValues.__details || ''}</span>
+                            ) : (
+                                <input
+                                    value={form.itemValues.__details || ''}
+                                    onChange={(e) => handleQuantityChange('__details', e.target.value)}
+                                    placeholder="Enter picking card details"
+                                />
+                            )}
+                            sideLabel="DATE"
+                            sideValue={isArchivedView ? (
+                                <span className="picking-static-value">{form.orderDate}</span>
+                            ) : (
+                                <input
+                                    type="date"
+                                    value={form.orderDate}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
+                                />
+                            )}
+                        />
+
+                        <tr className="picking-section-row">
+                            <th className="picking-section-title" colSpan={2}>MODULAR SCAFFOLD</th>
+                            <th className="picking-qty-head">QTY'S</th>
+                            <th className="picking-section-item" colSpan={2}>SOLE BOARDS</th>
+                            <th className="picking-qty-head">QTY'S</th>
+                            <th className="picking-section-item" colSpan={2}>SCAFFOLD LADDER</th>
+                            <th className="picking-qty-head">QTY'S</th>
+                        </tr>
+
+                        {PICKING_CARD_ROWS.map((row) => (
+                            <tr key={row.id}>
+                                <ItemCell
+                                    entry={row.left}
+                                    value={form.itemValues[quantityKey(row.id, 'left')]}
+                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'left'), value)}
+                                    readOnly={isArchivedView}
+                                />
+                                <ItemCell
+                                    entry={row.middle}
+                                    value={form.itemValues[quantityKey(row.id, 'middle')]}
+                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'middle'), value)}
+                                    readOnly={isArchivedView}
+                                />
+                                <ItemCell
+                                    entry={row.right}
+                                    value={form.itemValues[quantityKey(row.id, 'right')]}
+                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'right'), value)}
+                                    readOnly={isArchivedView}
+                                />
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {error ? <div className="module-error">{error}</div> : null}
+
+            <div className="material-order-footer">
+                <div className="material-order-summary">
+                    <span>Total Quantity</span>
+                    <strong>{totalQuantity}</strong>
+                </div>
+                {isArchivedView ? (
+                    <div className="material-ordering-readonly-note">Archived requests are view-only on web.</div>
+                ) : (
+                    <div className="module-form-actions">
+                        {form.id ? (
+                            <button type="button" className="module-danger-btn" onClick={deleteOrder} disabled={saving}>
+                                Delete
                             </button>
+                        ) : null}
+                        <button type="button" className="module-primary-btn" onClick={saveOrder} disabled={saving}>
+                            {saving ? 'Saving...' : 'Save Picking Card'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+
+    const renderListTable = () => {
+        const isActive = pageView === 'active';
+        const rows = isActive ? visibleOrders : archivedRequests;
+
+        return (
+            <div className="material-ordering-list-shell">
+                <div className="material-ordering-page-head">
+                    <div className="material-ordering-page-title-wrap">
+                                                <div>
+                            <h2>{isActive ? 'Active Material Lists' : 'Archived Material Lists'}</h2>
+                            <p>{isActive ? 'Live saved picking cards ready for transport submission and editing.' : 'Completed requests that have rolled out of the live queue.'}</p>
                         </div>
+                    </div>
+                    {isActive ? (
+                        <button type="button" className="module-primary-btn" onClick={startNewOrder}>
+                            New Card
+                        </button>
+                    ) : null}
+                </div>
 
-                        <div className="material-ordering-view-switcher">
-                            <button
-                                type="button"
-                                className={`material-ordering-view-btn ${listView === 'active' ? 'active' : ''}`}
-                                onClick={() => setListView('active')}
-                            >
-                                Active
-                            </button>
-                            <button
-                                type="button"
-                                className={`material-ordering-view-btn ${listView === 'archived' ? 'active' : ''}`}
-                                onClick={() => setListView('archived')}
-                            >
-                                Archived
-                            </button>
-                        </div>
-
-                        <div className="material-ordering-archive-panel material-ordering-archive-panel-inline">
+                <div className="material-ordering-browser">
+                    <div className="material-ordering-browser-list">
+                        <div className="material-ordering-browser-card">
                             <div className="material-ordering-archive-head">
                                 <div>
-                                    <h3>{listView === 'active' ? 'Active Material Lists' : 'Archived Material Lists'}</h3>
-                                    <p>{listView === 'active' ? 'Current saved picking cards that are still live.' : 'Requests move here automatically after their scheduled delivery time passes.'}</p>
+                                    <h3>{isActive ? 'Active Queue' : 'Archived Queue'}</h3>
+                                    <p>{isActive ? 'Select a live material list to review or edit.' : 'Select an archived request to review or open the PDF.'}</p>
                                 </div>
-                                <span>{listView === 'active' ? visibleOrders.length : archivedRequests.length}</span>
+                                <span>{rows.length}</span>
                             </div>
-                            {listView === 'active' ? (
-                                visibleOrders.length === 0 ? (
-                                    <div className="module-empty-inline">No active picking cards right now.</div>
-                                ) : (
-                                    <div className="material-ordering-archive-table-wrap">
-                                        <table className="material-ordering-archive-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Builder</th>
-                                                    <th>Project</th>
-                                                    <th>Date</th>
-                                                    <th>Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {visibleOrders.map((order) => (
-                                                    <tr
-                                                        key={order.id}
-                                                        className={selectedOrderId === order.id && !isArchivedView ? 'active' : ''}
-                                                    >
-                                                        <td>{order.builderName}</td>
-                                                        <td>{order.projectName}</td>
-                                                        <td>{order.orderDate}</td>
-                                                        <td>
-                                                            <div className="material-ordering-archive-actions">
-                                                                <button type="button" className="module-secondary-btn" onClick={() => selectOrder(order)}>
-                                                                    Open
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    className="module-secondary-btn"
-                                                                    onClick={() => deleteOrderById(order.id)}
-                                                                    disabled={saving}
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )
-                            ) : archivedRequests.length === 0 ? (
-                                <div className="module-empty-inline">No archived requests yet.</div>
+                            {rows.length === 0 ? (
+                                <div className="module-empty-inline">{isActive ? 'No active picking cards right now.' : 'No archived requests yet.'}</div>
                             ) : (
-                                <div className="material-ordering-archive-table-wrap">
+                                <div className="material-ordering-archive-table-wrap material-ordering-browser-table-wrap">
                                     <table className="material-ordering-archive-table">
                                         <thead>
                                             <tr>
                                                 <th>Builder</th>
                                                 <th>Project</th>
-                                                <th>Scheduled</th>
+                                                <th>{isActive ? 'Date' : 'Scheduled'}</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {archivedRequests.map((request) => (
-                                                <tr
-                                                    key={request.id}
-                                                    className={selectedArchivedRequest?.id === request.id ? 'active' : ''}
-                                                >
+                                            {isActive ? visibleOrders.map((order) => (
+                                                <tr key={order.id} className={selectedOrderId === order.id && !isArchivedView ? 'active' : ''}>
+                                                    <td>{order.builderName}</td>
+                                                    <td>{order.projectName}</td>
+                                                    <td>{order.orderDate}</td>
+                                                    <td>
+                                                        <div className="material-ordering-archive-actions">
+                                                            <button type="button" className="module-secondary-btn" onClick={() => selectOrder(order)}>
+                                                                Open
+                                                            </button>
+                                                            <button type="button" className="module-secondary-btn" onClick={() => deleteOrderById(order.id)} disabled={saving}>
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )) : archivedRequests.map((request) => (
+                                                <tr key={request.id} className={selectedArchivedRequest?.id === request.id ? 'active' : ''}>
                                                     <td>{request.builderName}</td>
                                                     <td>{request.projectName}</td>
                                                     <td>{formatDateTime(request.scheduledAtIso || request.archivedAt || request.submittedAt)}</td>
@@ -616,12 +771,7 @@ export default function MaterialOrderingPage({ user }) {
                                                             <button type="button" className="module-secondary-btn" onClick={() => selectArchivedRequest(request)}>
                                                                 Open
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                className="module-secondary-btn"
-                                                                onClick={(event) => openArchivedPdf(request, event)}
-                                                                disabled={openingArchivedPdfId === request.id}
-                                                            >
+                                                            <button type="button" className="module-secondary-btn" onClick={(event) => openArchivedPdf(request, event)} disabled={openingArchivedPdfId === request.id}>
                                                                 {openingArchivedPdfId === request.id ? 'Opening...' : 'PDF'}
                                                             </button>
                                                         </div>
@@ -633,184 +783,47 @@ export default function MaterialOrderingPage({ user }) {
                                 </div>
                             )}
                         </div>
-                    </aside>
+                    </div>
 
-                    <section className="material-ordering-canvas">
-                        {isArchivedView ? (
-                            <div className="material-ordering-archive-banner">
-                                <div>
-                                    <strong>Viewing archived transport request</strong>
-                                    <span>
-                                        Scheduled for {formatDateTime(selectedArchivedRequest?.scheduledAtIso || selectedArchivedRequest?.archivedAt || selectedArchivedRequest?.submittedAt)}
-                                    </span>
-                                </div>
-                                {selectedArchivedRequest?.pdfPath ? (
-                                    <button
-                                        type="button"
-                                        className="module-secondary-btn"
-                                        onClick={(event) => openArchivedPdf(selectedArchivedRequest, event)}
-                                        disabled={openingArchivedPdfId === selectedArchivedRequest.id}
-                                    >
-                                        {openingArchivedPdfId === selectedArchivedRequest.id ? 'Opening PDF...' : 'Open PDF'}
-                                    </button>
-                                ) : null}
+                    <section className="material-ordering-canvas material-ordering-canvas-wide">
+                        {renderPickingSheet()}
+                    </section>
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) {
+        return <div className="module-page"><div className="module-empty">Loading material ordering...</div></div>;
+    }
+
+    if (isActiveQueueView || isArchivedQueueView) {
+        return (
+            <div className="module-page">
+                <div className="module-shell material-ordering-shell material-ordering-shell-wide">
+                    {renderListTable()}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="module-page">
+            <div className="module-shell material-ordering-shell material-ordering-shell-wide">
+                <div className="material-ordering-list-shell">
+                    <div className="material-ordering-page-head">
+                        <div className="material-ordering-page-title-wrap">
+                            <div>
+                                <h2>ESS Material Ordering</h2>
+                                <p>Create and save material cards using the full iPad-style picking form.</p>
                             </div>
-                        ) : null}
-
-                        <div className="picking-sheet-card">
-                            <table className="picking-sheet-table">
-                                <colgroup>
-                                    <col className="w-label" />
-                                    <col className="w-spec" />
-                                    <col className="w-qty" />
-                                    <col className="w-label" />
-                                    <col className="w-spec" />
-                                    <col className="w-qty" />
-                                    <col className="w-label" />
-                                    <col className="w-spec" />
-                                    <col className="w-qty" />
-                                </colgroup>
-                                <thead>
-                                    <tr>
-                                        <th className="picking-title" colSpan={9}>PICKING CARD</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <MetadataRow
-                                        label="BUILDER :"
-                                        control={isArchivedView ? (
-                                            <span className="picking-static-value">{form.builderName}</span>
-                                        ) : (
-                                            <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
-                                                <option value="">Select builder</option>
-                                                {builders.map((builder) => (
-                                                    <option key={builder.id} value={builder.id}>{builder.name}</option>
-                                                ))}
-                                            </select>
-                                        )}
-                                        sideLabel="DAY"
-                                        sideValue={dayLabel}
-                                    />
-                                    <MetadataRow
-                                        label="PROJECT :"
-                                        control={isArchivedView ? (
-                                            <span className="picking-static-value">{form.projectName}</span>
-                                        ) : (
-                                            <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
-                                                <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
-                                                {availableProjects.map((project) => (
-                                                    <option key={project.id} value={project.id}>{project.name}</option>
-                                                ))}
-                                            </select>
-                                        )}
-                                        sideLabel="TIME"
-                                        sideValue={isArchivedView ? (
-                                            <span className="picking-static-value">{form.itemValues.__time || ''}</span>
-                                        ) : (
-                                            <input
-                                                value={form.itemValues.__time || ''}
-                                                onChange={(e) => handleQuantityChange('__time', e.target.value)}
-                                                placeholder="7am"
-                                            />
-                                        )}
-                                    />
-                                    <MetadataRow
-                                        label="SCAFFOLD TYPE :"
-                                        control={isArchivedView ? (
-                                            <span className="picking-static-value">{form.itemValues.__scaffoldingSystem || ''}</span>
-                                        ) : (
-                                            <select
-                                                value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
-                                                onChange={(e) => handleQuantityChange('__scaffoldingSystem', e.target.value)}
-                                            >
-                                                <option value="Kwikstage">Kwikstage</option>
-                                                <option value="AT-PAC">AT-PAC</option>
-                                                <option value="Layher">Layher</option>
-                                            </select>
-                                        )}
-                                        sideLabel="ESS REP"
-                                        sideValue={<span className="picking-static-value">{form.requestedByName}</span>}
-                                    />
-                                    <MetadataRow
-                                        label="DETAILS"
-                                        control={isArchivedView ? (
-                                            <span className="picking-static-value">{form.itemValues.__details || ''}</span>
-                                        ) : (
-                                            <input
-                                                value={form.itemValues.__details || ''}
-                                                onChange={(e) => handleQuantityChange('__details', e.target.value)}
-                                                placeholder="Enter picking card details"
-                                            />
-                                        )}
-                                        sideLabel="DATE"
-                                        sideValue={isArchivedView ? (
-                                            <span className="picking-static-value">{form.orderDate}</span>
-                                        ) : (
-                                            <input
-                                                type="date"
-                                                value={form.orderDate}
-                                                onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
-                                            />
-                                        )}
-                                    />
-
-                                    <tr className="picking-section-row">
-                                        <th className="picking-section-title" colSpan={2}>MODULAR SCAFFOLD</th>
-                                        <th className="picking-qty-head">QTY'S</th>
-                                        <th className="picking-section-item" colSpan={2}>SOLE BOARDS</th>
-                                        <th className="picking-qty-head">QTY'S</th>
-                                        <th className="picking-section-item" colSpan={2}>SCAFFOLD LADDER</th>
-                                        <th className="picking-qty-head">QTY'S</th>
-                                    </tr>
-
-                                    {PICKING_CARD_ROWS.map((row) => (
-                                        <tr key={row.id}>
-                                            <ItemCell
-                                                entry={row.left}
-                                                value={form.itemValues[quantityKey(row.id, 'left')]}
-                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'left'), value)}
-                                                readOnly={isArchivedView}
-                                            />
-                                            <ItemCell
-                                                entry={row.middle}
-                                                value={form.itemValues[quantityKey(row.id, 'middle')]}
-                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'middle'), value)}
-                                                readOnly={isArchivedView}
-                                            />
-                                            <ItemCell
-                                                entry={row.right}
-                                                value={form.itemValues[quantityKey(row.id, 'right')]}
-                                                onChange={(value) => handleQuantityChange(quantityKey(row.id, 'right'), value)}
-                                                readOnly={isArchivedView}
-                                            />
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
                         </div>
-
-                        {error ? <div className="module-error">{error}</div> : null}
-
-                        <div className="material-order-footer">
-                            <div className="material-order-summary">
-                                <span>Total Quantity</span>
-                                <strong>{totalQuantity}</strong>
-                            </div>
-                            {isArchivedView ? (
-                                <div className="material-ordering-readonly-note">Archived requests are view-only on web.</div>
-                            ) : (
-                                <div className="module-form-actions">
-                                    {form.id ? (
-                                        <button type="button" className="module-danger-btn" onClick={deleteOrder} disabled={saving}>
-                                            Delete
-                                        </button>
-                                    ) : null}
-                                    <button type="button" className="module-primary-btn" onClick={saveOrder} disabled={saving}>
-                                        {saving ? 'Saving...' : 'Save Picking Card'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <button type="button" className="module-primary-btn" onClick={startNewOrder}>
+                            New Card
+                        </button>
+                    </div>
+                    <section className="material-ordering-canvas material-ordering-canvas-wide">
+                        {renderPickingSheet()}
                     </section>
                 </div>
             </div>

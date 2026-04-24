@@ -4,7 +4,7 @@ const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
     { key: 'safety', label: 'ESS Safety' },
-    { key: 'material-ordering', label: 'ESS Material Ordering' },
+    { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] },
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
 ];
@@ -32,6 +32,9 @@ export default function WebNavDrawer({
         if (itemKey === 'rostering') {
             return currentPage === 'rostering' || currentPage === 'rostering-tree';
         }
+        if (itemKey === 'material-ordering') {
+            return currentPage === 'material-ordering' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+        }
         return currentPage === itemKey;
     };
 
@@ -54,13 +57,27 @@ export default function WebNavDrawer({
                 </div>
                 <div className="nav-drawer-list">
                     {items.map(item => (
-                        <button
-                            key={item.key}
-                            className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
-                            onClick={() => onSelect(item.key)}
-                        >
-                            {item.label}
-                        </button>
+                        <div key={item.key} className="nav-drawer-group">
+                            <button
+                                className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
+                                onClick={() => onSelect(item.key)}
+                            >
+                                {item.label}
+                            </button>
+                            {Array.isArray(item.children) ? (
+                                <div className="nav-drawer-sublist">
+                                    {item.children.map((child) => (
+                                        <button
+                                            key={child.key}
+                                            className={`nav-drawer-subitem ${currentPage === child.key ? 'active' : ''}`}
+                                            onClick={() => onSelect(child.key)}
+                                        >
+                                            {child.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
                     ))}
                 </div>
             </aside>
