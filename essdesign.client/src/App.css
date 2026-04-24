@@ -1620,6 +1620,36 @@ body {
     font-weight: 800;
 }
 
+.material-ordering-view-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.material-ordering-view-btn {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(248, 250, 252, 0.9);
+    color: var(--text-secondary);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.material-ordering-view-btn.active {
+    background: linear-gradient(135deg, #0b7dc0, #0f5f95);
+    color: #fff;
+    border-color: rgba(11, 125, 192, 0.3);
+    box-shadow: 0 12px 24px rgba(11, 125, 192, 0.18);
+}
+
+.material-ordering-archive-panel-inline {
+    border-top: none;
+    padding-top: 0;
+}
+
 .material-ordering-archive-panel {
     border-top: 1px solid rgba(148, 163, 184, 0.18);
     padding-top: 16px;

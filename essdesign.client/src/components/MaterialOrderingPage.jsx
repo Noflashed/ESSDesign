@@ -206,6 +206,7 @@ export default function MaterialOrderingPage({ user }) {
     const [archivedRequests, setArchivedRequests] = useState([]);
     const [selectedOrderId, setSelectedOrderId] = useState('new');
     const [selectedArchivedRequest, setSelectedArchivedRequest] = useState(null);
+    const [listView, setListView] = useState('active');
     const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
 
@@ -333,6 +334,7 @@ export default function MaterialOrderingPage({ user }) {
     );
 
     const selectOrder = (order) => {
+        setListView('active');
         setSelectedArchivedRequest(null);
         setSelectedOrderId(order.id);
         setForm(normalizeOrder(order, user));
@@ -345,6 +347,7 @@ export default function MaterialOrderingPage({ user }) {
         try {
             const fullRequest = await materialOrderRequestsAPI.getRequest(request.id);
             const resolvedRequest = fullRequest || request;
+            setListView('archived');
             setSelectedArchivedRequest(resolvedRequest);
             setSelectedOrderId(`archived:${request.id}`);
             setForm(normalizeOrder(mapArchivedRequestToOrder(resolvedRequest), user));
@@ -356,6 +359,7 @@ export default function MaterialOrderingPage({ user }) {
     };
 
     const startNewOrder = () => {
+        setListView('active');
         setSelectedOrderId('new');
         setSelectedArchivedRequest(null);
         setForm(createBlankOrder(user));
@@ -509,57 +513,83 @@ export default function MaterialOrderingPage({ user }) {
                         <div className="material-ordering-sidebar-head">
                             <div>
                                 <h2>ESS Material Ordering</h2>
-                                <p>Saved picking cards linked to your site registry, plus archived transport requests.</p>
+                                <p>Switch between active and archived material lists using the tabs below.</p>
                             </div>
                             <button type="button" className="module-primary-btn" onClick={startNewOrder}>
                                 New Card
                             </button>
                         </div>
 
-                        <div className="material-ordering-order-list">
-                            {visibleOrders.length === 0 ? (
-                                <div className="module-empty-inline">No active picking cards right now.</div>
-                            ) : (
-                                visibleOrders.map((order) => (
-                                    <div
-                                        key={order.id}
-                                        className={`material-ordering-order-item ${selectedOrderId === order.id ? 'active' : ''}`}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="material-ordering-order-main"
-                                            onClick={() => selectOrder(order)}
-                                        >
-                                            <span className="material-ordering-order-builder">{order.builderName}</span>
-                                            <span className="material-ordering-order-project">{order.projectName}</span>
-                                            <span className="material-ordering-order-details">
-                                                {order.itemValues?.__details || 'No details entered'}
-                                            </span>
-                                            <span className="material-ordering-order-meta">{order.orderDate}</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="material-ordering-order-delete"
-                                            aria-label={`Delete ${order.projectName}`}
-                                            onClick={() => deleteOrderById(order.id)}
-                                            disabled={saving}
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                ))
-                            )}
+                        <div className="material-ordering-view-switcher">
+                            <button
+                                type="button"
+                                className={`material-ordering-view-btn ${listView === 'active' ? 'active' : ''}`}
+                                onClick={() => setListView('active')}
+                            >
+                                Active
+                            </button>
+                            <button
+                                type="button"
+                                className={`material-ordering-view-btn ${listView === 'archived' ? 'active' : ''}`}
+                                onClick={() => setListView('archived')}
+                            >
+                                Archived
+                            </button>
                         </div>
 
-                        <div className="material-ordering-archive-panel">
+                        <div className="material-ordering-archive-panel material-ordering-archive-panel-inline">
                             <div className="material-ordering-archive-head">
                                 <div>
-                                    <h3>Archived Material Lists</h3>
-                                    <p>Requests move here automatically after their scheduled delivery time passes.</p>
+                                    <h3>{listView === 'active' ? 'Active Material Lists' : 'Archived Material Lists'}</h3>
+                                    <p>{listView === 'active' ? 'Current saved picking cards that are still live.' : 'Requests move here automatically after their scheduled delivery time passes.'}</p>
                                 </div>
-                                <span>{archivedRequests.length}</span>
+                                <span>{listView === 'active' ? visibleOrders.length : archivedRequests.length}</span>
                             </div>
-                            {archivedRequests.length === 0 ? (
+                            {listView === 'active' ? (
+                                visibleOrders.length === 0 ? (
+                                    <div className="module-empty-inline">No active picking cards right now.</div>
+                                ) : (
+                                    <div className="material-ordering-archive-table-wrap">
+                                        <table className="material-ordering-archive-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Builder</th>
+                                                    <th>Project</th>
+                                                    <th>Date</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {visibleOrders.map((order) => (
+                                                    <tr
+                                                        key={order.id}
+                                                        className={selectedOrderId === order.id && !isArchivedView ? 'active' : ''}
+                                                    >
+                                                        <td>{order.builderName}</td>
+                                                        <td>{order.projectName}</td>
+                                                        <td>{order.orderDate}</td>
+                                                        <td>
+                                                            <div className="material-ordering-archive-actions">
+                                                                <button type="button" className="module-secondary-btn" onClick={() => selectOrder(order)}>
+                                                                    Open
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="module-secondary-btn"
+                                                                    onClick={() => deleteOrderById(order.id)}
+                                                                    disabled={saving}
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )
+                            ) : archivedRequests.length === 0 ? (
                                 <div className="module-empty-inline">No archived requests yet.</div>
                             ) : (
                                 <div className="material-ordering-archive-table-wrap">
