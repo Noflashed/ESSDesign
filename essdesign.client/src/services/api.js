@@ -840,6 +840,61 @@ async function listStorageObjects(prefix) {
 }
 
 export const materialOrderRequestsAPI = {
+    listActiveRequests: async () => {
+        const raw = await readStorageJson('material-order-requests/index.json');
+        const items = Array.isArray(raw?.requests) ? raw.requests : [];
+        return items
+            .map(normalizeMaterialOrderRequestListItem)
+            .filter(item => item.id && !item.archivedAt)
+            .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+    },
+
+    submitRequest: async (form) => {
+        const requestId = makeId();
+        const submittedAt = nowIso();
+        const scaffoldingSystem = form?.itemValues?.__scaffoldingSystem || '';
+        const details = form?.itemValues?.__details || '';
+        const record = {
+            id: requestId,
+            sourceOrderId: form?.id || null,
+            builderId: form?.builderId || '',
+            builderName: form?.builderName || '',
+            projectId: form?.projectId || '',
+            projectName: form?.projectName || '',
+            requestedByUserId: form?.requestedByUserId || null,
+            requestedByName: form?.requestedByName || '',
+            orderDate: form?.orderDate || new Date().toISOString().slice(0, 10),
+            submittedAt,
+            notes: form?.notes || '',
+            itemValues: form?.itemValues || {},
+            pdfPath: '',
+            scheduledDate: null,
+            scheduledHour: null,
+            scheduledMinute: null,
+            scheduledAtIso: null,
+            archivedAt: null,
+        };
+
+        await uploadStorageObject(
+            `material-order-requests/requests/${requestId}.json`,
+            JSON.stringify(record),
+            'application/json'
+        );
+
+        const indexPath = 'material-order-requests/index.json';
+        const rawIndex = await readStorageJson(indexPath);
+        const existingItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: [
+                { id: requestId, builderName: record.builderName, projectName: record.projectName, requestedByName: record.requestedByName, submittedAt, orderDate: record.orderDate, sourceOrderId: record.sourceOrderId, pdfPath: '', scaffoldingSystem, details, scheduledDate: null, scheduledHour: null, scheduledMinute: null, scheduledAtIso: null, archivedAt: null },
+                ...existingItems.filter(item => item.id !== requestId)
+            ].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))),
+            updatedAt: submittedAt,
+        };
+        await uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json');
+        return record;
+    },
+
     listArchivedRequests: async () => {
         const raw = await readStorageJson('material-order-requests/index.json');
         const items = Array.isArray(raw?.requests) ? raw.requests : [];

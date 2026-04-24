@@ -249,37 +249,31 @@ body {
     gap: 6px;
 }
 
-.nav-drawer-row {
+.nav-drawer-item-expandable {
     display: flex;
     align-items: center;
-    gap: 0;
+    justify-content: space-between;
+    gap: 12px;
 }
 
-.nav-drawer-row .nav-drawer-item {
+.nav-drawer-item-label {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.nav-drawer-subtoggle {
-    width: 44px;
-    height: 44px;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    flex-shrink: 0;
+.nav-drawer-caret {
     font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: transform 0.18s ease;
+    line-height: 1;
 }
 
-.nav-drawer-subtoggle:hover {
-    background: var(--hover-bg);
-    border-color: var(--border-color);
-}
-
-.nav-drawer-subtoggle.open {
+.nav-drawer-caret.open {
+    transform: rotate(180deg);
     color: #c25500;
 }
 

@@ -184,13 +184,13 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-active', 'material-ordering-archived', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
-    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
     return currentPage === itemKey;
 }
 
@@ -476,12 +476,12 @@ function App() {
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
         : isTransportManagement
-        ? [{ key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] }]
+        ? [{ key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }] }]
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
-            { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] },
+            { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }] },
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
@@ -540,7 +540,7 @@ function App() {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : isTransportManagement
-            ? ((page === 'material-ordering' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'settings') ? page : 'material-ordering')
+            ? ((page === 'material-ordering' || page === 'material-ordering-new' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'settings') ? page : 'material-ordering-active')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -1109,7 +1109,7 @@ function App() {
                 />
             );
         }
-        if (currentPage === 'material-ordering') {
+        if (currentPage === 'material-ordering' || currentPage === 'material-ordering-new') {
             return <MaterialOrderingPage user={user} view="form" />;
         }
         if (currentPage === 'material-ordering-active') {

@@ -244,26 +244,26 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
 
         Promise.allSettled([
             safetyProjectsAPI.getBuilders({ includeArchived: true }),
-            materialOrdersAPI.getOrders(),
+            materialOrderRequestsAPI.listActiveRequests(),
             materialOrderRequestsAPI.listArchivedRequests()
         ])
-            .then(([buildersResult, ordersResult, archivedResult]) => {
+            .then(([buildersResult, activeResult, archivedResult]) => {
                 if (!active) return;
 
                 setBuilders(buildersResult.status === 'fulfilled' ? buildersResult.value : []);
-                setOrders(ordersResult.status === 'fulfilled' ? ordersResult.value : []);
+                setOrders(activeResult.status === 'fulfilled' ? activeResult.value : []);
                 setArchivedRequests(archivedResult.status === 'fulfilled' ? archivedResult.value : []);
 
                 if (buildersResult.status === 'rejected') {
                     setError(buildersResult.reason?.message || 'Failed to load builders');
                     return;
                 }
-                if (ordersResult.status === 'rejected') {
-                    setError(`${ordersResult.reason?.message || 'Failed to load material orders'}. Run migration 015 to create public.ess_material_orders.`);
+                if (activeResult.status === 'rejected') {
+                    setError(activeResult.reason?.message || 'Failed to load scheduled orders.');
                     return;
                 }
                 if (archivedResult.status === 'rejected') {
-                    setError(archivedResult.reason?.message || 'Failed to load archived material requests.');
+                    setError(archivedResult.reason?.message || 'Failed to load archived orders.');
                 } else {
                     setError('');
                 }
@@ -365,94 +365,18 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
         }));
     };
 
-    const saveOrder = async () => {
-        if (isArchivedView) {
-            return;
-        }
-
+    const submitOrder = async () => {
         if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
             setError('Builder, jobsite, requester, and date are required.');
             return;
         }
-
         setSaving(true);
         setError('');
-
         try {
-            const nextOrders = await materialOrdersAPI.saveOrder(form);
-            setOrders(nextOrders);
-            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
-            const saved = nextVisibleOrders.find((order) =>
-                order.id === form.id ||
-                (order.builderId === form.builderId &&
-                    order.projectId === form.projectId &&
-                    order.orderDate === form.orderDate &&
-                    order.requestedByName === form.requestedByName)
-            ) || nextVisibleOrders[0];
-
-            if (saved) {
-                setSelectedArchivedRequest(null);
-                setSelectedOrderId(saved.id);
-                setForm(normalizeOrder(saved, user));
-            }
+            await materialOrderRequestsAPI.submitRequest(form);
+            setForm(createBlankOrder(user));
         } catch (err) {
-            setError(err.message || 'Failed to save material order');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const deleteOrder = async () => {
-        if (isArchivedView || !form.id) {
-            startNewOrder();
-            return;
-        }
-
-        setSaving(true);
-        setError('');
-
-        try {
-            const nextOrders = await materialOrdersAPI.deleteOrder(form.id);
-            setOrders(nextOrders);
-            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
-            if (nextVisibleOrders[0]) {
-                setSelectedArchivedRequest(null);
-                setSelectedOrderId(nextVisibleOrders[0].id);
-                setForm(normalizeOrder(nextVisibleOrders[0], user));
-            } else {
-                startNewOrder();
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to delete material order');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const deleteOrderById = async (orderId) => {
-        if (!orderId) {
-            return;
-        }
-
-        setSaving(true);
-        setError('');
-
-        try {
-            const nextOrders = await materialOrdersAPI.deleteOrder(orderId);
-            setOrders(nextOrders);
-            const nextVisibleOrders = nextOrders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order)));
-
-            if (form.id === orderId) {
-                if (nextVisibleOrders[0]) {
-                    setSelectedArchivedRequest(null);
-                    setSelectedOrderId(nextVisibleOrders[0].id);
-                    setForm(normalizeOrder(nextVisibleOrders[0], user));
-                } else {
-                    startNewOrder();
-                }
-            }
-        } catch (err) {
-            setError(err.message || 'Failed to delete material order');
+            setError(err.message || 'Failed to submit order request');
         } finally {
             setSaving(false);
         }
@@ -636,20 +560,11 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
                     <span>Total Quantity</span>
                     <strong>{totalQuantity}</strong>
                 </div>
-                {isArchivedView ? (
-                    <div className="material-ordering-readonly-note">Archived requests are view-only on web.</div>
-                ) : (
-                    <div className="module-form-actions">
-                        {form.id ? (
-                            <button type="button" className="module-danger-btn" onClick={deleteOrder} disabled={saving}>
-                                Delete
-                            </button>
-                        ) : null}
-                        <button type="button" className="module-primary-btn" onClick={saveOrder} disabled={saving}>
-                            {saving ? 'Saving...' : 'Save Picking Card'}
-                        </button>
-                    </div>
-                )}
+                <div className="module-form-actions">
+                    <button type="button" className="module-primary-btn" onClick={submitOrder} disabled={saving}>
+                        {saving ? 'Submitting...' : 'Submit to ESS Transport'}
+                    </button>
+                </div>
             </div>
         </>
     );
@@ -663,8 +578,8 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
                 <div className="material-ordering-page-head">
                     <div className="material-ordering-page-title-wrap">
                         <div>
-                            <h2>{isActive ? 'Active Material Lists' : 'Archived Material Lists'}</h2>
-                            <p>{isActive ? 'Live saved picking cards ready for transport submission and editing.' : 'Completed requests that have rolled out of the live queue.'}</p>
+                            <h2>{isActive ? 'Scheduled Orders' : 'Archived Orders'}</h2>
+                            <p>{isActive ? 'Submitted transport requests scheduled for delivery.' : 'Completed requests that have rolled out of the active queue.'}</p>
                         </div>
                     </div>
                 </div>
@@ -674,13 +589,13 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
                 <div className="material-ordering-browser-card">
                     <div className="material-ordering-archive-head">
                         <div>
-                            <h3>{isActive ? 'Active Queue' : 'Archived Queue'}</h3>
-                            <p>{isActive ? 'Saved picking cards.' : 'Completed transport requests.'}</p>
+                            <h3>{isActive ? 'Scheduled Orders' : 'Archived Orders'}</h3>
+                            <p>{isActive ? 'Submitted transport requests.' : 'Completed transport requests.'}</p>
                         </div>
                         <span>{rows.length}</span>
                     </div>
                     {rows.length === 0 ? (
-                        <div className="module-empty-inline">{isActive ? 'No active picking cards right now.' : 'No archived requests yet.'}</div>
+                        <div className="module-empty-inline">{isActive ? 'No scheduled orders right now.' : 'No archived orders yet.'}</div>
                     ) : (
                         <div className="material-ordering-archive-table-wrap">
                             <table className="material-ordering-archive-table">
@@ -688,23 +603,17 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
                                     <tr>
                                         <th>Builder</th>
                                         <th>Project</th>
-                                        <th>{isActive ? 'Date' : 'Scheduled'}</th>
-                                        <th>Actions</th>
+                                        <th>{isActive ? 'Scaffold' : 'Scheduled'}</th>
+                                        <th>{isActive ? 'Submitted' : 'Actions'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {isActive ? visibleOrders.map((order) => (
-                                        <tr key={order.id}>
-                                            <td>{order.builderName}</td>
-                                            <td>{order.projectName}</td>
-                                            <td>{order.orderDate}</td>
-                                            <td>
-                                                <div className="material-ordering-archive-actions">
-                                                    <button type="button" className="module-danger-btn" onClick={() => deleteOrderById(order.id)} disabled={saving}>
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
+                                    {isActive ? orders.map((request) => (
+                                        <tr key={request.id}>
+                                            <td>{request.builderName}</td>
+                                            <td>{request.projectName}</td>
+                                            <td>{request.scaffoldingSystem || '—'}</td>
+                                            <td>{formatDateTime(request.submittedAt)}</td>
                                         </tr>
                                     )) : archivedRequests.map((request) => (
                                         <tr key={request.id}>

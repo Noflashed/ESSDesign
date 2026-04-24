@@ -4,7 +4,11 @@ const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
     { key: 'safety', label: 'ESS Safety' },
-    { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-active', label: 'Active Cards' }, { key: 'material-ordering-archived', label: 'Archived Cards' }] },
+    { key: 'material-ordering', label: 'ESS Material Ordering', children: [
+        { key: 'material-ordering-new', label: 'New Material Order' },
+        { key: 'material-ordering-active', label: 'Scheduled Orders' },
+        { key: 'material-ordering-archived', label: 'Archived Orders' }
+    ]},
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
 ];
@@ -39,7 +43,7 @@ export default function WebNavDrawer({
             return currentPage === 'rostering' || currentPage === 'rostering-tree';
         }
         if (itemKey === 'material-ordering') {
-            return currentPage === 'material-ordering' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+            return currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
         }
         return currentPage === itemKey;
     };
@@ -67,24 +71,15 @@ export default function WebNavDrawer({
                         const expanded = expandedKeys[item.key];
                         return (
                             <div key={item.key} className="nav-drawer-group">
-                                <div className="nav-drawer-row">
-                                    <button
-                                        className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
-                                        onClick={() => onSelect(item.key)}
-                                    >
-                                        {item.label}
-                                    </button>
+                                <button
+                                    className={`nav-drawer-item ${hasChildren ? 'nav-drawer-item-expandable' : ''} ${isActive(item.key) ? 'active' : ''}`}
+                                    onClick={() => hasChildren ? toggleGroup(item.key) : onSelect(item.key)}
+                                >
+                                    <span className="nav-drawer-item-label">{item.label}</span>
                                     {hasChildren ? (
-                                        <button
-                                            type="button"
-                                            className={`nav-drawer-subtoggle ${expanded ? 'open' : ''}`}
-                                            onClick={() => toggleGroup(item.key)}
-                                            aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
-                                        >
-                                            ▾
-                                        </button>
+                                        <span className={`nav-drawer-caret ${expanded ? 'open' : ''}`}>▾</span>
                                     ) : null}
-                                </div>
+                                </button>
                                 {hasChildren && expanded ? (
                                     <div className="nav-drawer-sublist">
                                         {item.children.map((child) => (
