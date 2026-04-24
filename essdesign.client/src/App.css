@@ -174,7 +174,7 @@ body {
     position: fixed;
     top: 0;
     right: 0;
-    width: 320px;
+    width: 360px;
     max-width: calc(100vw - 24px);
     height: 100vh;
     background: var(--bg-primary);
@@ -252,7 +252,7 @@ body {
 .nav-drawer-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
 }
 
 .nav-drawer-row .nav-drawer-item {
@@ -260,14 +260,18 @@ body {
 }
 
 .nav-drawer-subtoggle {
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border: 1px solid transparent;
     border-radius: 10px;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     flex-shrink: 0;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .nav-drawer-subtoggle:hover {
