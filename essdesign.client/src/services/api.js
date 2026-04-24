@@ -821,13 +821,44 @@ function normalizeMaterialOrderRequestRecord(record) {
     };
 }
 
+async function listStorageObjects(prefix) {
+    const response = await fetch(safetyBucketListUrl(), {
+        method: 'POST',
+        headers: storageHeaders(true),
+        body: JSON.stringify({ prefix, limit: 500, offset: 0 })
+    });
+
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || `Failed to list ${prefix}`);
+    }
+
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows : [];
+}
+
 export const materialOrderRequestsAPI = {
     listArchivedRequests: async () => {
         const raw = await readStorageJson('material-order-requests/index.json');
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
-        return items
+        const fromIndex = items
             .map(normalizeMaterialOrderRequestListItem)
-            .filter(item => item.id && item.archivedAt)
+            .filter(item => item.id && item.archivedAt);
+
+        if (fromIndex.length > 0) {
+            return fromIndex.sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
+        }
+
+        const rows = await listStorageObjects('material-order-requests/requests');
+        const requestPaths = rows
+            .map(row => row?.name)
+            .filter(name => typeof name === 'string' && name.toLowerCase().endsWith('.json'))
+            .map(name => `material-order-requests/requests/${name}`);
+
+        const records = await Promise.all(requestPaths.map(readStorageJson));
+        return records
+            .map(normalizeMaterialOrderRequestRecord)
+            .filter(item => item?.id && item?.archivedAt)
             .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
     },
 
