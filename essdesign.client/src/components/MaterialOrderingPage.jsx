@@ -197,7 +197,7 @@ export default function MaterialOrderingPage({ user }) {
     const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
 
-    useEffect(() => {
+    const loadPageData = React.useCallback((preserveSelection = true) => {
         let active = true;
 
         Promise.allSettled([
@@ -216,7 +216,25 @@ export default function MaterialOrderingPage({ user }) {
                 setOrders(nextOrders);
                 setArchivedRequests(nextArchivedRequests);
 
-                const firstVisibleOrder = nextOrders.find((order) => !nextArchivedRequests.some((request) => request.sourceOrderId === order.id));
+                const nextVisibleOrders = nextOrders.filter((order) => !nextArchivedRequests.some((request) => request.sourceOrderId === order.id));
+
+                if (preserveSelection && selectedArchivedRequest) {
+                    const refreshedArchived = nextArchivedRequests.find((request) => request.id === selectedArchivedRequest.id);
+                    if (refreshedArchived) {
+                        setSelectedArchivedRequest(refreshedArchived);
+                        return;
+                    }
+                }
+
+                if (preserveSelection && selectedOrderId && selectedOrderId !== 'new') {
+                    const refreshedOrder = nextVisibleOrders.find((order) => order.id === selectedOrderId);
+                    if (refreshedOrder) {
+                        setForm(normalizeOrder(refreshedOrder, user));
+                        return;
+                    }
+                }
+
+                const firstVisibleOrder = nextVisibleOrders[0];
                 if (firstVisibleOrder) {
                     setSelectedOrderId(firstVisibleOrder.id);
                     setSelectedArchivedRequest(null);
@@ -239,6 +257,8 @@ export default function MaterialOrderingPage({ user }) {
 
                 if (archivedResult.status === 'rejected') {
                     setError(archivedResult.reason?.message || 'Failed to load archived material requests.');
+                } else {
+                    setError('');
                 }
             })
             .finally(() => {
@@ -248,7 +268,30 @@ export default function MaterialOrderingPage({ user }) {
         return () => {
             active = false;
         };
-    }, [user]);
+    }, [selectedArchivedRequest, selectedOrderId, user]);
+
+    useEffect(() => {
+        setLoading(true);
+        const dispose = loadPageData(false);
+
+        const intervalId = window.setInterval(() => loadPageData(true), 30000);
+        const handleFocus = () => loadPageData(true);
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                loadPageData(true);
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', handleVisibility);
+
+        return () => {
+            dispose?.();
+            window.clearInterval(intervalId);
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
+    }, [loadPageData]);
 
     const isArchivedView = Boolean(selectedArchivedRequest);
 
