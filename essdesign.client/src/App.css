@@ -254,6 +254,8 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .nav-drawer-item-label {
