@@ -121,8 +121,9 @@ namespace ESSDesign.Server.Controllers
                 var actorName = "ESS Transport";
                 if (actorUserId != Guid.Empty)
                 {
-                    var users = await _supabaseService.GetUsersByIdsAsync(new[] { actorUserId.ToString() });
-                    var actor = users.FirstOrDefault(u => u.Id == actorUserId);
+                    var actorUserIdString = actorUserId.ToString();
+                    var users = await _supabaseService.GetUsersByIdsAsync(new[] { actorUserIdString });
+                    var actor = users.FirstOrDefault(u => string.Equals(u.Id, actorUserIdString, StringComparison.OrdinalIgnoreCase));
                     actorName = actor?.FullName ?? actor?.Email ?? actorName;
                 }
 
