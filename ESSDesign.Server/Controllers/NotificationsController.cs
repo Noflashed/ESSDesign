@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
@@ -98,6 +99,84 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting notification {NotificationId}", notificationId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+
+        [HttpPost("material-order-scheduled")]
+        public async Task<ActionResult> NotifyMaterialOrderScheduled([FromBody] MaterialOrderScheduledNotificationRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.RecipientUserId) ||
+                    string.IsNullOrWhiteSpace(request.BuilderName) ||
+                    string.IsNullOrWhiteSpace(request.ProjectName) ||
+                    string.IsNullOrWhiteSpace(request.ScheduledDate))
+                {
+                    return BadRequest(new { error = "Recipient, builder, project, and scheduled date are required" });
+                }
+
+                var actorUserId = GetUserIdOptional();
+                var actorName = "ESS Transport";
+                if (actorUserId != Guid.Empty)
+                {
+                    var users = await _supabaseService.GetUsersAsync();
+                    var actor = users.FirstOrDefault(u => u.Id == actorUserId);
+                    actorName = actor?.FullName ?? actor?.Email ?? actorName;
+                }
+
+                if (!DateTime.TryParseExact(
+                        request.ScheduledDate,
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var parsedDate))
+                {
+                    return BadRequest(new { error = "Scheduled date must be in yyyy-MM-dd format" });
+                }
+
+                var scheduledLocal = new DateTime(
+                    parsedDate.Year,
+                    parsedDate.Month,
+                    parsedDate.Day,
+                    Math.Clamp(request.ScheduledHour, 0, 23),
+                    Math.Clamp(request.ScheduledMinute, 0, 59),
+                    0,
+                    DateTimeKind.Unspecified);
+
+                var scheduledDisplay = scheduledLocal.ToString("dd MMM yyyy h:mm tt", CultureInfo.InvariantCulture);
+                var message = string.Join("\n", new[]
+                {
+                    $"Client: {request.BuilderName}",
+                    $"Project: {request.ProjectName}",
+                    $"Scaffold: {(string.IsNullOrWhiteSpace(request.ScaffoldingSystem) ? "N/A" : request.ScaffoldingSystem)}",
+                    $"Scheduled: {scheduledDisplay}",
+                    $"Scheduled By: {actorName}",
+                });
+
+                await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                {
+                    RecipientUserIds = new List<string> { request.RecipientUserId },
+                    Title = "Material order scheduled",
+                    Message = message,
+                    Type = "material_order_scheduled",
+                    ActorName = actorName,
+                });
+
+                var pushSent = await _pushNotificationService.SendMaterialOrderScheduledPushAsync(
+                    new[] { request.RecipientUserId },
+                    request.BuilderName,
+                    request.ProjectName,
+                    request.ScaffoldingSystem,
+                    scheduledDisplay,
+                    request.RequestId);
+
+                return Ok(new { message = "Material order notification sent", pushSent });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending material order scheduled notification");
                 return StatusCode(500, new { error = ex.Message });
             }
         }

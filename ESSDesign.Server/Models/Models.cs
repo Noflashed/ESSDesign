@@ -319,6 +319,19 @@ namespace ESSDesign.Server.Models
         public Guid? DocumentId { get; set; }
     }
 
+
+    public class MaterialOrderScheduledNotificationRequest
+    {
+        public string RequestId { get; set; } = string.Empty;
+        public string RecipientUserId { get; set; } = string.Empty;
+        public string BuilderName { get; set; } = string.Empty;
+        public string ProjectName { get; set; } = string.Empty;
+        public string? ScaffoldingSystem { get; set; }
+        public string ScheduledDate { get; set; } = string.Empty;
+        public int ScheduledHour { get; set; }
+        public int ScheduledMinute { get; set; }
+    }
+
     public class CreateFolderRequest
     {
         public string Name { get; set; } = string.Empty;

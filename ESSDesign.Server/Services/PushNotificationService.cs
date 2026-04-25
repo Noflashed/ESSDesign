@@ -164,6 +164,30 @@ namespace ESSDesign.Server.Services
                 });
         }
 
+        public async Task<int> SendMaterialOrderScheduledPushAsync(
+            IEnumerable<string> recipientUserIds,
+            string builderName,
+            string projectName,
+            string? scaffoldingSystem,
+            string scheduledDisplay,
+            string requestId)
+        {
+            return await SendDocumentPushAsync(
+                recipientUserIds,
+                "Material order scheduled",
+                $"{builderName} / {projectName} - {scheduledDisplay}",
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "material_order_scheduled",
+                    ["builderName"] = builderName,
+                    ["projectName"] = projectName,
+                    ["scaffoldingSystem"] = scaffoldingSystem,
+                    ["scheduled"] = scheduledDisplay,
+                    ["requestId"] = requestId,
+                });
+        }
+
+
         private async Task<int> SendDocumentPushAsync(
             IEnumerable<string> recipientUserIds,
             string title,
