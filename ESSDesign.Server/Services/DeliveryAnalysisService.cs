@@ -202,26 +202,26 @@ namespace ESSDesign.Server.Services
                 Always respond with valid JSON only, matching the exact schema requested.
                 """;
 
-            var userPrompt = $"""
+            var userPrompt = $$"""
                 Estimate timings for this scaffolding delivery from the ESS yard to site:
 
-                Departure: {departureTime} AEST, {dayOfWeek}
-                Site address: {request.SiteLocation}
-                Builder: {request.BuilderName}
-                Project: {request.ProjectName}
-                Scaffolding system: {request.ScaffoldingSystem}
-                Straight-line yard-to-site distance: {distanceKm:F1} km
-                Weather at site at departure: {weatherSummary}
+                Departure: {{departureTime}} AEST, {{dayOfWeek}}
+                Site address: {{request.SiteLocation}}
+                Builder: {{request.BuilderName}}
+                Project: {{request.ProjectName}}
+                Scaffolding system: {{request.ScaffoldingSystem}}
+                Straight-line yard-to-site distance: {{distanceKm:F1}} km
+                Weather at site at departure: {{weatherSummary}}
 
                 Return exactly this JSON:
-                {{
+                {
                   "travelToSiteMinutes": <realistic integer drive time yard to site including traffic>,
                   "unloadingMinutes": <realistic integer for unloading scaffolding materials on site>,
                   "returnTravelMinutes": <realistic integer drive time site back to yard>,
                   "trafficNote": "<one sentence traffic assessment for this day/time, max 90 chars>",
                   "weatherImpact": "<one sentence weather impact on the run, max 90 chars>",
                   "summaryText": "<2-3 sentences summarising the delivery run with key factors>"
-                }}
+                }
                 """;
 
             var payload = new
