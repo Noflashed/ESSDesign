@@ -4697,3 +4697,34 @@ button.stat-card {
     flex-direction: column;
   }
 }
+
+.site-registry-project-location {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.site-registry-map-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+}
+
+.site-registry-map-preview-label {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.site-registry-map-preview iframe {
+  width: 100%;
+  height: 220px;
+  border: 0;
+  border-radius: 12px;
+  background: #f3f5f8;
+}

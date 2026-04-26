@@ -341,6 +341,7 @@ function parseSafetyProjects(raw) {
                                 name: project.name.trim(),
                                 archived: Boolean(project.archived),
                                 archivedAt: project.archivedAt || null,
+                                siteLocation: (project.siteLocation || '').trim(),
                                 createdAt: project.createdAt || nowIso(),
                                 updatedAt: project.updatedAt || nowIso()
                             }))
@@ -560,8 +561,9 @@ export const safetyProjectsAPI = {
         return builders;
     },
 
-    createProject: async (builderId, projectName) => {
+    createProject: async (builderId, projectName, siteLocation = '') => {
         const cleanProject = projectName.trim();
+        const cleanLocation = siteLocation.trim();
         if (!builderId) {
             throw new Error('Builder is required');
         }
@@ -586,6 +588,7 @@ export const safetyProjectsAPI = {
             name: cleanProject,
             archived: false,
             archivedAt: null,
+            siteLocation: cleanLocation,
             createdAt: timestamp,
             updatedAt: timestamp
         });
@@ -616,8 +619,9 @@ export const safetyProjectsAPI = {
         return builders;
     },
 
-    renameProject: async (builderId, projectId, nextName) => {
+    renameProject: async (builderId, projectId, nextName, siteLocation = '') => {
         const clean = nextName.trim();
+        const cleanLocation = siteLocation.trim();
         if (!clean) {
             throw new Error('Project name is required');
         }
@@ -635,6 +639,7 @@ export const safetyProjectsAPI = {
             throw new Error('A project with that name already exists under this builder');
         }
         project.name = clean;
+        project.siteLocation = cleanLocation;
         project.updatedAt = nowIso();
         builder.projects.sort((a, b) => a.name.localeCompare(b.name));
         builder.updatedAt = nowIso();

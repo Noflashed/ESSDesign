@@ -5,8 +5,14 @@ function emptyProjectForm(initialBuilderId = '') {
     return {
         builderId: initialBuilderId,
         projectName: '',
+        siteLocation: '',
         editingProjectId: null
     };
+}
+
+function mapPreviewUrl(location) {
+    if (!location) return '';
+    return `https://www.google.com/maps?q=${encodeURIComponent(location)}&output=embed`;
 }
 
 export default function SiteInformationPage() {
@@ -68,6 +74,7 @@ export default function SiteInformationPage() {
         setProjectForm({
             builderId,
             projectName: project.name,
+            siteLocation: project.siteLocation || '',
             editingProjectId: project.id
         });
         setShowProjectModal(true);
@@ -89,8 +96,8 @@ export default function SiteInformationPage() {
         setError('');
         try {
             const nextBuilders = projectForm.editingProjectId
-                ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName)
-                : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName);
+                ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation)
+                : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation);
             setBuilders(nextBuilders);
             setSelectedBuilderId(projectForm.builderId);
             setShowProjectModal(false);
@@ -252,6 +259,9 @@ export default function SiteInformationPage() {
                                                     <div className="module-item-sub">
                                                         {selectedBuilder.name}{project.archived ? ' • Archived' : ''}
                                                     </div>
+                                                    {project.siteLocation ? (
+                                                        <div className="site-registry-project-location">{project.siteLocation}</div>
+                                                    ) : null}
                                                 </div>
                                                 <div className="module-list-actions">
                                                     <button className="module-secondary-btn" onClick={() => openEditProject(selectedBuilder.id, project)}>Edit</button>
@@ -287,8 +297,23 @@ export default function SiteInformationPage() {
                             </div>
                             <div className="module-field">
                                 <label>Project</label>
-                                <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="65 Martin Place" />
+                                <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Crown Sydney Hotel Resort" />
                             </div>
+                            <div className="module-field">
+                                <label>Site Geographic Location</label>
+                                <input value={projectForm.siteLocation} onChange={e => setProjectForm(prev => ({ ...prev, siteLocation: e.target.value }))} placeholder="1 Barangaroo Ave, Barangaroo NSW 2000" />
+                            </div>
+                            {projectForm.siteLocation.trim() ? (
+                                <div className="site-registry-map-preview">
+                                    <div className="site-registry-map-preview-label">Map Preview</div>
+                                    <iframe
+                                        title="Site location preview"
+                                        src={mapPreviewUrl(projectForm.siteLocation.trim())}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer-when-downgrade"
+                                    />
+                                </div>
+                            ) : null}
                             <button type="submit" className="module-primary-btn" disabled={saving}>
                                 {saving ? 'Saving...' : 'Save Project'}
                             </button>
