@@ -4,10 +4,11 @@ const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
     { key: 'safety', label: 'ESS Safety' },
-    { key: 'material-ordering', label: 'ESS Material Ordering', children: [
+    { key: 'material-ordering', label: 'ESS Transport', children: [
         { key: 'material-ordering-new', label: 'New Material Order' },
         { key: 'material-ordering-active', label: 'Scheduled Orders' },
-        { key: 'material-ordering-archived', label: 'Archived Orders' }
+        { key: 'material-ordering-archived', label: 'Archived Orders' },
+        { key: 'truck-schedule', label: 'Truck Schedule' }
     ]},
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
@@ -43,7 +44,7 @@ export default function WebNavDrawer({
             return currentPage === 'rostering' || currentPage === 'rostering-tree';
         }
         if (itemKey === 'material-ordering') {
-            return currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+            return currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule';
         }
         return currentPage === itemKey;
     };

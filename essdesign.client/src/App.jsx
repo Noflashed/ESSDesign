@@ -8,6 +8,7 @@ import PDFViewer from './components/PDFViewer';
 import WebNavDrawer from './components/WebNavDrawer';
 import ESSSafetyPage from './components/ESSSafetyPage';
 import MaterialOrderingPage from './components/MaterialOrderingPage';
+import TruckSchedulePage from './components/TruckSchedulePage';
 import ESSRosteringPage from './components/ESSRosteringPage';
 import EmployeesPage from './components/EmployeesPage';
 import WebSafetySwmsPage from './components/WebSafetySwmsPage';
@@ -184,13 +185,13 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
-    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule';
     return currentPage === itemKey;
 }
 
@@ -476,12 +477,12 @@ function App() {
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
         : isTransportManagement
-        ? [{ key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }] }]
+        ? [{ key: 'material-ordering', label: 'ESS Transport', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }, { key: 'truck-schedule', label: 'Truck Schedule' }] }]
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
-            { key: 'material-ordering', label: 'ESS Material Ordering', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }] },
+            { key: 'material-ordering', label: 'ESS Transport', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }, { key: 'truck-schedule', label: 'Truck Schedule' }] },
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
@@ -540,7 +541,7 @@ function App() {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : isTransportManagement
-            ? ((page === 'material-ordering' || page === 'material-ordering-new' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'settings') ? page : 'material-ordering-active')
+            ? ((page === 'material-ordering' || page === 'material-ordering-new' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'truck-schedule' || page === 'settings') ? page : 'material-ordering-active')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -1117,6 +1118,9 @@ function App() {
         }
         if (currentPage === 'material-ordering-archived') {
             return <MaterialOrderingPage user={user} view="archived" />;
+        }
+        if (currentPage === 'truck-schedule') {
+            return <TruckSchedulePage />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;

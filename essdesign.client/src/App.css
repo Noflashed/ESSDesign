@@ -4408,3 +4408,292 @@ button.stat-card {
     color: var(--text-secondary);
     opacity: 0.6;
 }
+
+.truck-schedule-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px;
+}
+
+.truck-schedule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.truck-schedule-header h1 {
+  margin: 0;
+  color: #102b5c;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.truck-schedule-header p {
+  margin: 6px 0 0;
+  color: #5f6f8d;
+}
+
+.truck-schedule-filter-button {
+  border: 1px solid #dde4ee;
+  background: #fff;
+  color: #102b5c;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.truck-schedule-card {
+  background: #fff;
+  border: 1px solid #e7edf5;
+  border-radius: 28px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(16, 43, 92, 0.06);
+}
+
+.truck-schedule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.truck-schedule-eyebrow {
+  color: #5d6e8b;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.truck-schedule-date {
+  margin-top: 6px;
+  color: #102b5c;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.truck-schedule-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.truck-schedule-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #5f6f8d;
+  font-weight: 600;
+}
+
+.truck-schedule-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.truck-schedule-legend i.booked { background: #193a72; }
+.truck-schedule-legend i.buffer { background: #c2c8d3; }
+
+.truck-schedule-error {
+  margin-top: 16px;
+  color: #b42318;
+  font-weight: 700;
+}
+
+.truck-schedule-board-wrap {
+  overflow-x: auto;
+  padding-top: 22px;
+}
+
+.truck-schedule-board {
+  min-width: 1080px;
+}
+
+.truck-schedule-time-header {
+  display: flex;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5eaf2;
+}
+
+.truck-schedule-time-label {
+  width: 140px;
+  color: #102b5c;
+  font-weight: 800;
+}
+
+.truck-schedule-time-markers {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  color: #102b5c;
+  font-weight: 800;
+}
+
+.truck-schedule-grid {
+  margin-top: 12px;
+  border: 1px solid #e5eaf2;
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.truck-schedule-row {
+  display: flex;
+  min-height: 176px;
+  background: #fff;
+}
+
+.truck-schedule-row + .truck-schedule-row {
+  border-top: 1px solid #e5eaf2;
+}
+
+.truck-schedule-truck-meta {
+  width: 140px;
+  padding: 20px 16px;
+  border-right: 1px solid #e5eaf2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.truck-schedule-truck-icon {
+  font-size: 2rem;
+}
+
+.truck-schedule-truck-rego {
+  color: #102b5c;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.truck-schedule-truck-type {
+  color: #5f6f8d;
+  font-weight: 600;
+}
+
+.truck-schedule-slots {
+  position: relative;
+  flex: 1;
+  padding: 14px 12px;
+}
+
+.truck-schedule-grid-lines {
+  position: absolute;
+  inset: 0 12px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.truck-schedule-grid-lines span {
+  width: 1px;
+  background: #eef2f7;
+}
+
+.truck-schedule-slot-row {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.truck-schedule-slot {
+  min-height: 120px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  position: relative;
+  cursor: default;
+}
+
+.truck-schedule-slot.clickable {
+  cursor: pointer;
+}
+
+.truck-schedule-slot.booked {
+  background: #193a72;
+  color: #fff;
+}
+
+.truck-schedule-slot.buffer {
+  background: #fafbfd;
+  border: 1px solid #edf1f6;
+}
+
+.truck-schedule-slot-time {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.truck-schedule-slot.buffer .truck-schedule-slot-time,
+.truck-schedule-slot-title {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.truck-schedule-slot-subtitle {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #d4e2ff;
+}
+
+.truck-schedule-help-card {
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #e5eaf2;
+  border-radius: 20px;
+  background: #fbfcfe;
+  padding: 18px;
+}
+
+.truck-schedule-help-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #102b5c;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.truck-schedule-help-card strong {
+  display: block;
+  color: #102b5c;
+  font-size: 1.05rem;
+}
+
+.truck-schedule-help-card p {
+  margin: 6px 0 0;
+  color: #5f6f8d;
+}
+
+@media (max-width: 960px) {
+  .truck-schedule-page {
+    padding: 20px;
+  }
+
+  .truck-schedule-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
