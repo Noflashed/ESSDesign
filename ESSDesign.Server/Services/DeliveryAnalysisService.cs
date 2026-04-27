@@ -171,6 +171,40 @@ namespace ESSDesign.Server.Services
             _ => "Cloudy",
         };
 
+        private async Task<(double DistanceKm, int BaseDriveMinutes)?> GetOsrmRouteAsync(
+            double fromLat, double fromLon, double toLat, double toLon, HttpClient client)
+        {
+            try
+            {
+                var url = $"https://router.project-osrm.org/route/v1/driving/{fromLon:F6},{fromLat:F6};{toLon:F6},{toLat:F6}?overview=false";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("User-Agent", "ESSDesignApp/1.0 (nathanb@erectsafe.com.au)");
+
+                var response = await client.SendAsync(request);
+                if (!response.IsSuccessStatusCode) return null;
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+
+                if (!root.TryGetProperty("code", out var codeEl) || codeEl.GetString() != "Ok") return null;
+                if (!root.TryGetProperty("routes", out var routesEl)) return null;
+
+                var routes = routesEl.EnumerateArray().ToList();
+                if (routes.Count == 0) return null;
+
+                var route = routes[0];
+                var distanceM = route.GetProperty("distance").GetDouble();
+                var durationS = route.GetProperty("duration").GetDouble();
+
+                return (Math.Round(distanceM / 1000.0, 1), (int)Math.Round(durationS / 60.0));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OSRM routing failed");
+                return null;
+            }
+        }
+
         private static string AddMinutesFormatted(string date, int hour, int minute, int addMinutes)
         {
             try
@@ -195,14 +229,28 @@ namespace ESSDesign.Server.Services
 
             var httpClient = _httpClientFactory.CreateClient();
 
+            // Geocode the site and fetch routing + weather in parallel
             var siteCoords = await GeocodeAsync(request.SiteLocation, httpClient);
-            var distanceKm = siteCoords.HasValue
-                ? HaversineKm(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon)
-                : 0;
 
-            var weatherSummary = siteCoords.HasValue
-                ? await GetWeatherSummaryAsync(siteCoords.Value.Lat, siteCoords.Value.Lon, request.ScheduledDate, request.ScheduledHour, httpClient)
-                : "Weather data unavailable (site could not be geocoded)";
+            (double DistanceKm, int BaseDriveMinutes)? osrmRoute = null;
+            string weatherSummary;
+
+            if (siteCoords.HasValue)
+            {
+                var routeTask = GetOsrmRouteAsync(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon, httpClient);
+                var weatherTask = GetWeatherSummaryAsync(siteCoords.Value.Lat, siteCoords.Value.Lon, request.ScheduledDate, request.ScheduledHour, httpClient);
+                await Task.WhenAll(routeTask, weatherTask);
+                osrmRoute = routeTask.Result;
+                weatherSummary = weatherTask.Result;
+            }
+            else
+            {
+                weatherSummary = "Weather data unavailable (site could not be geocoded)";
+            }
+
+            // Use road distance from OSRM; fall back to straight-line if OSRM unavailable
+            var displayDistanceKm = osrmRoute?.DistanceKm
+                ?? (siteCoords.HasValue ? HaversineKm(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon) : 0);
 
             var dayOfWeek = "Unknown";
             if (DateTime.TryParseExact(request.ScheduledDate, "yyyy-MM-dd",
@@ -214,38 +262,47 @@ namespace ESSDesign.Server.Services
 
             var departureTime = $"{request.ScheduledHour:D2}:{request.ScheduledMinute:D2}";
 
+            // Build routing context line — tells the AI exactly what the router measured
+            var routingContext = osrmRoute.HasValue
+                ? $"Road distance (OSM routing): {osrmRoute.Value.DistanceKm:F1} km | Free-flow drive time (no traffic): {osrmRoute.Value.BaseDriveMinutes} min"
+                : $"Straight-line distance (routing unavailable): {displayDistanceKm:F1} km";
+
             var systemPrompt = """
                 You are a delivery logistics analyst for ESS (Erect Safe Scaffolding), a scaffolding company based in Sydney, Australia.
                 The ESS delivery yard is at 130 Gilba Road, Girraween NSW 2145.
 
-                You provide realistic delivery timing estimates for scaffolding material runs in Greater Sydney, factoring in:
-                - Road distance and real-world driving conditions on Sydney roads
-                - Time-of-day and day-of-week traffic patterns (peak hours, school zones, highway vs suburban)
-                - Weather impact on driving safety and unloading efficiency
-                - Scaffolding system complexity for unloading time
+                You are given the actual road distance and free-flow drive time from an OSM router.
+                Your job is to apply realistic Sydney-specific traffic and weather adjustments to produce precise minute-level timing.
 
-                Always respond with valid JSON only, matching the exact schema requested.
+                Rules:
+                - travelToSiteMinutes must be >= the free-flow drive time provided. Add traffic delay on top of it.
+                - returnTravelMinutes should account for the time of day when the driver will be heading back.
+                - Do not round to the nearest 5 or 10; give the most precise estimate you can.
+                - Always respond with valid JSON only.
                 """;
 
             var userPrompt = $$"""
-                Estimate timings for this scaffolding delivery from the ESS yard to site:
+                Calculate exact timings for this scaffolding delivery:
 
                 Departure: {{departureTime}} AEST, {{dayOfWeek}}
                 Site address: {{request.SiteLocation}}
                 Builder: {{request.BuilderName}}
                 Project: {{request.ProjectName}}
                 Scaffolding system: {{request.ScaffoldingSystem}}
-                Straight-line yard-to-site distance: {{distanceKm:F1}} km
-                Weather at site at departure: {{weatherSummary}}
+                {{routingContext}}
+                Weather at site at departure time: {{weatherSummary}}
+
+                Using the road distance and free-flow time above as your baseline, apply realistic traffic
+                adjustments for {{dayOfWeek}} at {{departureTime}} on Sydney roads.
 
                 Return exactly this JSON:
                 {
-                  "travelToSiteMinutes": <realistic integer drive time yard to site including traffic>,
-                  "unloadingMinutes": <realistic integer for unloading scaffolding materials on site>,
-                  "returnTravelMinutes": <realistic integer drive time site back to yard>,
-                  "trafficNote": "<one sentence traffic assessment for this day/time, max 90 chars>",
-                  "weatherImpact": "<one sentence weather impact on the run, max 90 chars>",
-                  "summaryText": "<2-3 sentences summarising the delivery run with key factors>"
+                  "travelToSiteMinutes": <integer — free-flow time plus expected traffic delay>,
+                  "unloadingMinutes": <integer — realistic unload time for this scaffolding system>,
+                  "returnTravelMinutes": <integer — return trip adjusted for time of day>,
+                  "trafficNote": "<one sentence on traffic conditions for this route/time, max 90 chars>",
+                  "weatherImpact": "<one sentence on weather impact on this run, max 90 chars>",
+                  "summaryText": "<2-3 sentences: exact route context, timing rationale, and any risk factors>"
                 }
                 """;
 
@@ -301,7 +358,7 @@ namespace ESSDesign.Server.Services
                 TrafficNote = trafficNote,
                 WeatherImpact = weatherImpact,
                 SummaryText = summaryText,
-                DistanceKm = Math.Round(distanceKm, 1),
+                DistanceKm = Math.Round(displayDistanceKm, 1),
                 EstimatedArrival = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite),
                 EstimatedUnloadComplete = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading),
                 EstimatedReturn = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading + returnTravel),
