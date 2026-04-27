@@ -32,6 +32,31 @@ namespace ESSDesign.Server.Services
             public string EstimatedReturn { get; set; } = string.Empty;
         }
 
+        public sealed class TimeSlotRecommendationRequest
+        {
+            public string SiteLocation { get; set; } = string.Empty;
+            public string ScaffoldingSystem { get; set; } = string.Empty;
+            public string ScheduledDate { get; set; } = string.Empty;
+            public List<ExistingDelivery> ExistingDeliveries { get; set; } = new();
+        }
+
+        public sealed class ExistingDelivery
+        {
+            public string TruckId { get; set; } = string.Empty;
+            public string TruckLabel { get; set; } = string.Empty;
+            public int Hour { get; set; }
+            public int Minute { get; set; }
+        }
+
+        public sealed class TimeSlotRecommendationResult
+        {
+            public string RecommendedTruckId { get; set; } = string.Empty;
+            public string RecommendedTruckLabel { get; set; } = string.Empty;
+            public int RecommendedHour { get; set; }
+            public int RecommendedMinute { get; set; }
+            public string Reason { get; set; } = string.Empty;
+        }
+
         // Girraween yard coordinates (hardcoded — yard is always here)
         private const double YardLat = -33.8122;
         private const double YardLon = 150.9354;
@@ -280,6 +305,143 @@ namespace ESSDesign.Server.Services
                 EstimatedArrival = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite),
                 EstimatedUnloadComplete = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading),
                 EstimatedReturn = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading + returnTravel),
+            };
+        }
+
+        public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)
+        {
+            var apiKey = _configuration["OpenAI:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new InvalidOperationException("OpenAI API key is not configured.");
+
+            var model = _configuration["OpenAI:Model"] ?? "gpt-4o-mini";
+            var httpClient = _httpClientFactory.CreateClient();
+
+            var siteCoords = string.IsNullOrWhiteSpace(request.SiteLocation)
+                ? (ValueTuple<double, double>?)null
+                : await GeocodeAsync(request.SiteLocation, httpClient);
+
+            var distanceKm = siteCoords.HasValue
+                ? HaversineKm(YardLat, YardLon, siteCoords.Value.Item1, siteCoords.Value.Item2)
+                : 0;
+
+            var dayOfWeek = "Unknown";
+            if (DateTime.TryParseExact(request.ScheduledDate, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var scheduledDt))
+            {
+                dayOfWeek = scheduledDt.DayOfWeek.ToString();
+            }
+
+            var weatherSummary = siteCoords.HasValue
+                ? await GetWeatherSummaryAsync(siteCoords.Value.Item1, siteCoords.Value.Item2, request.ScheduledDate, 8, httpClient)
+                : "Weather data unavailable";
+
+            var trucks = new[] { ("truck-1", "ESS01"), ("truck-2", "ESS02"), ("truck-3", "ESS03") };
+            var scheduleLines = trucks.Select(truck =>
+            {
+                var deliveries = request.ExistingDeliveries
+                    .Where(d => d.TruckId == truck.Item1)
+                    .OrderBy(d => d.Hour).ThenBy(d => d.Minute)
+                    .Select(d =>
+                    {
+                        var h = d.Hour % 12 == 0 ? 12 : d.Hour % 12;
+                        var suffix = d.Hour >= 12 ? "PM" : "AM";
+                        return $"{h}:{d.Minute:D2} {suffix}";
+                    });
+                var list = string.Join(", ", deliveries);
+                return string.IsNullOrEmpty(list)
+                    ? $"  {truck.Item2}: (no deliveries booked)"
+                    : $"  {truck.Item2}: {list}";
+            });
+            var scheduleText = string.Join("\n", scheduleLines);
+
+            var systemPrompt = """
+                You are a delivery logistics analyst for ESS (Erect Safe Scaffolding), a scaffolding company in Girraween, Sydney.
+                Recommend the best available time slot for a new scaffolding delivery given the existing schedule.
+                Always respond with valid JSON only.
+                """;
+
+            var userPrompt = $"""
+                Recommend the best time slot for a new scaffolding delivery on {request.ScheduledDate} ({dayOfWeek}).
+
+                Site: {(string.IsNullOrWhiteSpace(request.SiteLocation) ? "Unknown" : request.SiteLocation)}
+                Scaffolding system: {(string.IsNullOrWhiteSpace(request.ScaffoldingSystem) ? "Standard" : request.ScaffoldingSystem)}
+                Straight-line distance from yard: {distanceKm:F1} km
+                Weather (morning): {weatherSummary}
+                Typical delivery duration: 90 minutes (yard to site, unload, return)
+
+                Today's truck schedule (each booking occupies 90 minutes):
+                {scheduleText}
+
+                Choose a slot that:
+                - Does not overlap any existing booking (leave 90-min gap)
+                - Avoids peak-hour Sydney traffic where practical (7–9 AM, 4–6 PM)
+                - Starts no later than 14:30 so the truck returns by 16:00
+                - Prefers the truck with the most free time today
+
+                Return exactly this JSON:
+                {{
+                  "recommendedTruckId": "truck-1" or "truck-2" or "truck-3",
+                  "recommendedTruckLabel": "ESS01" or "ESS02" or "ESS03",
+                  "recommendedHour": <integer 6–14>,
+                  "recommendedMinute": <0, 15, 30, or 45>,
+                  "reason": "<one sentence, max 90 chars>"
+                }}
+                """;
+
+            var payload = new
+            {
+                model,
+                response_format = new { type = "json_object" },
+                messages = new[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt },
+                }
+            };
+
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
+            };
+
+            var response = await httpClient.SendAsync(httpRequest);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException($"OpenAI returned {response.StatusCode}: {responseBody}");
+
+            var responseJson = JsonSerializer.Deserialize<JsonElement>(responseBody, _jsonOptions);
+            var content = responseJson
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(content))
+                throw new InvalidOperationException("No content in OpenAI response.");
+
+            var analysisJson = JsonSerializer.Deserialize<JsonElement>(content, _jsonOptions);
+
+            var truckId = analysisJson.TryGetProperty("recommendedTruckId", out var tidEl) ? tidEl.GetString() ?? "truck-1" : "truck-1";
+            var truckLabel = analysisJson.TryGetProperty("recommendedTruckLabel", out var tlEl) ? tlEl.GetString() ?? "ESS01" : "ESS01";
+            var recHour = analysisJson.TryGetProperty("recommendedHour", out var hourEl) ? hourEl.GetInt32() : 8;
+            var recMinute = analysisJson.TryGetProperty("recommendedMinute", out var minEl) ? minEl.GetInt32() : 0;
+            var reason = analysisJson.TryGetProperty("reason", out var reasonEl) ? reasonEl.GetString() ?? string.Empty : string.Empty;
+
+            recHour = Math.Max(6, Math.Min(14, recHour));
+            recMinute = recMinute is 0 or 15 or 30 or 45 ? recMinute : 0;
+
+            return new TimeSlotRecommendationResult
+            {
+                RecommendedTruckId = truckId,
+                RecommendedTruckLabel = truckLabel,
+                RecommendedHour = recHour,
+                RecommendedMinute = recMinute,
+                Reason = reason,
             };
         }
     }

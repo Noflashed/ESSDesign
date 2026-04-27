@@ -35,13 +35,37 @@ namespace ESSDesign.Server.Controllers
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("not configured"))
             {
-                _logger.LogError(ex, "Anthropic API key not configured");
+                _logger.LogError(ex, "OpenAI API key not configured");
                 return StatusCode(503, new { error = "AI analysis service is not configured." });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Delivery analysis failed for site {Site}", request.SiteLocation);
                 return StatusCode(500, new { error = "Analysis failed. Please try again." });
+            }
+        }
+
+        [HttpPost("recommend-time-slot")]
+        public async Task<IActionResult> RecommendTimeSlot(
+            [FromBody] DeliveryAnalysisService.TimeSlotRecommendationRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.ScheduledDate))
+                return BadRequest(new { error = "scheduledDate is required." });
+
+            try
+            {
+                var result = await _deliveryAnalysisService.RecommendTimeSlotAsync(request);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("not configured"))
+            {
+                _logger.LogError(ex, "OpenAI API key not configured");
+                return StatusCode(503, new { error = "AI analysis service is not configured." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Time slot recommendation failed");
+                return StatusCode(500, new { error = "Recommendation failed. Please try again." });
             }
         }
     }
