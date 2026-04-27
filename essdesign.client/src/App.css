@@ -4414,17 +4414,144 @@ button.stat-card {
 .ts-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 28px;
-  max-width: 1400px;
+  height: 100%;
+  background: #f4f7fb;
+  overflow: hidden;
 }
 
-/* Page header */
-.ts-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.ts-page-title  { margin: 0; color: #102b5c; font-size: 2rem; font-weight: 800; }
-.ts-page-subtitle { margin: 6px 0 0; color: #5f6f8d; }
+/* ── Header bar ──────────────────────────────────────────────────────────── */
+.ts-hbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e5eaf2;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.ts-hbar-left  { display: flex; align-items: center; gap: 9px; flex: 1; color: #102b5c; }
+.ts-hbar-title { margin: 0; color: #102b5c; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.3px; }
+.ts-hbar-mid   { display: flex; align-items: center; gap: 6px; }
+.ts-hbar-right { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; }
+.ts-hbar-nav {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  border: 1px solid #e5eaf2;
+  background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: #5f6f8d;
+  transition: background 0.15s;
+}
+.ts-hbar-nav:hover { background: #f4f7fb; }
+.ts-hbar-date {
+  font-size: 0.88rem; font-weight: 700; color: #102b5c;
+  min-width: 170px; text-align: center;
+}
+.ts-today-btn {
+  height: 28px; padding: 0 13px;
+  border-radius: 7px;
+  border: 1px solid #e5eaf2;
+  background: #fff;
+  font-size: 0.78rem; font-weight: 700; color: #5f6f8d;
+  cursor: pointer; transition: all 0.15s;
+}
+.ts-today-btn:hover   { background: #f4f7fb; }
+.ts-today-active      { background: #102b5c !important; color: #fff !important; border-color: #102b5c !important; }
+.ts-view-chip {
+  font-size: 0.76rem; font-weight: 700; color: #5f6f8d;
+  padding: 4px 10px; border-radius: 7px;
+  border: 1px solid #e5eaf2; background: #f9fafc;
+}
+.ts-new-order-btn {
+  height: 32px; padding: 0 16px;
+  border-radius: 8px; border: none;
+  background: #102b5c; color: #fff;
+  font-size: 0.8rem; font-weight: 800;
+  cursor: pointer; transition: background 0.15s;
+}
+.ts-new-order-btn:hover { background: #1a3d78; }
+.ts-new-order-open { background: #f47c20 !important; }
+.ts-new-order-open:hover { background: #e06a10 !important; }
 
-/* Card */
+/* ── Board ───────────────────────────────────────────────────────────────── */
+.ts-board-wrap {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  background: #fff;
+}
+.ts-board { min-width: 1080px; background: #fff; }
+.ts-board-head {
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  border-bottom: 2px solid #e5eaf2;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+}
+.ts-lane-col {
+  width: 148px;
+  flex-shrink: 0;
+  border-right: 1px solid #e5eaf2;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.ts-lane-col-head {
+  font-size: 0.68rem; font-weight: 800;
+  color: #7181a0; text-transform: uppercase; letter-spacing: 0.6px;
+}
+.ts-board-axis { flex: 1; position: relative; }
+.ts-axis-label {
+  position: absolute;
+  font-size: 0.66rem; font-weight: 700; color: #7181a0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ts-board-lane {
+  display: flex;
+  align-items: stretch;
+  height: 82px;
+  border-bottom: 1px solid #e5eaf2;
+}
+.ts-truck-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: #f4f7fb;
+  border-radius: 9px;
+  padding: 6px 10px;
+  width: 100%;
+  color: #102b5c;
+}
+.ts-truck-rego { font-size: 0.88rem; font-weight: 800; color: #102b5c; }
+.ts-lane-cells {
+  flex: 1;
+  position: relative;
+  background: #fafbfd;
+}
+.ts-vline {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: #edf0f7;
+  pointer-events: none;
+}
+
+/* ── Legend ──────────────────────────────────────────────────────────────── */
+.ts-board-legend {
+  display: flex; align-items: center; gap: 20px;
+  padding: 10px 20px;
+  border-top: 1px solid #e5eaf2;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* Legacy card classes (used by modal internals) */
 .ts-card {
   background: #fff;
   border: 1px solid #e7edf5;

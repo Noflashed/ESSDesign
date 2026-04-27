@@ -18,6 +18,8 @@ const TRUCK_LANES = [
   { id: 'truck-2', rego: 'ESS02' },
   { id: 'truck-3', rego: 'ESS03' },
 ];
+const BOARD_HOURS = [6, 8, 10, 12, 14, 16];
+const BOARD_HOUR_LINES = [7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -341,7 +343,10 @@ export default function TruckSchedulePage({ initialRequestId } = {}) {
   const [mapContainerSize, setMapContainerSize] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [showPending, setShowPending] = useState(false);
   const openedInitialRef = useRef(false);
+  const goToday = useCallback(() => setSelectedDate(startOfDay(new Date())), []);
+  const isToday = isSameDay(selectedDate, new Date());
 
   // Load all active requests once
   useEffect(() => {
@@ -484,109 +489,136 @@ export default function TruckSchedulePage({ initialRequestId } = {}) {
 
   return (
     <div className="ts-page">
-      {/* Page header */}
-      <div className="ts-page-header">
-        <div>
-          <h1 className="ts-page-title">Schedule Delivery</h1>
-          <p className="ts-page-subtitle">Live truck availability — 6:00 AM to 4:00 PM</p>
+
+      {/* ── Header Bar ──────────────────────────────────────────────────── */}
+      <div className="ts-hbar">
+        <div className="ts-hbar-left">
+          <TruckSvg />
+          <h1 className="ts-hbar-title">Truck Schedule</h1>
+        </div>
+        <div className="ts-hbar-mid">
+          <button className="ts-hbar-nav" onClick={navPrev}><ChevronLeft /></button>
+          <span className="ts-hbar-date">
+            {selectedDate.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </span>
+          <button className="ts-hbar-nav" onClick={navNext}><ChevronRight /></button>
+          <button className={`ts-today-btn${isToday ? ' ts-today-active' : ''}`} onClick={goToday}>Today</button>
+        </div>
+        <div className="ts-hbar-right">
+          <span className="ts-view-chip">Day View</span>
+          <button
+            className={`ts-new-order-btn${showPending ? ' ts-new-order-open' : ''}`}
+            onClick={() => setShowPending(p => !p)}
+          >+ New Order</button>
         </div>
       </div>
 
-      {/* Schedule card */}
-      <div className="ts-card">
-        <div className="ts-card-top">
-          <span className="ts-eyebrow">LIVE TRUCK AVAILABILITY</span>
-          <div className="ts-date-nav">
-            <button className="ts-date-nav-btn" onClick={navPrev}><ChevronLeft /></button>
-            <span className="ts-date-nav-label">{formatScheduleHeadline(selectedDate)}</span>
-            <button className="ts-date-nav-btn" onClick={navNext}><ChevronRight /></button>
-          </div>
-          <div className="ts-legend">
-            <LegendDot color={BOOKED_BG} label="Scheduled Delivery" />
-          </div>
-        </div>
+      {error ? <div className="ts-error" style={{ padding: '8px 24px 0' }}>{error}</div> : null}
 
-        {error ? <div className="ts-error">{error}</div> : null}
-
-        {/* Board */}
-        <div className="ts-board-wrap">
-          <div className="ts-board">
-            <div className="ts-time-header">
-              <div className="ts-time-label">TIME</div>
-              <div className="ts-time-markers">{TIME_MARKERS.map(m => <span key={m}>{m}</span>)}</div>
-            </div>
-            <div className="ts-grid">
-              {TRUCK_LANES.map((lane, laneIdx) => (
-                <div key={lane.id} className={`ts-row${laneIdx < TRUCK_LANES.length - 1 ? ' ts-row-border' : ''}`}>
-                  <div className="ts-truck-meta">
-                    <div className="ts-truck-chip">
-                      <TruckSvg />
-                      <span className="ts-truck-rego">{lane.rego}</span>
-                    </div>
-                  </div>
-                  <div className="ts-slots">
-                    <div className="ts-grid-lines">
-                      {Array.from({ length: 5 }).map((_, i) => <div key={i} className="ts-grid-line" />)}
-                    </div>
-                    {loadingRequests && laneIdx === 0 ? (
-                      <div className="ts-slots-loading">Loading schedule…</div>
-                    ) : (eventsByTruck[laneIdx] || []).map(ev => (
-                      <button
-                        key={ev.id}
-                        className="ts-block"
-                        style={{ left: blockLeftPct(ev.scheduledHour, ev.scheduledMinute), width: BLOCK_WIDTH_PCT }}
-                        onClick={() => openRequestModal(ev.id)}
-                      >
-                        <div className="ts-block-header">
-                          <span className="ts-block-time">{formatTimeChip(ev.scheduledHour, ev.scheduledMinute)}</span>
-                          <span className="ts-block-title">{ev.builderName}</span>
-                          {ev.projectName ? <span className="ts-block-subtitle">{ev.projectName}</span> : null}
-                        </div>
-                        <div className="ts-block-phases">
-                          <div className="ts-block-phase" style={{ flex: BLOCK_TRANSIT_MINUTES, background: '#F47C20' }}>
-                            <span>To site</span><strong>{BLOCK_TRANSIT_MINUTES}m</strong>
-                          </div>
-                          <div className="ts-block-phase" style={{ flex: BLOCK_LOADING_MINUTES, background: '#3B82F6' }}>
-                            <span>Unload</span><strong>{BLOCK_LOADING_MINUTES}m</strong>
-                          </div>
-                          <div className="ts-block-phase" style={{ flex: BLOCK_RETURN_MINUTES, background: '#22C55E' }}>
-                            <span>Return</span><strong>{BLOCK_RETURN_MINUTES}m</strong>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Pending orders panel */}
-      {pendingRequests.length > 0 ? (
+      {/* ── Pending Orders ───────────────────────────────────────────────── */}
+      {showPending ? (
         <div className="ts-pending-section">
           <div className="ts-pending-header">
             <span className="ts-eyebrow">UNSCHEDULED ORDERS</span>
-            <span className="ts-pending-count">{pendingRequests.length}</span>
+            {pendingRequests.length > 0 ? <span className="ts-pending-count">{pendingRequests.length}</span> : null}
           </div>
-          <div className="ts-pending-list">
-            {pendingRequests.map(r => (
-              <div key={r.id} className="ts-pending-card">
-                <div className="ts-pending-card-body">
-                  <span className="ts-pending-builder">{r.builderName}</span>
-                  <span className="ts-pending-project">{r.projectName}</span>
+          {pendingRequests.length === 0 ? (
+            <p style={{ margin: 0, color: '#7181a0', fontSize: '0.9rem' }}>All orders have been scheduled.</p>
+          ) : (
+            <div className="ts-pending-list">
+              {pendingRequests.map(r => (
+                <div key={r.id} className="ts-pending-card">
+                  <div className="ts-pending-card-body">
+                    <span className="ts-pending-builder">{r.builderName}</span>
+                    <span className="ts-pending-project">{r.projectName}</span>
+                  </div>
+                  <button className="ts-pending-schedule-btn" onClick={() => { setShowPending(false); openRequestModal(r.id); }}>
+                    Schedule →
+                  </button>
                 </div>
-                <button className="ts-pending-schedule-btn" onClick={() => openRequestModal(r.id)}>
-                  Schedule →
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
 
-      {/* Scheduling modal */}
+      {/* ── Schedule Board ───────────────────────────────────────────────── */}
+      <div className="ts-board-wrap">
+        <div className="ts-board">
+
+          {/* Time axis header */}
+          <div className="ts-board-head">
+            <div className="ts-lane-col ts-lane-col-head">Truck</div>
+            <div className="ts-board-axis">
+              {BOARD_HOURS.map(h => (
+                <span key={h} className="ts-axis-label" style={{ left: blockLeftPct(h, 0) }}>
+                  {h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Truck lanes */}
+          {TRUCK_LANES.map((lane, laneIdx) => (
+            <div key={lane.id} className="ts-board-lane">
+              <div className="ts-lane-col">
+                <div className="ts-truck-chip">
+                  <TruckSvg />
+                  <span className="ts-truck-rego">{lane.rego}</span>
+                </div>
+              </div>
+              <div className="ts-lane-cells">
+                {BOARD_HOUR_LINES.map(h => (
+                  <div key={h} className="ts-vline" style={{ left: blockLeftPct(h, 0) }} />
+                ))}
+                {loadingRequests && laneIdx === 0 ? (
+                  <div className="ts-slots-loading">Loading schedule…</div>
+                ) : (eventsByTruck[laneIdx] || []).map(ev => {
+                  const endMins = ev.scheduledHour * 60 + ev.scheduledMinute + SCHEDULE_BLOCK_MINUTES;
+                  return (
+                    <button
+                      key={ev.id}
+                      className="ts-block"
+                      style={{ left: blockLeftPct(ev.scheduledHour, ev.scheduledMinute), width: BLOCK_WIDTH_PCT }}
+                      onClick={() => openRequestModal(ev.id)}
+                    >
+                      <div className="ts-block-header">
+                        <span className="ts-block-time">
+                          {formatTimeChip(ev.scheduledHour, ev.scheduledMinute)} – {formatTimeChip(Math.floor(endMins / 60), endMins % 60)}
+                        </span>
+                        <span className="ts-block-title">{ev.builderName}</span>
+                        {ev.projectName ? <span className="ts-block-subtitle">{ev.projectName}</span> : null}
+                      </div>
+                      <div className="ts-block-phases">
+                        <div className="ts-block-phase" style={{ flex: BLOCK_TRANSIT_MINUTES, background: '#F47C20' }}>
+                          <span>To site</span><strong>{BLOCK_TRANSIT_MINUTES}m</strong>
+                        </div>
+                        <div className="ts-block-phase" style={{ flex: BLOCK_LOADING_MINUTES, background: '#3B82F6' }}>
+                          <span>Unload</span><strong>{BLOCK_LOADING_MINUTES}m</strong>
+                        </div>
+                        <div className="ts-block-phase" style={{ flex: BLOCK_RETURN_MINUTES, background: '#22C55E' }}>
+                          <span>Return</span><strong>{BLOCK_RETURN_MINUTES}m</strong>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+        </div>
+      </div>
+
+      {/* ── Legend ───────────────────────────────────────────────────────── */}
+      <div className="ts-board-legend">
+        <LegendDot color={BOOKED_BG} label="Delivery" />
+        <LegendDot color="#F47C20" label="Transit to Site" small />
+        <LegendDot color="#3B82F6" label="Unload" small />
+        <LegendDot color="#22C55E" label="Return" small />
+      </div>
+
+      {/* ── Scheduling Modal ─────────────────────────────────────────────── */}
       {(requestModal || requestLoading) ? (
         <div className="ts-backdrop" onClick={closeModal}>
           <div className="ts-modal" onClick={e => e.stopPropagation()}>
