@@ -362,17 +362,17 @@ namespace ESSDesign.Server.Services
                 Always respond with valid JSON only.
                 """;
 
-            var userPrompt = $"""
-                Recommend the best time slot for a new scaffolding delivery on {request.ScheduledDate} ({dayOfWeek}).
+            var userPrompt = $$"""
+                Recommend the best time slot for a new scaffolding delivery on {{request.ScheduledDate}} ({{dayOfWeek}}).
 
-                Site: {(string.IsNullOrWhiteSpace(request.SiteLocation) ? "Unknown" : request.SiteLocation)}
-                Scaffolding system: {(string.IsNullOrWhiteSpace(request.ScaffoldingSystem) ? "Standard" : request.ScaffoldingSystem)}
-                Straight-line distance from yard: {distanceKm:F1} km
-                Weather (morning): {weatherSummary}
+                Site: {{(string.IsNullOrWhiteSpace(request.SiteLocation) ? "Unknown" : request.SiteLocation)}}
+                Scaffolding system: {{(string.IsNullOrWhiteSpace(request.ScaffoldingSystem) ? "Standard" : request.ScaffoldingSystem)}}
+                Straight-line distance from yard: {{distanceKm:F1}} km
+                Weather (morning): {{weatherSummary}}
                 Typical delivery duration: 90 minutes (yard to site, unload, return)
 
                 Today's truck schedule (each booking occupies 90 minutes):
-                {scheduleText}
+                {{scheduleText}}
 
                 Choose a slot that:
                 - Does not overlap any existing booking (leave 90-min gap)
@@ -381,13 +381,13 @@ namespace ESSDesign.Server.Services
                 - Prefers the truck with the most free time today
 
                 Return exactly this JSON:
-                {{
+                {
                   "recommendedTruckId": "truck-1" or "truck-2" or "truck-3",
                   "recommendedTruckLabel": "ESS01" or "ESS02" or "ESS03",
                   "recommendedHour": <integer 6–14>,
                   "recommendedMinute": <0, 15, 30, or 45>,
                   "reason": "<one sentence, max 90 chars>"
-                }}
+                }
                 """;
 
             var payload = new
