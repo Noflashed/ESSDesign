@@ -49,6 +49,7 @@ builder.Services.AddScoped<Client>(_ =>
 builder.Services.AddScoped<SupabaseService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
+builder.Services.AddScoped<DeliveryAnalysisService>();
 builder.Services.AddHttpClient();
 
 // Configure Resend Email Service (optional - emails are skipped if API key is not set)
