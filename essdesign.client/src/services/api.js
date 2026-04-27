@@ -788,7 +788,9 @@ function buildMaterialOrderRequestScheduleIso(item) {
 function normalizeMaterialOrderRequestListItem(item) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
     const archivedAt = item?.archivedAt || null;
-    const shouldArchive = !archivedAt && scheduledAtIso && new Date(scheduledAtIso).getTime() <= Date.now();
+    const scheduledDate = item?.scheduledDate || null;
+    const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
+    const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
     return {
         id: item?.id || '',
@@ -801,10 +803,12 @@ function normalizeMaterialOrderRequestListItem(item) {
         pdfPath: item?.pdfPath || '',
         scaffoldingSystem: item?.scaffoldingSystem || '',
         details: item?.details || '',
-        scheduledDate: item?.scheduledDate || null,
+        scheduledDate,
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
         scheduledAtIso,
+        truckId: item?.truckId || null,
+        truckLabel: item?.truckLabel || null,
         archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
     };
 }
@@ -816,14 +820,18 @@ function normalizeMaterialOrderRequestRecord(record) {
 
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(record);
     const archivedAt = record.archivedAt || null;
-    const shouldArchive = !archivedAt && scheduledAtIso && new Date(scheduledAtIso).getTime() <= Date.now();
+    const scheduledDate = record.scheduledDate || null;
+    const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
+    const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
     return {
         ...record,
-        scheduledDate: record.scheduledDate || null,
+        scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
         scheduledAtIso,
+        truckId: record.truckId || null,
+        truckLabel: record.truckLabel || null,
         archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
     };
 }
@@ -877,6 +885,8 @@ export const materialOrderRequestsAPI = {
             scheduledHour: null,
             scheduledMinute: null,
             scheduledAtIso: null,
+            truckId: null,
+            truckLabel: null,
             archivedAt: null,
         };
 
@@ -891,7 +901,7 @@ export const materialOrderRequestsAPI = {
         const existingItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: [
-                { id: requestId, builderName: record.builderName, projectName: record.projectName, requestedByName: record.requestedByName, submittedAt, orderDate: record.orderDate, sourceOrderId: record.sourceOrderId, pdfPath: '', scaffoldingSystem, details, scheduledDate: null, scheduledHour: null, scheduledMinute: null, scheduledAtIso: null, archivedAt: null },
+                { id: requestId, builderName: record.builderName, projectName: record.projectName, requestedByName: record.requestedByName, submittedAt, orderDate: record.orderDate, sourceOrderId: record.sourceOrderId, pdfPath: '', scaffoldingSystem, details, scheduledDate: null, scheduledHour: null, scheduledMinute: null, scheduledAtIso: null, truckId: null, truckLabel: null, archivedAt: null },
                 ...existingItems.filter(item => item.id !== requestId)
             ].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))),
             updatedAt: submittedAt,
@@ -929,7 +939,30 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(request);
     },
 
-    getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14)
+    getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
+
+    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel }) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+        const updated = { ...record, scheduledDate: date, scheduledHour: hour, scheduledMinute: minute, scheduledAtIso, truckId, truckLabel };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? { ...item, scheduledDate: date, scheduledHour: hour, scheduledMinute: minute, scheduledAtIso, truckId, truckLabel }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
 };
 
 export const rosteringAPI = {
@@ -1527,4 +1560,11 @@ export const usersAPI = {
         return response.data;
     }
 };
+export const analysisAPI = {
+    recommendTimeSlot: async (payload) => {
+        const response = await apiClient.post('/analysis/recommend-time-slot', payload);
+        return response.data;
+    },
+};
+
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI, essNewsAPI };

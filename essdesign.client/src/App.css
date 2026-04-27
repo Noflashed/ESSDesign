@@ -4409,293 +4409,703 @@ button.stat-card {
     opacity: 0.6;
 }
 
-.truck-schedule-page {
+/* ── Truck Schedule ────────────────────────────────────────────────────────── */
+
+.ts-page {
   display: flex;
   flex-direction: column;
   gap: 24px;
   padding: 28px;
+  max-width: 1400px;
 }
 
-.truck-schedule-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
+/* Page header */
+.ts-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ts-page-title  { margin: 0; color: #102b5c; font-size: 2rem; font-weight: 800; }
+.ts-page-subtitle { margin: 6px 0 0; color: #5f6f8d; }
 
-.truck-schedule-header h1 {
-  margin: 0;
-  color: #102b5c;
-  font-size: 2rem;
-  font-weight: 800;
-}
-
-.truck-schedule-header p {
-  margin: 6px 0 0;
-  color: #5f6f8d;
-}
-
-.truck-schedule-filter-button {
-  border: 1px solid #dde4ee;
-  background: #fff;
-  color: #102b5c;
-  border-radius: 14px;
-  padding: 12px 18px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.truck-schedule-card {
+/* Card */
+.ts-card {
   background: #fff;
   border: 1px solid #e7edf5;
   border-radius: 28px;
   padding: 24px;
-  box-shadow: 0 10px 30px rgba(16, 43, 92, 0.06);
+  box-shadow: 0 10px 30px rgba(16,43,92,0.06);
 }
-
-.truck-schedule-card-header {
+.ts-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
   flex-wrap: wrap;
 }
-
-.truck-schedule-eyebrow {
+.ts-eyebrow {
   color: #5d6e8b;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
 
-.truck-schedule-date {
-  margin-top: 6px;
-  color: #102b5c;
-  font-size: 1.2rem;
-  font-weight: 800;
-}
-
-.truck-schedule-legend {
+/* Date navigation */
+.ts-date-nav {
   display: flex;
   align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
+  gap: 6px;
+}
+.ts-date-nav-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #dde4ee;
+  background: #f6f8fc;
+  color: #102b5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ts-date-nav-btn:hover { background: #eef2f9; }
+.ts-date-nav-label {
+  color: #102b5c;
+  font-size: 1rem;
+  font-weight: 700;
+  min-width: 220px;
+  text-align: center;
 }
 
-.truck-schedule-legend span {
+/* Legend */
+.ts-legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ts-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   color: #5f6f8d;
+  font-size: 0.88rem;
   font-weight: 600;
 }
-
-.truck-schedule-legend i {
-  width: 12px;
-  height: 12px;
+.ts-legend-item.small { font-size: 0.78rem; }
+.ts-legend-dot {
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
-  display: inline-block;
+  flex-shrink: 0;
 }
 
-.truck-schedule-legend i.booked { background: #193a72; }
-.truck-schedule-legend i.buffer { background: #c2c8d3; }
+/* Error */
+.ts-error { margin-top: 14px; color: #b42318; font-weight: 700; }
 
-.truck-schedule-error {
-  margin-top: 16px;
-  color: #b42318;
-  font-weight: 700;
-}
-
-.truck-schedule-board-wrap {
+/* Board */
+.ts-board-wrap {
   overflow-x: auto;
-  padding-top: 22px;
+  padding-top: 20px;
 }
-
-.truck-schedule-board {
-  min-width: 1080px;
-}
-
-.truck-schedule-time-header {
+.ts-board { min-width: 1080px; }
+.ts-time-header {
   display: flex;
   align-items: center;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #e5eaf2;
 }
-
-.truck-schedule-time-label {
-  width: 140px;
-  color: #102b5c;
-  font-weight: 800;
-}
-
-.truck-schedule-time-markers {
+.ts-time-label  { width: 130px; color: #102b5c; font-weight: 800; font-size: 0.9rem; }
+.ts-time-markers {
   flex: 1;
   display: flex;
   justify-content: space-between;
   color: #102b5c;
+  font-size: 0.9rem;
   font-weight: 800;
 }
 
-.truck-schedule-grid {
-  margin-top: 12px;
+/* Grid */
+.ts-grid {
+  margin-top: 10px;
   border: 1px solid #e5eaf2;
-  border-radius: 22px;
+  border-radius: 20px;
   overflow: hidden;
 }
-
-.truck-schedule-row {
+.ts-row {
   display: flex;
-  min-height: 176px;
+  min-height: 160px;
   background: #fff;
 }
+.ts-row-border { border-bottom: 1px solid #e5eaf2; }
 
-.truck-schedule-row + .truck-schedule-row {
-  border-top: 1px solid #e5eaf2;
+/* Truck meta column */
+.ts-truck-meta {
+  width: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  border-right: 1px solid #e5eaf2;
+  flex-shrink: 0;
+}
+.ts-truck-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  border: 1px solid #dde4ee;
+  background: #f8fafd;
+  color: #102b5c;
+}
+.ts-truck-rego { font-size: 0.95rem; font-weight: 800; color: #102b5c; }
+
+/* Slots */
+.ts-slots {
+  flex: 1;
+  position: relative;
+  padding: 12px 8px;
+  min-height: 160px;
+}
+.ts-grid-lines {
+  position: absolute;
+  inset: 0 8px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.ts-grid-line { width: 1px; background: #eef2f7; }
+.ts-slots-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 20px;
+  color: #7181a0;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-.truck-schedule-truck-meta {
-  width: 140px;
-  padding: 20px 16px;
-  border-right: 1px solid #e5eaf2;
+/* Delivery block */
+.ts-block {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  min-width: 90px;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #193a72;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+.ts-block:hover { opacity: 0.88; }
+.ts-block-header {
+  flex: 1;
+  padding: 7px 7px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ts-block-time     { color: #c8d8ff; font-size: 0.65rem; font-weight: 700; }
+.ts-block-title    { color: #fff;    font-size: 0.72rem; font-weight: 800; line-height: 1.3; }
+.ts-block-subtitle { color: #a8bcee; font-size: 0.65rem; font-weight: 500; line-height: 1.3; }
+
+/* Phase bar */
+.ts-block-phases {
+  display: flex;
+  height: 26px;
+  flex-shrink: 0;
+}
+.ts-block-phase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  line-height: 1;
+}
+.ts-block-phase span  { color: rgba(255,255,255,0.85); font-size: 0.5rem;  font-weight: 700; }
+.ts-block-phase strong{ color: #fff;                   font-size: 0.6rem;  font-weight: 900; }
+
+/* ── Modal ──────────────────────────────────────────────────────────────────── */
+.ts-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 29, 52, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 900;
+}
+.ts-modal {
+  background: #fff;
+  border-radius: 24px;
+  border: 1px solid #e8edf5;
+  width: 100%;
+  max-width: 540px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(16,43,92,0.18);
+}
+.ts-modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 60px 0;
+  color: #102b5c;
+  font-weight: 600;
+}
+.ts-modal-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 16px 0;
+  flex-shrink: 0;
+}
+.ts-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f4f7fb;
+  color: #7181a0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ts-modal-close:hover { background: #e8edf5; }
+.ts-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 8px;
+}
+.ts-modal-actions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  flex-shrink: 0;
+  border-top: 1px solid #f0f4fa;
+}
+.ts-btn-secondary {
+  flex: 1;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid #dde4ee;
+  background: #fff;
+  color: #102b5c;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ts-btn-secondary:hover { background: #f6f8fc; }
+.ts-btn-primary {
+  flex: 1.2;
+  height: 44px;
+  border-radius: 14px;
+  border: none;
+  background: #f47c20;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.ts-btn-primary:hover:not(:disabled) { background: #e06a10; }
+.ts-btn-primary:disabled { opacity: 0.65; cursor: not-allowed; }
+
+/* Map */
+.ts-map-card {
+  margin-top: 10px;
+  border-radius: 16px;
+  border: 1px solid #e8edf5;
+  overflow: hidden;
+}
+.ts-map-img {
+  height: 155px;
+  background: #e8edf5;
+  position: relative;
+  overflow: hidden;
+}
+.ts-map-placeholder {
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-.truck-schedule-truck-icon {
-  font-size: 2rem;
-}
-
-.truck-schedule-truck-rego {
-  color: #102b5c;
-  font-size: 1.35rem;
-  font-weight: 800;
-}
-
-.truck-schedule-truck-type {
-  color: #5f6f8d;
+  color: #7181a0;
+  font-size: 0.82rem;
   font-weight: 600;
 }
-
-.truck-schedule-slots {
-  position: relative;
-  flex: 1;
-  padding: 14px 12px;
-}
-
-.truck-schedule-grid-lines {
-  position: absolute;
-  inset: 0 12px;
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-.truck-schedule-grid-lines span {
-  width: 1px;
-  background: #eef2f7;
-}
-
-.truck-schedule-slot-row {
-  position: relative;
-  display: flex;
-  gap: 4px;
-  z-index: 1;
-}
-
-.truck-schedule-slot {
-  min-height: 120px;
-  border: 0;
-  border-radius: 8px;
-  padding: 10px;
-  text-align: left;
-  position: relative;
-  cursor: default;
-}
-
-.truck-schedule-slot.clickable {
-  cursor: pointer;
-}
-
-.truck-schedule-slot.booked {
-  background: #193a72;
-  color: #fff;
-}
-
-.truck-schedule-slot.buffer {
-  background: #fafbfd;
-  border: 1px solid #edf1f6;
-}
-
-.truck-schedule-slot-time {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.truck-schedule-slot.buffer .truck-schedule-slot-time,
-.truck-schedule-slot-title {
-  display: block;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.truck-schedule-slot-subtitle {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  color: #d4e2ff;
-}
-
-.truck-schedule-help-card {
-  margin-top: 22px;
+.ts-map-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
-  border: 1px solid #e5eaf2;
-  border-radius: 20px;
+  gap: 8px;
+  padding: 10px 12px;
   background: #fbfcfe;
-  padding: 18px;
 }
+.ts-map-footer > span {
+  flex: 1;
+  color: #102b5c;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.ts-open-maps {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f47c20;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #ffd6bb;
+  background: #fff8f2;
+  white-space: nowrap;
+}
+.ts-open-maps:hover { background: #fff0e0; }
 
-.truck-schedule-help-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: #102b5c;
-  color: #fff;
+/* Mini schedule strip */
+.ts-mini-section { margin-top: 14px; }
+.ts-modal-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.ts-mini-date-label {
+  flex: 1;
+  text-align: center;
+  color: #102b5c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ts-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ts-mini-axis {
+  display: flex;
+  align-items: center;
+  padding-bottom: 4px;
+}
+.ts-mini-axis-pad { width: 44px; flex-shrink: 0; }
+.ts-mini-ticks {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  color: #7181a0;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.ts-mini-table {
+  border-radius: 12px;
+  border: 1px solid #e5eaf2;
+  overflow: hidden;
+}
+.ts-mini-row {
+  display: flex;
+  height: 48px;
+  background: #fff;
+  cursor: pointer;
+  align-items: stretch;
+}
+.ts-mini-row.selected { background: #fff8f2; }
+.ts-mini-row.bordered { border-bottom: 1px solid #e5eaf2; }
+.ts-mini-row:hover { background: #f6f8fc; }
+.ts-mini-row.selected:hover { background: #fff4ea; }
+.ts-mini-label {
+  width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-right: 1px solid #e5eaf2;
+  flex-shrink: 0;
+}
+.ts-mini-label span      { color: #102b5c; font-size: 0.68rem; font-weight: 800; }
+.ts-mini-label span.active { color: #f47c20; }
+.ts-mini-bar {
+  flex: 1;
+  position: relative;
+  pointer-events: none;
+}
+.ts-mini-block {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 3px;
+}
+.ts-mini-block span  { font-size: 0.5rem; font-weight: 700; color: #fff; line-height: 1.3; white-space: nowrap; overflow: hidden; }
+.ts-mini-block.booked { background: #193a72; }
+.ts-mini-block.ghost  { opacity: 0.85; top: 3px; bottom: 3px; }
+.ts-mini-block.ai     { background: #22c55e; opacity: 0.7; top: 3px; bottom: 3px; }
+.ts-mini-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  padding-left: 2px;
+}
+
+/* AI suggestion banner */
+.ts-ai-banner {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  padding: 10px 12px;
+  color: #166534;
+}
+.ts-ai-banner > svg { flex-shrink: 0; color: #22c55e; }
+.ts-ai-banner > span { flex: 1; font-size: 0.78rem; font-weight: 600; line-height: 1.5; }
+.ts-ai-apply {
+  padding: 5px 12px;
+  border-radius: 10px;
+  border: none;
+  background: #22c55e;
+  color: #fff;
+  font-size: 0.78rem;
   font-weight: 800;
-  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
 }
+.ts-ai-apply:hover { background: #16a34a; }
 
-.truck-schedule-help-card strong {
-  display: block;
+/* Time + AI row */
+.ts-time-ai-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  align-items: stretch;
+}
+.ts-time-select {
+  flex: 1;
+  min-height: 50px;
+  border-radius: 14px;
+  border: 1px solid #e8edf5;
+  background: #fbfcfe;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  text-align: left;
   color: #102b5c;
-  font-size: 1.05rem;
 }
+.ts-time-select:hover { background: #f4f7fb; }
+.ts-time-select strong { display: block; font-size: 0.9rem; font-weight: 800; }
+.ts-time-select span   { display: block; font-size: 0.72rem; color: #7181a0; margin-top: 2px; }
+.ts-ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 14px;
+  border: 1px solid #dde4ee;
+  background: #f8fafd;
+  color: #102b5c;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ts-ai-btn:hover:not(:disabled) { background: #eef2f9; }
+.ts-ai-btn.loading { opacity: 0.6; cursor: not-allowed; }
+.ts-ai-btn.active  { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
 
-.truck-schedule-help-card p {
-  margin: 6px 0 0;
-  color: #5f6f8d;
+/* Spinners */
+.ts-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e5eaf2;
+  border-top-color: #f47c20;
+  border-radius: 50%;
+  animation: ts-spin 0.75s linear infinite;
 }
+.ts-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ts-spin 0.75s linear infinite;
+}
+@keyframes ts-spin { to { transform: rotate(360deg); } }
+
+/* Delivery timeline */
+.ts-delivery-timeline {
+  margin-top: 14px;
+  border-radius: 16px;
+  border: 1px solid #edf2f7;
+  background: #fbfcfe;
+  padding: 14px;
+}
+.ts-dt-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ts-dt-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ts-dt-step-body {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ts-dt-step-label {
+  color: #7181a0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.ts-dt-step-time  { color: #102b5c; font-size: 0.9rem; font-weight: 800; }
+.ts-dt-connector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 5px 0;
+}
+.ts-dt-line { flex: 1; height: 1px; background: #e2e8f0; }
+.ts-dt-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 3px 8px;
+  color: #7181a0;
+}
+.ts-dt-pill span { font-size: 0.68rem; font-weight: 600; white-space: nowrap; }
+.ts-dt-pill svg  { flex-shrink: 0; }
+
+/* Time picker */
+.ts-time-picker {
+  background: #fff;
+  border-radius: 22px;
+  border: 1px solid #e8edf5;
+  width: 100%;
+  max-width: 320px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(16,43,92,0.16);
+}
+.ts-time-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 10px;
+  flex-shrink: 0;
+}
+.ts-time-picker-head span { color: #102b5c; font-weight: 800; font-size: 1rem; }
+.ts-time-picker-head button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #f4f7fb;
+  color: #7181a0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.ts-time-picker-list {
+  overflow-y: auto;
+  padding: 4px 8px 10px;
+}
+.ts-time-opt {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: #102b5c;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+}
+.ts-time-opt:hover    { background: #f6f8fc; }
+.ts-time-opt.selected { background: #fff8f2; color: #f47c20; }
+
+/* Pending orders */
+.ts-pending-section {
+  background: #fff;
+  border: 1px solid #e7edf5;
+  border-radius: 24px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 16px rgba(16,43,92,0.04);
+}
+.ts-pending-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.ts-pending-count {
+  background: #f47c20;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.ts-pending-list { display: flex; flex-direction: column; gap: 8px; }
+.ts-pending-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 14px;
+  border: 1px solid #edf2f7;
+  background: #fbfcfe;
+  padding: 12px 14px;
+}
+.ts-pending-card-body { display: flex; flex-direction: column; gap: 2px; }
+.ts-pending-builder  { color: #102b5c; font-size: 0.9rem; font-weight: 800; }
+.ts-pending-project  { color: #7181a0; font-size: 0.8rem; font-weight: 600; }
+.ts-pending-schedule-btn {
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: none;
+  background: #102b5c;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ts-pending-schedule-btn:hover { background: #1a3d78; }
 
 @media (max-width: 960px) {
-  .truck-schedule-page {
-    padding: 20px;
-  }
-
-  .truck-schedule-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+  .ts-page { padding: 16px; }
+  .ts-card-top { flex-direction: column; align-items: flex-start; }
+  .ts-date-nav-label { min-width: 0; }
 }
 
 .site-registry-project-location {
