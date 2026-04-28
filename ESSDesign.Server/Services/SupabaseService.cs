@@ -864,15 +864,8 @@ namespace ESSDesign.Server.Services
                 userId,
                 deviceEmail,
                 string.IsNullOrWhiteSpace(fullName) ? normalizedDeviceId : fullName.Trim());
-            await EnsureUserRoleAsync(userId, normalizedRole);
 
-            var createdUser = (await GetUsersByIdsAsync(new[] { userId })).FirstOrDefault();
-            if (createdUser == null)
-            {
-                throw new InvalidOperationException("Truck device account was created, but could not be loaded.");
-            }
-
-            return createdUser;
+            return await UpdateUserRoleAsync(userId, normalizedRole);
         }
 
         private async Task SyncLinkedEmployeeRoleAsync(string normalizedUserId, string normalizedRole)
