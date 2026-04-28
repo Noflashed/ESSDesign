@@ -6422,3 +6422,82 @@ button.stat-card {
     .ts2-estimate-grid,
     .ts2-action-rows { grid-template-columns: 1fr; }
 }
+
+/* ── Transport full-page presentation overrides ───────────────────────────── */
+.transport-page-frame {
+    min-height: calc(100vh - 62px);
+    background: #eef3f9;
+}
+
+.transport-page-frame .transport-suite-shell {
+    min-height: calc(100vh - 62px);
+    grid-template-columns: 236px minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+    background: linear-gradient(180deg, #eef3f9 0%, #edf2f8 100%);
+}
+
+.transport-page-frame .transport-suite-sidebar {
+    border-radius: 0;
+    min-height: 100%;
+    padding: 24px 18px 20px;
+    box-shadow: none;
+}
+
+.transport-page-frame .transport-suite-content {
+    min-height: 100%;
+    padding: 20px 22px 22px;
+}
+
+.transport-page-frame .ts2-page,
+.transport-page-frame .delivery-schedule-page {
+    min-height: calc(100vh - 104px);
+}
+
+.transport-page-frame .ts2-header,
+.transport-page-frame .delivery-day-section,
+.transport-page-frame .ts2-board-scroll,
+.transport-page-frame .ts2-legend-row,
+.transport-page-frame .delivery-debug-card,
+.transport-page-frame .ts2-pending-panel,
+.transport-page-frame .transport-placeholder-card {
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+.transport-page-frame .ts2-header {
+    margin-top: 0;
+}
+
+.transport-page-frame .ts2-board-scroll {
+    border-radius: 22px;
+}
+
+.transport-page-frame .ts2-board-head {
+    background: rgba(255,255,255,0.98);
+}
+
+.transport-page-frame .transport-suite-sidebar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.transport-page-frame .transport-suite-sidebar {
+    position: relative;
+}
+
+@media (max-width: 1100px) {
+    .transport-page-frame .transport-suite-shell {
+        min-height: auto;
+        grid-template-columns: 1fr;
+    }
+
+    .transport-page-frame .transport-suite-sidebar {
+        border-radius: 0 0 24px 24px;
+    }
+
+    .transport-page-frame .transport-suite-content {
+        padding: 16px;
+    }
+}

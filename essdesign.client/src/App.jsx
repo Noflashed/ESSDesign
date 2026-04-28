@@ -184,6 +184,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
+const TRANSPORT_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
@@ -1033,6 +1034,7 @@ function App() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+    const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
     const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = getRoleDisplayName(user?.role);
@@ -1414,24 +1416,30 @@ function App() {
             </header>
 
             {DESIGN_PAGE_KEYS.has(currentPage) ? (
-                <div className="app-content-wrapper">
-                    <NavSidebar
-                        open={navSidebarOpen}
-                        onToggle={() => setNavSidebarOpen(prev => !prev)}
-                        navItems={allowedNavItems}
-                        currentPage={currentPage}
-                        onNavigate={(page) => {
-                            applyPageState(page, { builder: null, project: null }, { leadingHand: null });
-                        }}
-                        onGoSettings={() => {
-                            setShowUserMenu(false);
-                            applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
-                        }}
-                    />
-                    <div className="app-page-content">
+                isTransportPage ? (
+                    <div className="transport-page-frame">
                         {renderCurrentPage()}
                     </div>
-                </div>
+                ) : (
+                    <div className="app-content-wrapper">
+                        <NavSidebar
+                            open={navSidebarOpen}
+                            onToggle={() => setNavSidebarOpen(prev => !prev)}
+                            navItems={allowedNavItems}
+                            currentPage={currentPage}
+                            onNavigate={(page) => {
+                                applyPageState(page, { builder: null, project: null }, { leadingHand: null });
+                            }}
+                            onGoSettings={() => {
+                                setShowUserMenu(false);
+                                applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                            }}
+                        />
+                        <div className="app-page-content">
+                            {renderCurrentPage()}
+                        </div>
+                    </div>
+                )
             ) : (
                 renderCurrentPage()
             )}
