@@ -8,6 +8,9 @@ function getRoleDisplayName(role) {
         case 'leading_hand': return 'Leading Hand';
         case 'general_scaffolder': return 'Scaffolder';
         case 'transport_management': return 'Transport Management';
+        case 'truck_ess01': return 'Truck ESS01';
+        case 'truck_ess02': return 'Truck ESS02';
+        case 'truck_ess03': return 'Truck ESS03';
         default: return 'Viewer';
     }
 }

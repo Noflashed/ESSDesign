@@ -222,11 +222,15 @@ namespace ESSDesign.Server.Models
         public const string LeadingHand = "leading_hand";
         public const string GeneralScaffolder = "general_scaffolder";
         public const string TransportManagement = "transport_management";
+        public const string TruckEss01 = "truck_ess01";
+        public const string TruckEss02 = "truck_ess02";
+        public const string TruckEss03 = "truck_ess03";
 
         public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
         {
             Admin, Viewer, SiteSupervisor, ProjectManager,
             LeadingHand, GeneralScaffolder, TransportManagement,
+            TruckEss01, TruckEss02, TruckEss03,
         };
 
         public static readonly HashSet<string> NotificationRecipientRoles = new(StringComparer.OrdinalIgnoreCase)
@@ -246,7 +250,16 @@ namespace ESSDesign.Server.Models
     public class SignInRequest
     {
         public string Email { get; set; } = string.Empty;
+        public string? Identifier { get; set; }
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class CreateDeviceUserRequest
+    {
+        public string DeviceId { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
     }
 
     public class RefreshSessionRequest

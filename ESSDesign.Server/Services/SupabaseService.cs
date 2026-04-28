@@ -5,11 +5,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Services
 {
     public class SupabaseService
     {
+        private const string TruckDeviceEmailDomain = "ess-trucks.local";
         private sealed class EmployeeAuthRow
         {
             public Guid Id { get; set; }
@@ -507,8 +509,62 @@ namespace ESSDesign.Server.Services
                 AppRoles.LeadingHand => "Leading Hand",
                 AppRoles.GeneralScaffolder => "General Scaffolder",
                 AppRoles.TransportManagement => "Transport Management",
+                AppRoles.TruckEss01 => "Truck ESS01",
+                AppRoles.TruckEss02 => "Truck ESS02",
+                AppRoles.TruckEss03 => "Truck ESS03",
                 _ => "Viewer"
             };
+        }
+
+        private static string NormalizeDeviceId(string? value)
+        {
+            var trimmed = value?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return string.Empty;
+            }
+
+            var cleaned = Regex.Replace(trimmed, @"[^A-Za-z0-9]+", string.Empty);
+            return cleaned.ToUpperInvariant();
+        }
+
+        private static string ToTruckDeviceEmail(string deviceId)
+        {
+            var normalized = NormalizeDeviceId(deviceId);
+            return $"{normalized}@{TruckDeviceEmailDomain}";
+        }
+
+        private static bool IsTruckDeviceEmail(string? email)
+        {
+            return !string.IsNullOrWhiteSpace(email)
+                && email.EndsWith($"@{TruckDeviceEmailDomain}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ToPublicIdentifier(string? email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return string.Empty;
+            }
+
+            var suffix = $"@{TruckDeviceEmailDomain}";
+            return email.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                ? NormalizeDeviceId(email[..^suffix.Length])
+                : email;
+        }
+
+        private static void SanitizeUserForClient(UserInfo user)
+        {
+            if (user == null || !IsTruckDeviceEmail(user.Email))
+            {
+                return;
+            }
+
+            user.Email = ToPublicIdentifier(user.Email);
+            if (string.IsNullOrWhiteSpace(user.FullName))
+            {
+                user.FullName = user.Email;
+            }
         }
 
         public async Task<string> EnsureUserRoleAsync(string? userId, string? desiredRole = null)
@@ -635,6 +691,7 @@ namespace ESSDesign.Server.Services
             var employee = await GetLinkedEmployeeRoleInfoAsync(user.Id, user.Email);
             if (employee == null)
             {
+                SanitizeUserForClient(user);
                 return;
             }
 
@@ -653,6 +710,7 @@ namespace ESSDesign.Server.Services
             }
 
             user.EmployeeTitle = GetRoleDisplayName(user.Role);
+            SanitizeUserForClient(user);
         }
 
         private async Task<Dictionary<string, string>> GetAllUserRolesAsync()
@@ -741,6 +799,80 @@ namespace ESSDesign.Server.Services
             }
 
             return user;
+        }
+
+        public async Task<UserInfo> CreateTruckDeviceUserAsync(
+            string deviceId,
+            string fullName,
+            string password,
+            string role)
+        {
+            var normalizedDeviceId = NormalizeDeviceId(deviceId);
+            if (string.IsNullOrWhiteSpace(normalizedDeviceId))
+            {
+                throw new ArgumentException("Device ID is required", nameof(deviceId));
+            }
+
+            if (string.IsNullOrWhiteSpace(password) || password.Trim().Length < 6)
+            {
+                throw new ArgumentException("Password must be at least 6 characters", nameof(password));
+            }
+
+            var normalizedRole = NormalizeRole(role);
+            var deviceEmail = ToTruckDeviceEmail(normalizedDeviceId);
+            var serviceRoleKey = _configuration["Supabase:ServiceRoleKey"];
+            if (string.IsNullOrWhiteSpace(serviceRoleKey) || string.IsNullOrWhiteSpace(_supabaseUrl))
+            {
+                throw new InvalidOperationException("Supabase service role key is not configured");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{_supabaseUrl.TrimEnd('/')}/auth/v1/admin/users");
+            request.Headers.Add("apikey", serviceRoleKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", serviceRoleKey);
+            request.Content = JsonContent.Create(new
+            {
+                email = deviceEmail,
+                password = password.Trim(),
+                email_confirm = true,
+                user_metadata = new
+                {
+                    full_name = string.IsNullOrWhiteSpace(fullName) ? normalizedDeviceId : fullName.Trim()
+                }
+            });
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                if (body.Contains("already", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("A truck device account already exists for that device ID.");
+                }
+                throw new InvalidOperationException($"Failed to create truck device user: {body}");
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var userId = GetJsonString(root, "id");
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                throw new InvalidOperationException("Truck device account was created without a valid user ID.");
+            }
+
+            await UpsertUserNameAsync(
+                userId,
+                deviceEmail,
+                string.IsNullOrWhiteSpace(fullName) ? normalizedDeviceId : fullName.Trim());
+            await EnsureUserRoleAsync(userId, normalizedRole);
+
+            var createdUser = (await GetUsersByIdsAsync(new[] { userId })).FirstOrDefault();
+            if (createdUser == null)
+            {
+                throw new InvalidOperationException("Truck device account was created, but could not be loaded.");
+            }
+
+            return createdUser;
         }
 
         private async Task SyncLinkedEmployeeRoleAsync(string normalizedUserId, string normalizedRole)
@@ -1695,7 +1827,7 @@ namespace ESSDesign.Server.Services
             return new UserInfo
             {
                 Id = id ?? string.Empty,
-                Email = email ?? string.Empty,
+                Email = ToPublicIdentifier(email),
                 FullName = fullName ?? string.Empty,
                 AvatarUrl = avatarUrl,
                 Role = role
@@ -1785,6 +1917,7 @@ namespace ESSDesign.Server.Services
                         ? role
                         : await EnsureUserRoleAsync(user.Id);
                     await EnrichUserInfoWithEmployeeRoleAsync(user);
+                    SanitizeUserForClient(user);
                 }
 
                 return users;
@@ -1821,6 +1954,7 @@ namespace ESSDesign.Server.Services
                         ? role
                         : await EnsureUserRoleAsync(user.Id);
                     await EnrichUserInfoWithEmployeeRoleAsync(user);
+                    SanitizeUserForClient(user);
                 }
 
                 return users;

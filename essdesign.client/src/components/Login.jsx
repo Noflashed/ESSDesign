@@ -30,7 +30,7 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
             await authAPI.signIn(formData.email, formData.password);
             onLoginSuccess();
         } catch (err) {
-            setError(err.response?.data?.error || 'Invalid email or password');
+            setError(err.response?.data?.error || 'Invalid email, device ID, or password');
         } finally {
             setLoading(false);
         }
@@ -56,13 +56,13 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
 
                 <form onSubmit={handleSubmit} className="auth-form">
                     <div className="form-field">
-                        <label>Email</label>
+                        <label>Email or Device ID</label>
                         <input
-                            type="email"
+                            type="text"
                             name="email"
                             value={formData.email}
                             onChange={handleChange}
-                            placeholder="you@example.com"
+                            placeholder="you@example.com or ESS01"
                             required
                             autoFocus
                         />

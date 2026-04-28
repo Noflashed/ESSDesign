@@ -23,6 +23,10 @@ function emptyAppUserForm() {
     return { id: '', fullName: '', email: '', role: 'viewer', phoneNumber: '' };
 }
 
+function emptyTruckDeviceForm() {
+    return { deviceId: '', fullName: '', password: '', role: 'truck_ess01' };
+}
+
 function normalizePreferredSiteIds(siteIds) {
     return siteIds.filter(Boolean).slice(0, 3);
 }
@@ -35,6 +39,9 @@ function getRoleLabel(role) {
         case 'leading_hand': return 'Leading Hand';
         case 'general_scaffolder': return 'Scaffolder';
         case 'transport_management': return 'Transport Mgmt';
+        case 'truck_ess01': return 'Truck ESS01';
+        case 'truck_ess02': return 'Truck ESS02';
+        case 'truck_ess03': return 'Truck ESS03';
         default: return 'Viewer';
     }
 }
@@ -129,6 +136,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [showAppUserModal, setShowAppUserModal] = useState(false);
     const [appUserForm, setAppUserForm] = useState(emptyAppUserForm());
     const [appUserPendingDelete, setAppUserPendingDelete] = useState(null);
+    const [showTruckDeviceModal, setShowTruckDeviceModal] = useState(false);
+    const [truckDeviceForm, setTruckDeviceForm] = useState(emptyTruckDeviceForm());
 
     useEffect(() => {
         let active = true;
@@ -249,6 +258,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setShowAppUserModal(true);
     };
 
+    const openTruckDeviceCreator = () => {
+        setTruckDeviceForm(emptyTruckDeviceForm());
+        setError('');
+        setInviteMessage('');
+        setShowTruckDeviceModal(true);
+    };
+
     const updatePreferredSite = (index, siteId) => {
         setForm((prev) => {
             const next = [...prev.preferredSiteIds];
@@ -343,6 +359,23 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         }
     };
 
+    const saveTruckDevice = async (e) => {
+        e.preventDefault();
+        setSavingAppUser(true);
+        setError('');
+        try {
+            await authAPI.createTruckDeviceUser(truckDeviceForm);
+            const userRows = await usersAPI.getAllUsers();
+            setAppUsers(userRows || []);
+            setShowTruckDeviceModal(false);
+            setTruckDeviceForm(emptyTruckDeviceForm());
+        } catch (err) {
+            setError(err.message || 'Could not create truck device');
+        } finally {
+            setSavingAppUser(false);
+        }
+    };
+
     const removeEmployee = async (employeeId) => {
         try {
             const next = await rosteringAPI.deleteEmployee(employeeId);
@@ -408,9 +441,14 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         <h2>Employee Directory</h2>
                         <p>Manage employee details, preferred projects, leading hand relationships, and app accounts from one place.</p>
                     </div>
-                    <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
-                        Add Employee
-                    </button>
+                    <div className="module-form-actions">
+                        <button type="button" className="module-secondary-btn" onClick={openTruckDeviceCreator}>
+                            Add Truck Device
+                        </button>
+                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
+                            Add Employee
+                        </button>
+                    </div>
                 </div>
 
                 <div className="module-card employees-card">
@@ -686,6 +724,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <option value="leading_hand">Leading Hand</option>
                                     <option value="general_scaffolder">Scaffolder</option>
                                     <option value="transport_management">Transport Management</option>
+                                    <option value="truck_ess01">Truck ESS01</option>
+                                    <option value="truck_ess02">Truck ESS02</option>
+                                    <option value="truck_ess03">Truck ESS03</option>
                                 </select>
                             </div>
                             {error ? <div className="module-error">{error}</div> : null}
@@ -693,6 +734,69 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 <button type="button" className="module-secondary-btn" onClick={() => setShowAppUserModal(false)}>Cancel</button>
                                 <button type="submit" className="module-primary-btn" disabled={savingAppUser}>
                                     {savingAppUser ? 'Saving...' : 'Save User'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showTruckDeviceModal && (
+                <div className="module-modal-backdrop" onClick={() => setShowTruckDeviceModal(false)}>
+                    <div className="module-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Create Truck Device</h3>
+                            <button className="nav-drawer-close" onClick={() => setShowTruckDeviceModal(false)}>×</button>
+                        </div>
+                        <form className="module-form" onSubmit={saveTruckDevice}>
+                            <div className="module-grid module-grid-two">
+                                <div className="module-field">
+                                    <label>Device ID</label>
+                                    <input
+                                        value={truckDeviceForm.deviceId}
+                                        onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, deviceId: e.target.value }))}
+                                        placeholder="ESS01"
+                                    />
+                                </div>
+                                <div className="module-field">
+                                    <label>Truck Role</label>
+                                    <select
+                                        value={truckDeviceForm.role}
+                                        onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, role: e.target.value }))}
+                                    >
+                                        <option value="truck_ess01">Truck ESS01</option>
+                                        <option value="truck_ess02">Truck ESS02</option>
+                                        <option value="truck_ess03">Truck ESS03</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="module-grid module-grid-two">
+                                <div className="module-field">
+                                    <label>Display Name</label>
+                                    <input
+                                        value={truckDeviceForm.fullName}
+                                        onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                                        placeholder="ESS01 Driver Device"
+                                    />
+                                </div>
+                                <div className="module-field">
+                                    <label>Password</label>
+                                    <input
+                                        type="password"
+                                        value={truckDeviceForm.password}
+                                        onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, password: e.target.value }))}
+                                        placeholder="Minimum 6 characters"
+                                    />
+                                </div>
+                            </div>
+                            <div className="module-copy">
+                                Truck device accounts do not need a real email address. The backend creates the internal auth identity automatically and the driver signs in with the device ID and password.
+                            </div>
+                            {error ? <div className="module-error">{error}</div> : null}
+                            <div className="module-form-actions">
+                                <button type="button" className="module-secondary-btn" onClick={() => setShowTruckDeviceModal(false)}>Cancel</button>
+                                <button type="submit" className="module-primary-btn" disabled={savingAppUser}>
+                                    {savingAppUser ? 'Creating...' : 'Create Device'}
                                 </button>
                             </div>
                         </form>

@@ -179,8 +179,8 @@ export const authAPI = {
         return { ...response.data, user: hydratedUser };
     },
 
-    signIn: async (email, password) => {
-        const response = await apiClient.post('/auth/signin', { email, password });
+    signIn: async (identifier, password) => {
+        const response = await apiClient.post('/auth/signin', { email: identifier, identifier, password });
         const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         const signedInSession = { ...response.data, user: hydratedUser };
@@ -241,6 +241,11 @@ export const authAPI = {
 
     inviteUser: async (email) => {
         const response = await apiClient.post('/auth/invite', { email });
+        return response.data;
+    },
+
+    createTruckDeviceUser: async ({ deviceId, fullName, password, role }) => {
+        const response = await apiClient.post('/auth/create-device-user', { deviceId, fullName, password, role });
         return response.data;
     },
 

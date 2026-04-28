@@ -3,6 +3,7 @@ using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 using Supabase.Gotrue;
 using Supabase.Gotrue.Responses;
+using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Controllers
 {
@@ -10,6 +11,7 @@ namespace ESSDesign.Server.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
+        private const string TruckDeviceEmailDomain = "ess-trucks.local";
         private readonly Supabase.Client _supabase;
         private readonly SupabaseService _supabaseService;
         private readonly EmailService _emailService;
@@ -109,7 +111,11 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var session = await _supabase.Auth.SignIn(request.Email, request.Password);
+                var identifier = string.IsNullOrWhiteSpace(request.Identifier)
+                    ? request.Email
+                    : request.Identifier;
+                var signInEmail = NormalizeSignInIdentifier(identifier);
+                var session = await _supabase.Auth.SignIn(signInEmail, request.Password);
 
                 if (session?.User == null)
                 {
@@ -119,9 +125,9 @@ namespace ESSDesign.Server.Controllers
                 var fullName = session.User.UserMetadata?.ContainsKey("full_name") == true
                     ? session.User.UserMetadata["full_name"]?.ToString() ?? string.Empty
                     : string.Empty;
-                await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? request.Email, fullName);
+                await _supabaseService.UpsertUserNameAsync(session.User.Id, session.User.Email ?? signInEmail, fullName);
                 var role = await _supabaseService.EnsureUserRoleAsync(session.User.Id);
-                await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email ?? request.Email);
+                await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email ?? signInEmail);
 
                 var userInfo = BuildUserInfo(session.User, fullName, role);
                 await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(userInfo);
@@ -137,6 +143,73 @@ namespace ESSDesign.Server.Controllers
             {
                 _logger.LogError(ex, "Signin error");
                 return Unauthorized(new { error = "Invalid email or password" });
+            }
+        }
+
+        [HttpPost("create-device-user")]
+        public async Task<ActionResult<UserInfo>> CreateDeviceUser([FromBody] CreateDeviceUserRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserFromRequestAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                var normalizedRole = request.Role?.Trim().ToLowerInvariant() ?? string.Empty;
+                var allowedDeviceRoles = new[]
+                {
+                    AppRoles.TruckEss01,
+                    AppRoles.TruckEss02,
+                    AppRoles.TruckEss03,
+                };
+
+                if (!allowedDeviceRoles.Contains(normalizedRole, StringComparer.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "Truck device role must be one of: truck_ess01, truck_ess02, truck_ess03" });
+                }
+
+                var normalizedDeviceId = NormalizeDeviceId(request.DeviceId);
+                if (string.IsNullOrWhiteSpace(normalizedDeviceId))
+                {
+                    return BadRequest(new { error = "Device ID is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Trim().Length < 6)
+                {
+                    return BadRequest(new { error = "Password must be at least 6 characters" });
+                }
+
+                var fullName = string.IsNullOrWhiteSpace(request.FullName)
+                    ? normalizedDeviceId
+                    : request.FullName.Trim();
+
+                var createdUser = await _supabaseService.CreateTruckDeviceUserAsync(
+                    normalizedDeviceId,
+                    fullName,
+                    request.Password.Trim(),
+                    normalizedRole);
+
+                return Ok(createdUser);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Create truck device user error");
+                return StatusCode(500, new { error = ex.Message });
             }
         }
 
@@ -320,11 +393,14 @@ namespace ESSDesign.Server.Controllers
                     return Unauthorized(new { error = "Session refresh failed" });
                 }
 
-                await _supabaseService.UpsertUserNameAsync(
-                    session.User.Id,
-                    session.User.Email,
-                    session.User.FullName);
-                await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email);
+                if (!string.IsNullOrWhiteSpace(session.User.Email) && session.User.Email.Contains('@'))
+                {
+                    await _supabaseService.UpsertUserNameAsync(
+                        session.User.Id,
+                        session.User.Email,
+                        session.User.FullName);
+                    await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email);
+                }
 
                 await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(session.User);
                 return Ok(session);
@@ -347,8 +423,11 @@ namespace ESSDesign.Server.Controllers
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                await _supabaseService.UpsertUserNameAsync(user.Id, user.Email, user.FullName);
-                await _supabaseService.SyncEmployeeLinkForUserAsync(user.Id, user.Email);
+                if (!string.IsNullOrWhiteSpace(user.Email) && user.Email.Contains('@'))
+                {
+                    await _supabaseService.UpsertUserNameAsync(user.Id, user.Email, user.FullName);
+                    await _supabaseService.SyncEmployeeLinkForUserAsync(user.Id, user.Email);
+                }
 
                 await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(user);
                 return Ok(user);
@@ -378,10 +457,12 @@ namespace ESSDesign.Server.Controllers
                 ? fallbackFullName
                 : GetMetadataValue(user, "full_name");
 
+            var publicIdentifier = ToPublicIdentifier(user.Email);
+
             return new UserInfo
             {
                 Id = user.Id,
-                Email = user.Email ?? string.Empty,
+                Email = publicIdentifier,
                 FullName = fullName ?? string.Empty,
                 AvatarUrl =
                     GetMetadataValue(user, "avatar_url") ??
@@ -400,6 +481,47 @@ namespace ESSDesign.Server.Controllers
             }
 
             return null;
+        }
+
+        private static string NormalizeSignInIdentifier(string? identifier)
+        {
+            var trimmed = identifier?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return string.Empty;
+            }
+
+            if (trimmed.Contains('@', StringComparison.Ordinal))
+            {
+                return trimmed.ToLowerInvariant();
+            }
+
+            return $"{NormalizeDeviceId(trimmed)}@{TruckDeviceEmailDomain}";
+        }
+
+        private static string NormalizeDeviceId(string? value)
+        {
+            var trimmed = value?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return string.Empty;
+            }
+
+            var cleaned = Regex.Replace(trimmed, @"[^A-Za-z0-9]+", string.Empty);
+            return cleaned.ToUpperInvariant();
+        }
+
+        private static string ToPublicIdentifier(string? email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return string.Empty;
+            }
+
+            var suffix = $"@{TruckDeviceEmailDomain}";
+            return email.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                ? NormalizeDeviceId(email[..^suffix.Length])
+                : email;
         }
     }
 }
