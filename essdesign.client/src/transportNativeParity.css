@@ -1,0 +1,116 @@
+/* React Native Web transport island: iOS parity overrides for Electron/web. */
+.transport-page-frame.transport-page-frame-full {
+    height: 100vh;
+    overflow: auto;
+    background: #102B5C;
+}
+
+.transport-page-frame .ts2-page,
+.transport-page-frame .delivery-schedule-page,
+.transport-page-frame .material-ordering-transport-page,
+.transport-page-frame .transport-placeholder-page {
+    background: #F6F8FC;
+    color: #102B5C;
+    font-family: Inter, "Google Sans", Roboto, Arial, sans-serif;
+}
+
+.transport-page-frame .ts2-header,
+.transport-page-frame .delivery-schedule-toolbar,
+.transport-page-frame .material-ordering-transport-header {
+    min-height: 92px;
+    background: #FFFFFF;
+    border: 0;
+    border-bottom: 1px solid #E8EDF5;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 18px 28px;
+}
+
+.transport-page-frame .ts2-header h1,
+.transport-page-frame .material-ordering-transport-header h1 {
+    color: #102B5C;
+    font-size: 24px;
+    line-height: 1.08;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.transport-page-frame .ts2-header-date-pill,
+.transport-page-frame .ts2-secondary-btn,
+.transport-page-frame .ts2-chip-btn,
+.transport-page-frame .ts2-nav-btn,
+.transport-page-frame .transport-inline-btn,
+.transport-page-frame .material-ordering-queue-chip {
+    min-height: 44px;
+    border: 1px solid #E4EAF4;
+    border-radius: 14px;
+    background: #FFFFFF;
+    color: #102B5C;
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.transport-page-frame .ts2-board-card,
+.transport-page-frame .delivery-day-section,
+.transport-page-frame .material-ordering-transport-canvas-ios,
+.transport-page-frame .material-ordering-request-card-ios,
+.transport-page-frame .transport-placeholder-card {
+    background: #FFFFFF;
+    border: 1px solid #E4EAF4;
+    border-radius: 24px;
+    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.06);
+}
+
+.transport-page-frame .ts2-board-card {
+    margin: 16px 18px 18px;
+    overflow: hidden;
+}
+
+.transport-page-frame .ts2-board-card-title,
+.transport-page-frame .delivery-day-section h2 {
+    color: #102B5C;
+    font-size: 22px;
+    line-height: 1.15;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.transport-page-frame .ts2-board-scroll {
+    background: #FFFFFF;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.transport-page-frame .ts2-lane-row {
+    min-height: 124px;
+    border-bottom: 1px solid #EDF2F7;
+}
+
+.transport-page-frame .ts2-truck-pill {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.transport-page-frame .ts2-truck-pill-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+    background: #EDF4FF;
+}
+
+.transport-page-frame .ts2-event-card,
+.transport-page-frame .ts2-return-card,
+.transport-page-frame .delivery-card {
+    border: 0;
+    border-radius: 18px;
+    box-shadow: 0 8px 18px rgba(16, 43, 92, 0.16);
+}
+
+.transport-page-frame .delivery-card {
+    border: 1px solid #E4EAF4;
+    background: #FFFFFF;
+    border-radius: 22px;
+}
