@@ -259,6 +259,17 @@ function LegendDot({ color, label }) {
   );
 }
 
+function TruckLaneIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#102B5C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 17H4V6h11v11h-2" />
+      <path d="M15 9h3l2 3v5h-2" />
+      <circle cx="7.5" cy="17.5" r="1.5" />
+      <circle cx="17.5" cy="17.5" r="1.5" />
+    </svg>
+  );
+}
+
 function CurrentTimeMarker({ selectedDate, timelineWidth }) {
   const [now, setNow] = useState(new Date());
 
@@ -272,8 +283,9 @@ function CurrentTimeMarker({ selectedDate, timelineWidth }) {
   }
   const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
   const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
-  const left = ((currentMinutes - SCREEN_START_HOUR * 60) / totalMinutes) * timelineWidth;
-  if (left < 0 || left > timelineWidth) {
+  const laneOffset = 96 + 10;
+  const left = laneOffset + ((currentMinutes - SCREEN_START_HOUR * 60) / totalMinutes) * timelineWidth;
+  if (left < laneOffset || left > laneOffset + timelineWidth) {
     return null;
   }
   return (
@@ -759,7 +771,7 @@ export default function TruckSchedulePage({ user }) {
         </div>
 
         <div className="ts2-board-scroll" ref={boardScrollRef}>
-        <div className="ts2-board" style={{ width: timelineWidth + 186 }}>
+        <div className="ts2-board" style={{ width: timelineWidth + 96 }}>
           <div className="ts2-board-head">
             <div className="ts2-lane-head">Truck</div>
             <div className="ts2-axis" style={{ width: timelineWidth }}>
@@ -778,7 +790,9 @@ export default function TruckSchedulePage({ user }) {
                 <div key={lane.id} className="ts2-lane-row">
                   <div className="ts2-lane-meta">
                     <div className="ts2-truck-pill">
-                      <span className="ts2-truck-pill-dot" />
+                      <span className="ts2-truck-pill-icon">
+                        <TruckLaneIcon />
+                      </span>
                       <strong>{lane.rego}</strong>
                     </div>
                   </div>

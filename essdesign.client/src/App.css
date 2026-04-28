@@ -6901,3 +6901,237 @@ button.stat-card {
         min-width: 96px;
     }
 }
+
+/* ── Fixed transport material-ordering parity ─────────────────────────────── */
+.transport-page-frame {
+    overflow: auto;
+}
+
+.transport-page-frame .transport-suite-shell {
+    min-width: 1460px;
+}
+
+.transport-page-frame .transport-suite-content {
+    min-width: 1342px;
+}
+
+.transport-page-frame .material-ordering-transport-page {
+    min-width: 0;
+    background: #FFFFFF;
+}
+
+.transport-page-frame .material-ordering-transport-header {
+    align-items: center;
+}
+
+.transport-page-frame .material-ordering-transport-header-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.transport-page-frame .material-ordering-transport-header-copy p {
+    margin: 0;
+    color: #64748B;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.transport-page-frame .material-ordering-transport-canvas {
+    margin: 16px;
+    padding: 18px;
+    border: 1px solid #E8EDF5;
+    border-radius: 24px;
+    background: #FFFFFF;
+}
+
+.transport-page-frame .material-ordering-transport-canvas .picking-sheet-card {
+    border: 1px solid #DCE4EF;
+    border-radius: 18px;
+    box-shadow: none;
+}
+
+.transport-page-frame .material-ordering-transport-canvas .picking-sheet-table {
+    min-width: 1180px;
+}
+
+.transport-page-frame .material-ordering-transport-canvas .module-error {
+    margin-top: 14px;
+}
+
+.transport-page-frame .material-ordering-transport-canvas .material-order-footer {
+    margin-top: 16px;
+}
+
+.transport-page-frame .material-ordering-transport-canvas .module-primary-btn {
+    min-height: 40px;
+    border-radius: 12px;
+    padding: 0 18px;
+}
+
+.transport-page-frame .material-ordering-request-stack {
+    margin: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.transport-page-frame .material-ordering-request-card {
+    border: 1px solid #E8EDF5;
+    border-radius: 24px;
+    background: #FFFFFF;
+    padding: 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.transport-page-frame .material-ordering-request-card-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.transport-page-frame .material-ordering-request-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.transport-page-frame .material-ordering-request-card-copy strong {
+    display: block;
+    color: #102B5C;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.transport-page-frame .material-ordering-request-card-copy span {
+    display: block;
+    margin-top: 4px;
+    color: #64748B;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.transport-page-frame .material-ordering-request-status {
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: #FFF7ED;
+    color: #C25B0E;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.transport-page-frame .material-ordering-request-status.scheduled {
+    background: #EFF6FF;
+    color: #1D4ED8;
+}
+
+.transport-page-frame .material-ordering-request-metadata {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.transport-page-frame .material-ordering-request-metadata > div {
+    border-radius: 16px;
+    background: #F8FAFC;
+    border: 1px solid #E8EDF5;
+    padding: 12px 14px;
+}
+
+.transport-page-frame .material-ordering-request-metadata span {
+    display: block;
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.transport-page-frame .material-ordering-request-metadata strong {
+    display: block;
+    margin-top: 6px;
+    color: #102B5C;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.transport-page-frame .material-ordering-request-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 96px;
+}
+
+.transport-page-frame .material-ordering-transport-empty,
+.transport-page-frame .material-ordering-inline-error {
+    margin: 16px;
+}
+
+.transport-page-frame .material-ordering-inline-error {
+    margin-bottom: 0;
+}
+
+@media (max-width: 1100px) {
+    .transport-page-frame .transport-suite-shell {
+        grid-template-columns: 118px minmax(0, 1fr);
+        min-width: 1460px;
+    }
+
+    .transport-page-frame .transport-suite-sidebar {
+        border-radius: 0;
+        padding: 22px 10px 18px;
+    }
+
+    .transport-page-frame .transport-side-rail-nav {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+    }
+
+    .transport-page-frame .transport-suite-nav-item {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+/* ── Dynamic schedule alignment + truck lane icons ────────────────────────── */
+.transport-page-frame .ts2-axis,
+.transport-page-frame .ts2-lane-track {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.transport-page-frame .ts2-axis-tick span {
+    left: 10px;
+}
+
+.transport-page-frame .ts2-truck-pill {
+    gap: 8px;
+}
+
+.transport-page-frame .ts2-truck-pill-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: #EEF4FD;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transport-page-frame .ts2-truck-pill-icon svg {
+    display: block;
+}

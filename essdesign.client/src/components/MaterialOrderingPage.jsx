@@ -574,104 +574,114 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
         const rows = isActive ? visibleOrders : archivedRequests;
 
         return (
-            <div className="material-ordering-list-shell">
-                <div className="material-ordering-page-head">
-                    <div className="material-ordering-page-title-wrap">
-                        <div>
-                            <h2>{isActive ? 'Scheduled Orders' : 'Archived Orders'}</h2>
-                            <p>{isActive ? 'Submitted transport requests scheduled for delivery.' : 'Completed requests that have rolled out of the active queue.'}</p>
-                        </div>
+            <div className="ts2-page material-ordering-transport-page">
+                <div className="ts2-header material-ordering-transport-header">
+                    <div className="ts2-header-left material-ordering-transport-header-copy">
+                        <h1>{isActive ? 'Schedule Management' : 'Archived Orders'}</h1>
+                        <p>{isActive ? 'Submitted transport requests currently in the live queue.' : 'Completed transport requests that have rolled out of the active queue.'}</p>
+                    </div>
+                    <div className="ts2-header-actions">
+                        <div className="ts2-header-date-pill">{rows.length} {rows.length === 1 ? 'order' : 'orders'}</div>
                     </div>
                 </div>
 
-                {error ? <div className="module-error">{error}</div> : null}
+                {error ? <div className="module-error material-ordering-inline-error">{error}</div> : null}
 
-                <div className="material-ordering-browser-card">
-                    <div className="material-ordering-archive-head">
-                        <div>
-                            <h3>{isActive ? 'Scheduled Orders' : 'Archived Orders'}</h3>
-                            <p>{isActive ? 'Submitted transport requests.' : 'Completed transport requests.'}</p>
-                        </div>
-                        <span>{rows.length}</span>
+                {rows.length === 0 ? (
+                    <div className="transport-placeholder-card material-ordering-transport-empty">
+                        <span className="transport-placeholder-eyebrow">ESS Transport</span>
+                        <h2>{isActive ? 'No scheduled orders' : 'No archived orders'}</h2>
+                        <p>{isActive ? 'Submitted transport requests will appear here as soon as they enter the active queue.' : 'Completed transport requests will appear here once they have rolled out of the active queue.'}</p>
                     </div>
-                    {rows.length === 0 ? (
-                        <div className="module-empty-inline">{isActive ? 'No scheduled orders right now.' : 'No archived orders yet.'}</div>
-                    ) : (
-                        <div className="material-ordering-archive-table-wrap">
-                            <table className="material-ordering-archive-table">
-                                <thead>
-                                    <tr>
-                                        <th>Builder</th>
-                                        <th>Project</th>
-                                        <th>{isActive ? 'Scaffold' : 'Scheduled'}</th>
-                                        <th>{isActive ? 'Submitted' : 'Actions'}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {isActive ? orders.map((request) => (
-                                        <tr key={request.id}>
-                                            <td>{request.builderName}</td>
-                                            <td>{request.projectName}</td>
-                                            <td>{request.scaffoldingSystem || '—'}</td>
-                                            <td>{formatDateTime(request.submittedAt)}</td>
-                                        </tr>
-                                    )) : archivedRequests.map((request) => (
-                                        <tr key={request.id}>
-                                            <td>{request.builderName}</td>
-                                            <td>{request.projectName}</td>
-                                            <td>{formatDateTime(request.scheduledAtIso || request.archivedAt || request.submittedAt)}</td>
-                                            <td>
-                                                <div className="material-ordering-archive-actions">
-                                                    <button type="button" className="module-secondary-btn" onClick={(event) => openArchivedPdf(request, event)} disabled={openingArchivedPdfId === request.id}>
-                                                        {openingArchivedPdfId === request.id ? 'Opening...' : 'PDF'}
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
+                ) : (
+                    <div className="material-ordering-request-stack">
+                        {rows.map((request) => {
+                            const isScheduled = Boolean(
+                                request.scheduledAtIso ||
+                                (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number')
+                            );
+                            const statusLabel = isActive ? (isScheduled ? 'Scheduled' : 'Pending') : 'Archived';
+                            return (
+                                <article key={request.id} className="material-ordering-request-card">
+                                    <div className="material-ordering-request-card-main">
+                                        <div className="material-ordering-request-card-top">
+                                            <div className="material-ordering-request-card-copy">
+                                                <strong>{request.builderName}</strong>
+                                                <span>{request.projectName}</span>
+                                            </div>
+                                            <span className={"material-ordering-request-status" + (isScheduled ? ' scheduled' : '')}>
+                                                {statusLabel}
+                                            </span>
+                                        </div>
+                                        <div className="material-ordering-request-metadata">
+                                            <div>
+                                                <span>Scaffold</span>
+                                                <strong>{request.scaffoldingSystem || '—'}</strong>
+                                            </div>
+                                            <div>
+                                                <span>Requested By</span>
+                                                <strong>{request.requestedByName || '—'}</strong>
+                                            </div>
+                                            <div>
+                                                <span>{isActive ? 'Submitted' : 'Scheduled'}</span>
+                                                <strong>{formatDateTime(isActive ? request.submittedAt : request.scheduledAtIso || request.archivedAt || request.submittedAt)}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="material-ordering-request-card-actions">
+                                        {!isActive ? (
+                                            <button
+                                                type="button"
+                                                className="ts2-secondary-btn"
+                                                onClick={(event) => openArchivedPdf(request, event)}
+                                                disabled={openingArchivedPdfId === request.id}
+                                            >
+                                                {openingArchivedPdfId === request.id ? 'Opening...' : 'PDF'}
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         );
     };
 
     if (loading) {
-        return <div className="module-page"><div className="module-empty">Loading material ordering...</div></div>;
-    }
-
-    if (isActiveQueueView || isArchivedQueueView) {
         return (
-            <div className="module-page">
-                <div className="module-shell material-ordering-shell material-ordering-shell-wide">
-                    {renderListTable()}
+            <div className="ts2-page material-ordering-transport-page">
+                <div className="transport-placeholder-card material-ordering-transport-empty">
+                    <span className="transport-placeholder-eyebrow">ESS Transport</span>
+                    <h2>Loading material ordering…</h2>
+                    <p>The transport workspace is loading the current picking card data.</p>
                 </div>
             </div>
         );
     }
 
+    if (isActiveQueueView || isArchivedQueueView) {
+        return renderListTable();
+    }
+
     return (
-        <div className="module-page">
-            <div className="module-shell material-ordering-shell material-ordering-shell-wide">
-                <div className="material-ordering-list-shell">
-                    <div className="material-ordering-page-head">
-                        <div className="material-ordering-page-title-wrap">
-                            <div>
-                                <h2>ESS Material Ordering</h2>
-                                <p>Create and save material cards using the full iPad-style picking form.</p>
-                            </div>
-                        </div>
-                        <button type="button" className="module-primary-btn" onClick={startNewOrder}>
-                            New Card
-                        </button>
-                    </div>
-                    <section className="material-ordering-canvas material-ordering-canvas-wide">
-                        {renderPickingSheet()}
-                    </section>
+        <div className="ts2-page material-ordering-transport-page">
+            <div className="ts2-header material-ordering-transport-header">
+                <div className="ts2-header-left material-ordering-transport-header-copy">
+                    <h1>Material Ordering</h1>
+                    <p>Create and submit material cards using the full ESS Transport picking sheet.</p>
+                </div>
+                <div className="ts2-header-actions">
+                    <button type="button" className="ts2-primary-btn solid" onClick={startNewOrder}>
+                        New Card
+                    </button>
                 </div>
             </div>
+
+            <section className="material-ordering-transport-canvas">
+                {renderPickingSheet()}
+            </section>
         </div>
     );
 }
