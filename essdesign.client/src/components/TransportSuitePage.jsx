@@ -32,11 +32,18 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
     }
     return [
       { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard' },
-      { key: 'transport-drivers', label: 'Drivers', icon: 'drivers' },
       { key: 'truck-schedule', label: 'Dynamic Schedule', icon: 'dynamic' },
-      { key: 'truck-tracking', label: 'Truck Tracking', icon: 'tracking' },
-      { key: 'material-ordering-active', label: 'Schedule Management', icon: 'schedule' },
-      { key: 'material-ordering-new', label: 'Material Ordering', icon: 'materials' },
+      { key: 'material-ordering-active', label: 'Schedule Management', icon: 'schedule', match: ['material-ordering-active', 'material-ordering-archived'] },
+      { key: 'material-ordering-new', label: 'Orders', icon: 'orders', match: ['material-ordering-new', 'material-ordering'] },
+      { key: 'transport-trips', label: 'Trips', icon: 'trips' },
+      { key: 'transport-fleet', label: 'Fleet', icon: 'fleet' },
+      { key: 'transport-drivers', label: 'Drivers', icon: 'drivers' },
+      { key: 'transport-clients', label: 'Clients', icon: 'clients' },
+      { key: 'transport-inventory', label: 'Inventory', icon: 'inventory' },
+      { key: 'transport-yard', label: 'Yard', icon: 'yard' },
+      { key: 'transport-reports', label: 'Reports', icon: 'reports' },
+      { key: 'transport-alerts', label: 'Alerts', icon: 'alerts', badge: '3' },
+      { key: 'transport-settings', label: 'Settings', icon: 'settings' },
     ];
   }, [isTruckRole]);
 
@@ -56,6 +63,16 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
           eyebrow="ESS Transport"
           title="Drivers"
           description="This page is reserved for the transport driver management view. The shell and navigation now match the iOS transport suite."
+        />
+      );
+    }
+    if (['transport-trips', 'transport-fleet', 'transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts', 'transport-settings'].includes(currentPage)) {
+      const title = currentPage.replace('transport-', '').replace(/^\w/, value => value.toUpperCase());
+      return (
+        <TransportPlaceholderPage
+          eyebrow="ESS Transport"
+          title={title}
+          description={`${title} will use the same desktop transport shell and can be wired into the live transport data next.`}
         />
       );
     }

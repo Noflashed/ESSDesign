@@ -876,3 +876,707 @@
         min-width: 860px !important;
     }
 }
+
+/* Reference-image transport desktop pass. This intentionally overrides the earlier
+   native-parity layer so the web screens match the supplied desktop mockups. */
+.transport-desktop-shell {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    min-height: 100vh;
+    background: #0c1a25;
+    color: #111827;
+    font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.transport-desktop-rail {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100vh;
+    padding: 18px 8px 10px;
+    background: linear-gradient(180deg, #0f2534 0%, #07131d 100%);
+    color: #c8d3df;
+    box-sizing: border-box;
+}
+
+.transport-desktop-brand {
+    padding: 4px 16px 22px;
+    color: #ffffff;
+}
+
+.transport-desktop-brand strong {
+    display: block;
+    font-size: 28px;
+    line-height: 26px;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.transport-desktop-brand span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.transport-desktop-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.transport-desktop-nav-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    width: 100%;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #c7d2df;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.transport-desktop-nav-item span {
+    overflow: hidden;
+    white-space: normal;
+    line-height: 13px;
+}
+
+.transport-desktop-nav-item:hover,
+.transport-desktop-nav-item.active {
+    background: #143a5c;
+    color: #ffffff;
+}
+
+.transport-desktop-nav-item.active {
+    box-shadow: inset 3px 0 0 #2688ff;
+}
+
+.transport-desktop-nav-item b {
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f04452;
+    color: #ffffff;
+    font-size: 10px;
+}
+
+.transport-desktop-user {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px;
+    color: #ffffff;
+}
+
+.transport-desktop-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #dbeafe;
+    color: #123457;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.transport-desktop-user strong,
+.transport-desktop-user span {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-desktop-user strong { font-size: 10px; font-weight: 900; }
+.transport-desktop-user span { font-size: 9px; color: #9fb0bf; }
+.transport-desktop-user button {
+    border: 0;
+    background: transparent;
+    color: #9fb0bf;
+    font-size: 18px;
+}
+
+.transport-desktop-workspace {
+    min-width: 0;
+    min-height: 100vh;
+    background: #f4f7fb;
+}
+
+.transport-page-frame .transport-desktop-workspace .ts2-page,
+.transport-desktop-workspace .ts2-page {
+    min-height: 100vh !important;
+    overflow: auto !important;
+    background: #f4f7fb !important;
+    color: #111827 !important;
+}
+
+.transport-page-frame .transport-reference-header,
+.transport-desktop-workspace .transport-reference-header,
+.transport-page-frame .transport-management-redesign .material-ordering-transport-header,
+.transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header {
+    min-height: 64px !important;
+    padding: 0 20px !important;
+    border-bottom: 1px solid #dfe6ef !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-reference-header h1,
+.transport-desktop-workspace .transport-reference-header h1,
+.transport-page-frame .transport-management-redesign h1,
+.transport-desktop-workspace .transport-management-redesign h1 {
+    margin: 0 !important;
+    color: #111827 !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-reference-header .ts2-header-icon-btn,
+.transport-desktop-workspace .transport-reference-header .ts2-header-icon-btn,
+.transport-page-frame .transport-reference-header .ts2-header-actions > *,
+.transport-desktop-workspace .transport-reference-header .ts2-header-actions > * {
+    display: none !important;
+}
+
+.transport-page-frame .transport-reference-header .ts2-header-actions::after,
+.transport-desktop-workspace .transport-reference-header .ts2-header-actions::after,
+.transport-page-frame .transport-management-redesign .ts2-header-actions::after,
+.transport-desktop-workspace .transport-management-redesign .ts2-header-actions::after {
+    content: "?";
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #cbd5e1;
+    border-radius: 50%;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.transport-reference-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 58px;
+    padding: 10px 18px;
+    background: #ffffff;
+    border-bottom: 1px solid #dfe6ef;
+    box-sizing: border-box;
+}
+
+.transport-toolbar-icon,
+.transport-toolbar-date,
+.transport-toolbar-button,
+.transport-toolbar-filter select {
+    height: 38px;
+    border: 1px solid #d7e0eb;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.transport-toolbar-icon {
+    width: 38px;
+    padding: 0;
+    font-size: 17px;
+}
+
+.transport-toolbar-date {
+    padding: 0 14px;
+}
+
+.transport-live-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.transport-live-refresh i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+}
+
+.transport-live-refresh b {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 10px;
+}
+
+.transport-toolbar-button {
+    padding: 0 14px;
+}
+
+.transport-toolbar-button.route {
+    border-color: #7aa7f7;
+    color: #1d4ed8;
+    background: #f7fbff;
+}
+
+.transport-toolbar-filter {
+    display: grid;
+    gap: 3px;
+    margin-left: auto;
+}
+
+.transport-toolbar-filter span {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.transport-toolbar-filter select {
+    min-width: 146px;
+    padding: 0 10px;
+}
+
+.transport-dynamic-reference > .ts2-pending-panel {
+    display: none !important;
+}
+
+.transport-page-frame .transport-schedule-redesign-grid,
+.transport-desktop-workspace .transport-schedule-redesign-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 320px !important;
+    grid-template-rows: auto auto !important;
+    gap: 0 !important;
+    padding: 0 0 0 0 !important;
+    align-items: stretch !important;
+}
+
+.transport-page-frame .transport-schedule-board-card,
+.transport-desktop-workspace .transport-schedule-board-card {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-right: 1px solid #dfe6ef !important;
+    border-bottom: 1px solid #dfe6ef !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-schedule-inspector,
+.transport-desktop-workspace .transport-schedule-inspector {
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    border: 0 !important;
+    border-left: 1px solid #dfe6ef !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 16px !important;
+    background: #ffffff !important;
+}
+
+.transport-page-frame .ts2-board-card-head,
+.transport-desktop-workspace .ts2-board-card-head {
+    height: 54px !important;
+    padding: 0 14px !important;
+    border-bottom: 1px solid #dfe6ef !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.transport-page-frame .ts2-board-card-title,
+.transport-desktop-workspace .ts2-board-card-title {
+    font-size: 14px !important;
+    color: #111827 !important;
+}
+
+.transport-page-frame .ts2-board-card-subtitle,
+.transport-desktop-workspace .ts2-board-card-subtitle,
+.transport-page-frame .ts2-board-card-controls,
+.transport-desktop-workspace .ts2-board-card-controls {
+    display: none !important;
+}
+
+.transport-page-frame .ts2-legend-row-inline,
+.transport-desktop-workspace .ts2-legend-row-inline {
+    order: 2;
+    margin: 8px 14px !important;
+    padding: 0 !important;
+    justify-content: flex-start !important;
+    gap: 18px !important;
+    font-size: 11px !important;
+}
+
+.transport-page-frame .ts2-board,
+.transport-desktop-workspace .ts2-board {
+    padding: 0 10px 8px !important;
+}
+
+.transport-page-frame .ts2-axis,
+.transport-desktop-workspace .ts2-axis {
+    height: 42px !important;
+}
+
+.transport-page-frame .ts2-axis-tick span,
+.transport-desktop-workspace .ts2-axis-tick span {
+    top: 11px !important;
+    color: #1f2937 !important;
+    font-size: 10px !important;
+}
+
+.transport-page-frame .ts2-lane-row,
+.transport-desktop-workspace .ts2-lane-row {
+    min-height: 128px !important;
+    border-top: 1px solid #edf2f7 !important;
+    border-bottom: 0 !important;
+}
+
+.transport-page-frame .ts2-lane-meta,
+.transport-desktop-workspace .ts2-lane-meta {
+    padding: 18px 10px !important;
+    border-right: 1px solid #dfe6ef !important;
+    background: #ffffff !important;
+}
+
+.transport-page-frame .ts2-truck-pill,
+.transport-desktop-workspace .ts2-truck-pill {
+    display: grid !important;
+    gap: 4px !important;
+}
+
+.transport-page-frame .ts2-truck-pill strong,
+.transport-desktop-workspace .ts2-truck-pill strong {
+    color: #111827 !important;
+    font-size: 13px !important;
+}
+
+.transport-page-frame .ts2-truck-pill::after,
+.transport-desktop-workspace .ts2-truck-pill::after {
+    content: "On Duty";
+    width: max-content;
+    margin-top: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.transport-page-frame .ts2-truck-pill-icon,
+.transport-desktop-workspace .ts2-truck-pill-icon {
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+}
+
+.transport-page-frame .ts2-lane-track,
+.transport-desktop-workspace .ts2-lane-track {
+    min-height: 128px !important;
+    background: #ffffff !important;
+}
+
+.transport-page-frame .ts2-event-wrap,
+.transport-desktop-workspace .ts2-event-wrap {
+    top: 22px !important;
+    bottom: 22px !important;
+}
+
+.transport-page-frame .ts2-event-card,
+.transport-desktop-workspace .ts2-event-card,
+.transport-page-frame .ts2-return-card,
+.transport-desktop-workspace .ts2-return-card {
+    border: 1px solid currentColor !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    padding: 8px 9px !important;
+}
+
+.transport-page-frame .ts2-event-time,
+.transport-desktop-workspace .ts2-event-time {
+    font-size: 10px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .ts2-event-title,
+.transport-desktop-workspace .ts2-event-title {
+    font-size: 11px !important;
+    line-height: 13px !important;
+}
+
+.transport-page-frame .ts2-event-subtitle,
+.transport-desktop-workspace .ts2-event-subtitle,
+.transport-page-frame .ts2-event-status-row,
+.transport-desktop-workspace .ts2-event-status-row {
+    font-size: 10px !important;
+}
+
+.transport-reference-pending {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    background: #ffffff;
+    border-right: 1px solid #dfe6ef;
+    padding: 12px 14px 14px;
+}
+
+.transport-reference-pending-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+}
+
+.transport-reference-pending-head strong {
+    color: #111827;
+    font-size: 13px;
+}
+
+.transport-reference-pending-head button {
+    border: 0;
+    background: transparent;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.transport-reference-pending-tools {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 120px 120px 34px 34px;
+    gap: 8px;
+    margin: 8px 0 10px;
+}
+
+.transport-reference-pending-tools label {
+    position: relative;
+}
+
+.transport-reference-pending-tools label span {
+    position: absolute;
+    left: 12px;
+    top: 10px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.transport-reference-pending-tools input,
+.transport-reference-pending-tools button {
+    width: 100%;
+    height: 34px;
+    border: 1px solid #d7e0eb;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.transport-reference-pending-tools .active {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.transport-reference-pending-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(130px, 1fr));
+    gap: 8px;
+}
+
+.transport-reference-pending-card {
+    display: grid;
+    gap: 5px;
+    min-height: 154px;
+    padding: 10px;
+    border: 1px solid #dfe6ef;
+    border-radius: 5px;
+    background: #ffffff;
+}
+
+.transport-reference-pending-card div {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.transport-reference-pending-card strong {
+    color: #111827;
+    font-size: 11px;
+    line-height: 14px;
+}
+
+.transport-reference-pending-card span,
+.transport-reference-pending-card small {
+    color: #475569;
+    font-size: 10px;
+    line-height: 13px;
+}
+
+.transport-reference-pending-card button {
+    align-self: end;
+    height: 30px;
+    border: 1px solid #8bb9ff;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.transport-page-frame .transport-schedule-inspector-head h2,
+.transport-desktop-workspace .transport-schedule-inspector-head h2,
+.transport-page-frame .transport-management-detail-head h2,
+.transport-desktop-workspace .transport-management-detail-head h2 {
+    color: #1d4ed8 !important;
+    font-size: 14px !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list,
+.transport-desktop-workspace .transport-schedule-detail-list,
+.transport-page-frame .transport-management-summary-grid,
+.transport-desktop-workspace .transport-management-summary-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card,
+.transport-desktop-workspace .transport-schedule-estimate-card,
+.transport-page-frame .transport-management-route-card,
+.transport-desktop-workspace .transport-management-route-card {
+    border-radius: 5px !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-map,
+.transport-desktop-workspace .transport-schedule-inspector-map {
+    height: 130px !important;
+    min-height: 130px !important;
+    border-radius: 5px !important;
+}
+
+.transport-page-frame .transport-management-redesign .ts2-header-actions > *,
+.transport-desktop-workspace .transport-management-redesign .ts2-header-actions > * {
+    display: none !important;
+}
+
+.transport-page-frame .transport-management-layout,
+.transport-desktop-workspace .transport-management-layout {
+    grid-template-columns: minmax(0, 1fr) 338px !important;
+    gap: 0 !important;
+    padding: 0 !important;
+}
+
+.transport-page-frame .transport-management-main,
+.transport-desktop-workspace .transport-management-main {
+    padding: 0 14px 14px !important;
+    background: #ffffff !important;
+    border-right: 1px solid #dfe6ef !important;
+}
+
+.transport-page-frame .transport-management-tabs,
+.transport-desktop-workspace .transport-management-tabs {
+    min-height: 54px !important;
+    gap: 34px !important;
+}
+
+.transport-page-frame .transport-management-tools,
+.transport-desktop-workspace .transport-management-tools {
+    grid-template-columns: minmax(300px, 1fr) auto !important;
+    margin: 12px 0 !important;
+}
+
+.transport-page-frame .transport-management-table-wrap,
+.transport-desktop-workspace .transport-management-table-wrap,
+.transport-page-frame .transport-management-detail,
+.transport-desktop-workspace .transport-management-detail {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-management-table th,
+.transport-desktop-workspace .transport-management-table th {
+    height: 38px !important;
+    padding: 7px 9px !important;
+    background: #ffffff !important;
+    font-size: 10px !important;
+}
+
+.transport-page-frame .transport-management-table td,
+.transport-desktop-workspace .transport-management-table td {
+    padding: 9px !important;
+    font-size: 10px !important;
+}
+
+.transport-page-frame .transport-management-table td strong,
+.transport-desktop-workspace .transport-management-table td strong {
+    font-size: 10px !important;
+}
+
+.transport-page-frame .transport-management-detail,
+.transport-desktop-workspace .transport-management-detail {
+    background: #ffffff !important;
+    padding: 16px !important;
+}
+
+.transport-page-frame .transport-management-panel,
+.transport-desktop-workspace .transport-management-panel {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-top: 14px !important;
+}
+
+.transport-page-frame .transport-management-panel-title,
+.transport-desktop-workspace .transport-management-panel-title {
+    min-height: 34px !important;
+}
+
+.transport-page-frame .transport-management-items,
+.transport-desktop-workspace .transport-management-items,
+.transport-page-frame .transport-management-notes textarea,
+.transport-desktop-workspace .transport-management-notes textarea,
+.transport-page-frame .transport-management-route-card,
+.transport-desktop-workspace .transport-management-route-card {
+    border-radius: 5px !important;
+}
+
+.transport-page-frame .transport-management-truck-tabs button,
+.transport-desktop-workspace .transport-management-truck-tabs button,
+.transport-page-frame .transport-management-save,
+.transport-desktop-workspace .transport-management-save,
+.transport-page-frame .transport-management-secondary-action,
+.transport-desktop-workspace .transport-management-secondary-action {
+    border-radius: 5px !important;
+}
+
+@media (max-width: 1220px) {
+    .transport-reference-pending-list {
+        grid-template-columns: repeat(3, minmax(130px, 1fr));
+    }
+}

@@ -273,6 +273,18 @@ function TruckLaneIcon() {
   );
 }
 
+function requestPriorityLabel(request) {
+  const submitted = request?.submittedAt ? new Date(request.submittedAt).getTime() : Date.now();
+  const ageHours = Math.max(0, (Date.now() - submitted) / 3600000);
+  if (ageHours > 24) return 'High';
+  if (ageHours > 8) return 'Medium';
+  return 'Low';
+}
+
+function formatLastRefreshTime() {
+  return new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0 }) {
   const [now, setNow] = useState(new Date());
 
@@ -710,8 +722,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [selectedDate]);
 
   return (
-    <div className="ts2-page">
-      <div className="ts2-header">
+    <div className="ts2-page transport-dynamic-reference">
+      <div className="ts2-header transport-reference-header">
         <div className="ts2-header-left">
           {!isTruckRole ? (
             <button type="button" className="ts2-header-icon-btn" aria-label="Transport menu">☰</button>
@@ -732,6 +744,27 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div className="transport-reference-toolbar">
+        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
+        <button type="button" className="transport-toolbar-date">{selectedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</button>
+        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(startOfDay(new Date()))}>▣</button>
+        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
+        <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
+        <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}>⟳ Refresh</button>
+        <button type="button" className="transport-toolbar-button route">⟳ Route Analysis</button>
+        {!isTruckRole ? (
+          <label className="transport-toolbar-filter">
+            <span>Truck Filter</span>
+            <select value="all" onChange={() => {}}>
+              <option value="all">All Trucks</option>
+              {TRUCK_LANES.map(lane => <option key={lane.id} value={lane.id}>{lane.rego}</option>)}
+            </select>
+          </label>
+        ) : null}
+        <button type="button" className="transport-toolbar-icon">⌯</button>
+        <button type="button" className="transport-toolbar-icon">⋯</button>
       </div>
 
       {error ? <div className="ts2-error">{error}</div> : null}
@@ -764,7 +797,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       <div className="ts2-board-card transport-schedule-board-card">
         <div className="ts2-board-card-head">
           <div>
-            <strong className="ts2-board-card-title">Live Schedule</strong>
+            <strong className="ts2-board-card-title">Schedule Board</strong>
             <span className="ts2-board-card-subtitle">{formatBoardDay(selectedDate)}</span>
           </div>
           <div className="ts2-board-card-controls">
@@ -885,6 +918,36 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
         </div>
       </div>
+      {!isTruckRole ? (
+        <section className="transport-reference-pending">
+          <div className="transport-reference-pending-head">
+            <strong>Pending Requests ({pendingRequests.length})</strong>
+            <button type="button" onClick={() => setShowPendingPanel(open => !open)}>{showPendingPanel ? 'Collapse' : 'Expand'}</button>
+          </div>
+          <div className="transport-reference-pending-tools">
+            <label><span>Search pending requests...</span><input type="text" aria-label="Search pending requests" readOnly /></label>
+            <button type="button">All Priorities</button>
+            <button type="button">Earliest First</button>
+            <button type="button" className="active">▦</button>
+            <button type="button">▤</button>
+          </div>
+          <div className="transport-reference-pending-list">
+            {pendingRequests.length > 0 ? pendingRequests.slice(0, 6).map(request => {
+              const priority = requestPriorityLabel(request);
+              return (
+                <article key={request.id} className="transport-reference-pending-card">
+                  <div><span className={`transport-priority priority-${priority.toLowerCase()}`}>{priority}</span><b>{request.id}</b></div>
+                  <strong>{request.builderName || 'Material Order'}</strong>
+                  <span>{request.projectName || 'Awaiting site assignment'}</span>
+                  <small>Requested by {request.requestedByName || 'Transport'}</small>
+                  <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
+                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                </article>
+              );
+            }) : <p>All material requests are scheduled.</p>}
+          </div>
+        </section>
+      ) : null}
       </div>
       <aside className="transport-schedule-inspector">
         <div className="transport-schedule-inspector-head">
