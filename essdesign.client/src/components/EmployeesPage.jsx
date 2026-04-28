@@ -343,7 +343,25 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setSavingAppUser(true);
         setError('');
         try {
-            await usersAPI.updateUser(appUserForm.id, { fullName: appUserForm.fullName, role: appUserForm.role, phoneNumber: appUserForm.phoneNumber });
+            const existingAppUser = appUsers.find((entry) => entry.id === appUserForm.id);
+            const nextFullName = appUserForm.fullName || '';
+            const nextPhoneNumber = appUserForm.phoneNumber || '';
+            const nextRole = appUserForm.role || 'viewer';
+            const currentFullName = existingAppUser?.fullName || '';
+            const currentPhoneNumber = existingAppUser?.phoneNumber || '';
+            const currentRole = existingAppUser?.role || 'viewer';
+
+            if (nextRole !== currentRole) {
+                await usersAPI.updateUserRole(appUserForm.id, nextRole);
+            }
+
+            if (nextFullName !== currentFullName || nextPhoneNumber !== currentPhoneNumber) {
+                await usersAPI.updateUser(appUserForm.id, {
+                    fullName: nextFullName,
+                    phoneNumber: nextPhoneNumber,
+                });
+            }
+
             const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
             setAppUsers(userRows || []);
             setEmployees(employeeRows);
@@ -353,7 +371,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             }
             setShowAppUserModal(false);
         } catch (err) {
-            setError(err.message || 'Could not save user');
+            setError(err?.response?.data?.error || err.message || 'Could not save user');
         } finally {
             setSavingAppUser(false);
         }
