@@ -549,6 +549,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
   const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation) ?? null) : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
+  const selectedScheduleWindowLabel = useMemo(() => {
+    if (!selectedScheduleEvent) return 'No delivery selected';
+    const startMinutes = (eventStartMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleEvent.hour * 60 + selectedScheduleEvent.minute);
+    const durationMinutes = eventPrimaryDurationMinutesMap[selectedScheduleEvent.orderId] ?? eventDurationMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleTiming?.totalMinutes ?? 90;
+    const endMinutes = startMinutes + durationMinutes;
+    return `${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}`;
+  }, [eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, selectedScheduleEvent, selectedScheduleTiming?.totalMinutes]);
   const selectedRouteDurationMinutes = useMemo(
     () => Math.max(30, selectedRouteEstimate?.durationMinutes ? selectedRouteEstimate.durationMinutes * 2 + 30 : 90),
     [selectedRouteEstimate],
@@ -953,8 +960,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         <div className="transport-schedule-inspector-head">
           <div>
             <span>Selected Delivery</span>
-            <h2>{selectedScheduleEvent ? `${formatTimeChip(selectedScheduleEvent.hour, selectedScheduleEvent.minute)} - ${selectedScheduleRequest?.scheduledTruckLabel || selectedScheduleEvent.truckLabel || 'ESS'}` : 'No delivery selected'}</h2>
+            <h2>{selectedScheduleWindowLabel}</h2>
           </div>
+          {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleRequest.deliveryStatus || 'scheduled'}`}>{scheduleStatusLabel(selectedScheduleRequest.deliveryStatus || 'scheduled')}</span> : null}
           <button type="button" onClick={() => setSelectedScheduleEventId('')} aria-label="Clear selected delivery">x</button>
         </div>
         {selectedScheduleEvent ? (
@@ -969,12 +977,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <div><span>Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
               <div><span>Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
               <div><span>Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
-              <div><span>Total</span><strong>{selectedScheduleTiming ? `${Math.round(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
+              <div><span>Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
             </div>
+            <h3 className="transport-panel-section-title">Route Preview</h3>
             <RouteMapCanvas className="transport-schedule-inspector-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={selectedScheduleSiteLocation} />
+            <h3 className="transport-panel-section-title">Weather & Traffic</h3>
+            <div className="transport-weather-grid">
+              <div><strong>18°C</strong><span>Sunny</span></div>
+              <div><strong>Low Traffic</strong><span>ETA impact +5 min</span></div>
+            </div>
+            <h3 className="transport-panel-section-title">Recommended Time Slot</h3>
             <div className="transport-schedule-recommendation">
-              <span>Recommended Time Slot</span>
-              <strong>{selectedScheduleTiming ? 'Best traffic conditions' : 'Route estimate pending'}</strong>
+              <strong>{selectedScheduleWindowLabel}</strong>
               <small>{selectedScheduleTiming ? `Allow ${selectedScheduleTiming.totalMinutes} min total cycle` : 'Add a project site location to improve recommendations.'}</small>
             </div>
             <button type="button" className="transport-management-secondary-action" onClick={() => openEventOverview(selectedScheduleEvent)}>View Full Route Analysis</button>
