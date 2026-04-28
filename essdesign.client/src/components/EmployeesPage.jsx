@@ -364,13 +364,22 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setSavingAppUser(true);
         setError('');
         try {
+            const normalizedDeviceId = (truckDeviceForm.deviceId || '').trim();
+            const normalizedPassword = truckDeviceForm.password || '';
+            if (!normalizedDeviceId) {
+                throw new Error('Device ID is required.');
+            }
+            if (normalizedPassword.trim().length < 6) {
+                throw new Error('Password must be at least 6 characters.');
+            }
+
             await authAPI.createTruckDeviceUser(truckDeviceForm);
             const userRows = await usersAPI.getAllUsers();
             setAppUsers(userRows || []);
             setShowTruckDeviceModal(false);
             setTruckDeviceForm(emptyTruckDeviceForm());
         } catch (err) {
-            setError(err.message || 'Could not create truck device');
+            setError(err?.response?.data?.error || err.message || 'Could not create truck device');
         } finally {
             setSavingAppUser(false);
         }
@@ -756,6 +765,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         value={truckDeviceForm.deviceId}
                                         onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, deviceId: e.target.value }))}
                                         placeholder="ESS01"
+                                        required
                                     />
                                 </div>
                                 <div className="module-field">
@@ -777,6 +787,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         value={truckDeviceForm.fullName}
                                         onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, fullName: e.target.value }))}
                                         placeholder="ESS01 Driver Device"
+                                        required
                                     />
                                 </div>
                                 <div className="module-field">
@@ -786,6 +797,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         value={truckDeviceForm.password}
                                         onChange={(e) => setTruckDeviceForm((prev) => ({ ...prev, password: e.target.value }))}
                                         placeholder="Minimum 6 characters"
+                                        minLength={6}
+                                        required
                                     />
                                 </div>
                             </div>
