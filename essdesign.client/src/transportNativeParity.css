@@ -228,8 +228,8 @@
 
 .transport-page-frame .material-ordering-queue-tools,
 .transport-page-frame .material-ordering-request-stack-ios {
-    width: min(760px, calc(100vw - 170px)) !important;
-    max-width: 760px !important;
+    width: calc(100% - 48px) !important;
+    max-width: 1180px !important;
     margin-left: 24px !important;
     margin-right: auto !important;
     padding-left: 0 !important;
@@ -284,10 +284,40 @@
     border-radius: 24px !important;
 }
 
+.transport-page-frame .material-ordering-request-card-ios-stacked {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
 .transport-page-frame .material-ordering-request-ios-top,
 .transport-page-frame .material-ordering-request-ios-badges,
 .transport-page-frame .material-ordering-request-ios-footer {
     display: flex !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-top {
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-badges {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    min-width: 0 !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-brief,
+.transport-page-frame .material-ordering-request-ios-project,
+.transport-page-frame .material-ordering-request-ios-meta-row,
+.transport-page-frame .material-ordering-request-ios-footer {
+    width: 100% !important;
+    min-width: 0 !important;
 }
 
 .transport-page-frame .material-ordering-request-chip {
@@ -310,6 +340,7 @@
     font-size: 17px !important;
     font-weight: 800 !important;
     line-height: 1.45 !important;
+    max-width: none !important;
 }
 
 .transport-page-frame .material-ordering-request-ios-action {
@@ -317,4 +348,19 @@
     border-radius: 999px !important;
     background: #3F8A78 !important;
     font-size: 17px !important;
+}
+
+@media (min-width: 900px) {
+    .transport-page-frame .material-ordering-request-card-ios-stacked {
+        padding: 24px 28px 24px !important;
+    }
+
+    .transport-page-frame .material-ordering-request-ios-project {
+        max-width: 760px !important;
+    }
+
+    .transport-page-frame .material-ordering-request-ios-action {
+        max-width: 260px !important;
+        align-self: flex-start !important;
+    }
 }
