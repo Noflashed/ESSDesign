@@ -683,28 +683,15 @@ export default function TruckSchedulePage({ user }) {
   return (
     <div className="ts2-page">
       <div className="ts2-header">
-        <div>
-          <span className="ts2-eyebrow">ESS Transport</span>
-          <h1>{isTruckRole ? `${assignedTruck?.rego || 'Truck'} Dynamic Schedule` : 'Truck Schedule'}</h1>
+        <div className="ts2-header-left">
+          <h1>{isTruckRole ? (assignedTruck?.rego || 'Truck') + ' Schedule' : 'Truck Schedule'}</h1>
         </div>
         <div className="ts2-header-actions">
-          <button type="button" className="ts2-chip-btn" onClick={() => setSelectedDate(startOfDay(new Date()))}>Today</button>
-          <button
-            type="button"
-            className={`ts2-chip-btn${timelineScaleMode !== 'standard' ? ' active' : ''}`}
-            onClick={() => {
-              if (boardScrollRef.current) {
-                const node = boardScrollRef.current;
-                const maxScroll = Math.max(1, node.scrollWidth - node.clientWidth);
-                scaleAnchorRef.current = node.scrollLeft / maxScroll;
-              }
-              setTimelineScaleMode(current => cycleScaleMode(current));
-            }}
-          >
-            {timelineScaleLabel}
-          </button>
+          <div className="ts2-header-date-pill">{selectedDate.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })}</div>
+          <button type="button" className="ts2-secondary-btn" onClick={() => setSelectedDate(startOfDay(new Date()))}>Today</button>
+          {!isTruckRole ? <button type="button" className="ts2-secondary-btn">Filter</button> : null}
           {!isTruckRole ? (
-            <button type="button" className="ts2-primary-btn" onClick={() => setShowPendingPanel(open => !open)}>
+            <button type="button" className="ts2-primary-btn solid" onClick={() => setShowPendingPanel(open => !open)}>
               Scheduled Orders <span>{pendingRequests.length}</span>
             </button>
           ) : null}
@@ -737,21 +724,41 @@ export default function TruckSchedulePage({ user }) {
         </div>
       ) : null}
 
-      <div className="ts2-toolbar-row">
-        <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
-        <div className="ts2-toolbar-date">{formatBoardDay(selectedDate)}</div>
-        <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
-      </div>
+      <div className="ts2-board-card">
+        <div className="ts2-board-card-head">
+          <div>
+            <strong className="ts2-board-card-title">Live Schedule</strong>
+            <span className="ts2-board-card-subtitle">{formatBoardDay(selectedDate)}</span>
+          </div>
+          <div className="ts2-board-card-controls">
+            <button
+              type="button"
+              className={'ts2-chip-btn' + (timelineScaleMode !== 'standard' ? ' active' : '')}
+              onClick={() => {
+                if (boardScrollRef.current) {
+                  const node = boardScrollRef.current;
+                  const maxScroll = Math.max(1, node.scrollWidth - node.clientWidth);
+                  scaleAnchorRef.current = node.scrollLeft / maxScroll;
+                }
+                setTimelineScaleMode(current => cycleScaleMode(current));
+              }}
+            >
+              {timelineScaleLabel}
+            </button>
+            <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
+            <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
+          </div>
+        </div>
 
-      <div className="ts2-legend-row">
-        <LegendDot color="#16A34A" label="Scheduled" />
-        <LegendDot color="#2563EB" label="In transit" />
-        <LegendDot color="#F47C20" label="Offloading" />
-        <LegendDot color="#7C3AED" label="Delivered" />
-        <LegendDot color="#6B7280" label="Return transit" />
-      </div>
+        <div className="ts2-legend-row ts2-legend-row-inline">
+          <LegendDot color="#16A34A" label="Scheduled" />
+          <LegendDot color="#2563EB" label="In transit" />
+          <LegendDot color="#F47C20" label="Offloading" />
+          <LegendDot color="#7C3AED" label="Delivered" />
+          <LegendDot color="#6B7280" label="Return transit" />
+        </div>
 
-      <div className="ts2-board-scroll" ref={boardScrollRef}>
+        <div className="ts2-board-scroll" ref={boardScrollRef}>
         <div className="ts2-board" style={{ width: timelineWidth + 186 }}>
           <div className="ts2-board-head">
             <div className="ts2-lane-head">Truck</div>
@@ -830,6 +837,7 @@ export default function TruckSchedulePage({ user }) {
             })}
           </div>
         </div>
+      </div>
       </div>
 
       {(requestModal || requestModalLoading) ? (

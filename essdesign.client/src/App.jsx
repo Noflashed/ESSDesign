@@ -184,14 +184,14 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const TRANSPORT_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
-    if (itemKey === 'truck-schedule') return currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking' || currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+    if (itemKey === 'truck-schedule') return currentPage === 'transport-dashboard' || currentPage === 'transport-drivers' || currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking' || currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
     if (itemKey === 'material-ordering-new') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new';
     return currentPage === itemKey;
 }
@@ -548,7 +548,7 @@ function App() {
     }, []);
 
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
-        const transportPages = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
+        const transportPages = new Set(['transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : isTruckDeviceUser
@@ -1124,8 +1124,8 @@ function App() {
                 />
             );
         }
-        if (currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking') {
-            return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
+        if (currentPage === 'transport-dashboard' || currentPage === 'transport-drivers' || currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking') {
+            return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onExit={() => applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;
