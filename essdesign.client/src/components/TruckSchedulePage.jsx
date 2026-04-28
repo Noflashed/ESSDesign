@@ -270,7 +270,7 @@ function TruckLaneIcon() {
   );
 }
 
-function CurrentTimeMarker({ selectedDate, timelineWidth }) {
+function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0 }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -283,7 +283,6 @@ function CurrentTimeMarker({ selectedDate, timelineWidth }) {
   }
   const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
   const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
-  const laneOffset = 96 + 10;
   const left = laneOffset + ((currentMinutes - SCREEN_START_HOUR * 60) / totalMinutes) * timelineWidth;
   if (left < laneOffset || left > laneOffset + timelineWidth) {
     return null;
@@ -771,19 +770,21 @@ export default function TruckSchedulePage({ user }) {
         </div>
 
         <div className="ts2-board-scroll" ref={boardScrollRef}>
-        <div className="ts2-board" style={{ width: timelineWidth + 96 }}>
+        <div className="ts2-board" style={{ width: timelineWidth + 116 }}>
           <div className="ts2-board-head">
             <div className="ts2-lane-head">Truck</div>
-            <div className="ts2-axis" style={{ width: timelineWidth }}>
-              {timelineMarkers.map(marker => (
-                <div key={`${timelineScaleMode}-${marker.minutes}`} className={`ts2-axis-tick${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }}>
-                  {marker.showLabel ? <span>{marker.label}</span> : null}
-                </div>
-              ))}
+            <div className="ts2-axis-shell">
+              <div className="ts2-axis" style={{ width: timelineWidth }}>
+                {timelineMarkers.map(marker => (
+                  <div key={`${timelineScaleMode}-${marker.minutes}`} className={`ts2-axis-tick${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }}>
+                    {marker.showLabel ? <span>{marker.label}</span> : null}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className="ts2-board-body">
-            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} />
+            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} laneOffset={106} />
             {visibleTruckLanes.map((lane, laneIndex) => {
               const laneEvents = groupedEventsByTruck[laneIndex] || [];
               return (
@@ -796,12 +797,13 @@ export default function TruckSchedulePage({ user }) {
                       <strong>{lane.rego}</strong>
                     </div>
                   </div>
-                  <div className="ts2-lane-track" style={{ width: timelineWidth }}>
-                    {timelineMarkers.slice(1, -1).map(marker => (
-                      <div key={`${lane.id}-${marker.minutes}`} className={`ts2-grid-line${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }} />
-                    ))}
-                    {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
-                    {laneEvents.map(event => {
+                  <div className="ts2-lane-track-shell">
+                    <div className="ts2-lane-track" style={{ width: timelineWidth }}>
+                      {timelineMarkers.slice(1, -1).map(marker => (
+                        <div key={`${lane.id}-${marker.minutes}`} className={`ts2-grid-line${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }} />
+                      ))}
+                      {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
+                      {laneEvents.map(event => {
                       const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
                       const status = request?.deliveryStatus || 'scheduled';
@@ -844,7 +846,8 @@ export default function TruckSchedulePage({ user }) {
                         </div>
                       );
                     })}
-                    {!loadingBoard && laneEvents.length === 0 ? <div className="ts2-empty-lane" /> : null}
+                      {!loadingBoard && laneEvents.length === 0 ? <div className="ts2-empty-lane" /> : null}
+                    </div>
                   </div>
                 </div>
               );

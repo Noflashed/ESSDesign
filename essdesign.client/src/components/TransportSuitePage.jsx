@@ -151,13 +151,13 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       return <TruckDeliverySchedulePage user={user} />;
     }
     if (currentPage === 'material-ordering-new' || currentPage === 'material-ordering') {
-      return <MaterialOrderingPage user={user} view="form" />;
+      return <MaterialOrderingPage user={user} view="form" onNavigate={onNavigate} />;
     }
     if (currentPage === 'material-ordering-active') {
-      return <MaterialOrderingPage user={user} view="active" />;
+      return <MaterialOrderingPage user={user} view="active" onNavigate={onNavigate} />;
     }
     if (currentPage === 'material-ordering-archived') {
-      return <MaterialOrderingPage user={user} view="archived" />;
+      return <MaterialOrderingPage user={user} view="archived" onNavigate={onNavigate} />;
     }
     return <TruckSchedulePage user={user} onNavigate={onNavigate} />;
   }, [currentPage, onNavigate, user]);

@@ -197,7 +197,7 @@ function ItemCell({ entry, value, onChange, readOnly = false }) {
     );
 }
 
-export default function MaterialOrderingPage({ user, view = 'form' }) {
+export default function MaterialOrderingPage({ user, view = 'form', onNavigate }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -555,13 +555,16 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
 
             {error ? <div className="module-error">{error}</div> : null}
 
-            <div className="material-order-footer">
+            <div className="material-order-footer material-order-footer-ios">
                 <div className="material-order-summary">
                     <span>Total Quantity</span>
                     <strong>{totalQuantity}</strong>
                 </div>
-                <div className="module-form-actions">
-                    <button type="button" className="module-primary-btn" onClick={submitOrder} disabled={saving}>
+                <div className="material-order-footer-actions">
+                    <button type="button" className="ts2-secondary-btn" onClick={startNewOrder}>
+                        + New
+                    </button>
+                    <button type="button" className="ts2-primary-btn solid" onClick={submitOrder} disabled={saving}>
                         {saving ? 'Submitting...' : 'Submit to ESS Transport'}
                     </button>
                 </div>
@@ -670,16 +673,14 @@ export default function MaterialOrderingPage({ user, view = 'form' }) {
             <div className="ts2-header material-ordering-transport-header">
                 <div className="ts2-header-left material-ordering-transport-header-copy">
                     <h1>Material Ordering</h1>
-                    <p>Create and submit material cards using the full ESS Transport picking sheet.</p>
                 </div>
                 <div className="ts2-header-actions">
-                    <button type="button" className="ts2-primary-btn solid" onClick={startNewOrder}>
-                        New Card
-                    </button>
+                    <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
+                    <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('material-ordering-active')}>Order Requests</button>
                 </div>
             </div>
 
-            <section className="material-ordering-transport-canvas">
+            <section className="material-ordering-transport-canvas material-ordering-transport-canvas-ios">
                 {renderPickingSheet()}
             </section>
         </div>
