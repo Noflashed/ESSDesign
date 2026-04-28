@@ -7560,3 +7560,112 @@ button.stat-card {
 .transport-page-frame .material-ordering-transport-page .material-ordering-transport-canvas-ios {
     margin: 18px 24px 24px;
 }
+
+
+/* ── transport parity corrections (grid + schedule management card) ─────── */
+.transport-page-frame .ts2-axis-shell,
+.transport-page-frame .ts2-lane-track-shell {
+    position: relative;
+}
+
+.transport-page-frame .ts2-axis,
+.transport-page-frame .ts2-lane-track {
+    overflow: visible;
+}
+
+.transport-page-frame .ts2-axis-tick:first-child,
+.transport-page-frame .ts2-grid-line:first-child {
+    background: rgba(148, 163, 184, 0.58);
+}
+
+.transport-page-frame .ts2-axis-tick:last-child,
+.transport-page-frame .ts2-grid-line:last-child {
+    background: rgba(148, 163, 184, 0.58);
+}
+
+.transport-page-frame .material-ordering-request-card-ios-stacked {
+    padding: 20px 22px 18px;
+}
+
+.transport-page-frame .material-ordering-request-card-ios-stacked .material-ordering-request-ios-top {
+    margin-bottom: 14px;
+}
+
+.transport-page-frame .material-ordering-request-ios-brief {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.transport-page-frame .material-ordering-request-ios-brief-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.transport-page-frame .material-ordering-request-ios-brief strong {
+    color: #102B5C;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+}
+
+.transport-page-frame .material-ordering-request-ios-project {
+    margin-top: 10px;
+    color: #2D3748;
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.45;
+    max-width: 620px;
+}
+
+.transport-page-frame .material-ordering-request-ios-meta-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.transport-page-frame .material-ordering-request-ios-meta-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: #7A869F;
+    font-size: 12px;
+    flex: 0 0 16px;
+}
+
+.transport-page-frame .material-ordering-request-ios-meta-text {
+    color: #6B7280;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.transport-page-frame .material-ordering-request-ios-footer {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.transport-page-frame .material-ordering-request-ios-action {
+    flex: 1;
+    min-height: 60px;
+    justify-content: center;
+    padding: 0 24px;
+}
+
+.transport-page-frame .material-ordering-request-ios-chevron {
+    color: #7A869F;
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 500;
+}

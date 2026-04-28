@@ -685,27 +685,43 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             const isScheduled = Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
                             const siteLocation = getProjectLocation(builders, request);
                             return (
-                                <article key={request.id} className="material-ordering-request-card material-ordering-request-card-ios">
+                                <article key={request.id} className="material-ordering-request-card material-ordering-request-card-ios material-ordering-request-card-ios-stacked">
                                     <div className="material-ordering-request-ios-top">
                                         <div className="material-ordering-request-ios-badges">
-                                            <span className={"material-ordering-request-chip material-ordering-request-chip-scheduled" + (isScheduled ? ' active' : '')}>{formatSchedulePill(request)}</span>
-                                            <span className="material-ordering-request-chip material-ordering-request-chip-scaffold">{request.scaffoldingSystem || 'Scaffold'}</span>
+                                            <span className={"material-ordering-request-chip material-ordering-request-chip-scheduled" + (isScheduled ? ' active' : '')}>{isScheduled ? formatSchedulePill(request) : 'Not Scheduled'}</span>
+                                            {request.scaffoldingSystem ? <span className="material-ordering-request-chip material-ordering-request-chip-scaffold">{request.scaffoldingSystem}</span> : null}
                                         </div>
                                         <button type="button" className="material-ordering-request-delete" onClick={() => window.alert('Delete request support will be added here in the web transport suite.')}>🗑</button>
                                     </div>
-                                    <div className="material-ordering-request-ios-copy">
+
+                                    <div className="material-ordering-request-ios-brief">
+                                        <span className="material-ordering-request-ios-brief-icon">🧰</span>
                                         <strong>{request.builderName}</strong>
-                                        <span>{siteLocation || request.projectName}</span>
                                     </div>
-                                    <div className="material-ordering-request-ios-details">
-                                        <div><span>Submitted</span><strong>{formatDateTime(request.submittedAt)}</strong></div>
-                                        <div><span>Requested by</span><strong>{request.requestedByName || '—'}</strong></div>
-                                        <div><span>Scaffold Detail</span><strong>{request.details || request.scaffoldingSystem || '—'}</strong></div>
+
+                                    <div className="material-ordering-request-ios-project">
+                                        {siteLocation || request.projectName}
                                     </div>
-                                    <button type="button" className="material-ordering-request-ios-action" onClick={() => onNavigate?.('truck-schedule')}>
-                                        <span>{isScheduled ? 'Edit Schedule' : 'Schedule Order'}</span>
-                                        <span>›</span>
-                                    </button>
+
+                                    <div className="material-ordering-request-ios-meta-row">
+                                        <span className="material-ordering-request-ios-meta-icon">🗓</span>
+                                        <span className="material-ordering-request-ios-meta-text">{formatDateTime(request.submittedAt)}</span>
+                                    </div>
+                                    <div className="material-ordering-request-ios-meta-row">
+                                        <span className="material-ordering-request-ios-meta-icon">👤</span>
+                                        <span className="material-ordering-request-ios-meta-text">Requested by: {request.requestedByName || '—'}</span>
+                                    </div>
+                                    <div className="material-ordering-request-ios-meta-row">
+                                        <span className="material-ordering-request-ios-meta-icon">ⓘ</span>
+                                        <span className="material-ordering-request-ios-meta-text">{request.details || request.scaffoldingSystem || '—'}</span>
+                                    </div>
+
+                                    <div className="material-ordering-request-ios-footer">
+                                        <button type="button" className="material-ordering-request-ios-action" onClick={() => onNavigate?.('truck-schedule')}>
+                                            <span>{isScheduled ? 'Edit Schedule' : 'Schedule Order'}</span>
+                                        </button>
+                                        <span className="material-ordering-request-ios-chevron">›</span>
+                                    </div>
                                 </article>
                             );
                         })}

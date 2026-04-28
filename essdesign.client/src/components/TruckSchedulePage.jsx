@@ -809,7 +809,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   </div>
                   <div className="ts2-lane-track-shell">
                     <div className="ts2-lane-track" style={{ width: timelineWidth }}>
-                      {timelineMarkers.slice(1, -1).map(marker => (
+                      {timelineMarkers.map(marker => (
                         <div key={`${lane.id}-${marker.minutes}`} className={`ts2-grid-line${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }} />
                       ))}
                       {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
