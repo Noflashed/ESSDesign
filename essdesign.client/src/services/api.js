@@ -794,6 +794,8 @@ function normalizeMaterialOrderRequestListItem(item) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
     const archivedAt = item?.archivedAt || null;
     const scheduledDate = item?.scheduledDate || null;
+    const scheduledTruckId = item?.scheduledTruckId || item?.truckId || null;
+    const scheduledTruckLabel = item?.scheduledTruckLabel || item?.truckLabel || null;
     const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
     const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
@@ -801,6 +803,7 @@ function normalizeMaterialOrderRequestListItem(item) {
         id: item?.id || '',
         builderName: item?.builderName || '',
         projectName: item?.projectName || '',
+        requestedByUserId: item?.requestedByUserId || null,
         requestedByName: item?.requestedByName || '',
         submittedAt: item?.submittedAt || nowIso(),
         orderDate: item?.orderDate || new Date().toISOString().slice(0, 10),
@@ -812,8 +815,14 @@ function normalizeMaterialOrderRequestListItem(item) {
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
         scheduledAtIso,
-        truckId: item?.truckId || null,
-        truckLabel: item?.truckLabel || null,
+        scheduledTruckId,
+        scheduledTruckLabel,
+        truckId: scheduledTruckId,
+        truckLabel: scheduledTruckLabel,
+        deliveryStatus: item?.deliveryStatus || (scheduledDate || scheduledAtIso ? 'scheduled' : null),
+        deliveryStartedAt: item?.deliveryStartedAt || null,
+        deliveryUnloadingAt: item?.deliveryUnloadingAt || null,
+        deliveryConfirmedAt: item?.deliveryConfirmedAt || null,
         archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
     };
 }
@@ -826,17 +835,26 @@ function normalizeMaterialOrderRequestRecord(record) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(record);
     const archivedAt = record.archivedAt || null;
     const scheduledDate = record.scheduledDate || null;
+    const scheduledTruckId = record.scheduledTruckId || record.truckId || null;
+    const scheduledTruckLabel = record.scheduledTruckLabel || record.truckLabel || null;
     const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
     const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
     return {
         ...record,
+        requestedByUserId: record.requestedByUserId || null,
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
         scheduledAtIso,
-        truckId: record.truckId || null,
-        truckLabel: record.truckLabel || null,
+        scheduledTruckId,
+        scheduledTruckLabel,
+        truckId: scheduledTruckId,
+        truckLabel: scheduledTruckLabel,
+        deliveryStatus: record.deliveryStatus || (scheduledDate || scheduledAtIso ? 'scheduled' : null),
+        deliveryStartedAt: record.deliveryStartedAt || null,
+        deliveryUnloadingAt: record.deliveryUnloadingAt || null,
+        deliveryConfirmedAt: record.deliveryConfirmedAt || null,
         archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
     };
 }
@@ -858,12 +876,12 @@ async function listStorageObjects(prefix) {
 }
 
 export const materialOrderRequestsAPI = {
-    listActiveRequests: async () => {
+    listActiveRequests: async ({ includeArchived = false } = {}) => {
         const raw = await readStorageJson('material-order-requests/index.json');
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         return items
             .map(normalizeMaterialOrderRequestListItem)
-            .filter(item => item.id && !item.archivedAt)
+            .filter(item => item.id && (includeArchived || !item.archivedAt))
             .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
     },
 
@@ -890,8 +908,14 @@ export const materialOrderRequestsAPI = {
             scheduledHour: null,
             scheduledMinute: null,
             scheduledAtIso: null,
+            scheduledTruckId: null,
+            scheduledTruckLabel: null,
             truckId: null,
             truckLabel: null,
+            deliveryStatus: null,
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
             archivedAt: null,
         };
 
@@ -906,7 +930,32 @@ export const materialOrderRequestsAPI = {
         const existingItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: [
-                { id: requestId, builderName: record.builderName, projectName: record.projectName, requestedByName: record.requestedByName, submittedAt, orderDate: record.orderDate, sourceOrderId: record.sourceOrderId, pdfPath: '', scaffoldingSystem, details, scheduledDate: null, scheduledHour: null, scheduledMinute: null, scheduledAtIso: null, truckId: null, truckLabel: null, archivedAt: null },
+                {
+                    id: requestId,
+                    builderName: record.builderName,
+                    projectName: record.projectName,
+                    requestedByUserId: record.requestedByUserId,
+                    requestedByName: record.requestedByName,
+                    submittedAt,
+                    orderDate: record.orderDate,
+                    sourceOrderId: record.sourceOrderId,
+                    pdfPath: '',
+                    scaffoldingSystem,
+                    details,
+                    scheduledDate: null,
+                    scheduledHour: null,
+                    scheduledMinute: null,
+                    scheduledAtIso: null,
+                    scheduledTruckId: null,
+                    scheduledTruckLabel: null,
+                    truckId: null,
+                    truckLabel: null,
+                    deliveryStatus: null,
+                    deliveryStartedAt: null,
+                    deliveryUnloadingAt: null,
+                    deliveryConfirmedAt: null,
+                    archivedAt: null,
+                },
                 ...existingItems.filter(item => item.id !== requestId)
             ].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))),
             updatedAt: submittedAt,
@@ -954,11 +1003,73 @@ export const materialOrderRequestsAPI = {
         ]);
         if (!record) throw new Error('Request not found');
         const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
-        const updated = { ...record, scheduledDate: date, scheduledHour: hour, scheduledMinute: minute, scheduledAtIso, truckId, truckLabel };
+        const updated = {
+            ...record,
+            scheduledDate: date,
+            scheduledHour: hour,
+            scheduledMinute: minute,
+            scheduledAtIso,
+            scheduledTruckId: truckId,
+            scheduledTruckLabel: truckLabel,
+            truckId,
+            truckLabel,
+            deliveryStatus: 'scheduled',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+        };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
-                ? { ...item, scheduledDate: date, scheduledHour: hour, scheduledMinute: minute, scheduledAtIso, truckId, truckLabel }
+                ? {
+                    ...item,
+                    scheduledDate: date,
+                    scheduledHour: hour,
+                    scheduledMinute: minute,
+                    scheduledAtIso,
+                    scheduledTruckId: truckId,
+                    scheduledTruckLabel: truckLabel,
+                    truckId,
+                    truckLabel,
+                    deliveryStatus: 'scheduled',
+                    deliveryStartedAt: null,
+                    deliveryUnloadingAt: null,
+                    deliveryConfirmedAt: null,
+                }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
+    updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const updated = {
+            ...record,
+            deliveryStatus: status,
+            deliveryStartedAt: startedAt,
+            deliveryUnloadingAt: unloadingAt,
+            deliveryConfirmedAt: confirmedAt,
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    deliveryStatus: status,
+                    deliveryStartedAt: startedAt,
+                    deliveryUnloadingAt: unloadingAt,
+                    deliveryConfirmedAt: confirmedAt,
+                }
                 : item),
             updatedAt: nowIso(),
         };

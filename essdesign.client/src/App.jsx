@@ -7,8 +7,6 @@ import RegistrationConfirmed from './components/RegistrationConfirmed';
 import PDFViewer from './components/PDFViewer';
 import WebNavDrawer from './components/WebNavDrawer';
 import ESSSafetyPage from './components/ESSSafetyPage';
-import MaterialOrderingPage from './components/MaterialOrderingPage';
-import TruckSchedulePage from './components/TruckSchedulePage';
 import ESSRosteringPage from './components/ESSRosteringPage';
 import EmployeesPage from './components/EmployeesPage';
 import WebSafetySwmsPage from './components/WebSafetySwmsPage';
@@ -20,6 +18,7 @@ import EmployeePortalPage from './components/EmployeePortalPage';
 import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
+import TransportSuitePage from './components/TransportSuitePage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
@@ -185,13 +184,14 @@ function NavPageIcon({ pageKey, size = 18 }) {
     return <Icon size={size} />;
 }
 
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
-    if (itemKey === 'material-ordering') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule';
+    if (itemKey === 'truck-schedule') return currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking' || currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';
+    if (itemKey === 'material-ordering-new') return currentPage === 'material-ordering' || currentPage === 'material-ordering-new';
     return currentPage === itemKey;
 }
 
@@ -476,16 +476,22 @@ function App() {
     const isEmployeePortalRole = user?.role === 'general_scaffolder'
         || user?.role === 'leading_hand';
     const isTransportManagement = user?.role === 'transport_management';
+    const isTruckDeviceUser = user?.role === 'truck_ess01' || user?.role === 'truck_ess02' || user?.role === 'truck_ess03';
+    const hasTransportSuiteAccess = user?.role === 'admin' || isTransportManagement || isTruckDeviceUser;
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }]
+        : isTruckDeviceUser
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
         : isTransportManagement
-        ? [{ key: 'material-ordering', label: 'ESS Transport', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }, { key: 'truck-schedule', label: 'Truck Schedule' }] }]
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'safety', label: 'ESS Safety' },
-            { key: 'material-ordering', label: 'ESS Transport', children: [{ key: 'material-ordering-new', label: 'New Material Order' }, { key: 'material-ordering-active', label: 'Scheduled Orders' }, { key: 'material-ordering-archived', label: 'Archived Orders' }, { key: 'truck-schedule', label: 'Truck Schedule' }] },
+            ...(hasTransportSuiteAccess
+                ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+                : [{ key: 'material-ordering-new', label: 'New Materials List' }]),
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
@@ -541,10 +547,13 @@ function App() {
     }, []);
 
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
+        const transportPages = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
+            : isTruckDeviceUser
+            ? (transportPages.has(page) ? page : 'truck-schedule')
             : isTransportManagement
-            ? ((page === 'material-ordering' || page === 'material-ordering-new' || page === 'material-ordering-active' || page === 'material-ordering-archived' || page === 'truck-schedule' || page === 'settings') ? page : 'material-ordering-active')
+            ? (transportPages.has(page) ? page : 'truck-schedule')
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -563,7 +572,7 @@ function App() {
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, isEmployeePortalRole, isTransportManagement, selectedFolderId]);
+    }, [buildAppUrl, isEmployeePortalRole, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
@@ -797,7 +806,7 @@ function App() {
 
     const handleLoginSuccess = () => {
         updateAuthView('landing');
-        applyPageState(isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
+        applyPageState(isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
         checkAuth();
     };
 
@@ -968,7 +977,7 @@ function App() {
     // Browser back/forward button support
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
-        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing');
+        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing');
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
         const leadingHandFromUrl = urlParams.get('leadingHand');
@@ -996,7 +1005,7 @@ function App() {
 
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
-            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : isTransportManagement ? 'material-ordering' : 'landing');
+            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing');
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
             const nextRosteringContext = e.state?.rosteringContext ?? { planDate: null };
@@ -1009,7 +1018,7 @@ function App() {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [buildAppUrl, isEmployeePortalRole]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl, isEmployeePortalRole, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -1113,17 +1122,8 @@ function App() {
                 />
             );
         }
-        if (currentPage === 'material-ordering' || currentPage === 'material-ordering-new') {
-            return <MaterialOrderingPage user={user} view="form" />;
-        }
-        if (currentPage === 'material-ordering-active') {
-            return <MaterialOrderingPage user={user} view="active" />;
-        }
-        if (currentPage === 'material-ordering-archived') {
-            return <MaterialOrderingPage user={user} view="archived" />;
-        }
-        if (currentPage === 'truck-schedule') {
-            return <TruckSchedulePage />;
+        if (currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking') {
+            return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;

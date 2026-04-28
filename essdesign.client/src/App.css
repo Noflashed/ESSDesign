@@ -5265,3 +5265,1160 @@ button.stat-card {
   border-radius: 12px;
   background: #f3f5f8;
 }
+
+/* ── ESS Transport Suite (Web parity with iOS transport flow) ───────────────── */
+.transport-suite-shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 18px;
+    min-height: calc(100vh - 110px);
+    padding: 18px;
+    background: linear-gradient(180deg, #f3f6fb 0%, #eef3f9 100%);
+}
+
+.transport-suite-sidebar {
+    background: linear-gradient(180deg, #102b5c 0%, #15356d 100%);
+    color: #ffffff;
+    border-radius: 24px;
+    padding: 22px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    box-shadow: 0 24px 60px rgba(16, 43, 92, 0.18);
+}
+
+.transport-suite-sidebar-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.transport-suite-eyebrow,
+.ts2-eyebrow,
+.transport-placeholder-eyebrow {
+    color: #f7b069;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.transport-suite-sidebar-head strong {
+    font-size: 26px;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+}
+
+.transport-suite-sidebar-head p {
+    margin: 0;
+    color: rgba(255,255,255,0.74);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.transport-suite-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transport-suite-nav-item {
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.92);
+    border-radius: 16px;
+    min-height: 56px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 700;
+    transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.transport-suite-nav-item:hover {
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.12);
+}
+
+.transport-suite-nav-item.active {
+    background: linear-gradient(135deg, #f47c20, #f59e0b);
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(244, 124, 32, 0.28);
+}
+
+.transport-suite-nav-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.12);
+    position: relative;
+}
+
+.transport-suite-nav-icon.active {
+    background: rgba(255,255,255,0.18);
+}
+
+.transport-suite-nav-live-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #FFD59B;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.22);
+}
+
+.transport-suite-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.transport-placeholder-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 26px;
+    padding: 28px;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+}
+
+.transport-placeholder-card h2 {
+    margin: 8px 0 10px;
+    color: #102b5c;
+    font-size: 32px;
+    line-height: 1.05;
+}
+
+.transport-placeholder-card p {
+    margin: 0;
+    color: #64748b;
+    font-size: 15px;
+    line-height: 1.65;
+    max-width: 640px;
+}
+
+.transport-placeholder-pill {
+    margin-top: 18px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #c25b0e;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.transport-inline-btn {
+    border: 1px solid rgba(16, 43, 92, 0.12);
+    background: #ffffff;
+    color: #102b5c;
+    border-radius: 999px;
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.transport-inline-btn.primary,
+.transport-route-action {
+    color: #ffffff;
+    border: none;
+}
+
+.transport-inline-btn.link {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transport-route-modal-root,
+.ts2-modal-root {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+.transport-route-modal-backdrop,
+.ts2-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(14, 24, 44, 0.56);
+    backdrop-filter: blur(6px);
+}
+
+.transport-route-modal-shell {
+    position: absolute;
+    inset: 22px;
+    border-radius: 28px;
+    overflow: hidden;
+    background: #0f172a;
+    box-shadow: 0 32px 84px rgba(15, 23, 42, 0.34);
+}
+
+.transport-route-modal-shell.management {
+    inset: 26px;
+}
+
+.transport-route-modal-map,
+.transport-route-canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.transport-route-canvas {
+    background:
+        radial-gradient(circle at top right, rgba(47,166,255,0.16), transparent 24%),
+        linear-gradient(180deg, #eff4fb 0%, #e8eef7 100%);
+    overflow: hidden;
+}
+
+.transport-route-canvas-tiles {
+    position: absolute;
+    inset: 0;
+}
+
+.transport-route-tile {
+    position: absolute;
+    width: 256px;
+    height: 256px;
+    display: block;
+}
+
+.transport-route-svg {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.transport-route-pin {
+    position: absolute;
+    transform: translate(-50%, calc(-100% - 12px));
+    z-index: 3;
+}
+
+.transport-route-pin span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    height: 28px;
+    border-radius: 999px;
+    padding: 0 12px;
+    background: rgba(255,255,255,0.94);
+    color: #102b5c;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 10px 20px rgba(15,23,42,0.14);
+}
+
+.transport-route-pin-site span { color: #c25b0e; }
+.transport-route-pin-live span { color: #1d4ed8; }
+
+.transport-map-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #102b5c;
+    background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(248,250,252,0.92));
+    z-index: 1;
+}
+
+.transport-map-placeholder-icon { font-size: 26px; }
+
+.transport-route-modal-top {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    right: 24px;
+    z-index: 4;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.transport-route-modal-top h2 {
+    margin: 0;
+    color: #102b5c;
+    font-size: 34px;
+    line-height: 1.05;
+}
+
+.transport-route-modal-top p {
+    margin: 8px 0 0;
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.transport-route-close,
+.ts2-close-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(255,255,255,0.94);
+    color: #102b5c;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 12px 24px rgba(15,23,42,0.16);
+}
+
+.transport-route-hero-pill {
+    position: absolute;
+    top: 110px;
+    left: 24px;
+    z-index: 4;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.94);
+    color: #102b5c;
+    box-shadow: 0 18px 34px rgba(15,23,42,0.14);
+}
+
+.transport-route-hero-pill strong {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.transport-route-hero-pill span {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.transport-route-modal-bottom {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    z-index: 4;
+    width: min(420px, calc(100% - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transport-route-info-card,
+.delivery-debug-card,
+.ts2-pending-panel,
+.ts2-modal-card,
+.ts2-time-picker-card {
+    background: rgba(255,255,255,0.96);
+    border: 1px solid rgba(148,163,184,0.22);
+    border-radius: 22px;
+    box-shadow: 0 18px 34px rgba(15,23,42,0.12);
+}
+
+.transport-route-info-card {
+    padding: 14px 16px;
+}
+
+.transport-route-info-row {
+    display: grid;
+    grid-template-columns: minmax(0, 124px) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(226,232,240,0.85);
+}
+
+.transport-route-info-row:last-child { border-bottom: none; }
+.transport-route-info-row span { color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+.transport-route-info-row strong { color: #102b5c; font-size: 14px; line-height: 1.5; }
+
+.transport-route-warning {
+    background: #fff7ed;
+    color: #c25b0e;
+    border-radius: 18px;
+    padding: 14px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.55;
+}
+
+.transport-route-action {
+    min-height: 52px;
+    border-radius: 18px;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 18px 28px rgba(16, 43, 92, 0.18);
+}
+
+.transport-route-action.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.transport-route-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.delivery-schedule-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.delivery-schedule-toolbar {
+    display: flex;
+    gap: 10px;
+}
+
+.delivery-debug-card {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.delivery-debug-list,
+.delivery-debug-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.delivery-debug-chip {
+    border: 1px solid rgba(16, 43, 92, 0.12);
+    background: #fff;
+    color: #102b5c;
+    border-radius: 999px;
+    min-height: 36px;
+    padding: 0 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.delivery-debug-chip.active {
+    background: #102b5c;
+    color: #fff;
+}
+
+.delivery-schedule-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.delivery-day-section {
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.07);
+}
+
+.delivery-day-section h3 {
+    margin: 0 0 14px;
+    color: #102b5c;
+    font-size: 18px;
+}
+
+.delivery-day-list { display: flex; flex-direction: column; gap: 10px; }
+
+.delivery-card {
+    border: 1px solid rgba(148,163,184,0.16);
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) 24px;
+    gap: 16px;
+    align-items: center;
+    text-align: left;
+    cursor: pointer;
+}
+
+.delivery-card.completed {
+    opacity: 0.82;
+    background: #f8fafc;
+}
+
+.delivery-card-time strong {
+    display: block;
+    color: #102b5c;
+    font-size: 15px;
+}
+
+.delivery-card-time span,
+.delivery-card-body span,
+.delivery-card-body small {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.delivery-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.delivery-card-body strong {
+    color: #102b5c;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.delivery-card-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    border-radius: 999px;
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.delivery-card-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+}
+
+.delivery-card-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.delivery-card-chevron {
+    color: #94a3b8;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.delivery-return-strip {
+    margin: -2px 0 2px 136px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #667085;
+    min-height: 30px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.ts2-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ts2-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 24px;
+    padding: 22px 24px;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+}
+
+.ts2-header h1 {
+    margin: 8px 0 0;
+    color: #102b5c;
+    font-size: 34px;
+    line-height: 1.02;
+}
+
+.ts2-header-actions,
+.ts2-toolbar-row,
+.ts2-legend-row,
+.ts2-modal-controls,
+.ts2-truck-pills,
+.ts2-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ts2-chip-btn,
+.ts2-nav-btn,
+.ts2-time-btn,
+.ts2-truck-select,
+.ts2-secondary-btn,
+.ts2-primary-btn,
+.ts2-pending-item button {
+    border: 1px solid rgba(16, 43, 92, 0.12);
+    background: #ffffff;
+    color: #102b5c;
+    border-radius: 14px;
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ts2-chip-btn.active,
+.ts2-primary-btn,
+.ts2-primary-btn.solid,
+.ts2-pending-item button {
+    background: #102b5c;
+    color: #ffffff;
+}
+
+.ts2-primary-btn.solid {
+    background: #f47c20;
+    border: none;
+}
+
+.ts2-primary-btn.solid:hover { background: #e06a10; }
+
+.ts2-primary-btn span {
+    display: inline-flex;
+    min-width: 24px;
+    justify-content: center;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.18);
+}
+
+.ts2-toolbar-row {
+    justify-content: center;
+}
+
+.ts2-toolbar-date {
+    min-width: 240px;
+    text-align: center;
+    color: #102b5c;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.ts2-legend-row {
+    background: rgba(255,255,255,0.96);
+    border: 1px solid rgba(148,163,184,0.18);
+    border-radius: 18px;
+    padding: 12px 16px;
+}
+
+.ts2-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4b5563;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.ts2-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+.ts2-error {
+    color: #b91c1c;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.ts2-pending-panel {
+    padding: 18px 20px;
+}
+
+.ts2-pending-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.ts2-pending-head strong { color: #102b5c; }
+.ts2-pending-head span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: #f47c20;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.ts2-pending-list { display: flex; flex-direction: column; gap: 10px; }
+.ts2-pending-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid rgba(226,232,240,0.85);
+}
+.ts2-pending-item strong { display: block; color: #102b5c; font-size: 14px; }
+.ts2-pending-item span { display: block; margin-top: 4px; color: #64748b; font-size: 13px; }
+
+.ts2-board-scroll {
+    overflow: auto;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+    border: 1px solid rgba(148,163,184,0.18);
+    border-radius: 24px;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.07);
+}
+
+.ts2-board {
+    position: relative;
+    padding-bottom: 14px;
+}
+
+.ts2-board-head,
+.ts2-lane-row {
+    display: grid;
+    grid-template-columns: 186px minmax(0, 1fr);
+}
+
+.ts2-board-head {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: rgba(255,255,255,0.96);
+    border-bottom: 1px solid rgba(226,232,240,0.9);
+}
+
+.ts2-lane-head,
+.ts2-lane-meta {
+    padding: 16px 18px;
+    border-right: 1px solid rgba(226,232,240,0.9);
+}
+
+.ts2-lane-head {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.ts2-axis,
+.ts2-lane-track {
+    position: relative;
+}
+
+.ts2-axis { height: 54px; }
+
+.ts2-axis-tick,
+.ts2-grid-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(203,213,225,0.42);
+}
+
+.ts2-axis-tick.major,
+.ts2-grid-line.major { background: rgba(148,163,184,0.48); }
+.ts2-axis-tick span {
+    position: absolute;
+    top: 18px;
+    left: 8px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.ts2-board-body { position: relative; }
+.ts2-now-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dc2626;
+    z-index: 6;
+}
+.ts2-now-marker span {
+    position: absolute;
+    top: 12px;
+    left: 8px;
+    color: #dc2626;
+    font-size: 11px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.ts2-lane-row {
+    min-height: 110px;
+    border-bottom: 1px solid rgba(226,232,240,0.88);
+}
+.ts2-lane-row:last-child { border-bottom: none; }
+.ts2-lane-meta { display: flex; align-items: center; }
+.ts2-truck-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    background: #eef3fb;
+    color: #102b5c;
+}
+.ts2-truck-pill-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #f47c20;
+}
+.ts2-lane-track {
+    min-height: 110px;
+    background: linear-gradient(180deg, rgba(248,250,252,0.84), rgba(248,250,252,0.48));
+}
+.ts2-loading,
+.ts2-empty-lane {
+    position: absolute;
+    inset: 0;
+}
+.ts2-loading {
+    display: flex;
+    align-items: center;
+    padding-left: 18px;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 700;
+}
+.ts2-event-wrap {
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    min-width: 112px;
+}
+.ts2-event-card,
+.ts2-return-card {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border: none;
+    border-radius: 14px;
+    text-align: left;
+    padding: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+}
+.ts2-event-card { left: 0; }
+.ts2-return-card {
+    background: #eef2f7;
+    color: #667085;
+}
+.ts2-event-time,
+.ts2-return-card span {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.ts2-event-title,
+.ts2-return-card strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+.ts2-event-subtitle {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.ts2-event-status-row {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.7);
+    font-size: 11px;
+    font-weight: 800;
+}
+.ts2-event-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+}
+
+.ts2-modal-card,
+.ts2-time-picker-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(860px, calc(100% - 44px));
+    max-height: calc(100% - 44px);
+    overflow: auto;
+    padding: 18px;
+}
+
+.ts2-time-picker-card {
+    width: min(340px, calc(100% - 44px));
+    padding: 14px;
+}
+
+.ts2-modal-head,
+.ts2-time-picker-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.ts2-modal-head h2 {
+    margin: 8px 0 0;
+    color: #102b5c;
+    font-size: 28px;
+}
+
+.ts2-modal-head p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ts2-compact-map {
+    position: relative;
+    margin-top: 14px;
+    height: 240px;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.ts2-estimate-grid,
+.ts2-action-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.ts2-estimate-grid > div,
+.ts2-action-rows > div {
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid rgba(226,232,240,0.85);
+    padding: 12px 14px;
+}
+
+.ts2-estimate-grid span,
+.ts2-action-rows span,
+.ts2-time-btn span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.ts2-estimate-grid strong,
+.ts2-action-rows strong,
+.ts2-time-btn strong {
+    display: block;
+    color: #102b5c;
+    font-size: 15px;
+}
+
+.ts2-mini { margin-top: 14px; }
+.ts2-mini-axis {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0;
+    margin-bottom: 6px;
+}
+.ts2-mini-axis-track {
+    display: flex;
+    justify-content: space-between;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+}
+.ts2-mini-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ts2-mini-row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0;
+    align-items: center;
+}
+.ts2-mini-label {
+    color: #102b5c;
+    font-size: 12px;
+    font-weight: 800;
+}
+.ts2-mini-track {
+    position: relative;
+    min-height: 48px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid rgba(226,232,240,0.85);
+    overflow: hidden;
+}
+.ts2-mini-past {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(148,163,184,0.18);
+}
+.ts2-mini-block,
+.ts2-mini-ghost {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    border-radius: 10px;
+}
+.ts2-mini-block {
+    background: #102b5c;
+    color: #fff;
+    padding: 6px 8px;
+    font-size: 10px;
+    font-weight: 800;
+}
+.ts2-mini-ghost {
+    background: rgba(244,124,32,0.3);
+    border: 1px dashed #f47c20;
+}
+.ts2-mini-insert {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: none;
+    background: #fff;
+    color: #f47c20;
+    box-shadow: 0 10px 18px rgba(15,23,42,0.12);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.ts2-time-btn {
+    flex: 1;
+    text-align: left;
+    min-height: 56px;
+}
+.ts2-truck-select.active { background: #102b5c; color: #fff; }
+.ts2-time-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+    max-height: 56vh;
+    overflow: auto;
+}
+.ts2-time-option {
+    border: none;
+    background: #f8fafc;
+    color: #102b5c;
+    border-radius: 14px;
+    min-height: 42px;
+    padding: 0 14px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.ts2-time-option.active { background: #fff7ed; color: #c25b0e; }
+.ts2-time-option.disabled { opacity: 0.45; cursor: not-allowed; }
+.ts2-modal-loading { padding: 46px 20px; text-align: center; color: #102b5c; font-size: 15px; font-weight: 700; }
+
+@media (max-width: 1100px) {
+    .transport-suite-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .transport-suite-sidebar {
+        order: -1;
+    }
+
+    .transport-route-modal-shell,
+    .transport-route-modal-shell.management {
+        inset: 14px;
+    }
+
+    .transport-route-modal-bottom {
+        width: calc(100% - 32px);
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .transport-route-modal-top {
+        left: 16px;
+        right: 16px;
+        top: 16px;
+    }
+
+    .transport-route-hero-pill {
+        left: 16px;
+        top: 96px;
+    }
+
+    .ts2-header {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 760px) {
+    .transport-suite-shell { padding: 14px; }
+    .transport-suite-sidebar { padding: 18px 16px; }
+    .transport-suite-sidebar-head strong { font-size: 22px; }
+    .transport-route-modal-top h2,
+    .ts2-header h1,
+    .transport-placeholder-card h2 { font-size: 28px; }
+    .transport-route-modal-bottom,
+    .transport-route-hero-pill { width: calc(100% - 24px); left: 12px; right: 12px; }
+    .transport-route-modal-bottom { bottom: 12px; }
+    .transport-route-hero-pill { top: 86px; }
+    .delivery-card { grid-template-columns: 1fr; }
+    .delivery-return-strip { margin-left: 0; }
+    .ts2-modal-card,
+    .ts2-time-picker-card { width: calc(100% - 24px); }
+    .ts2-estimate-grid,
+    .ts2-action-rows { grid-template-columns: 1fr; }
+}

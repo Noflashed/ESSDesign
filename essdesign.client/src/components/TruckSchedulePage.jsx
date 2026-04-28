@@ -1,320 +1,366 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import { materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import RouteMapCanvas from './transport/RouteMapCanvas';
+import {
+  ESS_NAVY,
+  ESS_ORANGE,
+  SCREEN_END_HOUR,
+  SCREEN_START_HOUR,
+  TRUCK_LANES,
+  YARD_LOCATION,
+  buildScheduleIso,
+  deliveredTileAppearance,
+  eventTruckIndex,
+  fetchRouteData,
+  findProjectLocation,
+  formatActionTimestamp,
+  formatBoardDay,
+  formatDistance,
+  formatDuration,
+  formatTimeChip,
+  getCachedRouteEstimate,
+  getCachedRouteEstimateValue,
+  getDeliveryActionRows,
+  getEventFlex,
+  getEventOffset,
+  getPlannedDurationMinutes,
+  getSafetyBuildersCached,
+  getTimingProfile,
+  getTruckAssignment,
+  isSameDay,
+  isTruckDeviceRole,
+  projectRequestWindow,
+  requestToCalendarEvent,
+  scheduleStatusAppearance,
+  scheduleStatusLabel,
+  startOfDay,
+  formatDateKey,
+} from './transport/transportUtils';
 
-const ESS_NAVY = '#102B5C';
-const ESS_ORANGE = '#F47C20';
-const BOOKED_BG = '#193A72';
-const SCREEN_START_HOUR = 6;
-const SCREEN_END_HOUR = 16;
-const TIME_MARKERS = ['6 AM', '8 AM', '10 AM', '12 PM', '2 PM', '4 PM'];
-const SCHEDULE_BLOCK_MINUTES = 90;
-const BLOCK_TRANSIT_MINUTES = 45;
-const BLOCK_LOADING_MINUTES = 30;
-const BLOCK_RETURN_MINUTES = 45;
-const START_HOUR_OPTIONS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-const START_MINUTE_OPTIONS = [0, 15, 30, 45];
-const TRUCK_LANES = [
-  { id: 'truck-1', rego: 'ESS01' },
-  { id: 'truck-2', rego: 'ESS02' },
-  { id: 'truck-3', rego: 'ESS03' },
-];
-const BOARD_HOURS = [6, 8, 10, 12, 14, 16];
-const BOARD_HOUR_LINES = [7, 8, 9, 10, 11, 12, 13, 14, 15];
+const SCALE_MODES = {
+  standard: { label: 'Scale', pxPerHour: 160, tickMinutes: 30, labelEveryMinutes: 60 },
+  detailed: { label: '10 min', pxPerHour: 260, tickMinutes: 10, labelEveryMinutes: 30 },
+  fine: { label: '5 min', pxPerHour: 360, tickMinutes: 5, labelEveryMinutes: 30 },
+  ultraFine: { label: '1 min', pxPerHour: 720, tickMinutes: 1, labelEveryMinutes: 30 },
+};
+const SCALE_ORDER = ['standard', 'detailed', 'fine', 'ultraFine'];
+const LIVE_REFRESH_MS = 3000;
+const TIME_PICKER_MINUTE_STEP = 15;
+const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 
-// ─── Utilities ───────────────────────────────────────────────────────────────
-
-function startOfDay(date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function dedupeRequests(items) {
+  const map = new Map();
+  (items || []).forEach(item => {
+    if (item?.id) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
 }
 
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function formatScheduleHeadline(date) {
-  const today = startOfDay(new Date());
-  const target = startOfDay(date);
-  const prefix = isSameDay(today, target) ? 'Today' : target.toLocaleDateString('en-AU', { weekday: 'short' });
-  return `${prefix}, ${target.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-}
-
-function toDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function formatTimeChip(hour, minute = 0) {
-  const h = hour % 12 || 12;
-  const suffix = hour >= 12 ? 'PM' : 'AM';
-  return `${h}:${String(minute).padStart(2, '0')} ${suffix}`;
-}
-
-function eventTruckIndex(event) {
-  if (event.truckId) {
-    const idx = TRUCK_LANES.findIndex(l => l.id === event.truckId);
-    if (idx >= 0) return idx;
+function buildTimelineMarkers(mode) {
+  const config = SCALE_MODES[mode] || SCALE_MODES.standard;
+  const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
+  const markers = [];
+  for (let minutes = 0; minutes <= totalMinutes; minutes += config.tickMinutes) {
+    const absoluteMinutes = SCREEN_START_HOUR * 60 + minutes;
+    const hour = Math.floor(absoluteMinutes / 60);
+    const minute = absoluteMinutes % 60;
+    const isHour = minute === 0;
+    const isHalfHour = minute === 30;
+    const showLabel = mode === 'standard' ? isHour : minute % config.labelEveryMinutes === 0;
+    markers.push({
+      minutes: absoluteMinutes,
+      isHour,
+      isHalfHour,
+      showLabel,
+      label: showLabel ? formatTimeChip(hour, minute) : '',
+    });
   }
-  const source = event.id || event.builderName || event.projectName || '';
-  let hash = 0;
-  for (let i = 0; i < source.length; i++) hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
-  return hash % TRUCK_LANES.length;
+  return markers;
 }
 
-function blockLeftPct(hour, minute) {
-  const total = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
-  return `${Math.max(0, ((hour * 60 + minute) - SCREEN_START_HOUR * 60) / total * 100)}%`;
+function getTimelineWidth(mode) {
+  return (SCREEN_END_HOUR - SCREEN_START_HOUR) * (SCALE_MODES[mode] || SCALE_MODES.standard).pxPerHour;
 }
 
-const BLOCK_WIDTH_PCT = `${SCHEDULE_BLOCK_MINUTES / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60) * 100}%`;
-
-function findProjectLocation(builders, request) {
-  const byIds = builders
-    .find(b => b.id === request.builderId)
-    ?.projects.find(p => p.id === request.projectId)?.siteLocation;
-  if (byIds) return byIds;
-  const nb = (request.builderName || '').trim().toLowerCase();
-  const np = (request.projectName || '').trim().toLowerCase();
-  return builders
-    .find(b => (b.name || '').trim().toLowerCase() === nb)
-    ?.projects.find(p => (p.name || '').trim().toLowerCase() === np)?.siteLocation || null;
+function cycleScaleMode(mode) {
+  const index = SCALE_ORDER.indexOf(mode);
+  return SCALE_ORDER[(index + 1) % SCALE_ORDER.length];
 }
 
-async function geocodeAddress(address) {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`,
-    { headers: { Accept: 'application/json', 'User-Agent': 'ESSDesignApp/1.0 (nathanb@erectsafe.com.au)' } }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  const first = data[0];
-  if (!first?.lat || !first?.lon) return null;
-  const lat = Number(first.lat);
-  const lon = Number(first.lon);
-  return (isFinite(lat) && isFinite(lon)) ? { lat, lon } : null;
-}
+function buildBoardState(requestsForDay, routeMap) {
+  const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
+  const groupedByTruck = new Map();
+  const now = new Date();
+  const dayEvents = [];
+  const durationMap = {};
+  const startMap = {};
+  const primaryDurationMap = {};
+  const cycleStateMap = {};
 
-function buildMapTileData(lat, lon, zoom = 15) {
-  const z = Math.pow(2, zoom);
-  const xFrac = ((lon + 180) / 360) * z;
-  const latRad = (lat * Math.PI) / 180;
-  const yFrac = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * z;
-  const tileX = Math.floor(xFrac);
-  const tileY = Math.floor(yFrac);
-  return { zoom, tileX, tileY, pinX: xFrac - tileX, pinY: yFrac - tileY };
-}
+  requestsForDay.forEach(request => {
+    const event = requestToCalendarEvent(request);
+    const truckId = request.scheduledTruckId ?? request.truckId ?? event?.truckId ?? TRUCK_LANES[0].id;
+    const list = groupedByTruck.get(truckId) ?? [];
+    list.push(request);
+    groupedByTruck.set(truckId, list);
+  });
 
-function cartoTileUrl(zoom, x, y) {
-  return `https://a.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${x}/${y}.png`;
-}
+  groupedByTruck.forEach((truckRequests, truckId) => {
+    let cumulativeShiftMinutes = 0;
+    truckRequests
+      .sort((left, right) => {
+        const leftStart = (left.scheduledHour ?? SCREEN_START_HOUR) * 60 + (left.scheduledMinute ?? 0);
+        const rightStart = (right.scheduledHour ?? SCREEN_START_HOUR) * 60 + (right.scheduledMinute ?? 0);
+        if (leftStart !== rightStart) {
+          return leftStart - rightStart;
+        }
+        return String(left.submittedAt || '').localeCompare(String(right.submittedAt || ''));
+      })
+      .forEach((request, index, ordered) => {
+        const timing = getTimingProfile(routeMap[request.id] ?? null);
+        const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
+        const shiftedScheduledStart = Math.max(SCREEN_START_HOUR * 60, scheduledStart + cumulativeShiftMinutes);
+        const laterRequests = ordered.slice(index + 1);
+        const nextStartedRequest = laterRequests.find(nextRequest => {
+          const iso = nextRequest.deliveryStartedAt;
+          if (!iso) return false;
+          const parsed = new Date(iso);
+          return !Number.isNaN(parsed.getTime()) && formatDateKey(parsed) === dateKey;
+        }) || null;
+        const nextActualStartMinutes = nextStartedRequest?.deliveryStartedAt
+          ? (() => {
+              const parsed = new Date(nextStartedRequest.deliveryStartedAt);
+              return parsed.getHours() * 60 + parsed.getMinutes() + parsed.getSeconds() / 60;
+            })()
+          : null;
+        const projected = projectRequestWindow(
+          request,
+          timing,
+          dateKey,
+          now,
+          shiftedScheduledStart,
+          nextActualStartMinutes,
+          laterRequests.length > 0,
+        );
+        const startMinutes = projected.startMinutes;
+        const durationMinutes = projected.durationMinutes;
+        const primaryDurationMinutesValue = projected.primaryDurationMinutes;
+        cumulativeShiftMinutes = projected.projectedEndMinutes - projected.plannedEndMinutes;
+        startMap[request.id] = startMinutes;
+        durationMap[request.id] = durationMinutes;
+        primaryDurationMap[request.id] = primaryDurationMinutesValue;
+        cycleStateMap[request.id] = {
+          groupedCompletedCycle: projected.groupedCompletedCycle,
+          showReturnTransitTile: projected.showReturnTransitTile,
+          returnTransitEndMinutes: projected.returnTransitEndMinutes,
+          isLastScheduledForDay: laterRequests.length === 0,
+        };
+        dayEvents.push({
+          id: `remote-${request.id}`,
+          date: dateKey,
+          hour: Math.floor(startMinutes / 60),
+          minute: Math.floor(startMinutes % 60),
+          builderName: request.builderName,
+          projectName: request.projectName,
+          scaffoldingSystem: request.scaffoldingSystem,
+          orderId: request.id,
+          truckId,
+          truckLabel: request.scheduledTruckLabel ?? request.truckLabel ?? TRUCK_LANES.find(lane => lane.id === truckId)?.rego ?? null,
+        });
+      });
+  });
 
-function estimateSummary(siteLocation, startHour, startMinute) {
-  const travelMins = siteLocation ? 45 : 0;
-  const loadMins = 30;
-  const returnMins = siteLocation ? 45 : 0;
-  const addM = (h, m, add) => { const t = h * 60 + m + add; return { h: Math.floor(t / 60), m: t % 60 }; };
-  const arr = addM(startHour, startMinute, travelMins);
-  const done = addM(arr.h, arr.m, loadMins);
-  const ret = addM(done.h, done.m, returnMins);
+  dayEvents.sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
+
   return {
-    deliveryFromYard: siteLocation ? `${travelMins} min` : 'Pending site location',
-    siteLoading: `${loadMins} min`,
-    returnTransit: siteLocation ? `${returnMins} min` : 'Pending site location',
-    aestTime: formatTimeChip(startHour, startMinute),
-    arrivalTime: siteLocation ? formatTimeChip(arr.h, arr.m) : 'Pending',
-    loadingCompleteTime: formatTimeChip(done.h, done.m),
-    returnTime: siteLocation ? formatTimeChip(ret.h, ret.m) : 'Pending',
+    dayEvents,
+    durationMap,
+    startMap,
+    primaryDurationMap,
+    cycleStateMap,
   };
 }
 
-function getSuggestedStartTime(truckId, selectedDate, dayRequests) {
+function getSuggestedStartTime({ truckId, selectedDate, dayEvents, startMap, durationMap }) {
+  const laneEvents = dayEvents
+    .filter(event => event.truckId === truckId)
+    .sort((left, right) => {
+      const leftStart = startMap[left.orderId] ?? left.hour * 60 + left.minute;
+      const rightStart = startMap[right.orderId] ?? right.hour * 60 + right.minute;
+      return leftStart - rightStart;
+    });
   const now = new Date();
-  const sameDay = isSameDay(now, selectedDate);
-  const curMins = sameDay ? now.getHours() * 60 + now.getMinutes() : SCREEN_START_HOUR * 60;
-  let latestEnd = SCREEN_START_HOUR * 60;
-  if (truckId) {
-    const idx = TRUCK_LANES.findIndex(l => l.id === truckId);
-    if (idx >= 0) {
-      dayRequests.filter(r => eventTruckIndex(r) === idx).forEach(r => {
-        if (typeof r.scheduledHour === 'number') {
-          latestEnd = Math.max(latestEnd, r.scheduledHour * 60 + r.scheduledMinute + SCHEDULE_BLOCK_MINUTES);
-        }
-      });
-    }
-  }
-  const base = Math.max(curMins, latestEnd, SCREEN_START_HOUR * 60);
-  const rounded = Math.ceil(base / 15) * 15;
-  const clamped = Math.min(rounded, SCREEN_END_HOUR * 60);
-  return { hour: Math.min(Math.max(Math.floor(clamped / 60), SCREEN_START_HOUR), SCREEN_END_HOUR), minute: clamped % 60 };
+  const currentMinutes = isSameDay(now, selectedDate) ? now.getHours() * 60 + now.getMinutes() : SCREEN_START_HOUR * 60;
+  const latestEnd = laneEvents.reduce((max, event) => {
+    const startMinutes = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+    const durationMinutes = durationMap[event.orderId] ?? 90;
+    return Math.max(max, startMinutes + durationMinutes);
+  }, SCREEN_START_HOUR * 60);
+  const base = Math.max(currentMinutes, latestEnd, SCREEN_START_HOUR * 60);
+  const rounded = Math.ceil(base / TIME_PICKER_MINUTE_STEP) * TIME_PICKER_MINUTE_STEP;
+  return {
+    hour: Math.floor(rounded / 60),
+    minute: rounded % 60,
+  };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation) {
+  const transitMinutes = routeEstimate?.durationMinutes ?? 0;
+  const loadingMinutes = 30;
+  const returnMinutes = routeEstimate?.durationMinutes ?? 0;
+  const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0, 0);
+  const arrival = new Date(start.getTime() + transitMinutes * 60 * 1000);
+  const loadingComplete = new Date(arrival.getTime() + loadingMinutes * 60 * 1000);
+  const returned = new Date(loadingComplete.getTime() + returnMinutes * 60 * 1000);
+  if (!hasSiteLocation) {
+    return {
+      deliveryFromYard: 'Pending site location',
+      siteLoading: `${loadingMinutes} min`,
+      returnTransit: 'Pending site location',
+      overall: `${loadingMinutes} min onsite`,
+      aestTime: formatTimeChip(hour, minute),
+      arrivalTime: 'Pending',
+      loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+      returnTime: 'Pending',
+    };
+  }
+  if (!routeEstimate) {
+    return {
+      deliveryFromYard: 'Calculating route',
+      siteLoading: `${loadingMinutes} min`,
+      returnTransit: 'Calculating route',
+      overall: `${loadingMinutes} min onsite`,
+      aestTime: formatTimeChip(hour, minute),
+      arrivalTime: 'Calculating',
+      loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+      returnTime: 'Calculating',
+    };
+  }
+  return {
+    deliveryFromYard: `${transitMinutes} min`,
+    siteLoading: `${loadingMinutes} min`,
+    returnTransit: `${returnMinutes} min`,
+    overall: `${transitMinutes + loadingMinutes + returnMinutes} min`,
+    aestTime: formatTimeChip(hour, minute),
+    arrivalTime: formatTimeChip(arrival.getHours(), arrival.getMinutes()),
+    loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+    returnTime: formatTimeChip(returned.getHours(), returned.getMinutes()),
+  };
+}
 
-function LegendDot({ color, label, small }) {
+function LegendDot({ color, label }) {
   return (
-    <span className={`ts-legend-item${small ? ' small' : ''}`}>
-      <span className="ts-legend-dot" style={{ background: color }} />
+    <span className="ts2-legend-item">
+      <span className="ts2-legend-dot" style={{ backgroundColor: color }} />
       {label}
     </span>
   );
 }
 
-function DeliveryStep({ label, time, color }) {
-  return (
-    <div className="ts-dt-step">
-      <span className="ts-dt-dot" style={{ background: color }} />
-      <div className="ts-dt-step-body">
-        <span className="ts-dt-step-label">{label}</span>
-        <span className="ts-dt-step-time">{time}</span>
-      </div>
-    </div>
-  );
-}
-
-function DurationConnector({ icon, label }) {
-  const icons = {
-    truck: (
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="1" y="3" width="15" height="13" rx="1" /><path d="M16 8h4l3 5v4h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
-      </svg>
-    ),
-    clock: (
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-    return: (
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="9 14 4 19 9 24" /><path d="M20 4v7a4 4 0 0 1-4 4H4" />
-      </svg>
-    ),
-  };
-  return (
-    <div className="ts-dt-connector">
-      <div className="ts-dt-line" />
-      <div className="ts-dt-pill">
-        {icons[icon]}
-        <span>{label}</span>
-      </div>
-      <div className="ts-dt-line" />
-    </div>
-  );
-}
-
-function MapTilePreview({ mapTileData, containerSize }) {
-  if (!mapTileData || !containerSize) return null;
-  const { width: cw, height: ch } = containerSize;
-  const tileSize = cw / 3;
-  const pinGridX = (1 + mapTileData.pinX) * tileSize;
-  const pinGridY = (1 + mapTileData.pinY) * tileSize;
-  const gridTop = ch / 2 - pinGridY;
-  return (
-    <>
-      <div style={{ position: 'absolute', top: gridTop, left: 0, width: cw, height: cw, overflow: 'hidden' }}>
-        {([-1, 0, 1]).flatMap(dy => ([-1, 0, 1]).map(dx => (
-          <img
-            key={`${dx}-${dy}`}
-            src={cartoTileUrl(mapTileData.zoom, mapTileData.tileX + dx, mapTileData.tileY + dy)}
-            alt=""
-            style={{ position: 'absolute', left: (dx + 1) * tileSize, top: (dy + 1) * tileSize, width: tileSize, height: tileSize, display: 'block' }}
-          />
-        )))}
-      </div>
-      <div style={{ position: 'absolute', left: pinGridX - 13, top: ch / 2 - 28, pointerEvents: 'none', zIndex: 2 }}>
-        <svg width="26" height="32" viewBox="0 0 24 32" fill={ESS_ORANGE}>
-          <path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 21 9 21s9-14.25 9-21c0-4.97-4.03-9-9-9zm0 13a4 4 0 1 1 0-8 4 4 0 0 1 0 8z" />
-        </svg>
-      </div>
-    </>
-  );
-}
-
-function MiniScheduleStrip({ eventsByTruck, truckLanes, selectedTruckId, selectedHour, selectedMinute, aiSuggestion, onSelectSlot }) {
-  const barRef = useRef(null);
-  const [barWidth, setBarWidth] = useState(0);
-  const totalMins = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
+function CurrentTimeMarker({ selectedDate, timelineWidth }) {
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const el = barRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(entries => setBarWidth(entries[0].contentRect.width));
-    obs.observe(el);
-    setBarWidth(el.getBoundingClientRect().width);
-    return () => obs.disconnect();
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
-  const minsToX = mins => barWidth > 0 ? Math.max(0, ((mins - SCREEN_START_HOUR * 60) / totalMins) * barWidth) : 0;
-  const minsToW = dur => barWidth > 0 ? Math.max(6, (dur / totalMins) * barWidth) : 0;
-  const ghostStart = selectedHour * 60 + selectedMinute;
+  if (!isSameDay(now, selectedDate)) {
+    return null;
+  }
+  const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
+  const left = ((currentMinutes - SCREEN_START_HOUR * 60) / totalMinutes) * timelineWidth;
+  if (left < 0 || left > timelineWidth) {
+    return null;
+  }
+  return (
+    <div className="ts2-now-marker" style={{ left }}>
+      <span>{now.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+    </div>
+  );
+}
 
-  const handleRowClick = (lane, e) => {
-    const bar = e.currentTarget.querySelector('[data-bar]');
-    if (!bar || barWidth <= 0) { onSelectSlot(lane.id, selectedHour, selectedMinute); return; }
-    const rect = bar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    if (x < 0) { onSelectSlot(lane.id, selectedHour, selectedMinute); return; }
-    const frac = Math.max(0, Math.min(1, x / barWidth));
-    const raw = SCREEN_START_HOUR * 60 + frac * totalMins;
-    const rounded = Math.round(raw / 15) * 15;
-    const clamped = Math.min((SCREEN_END_HOUR - 2) * 60, Math.max(SCREEN_START_HOUR * 60, rounded));
-    onSelectSlot(lane.id, Math.floor(clamped / 60), clamped % 60);
+function MiniScheduleStrip({
+  laneEvents,
+  lanes,
+  selectedTruckId,
+  selectedHour,
+  selectedMinute,
+  dayEvents,
+  startMap,
+  durationMap,
+  currentDurationMinutes,
+  onSelectSlot,
+  selectedDate,
+}) {
+  const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
+  const now = new Date();
+  const showPastOverlay = isSameDay(now, selectedDate);
+  const pastMinutes = showPastOverlay ? Math.max(0, now.getHours() * 60 + now.getMinutes() - SCREEN_START_HOUR * 60) : 0;
+
+  const pickStartAfter = (event) => {
+    const start = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+    const duration = durationMap[event.orderId] ?? 90;
+    const next = Math.ceil((start + duration) / TIME_PICKER_MINUTE_STEP) * TIME_PICKER_MINUTE_STEP;
+    onSelectSlot(event.truckId, Math.floor(next / 60), next % 60);
+  };
+
+  const pickStartBefore = (event) => {
+    const start = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+    const next = Math.max(SCREEN_START_HOUR * 60, Math.floor((start - currentDurationMinutes) / TIME_PICKER_MINUTE_STEP) * TIME_PICKER_MINUTE_STEP);
+    onSelectSlot(event.truckId, Math.floor(next / 60), next % 60);
   };
 
   return (
-    <div className="ts-mini">
-      <div className="ts-mini-axis">
-        <div className="ts-mini-axis-pad" />
-        <div className="ts-mini-ticks">
-          {TIME_MARKERS.map(m => <span key={m}>{m}</span>)}
+    <div className="ts2-mini">
+      <div className="ts2-mini-axis">
+        <div className="ts2-mini-axis-pad" />
+        <div className="ts2-mini-axis-track">
+          {Array.from({ length: SCREEN_END_HOUR - SCREEN_START_HOUR + 1 }).map((_, index) => (
+            <span key={index}>{formatTimeChip(SCREEN_START_HOUR + index, 0)}</span>
+          ))}
         </div>
       </div>
-      <div className="ts-mini-table">
-        {truckLanes.map((lane, idx) => {
-          const isSelected = lane.id === selectedTruckId;
-          const isAi = aiSuggestion?.recommendedTruckId === lane.id;
-          const laneEvents = eventsByTruck[idx] || [];
-          const hasConflict = isSelected && laneEvents.some(ev => {
-            const eStart = ev.scheduledHour * 60 + ev.scheduledMinute;
-            return ghostStart < eStart + SCHEDULE_BLOCK_MINUTES && ghostStart + 90 > eStart;
-          });
+      <div className="ts2-mini-table">
+        {lanes.map((lane, laneIndex) => {
+          const eventsForLane = laneEvents[laneIndex] || [];
+          const selected = selectedTruckId === lane.id;
           return (
-            <div
-              key={lane.id}
-              className={`ts-mini-row${isSelected ? ' selected' : ''}${idx < truckLanes.length - 1 ? ' bordered' : ''}`}
-              onClick={e => handleRowClick(lane, e)}
-            >
-              <div className="ts-mini-label">
-                <span className={isSelected ? 'active' : ''}>{lane.rego}</span>
-              </div>
-              <div className="ts-mini-bar" data-bar ref={idx === 0 ? barRef : null}>
-                {barWidth > 0 && laneEvents.map(ev => (
+            <div key={lane.id} className={`ts2-mini-row${selected ? ' selected' : ''}`}>
+              <div className="ts2-mini-label">{lane.rego}</div>
+              <div className="ts2-mini-track" onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const ratio = (event.clientX - rect.left) / rect.width;
+                const absoluteMinutes = SCREEN_START_HOUR * 60 + Math.max(0, Math.min(1, ratio)) * totalMinutes;
+                const rounded = Math.round(absoluteMinutes / TIME_PICKER_MINUTE_STEP) * TIME_PICKER_MINUTE_STEP;
+                onSelectSlot(lane.id, Math.floor(rounded / 60), rounded % 60);
+              }}>
+                {showPastOverlay ? <div className="ts2-mini-past" style={{ width: `${(pastMinutes / totalMinutes) * 100}%` }} /> : null}
+                {eventsForLane.map(event => {
+                  const left = ((startMap[event.orderId] ?? event.hour * 60 + event.minute) - SCREEN_START_HOUR * 60) / totalMinutes * 100;
+                  const width = (Math.max(15, durationMap[event.orderId] ?? 90) / totalMinutes) * 100;
+                  return (
+                    <React.Fragment key={event.id}>
+                      <button type="button" className="ts2-mini-insert before" style={{ left: `${left}%` }} onClick={e => { e.stopPropagation(); pickStartBefore(event); }}>+</button>
+                      <div className="ts2-mini-block" style={{ left: `${left}%`, width: `${width}%` }}>
+                        <span>{formatTimeChip(event.hour, event.minute)}</span>
+                      </div>
+                      <button type="button" className="ts2-mini-insert after" style={{ left: `${left + width}%` }} onClick={e => { e.stopPropagation(); pickStartAfter(event); }}>+</button>
+                    </React.Fragment>
+                  );
+                })}
+                {selectedTruckId === lane.id ? (
                   <div
-                    key={ev.id}
-                    className="ts-mini-block booked"
-                    style={{ left: minsToX(ev.scheduledHour * 60 + ev.scheduledMinute), width: minsToW(SCHEDULE_BLOCK_MINUTES) }}
-                  >
-                    <span>{formatTimeChip(ev.scheduledHour, ev.scheduledMinute)}</span>
-                    <span>{ev.builderName}</span>
-                  </div>
-                ))}
-                {isSelected && barWidth > 0 && (
-                  <div
-                    className="ts-mini-block ghost"
+                    className="ts2-mini-ghost"
                     style={{
-                      left: minsToX(ghostStart), width: minsToW(90),
-                      background: hasConflict ? '#E74C3C' : ESS_ORANGE,
-                      border: hasConflict ? '1.5px solid #C0392B' : 'none',
+                      left: `${(((selectedHour * 60 + selectedMinute) - SCREEN_START_HOUR * 60) / totalMinutes) * 100}%`,
+                      width: `${(Math.max(15, currentDurationMinutes) / totalMinutes) * 100}%`,
                     }}
-                  >
-                    <span>{formatTimeChip(selectedHour, selectedMinute)}</span>
-                  </div>
-                )}
-                {isAi && !isSelected && aiSuggestion && barWidth > 0 && (
-                  <div
-                    className="ts-mini-block ai"
-                    style={{ left: minsToX(aiSuggestion.recommendedHour * 60 + aiSuggestion.recommendedMinute), width: minsToW(90) }}
-                  >
-                    <span>{formatTimeChip(aiSuggestion.recommendedHour, aiSuggestion.recommendedMinute)}</span>
-                  </div>
-                )}
+                  />
+                ) : null}
               </div>
             </div>
           );
@@ -324,217 +370,366 @@ function MiniScheduleStrip({ eventsByTruck, truckLanes, selectedTruckId, selecte
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function TruckSchedulePage({ initialRequestId } = {}) {
+export default function TruckSchedulePage({ user }) {
+  const isTruckRole = isTruckDeviceRole(user?.role);
+  const assignedTruck = getTruckAssignment(user?.role);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
-  const [requests, setRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [allRequests, setAllRequests] = useState([]);
+  const [dayEvents, setDayEvents] = useState([]);
+  const [requestMetaMap, setRequestMetaMap] = useState({});
+  const [requestSiteLocationMap, setRequestSiteLocationMap] = useState({});
+  const [eventDurationMinutesMap, setEventDurationMinutesMap] = useState({});
+  const [eventPrimaryDurationMinutesMap, setEventPrimaryDurationMinutesMap] = useState({});
+  const [eventStartMinutesMap, setEventStartMinutesMap] = useState({});
+  const [eventCycleStateMap, setEventCycleStateMap] = useState({});
+  const [loadingBoard, setLoadingBoard] = useState(true);
   const [error, setError] = useState('');
+  const [showPendingPanel, setShowPendingPanel] = useState(false);
+  const [timelineScaleMode, setTimelineScaleMode] = useState(() => {
+    const saved = localStorage.getItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
+    return saved && SCALE_MODES[saved] ? saved : 'standard';
+  });
   const [requestModal, setRequestModal] = useState(null);
-  const [requestLoading, setRequestLoading] = useState(false);
-  const [selectedTruckId, setSelectedTruckId] = useState(null);
-  const [selectedHour, setSelectedHour] = useState(6);
+  const [requestModalLoading, setRequestModalLoading] = useState(false);
+  const [requestModalRouteData, setRequestModalRouteData] = useState(null);
+  const [requestModalRouteLoading, setRequestModalRouteLoading] = useState(false);
+  const [selectedTruckId, setSelectedTruckId] = useState(assignedTruck?.id || TRUCK_LANES[0].id);
+  const [selectedHour, setSelectedHour] = useState(SCREEN_START_HOUR);
   const [selectedMinute, setSelectedMinute] = useState(0);
+  const [selectedRouteEstimate, setSelectedRouteEstimate] = useState(null);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
-  const [mapTileData, setMapTileData] = useState(null);
-  const [mapLoading, setMapLoading] = useState(false);
-  const [mapContainerSize, setMapContainerSize] = useState(null);
-  const [aiSuggestion, setAiSuggestion] = useState(null);
-  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
-  const [showPending, setShowPending] = useState(false);
-  const openedInitialRef = useRef(false);
-  const goToday = useCallback(() => setSelectedDate(startOfDay(new Date())), []);
-  const isToday = isSameDay(selectedDate, new Date());
+  const [eventOverviewModal, setEventOverviewModal] = useState(null);
+  const [eventOverviewLoading, setEventOverviewLoading] = useState(false);
+  const [eventOverviewRouteLoading, setEventOverviewRouteLoading] = useState(false);
+  const [eventOverviewRouteData, setEventOverviewRouteData] = useState(null);
+  const boardScrollRef = useRef(null);
+  const scaleAnchorRef = useRef(null);
+  const loadPromiseRef = useRef(null);
 
-  // Load all active requests once
-  useEffect(() => {
-    let active = true;
-    setLoadingRequests(true);
-    materialOrderRequestsAPI.listActiveRequests()
-      .then(items => { if (active) setRequests(items || []); })
-      .catch(err => { if (active) setError(err?.message || 'Failed to load schedule.'); })
-      .finally(() => { if (active) setLoadingRequests(false); });
-    return () => { active = false; };
-  }, []);
+  const visibleTruckLanes = useMemo(() => {
+    if (isTruckRole && assignedTruck) {
+      return TRUCK_LANES.filter(lane => lane.id === assignedTruck.id);
+    }
+    return TRUCK_LANES;
+  }, [assignedTruck, isTruckRole]);
 
-  const dateStr = toDateStr(selectedDate);
-
-  const dayRequests = useMemo(() =>
-    requests.filter(r => r.scheduledDate === dateStr && typeof r.scheduledHour === 'number'),
-    [requests, dateStr]
-  );
-
-  const pendingRequests = useMemo(() =>
-    requests.filter(r => !r.scheduledDate),
-    [requests]
-  );
-
-  const eventsByTruck = useMemo(() => {
-    const groups = TRUCK_LANES.map(() => []);
-    dayRequests.forEach(r => groups[eventTruckIndex(r)].push(r));
-    groups.forEach(g => g.sort((a, b) => (a.scheduledHour * 60 + a.scheduledMinute) - (b.scheduledHour * 60 + b.scheduledMinute)));
-    return groups;
-  }, [dayRequests]);
-
-  // Open initial request if provided as prop
-  useEffect(() => {
-    if (!initialRequestId || openedInitialRef.current || loadingRequests) return;
-    openedInitialRef.current = true;
-    openRequestModal(initialRequestId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRequestId, loadingRequests]);
-
-  const openRequestModal = useCallback(async (requestId) => {
-    setRequestLoading(true);
-    try {
-      const [request, builders] = await Promise.all([
-        materialOrderRequestsAPI.getRequest(requestId),
-        safetyProjectsAPI.getBuilders({ includeArchived: false }),
+  const loadBoard = useCallback(async () => {
+    if (loadPromiseRef.current) {
+      return loadPromiseRef.current;
+    }
+    const task = (async () => {
+      const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+      const [active, archived] = await Promise.all([
+        materialOrderRequestsAPI.listActiveRequests({ includeArchived: true }).catch(() => []),
+        materialOrderRequestsAPI.listArchivedRequests().catch(() => []),
       ]);
-      if (!request) throw new Error('Request not found.');
-      const siteLocation = findProjectLocation(builders, request);
-      setRequestModal({ request, siteLocation });
-      const nextTruck = request.truckId || TRUCK_LANES[0].id;
-      setSelectedTruckId(nextTruck);
-      if (typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number') {
-        setSelectedHour(request.scheduledHour);
-        setSelectedMinute(request.scheduledMinute);
-      } else {
-        const s = getSuggestedStartTime(nextTruck, selectedDate, dayRequests);
-        setSelectedHour(s.hour);
-        setSelectedMinute(s.minute);
-      }
-      setAiSuggestion(null);
-    } catch (err) {
-      alert(err?.message || 'Failed to load request details.');
-    } finally {
-      setRequestLoading(false);
-    }
-  }, [selectedDate, dayRequests]);
+      const merged = dedupeRequests([...active, ...archived]);
+      setAllRequests(merged);
+      const dateKey = formatDateKey(selectedDate);
+      const requestsForDay = merged.filter(request => request.scheduledDate === dateKey);
+      const siteLocationMap = Object.fromEntries(
+        requestsForDay.map(request => [request.id, requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request)]),
+      );
+      setRequestSiteLocationMap(current => ({ ...current, ...siteLocationMap }));
+      const cachedRouteMap = Object.fromEntries(
+        requestsForDay.map(request => {
+          const siteLocation = siteLocationMap[request.id];
+          return [request.id, siteLocation ? getCachedRouteEstimateValue(siteLocation) ?? null : null];
+        }),
+      );
+      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap);
+      setDayEvents(initialBoard.dayEvents);
+      setEventDurationMinutesMap(initialBoard.durationMap);
+      setEventStartMinutesMap(initialBoard.startMap);
+      setEventPrimaryDurationMinutesMap(initialBoard.primaryDurationMap);
+      setEventCycleStateMap(initialBoard.cycleStateMap);
+      setRequestMetaMap(Object.fromEntries(requestsForDay.map(request => [request.id, request])));
+      setLoadingBoard(false);
+      const resolvedRouteEntries = await Promise.all(
+        requestsForDay.map(async request => {
+          const siteLocation = siteLocationMap[request.id];
+          return [request.id, siteLocation ? await getCachedRouteEstimate(siteLocation) : null];
+        }),
+      );
+      const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries);
+      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap);
+      setDayEvents(nextBoard.dayEvents);
+      setEventDurationMinutesMap(nextBoard.durationMap);
+      setEventStartMinutesMap(nextBoard.startMap);
+      setEventPrimaryDurationMinutesMap(nextBoard.primaryDurationMap);
+      setEventCycleStateMap(nextBoard.cycleStateMap);
+      setError('');
+    })().catch(err => {
+      setError(err?.message || 'Failed to load truck schedule.');
+      setLoadingBoard(false);
+    }).finally(() => {
+      loadPromiseRef.current = null;
+    });
+    loadPromiseRef.current = task;
+    return task;
+  }, [requestSiteLocationMap, selectedDate]);
 
-  const closeModal = useCallback(() => {
+  useEffect(() => {
+    loadBoard().catch(() => {});
+  }, [loadBoard]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      loadBoard().catch(() => {});
+    }, LIVE_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, [loadBoard]);
+
+  useEffect(() => {
+    localStorage.setItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`, timelineScaleMode);
+  }, [timelineScaleMode, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (scaleAnchorRef.current == null || !boardScrollRef.current) {
+      return;
+    }
+    const ratio = scaleAnchorRef.current;
+    const node = boardScrollRef.current;
+    requestAnimationFrame(() => {
+      const maxScroll = Math.max(0, node.scrollWidth - node.clientWidth);
+      node.scrollLeft = ratio * maxScroll;
+      scaleAnchorRef.current = null;
+    });
+  }, [timelineScaleMode]);
+
+  const timelineMarkers = useMemo(() => buildTimelineMarkers(timelineScaleMode), [timelineScaleMode]);
+  const timelineWidth = useMemo(() => getTimelineWidth(timelineScaleMode), [timelineScaleMode]);
+  const pendingRequests = useMemo(
+    () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt),
+    [allRequests],
+  );
+  const groupedEventsByTruck = useMemo(
+    () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
+    [dayEvents, visibleTruckLanes],
+  );
+  const selectedRouteDurationMinutes = useMemo(
+    () => Math.max(30, selectedRouteEstimate?.durationMinutes ? selectedRouteEstimate.durationMinutes * 2 + 30 : 90),
+    [selectedRouteEstimate],
+  );
+  const requestModalSummary = useMemo(
+    () => buildEstimateSummary(selectedDate, selectedHour, selectedMinute, selectedRouteEstimate, Boolean(requestModal?.siteLocation)),
+    [requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
+  );
+  const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
+  const timelineScaleLabel = useMemo(() => SCALE_MODES[timelineScaleMode]?.label || 'Scale', [timelineScaleMode]);
+  const overviewActionRows = useMemo(() => getDeliveryActionRows(eventOverviewModal?.request), [eventOverviewModal]);
+  const overviewSummary = useMemo(() => {
+    if (!eventOverviewModal?.request) {
+      return null;
+    }
+    const request = eventOverviewModal.request;
+    return buildEstimateSummary(
+      eventOverviewModal.siteLocation,
+      new Date(`${eventOverviewModal.event.date}T00:00:00`),
+      eventOverviewModal.event.hour,
+      eventOverviewModal.event.minute,
+      eventOverviewModal.routeEstimate,
+      Boolean(eventOverviewModal.siteLocation),
+    );
+  }, [eventOverviewModal]);
+
+  const openRequestModal = useCallback(async requestId => {
+    setRequestModalLoading(true);
     setRequestModal(null);
-    setAiSuggestion(null);
-    setAiSuggestLoading(false);
+    setRequestModalRouteData(null);
+    setRequestModalRouteLoading(false);
+    const request = allRequests.find(item => item.id === requestId) ?? await materialOrderRequestsAPI.getRequest(requestId);
+    if (!request) {
+      setRequestModalLoading(false);
+      return;
+    }
+    const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+    const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
+    const nextTruckId = request.scheduledTruckId ?? request.truckId ?? selectedTruckId ?? TRUCK_LANES[0].id;
+    const nextRouteEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation) : null;
+    setSelectedRouteEstimate(nextRouteEstimate);
+    setSelectedTruckId(nextTruckId);
+    if (typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number') {
+      setSelectedHour(request.scheduledHour);
+      setSelectedMinute(request.scheduledMinute);
+    } else {
+      const suggested = getSuggestedStartTime({
+        truckId: nextTruckId,
+        selectedDate,
+        dayEvents,
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+      });
+      setSelectedHour(suggested.hour);
+      setSelectedMinute(suggested.minute);
+    }
+    setRequestModal({ request, siteLocation });
+    setRequestModalLoading(false);
+    if (siteLocation) {
+      setRequestModalRouteLoading(true);
+      fetchRouteData(siteLocation)
+        .then(data => setRequestModalRouteData(data))
+        .finally(() => setRequestModalRouteLoading(false));
+    }
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventStartMinutesMap, requestSiteLocationMap, selectedDate, selectedTruckId]);
+
+  const closeRequestModal = useCallback(() => {
+    setRequestModal(null);
+    setRequestModalLoading(false);
+    setRequestModalRouteData(null);
+    setRequestModalRouteLoading(false);
+    setTimePickerVisible(false);
   }, []);
 
-  // Geocode site for map
-  useEffect(() => {
-    const loc = requestModal?.siteLocation?.trim();
-    if (!loc) { setMapTileData(null); return; }
-    let active = true;
-    setMapLoading(true);
-    geocodeAddress(loc)
-      .then(pt => { if (active) setMapTileData(pt ? buildMapTileData(pt.lat, pt.lon) : null); })
-      .catch(() => { if (active) setMapTileData(null); })
-      .finally(() => { if (active) setMapLoading(false); });
-    return () => { active = false; };
-  }, [requestModal?.siteLocation]);
-
-  const fetchAiSuggestion = useCallback(async () => {
-    if (!requestModal) return;
-    setAiSuggestLoading(true);
-    setAiSuggestion(null);
-    try {
-      const existingDeliveries = dayRequests.map(r => ({
-        truckId: TRUCK_LANES[eventTruckIndex(r)].id,
-        truckLabel: TRUCK_LANES[eventTruckIndex(r)].rego,
-        hour: r.scheduledHour,
-        minute: r.scheduledMinute,
-      }));
-      const result = await analysisAPI.recommendTimeSlot({
-        siteLocation: requestModal.siteLocation || '',
-        scaffoldingSystem: requestModal.request.itemValues?.__scaffoldingSystem || '',
-        scheduledDate: dateStr,
-        existingDeliveries,
-      });
-      setAiSuggestion(result);
-    } catch {
-      // silent fail — user can retry
-    } finally {
-      setAiSuggestLoading(false);
+  const openEventOverview = useCallback(async event => {
+    setEventOverviewLoading(true);
+    setEventOverviewModal(null);
+    setEventOverviewRouteData(null);
+    const request = requestMetaMap[event.orderId] ?? await materialOrderRequestsAPI.getRequest(event.orderId);
+    if (!request) {
+      setEventOverviewLoading(false);
+      return;
     }
-  }, [requestModal, dayRequests, dateStr]);
+    const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+    const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
+    const routeEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation) : null;
+    const cycleState = eventCycleStateMap[event.orderId] ?? null;
+    const modalState = { event, request, siteLocation, routeEstimate, cycleState };
+    setEventOverviewModal(modalState);
+    setEventOverviewLoading(false);
+    if (siteLocation) {
+      setEventOverviewRouteLoading(true);
+      fetchRouteData(siteLocation)
+        .then(data => setEventOverviewRouteData(data))
+        .finally(() => setEventOverviewRouteLoading(false));
+    }
+  }, [eventCycleStateMap, requestMetaMap, requestSiteLocationMap]);
+
+  const closeEventOverview = useCallback(() => {
+    setEventOverviewModal(null);
+    setEventOverviewLoading(false);
+    setEventOverviewRouteLoading(false);
+    setEventOverviewRouteData(null);
+  }, []);
 
   const handleSchedule = useCallback(async () => {
-    if (!requestModal || !selectedTruckId) return;
-    const truck = TRUCK_LANES.find(l => l.id === selectedTruckId);
-    if (!truck) { alert('Please select a truck.'); return; }
+    if (!requestModal?.request || !selectedTruckId) {
+      return;
+    }
+    const scheduleDateIso = buildScheduleIso(formatDateKey(selectedDate), selectedHour, selectedMinute);
+    if (!scheduleDateIso || new Date(scheduleDateIso).getTime() <= Date.now()) {
+      window.alert('Please choose a future time for this delivery.');
+      return;
+    }
     setScheduleSaving(true);
     try {
+      const truck = TRUCK_LANES.find(lane => lane.id === selectedTruckId);
       await materialOrderRequestsAPI.setSchedule(requestModal.request.id, {
-        date: dateStr,
+        date: formatDateKey(selectedDate),
         hour: selectedHour,
         minute: selectedMinute,
-        truckId: truck.id,
-        truckLabel: truck.rego,
+        truckId: truck?.id ?? selectedTruckId,
+        truckLabel: truck?.rego ?? requestModal.request.scheduledTruckLabel ?? null,
       });
-      const updated = await materialOrderRequestsAPI.listActiveRequests();
-      setRequests(updated || []);
-      closeModal();
-    } catch (err) {
-      alert(err?.message || 'Scheduling failed. Please try again.');
+      setAllRequests(current => current.map(item => item.id === requestModal.request.id ? {
+        ...item,
+        scheduledDate: formatDateKey(selectedDate),
+        scheduledHour: selectedHour,
+        scheduledMinute: selectedMinute,
+        scheduledTruckId: truck?.id ?? selectedTruckId,
+        scheduledTruckLabel: truck?.rego ?? null,
+        truckId: truck?.id ?? selectedTruckId,
+        truckLabel: truck?.rego ?? null,
+        deliveryStatus: 'scheduled',
+        deliveryStartedAt: null,
+        deliveryUnloadingAt: null,
+        deliveryConfirmedAt: null,
+      } : item));
+      closeRequestModal();
+      await loadBoard();
     } finally {
       setScheduleSaving(false);
     }
-  }, [requestModal, selectedTruckId, selectedHour, selectedMinute, dateStr, closeModal]);
+  }, [closeRequestModal, loadBoard, requestModal, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
 
-  const estimates = estimateSummary(requestModal?.siteLocation || null, selectedHour, selectedMinute);
-  const timeOptions = START_HOUR_OPTIONS.flatMap(h => START_MINUTE_OPTIONS.map(m => ({ hour: h, minute: m, label: formatTimeChip(h, m) })));
+  const handleOpenPdf = useCallback(async request => {
+    if (!request?.pdfPath) {
+      return;
+    }
+    const pdfUrl = await materialOrderRequestsAPI.getPdfUrl(request);
+    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+  }, []);
 
-  const navPrev = () => setSelectedDate(d => startOfDay(new Date(d.getTime() - 86400000)));
-  const navNext = () => setSelectedDate(d => startOfDay(new Date(d.getTime() + 86400000)));
+  const timeOptions = useMemo(() => {
+    const options = [];
+    for (let hour = SCREEN_START_HOUR; hour <= SCREEN_END_HOUR; hour += 1) {
+      for (let minute = 0; minute < 60; minute += TIME_PICKER_MINUTE_STEP) {
+        if (hour === SCREEN_END_HOUR && minute > 0) {
+          continue;
+        }
+        const iso = buildScheduleIso(formatDateKey(selectedDate), hour, minute);
+        options.push({
+          hour,
+          minute,
+          label: formatTimeChip(hour, minute),
+          isPast: iso ? new Date(iso).getTime() <= Date.now() : false,
+        });
+      }
+    }
+    return options;
+  }, [selectedDate]);
 
   return (
-    <div className="ts-page">
-
-      {/* ── Header Bar ──────────────────────────────────────────────────── */}
-      <div className="ts-hbar">
-        <div className="ts-hbar-left">
-          <TruckSvg />
-          <h1 className="ts-hbar-title">Truck Schedule</h1>
+    <div className="ts2-page">
+      <div className="ts2-header">
+        <div>
+          <span className="ts2-eyebrow">ESS Transport</span>
+          <h1>{isTruckRole ? `${assignedTruck?.rego || 'Truck'} Dynamic Schedule` : 'Truck Schedule'}</h1>
         </div>
-        <div className="ts-hbar-mid">
-          <button className="ts-hbar-nav" onClick={navPrev}><ChevronLeft /></button>
-          <span className="ts-hbar-date">
-            {selectedDate.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </span>
-          <button className="ts-hbar-nav" onClick={navNext}><ChevronRight /></button>
-          <button className={`ts-today-btn${isToday ? ' ts-today-active' : ''}`} onClick={goToday}>Today</button>
-        </div>
-        <div className="ts-hbar-right">
-          <span className="ts-view-chip">Day View</span>
+        <div className="ts2-header-actions">
+          <button type="button" className="ts2-chip-btn" onClick={() => setSelectedDate(startOfDay(new Date()))}>Today</button>
           <button
-            className={`ts-new-order-btn${showPending ? ' ts-new-order-open' : ''}`}
-            onClick={() => setShowPending(p => !p)}
-          >+ New Order</button>
+            type="button"
+            className={`ts2-chip-btn${timelineScaleMode !== 'standard' ? ' active' : ''}`}
+            onClick={() => {
+              if (boardScrollRef.current) {
+                const node = boardScrollRef.current;
+                const maxScroll = Math.max(1, node.scrollWidth - node.clientWidth);
+                scaleAnchorRef.current = node.scrollLeft / maxScroll;
+              }
+              setTimelineScaleMode(current => cycleScaleMode(current));
+            }}
+          >
+            {timelineScaleLabel}
+          </button>
+          {!isTruckRole ? (
+            <button type="button" className="ts2-primary-btn" onClick={() => setShowPendingPanel(open => !open)}>
+              Scheduled Orders <span>{pendingRequests.length}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {error ? <div className="ts-error" style={{ padding: '8px 24px 0' }}>{error}</div> : null}
+      {error ? <div className="ts2-error">{error}</div> : null}
 
-      {/* ── Pending Orders ───────────────────────────────────────────────── */}
-      {showPending ? (
-        <div className="ts-pending-section">
-          <div className="ts-pending-header">
-            <span className="ts-eyebrow">UNSCHEDULED ORDERS</span>
-            {pendingRequests.length > 0 ? <span className="ts-pending-count">{pendingRequests.length}</span> : null}
+      {!isTruckRole && showPendingPanel ? (
+        <div className="ts2-pending-panel">
+          <div className="ts2-pending-head">
+            <strong>Scheduled Orders</strong>
+            <span>{pendingRequests.length}</span>
           </div>
           {pendingRequests.length === 0 ? (
-            <p style={{ margin: 0, color: '#7181a0', fontSize: '0.9rem' }}>All orders have been scheduled.</p>
+            <p>All material requests are scheduled.</p>
           ) : (
-            <div className="ts-pending-list">
-              {pendingRequests.map(r => (
-                <div key={r.id} className="ts-pending-card">
-                  <div className="ts-pending-card-body">
-                    <span className="ts-pending-builder">{r.builderName}</span>
-                    <span className="ts-pending-project">{r.projectName}</span>
+            <div className="ts2-pending-list">
+              {pendingRequests.map(request => (
+                <div key={request.id} className="ts2-pending-item">
+                  <div>
+                    <strong>{request.builderName || 'Material Order'}</strong>
+                    <span>{request.projectName || 'Awaiting site assignment'}</span>
                   </div>
-                  <button className="ts-pending-schedule-btn" onClick={() => { setShowPending(false); openRequestModal(r.id); }}>
-                    Schedule →
-                  </button>
+                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
                 </div>
               ))}
             </div>
@@ -542,216 +737,169 @@ export default function TruckSchedulePage({ initialRequestId } = {}) {
         </div>
       ) : null}
 
-      {/* ── Schedule Board ───────────────────────────────────────────────── */}
-      <div className="ts-board-wrap">
-        <div className="ts-board">
+      <div className="ts2-toolbar-row">
+        <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
+        <div className="ts2-toolbar-date">{formatBoardDay(selectedDate)}</div>
+        <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
+      </div>
 
-          {/* Time axis header */}
-          <div className="ts-board-head">
-            <div className="ts-lane-col ts-lane-col-head">Truck</div>
-            <div className="ts-board-axis">
-              {BOARD_HOURS.map(h => (
-                <span key={h} className="ts-axis-label" style={{ left: blockLeftPct(h, 0) }}>
-                  {h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`}
-                </span>
+      <div className="ts2-legend-row">
+        <LegendDot color="#16A34A" label="Scheduled" />
+        <LegendDot color="#2563EB" label="In transit" />
+        <LegendDot color="#F47C20" label="Offloading" />
+        <LegendDot color="#7C3AED" label="Delivered" />
+        <LegendDot color="#6B7280" label="Return transit" />
+      </div>
+
+      <div className="ts2-board-scroll" ref={boardScrollRef}>
+        <div className="ts2-board" style={{ width: timelineWidth + 186 }}>
+          <div className="ts2-board-head">
+            <div className="ts2-lane-head">Truck</div>
+            <div className="ts2-axis" style={{ width: timelineWidth }}>
+              {timelineMarkers.map(marker => (
+                <div key={`${timelineScaleMode}-${marker.minutes}`} className={`ts2-axis-tick${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }}>
+                  {marker.showLabel ? <span>{marker.label}</span> : null}
+                </div>
               ))}
             </div>
           </div>
-
-          {/* Truck lanes */}
-          {TRUCK_LANES.map((lane, laneIdx) => (
-            <div key={lane.id} className="ts-board-lane">
-              <div className="ts-lane-col">
-                <div className="ts-truck-chip">
-                  <TruckSvg />
-                  <span className="ts-truck-rego">{lane.rego}</span>
+          <div className="ts2-board-body">
+            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} />
+            {visibleTruckLanes.map((lane, laneIndex) => {
+              const laneEvents = groupedEventsByTruck[laneIndex] || [];
+              return (
+                <div key={lane.id} className="ts2-lane-row">
+                  <div className="ts2-lane-meta">
+                    <div className="ts2-truck-pill">
+                      <span className="ts2-truck-pill-dot" />
+                      <strong>{lane.rego}</strong>
+                    </div>
+                  </div>
+                  <div className="ts2-lane-track" style={{ width: timelineWidth }}>
+                    {timelineMarkers.slice(1, -1).map(marker => (
+                      <div key={`${lane.id}-${marker.minutes}`} className={`ts2-grid-line${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }} />
+                    ))}
+                    {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
+                    {laneEvents.map(event => {
+                      const cycleState = eventCycleStateMap[event.orderId] || {};
+                      const request = requestMetaMap[event.orderId];
+                      const status = request?.deliveryStatus || 'scheduled';
+                      const durationMinutes = eventDurationMinutesMap[event.orderId] ?? 90;
+                      const primaryDurationMinutes = eventPrimaryDurationMinutesMap[event.orderId] ?? durationMinutes;
+                      const offset = getEventOffset(eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute) * 100;
+                      const width = getEventFlex(durationMinutes) * 100;
+                      const primaryRatio = Math.max(0, Math.min(1, primaryDurationMinutes / Math.max(1, durationMinutes)));
+                      const primaryWidth = primaryRatio * 100;
+                      const returnWidth = Math.max(0, 100 - primaryWidth);
+                      const hasReturnTransitTile = status === 'return_transit' && cycleState.showReturnTransitTile && returnWidth > 0;
+                      const groupedCompletedCycle = status === 'return_transit' && cycleState.groupedCompletedCycle;
+                      const palette = status === 'return_transit' && (hasReturnTransitTile || groupedCompletedCycle)
+                        ? deliveredTileAppearance()
+                        : scheduleStatusAppearance(status);
+                      const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
+                      const primaryEnd = startMinutes + primaryDurationMinutes;
+                      return (
+                        <div key={event.id} className="ts2-event-wrap" style={{ left: `${offset}%`, width: `${width}%` }}>
+                          <button
+                            type="button"
+                            className="ts2-event-card"
+                            style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : '100%' }}
+                            onClick={() => openEventOverview(event)}
+                          >
+                            <span className="ts2-event-time">{formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} – {formatTimeChip(Math.floor(primaryEnd / 60), Math.floor(primaryEnd % 60))}</span>
+                            <strong className="ts2-event-title">{event.builderName || 'Material Order'}</strong>
+                            <span className="ts2-event-subtitle">{event.projectName || 'Scheduled delivery'}</span>
+                            <div className="ts2-event-status-row">
+                              <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
+                              <span>{groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
+                            </div>
+                          </button>
+                          {hasReturnTransitTile ? (
+                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => openEventOverview(event)}>
+                              <span>Return transit</span>
+                              <strong>Back to yard</strong>
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {!loadingBoard && laneEvents.length === 0 ? <div className="ts2-empty-lane" /> : null}
+                  </div>
                 </div>
-              </div>
-              <div className="ts-lane-cells">
-                {BOARD_HOUR_LINES.map(h => (
-                  <div key={h} className="ts-vline" style={{ left: blockLeftPct(h, 0) }} />
-                ))}
-                {loadingRequests && laneIdx === 0 ? (
-                  <div className="ts-slots-loading">Loading schedule…</div>
-                ) : (eventsByTruck[laneIdx] || []).map(ev => {
-                  const endMins = ev.scheduledHour * 60 + ev.scheduledMinute + SCHEDULE_BLOCK_MINUTES;
-                  return (
-                    <button
-                      key={ev.id}
-                      className="ts-block"
-                      style={{ left: blockLeftPct(ev.scheduledHour, ev.scheduledMinute), width: BLOCK_WIDTH_PCT }}
-                      onClick={() => openRequestModal(ev.id)}
-                    >
-                      <div className="ts-block-header">
-                        <span className="ts-block-time">
-                          {formatTimeChip(ev.scheduledHour, ev.scheduledMinute)} – {formatTimeChip(Math.floor(endMins / 60), endMins % 60)}
-                        </span>
-                        <span className="ts-block-title">{ev.builderName}</span>
-                        {ev.projectName ? <span className="ts-block-subtitle">{ev.projectName}</span> : null}
-                      </div>
-                      <div className="ts-block-phases">
-                        <div className="ts-block-phase" style={{ flex: BLOCK_TRANSIT_MINUTES, background: '#F47C20' }}>
-                          <span>To site</span><strong>{BLOCK_TRANSIT_MINUTES}m</strong>
-                        </div>
-                        <div className="ts-block-phase" style={{ flex: BLOCK_LOADING_MINUTES, background: '#3B82F6' }}>
-                          <span>Unload</span><strong>{BLOCK_LOADING_MINUTES}m</strong>
-                        </div>
-                        <div className="ts-block-phase" style={{ flex: BLOCK_RETURN_MINUTES, background: '#22C55E' }}>
-                          <span>Return</span><strong>{BLOCK_RETURN_MINUTES}m</strong>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* ── Legend ───────────────────────────────────────────────────────── */}
-      <div className="ts-board-legend">
-        <LegendDot color={BOOKED_BG} label="Delivery" />
-        <LegendDot color="#F47C20" label="Transit to Site" small />
-        <LegendDot color="#3B82F6" label="Unload" small />
-        <LegendDot color="#22C55E" label="Return" small />
-      </div>
-
-      {/* ── Scheduling Modal ─────────────────────────────────────────────── */}
-      {(requestModal || requestLoading) ? (
-        <div className="ts-backdrop" onClick={closeModal}>
-          <div className="ts-modal" onClick={e => e.stopPropagation()}>
-            {requestLoading ? (
-              <div className="ts-modal-loading">
-                <div className="ts-spinner" />
-                <span>Loading request details…</span>
-              </div>
+      {(requestModal || requestModalLoading) ? (
+        <div className="ts2-modal-root">
+          <div className="ts2-modal-backdrop" onClick={closeRequestModal} />
+          <div className="ts2-modal-card">
+            {requestModalLoading ? (
+              <div className="ts2-modal-loading">Loading request details…</div>
             ) : requestModal ? (
               <>
-                <div className="ts-modal-head">
-                  <div />
-                  <button className="ts-modal-close" onClick={closeModal}>✕</button>
+                <div className="ts2-modal-head">
+                  <div>
+                    <span className="ts2-eyebrow">Schedule Delivery</span>
+                    <h2>{requestModal.request.builderName || 'Material Order'}</h2>
+                    <p>{requestModal.request.projectName || 'Scheduled delivery'}</p>
+                  </div>
+                  <button type="button" className="ts2-close-btn" onClick={closeRequestModal}>×</button>
                 </div>
-
-                <div className="ts-modal-body">
-                  {/* Map */}
-                  <div className="ts-map-card">
-                    <div
-                      className="ts-map-img"
-                      ref={el => {
-                        if (el && !mapContainerSize) {
-                          const r = el.getBoundingClientRect();
-                          setMapContainerSize({ width: r.width, height: r.height });
-                        }
-                      }}
-                    >
-                      {mapTileData && mapContainerSize ? (
-                        <MapTilePreview mapTileData={mapTileData} containerSize={mapContainerSize} />
-                      ) : mapLoading ? (
-                        <div className="ts-map-placeholder"><div className="ts-spinner" /><span>Loading map…</span></div>
-                      ) : (
-                        <div className="ts-map-placeholder">
-                          <MapSvg />
-                          <span>{requestModal.siteLocation ? 'Map unavailable' : 'No site location saved'}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="ts-map-footer">
-                      <PinSvg />
-                      <span>{requestModal.siteLocation || 'Add a site address in the ESS Design Site Registry to enable map preview.'}</span>
-                      {requestModal.siteLocation ? (
-                        <a
-                          href={`https://maps.google.com/?q=${encodeURIComponent(requestModal.siteLocation)}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="ts-open-maps"
-                        >Open in Maps ↗</a>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* Mini schedule strip with date nav */}
-                  <div className="ts-mini-section">
-                    <div className="ts-modal-date-nav">
-                      <button className="ts-date-nav-btn" onClick={navPrev}><ChevronLeft /></button>
-                      <span className="ts-mini-date-label">{formatScheduleHeadline(selectedDate)} — click a row</span>
-                      <button className="ts-date-nav-btn" onClick={navNext}><ChevronRight /></button>
-                    </div>
-                    <MiniScheduleStrip
-                      eventsByTruck={eventsByTruck}
-                      truckLanes={TRUCK_LANES}
-                      selectedTruckId={selectedTruckId}
-                      selectedHour={selectedHour}
-                      selectedMinute={selectedMinute}
-                      aiSuggestion={aiSuggestion}
-                      onSelectSlot={(truckId, hour, minute) => {
-                        setSelectedTruckId(truckId);
-                        setSelectedHour(hour);
-                        setSelectedMinute(minute);
-                      }}
-                    />
-                  </div>
-
-                  {/* Mini legend */}
-                  <div className="ts-mini-legend">
-                    <LegendDot color={BOOKED_BG} label="Booked" small />
-                    <LegendDot color={ESS_ORANGE} label="New order" small />
-                    {aiSuggestion ? <LegendDot color="#22C55E" label="AI suggestion" small /> : null}
-                  </div>
-
-                  {/* AI suggestion banner */}
-                  {aiSuggestion ? (
-                    <div className="ts-ai-banner">
-                      <ZapSvg />
-                      <span>
-                        {aiSuggestion.recommendedTruckLabel} at {formatTimeChip(aiSuggestion.recommendedHour, aiSuggestion.recommendedMinute)} — {aiSuggestion.reason}
-                      </span>
-                      <button className="ts-ai-apply" onClick={() => {
-                        setSelectedTruckId(aiSuggestion.recommendedTruckId);
-                        setSelectedHour(aiSuggestion.recommendedHour);
-                        setSelectedMinute(aiSuggestion.recommendedMinute);
-                      }}>Apply</button>
-                    </div>
-                  ) : null}
-
-                  {/* Time + AI suggest row */}
-                  <div className="ts-time-ai-row">
-                    <button className="ts-time-select" onClick={() => setTimePickerVisible(true)}>
-                      <div>
-                        <strong>{formatTimeChip(selectedHour, selectedMinute)}</strong>
-                        <span>Click to change time</span>
-                      </div>
-                      <ChevronRight />
-                    </button>
-                    <button
-                      className={`ts-ai-btn${aiSuggestLoading ? ' loading' : ''}${aiSuggestion ? ' active' : ''}`}
-                      disabled={aiSuggestLoading}
-                      onClick={() => fetchAiSuggestion()}
-                    >
-                      {aiSuggestLoading ? <div className="ts-spinner-sm" /> : <ZapSvg />}
-                      <span>{aiSuggestLoading ? 'Finding…' : aiSuggestion ? 'Re-suggest' : 'AI Suggest'}</span>
-                    </button>
-                  </div>
-
-                  {/* Delivery timeline */}
-                  <div className="ts-delivery-timeline">
-                    <DeliveryStep label="DEPARTS YARD" time={estimates.aestTime} color={ESS_NAVY} />
-                    <DurationConnector icon="truck" label={`Transit · ${estimates.deliveryFromYard}`} />
-                    <DeliveryStep label="ARRIVES SITE" time={estimates.arrivalTime} color={ESS_ORANGE} />
-                    <DurationConnector icon="clock" label={`Site loading · ${estimates.siteLoading}`} />
-                    <DeliveryStep label="LOADING COMPLETE" time={estimates.loadingCompleteTime} color="#22C55E" />
-                    <DurationConnector icon="return" label={`Return transit · ${estimates.returnTransit}`} />
-                    <DeliveryStep label="RETURNS YARD" time={estimates.returnTime} color={ESS_NAVY} />
-                  </div>
+                <RouteMapCanvas className="ts2-compact-map" routeData={requestModalRouteData} loading={requestModalRouteLoading} siteLocation={requestModal.siteLocation} />
+                <div className="ts2-estimate-grid">
+                  <div><span>Transit from yard</span><strong>{requestModalSummary.deliveryFromYard}</strong></div>
+                  <div><span>Site loading</span><strong>{requestModalSummary.siteLoading}</strong></div>
+                  <div><span>Return transit</span><strong>{requestModalSummary.returnTransit}</strong></div>
+                  <div><span>Overall</span><strong>{requestModalSummary.overall}</strong></div>
                 </div>
-
-                {/* Action buttons */}
-                <div className="ts-modal-actions">
-                  <button className="ts-btn-secondary" onClick={closeModal}>Close</button>
-                  <button className="ts-btn-primary" disabled={scheduleSaving} onClick={handleSchedule}>
-                    {scheduleSaving ? <div className="ts-spinner-sm" /> : null}
-                    {scheduleSaving ? 'Saving…' : 'Schedule Order ✓'}
+                <MiniScheduleStrip
+                  laneEvents={groupedEventsByTruck}
+                  lanes={TRUCK_LANES}
+                  selectedTruckId={selectedTruckId}
+                  selectedHour={selectedHour}
+                  selectedMinute={selectedMinute}
+                  dayEvents={dayEvents}
+                  startMap={eventStartMinutesMap}
+                  durationMap={eventDurationMinutesMap}
+                  currentDurationMinutes={selectedRouteDurationMinutes}
+                  selectedDate={selectedDate}
+                  onSelectSlot={(truckId, hour, minute) => {
+                    setSelectedTruckId(truckId);
+                    setSelectedHour(hour);
+                    setSelectedMinute(minute);
+                  }}
+                />
+                <div className="ts2-modal-controls">
+                  <button type="button" className="ts2-time-btn" onClick={() => setTimePickerVisible(true)}>
+                    <strong>{formatTimeChip(selectedHour, selectedMinute)}</strong>
+                    <span>Manual time selection</span>
                   </button>
+                  <div className="ts2-truck-pills">
+                    {TRUCK_LANES.map(lane => (
+                      <button
+                        key={lane.id}
+                        type="button"
+                        className={`ts2-truck-select${selectedTruckId === lane.id ? ' active' : ''}`}
+                        onClick={() => setSelectedTruckId(lane.id)}
+                      >
+                        {lane.rego}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {requestModalActionRows.length > 0 ? (
+                  <div className="ts2-action-rows">
+                    {requestModalActionRows.map(row => (
+                      <div key={row.key}><span>{row.label}</span><strong>{row.value}</strong></div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="ts2-modal-actions">
+                  <button type="button" className="ts2-secondary-btn" onClick={closeRequestModal}>Close</button>
+                  <button type="button" className="ts2-primary-btn solid" disabled={scheduleSaving} onClick={handleSchedule}>{scheduleSaving ? 'Saving…' : 'Schedule Order'}</button>
                 </div>
               </>
             ) : null}
@@ -759,78 +907,91 @@ export default function TruckSchedulePage({ initialRequestId } = {}) {
         </div>
       ) : null}
 
-      {/* Time picker overlay */}
       {timePickerVisible ? (
-        <div className="ts-backdrop" onClick={() => setTimePickerVisible(false)}>
-          <div className="ts-time-picker" onClick={e => e.stopPropagation()}>
-            <div className="ts-time-picker-head">
-              <span>Select Delivery Time</span>
-              <button onClick={() => setTimePickerVisible(false)}>✕</button>
+        <div className="ts2-modal-root">
+          <div className="ts2-modal-backdrop" onClick={() => setTimePickerVisible(false)} />
+          <div className="ts2-time-picker-card">
+            <div className="ts2-time-picker-head">
+              <strong>Select Delivery Time</strong>
+              <button type="button" className="ts2-close-btn" onClick={() => setTimePickerVisible(false)}>×</button>
             </div>
-            <div className="ts-time-picker-list">
-              {timeOptions.map(opt => (
+            <div className="ts2-time-picker-list">
+              {timeOptions.map(option => (
                 <button
-                  key={`${opt.hour}-${opt.minute}`}
-                  className={`ts-time-opt${opt.hour === selectedHour && opt.minute === selectedMinute ? ' selected' : ''}`}
-                  onClick={() => { setSelectedHour(opt.hour); setSelectedMinute(opt.minute); setTimePickerVisible(false); }}
+                  key={`${option.hour}-${option.minute}`}
+                  type="button"
+                  disabled={option.isPast}
+                  className={`ts2-time-option${selectedHour === option.hour && selectedMinute === option.minute ? ' active' : ''}${option.isPast ? ' disabled' : ''}`}
+                  onClick={() => {
+                    setSelectedHour(option.hour);
+                    setSelectedMinute(option.minute);
+                    setTimePickerVisible(false);
+                  }}
                 >
-                  <span>{opt.label}</span>
-                  {opt.hour === selectedHour && opt.minute === selectedMinute
-                    ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ESS_ORANGE} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    : null}
+                  {option.label}
                 </button>
               ))}
             </div>
           </div>
         </div>
       ) : null}
+
+      {(eventOverviewModal || eventOverviewLoading) ? (
+        <div className="transport-route-modal-root">
+          <div className="transport-route-modal-backdrop" onClick={closeEventOverview} />
+          <div className="transport-route-modal-shell management">
+            {eventOverviewLoading ? (
+              <div className="ts2-modal-loading">Loading delivery overview…</div>
+            ) : eventOverviewModal ? (
+              <>
+                <RouteMapCanvas className="transport-route-modal-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={eventOverviewModal.siteLocation} />
+                <div className="transport-route-modal-top">
+                  <div>
+                    <h2>Delivery Route</h2>
+                    <p>{eventOverviewModal.event.builderName || 'Material Order'} · {eventOverviewModal.event.projectName || 'Scheduled delivery'}</p>
+                  </div>
+                  <button type="button" className="transport-route-close" onClick={closeEventOverview}>×</button>
+                </div>
+                {eventOverviewRouteData ? (
+                  <div className="transport-route-hero-pill">
+                    <strong>{formatDuration(eventOverviewRouteData.durationSeconds)} · {formatDistance(eventOverviewRouteData.distanceMeters)}</strong>
+                    <span>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(eventOverviewModal.request?.deliveryStatus ?? 'scheduled')}</span>
+                  </div>
+                ) : null}
+                <div className="transport-route-modal-bottom">
+                  <div className="transport-route-info-card">
+                    <div className="transport-route-info-row"><span>Destination</span><strong>{eventOverviewModal.siteLocation || 'No site location saved for this project yet.'}</strong></div>
+                    <div className="transport-route-info-row"><span>Truck</span><strong>{eventOverviewModal.event.truckLabel || 'ESS Transport'}</strong></div>
+                    <div className="transport-route-info-row"><span>Status</span><strong>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(eventOverviewModal.request?.deliveryStatus ?? 'scheduled')}</strong></div>
+                  </div>
+                  {overviewSummary ? (
+                    <div className="transport-route-info-card">
+                      <div className="transport-route-info-row"><span>Scheduled</span><strong>{formatBoardDay(eventOverviewModal.event.date)} · {formatTimeChip(eventOverviewModal.event.hour, eventOverviewModal.event.minute)}</strong></div>
+                      <div className="transport-route-info-row"><span>Transit from yard</span><strong>{overviewSummary.deliveryFromYard}</strong></div>
+                      <div className="transport-route-info-row"><span>Site loading</span><strong>{overviewSummary.siteLoading}</strong></div>
+                      <div className="transport-route-info-row"><span>Return transit</span><strong>{overviewSummary.returnTransit}</strong></div>
+                      <div className="transport-route-info-row"><span>Overall planned</span><strong>{overviewSummary.overall}</strong></div>
+                    </div>
+                  ) : null}
+                  {overviewActionRows.length > 0 ? (
+                    <div className="transport-route-info-card">
+                      {overviewActionRows.map(row => (
+                        <div key={row.key} className="transport-route-info-row"><span>{row.label}</span><strong>{row.value}</strong></div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="transport-route-actions">
+                    {eventOverviewModal.siteLocation ? (
+                      <a className="transport-inline-btn link" href={`https://maps.google.com/?q=${encodeURIComponent(eventOverviewModal.siteLocation)}`} target="_blank" rel="noreferrer">Open in Maps</a>
+                    ) : null}
+                    <button type="button" className="transport-inline-btn primary" disabled={!eventOverviewModal.request?.pdfPath} onClick={() => handleOpenPdf(eventOverviewModal.request)}>Open Materials PDF</button>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
-  );
-}
-
-// ─── Inline SVG icons ─────────────────────────────────────────────────────────
-
-function ChevronLeft() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-function ChevronRight() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-function TruckSvg() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="3" width="15" height="13" rx="1" /><path d="M16 8h4l3 5v4h-7V8z" />
-      <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
-    </svg>
-  );
-}
-function MapSvg() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7181A0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
-      <line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" />
-    </svg>
-  );
-}
-function PinSvg() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill={ESS_ORANGE} stroke="none">
-      <path d="M12 0C8.13 0 5 3.13 5 7c0 5.25 7 17 7 17s7-11.75 7-17c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 4.5 12 4.5s2.5 1.12 2.5 2.5S13.38 9.5 12 9.5z" />
-    </svg>
-  );
-}
-function ZapSvg() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-    </svg>
   );
 }

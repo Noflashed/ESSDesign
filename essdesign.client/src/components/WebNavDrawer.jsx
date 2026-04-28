@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
     { key: 'safety', label: 'ESS Safety' },
-    { key: 'material-ordering', label: 'ESS Transport', children: [
-        { key: 'material-ordering-new', label: 'New Material Order' },
-        { key: 'material-ordering-active', label: 'Scheduled Orders' },
-        { key: 'material-ordering-archived', label: 'Archived Orders' },
-        { key: 'truck-schedule', label: 'Truck Schedule' }
-    ]},
+    { key: 'truck-schedule', label: 'ESS Transport' },
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
 ];
@@ -30,12 +25,6 @@ export default function WebNavDrawer({
     onSelect,
     items = MENU_ITEMS
 }) {
-    const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
-
-    const toggleGroup = (key) => {
-        setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
-    };
-
     const isActive = (itemKey) => {
         if (itemKey === 'safety') {
             return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -43,8 +32,17 @@ export default function WebNavDrawer({
         if (itemKey === 'rostering') {
             return currentPage === 'rostering' || currentPage === 'rostering-tree';
         }
-        if (itemKey === 'material-ordering') {
-            return currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived' || currentPage === 'truck-schedule';
+        if (itemKey === 'truck-schedule') {
+            return currentPage === 'truck-schedule'
+                || currentPage === 'truck-delivery-schedule'
+                || currentPage === 'truck-tracking'
+                || currentPage === 'material-ordering'
+                || currentPage === 'material-ordering-new'
+                || currentPage === 'material-ordering-active'
+                || currentPage === 'material-ordering-archived';
+        }
+        if (itemKey === 'material-ordering-new') {
+            return currentPage === 'material-ordering' || currentPage === 'material-ordering-new';
         }
         return currentPage === itemKey;
     };
@@ -67,36 +65,15 @@ export default function WebNavDrawer({
                     <button className="nav-drawer-close" onClick={onClose} aria-label="Close navigation">×</button>
                 </div>
                 <div className="nav-drawer-list">
-                    {items.map(item => {
-                        const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-                        const expanded = expandedKeys[item.key];
-                        return (
-                            <div key={item.key} className="nav-drawer-group">
-                                <button
-                                    className={`nav-drawer-item ${hasChildren ? 'nav-drawer-item-expandable' : ''} ${isActive(item.key) ? 'active' : ''}`}
-                                    onClick={() => hasChildren ? toggleGroup(item.key) : onSelect(item.key)}
-                                >
-                                    <span className="nav-drawer-item-label">{item.label}</span>
-                                    {hasChildren ? (
-                                        <span className={`nav-drawer-caret ${expanded ? 'open' : ''}`}>▾</span>
-                                    ) : null}
-                                </button>
-                                {hasChildren && expanded ? (
-                                    <div className="nav-drawer-sublist">
-                                        {item.children.map((child) => (
-                                            <button
-                                                key={child.key}
-                                                className={`nav-drawer-subitem ${currentPage === child.key ? 'active' : ''}`}
-                                                onClick={() => onSelect(child.key)}
-                                            >
-                                                {child.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : null}
-                            </div>
-                        );
-                    })}
+                    {items.map(item => (
+                        <button
+                            key={item.key}
+                            className={`nav-drawer-item ${isActive(item.key) ? 'active' : ''}`}
+                            onClick={() => onSelect(item.key)}
+                        >
+                            <span className="nav-drawer-item-label">{item.label}</span>
+                        </button>
+                    ))}
                 </div>
             </aside>
         </>
