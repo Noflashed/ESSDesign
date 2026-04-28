@@ -1,38 +1,50 @@
 /* React Native Web transport island: iOS parity overrides for Electron/web. */
 .transport-page-frame.transport-page-frame-full {
-    height: 100vh;
-    overflow: auto;
-    background: #102B5C;
+    height: 100vh !important;
+    overflow: hidden !important;
+    background: #102B5C !important;
+}
+
+.transport-page-frame [data-transport-role],
+.transport-page-frame [data-transport-role] > div {
+    min-width: 0 !important;
+}
+
+.transport-page-frame .css-view-175oi2r {
+    box-sizing: border-box;
 }
 
 .transport-page-frame .ts2-page,
 .transport-page-frame .delivery-schedule-page,
 .transport-page-frame .material-ordering-transport-page,
 .transport-page-frame .transport-placeholder-page {
-    background: #F6F8FC;
-    color: #102B5C;
+    min-width: 0 !important;
+    min-height: 100vh !important;
+    background: #F6F8FC !important;
+    color: #102B5C !important;
     font-family: Inter, "Google Sans", Roboto, Arial, sans-serif;
+    overflow: auto !important;
 }
 
 .transport-page-frame .ts2-header,
 .transport-page-frame .delivery-schedule-toolbar,
 .transport-page-frame .material-ordering-transport-header {
-    min-height: 92px;
-    background: #FFFFFF;
-    border: 0;
-    border-bottom: 1px solid #E8EDF5;
-    border-radius: 0;
-    box-shadow: none;
-    padding: 18px 28px;
+    min-height: 92px !important;
+    background: #FFFFFF !important;
+    border: 0 !important;
+    border-bottom: 1px solid #E8EDF5 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 18px 28px !important;
 }
 
 .transport-page-frame .ts2-header h1,
 .transport-page-frame .material-ordering-transport-header h1 {
-    color: #102B5C;
-    font-size: 24px;
-    line-height: 1.08;
-    font-weight: 900;
-    letter-spacing: 0;
+    color: #102B5C !important;
+    font-size: 24px !important;
+    line-height: 1.08 !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
 }
 
 .transport-page-frame .ts2-header-date-pill,
@@ -41,14 +53,14 @@
 .transport-page-frame .ts2-nav-btn,
 .transport-page-frame .transport-inline-btn,
 .transport-page-frame .material-ordering-queue-chip {
-    min-height: 44px;
-    border: 1px solid #E4EAF4;
-    border-radius: 14px;
-    background: #FFFFFF;
-    color: #102B5C;
-    box-shadow: none;
-    font-size: 14px;
-    font-weight: 800;
+    min-height: 44px !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 14px !important;
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
 }
 
 .transport-page-frame .ts2-board-card,
@@ -56,42 +68,42 @@
 .transport-page-frame .material-ordering-transport-canvas-ios,
 .transport-page-frame .material-ordering-request-card-ios,
 .transport-page-frame .transport-placeholder-card {
-    background: #FFFFFF;
-    border: 1px solid #E4EAF4;
-    border-radius: 24px;
-    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.06);
+    background: #FFFFFF !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 24px !important;
+    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.06) !important;
 }
 
 .transport-page-frame .ts2-board-card {
-    margin: 16px 18px 18px;
-    overflow: hidden;
+    margin: 16px 18px 18px !important;
+    overflow: hidden !important;
 }
 
 .transport-page-frame .ts2-board-card-title,
 .transport-page-frame .delivery-day-section h2 {
-    color: #102B5C;
-    font-size: 22px;
-    line-height: 1.15;
-    font-weight: 900;
-    letter-spacing: 0;
+    color: #102B5C !important;
+    font-size: 22px !important;
+    line-height: 1.15 !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
 }
 
 .transport-page-frame .ts2-board-scroll {
-    background: #FFFFFF;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    background: #FFFFFF !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 .transport-page-frame .ts2-lane-row {
-    min-height: 124px;
-    border-bottom: 1px solid #EDF2F7;
+    min-height: 124px !important;
+    border-bottom: 1px solid #EDF2F7 !important;
 }
 
 .transport-page-frame .ts2-truck-pill {
-    padding: 0;
-    border: 0;
-    background: transparent;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
 }
 
 .transport-page-frame .ts2-truck-pill-icon {
@@ -113,4 +125,196 @@
     border: 1px solid #E4EAF4;
     background: #FFFFFF;
     border-radius: 22px;
+}
+
+/* Dynamic Schedule: force iOS/iPad-like board proportions over legacy desktop locks. */
+.transport-page-frame .ts2-page > .ts2-header {
+    flex: 0 0 auto !important;
+}
+
+.transport-page-frame .ts2-header-left {
+    align-items: center !important;
+    gap: 18px !important;
+}
+
+.transport-page-frame .ts2-header-icon-btn {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 18px !important;
+    background: #F4F7FC !important;
+    color: #102B5C !important;
+    font-size: 28px !important;
+}
+
+.transport-page-frame .ts2-board-card-head {
+    padding: 20px 24px 12px !important;
+}
+
+.transport-page-frame .ts2-legend-row-inline {
+    margin: 0 24px 8px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.transport-page-frame .ts2-board {
+    width: max-content !important;
+    padding: 0 24px 20px !important;
+}
+
+.transport-page-frame .ts2-board-head,
+.transport-page-frame .ts2-lane-row {
+    grid-template-columns: 154px minmax(0, 1fr) !important;
+}
+
+.transport-page-frame .ts2-lane-head,
+.transport-page-frame .ts2-lane-meta {
+    padding: 18px 16px !important;
+    border-right: 1px solid #EDF2F7 !important;
+}
+
+.transport-page-frame .ts2-axis-shell,
+.transport-page-frame .ts2-lane-track-shell {
+    padding-left: 14px !important;
+    padding-right: 0 !important;
+    position: relative !important;
+}
+
+.transport-page-frame .ts2-axis {
+    height: 58px !important;
+}
+
+.transport-page-frame .ts2-axis,
+.transport-page-frame .ts2-lane-track {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+}
+
+.transport-page-frame .ts2-axis-tick span {
+    top: 14px !important;
+    left: 12px !important;
+    color: #102B5C !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .ts2-lane-track {
+    min-height: 124px !important;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFF 100%) !important;
+}
+
+.transport-page-frame .ts2-event-wrap {
+    top: 13px !important;
+    bottom: 13px !important;
+}
+
+.transport-page-frame .ts2-event-card,
+.transport-page-frame .ts2-return-card {
+    border-radius: 18px !important;
+    padding: 12px 14px !important;
+}
+
+.transport-page-frame .ts2-event-title {
+    font-size: 15px !important;
+    line-height: 1.15 !important;
+    font-weight: 900 !important;
+}
+
+/* Schedule Management: match the iOS request list sizing instead of wide web cards. */
+.transport-page-frame .material-ordering-transport-header-queue {
+    min-height: 92px !important;
+}
+
+.transport-page-frame .material-ordering-queue-tools,
+.transport-page-frame .material-ordering-request-stack-ios {
+    width: min(760px, calc(100vw - 170px)) !important;
+    max-width: 760px !important;
+    margin-left: 24px !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.transport-page-frame .material-ordering-queue-tools {
+    padding-top: 20px !important;
+    padding-bottom: 16px !important;
+}
+
+.transport-page-frame .material-ordering-queue-search {
+    min-height: 68px !important;
+    padding: 0 22px !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 24px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.06) !important;
+}
+
+.transport-page-frame .material-ordering-queue-chip-row {
+    gap: 14px !important;
+    margin-top: 18px !important;
+}
+
+.transport-page-frame .material-ordering-queue-chip {
+    min-height: 52px !important;
+    padding: 0 22px !important;
+    border-radius: 999px !important;
+    font-size: 16px !important;
+}
+
+.transport-page-frame .material-ordering-queue-meta {
+    margin-top: 20px !important;
+    color: #7A869F !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+}
+
+.transport-page-frame .material-ordering-request-stack-ios {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 18px !important;
+    padding-bottom: 28px !important;
+}
+
+.transport-page-frame .material-ordering-request-card,
+.transport-page-frame .material-ordering-request-card-ios {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 22px 22px 20px !important;
+    border-radius: 24px !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-top,
+.transport-page-frame .material-ordering-request-ios-badges,
+.transport-page-frame .material-ordering-request-ios-footer {
+    display: flex !important;
+}
+
+.transport-page-frame .material-ordering-request-chip {
+    min-height: 38px !important;
+    padding: 0 16px !important;
+    border-radius: 999px !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-brief strong {
+    color: #102B5C !important;
+    font-size: 18px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-project {
+    margin-top: 10px !important;
+    color: #2D3748 !important;
+    font-size: 17px !important;
+    font-weight: 800 !important;
+    line-height: 1.45 !important;
+}
+
+.transport-page-frame .material-ordering-request-ios-action {
+    min-height: 60px !important;
+    border-radius: 999px !important;
+    background: #3F8A78 !important;
+    font-size: 17px !important;
 }
