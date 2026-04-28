@@ -14,6 +14,11 @@ const keyFilePath = path.join(baseFolder, `${certificateName}.key`);
 
 export default defineConfig({
     plugins: [react()],
+    resolve: {
+        alias: [
+            { find: 'react-native', replacement: 'react-native-web' }
+        ]
+    },
     build: {
         rollupOptions: {
             output: {
