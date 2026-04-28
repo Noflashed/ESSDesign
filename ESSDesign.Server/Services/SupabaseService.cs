@@ -820,7 +820,7 @@ namespace ESSDesign.Server.Services
 
             var normalizedRole = NormalizeRole(role);
             var deviceEmail = ToTruckDeviceEmail(normalizedDeviceId);
-            var serviceRoleKey = _configuration["Supabase:ServiceRoleKey"];
+            var serviceRoleKey = _supabaseKey;
             if (string.IsNullOrWhiteSpace(serviceRoleKey) || string.IsNullOrWhiteSpace(_supabaseUrl))
             {
                 throw new InvalidOperationException("Supabase service role key is not configured");
