@@ -364,3 +364,515 @@
         align-self: flex-start !important;
     }
 }
+
+/* Desktop transport redesign: schedule board + inspector, management table + editor. */
+.transport-page-frame .transport-schedule-redesign-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 330px !important;
+    gap: 12px !important;
+    padding: 12px 14px 16px !important;
+    min-height: 0 !important;
+}
+
+.transport-page-frame .transport-schedule-board-card {
+    margin: 0 !important;
+    min-width: 0 !important;
+    border-radius: 8px !important;
+}
+
+.transport-page-frame .transport-schedule-inspector,
+.transport-page-frame .transport-management-detail,
+.transport-page-frame .transport-management-table-wrap,
+.transport-page-frame .transport-management-panel {
+    background: #FFFFFF !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 22px rgba(16, 43, 92, 0.06) !important;
+}
+
+.transport-page-frame .transport-schedule-inspector {
+    min-width: 0 !important;
+    padding: 14px !important;
+    overflow: auto !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head,
+.transport-page-frame .transport-management-detail-head,
+.transport-page-frame .transport-management-panel-title,
+.transport-page-frame .transport-management-table-foot {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head span,
+.transport-page-frame .transport-management-detail-head span,
+.transport-page-frame .transport-schedule-detail-list dt,
+.transport-page-frame .transport-management-summary-grid dt,
+.transport-page-frame .transport-schedule-estimate-card span,
+.transport-page-frame .transport-management-route-card span {
+    color: #6B7280 !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head h2,
+.transport-page-frame .transport-management-detail-head h2 {
+    margin: 3px 0 0 !important;
+    color: #102B5C !important;
+    font-size: 17px !important;
+    line-height: 1.15 !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head button,
+.transport-page-frame .transport-management-detail-head button {
+    width: 30px !important;
+    height: 30px !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+    color: #64748B !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list,
+.transport-page-frame .transport-management-summary-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    margin: 14px 0 !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list div,
+.transport-page-frame .transport-management-summary-grid div {
+    min-width: 0 !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list dd,
+.transport-page-frame .transport-management-summary-grid dd {
+    margin: 3px 0 0 !important;
+    color: #0F172A !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    line-height: 1.3 !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card,
+.transport-page-frame .transport-management-route-card {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    margin: 12px 0 !important;
+    border-radius: 8px !important;
+    background: #F7FAFF !important;
+    border: 1px solid #E0E8F7 !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card strong,
+.transport-page-frame .transport-management-route-card strong {
+    display: block !important;
+    margin-top: 2px !important;
+    color: #102B5C !important;
+    font-size: 12px !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-map {
+    position: relative !important;
+    height: 126px !important;
+    min-height: 126px !important;
+    border-radius: 8px !important;
+    border: 1px solid #E4EAF4 !important;
+    overflow: hidden !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation {
+    display: grid !important;
+    gap: 4px !important;
+    margin: 12px 0 !important;
+    padding: 12px !important;
+    border: 1px solid #BFEBD5 !important;
+    border-radius: 8px !important;
+    background: #ECFDF5 !important;
+    color: #065F46 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation span,
+.transport-page-frame .transport-schedule-recommendation small {
+    color: #047857 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-schedule-timeline {
+    margin-top: 14px !important;
+    padding-top: 12px !important;
+    border-top: 1px solid #E4EAF4 !important;
+}
+
+.transport-page-frame .transport-schedule-timeline > div {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 10px !important;
+    padding: 8px 0 !important;
+    color: #475569 !important;
+    font-size: 12px !important;
+}
+
+.transport-page-frame .ts2-pending-panel {
+    margin: 12px 14px 0 !important;
+    border-radius: 8px !important;
+    border: 1px solid #E4EAF4 !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .ts2-pending-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
+    gap: 10px !important;
+}
+
+.transport-page-frame .ts2-pending-item {
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+}
+
+.transport-page-frame .transport-management-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 370px !important;
+    gap: 14px !important;
+    padding: 14px !important;
+}
+
+.transport-page-frame .transport-management-main {
+    min-width: 0 !important;
+}
+
+.transport-page-frame .transport-management-tabs {
+    display: flex !important;
+    align-items: center !important;
+    gap: 24px !important;
+    min-height: 48px !important;
+    border-bottom: 1px solid #E4EAF4 !important;
+}
+
+.transport-page-frame .transport-management-tabs button {
+    align-self: stretch !important;
+    border: 0 !important;
+    border-bottom: 3px solid transparent !important;
+    background: transparent !important;
+    color: #64748B !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-tabs button.active {
+    color: #1D4ED8 !important;
+    border-bottom-color: #2563EB !important;
+}
+
+.transport-page-frame .transport-management-tabs span {
+    display: inline-flex !important;
+    min-width: 22px !important;
+    height: 20px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-left: 4px !important;
+    padding: 0 6px !important;
+    border-radius: 999px !important;
+    background: #EAF1FF !important;
+    color: #1D4ED8 !important;
+    font-size: 11px !important;
+}
+
+.transport-page-frame .transport-management-tools {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 14px 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(260px, 1fr) auto !important;
+    gap: 10px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-search {
+    min-height: 42px !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    padding: 0 12px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-search span {
+    color: #94A3B8 !important;
+    font-size: 12px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-chip-row {
+    margin-top: 0 !important;
+    align-items: center !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-chip {
+    min-height: 42px !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+}
+
+.transport-page-frame .transport-management-table-wrap {
+    overflow: hidden !important;
+}
+
+.transport-page-frame .transport-management-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+}
+
+.transport-page-frame .transport-management-table th {
+    padding: 12px 10px !important;
+    background: #F8FAFC !important;
+    border-bottom: 1px solid #E4EAF4 !important;
+    color: #64748B !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    text-align: left !important;
+}
+
+.transport-page-frame .transport-management-table td {
+    padding: 12px 10px !important;
+    border-bottom: 1px solid #EEF2F7 !important;
+    color: #334155 !important;
+    font-size: 12px !important;
+    vertical-align: top !important;
+}
+
+.transport-page-frame .transport-management-table tr {
+    cursor: pointer !important;
+}
+
+.transport-page-frame .transport-management-table tr.selected td,
+.transport-page-frame .transport-management-table tr:hover td {
+    background: #F0F6FF !important;
+}
+
+.transport-page-frame .transport-management-table td strong,
+.transport-page-frame .transport-management-table td span {
+    display: block !important;
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
+}
+
+.transport-page-frame .transport-priority,
+.transport-page-frame .transport-status-pill {
+    margin-top: 4px !important;
+    font-size: 10px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .priority-high { color: #DC2626 !important; }
+.transport-page-frame .priority-medium { color: #D97706 !important; }
+.transport-page-frame .priority-low { color: #16A34A !important; }
+
+.transport-page-frame .transport-status-pill {
+    display: inline-flex !important;
+    width: max-content !important;
+    padding: 3px 8px !important;
+    border-radius: 999px !important;
+    background: #EEF2FF !important;
+    color: #3730A3 !important;
+}
+
+.transport-page-frame .status-scheduled { background: #DCFCE7 !important; color: #166534 !important; }
+.transport-page-frame .status-in_transit { background: #DBEAFE !important; color: #1D4ED8 !important; }
+.transport-page-frame .status-unloading { background: #FEF3C7 !important; color: #B45309 !important; }
+.transport-page-frame .status-return_transit { background: #F3E8FF !important; color: #7E22CE !important; }
+.transport-page-frame .status-pending { background: #F1F5F9 !important; color: #475569 !important; }
+
+.transport-page-frame .transport-management-pdf-btn {
+    min-height: 28px !important;
+    padding: 0 8px !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-table-foot {
+    padding: 11px 12px !important;
+    color: #64748B !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-management-detail {
+    min-width: 0 !important;
+    padding: 14px !important;
+    overflow: auto !important;
+}
+
+.transport-page-frame .transport-management-panel {
+    margin-top: 12px !important;
+    padding: 12px !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-management-panel-title button {
+    min-height: 34px !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-items {
+    margin-top: 12px !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+.transport-page-frame .transport-management-items-head,
+.transport-page-frame .transport-management-items > div:not(.transport-management-items-head) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 56px !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+    border-bottom: 1px solid #EEF2F7 !important;
+    font-size: 12px !important;
+}
+
+.transport-page-frame .transport-management-items-head {
+    background: #F8FAFC !important;
+    color: #64748B !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-notes {
+    display: grid !important;
+    gap: 6px !important;
+    margin-top: 12px !important;
+}
+
+.transport-page-frame .transport-management-notes span,
+.transport-page-frame .transport-management-schedule-grid span {
+    color: #64748B !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-notes textarea {
+    min-height: 74px !important;
+    resize: vertical !important;
+    border: 1px solid #E4EAF4 !important;
+    border-radius: 8px !important;
+    padding: 10px !important;
+    color: #334155 !important;
+}
+
+.transport-page-frame .transport-management-truck-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    margin-top: 10px !important;
+}
+
+.transport-page-frame .transport-management-truck-tabs button,
+.transport-page-frame .transport-management-save,
+.transport-page-frame .transport-management-secondary-action {
+    min-height: 40px !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-management-truck-tabs button.active,
+.transport-page-frame .transport-management-save {
+    background: #2563EB !important;
+    border-color: #2563EB !important;
+    color: #FFFFFF !important;
+}
+
+.transport-page-frame .transport-management-schedule-grid {
+    display: grid !important;
+    grid-template-columns: 1.2fr 1fr 1fr !important;
+    gap: 8px !important;
+    margin-top: 12px !important;
+}
+
+.transport-page-frame .transport-management-schedule-grid label {
+    display: grid !important;
+    gap: 6px !important;
+}
+
+.transport-page-frame .transport-management-schedule-grid input,
+.transport-page-frame .transport-management-schedule-grid select {
+    min-height: 38px !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 8px !important;
+    padding: 0 8px !important;
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-management-validation {
+    display: grid !important;
+    gap: 6px !important;
+    margin: 10px 0 !important;
+}
+
+.transport-page-frame .transport-management-validation span {
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    background: #FFF7ED !important;
+    color: #C2410C !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-management-save,
+.transport-page-frame .transport-management-secondary-action {
+    width: 100% !important;
+    margin-top: 8px !important;
+}
+
+.transport-page-frame .transport-management-secondary-action {
+    background: #FFFFFF !important;
+    color: #102B5C !important;
+}
+
+@media (max-width: 1180px) {
+    .transport-page-frame .transport-schedule-redesign-grid,
+    .transport-page-frame .transport-management-layout {
+        grid-template-columns: 1fr !important;
+    }
+
+    .transport-page-frame .transport-schedule-inspector,
+    .transport-page-frame .transport-management-detail {
+        max-height: none !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .transport-page-frame .transport-management-tools {
+        grid-template-columns: 1fr !important;
+    }
+
+    .transport-page-frame .transport-management-table-wrap {
+        overflow-x: auto !important;
+    }
+
+    .transport-page-frame .transport-management-table {
+        min-width: 860px !important;
+    }
+}

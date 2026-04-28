@@ -398,7 +398,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [eventCycleStateMap, setEventCycleStateMap] = useState({});
   const [loadingBoard, setLoadingBoard] = useState(true);
   const [error, setError] = useState('');
-  const [showPendingPanel, setShowPendingPanel] = useState(false);
+  const [showPendingPanel, setShowPendingPanel] = useState(true);
   const [timelineScaleMode, setTimelineScaleMode] = useState(() => {
     const saved = localStorage.getItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved && SCALE_MODES[saved] ? saved : 'standard';
@@ -417,6 +417,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [eventOverviewLoading, setEventOverviewLoading] = useState(false);
   const [eventOverviewRouteLoading, setEventOverviewRouteLoading] = useState(false);
   const [eventOverviewRouteData, setEventOverviewRouteData] = useState(null);
+  const [selectedScheduleEventId, setSelectedScheduleEventId] = useState('');
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
@@ -522,6 +523,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
   );
+  useEffect(() => {
+    if (selectedScheduleEventId && dayEvents.some(event => event.orderId === selectedScheduleEventId)) {
+      return;
+    }
+    setSelectedScheduleEventId(dayEvents[0]?.orderId || '');
+  }, [dayEvents, selectedScheduleEventId]);
+  const selectedScheduleEvent = useMemo(
+    () => dayEvents.find(event => event.orderId === selectedScheduleEventId) || dayEvents[0] || null,
+    [dayEvents, selectedScheduleEventId],
+  );
+  const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
+  const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
+  const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation) ?? null) : null;
+  const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedRouteDurationMinutes = useMemo(
     () => Math.max(30, selectedRouteEstimate?.durationMinutes ? selectedRouteEstimate.durationMinutes * 2 + 30 : 90),
     [selectedRouteEstimate],
@@ -701,7 +716,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           {!isTruckRole ? (
             <button type="button" className="ts2-header-icon-btn" aria-label="Transport menu">☰</button>
           ) : null}
-          <h1>{isTruckRole ? (assignedTruck?.rego || 'Truck') + ' Schedule' : 'Truck Schedule'}</h1>
+          <h1>{isTruckRole ? (assignedTruck?.rego || 'Truck') + ' Schedule' : 'Dynamic Schedule'}</h1>
         </div>
         <div className="ts2-header-actions">
           {!isTruckRole ? (
@@ -713,7 +728,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           {!isTruckRole ? <button type="button" className="ts2-secondary-btn" onClick={() => window.alert('Debug controls will be surfaced here in the web transport suite.')}>Debug</button> : null}
           {!isTruckRole ? (
             <button type="button" className="ts2-primary-btn solid" onClick={() => setShowPendingPanel(open => !open)}>
-              Scheduled Orders <span>{pendingRequests.length}</span>
+              Pending Requests <span>{pendingRequests.length}</span>
             </button>
           ) : null}
         </div>
@@ -745,7 +760,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         </div>
       ) : null}
 
-      <div className="ts2-board-card">
+      <div className="transport-schedule-redesign-grid">
+      <div className="ts2-board-card transport-schedule-board-card">
         <div className="ts2-board-card-head">
           <div>
             <strong className="ts2-board-card-title">Live Schedule</strong>
@@ -837,7 +853,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             type="button"
                             className="ts2-event-card"
                             style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : '100%' }}
-                            onClick={() => openEventOverview(event)}
+                            onClick={() => {
+                              setSelectedScheduleEventId(event.orderId);
+                            }}
                           >
                             <span className="ts2-event-time">{formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} – {formatTimeChip(Math.floor(primaryEnd / 60), Math.floor(primaryEnd % 60))}</span>
                             <strong className="ts2-event-title">{event.builderName || 'Material Order'}</strong>
@@ -848,7 +866,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             </div>
                           </button>
                           {hasReturnTransitTile ? (
-                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => openEventOverview(event)}>
+                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => {
+                              setSelectedScheduleEventId(event.orderId);
+                            }}>
                               <span>Return transit</span>
                               <strong>Back to yard</strong>
                             </button>
@@ -865,6 +885,46 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
         </div>
       </div>
+      </div>
+      <aside className="transport-schedule-inspector">
+        <div className="transport-schedule-inspector-head">
+          <div>
+            <span>Selected Delivery</span>
+            <h2>{selectedScheduleEvent ? `${formatTimeChip(selectedScheduleEvent.hour, selectedScheduleEvent.minute)} - ${selectedScheduleRequest?.scheduledTruckLabel || selectedScheduleEvent.truckLabel || 'ESS'}` : 'No delivery selected'}</h2>
+          </div>
+          <button type="button" onClick={() => setSelectedScheduleEventId('')} aria-label="Clear selected delivery">x</button>
+        </div>
+        {selectedScheduleEvent ? (
+          <>
+            <dl className="transport-schedule-detail-list">
+              <div><dt>Builder</dt><dd>{selectedScheduleEvent.builderName || 'Material Order'}</dd></div>
+              <div><dt>Project</dt><dd>{selectedScheduleEvent.projectName || 'Scheduled delivery'}</dd></div>
+              <div><dt>Destination</dt><dd>{selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
+              <div><dt>Scaffold System</dt><dd>{selectedScheduleEvent.scaffoldingSystem || selectedScheduleRequest?.scaffoldingSystem || '-'}</dd></div>
+            </dl>
+            <div className="transport-schedule-estimate-card">
+              <div><span>Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
+              <div><span>Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
+              <div><span>Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
+              <div><span>Total</span><strong>{selectedScheduleTiming ? `${Math.round(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
+            </div>
+            <RouteMapCanvas className="transport-schedule-inspector-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={selectedScheduleSiteLocation} />
+            <div className="transport-schedule-recommendation">
+              <span>Recommended Time Slot</span>
+              <strong>{selectedScheduleTiming ? 'Best traffic conditions' : 'Route estimate pending'}</strong>
+              <small>{selectedScheduleTiming ? `Allow ${selectedScheduleTiming.totalMinutes} min total cycle` : 'Add a project site location to improve recommendations.'}</small>
+            </div>
+            <button type="button" className="transport-management-secondary-action" onClick={() => openEventOverview(selectedScheduleEvent)}>View Full Route Analysis</button>
+            <button type="button" className="transport-management-save" disabled={!selectedScheduleRequest?.pdfPath} onClick={() => handleOpenPdf(selectedScheduleRequest)}>PDF Picking Card</button>
+            <div className="transport-schedule-timeline">
+              <strong>Driver Status Timeline</strong>
+              {selectedScheduleActionRows.length > 0 ? selectedScheduleActionRows.map(row => <div key={row.key}><span>{row.label}</span><b>{row.value}</b></div>) : <p>No driver status updates yet.</p>}
+            </div>
+          </>
+        ) : (
+          <p className="transport-schedule-empty-inspector">Select a block on the schedule board to review route, status, and PDF details.</p>
+        )}
+      </aside>
       </div>
 
       {(requestModal || requestModalLoading) ? (
