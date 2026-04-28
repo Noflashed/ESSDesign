@@ -45,6 +45,9 @@ const SCALE_MODES = {
 };
 const SCALE_ORDER = ['standard', 'detailed', 'fine', 'ultraFine'];
 const LIVE_REFRESH_MS = 3000;
+const LANE_META_WIDTH = 154;
+const TRACK_GUTTER = 14;
+const TRACK_OFFSET = LANE_META_WIDTH + TRACK_GUTTER;
 const TIME_PICKER_MINUTE_STEP = 15;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 
@@ -381,7 +384,7 @@ function MiniScheduleStrip({
   );
 }
 
-export default function TruckSchedulePage({ user }) {
+export default function TruckSchedulePage({ user, onNavigate }) {
   const isTruckRole = isTruckDeviceRole(user?.role);
   const assignedTruck = getTruckAssignment(user?.role);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
@@ -695,12 +698,19 @@ export default function TruckSchedulePage({ user }) {
     <div className="ts2-page">
       <div className="ts2-header">
         <div className="ts2-header-left">
+          {!isTruckRole ? (
+            <button type="button" className="ts2-header-icon-btn" aria-label="Transport menu">☰</button>
+          ) : null}
           <h1>{isTruckRole ? (assignedTruck?.rego || 'Truck') + ' Schedule' : 'Truck Schedule'}</h1>
         </div>
         <div className="ts2-header-actions">
-          <div className="ts2-header-date-pill">{selectedDate.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })}</div>
+          {!isTruckRole ? (
+            <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
+          ) : null}
+          <div className="ts2-header-date-pill">{selectedDate.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</div>
           <button type="button" className="ts2-secondary-btn" onClick={() => setSelectedDate(startOfDay(new Date()))}>Today</button>
           {!isTruckRole ? <button type="button" className="ts2-secondary-btn">Filter</button> : null}
+          {!isTruckRole ? <button type="button" className="ts2-secondary-btn" onClick={() => window.alert('Debug controls will be surfaced here in the web transport suite.')}>Debug</button> : null}
           {!isTruckRole ? (
             <button type="button" className="ts2-primary-btn solid" onClick={() => setShowPendingPanel(open => !open)}>
               Scheduled Orders <span>{pendingRequests.length}</span>
@@ -770,9 +780,9 @@ export default function TruckSchedulePage({ user }) {
         </div>
 
         <div className="ts2-board-scroll" ref={boardScrollRef}>
-        <div className="ts2-board" style={{ width: timelineWidth + 116 }}>
-          <div className="ts2-board-head">
-            <div className="ts2-lane-head">Truck</div>
+        <div className="ts2-board" style={{ width: timelineWidth + TRACK_OFFSET }}>
+          <div className="ts2-board-head" style={{ gridTemplateColumns: `${LANE_META_WIDTH}px minmax(0, 1fr)` }}>
+            <div className="ts2-lane-head" />
             <div className="ts2-axis-shell">
               <div className="ts2-axis" style={{ width: timelineWidth }}>
                 {timelineMarkers.map(marker => (
@@ -784,11 +794,11 @@ export default function TruckSchedulePage({ user }) {
             </div>
           </div>
           <div className="ts2-board-body">
-            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} laneOffset={106} />
+            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} laneOffset={TRACK_OFFSET} />
             {visibleTruckLanes.map((lane, laneIndex) => {
               const laneEvents = groupedEventsByTruck[laneIndex] || [];
               return (
-                <div key={lane.id} className="ts2-lane-row">
+                <div key={lane.id} className="ts2-lane-row" style={{ gridTemplateColumns: `${LANE_META_WIDTH}px minmax(0, 1fr)` }}>
                   <div className="ts2-lane-meta">
                     <div className="ts2-truck-pill">
                       <span className="ts2-truck-pill-icon">

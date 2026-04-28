@@ -1267,6 +1267,7 @@ function App() {
     return (
         <ToastProvider>
             <div className="App">
+            {!isTransportPage ? (
             <header className="app-header">
                 <div className="header-left">
                     <button
@@ -1414,10 +1415,11 @@ function App() {
                     </div>
                 </div>
             </header>
+            ) : null}
 
             {DESIGN_PAGE_KEYS.has(currentPage) ? (
                 isTransportPage ? (
-                    <div className="transport-page-frame">
+                    <div className="transport-page-frame transport-page-frame-full">
                         {renderCurrentPage()}
                     </div>
                 ) : (

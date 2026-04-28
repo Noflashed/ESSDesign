@@ -7262,3 +7262,301 @@ button.stat-card {
         flex-wrap: nowrap !important;
     }
 }
+
+
+/* ── transport parity hard overrides (ios-match) ─────────────────────────── */
+.transport-page-frame.transport-page-frame-full {
+    min-height: 100vh;
+    background: #F6F8FC;
+}
+
+.transport-page-frame.transport-page-frame-full .transport-suite-shell {
+    min-height: 100vh;
+}
+
+.transport-page-frame .ts2-header-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid #E4EAF4;
+    border-radius: 18px;
+    background: #F4F7FC;
+    color: #102B5C;
+    font-size: 30px;
+    line-height: 1;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.transport-page-frame .ts2-header-left {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.transport-page-frame .ts2-header {
+    padding: 18px 28px;
+}
+
+.transport-page-frame .ts2-board-card-head {
+    padding: 20px 24px 12px;
+}
+
+.transport-page-frame .ts2-legend-row-inline {
+    margin: 0 24px 8px;
+}
+
+.transport-page-frame .ts2-board {
+    padding: 0 24px 20px;
+}
+
+.transport-page-frame .ts2-board-head,
+.transport-page-frame .ts2-lane-row {
+    grid-template-columns: 154px minmax(0, 1fr) !important;
+}
+
+.transport-page-frame .ts2-lane-head,
+.transport-page-frame .ts2-lane-meta {
+    padding: 18px 16px;
+}
+
+.transport-page-frame .ts2-axis-shell,
+.transport-page-frame .ts2-lane-track-shell {
+    padding-left: 14px !important;
+    padding-right: 0 !important;
+}
+
+.transport-page-frame .ts2-axis {
+    height: 58px;
+}
+
+.transport-page-frame .ts2-axis-tick span {
+    top: 14px;
+    left: 12px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #102B5C;
+}
+
+.transport-page-frame .ts2-truck-pill {
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.transport-page-frame .ts2-truck-pill-icon {
+    width: 50px;
+    height: 50px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    background: #EDF4FF;
+}
+
+.transport-page-frame .ts2-truck-pill strong {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: -0.4px;
+}
+
+.transport-page-frame .material-ordering-transport-header-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.transport-page-frame .material-ordering-queue-tools {
+    padding: 0 24px 16px;
+}
+
+.transport-page-frame .material-ordering-queue-search {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 68px;
+    padding: 0 22px;
+    border: 1px solid #E4EAF4;
+    border-radius: 24px;
+    background: #FFFFFF;
+}
+
+.transport-page-frame .material-ordering-queue-search span {
+    color: #7A869F;
+    font-size: 28px;
+    line-height: 1;
+}
+
+.transport-page-frame .material-ordering-queue-search input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #102B5C;
+    font-size: 18px;
+}
+
+.transport-page-frame .material-ordering-queue-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.transport-page-frame .material-ordering-queue-chip {
+    min-height: 52px;
+    padding: 0 22px;
+    border: 1px solid #E4EAF4;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: #3F4C64;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.transport-page-frame .material-ordering-queue-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 20px;
+    color: #7A869F;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.transport-page-frame .material-ordering-request-stack-ios {
+    padding: 0 24px 24px;
+    gap: 18px;
+}
+
+.transport-page-frame .material-ordering-request-card-ios {
+    min-width: 0;
+    padding: 22px 22px 20px;
+    border-radius: 24px;
+    border: 1px solid #E4EAF4;
+    background: #FFFFFF;
+    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.06);
+}
+
+.transport-page-frame .material-ordering-request-ios-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.transport-page-frame .material-ordering-request-ios-badges {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.transport-page-frame .material-ordering-request-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.transport-page-frame .material-ordering-request-chip-scheduled {
+    background: #EEF7F2;
+    color: #3D8A71;
+    border: 1px solid #B7DEC7;
+}
+
+.transport-page-frame .material-ordering-request-chip-scheduled.active {
+    background: #E8F7EE;
+}
+
+.transport-page-frame .material-ordering-request-chip-scaffold {
+    background: #EEF1FF;
+    color: #6E79D6;
+    border: 1px solid #D9DDFC;
+}
+
+.transport-page-frame .material-ordering-request-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid #F3C9C5;
+    border-radius: 999px;
+    background: #FFF9F8;
+    color: #E06C61;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.transport-page-frame .material-ordering-request-ios-copy {
+    margin-top: 16px;
+}
+
+.transport-page-frame .material-ordering-request-ios-copy strong {
+    display: block;
+    color: #102B5C;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.4px;
+}
+
+.transport-page-frame .material-ordering-request-ios-copy span {
+    display: block;
+    margin-top: 8px;
+    color: #39465C;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.transport-page-frame .material-ordering-request-ios-details {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.transport-page-frame .material-ordering-request-ios-details div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #6A7488;
+    font-size: 15px;
+}
+
+.transport-page-frame .material-ordering-request-ios-details span {
+    color: #7A869F;
+    font-weight: 500;
+}
+
+.transport-page-frame .material-ordering-request-ios-details strong {
+    color: #5B667B;
+    font-weight: 700;
+}
+
+.transport-page-frame .material-ordering-request-ios-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 60px;
+    margin-top: 18px;
+    border: none;
+    border-radius: 999px;
+    background: #3F8A78;
+    color: #FFFFFF;
+    font-size: 17px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.transport-page-frame .material-ordering-transport-page .material-ordering-transport-canvas-ios {
+    margin: 18px 24px 24px;
+}
