@@ -209,6 +209,23 @@ function getSuggestedStartTime({ truckId, selectedDate, dayEvents, startMap, dur
   };
 }
 
+function clampScheduleMinutes(minutes, durationMinutes = TIME_PICKER_MINUTE_STEP) {
+  const min = SCREEN_START_HOUR * 60;
+  const max = SCREEN_END_HOUR * 60 - Math.max(TIME_PICKER_MINUTE_STEP, durationMinutes);
+  return Math.max(min, Math.min(max, minutes));
+}
+
+function roundScheduleMinutes(minutes) {
+  return Math.round(minutes / TIME_PICKER_MINUTE_STEP) * TIME_PICKER_MINUTE_STEP;
+}
+
+function getDropMinutesFromPointer(clientX, trackElement) {
+  const rect = trackElement.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+  const rangeMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
+  return clampScheduleMinutes(roundScheduleMinutes(SCREEN_START_HOUR * 60 + ratio * rangeMinutes), 90);
+}
+
 function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation) {
   const transitMinutes = routeEstimate?.durationMinutes ?? 0;
   const loadingMinutes = 30;
@@ -521,6 +538,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [selectedScheduleRouteData, setSelectedScheduleRouteData] = useState(null);
   const [selectedScheduleEventId, setSelectedScheduleEventId] = useState('');
   const [scheduleInspectorOpen, setScheduleInspectorOpen] = useState(true);
+  const [draggedRequestId, setDraggedRequestId] = useState('');
+  const [dropPreview, setDropPreview] = useState(null);
+  const [dragSchedulingId, setDragSchedulingId] = useState('');
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
@@ -828,6 +848,105 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
   }, [closeRequestModal, loadBoard, requestModal, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
 
+  const scheduleRequestAt = useCallback(async (requestId, truckId, startMinutes) => {
+    if (!requestId || !truckId || dragSchedulingId) {
+      return;
+    }
+    const safeMinutes = clampScheduleMinutes(roundScheduleMinutes(startMinutes), 90);
+    const hour = Math.floor(safeMinutes / 60);
+    const minute = safeMinutes % 60;
+    const truck = TRUCK_LANES.find(lane => lane.id === truckId);
+    setDragSchedulingId(requestId);
+    try {
+      await materialOrderRequestsAPI.setSchedule(requestId, {
+        date: formatDateKey(selectedDate),
+        hour,
+        minute,
+        truckId: truck?.id ?? truckId,
+        truckLabel: truck?.rego ?? null,
+      });
+      setAllRequests(current => current.map(item => item.id === requestId ? {
+        ...item,
+        scheduledDate: formatDateKey(selectedDate),
+        scheduledHour: hour,
+        scheduledMinute: minute,
+        scheduledTruckId: truck?.id ?? truckId,
+        scheduledTruckLabel: truck?.rego ?? null,
+        truckId: truck?.id ?? truckId,
+        truckLabel: truck?.rego ?? null,
+        deliveryStatus: 'scheduled',
+        deliveryStartedAt: null,
+        deliveryUnloadingAt: null,
+        deliveryConfirmedAt: null,
+      } : item));
+      setSelectedScheduleEventId(requestId);
+      setScheduleInspectorOpen(true);
+      setDraggedRequestId('');
+      setDropPreview(null);
+      await loadBoard();
+    } finally {
+      setDragSchedulingId('');
+    }
+  }, [dragSchedulingId, loadBoard, selectedDate]);
+
+  const handlePendingDragStart = useCallback((event, requestId) => {
+    setDraggedRequestId(requestId);
+    setDropPreview(null);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', requestId);
+  }, []);
+
+  const handlePendingDragEnd = useCallback(() => {
+    setDraggedRequestId('');
+    setDropPreview(null);
+  }, []);
+
+  const handleLaneDragOver = useCallback((event, truckId) => {
+    if (!draggedRequestId) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget);
+    setDropPreview({ truckId, minutes });
+  }, [draggedRequestId]);
+
+  const handleLaneDragLeave = useCallback((event, truckId) => {
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+    setDropPreview(current => current?.truckId === truckId ? null : current);
+  }, []);
+
+  const handleLaneDrop = useCallback((event, truckId) => {
+    const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    if (!requestId) {
+      return;
+    }
+    event.preventDefault();
+    const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget);
+    scheduleRequestAt(requestId, truckId, minutes).catch(err => {
+      setError(err?.message || 'Failed to schedule request.');
+    });
+  }, [draggedRequestId, scheduleRequestAt]);
+
+  const handleEventSnapDrop = useCallback((event, scheduleEvent, side) => {
+    const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    if (!requestId || !scheduleEvent?.truckId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const targetStart = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+    const targetDuration = eventDurationMinutesMap[scheduleEvent.orderId] ?? 90;
+    const nextStart = side === 'before'
+      ? clampScheduleMinutes(targetStart - 90, 90)
+      : clampScheduleMinutes(targetStart + targetDuration, 90);
+    scheduleRequestAt(requestId, scheduleEvent.truckId, nextStart).catch(err => {
+      setError(err?.message || 'Failed to schedule request.');
+    });
+  }, [draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+
   const handleOpenPdf = useCallback(async request => {
     if (!request?.pdfPath) {
       return;
@@ -938,7 +1057,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           ) : (
             <div className="ts2-pending-list">
               {pendingRequests.map(request => (
-                <div key={request.id} className="ts2-pending-item">
+                <div
+                  key={request.id}
+                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
+                  draggable={!dragSchedulingId}
+                  onDragStart={(event) => handlePendingDragStart(event, request.id)}
+                  onDragEnd={handlePendingDragEnd}
+                >
                   <div>
                     <strong>{request.builderName || 'Material Order'}</strong>
                     <span>{request.projectName || 'Awaiting site assignment'}</span>
@@ -1007,11 +1132,29 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     </div>
                   </div>
                   <div className="ts2-lane-track-shell">
-                    <div className="ts2-lane-track" style={{ width: timelineWidth }}>
+                    <div
+                      className={`ts2-lane-track${dropPreview?.truckId === lane.id ? ' is-drop-target' : ''}`}
+                      style={{ width: timelineWidth }}
+                      onDragOver={(event) => handleLaneDragOver(event, lane.id)}
+                      onDragLeave={(event) => handleLaneDragLeave(event, lane.id)}
+                      onDrop={(event) => handleLaneDrop(event, lane.id)}
+                    >
                       {timelineMarkers.map(marker => (
                         <div key={`${lane.id}-${marker.minutes}`} className={`ts2-grid-line${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }} />
                       ))}
                       {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
+                      {dropPreview?.truckId === lane.id ? (
+                        <div
+                          className="transport-drop-preview"
+                          style={{
+                            left: `${getEventOffset(dropPreview.minutes) * 100}%`,
+                            width: `${getEventFlex(90) * 100}%`,
+                          }}
+                        >
+                          <span>{formatTimeChip(Math.floor(dropPreview.minutes / 60), dropPreview.minutes % 60)}</span>
+                          <strong>Drop to schedule</strong>
+                        </div>
+                      ) : null}
                       {laneEvents.map(event => {
                       const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
@@ -1031,7 +1174,35 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const primaryEnd = startMinutes + primaryDurationMinutes;
                       return (
-                        <div key={event.id} className="ts2-event-wrap" style={{ left: `${offset}%`, width: `${width}%` }}>
+                        <div key={event.id} className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}`} style={{ left: `${offset}%`, width: `${width}%` }}>
+                          {draggedRequestId ? (
+                            <>
+                              <button
+                                type="button"
+                                className="transport-snap-zone before"
+                                onDragOver={(dragEvent) => {
+                                  dragEvent.preventDefault();
+                                  dragEvent.dataTransfer.dropEffect = 'move';
+                                }}
+                                onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'before')}
+                                aria-label="Schedule before this delivery"
+                              >
+                                <span>Before</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="transport-snap-zone after"
+                                onDragOver={(dragEvent) => {
+                                  dragEvent.preventDefault();
+                                  dragEvent.dataTransfer.dropEffect = 'move';
+                                }}
+                                onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'after')}
+                                aria-label="Schedule after this delivery"
+                              >
+                                <span>After</span>
+                              </button>
+                            </>
+                          ) : null}
                           <button
                             type="button"
                             className="ts2-event-card"
@@ -1082,9 +1253,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <button type="button">▤</button>
           </div>
           <div className="transport-reference-pending-list">
-            {pendingRequests.length > 0 ? pendingRequests.slice(0, 6).map(request => {
+            {pendingRequests.length > 0 ? pendingRequests.map(request => {
               return (
-                <article key={request.id} className="transport-reference-pending-card">
+                <article
+                  key={request.id}
+                  className={`transport-reference-pending-card${draggedRequestId === request.id ? ' dragging' : ''}`}
+                  draggable={!dragSchedulingId}
+                  onDragStart={(event) => handlePendingDragStart(event, request.id)}
+                  onDragEnd={handlePendingDragEnd}
+                >
                   <div><b>{request.id}</b></div>
                   <strong>{request.builderName || 'Material Order'}</strong>
                   <span>{request.projectName || 'Awaiting site assignment'}</span>

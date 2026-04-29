@@ -118,6 +118,20 @@ function getDeliveryStatusLabel(status) {
     return 'Pending';
 }
 
+function getRequestFilterDate(request) {
+    const value = request?.scheduledDate || request?.scheduledAtIso || request?.submittedAt || request?.orderDate || '';
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(value))) {
+        return String(value).slice(0, 10);
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+}
+
+function getRequestTruckKey(request) {
+    return request?.scheduledTruckId || request?.truckId || request?.scheduledTruckLabel || request?.truckLabel || '';
+}
+
 function getSubmittedDateLabel(value) {
     if (!value) return 'Pending';
     const date = new Date(value);
@@ -326,6 +340,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestSearch, setRequestSearch] = useState('');
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('newest');
+    const [requestFiltersOpen, setRequestFiltersOpen] = useState(false);
+    const [requestDateFilter, setRequestDateFilter] = useState('');
+    const [requestTruckFilter, setRequestTruckFilter] = useState('all');
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
     const [selectedRequestId, setSelectedRequestId] = useState('');
     const [selectedRequestDetail, setSelectedRequestDetail] = useState(null);
@@ -374,11 +391,20 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     getProjectLocation(builders, request),
                 ].some(value => String(value || '').toLowerCase().includes(query));
                 if (!matchesQuery) return false;
+                if (requestDateFilter && getRequestFilterDate(request) !== requestDateFilter) {
+                    return false;
+                }
+                if (requestTruckFilter !== 'all' && getRequestTruckKey(request) !== requestTruckFilter) {
+                    return false;
+                }
                 if (requestStatusFilter === 'scheduled') {
                     return Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
                 }
                 if (requestStatusFilter === 'pending') {
                     return !request.scheduledAtIso && !(request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number');
+                }
+                if (requestStatusFilter !== 'all') {
+                    return (request.deliveryStatus || 'pending') === requestStatusFilter;
                 }
                 return true;
             })
@@ -387,7 +413,19 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 const rightValue = requestSortOrder === 'oldest' ? String(right.submittedAt || '') : String(left.submittedAt || '');
                 return leftValue.localeCompare(rightValue);
             });
-    }, [archivedRequests, builders, isActiveQueueView, requestSearch, requestSortOrder, requestStatusFilter, visibleOrders]);
+    }, [archivedRequests, builders, isActiveQueueView, requestDateFilter, requestSearch, requestSortOrder, requestStatusFilter, requestTruckFilter, visibleOrders]);
+
+    const requestTruckOptions = useMemo(() => {
+        const rows = isActiveQueueView ? visibleOrders : archivedRequests;
+        const map = new Map();
+        rows.forEach((request) => {
+            const key = getRequestTruckKey(request);
+            if (!key) return;
+            const label = request.scheduledTruckLabel || request.truckLabel || request.scheduledTruckId || request.truckId || key;
+            map.set(key, label);
+        });
+        return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    }, [archivedRequests, isActiveQueueView, visibleOrders]);
 
     const selectedRequestListItem = useMemo(
         () => (selectedRequestId ? queueRows.find((request) => request.id === selectedRequestId) || null : null),
@@ -799,6 +837,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
         const selectedItems = summarizeItems(selectedRequest);
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
+        const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
 
         return (
             <div className="ts2-page material-ordering-transport-page transport-management-redesign">
@@ -831,13 +870,63 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     placeholder="Search builders, projects, scaffold details..."
                                 />
                             </label>
-                            <div className="material-ordering-queue-chip-row">
-                                <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestStatusFilter(current => current === 'all' ? 'pending' : 'all')}>
-                                    {requestStatusFilter === 'all' ? `All Statuses (${activeCount})` : `Pending (${pendingCount})`}
+                            <div className="transport-management-filter-wrap">
+                                <button
+                                    type="button"
+                                    className={`transport-management-filter-button${requestFiltersOpen ? ' active' : ''}`}
+                                    onClick={() => setRequestFiltersOpen(open => !open)}
+                                    aria-expanded={requestFiltersOpen}
+                                >
+                                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                        <path d="M2.25 4.25h11.5M4.5 8h7M6.75 11.75h2.5" />
+                                    </svg>
+                                    <span>Filters</span>
+                                    {activeFilterCount > 0 ? <b>{activeFilterCount}</b> : null}
                                 </button>
-                                <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestSortOrder(current => current === 'newest' ? 'oldest' : 'newest')}>
-                                    {requestSortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
-                                </button>
+                                {requestFiltersOpen ? (
+                                    <div className="transport-management-filter-menu">
+                                        <label>
+                                            <span>Status</span>
+                                            <select value={requestStatusFilter} onChange={(event) => setRequestStatusFilter(event.target.value)}>
+                                                <option value="all">All statuses</option>
+                                                <option value="pending">Pending</option>
+                                                <option value="scheduled">Scheduled</option>
+                                                <option value="in_transit">In transit</option>
+                                                <option value="unloading">Unloading</option>
+                                                <option value="return_transit">Return transit</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Date</span>
+                                            <input type="date" value={requestDateFilter} onChange={(event) => setRequestDateFilter(event.target.value)} />
+                                        </label>
+                                        <label>
+                                            <span>Truck</span>
+                                            <select value={requestTruckFilter} onChange={(event) => setRequestTruckFilter(event.target.value)}>
+                                                <option value="all">All trucks</option>
+                                                {requestTruckOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Sort</span>
+                                            <select value={requestSortOrder} onChange={(event) => setRequestSortOrder(event.target.value)}>
+                                                <option value="newest">Newest first</option>
+                                                <option value="oldest">Oldest first</option>
+                                            </select>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setRequestStatusFilter('all');
+                                                setRequestDateFilter('');
+                                                setRequestTruckFilter('all');
+                                                setRequestSortOrder('newest');
+                                            }}
+                                        >
+                                            Clear filters
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
 
@@ -974,19 +1063,16 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     <div className="transport-management-items-head">
                                         <strong>Items</strong>
                                         <span>Qty</span>
-                                        <span>UOM</span>
                                     </div>
                                     {selectedItems.length > 0 ? selectedItems.map((item) => (
                                         <div key={item.description}>
                                             <strong>{item.description}</strong>
                                             <span>{item.qty}</span>
-                                            <span>{item.uom}</span>
                                         </div>
                                     )) : (
                                         <div className="transport-management-items-empty">
                                             <strong>No picking items added</strong>
                                             <span>0</span>
-                                            <span>ea</span>
                                         </div>
                                     )}
                                 </div>
