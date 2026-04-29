@@ -168,53 +168,6 @@ const NewsNavIcon = ({ size = 18 }) => (
     </svg>
 );
 
-function DesktopWindowControls({ className = '' }) {
-    const controls = typeof window !== 'undefined' ? window.essDesktop?.windowControls : null;
-    if (!controls) {
-        return null;
-    }
-
-    const classes = ['ess-desktop-window-controls', className].filter(Boolean).join(' ');
-
-    return (
-        <div className={classes} aria-label="Window controls">
-            <button
-                type="button"
-                className="ess-desktop-window-btn"
-                onClick={() => controls.minimize()}
-                aria-label="Minimize window"
-                title="Minimize"
-                data-action="minimize"
-            >
-                <span className="ess-desktop-window-icon ess-desktop-window-icon-minimize" aria-hidden="true" />
-            </button>
-            <button
-                type="button"
-                className="ess-desktop-window-btn"
-                onClick={() => controls.toggleMaximize()}
-                aria-label="Maximize window"
-                title="Maximize"
-                data-action="maximize"
-            >
-                <span className="ess-desktop-window-icon ess-desktop-window-icon-maximize" aria-hidden="true" />
-            </button>
-            <button
-                type="button"
-                className="ess-desktop-window-btn"
-                onClick={() => controls.close()}
-                aria-label="Close window"
-                title="Close"
-                data-action="close"
-            >
-                <span className="ess-desktop-window-icon ess-desktop-window-icon-close" aria-hidden="true">
-                    <span className="ess-desktop-window-icon-close-line" />
-                    <span className="ess-desktop-window-icon-close-line" />
-                </span>
-            </button>
-        </div>
-    );
-}
-
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
     'design': DesignNavIcon,
@@ -419,460 +372,670 @@ function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPD
                             </div>
                         </div>
                     ))}
+                    {children.subFolders.length === 0 && children.documents.length === 0 && (
+                        <div className="search-folder-row search-empty-folder" style={{ paddingLeft: `${paddingLeft + 24}px` }}>
+                            <span className="search-empty-text">Empty folder</span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
     );
 }
 
-function App() {
-    const [loading, setLoading] = useState(true);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [user, setUser] = useState(null);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteFirstName, setInviteFirstName] = useState('');
-    const [inviteLastName, setInviteLastName] = useState('');
-    const [inviteEmployeeId, setInviteEmployeeId] = useState('');
-    const [selectedFolderId, setSelectedFolderId] = useState(null);
-    const [viewMode, setViewMode] = useState('grid');
-    const [showNavDrawer, setShowNavDrawer] = useState(false);
-    const [showUserMenu, setShowUserMenu] = useState(false);
-    const [showInviteModal, setShowInviteModal] = useState(false);
-    const [inviteLoading, setInviteLoading] = useState(false);
-    const [inviteError, setInviteError] = useState('');
-    const [inviteSuccess, setInviteSuccess] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const [showSearchResults, setShowSearchResults] = useState(false);
-    const [refreshKey, setRefreshKey] = useState(0);
-    const [pdfViewer, setPdfViewer] = useState(null);
-    const [authView, setAuthView] = useState(getAuthViewFromUrl);
-    const [theme, setTheme] = useState('light');
-    const [currentPage, setCurrentPage] = useState('landing');
-    const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
-    const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
-    const [rosteringContext, setRosteringContext] = useState({ planDate: null });
-    const [navSidebarOpen, setNavSidebarOpen] = useState(true);
-    const [avatarIndex, setAvatarIndex] = useState(0);
-    const userMenuRef = useRef(null);
-    const searchRef = useRef(null);
-    const searchAbortRef = useRef(null);
-    const authViewRef = useRef(authView);
-    const currentPageRef = useRef(currentPage);
-    const isDesktopApp = typeof window !== 'undefined' && Boolean(window.essDesktop?.isDesktop);
 
-    const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
-    const isEmployeePortalRole = ['leading_hand', 'general_scaffolder'].includes(user?.role);
-    const isAdmin = user?.role === 'admin';
+const normalizeAvatarSource = (value) => {
+    if (!value || typeof value !== 'string') return [];
+    const trimmed = value.trim();
+    if (!trimmed) return [];
 
-    const avatarCandidates = [
+    if (/^https?:\/\//i.test(trimmed)) {
+        return [trimmed];
+    }
+
+    const normalizedPath = trimmed.replace(/^\/+/, '');
+    const candidates = [];
+
+    if (normalizedPath.startsWith('storage/v1/')) {
+        candidates.push(`${SUPABASE_BASE_URL}/${normalizedPath}`);
+    } else {
+        candidates.push(`${SUPABASE_BASE_URL}/storage/v1/object/public/${normalizedPath}`);
+        candidates.push(`${SUPABASE_BASE_URL}/storage/v1/object/public/public-assets/${normalizedPath}`);
+    }
+
+    return [...new Set(candidates)];
+};
+
+const buildAvatarCandidates = (user) => {
+    const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
         user?.picture,
         user?.profileImageUrl,
         user?.profile_image_url,
-        user?.avatarPath ? `${SUPABASE_BASE_URL}/storage/v1/object/public/avatars/${String(user.avatarPath).replace(/^\/+/, '')}` : null,
-        user?.avatar_path ? `${SUPABASE_BASE_URL}/storage/v1/object/public/avatars/${String(user.avatar_path).replace(/^\/+/, '')}` : null,
+        user?.profileImage,
+        user?.profile_image,
+        user?.avatarPath,
+        user?.avatar_path
     ].filter(Boolean);
 
-    useEffect(() => {
-        authViewRef.current = authView;
-    }, [authView]);
+    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
+};
+
+function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [authView, setAuthView] = useState(getAuthViewFromUrl);
+    const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+    const [selectedFolderId, setSelectedFolderId] = useState(() => {
+        // Honor explicit deep links, otherwise always start from Home on app reopen.
+        const urlParams = new URLSearchParams(window.location.search);
+        const folderFromUrl = urlParams.get('folder');
+        if (folderFromUrl) {
+            localStorage.setItem('selectedFolderId', folderFromUrl);
+            return folderFromUrl;
+        }
+        localStorage.removeItem('selectedFolderId');
+        return null;
+    });
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        const saved = localStorage.getItem('sidebarWidth');
+        return saved ? parseInt(saved) : 280;
+    });
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'grid');
+    const [pdfViewer, setPdfViewer] = useState(null);
+    const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [showSearchResults, setShowSearchResults] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showInviteModal, setShowInviteModal] = useState(false);
+    const [navSidebarOpen, setNavSidebarOpen] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
+    const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
+    const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
+    const [inviteEmployeeId, setInviteEmployeeId] = useState(() => new URLSearchParams(window.location.search).get('employeeId') || '');
+    const [inviteLoading, setInviteLoading] = useState(false);
+    const [inviteError, setInviteError] = useState('');
+    const [inviteSuccess, setInviteSuccess] = useState('');
+    const [linkingEmployee, setLinkingEmployee] = useState(false);
+    const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [currentPage, setCurrentPage] = useState('landing');
+    const [showNavDrawer, setShowNavDrawer] = useState(false);
 
     useEffect(() => {
-        currentPageRef.current = currentPage;
+        if (currentPage === 'landing') {
+            setNavSidebarOpen(false);
+        }
     }, [currentPage]);
+    const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
+    const [employeeContext, setEmployeeContext] = useState({ leadingHand: null });
+    const [rosteringContext, setRosteringContext] = useState({ planDate: null });
+    const isEmployeePortalRole = user?.role === 'general_scaffolder'
+        || user?.role === 'leading_hand';
+    const isTransportManagement = user?.role === 'transport_management';
+    const isTruckDeviceUser = user?.role === 'truck_ess01' || user?.role === 'truck_ess02' || user?.role === 'truck_ess03';
+    const hasTransportSuiteAccess = user?.role === 'admin' || isTransportManagement || isTruckDeviceUser;
+    const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
+    const allowedNavItems = isEmployeePortalRole
+        ? [{ key: 'employee-home', label: 'ESS App' }]
+        : isTruckDeviceUser
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+        : isTransportManagement
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+        : [
+            { key: 'design', label: 'ESS Design' },
+            { key: 'site-information', label: 'Site Registry' },
+            { key: 'safety', label: 'ESS Safety' },
+            ...(hasTransportSuiteAccess
+                ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+                : [{ key: 'material-ordering-new', label: 'New Materials List' }]),
+            ...(showRosteringAndEmployees ? [
+                { key: 'rostering', label: 'ESS Rostering' },
+                { key: 'employees', label: 'Employees' },
+            ] : []),
+            ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
+        ];
+    const showHeaderSearch = currentPage === 'design';
+    const searchRef = useRef(null);
+    const userMenuRef = useRef(null);
+    const searchTimerRef = useRef(null);
+    const avatarCandidates = buildAvatarCandidates(user);
+    const [avatarIndex, setAvatarIndex] = useState(0);
 
-    useEffect(() => {
-        const root = document.documentElement;
-        root.dataset.theme = theme;
-    }, [theme]);
+    const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
+        const url = new URL(window.location.href);
+        if (folderId) {
+            url.searchParams.set('folder', folderId);
+        } else {
+            url.searchParams.delete('folder');
+        }
 
-    useEffect(() => {
-        let active = true;
+        if (page && page !== 'landing') {
+            url.searchParams.set('page', page);
+        } else {
+            url.searchParams.delete('page');
+        }
 
-        const initializeTheme = async () => {
-            let nextTheme = 'light';
+        if (nextSafetyContext.builder?.id) {
+            url.searchParams.set('builder', nextSafetyContext.builder.id);
+        } else {
+            url.searchParams.delete('builder');
+        }
 
-            try {
-                const storedTheme = window.localStorage.getItem('essdesign-theme');
-                if (storedTheme === 'light' || storedTheme === 'dark') {
-                    nextTheme = storedTheme;
-                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    nextTheme = 'dark';
-                }
-            } catch (error) {
-                console.error('Error loading saved theme:', error);
-            }
+        if (nextSafetyContext.project?.id) {
+            url.searchParams.set('project', nextSafetyContext.project.id);
+        } else {
+            url.searchParams.delete('project');
+        }
 
-            if (active) {
-                setTheme(nextTheme);
-            }
-        };
+        if (nextEmployeeContext.leadingHand?.id) {
+            url.searchParams.set('leadingHand', nextEmployeeContext.leadingHand.id);
+        } else {
+            url.searchParams.delete('leadingHand');
+        }
 
-        initializeTheme();
+        if (nextRosteringContext.planDate) {
+            url.searchParams.set('rosterDate', nextRosteringContext.planDate);
+        } else {
+            url.searchParams.delete('rosterDate');
+        }
 
-        return () => {
-            active = false;
-        };
+        return `${url.pathname}${url.search}`;
     }, []);
 
-    const applyTheme = useCallback(async (nextTheme, persistToServer = true) => {
-        setTheme(nextTheme);
-        try {
-            window.localStorage.setItem('essdesign-theme', nextTheme);
-        } catch (error) {
-            console.error('Error saving theme preference locally:', error);
-        }
-
-        if (persistToServer && isAuthenticated) {
-            try {
-                await preferencesAPI.updatePreferences({ theme: nextTheme });
-            } catch (error) {
-                console.error('Error saving theme preference to server:', error);
-            }
-        }
-    }, [isAuthenticated]);
-
-    const toggleTheme = () => {
-        applyTheme(theme === 'light' ? 'dark' : 'light', isAuthenticated);
-    };
-
-    const loadUserPreferences = useCallback(async () => {
-        try {
-            const preferences = await preferencesAPI.getPreferences();
-            if (preferences?.theme === 'light' || preferences?.theme === 'dark') {
-                await applyTheme(preferences.theme, false);
-            }
-        } catch (error) {
-            console.error('Error loading user preferences:', error);
-        }
-    }, [applyTheme]);
-
-    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
-        setCurrentPage(page);
+    const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
+        const transportPages = new Set(['transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
+        const resolvedPage = isEmployeePortalRole
+            ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
+            : isTruckDeviceUser
+            ? (transportPages.has(page) ? page : 'truck-schedule')
+            : isTransportManagement
+            ? (transportPages.has(page) ? page : 'truck-schedule')
+            : page;
+        setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
         setEmployeeContext(nextEmployeeContext);
         setRosteringContext(nextRosteringContext);
-        setShowUserMenu(false);
-        window.history.pushState({ page, safetyContext: nextSafetyContext, employeeContext: nextEmployeeContext, rosteringContext: nextRosteringContext }, '', window.location.pathname);
-    }, []);
-
-    useEffect(() => {
-        const handlePopState = (event) => {
-            const state = event.state;
-            if (state?.page) {
-                setCurrentPage(state.page);
-                setSafetyContext(state.safetyContext || { builder: null, project: null });
-                setEmployeeContext(state.employeeContext || { leadingHand: null });
-                setRosteringContext(state.rosteringContext || { planDate: null });
-                setShowUserMenu(false);
-                return;
-            }
-            const fallbackPage = currentPageRef.current === 'landing' ? 'landing' : (isEmployeePortalRole ? 'employee-home' : 'landing');
-            setCurrentPage(fallbackPage);
-            setSafetyContext({ builder: null, project: null });
-            setEmployeeContext({ leadingHand: null });
-            setRosteringContext({ planDate: null });
-            setShowUserMenu(false);
+        const state = {
+            folderId: selectedFolderId,
+            page: resolvedPage,
+            safetyContext: nextSafetyContext,
+            employeeContext: nextEmployeeContext,
+            rosteringContext: nextRosteringContext
         };
-
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [isEmployeePortalRole]);
-
-    const checkAuth = useCallback(async () => {
-        const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
-        const authUrlParams = new URLSearchParams(window.location.search);
-        const emailFromUrl = authUrlParams.get('email') || '';
-
-        if (callbackResult?.hasSession) {
-            setAuthView('signup-confirmed');
-            setInviteEmail(emailFromUrl);
-            setInviteFirstName(authUrlParams.get('firstName') || '');
-            setInviteLastName(authUrlParams.get('lastName') || '');
-            setInviteEmployeeId(authUrlParams.get('employeeId') || '');
+        const targetUrl = buildAppUrl(selectedFolderId, resolvedPage, nextSafetyContext, nextEmployeeContext, nextRosteringContext);
+        if (pushHistory) {
+            window.history.pushState(state, '', targetUrl);
+        } else {
+            window.history.replaceState(state, '', targetUrl);
         }
-
-        try {
-            if (!authAPI.isAuthenticated()) {
-                setIsAuthenticated(false);
-                setUser(null);
-                return;
-            }
-
-            let currentUser = authAPI.getCurrentUser();
-            setIsAuthenticated(true);
-
-            try {
-                currentUser = await authAPI.restoreSession();
-            } catch (restoreError) {
-                console.error('Error restoring session:', restoreError);
-                currentUser = await authAPI.refreshCurrentUser();
-            }
-
-            setUser(currentUser);
-            const initialPage = ['leading_hand', 'general_scaffolder'].includes(currentUser?.role) ? 'employee-home' : 'landing';
-            setCurrentPage(initialPage);
-            window.history.replaceState({ page: initialPage, safetyContext: { builder: null, project: null }, employeeContext: { leadingHand: null }, rosteringContext: { planDate: null } }, '', window.location.pathname);
-            await loadUserPreferences();
-        } catch (error) {
-            console.error('Error checking auth:', error);
-            setIsAuthenticated(false);
-            setUser(null);
-        } finally {
-            setLoading(false);
-        }
-    }, [loadUserPreferences]);
+    }, [buildAppUrl, isEmployeePortalRole, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
-    }, [checkAuth]);
-
-    useEffect(() => {
-        const handleUrlChange = () => {
-            const nextView = getAuthViewFromUrl();
-            setAuthView(nextView);
-            if (nextView === 'signup' || nextView === 'signup-success' || nextView === 'signup-confirmed') {
-                const params = new URLSearchParams(window.location.search);
-                setInviteEmail(params.get('email') || '');
-                setInviteFirstName(params.get('firstName') || '');
-                setInviteLastName(params.get('lastName') || '');
-                setInviteEmployeeId(params.get('employeeId') || '');
-            }
-        };
-
-        handleUrlChange();
-        window.addEventListener('popstate', handleUrlChange);
-        return () => window.removeEventListener('popstate', handleUrlChange);
     }, []);
 
     useEffect(() => {
-        const handleDocumentClick = (event) => {
-            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
-                setShowUserMenu(false);
-            }
-            if (searchRef.current && !searchRef.current.contains(event.target)) {
-                setShowSearchResults(false);
-            }
-        };
+        if (isAuthenticated && !preferencesLoaded) {
+            loadPreferences();
+        }
+    }, [isAuthenticated, preferencesLoaded]);
 
-        document.addEventListener('mousedown', handleDocumentClick);
-        return () => document.removeEventListener('mousedown', handleDocumentClick);
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        setAuthView(getAuthViewFromUrl());
+        setInviteEmail(urlParams.get('email') || '');
+        setInviteFirstName(urlParams.get('firstName') || '');
+        setInviteLastName(urlParams.get('lastName') || '');
+        setInviteEmployeeId(urlParams.get('employeeId') || '');
+        setEmployeeLinkAttempted(false);
     }, []);
 
     useEffect(() => {
-        if (!isAuthenticated) {
-            return undefined;
-        }
-
-        if (searchQuery.trim().length < 2) {
-            setSearchResults([]);
-            setSearchLoading(false);
-            setShowSearchResults(false);
-            if (searchAbortRef.current) {
-                searchAbortRef.current.abort();
-                searchAbortRef.current = null;
+        const tryLinkEmployee = async () => {
+            if (authView !== 'signup-confirmed' || !isAuthenticated || !inviteEmployeeId || linkingEmployee || employeeLinkAttempted) {
+                return;
             }
-            return undefined;
-        }
 
-        const controller = new AbortController();
-        searchAbortRef.current = controller;
-        setSearchLoading(true);
-
-        const timer = setTimeout(async () => {
+            setEmployeeLinkAttempted(true);
+            setLinkingEmployee(true);
             try {
-                const response = await foldersAPI.searchFolders(searchQuery, { signal: controller.signal });
-                if (!controller.signal.aborted) {
-                    setSearchResults(response?.folders || []);
-                    setShowSearchResults(true);
-                }
+                await authAPI.linkEmployee(inviteEmployeeId);
             } catch (error) {
-                if (!controller.signal.aborted) {
-                    console.error('Error searching folders:', error);
-                    setSearchResults([]);
-                }
+                console.error('Error linking employee account:', error);
             } finally {
-                if (!controller.signal.aborted) {
-                    setSearchLoading(false);
-                }
-            }
-        }, 250);
-
-        return () => {
-            clearTimeout(timer);
-            controller.abort();
-            if (searchAbortRef.current === controller) {
-                searchAbortRef.current = null;
+                setLinkingEmployee(false);
             }
         };
-    }, [searchQuery, isAuthenticated]);
 
-    const handleLoginSuccess = async (response) => {
-        const signedInUser = response?.user || authAPI.getCurrentUser();
-        setUser(signedInUser);
-        setIsAuthenticated(true);
-        setShowNavDrawer(false);
-        setAuthView('landing');
-        window.history.replaceState({}, '', window.location.pathname);
-        await loadUserPreferences();
-        const initialPage = ['leading_hand', 'general_scaffolder'].includes(signedInUser?.role) ? 'employee-home' : 'landing';
-        applyPageState(initialPage, { builder: null, project: null }, { leadingHand: null }, { planDate: null });
-    };
+        tryLinkEmployee();
+    }, [authView, isAuthenticated, inviteEmployeeId, linkingEmployee, employeeLinkAttempted]);
 
-    const handleLogout = async () => {
-        try {
-            await authAPI.signOut();
-        } catch (error) {
-            console.error('Error logging out:', error);
-        } finally {
-            setUser(null);
-            setIsAuthenticated(false);
-            setSelectedFolderId(null);
-            setSearchQuery('');
-            setSearchResults([]);
+    useEffect(() => {
+        if (!showHeaderSearch) {
             setShowSearchResults(false);
-            setShowUserMenu(false);
-            setShowInviteModal(false);
-            setInviteError('');
-            setInviteSuccess('');
-            setCurrentPage('landing');
-            setSafetyContext({ builder: null, project: null });
-            setEmployeeContext({ leadingHand: null });
-            setRosteringContext({ planDate: null });
-            setAuthView('landing');
-            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [showHeaderSearch]);
+
+    const checkAuth = async () => {
+        const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
+        const authUrlParams = new URLSearchParams(window.location.search);
+        const emailFromUrl = authUrlParams.get('email') || '';
+        const firstNameFromUrl = authUrlParams.get('firstName') || '';
+        const lastNameFromUrl = authUrlParams.get('lastName') || '';
+        const employeeIdFromUrl = authUrlParams.get('employeeId') || '';
+
+        if (callbackResult?.hasSession) {
+            updateAuthView('signup-confirmed', emailFromUrl, {
+                firstName: firstNameFromUrl,
+                lastName: lastNameFromUrl,
+                employeeId: employeeIdFromUrl
+            });
+        }
+
+        const authenticated = authAPI.isAuthenticated();
+        const currentUser = authAPI.getCurrentUser();
+
+        if (!authenticated) {
+            setIsAuthenticated(false);
+            setUser(null);
+            setLoading(false);
+            return;
+        }
+
+        setIsAuthenticated(true);
+        setUser(currentUser);
+
+        try {
+            const restoredUser = await authAPI.restoreSession();
+            setUser(restoredUser);
+        } catch (restoreError) {
+            console.error('Error restoring session:', restoreError);
+            try {
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                setUser(refreshedUser);
+                return;
+            } catch (error) {
+                console.error('Error refreshing current user:', error);
+                setIsAuthenticated(false);
+                setUser(null);
+                updateAuthView('landing');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleSwitchToLogin = () => {
-        setAuthView('login-form');
-        const url = new URL(window.location.href);
-        url.searchParams.set('auth', 'login-form');
-        window.history.pushState({}, '', url.toString());
+    const loadPreferences = async () => {
+        try {
+            const prefs = await preferencesAPI.getPreferences();
+
+            // Keep deep links working, but default normal app launches back to Home.
+            const urlParams = new URLSearchParams(window.location.search);
+            const folderFromUrl = urlParams.get('folder');
+            if (folderFromUrl) {
+                setSelectedFolderId(folderFromUrl);
+                localStorage.setItem('selectedFolderId', folderFromUrl);
+            } else {
+                setSelectedFolderId(null);
+                localStorage.removeItem('selectedFolderId');
+            }
+            if (prefs.theme) {
+                setTheme(prefs.theme);
+                localStorage.setItem('theme', prefs.theme);
+            }
+            if (prefs.viewMode) {
+                setViewMode(prefs.viewMode);
+                localStorage.setItem('viewMode', prefs.viewMode);
+            }
+            if (prefs.sidebarWidth) {
+                setSidebarWidth(prefs.sidebarWidth);
+                localStorage.setItem('sidebarWidth', prefs.sidebarWidth.toString());
+            }
+
+            setPreferencesLoaded(true);
+        } catch (error) {
+            console.error('Error loading preferences:', error);
+            // Continue with localStorage defaults
+            setPreferencesLoaded(true);
+        }
     };
 
-    const handleSignUpSuccess = (email) => {
-        setInviteEmail(email);
-        setAuthView('signup-success');
-        const url = new URL(window.location.href);
-        url.searchParams.set('auth', 'signup-success');
-        if (email) {
-            url.searchParams.set('email', email);
+    const savePreferencesToBackend = useCallback(async (updates) => {
+        try {
+            await preferencesAPI.updatePreferences(updates);
+        } catch (error) {
+            console.error('Error saving preferences:', error);
         }
-        window.history.pushState({}, '', url.toString());
+    }, []);
+
+    const applyTheme = (newTheme, persistToBackend = true) => {
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+
+        if (persistToBackend && isAuthenticated) {
+            savePreferencesToBackend({ theme: newTheme });
+        }
+    };
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        applyTheme(newTheme, true);
+    };
+
+    const updateAuthView = (nextView, nextEmail = '', { firstName = null, lastName = null, employeeId = null } = {}) => {
+        const url = new URL(window.location.href);
+        const resolvedFirstName = firstName ?? url.searchParams.get('firstName') ?? '';
+        const resolvedLastName = lastName ?? url.searchParams.get('lastName') ?? '';
+        const resolvedEmployeeId = employeeId ?? url.searchParams.get('employeeId') ?? '';
+
+        if (nextView === 'signup') {
+            url.searchParams.set('auth', 'signup');
+            if (nextEmail) {
+                url.searchParams.set('email', nextEmail);
+            } else {
+                url.searchParams.delete('email');
+            }
+            if (resolvedFirstName) {
+                url.searchParams.set('firstName', resolvedFirstName);
+            } else {
+                url.searchParams.delete('firstName');
+            }
+            if (resolvedLastName) {
+                url.searchParams.set('lastName', resolvedLastName);
+            } else {
+                url.searchParams.delete('lastName');
+            }
+            if (resolvedEmployeeId) {
+                url.searchParams.set('employeeId', resolvedEmployeeId);
+            } else {
+                url.searchParams.delete('employeeId');
+            }
+        } else if (nextView === 'signup-success' || nextView === 'signup-confirmed') {
+            url.searchParams.set('auth', nextView);
+            if (nextEmail) {
+                url.searchParams.set('email', nextEmail);
+            } else {
+                url.searchParams.delete('email');
+            }
+            if (resolvedFirstName) {
+                url.searchParams.set('firstName', resolvedFirstName);
+            } else {
+                url.searchParams.delete('firstName');
+            }
+            if (resolvedLastName) {
+                url.searchParams.set('lastName', resolvedLastName);
+            } else {
+                url.searchParams.delete('lastName');
+            }
+            if (resolvedEmployeeId) {
+                url.searchParams.set('employeeId', resolvedEmployeeId);
+            } else {
+                url.searchParams.delete('employeeId');
+            }
+        } else if (nextView === 'login-form') {
+            url.searchParams.set('auth', 'login-form');
+            url.searchParams.delete('email');
+            url.searchParams.delete('firstName');
+            url.searchParams.delete('lastName');
+            url.searchParams.delete('employeeId');
+        } else {
+            url.searchParams.delete('auth');
+            url.searchParams.delete('email');
+            url.searchParams.delete('firstName');
+            url.searchParams.delete('lastName');
+            url.searchParams.delete('employeeId');
+        }
+
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+        setAuthView(nextView);
+        setInviteEmail(nextEmail);
+        setInviteFirstName(url.searchParams.get('firstName') || '');
+        setInviteLastName(url.searchParams.get('lastName') || '');
+        setInviteEmployeeId(url.searchParams.get('employeeId') || '');
+        setEmployeeLinkAttempted(false);
+    };
+
+    const handleLoginSuccess = () => {
+        updateAuthView('landing');
+        applyPageState(isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null }, { pushHistory: false });
+        checkAuth();
+    };
+
+    const handleSignUpSuccess = (email = '') => {
+        updateAuthView('signup-success', email);
     };
 
     const handleConfirmationContinue = () => {
-        handleSwitchToLogin();
+        if (isAuthenticated) {
+            updateAuthView('landing');
+            return;
+        }
+
+        updateAuthView('landing');
     };
 
-    const handleFolderSelect = (folderId) => {
-        setSelectedFolderId(folderId);
+    const handleSwitchToSignUp = (email = '') => {
+        updateAuthView('signup', email);
     };
 
-    const handleViewModeChange = (mode) => {
-        setViewMode(mode);
-    };
-
-    const triggerRefresh = () => {
-        setRefreshKey(current => current + 1);
-    };
-
-    const handleSearch = (value) => {
-        setSearchQuery(value);
-    };
-
-    const closeSearch = () => {
-        setSearchQuery('');
-        setSearchResults([]);
-        setShowSearchResults(false);
-        setSearchLoading(false);
-    };
-
-    const handleSearchNavigate = (folderId) => {
-        setSelectedFolderId(folderId);
-        closeSearch();
-    };
-
-    const openInviteModal = () => {
-        setShowInviteModal(true);
-        setInviteEmail('');
-        setInviteError('');
-        setInviteSuccess('');
+    const handleSwitchToLogin = () => {
+        updateAuthView('login-form');
     };
 
     const closeInviteModal = () => {
         setShowInviteModal(false);
-        setInviteLoading(false);
         setInviteError('');
         setInviteSuccess('');
+        setInviteEmail('');
     };
 
-    const handleInviteUser = async (event) => {
-        event.preventDefault();
+    const handleInviteUser = async (e) => {
+        e.preventDefault();
         setInviteError('');
         setInviteSuccess('');
 
         if (!inviteEmail.trim()) {
-            setInviteError('Please enter an email address.');
+            setInviteError('Please enter an email address');
             return;
         }
 
         setInviteLoading(true);
         try {
             await authAPI.inviteUser(inviteEmail.trim());
-            setInviteSuccess(`Invite sent to ${inviteEmail.trim()}`);
-            setInviteEmail('');
+            setInviteSuccess(`Invitation sent to ${inviteEmail.trim()}`);
         } catch (error) {
-            console.error('Error inviting user:', error);
-            setInviteError(error?.response?.data?.message || 'Unable to send invite right now.');
+            if (error.response?.status === 401) {
+                setInviteError('Your session has expired. Please sign in again and resend the invite.');
+                setShowInviteModal(false);
+                setIsAuthenticated(false);
+                setUser(null);
+                updateAuthView('landing');
+            } else {
+                setInviteError(error.response?.data?.error || 'Failed to send invitation');
+            }
         } finally {
             setInviteLoading(false);
         }
     };
 
-    const allowedNavItems = (() => {
-        const shared = [
-            { key: 'design', label: 'Design' },
-            { key: 'site-information', label: 'Site Information' },
-            {
-                key: 'safety',
-                label: 'Safety',
-                children: [
-                    { key: 'safety-scaff-tags', label: 'Scaff Tags' },
-                    { key: 'safety-swms', label: 'SWMS' },
-                ],
-            },
-            { key: 'rostering', label: 'Rostering', children: [{ key: 'rostering-tree', label: 'Rostering Tree' }] },
-            { key: 'employees', label: 'Employees', children: [{ key: 'employee-relationships', label: 'Leading Hands' }] },
-        ];
+    const openInviteModal = () => {
+        setShowUserMenu(false);
+        setInviteError('');
+        setInviteSuccess('');
+        setInviteEmail('');
+        setShowInviteModal(true);
+    };
 
-        if (user?.role === 'transport_management') {
-            return [
-                { key: 'transport-dashboard', label: 'Transport Dashboard' },
-                { key: 'truck-schedule', label: 'Truck Schedule' },
-                { key: 'truck-delivery-schedule', label: 'Delivery Schedule' },
-                { key: 'material-ordering-new', label: 'Material Ordering' },
-            ];
+    const handleLogout = async () => {
+        try {
+            setShowUserMenu(false);
+            await authAPI.signOut();
+            setIsAuthenticated(false);
+            setUser(null);
+            updateAuthView('landing');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    };
+
+    const handleFolderSelect = useCallback((folderId, { pushHistory = true } = {}) => {
+        setSelectedFolderId(folderId);
+
+        // Save to localStorage
+        if (folderId === null) {
+            localStorage.removeItem('selectedFolderId');
+        } else {
+            localStorage.setItem('selectedFolderId', folderId);
         }
 
-        if (['truck_ess01', 'truck_ess02', 'truck_ess03'].includes(user?.role)) {
-            return [
-                { key: 'transport-dashboard', label: 'Transport Dashboard' },
-                { key: 'truck-schedule', label: 'Truck Schedule' },
-                { key: 'truck-delivery-schedule', label: 'Delivery Schedule' },
-            ];
+        // Push browser history so back/forward buttons work
+        if (pushHistory) {
+            window.history.pushState(
+                { folderId, page: currentPage, safetyContext, employeeContext },
+                '',
+                buildAppUrl(folderId, currentPage, safetyContext, employeeContext)
+            );
         }
 
-        return isAdmin
-            ? [...shared, { key: 'ess-news', label: 'ESS News' }]
-            : shared;
-    })();
+        // Save to backend
+        savePreferencesToBackend({ selectedFolderId: folderId });
+    }, [buildAppUrl, currentPage, safetyContext, employeeContext, savePreferencesToBackend]);
 
-    const showHeaderSearch = isAuthenticated && !DESIGN_PAGE_KEYS.has(currentPage);
+    const handleSidebarResize = (newWidth) => {
+        setSidebarWidth(newWidth);
+        localStorage.setItem('sidebarWidth', newWidth.toString());
+        savePreferencesToBackend({ sidebarWidth: newWidth });
+    };
+
+    const handleViewModeChange = (newViewMode) => {
+        setViewMode(newViewMode);
+        localStorage.setItem('viewMode', newViewMode);
+        savePreferencesToBackend({ viewMode: newViewMode });
+    };
+
+    const triggerRefresh = () => {
+        setRefreshTrigger(prev => prev + 1);
+    };
+
+    const handleSearch = useCallback((query) => {
+        setSearchQuery(query);
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+        if (query.trim().length < 2) {
+            setSearchResults([]);
+            setShowSearchResults(false);
+            return;
+        }
+
+        setShowSearchResults(true);
+        setSearchLoading(true);
+
+        searchTimerRef.current = setTimeout(async () => {
+            try {
+                const results = await foldersAPI.search(query.trim());
+                setSearchResults(results);
+            } catch (error) {
+                if (error.name === 'CanceledError' || error.name === 'AbortError') return;
+                console.error('Search error:', error);
+                setSearchResults([]);
+            } finally {
+                setSearchLoading(false);
+            }
+        }, 300);
+    }, []);
+
+    const closeSearch = () => {
+        setSearchQuery('');
+        setShowSearchResults(false);
+        setSearchResults([]);
+    };
+
+    const handleSearchNavigate = (folderId) => {
+        closeSearch();
+        handleFolderSelect(folderId);
+    };
+
+    const handleSearchViewPDF = (doc, type) => {
+        const fileName = type === 'ess' ? doc.essDesignIssueName : doc.thirdPartyDesignName;
+        setPdfViewer({
+            documentId: doc.id,
+            fileName: fileName || 'document.pdf',
+            fileType: type
+        });
+        closeSearch();
+    };
+
+    // Browser back/forward button support
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pageFromUrl = urlParams.get('page') || (isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing');
+        const builderFromUrl = urlParams.get('builder');
+        const projectFromUrl = urlParams.get('project');
+        const leadingHandFromUrl = urlParams.get('leadingHand');
+        const rosterDateFromUrl = urlParams.get('rosterDate');
+        const initialSafetyContext = {
+            builder: builderFromUrl ? { id: builderFromUrl } : null,
+            project: projectFromUrl ? { id: projectFromUrl } : null
+        };
+        const initialEmployeeContext = {
+            leadingHand: leadingHandFromUrl ? { id: leadingHandFromUrl } : null
+        };
+        const initialRosteringContext = {
+            planDate: rosterDateFromUrl || null
+        };
+
+        setCurrentPage(pageFromUrl);
+        setSafetyContext(initialSafetyContext);
+        setEmployeeContext(initialEmployeeContext);
+        setRosteringContext(initialRosteringContext);
+        window.history.replaceState(
+            { folderId: selectedFolderId, page: pageFromUrl, safetyContext: initialSafetyContext, employeeContext: initialEmployeeContext, rosteringContext: initialRosteringContext },
+            '',
+            buildAppUrl(selectedFolderId, pageFromUrl, initialSafetyContext, initialEmployeeContext, initialRosteringContext)
+        );
+
+        const handlePopState = (e) => {
+            const folderId = e.state?.folderId ?? null;
+            const page = e.state?.page ?? (isEmployeePortalRole ? 'employee-home' : (isTruckDeviceUser || isTransportManagement) ? 'truck-schedule' : 'landing');
+            const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
+            const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
+            const nextRosteringContext = e.state?.rosteringContext ?? { planDate: null };
+            setCurrentPage(page);
+            setSafetyContext(nextSafetyContext);
+            setEmployeeContext(nextEmployeeContext);
+            setRosteringContext(nextRosteringContext);
+            handleFolderSelect(folderId, { pushHistory: false });
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [buildAppUrl, isEmployeePortalRole, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Close search results and user menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchRef.current && !searchRef.current.contains(e.target)) {
+                setShowSearchResults(false);
+            }
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+                setShowUserMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+    const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
+    const isAdmin = user?.role === 'admin';
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = getRoleDisplayName(user?.role);
     const userInitials = user?.fullName
@@ -1014,7 +1177,6 @@ function App() {
     if (loading) {
         return (
             <div className="loading-screen">
-                {isDesktopApp ? <DesktopWindowControls className="ess-desktop-window-controls-overlay" /> : null}
                 <div className="loading-brandmark" aria-hidden="true">
                     <div className="loading-ring"></div>
                     <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
@@ -1071,7 +1233,7 @@ function App() {
         }
         return (
             <div className="App">
-                <header className={`app-header${isDesktopApp ? ' ess-desktop-header-has-controls' : ''}`}>
+                <header className="app-header">
                     <div className="header-left">
                         <div className="logo">
                             <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="logo-icon" />
@@ -1096,7 +1258,6 @@ function App() {
                             Sign In
                         </button>
                     </div>
-                    {isDesktopApp ? <DesktopWindowControls className="ess-desktop-window-controls-header" /> : null}
                 </header>
                 <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />
             </div>
@@ -1107,7 +1268,7 @@ function App() {
         <ToastProvider>
             <div className="App">
             {!isTransportPage ? (
-            <header className={`app-header${isDesktopApp ? ' ess-desktop-header-has-controls' : ''}`}>
+            <header className="app-header">
                 <div className="header-left">
                     <button
                         type="button"
@@ -1178,11 +1339,11 @@ function App() {
                         )}
                     </div>
                 ) : null}
-                    <div className="header-right">
-                        {!DESIGN_PAGE_KEYS.has(currentPage) && (
-                            <WebNavDrawer
-                                open={showNavDrawer}
-                                currentPage={currentPage}
+                <div className="header-right">
+                    {!DESIGN_PAGE_KEYS.has(currentPage) && (
+                        <WebNavDrawer
+                            open={showNavDrawer}
+                            currentPage={currentPage}
                             items={allowedNavItems}
                             onToggle={() => setShowNavDrawer(prev => !prev)}
                             onClose={() => setShowNavDrawer(false)}
@@ -1253,18 +1414,12 @@ function App() {
                         )}
                     </div>
                 </div>
-                {isDesktopApp ? <DesktopWindowControls className="ess-desktop-window-controls-header" /> : null}
             </header>
             ) : null}
 
             {DESIGN_PAGE_KEYS.has(currentPage) ? (
                 isTransportPage ? (
-                    <div className={`transport-page-frame transport-page-frame-full${isDesktopApp ? ' transport-page-frame-desktop' : ''}`}>
-                        {isDesktopApp ? (
-                            <div className="transport-desktop-titlebar">
-                                <DesktopWindowControls className="ess-desktop-window-controls-transport" />
-                            </div>
-                        ) : null}
+                    <div className="transport-page-frame transport-page-frame-full">
                         {renderCurrentPage()}
                     </div>
                 ) : (
