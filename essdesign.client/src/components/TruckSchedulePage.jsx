@@ -880,18 +880,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         </div>
         <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
         <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}><ToolbarIcon type="refresh" />Refresh</button>
-        <button type="button" className="transport-toolbar-button route" disabled={!selectedScheduleEvent} onClick={() => selectedScheduleEvent && openEventOverview(selectedScheduleEvent)}><ToolbarIcon type="analysis" />Route Analysis</button>
-        {!isTruckRole ? (
-          <label className="transport-toolbar-filter">
-            <span>Truck Filter</span>
-            <select value="all" onChange={() => {}}>
-              <option value="all">All Trucks</option>
-              {TRUCK_LANES.map(lane => <option key={lane.id} value={lane.id}>{lane.rego}</option>)}
-            </select>
-          </label>
-        ) : null}
-        <button type="button" className="transport-toolbar-icon" aria-label="Filter options"><ToolbarIcon type="filter" /></button>
-        <button type="button" className="transport-toolbar-icon" aria-label="More options"><ToolbarIcon type="more" /></button>
       </div>
 
       {error ? <div className="ts2-error">{error}</div> : null}

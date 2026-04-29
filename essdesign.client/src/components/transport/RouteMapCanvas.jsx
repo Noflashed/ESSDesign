@@ -66,8 +66,28 @@ function RouteMapInstance({
     launchViewer ? 'is-viewer-launcher' : '',
   ].filter(Boolean).join(' ');
 
+  const handleLaunch = () => {
+    if (!interactive && launchViewer) {
+      launchViewer();
+    }
+  };
+
+  const handleKeyDown = event => {
+    if (!interactive && launchViewer && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      launchViewer();
+    }
+  };
+
   return (
-    <div className={rootClassName}>
+    <div
+      className={rootClassName}
+      onClick={handleLaunch}
+      onKeyDown={handleKeyDown}
+      role={!interactive && launchViewer ? 'button' : undefined}
+      tabIndex={!interactive && launchViewer ? 0 : undefined}
+      aria-label={!interactive && launchViewer ? 'Open interactive map' : undefined}
+    >
       <MapContainer
         className="transport-leaflet-map"
         center={bounds[0] || [-33.8122, 150.9354]}
@@ -109,7 +129,10 @@ function RouteMapInstance({
         <div className="transport-route-map-hint">Use mouse or touch to move around the map.</div>
       ) : null}
       {launchViewer ? (
-        <button type="button" className="transport-route-open-button" onClick={launchViewer}>
+        <button type="button" className="transport-route-open-button" onClick={(event) => {
+          event.stopPropagation();
+          launchViewer();
+        }}>
           Open interactive map
         </button>
       ) : null}

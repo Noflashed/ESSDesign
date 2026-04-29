@@ -5491,6 +5491,11 @@ button.stat-card {
     cursor: pointer;
 }
 
+.transport-route-canvas.is-viewer-launcher:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.55);
+    outline-offset: 0;
+}
+
 .transport-route-canvas.is-interactive {
     cursor: auto;
 }
@@ -5572,11 +5577,12 @@ button.stat-card {
 
 .transport-route-open-button {
     position: absolute;
-    left: 10px;
-    bottom: 10px;
-    z-index: 5;
-    height: 34px;
-    padding: 0 12px;
+    left: 50%;
+    top: 50%;
+    z-index: 6;
+    transform: translate(-50%, calc(-50% + 8px));
+    height: 36px;
+    padding: 0 14px;
     border-radius: 10px;
     font-size: 12px;
     font-weight: 700;
@@ -5585,6 +5591,34 @@ button.stat-card {
     color: #102b5c;
     box-shadow: 0 12px 24px rgba(15,23,42,0.12);
     cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.transport-route-canvas.is-viewer-launcher::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.16));
+    opacity: 0;
+    transition: opacity 140ms ease;
+    pointer-events: none;
+}
+
+.transport-route-canvas.is-viewer-launcher:hover::after,
+.transport-route-canvas.is-viewer-launcher:focus-within::after,
+.transport-route-canvas.is-viewer-launcher:focus-visible::after {
+    opacity: 1;
+}
+
+.transport-route-canvas.is-viewer-launcher:hover .transport-route-open-button,
+.transport-route-canvas.is-viewer-launcher:focus-within .transport-route-open-button,
+.transport-route-canvas.is-viewer-launcher:focus-visible .transport-route-open-button {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%);
 }
 
 .transport-route-map-hint {

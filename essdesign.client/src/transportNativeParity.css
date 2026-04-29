@@ -2740,9 +2740,9 @@
     display: flex !important;
     flex-wrap: wrap !important;
     align-items: center !important;
-    gap: 8px !important;
-    min-height: 34px !important;
-    padding: 0 0 10px !important;
+    gap: 12px !important;
+    min-height: 38px !important;
+    padding: 2px 0 12px !important;
 }
 
 .transport-page-frame .transport-reference-legend-label,
@@ -2750,22 +2750,24 @@
     color: #475569 !important;
     font-size: 11px !important;
     font-weight: 700 !important;
+    margin-right: 2px !important;
 }
 
 .transport-page-frame .transport-reference-legend-icon-item,
 .transport-desktop-workspace .transport-reference-legend-icon-item {
     display: inline-flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 7px !important;
     color: #475569 !important;
-    font-size: 10px !important;
+    font-size: 11px !important;
+    line-height: 14px !important;
     font-weight: 700 !important;
 }
 
 .transport-page-frame .transport-reference-legend-icon-item svg,
 .transport-desktop-workspace .transport-reference-legend-icon-item svg {
-    width: 12px !important;
-    height: 12px !important;
+    width: 14px !important;
+    height: 14px !important;
     color: #4b5563 !important;
 }
 
@@ -2774,9 +2776,9 @@
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-height: 22px !important;
-    padding: 0 9px !important;
-    border-radius: 999px !important;
+    min-height: 24px !important;
+    padding: 0 10px !important;
+    border-radius: 6px !important;
     font-size: 10px !important;
     line-height: 12px !important;
     font-weight: 700 !important;
