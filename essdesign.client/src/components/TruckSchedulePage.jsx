@@ -362,6 +362,16 @@ function formatLastRefreshTime() {
   return new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function formatNativeDateValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0 }) {
   const [now, setNow] = useState(new Date());
 
@@ -476,6 +486,7 @@ function MiniScheduleStrip({
 export default function TruckSchedulePage({ user, onNavigate }) {
   const isTruckRole = isTruckDeviceRole(user?.role);
   const assignedTruck = getTruckAssignment(user?.role);
+  const toolbarDateInputRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [allRequests, setAllRequests] = useState([]);
   const [dayEvents, setDayEvents] = useState([]);
@@ -844,6 +855,30 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return options;
   }, [selectedDate]);
 
+  const handleToolbarDateChange = useCallback((event) => {
+    const nextValue = event.target.value;
+    if (!nextValue) {
+      return;
+    }
+    const nextDate = startOfDay(new Date(`${nextValue}T00:00:00`));
+    if (!Number.isNaN(nextDate.getTime())) {
+      setSelectedDate(nextDate);
+    }
+  }, []);
+
+  const openToolbarDatePicker = useCallback(() => {
+    const input = toolbarDateInputRef.current;
+    if (!input) {
+      return;
+    }
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  }, []);
+
   return (
     <div className="ts2-page transport-dynamic-reference">
       <div className="ts2-header transport-reference-header">
@@ -872,10 +907,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       <div className="transport-reference-toolbar">
         <div className="transport-toolbar-date-group">
           <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))} aria-label="Previous day"><ToolbarIcon type="chevron-left" /></button>
-          <button type="button" className="transport-toolbar-date" onClick={() => setSelectedDate(startOfDay(new Date()))}>
-            <span>{selectedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-            <ToolbarIcon type="calendar" />
-          </button>
+          <label className="transport-toolbar-date" aria-label="Select schedule date">
+            <input
+              ref={toolbarDateInputRef}
+              type="date"
+              value={formatNativeDateValue(selectedDate)}
+              onChange={handleToolbarDateChange}
+            />
+            <button type="button" className="transport-toolbar-date-trigger" onClick={openToolbarDatePicker}>
+              <span>{selectedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <ToolbarIcon type="calendar" />
+            </button>
+          </label>
           <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))} aria-label="Next day"><ToolbarIcon type="chevron-right" /></button>
         </div>
         <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
