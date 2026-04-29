@@ -3199,6 +3199,15 @@
     font-weight: 800 !important;
 }
 
+.transport-page-frame .transport-drop-preview.blocked,
+.transport-desktop-workspace .transport-drop-preview.blocked {
+    border-color: #fca5a5 !important;
+    background: rgba(254, 242, 242, 0.96) !important;
+    color: #b91c1c !important;
+    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.12) !important;
+    animation: none !important;
+}
+
 .transport-page-frame .ts2-event-wrap.drag-active,
 .transport-desktop-workspace .ts2-event-wrap.drag-active {
     z-index: 12 !important;

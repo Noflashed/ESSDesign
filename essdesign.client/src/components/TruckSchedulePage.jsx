@@ -226,6 +226,27 @@ function getDropMinutesFromPointer(clientX, trackElement) {
   return clampScheduleMinutes(roundScheduleMinutes(SCREEN_START_HOUR * 60 + ratio * rangeMinutes), 90);
 }
 
+function getScheduleCollision({ requestId, truckId, startMinutes, durationMinutes, dayEvents, startMap, durationMap }) {
+  const endMinutes = startMinutes + durationMinutes;
+  return dayEvents.find(event => {
+    if (event.truckId !== truckId || event.orderId === requestId) {
+      return false;
+    }
+    const existingStart = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+    const existingEnd = existingStart + (durationMap[event.orderId] ?? 90);
+    return startMinutes < existingEnd && endMinutes > existingStart;
+  }) || null;
+}
+
+function getCollisionMessage(event, startMap, durationMap) {
+  if (!event) {
+    return 'That time overlaps another delivery.';
+  }
+  const startMinutes = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+  const endMinutes = startMinutes + (durationMap[event.orderId] ?? 90);
+  return `That slot overlaps ${event.builderName || 'another delivery'} (${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}).`;
+}
+
 function setScheduleDragImage(event, request, options = {}) {
   if (!event.dataTransfer || typeof document === 'undefined') {
     return;
@@ -581,6 +602,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
+  const optimisticBoardLockUntilRef = useRef(0);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -590,6 +612,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [assignedTruck, isTruckRole]);
 
   const loadBoard = useCallback(async () => {
+    if (Date.now() < optimisticBoardLockUntilRef.current) {
+      return Promise.resolve();
+    }
     if (loadPromiseRef.current) {
       return loadPromiseRef.current;
     }
@@ -858,7 +883,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setEventOverviewRouteData(null);
   }, []);
 
-  const handleSchedule = useCallback(async () => {
+  const handleSchedule = useCallback(() => {
     if (!requestModal?.request || !selectedTruckId) {
       return;
     }
@@ -867,36 +892,97 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       window.alert('Please choose a future time for this delivery.');
       return;
     }
+    const collision = getScheduleCollision({
+      requestId: requestModal.request.id,
+      truckId: selectedTruckId,
+      startMinutes: selectedHour * 60 + selectedMinute,
+      durationMinutes: selectedRouteDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    if (collision) {
+      const message = getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap);
+      setError(message);
+      window.alert(message);
+      return;
+    }
     setScheduleSaving(true);
-    try {
-      const truck = TRUCK_LANES.find(lane => lane.id === selectedTruckId);
-      await materialOrderRequestsAPI.setSchedule(requestModal.request.id, {
+    const requestId = requestModal.request.id;
+    const truck = TRUCK_LANES.find(lane => lane.id === selectedTruckId);
+    const dateKey = formatDateKey(selectedDate);
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const updatedRequest = {
+      ...requestModal.request,
+      scheduledDate: dateKey,
+      scheduledHour: selectedHour,
+      scheduledMinute: selectedMinute,
+      scheduledAtIso: scheduleDateIso,
+      scheduledTruckId: truck?.id ?? selectedTruckId,
+      scheduledTruckLabel: truck?.rego ?? null,
+      truckId: truck?.id ?? selectedTruckId,
+      truckLabel: truck?.rego ?? null,
+      deliveryStatus: 'scheduled',
+      deliveryStartedAt: null,
+      deliveryUnloadingAt: null,
+      deliveryConfirmedAt: null,
+    };
+    setAllRequests(current => current.map(item => item.id === requestId ? updatedRequest : item));
+    setRequestMetaMap(current => ({ ...current, [requestId]: updatedRequest }));
+    setDayEvents(current => {
+      const nextEvent = {
+        id: current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`,
+        date: dateKey,
+        hour: selectedHour,
+        minute: selectedMinute,
+        builderName: updatedRequest.builderName,
+        projectName: updatedRequest.projectName,
+        scaffoldingSystem: updatedRequest.scaffoldingSystem,
+        orderId: requestId,
+        truckId: truck?.id ?? selectedTruckId,
+        truckLabel: truck?.rego ?? updatedRequest.scheduledTruckLabel ?? updatedRequest.truckLabel ?? null,
+      };
+      return [...current.filter(event => event.orderId !== requestId), nextEvent]
+        .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
+    });
+    setEventStartMinutesMap(current => ({ ...current, [requestId]: selectedHour * 60 + selectedMinute }));
+    setEventDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? selectedRouteDurationMinutes }));
+    setEventPrimaryDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? Math.min(selectedRouteDurationMinutes, 90) }));
+    setSelectedScheduleEventId(requestId);
+    setScheduleInspectorOpen(true);
+    closeRequestModal();
+    optimisticBoardLockUntilRef.current = Date.now() + 5000;
+
+    materialOrderRequestsAPI.setSchedule(requestId, {
         date: formatDateKey(selectedDate),
         hour: selectedHour,
         minute: selectedMinute,
         truckId: truck?.id ?? selectedTruckId,
         truckLabel: truck?.rego ?? requestModal.request.scheduledTruckLabel ?? null,
+      })
+      .then(() => {
+        optimisticBoardLockUntilRef.current = Date.now() + 3000;
+        setError('');
+      })
+      .catch(err => {
+        optimisticBoardLockUntilRef.current = 0;
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setError(err?.message || 'Failed to schedule request.');
+      })
+      .finally(() => {
+        setScheduleSaving(false);
       });
-      setAllRequests(current => current.map(item => item.id === requestModal.request.id ? {
-        ...item,
-        scheduledDate: formatDateKey(selectedDate),
-        scheduledHour: selectedHour,
-        scheduledMinute: selectedMinute,
-        scheduledTruckId: truck?.id ?? selectedTruckId,
-        scheduledTruckLabel: truck?.rego ?? null,
-        truckId: truck?.id ?? selectedTruckId,
-        truckLabel: truck?.rego ?? null,
-        deliveryStatus: 'scheduled',
-        deliveryStartedAt: null,
-        deliveryUnloadingAt: null,
-        deliveryConfirmedAt: null,
-      } : item));
-      closeRequestModal();
-      await loadBoard();
-    } finally {
-      setScheduleSaving(false);
-    }
-  }, [closeRequestModal, loadBoard, requestModal, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
+  }, [allRequests, closeRequestModal, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap, requestModal, selectedDate, selectedHour, selectedMinute, selectedRouteDurationMinutes, selectedTruckId]);
 
   const scheduleRequestAt = useCallback((requestId, truckId, startMinutes, durationMinutes = 90) => {
     if (!requestId || !truckId) {
@@ -907,6 +993,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const minute = safeMinutes % 60;
     const truck = TRUCK_LANES.find(lane => lane.id === truckId);
     const dateKey = formatDateKey(selectedDate);
+    const collision = getScheduleCollision({
+      requestId,
+      truckId: truck?.id ?? truckId,
+      startMinutes: safeMinutes,
+      durationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    if (collision) {
+      setError(getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap));
+      setDropPreview(null);
+      return;
+    }
     const previousRequests = allRequests;
     const previousEvents = dayEvents;
     const previousMetaMap = requestMetaMap;
@@ -960,6 +1060,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDraggedScheduledOrderId('');
     setDragPreviewDurationMinutes(90);
     setDropPreview(null);
+    optimisticBoardLockUntilRef.current = Date.now() + 5000;
 
     materialOrderRequestsAPI.setSchedule(requestId, {
         date: formatDateKey(selectedDate),
@@ -968,8 +1069,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         truckId: truck?.id ?? truckId,
         truckLabel: truck?.rego ?? null,
       })
-      .then(() => loadBoard().catch(() => {}))
+      .then(() => {
+        optimisticBoardLockUntilRef.current = Date.now() + 3000;
+        setError('');
+      })
       .catch(err => {
+        optimisticBoardLockUntilRef.current = 0;
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -978,7 +1083,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap, selectedDate]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -1039,8 +1144,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget);
-    setDropPreview({ truckId, minutes, durationMinutes: dragPreviewDurationMinutes });
-  }, [dragPreviewDurationMinutes, draggedRequestId]);
+    const collision = getScheduleCollision({
+      requestId: draggedRequestId,
+      truckId,
+      startMinutes: minutes,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    setDropPreview({ truckId, minutes, durationMinutes: dragPreviewDurationMinutes, blocked: Boolean(collision) });
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
 
   const handleLaneDragLeave = useCallback((event, truckId) => {
     if (event.currentTarget.contains(event.relatedTarget)) {
@@ -1127,10 +1241,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
     }
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    optimisticBoardLockUntilRef.current = Date.now() + 5000;
 
     materialOrderRequestsAPI.clearSchedule(requestId)
-      .then(() => loadBoard().catch(() => {}))
+      .then(() => {
+        optimisticBoardLockUntilRef.current = Date.now() + 3000;
+        setError('');
+      })
       .catch(err => {
+        optimisticBoardLockUntilRef.current = 0;
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1139,7 +1258,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setError(err?.message || 'Failed to unschedule order.');
       });
-  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap]);
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap]);
 
   const handleDeleteScheduledOrder = useCallback((requestId) => {
     if (!requestId) {
@@ -1179,10 +1298,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return next;
     });
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    optimisticBoardLockUntilRef.current = Date.now() + 5000;
 
     materialOrderRequestsAPI.deleteRequest(requestId)
-      .then(() => loadBoard().catch(() => {}))
+      .then(() => {
+        optimisticBoardLockUntilRef.current = Date.now() + 3000;
+        setError('');
+      })
       .catch(err => {
+        optimisticBoardLockUntilRef.current = 0;
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1191,7 +1315,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setError(err?.message || 'Failed to delete order.');
       });
-  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap]);
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap]);
 
   const handleOpenPdf = useCallback(async request => {
     if (!request?.pdfPath) {
@@ -1391,14 +1515,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       {loadingBoard && laneIndex === 0 ? <div className="ts2-loading">Loading live schedule…</div> : null}
                       {dropPreview?.truckId === lane.id ? (
                         <div
-                          className="transport-drop-preview"
+                          className={`transport-drop-preview${dropPreview.blocked ? ' blocked' : ''}`}
                           style={{
                             left: `${getEventOffset(dropPreview.minutes) * 100}%`,
                             width: `${getEventFlex(dropPreview.durationMinutes || 90) * 100}%`,
                           }}
                         >
                           <span>{formatTimeChip(Math.floor(dropPreview.minutes / 60), dropPreview.minutes % 60)}</span>
-                          <strong>Drop to schedule</strong>
+                          <strong>{dropPreview.blocked ? 'Slot unavailable' : 'Drop to schedule'}</strong>
                         </div>
                       ) : null}
                       {laneEvents.map(event => {
