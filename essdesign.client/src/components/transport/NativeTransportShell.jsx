@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png';
 
 function TransportIcon({ type }) {
   const common = {

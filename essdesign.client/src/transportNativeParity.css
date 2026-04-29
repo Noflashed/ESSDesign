@@ -909,7 +909,6 @@
     width: 102px;
     height: auto;
     object-fit: contain;
-    filter: brightness(0) invert(1);
 }
 
 .transport-desktop-nav {
