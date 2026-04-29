@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
-import { TRUCK_LANES, formatTimeChip } from './transport/transportUtils';
+import { formatTimeChip } from './transport/transportUtils';
 
 const SECTION_HEADER_LABELS = new Set([
     'TIMBER BOARDS',
@@ -139,26 +139,6 @@ function getScheduledTimeRange(request) {
     return `${getSubmittedDateLabel(request.scheduledDate)} ${formatTimeChip(request.scheduledHour, request.scheduledMinute)}`;
 }
 
-function getRequestPriority(request) {
-    const submitted = request?.submittedAt ? new Date(request.submittedAt).getTime() : Date.now();
-    const ageHours = Math.max(0, (Date.now() - submitted) / 3600000);
-    if (!request?.scheduledAtIso && ageHours > 24) return 'High';
-    if (!request?.scheduledAtIso) return 'Medium';
-    return 'Low';
-}
-
-function summarizeItems(itemValues) {
-    const entries = Object.entries(itemValues || {})
-        .filter(([key, value]) => key.endsWith('_qty') && value !== '' && value !== null && value !== undefined && Number(value) > 0)
-        .slice(0, 5);
-    return entries.map(([key, value]) => {
-        const row = PICKING_CARD_ROWS.find(item => key.startsWith(`${item.id}_`));
-        const side = key.includes('_left_') ? 'left' : key.includes('_middle_') ? 'middle' : 'right';
-        const label = row?.[side]?.filter(Boolean).join(' ') || 'Material item';
-        return { key, label, qty: value };
-    });
-}
-
 function getProjectLocation(builders, request) {
     const builder = (builders || []).find(item => item.id === request?.builderId || item.name === request?.builderName);
     const project = (builder?.projects || []).find(item => item.id === request?.projectId || item.name === request?.projectName);
@@ -288,12 +268,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('newest');
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
-    const [selectedRequestId, setSelectedRequestId] = useState('');
-    const [managementScheduleDate, setManagementScheduleDate] = useState(todayDate());
-    const [managementScheduleHour, setManagementScheduleHour] = useState(9);
-    const [managementScheduleMinute, setManagementScheduleMinute] = useState(30);
-    const [managementScheduleTruckId, setManagementScheduleTruckId] = useState(TRUCK_LANES[0]?.id || 'truck-1');
-    const [managementScheduleSaving, setManagementScheduleSaving] = useState(false);
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -311,22 +285,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         () => orders.filter((order) => !archivedRequests.some((request) => archivedRequestMatchesOrder(request, order))),
         [orders, archivedRequests]
     );
-
-    useEffect(() => {
-        if (selectedRequestId && [...visibleOrders, ...archivedRequests].some(request => request.id === selectedRequestId)) {
-            return;
-        }
-        setSelectedRequestId(visibleOrders[0]?.id || archivedRequests[0]?.id || '');
-    }, [archivedRequests, selectedRequestId, visibleOrders]);
-
-    useEffect(() => {
-        const selected = [...visibleOrders, ...archivedRequests].find(request => request.id === selectedRequestId);
-        if (!selected) return;
-        setManagementScheduleDate(selected.scheduledDate || todayDate());
-        setManagementScheduleHour(typeof selected.scheduledHour === 'number' ? selected.scheduledHour : 9);
-        setManagementScheduleMinute(typeof selected.scheduledMinute === 'number' ? selected.scheduledMinute : 30);
-        setManagementScheduleTruckId(selected.scheduledTruckId || selected.truckId || TRUCK_LANES[0]?.id || 'truck-1');
-    }, [archivedRequests, selectedRequestId, visibleOrders]);
 
     const isFormOnlyView = view === 'form';
     const isActiveQueueView = view === 'active';
@@ -499,28 +457,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             setError(err.message || 'Failed to open archived PDF');
         } finally {
             setOpeningArchivedPdfId(null);
-        }
-    };
-
-    const saveManagementSchedule = async (request) => {
-        if (!request?.id) return;
-        const truck = TRUCK_LANES.find(lane => lane.id === managementScheduleTruckId) || TRUCK_LANES[0];
-        setManagementScheduleSaving(true);
-        setError('');
-        try {
-            await materialOrderRequestsAPI.setSchedule(request.id, {
-                date: managementScheduleDate,
-                hour: Number(managementScheduleHour),
-                minute: Number(managementScheduleMinute),
-                truckId: truck?.id || managementScheduleTruckId,
-                truckLabel: truck?.rego || truck?.label || managementScheduleTruckId,
-            });
-            await loadPageData();
-            setRequestUpdatedAt(new Date().toISOString());
-        } catch (err) {
-            setError(err.message || 'Failed to save schedule.');
-        } finally {
-            setManagementScheduleSaving(false);
         }
     };
 
@@ -727,9 +663,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 return leftValue.localeCompare(rightValue);
             });
 
-        const selectedRequest = filteredRows.find(request => request.id === selectedRequestId) || filteredRows[0] || null;
-        const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
-        const selectedItems = summarizeItems(selectedRequest?.itemValues);
         const activeCount = visibleOrders.length;
         const scheduledCount = visibleOrders.filter(request => request.scheduledAtIso || request.scheduledDate).length;
         const pendingCount = visibleOrders.filter(request => !request.scheduledAtIso && !request.scheduledDate).length;
@@ -758,12 +691,12 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
                         <div className="material-ordering-queue-tools transport-management-tools">
                             <label className="material-ordering-queue-search">
-                                <span>Search</span>
+                                <span className="material-ordering-queue-search-icon" aria-hidden="true">⌕</span>
                                 <input
                                     type="text"
                                     value={requestSearch}
                                     onChange={(event) => setRequestSearch(event.target.value)}
-                                    placeholder="Search orders, builders, projects..."
+                                    placeholder="Search builders, projects, scaffold details..."
                                 />
                             </label>
                             <div className="material-ordering-queue-chip-row">
@@ -789,7 +722,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <table className="transport-management-table">
                                     <thead>
                                         <tr>
-                                            <th>Order ID</th>
+                                            <th>Scaffold Details</th>
                                             <th>Builder / Project</th>
                                             <th>Requested By</th>
                                             <th>System</th>
@@ -802,11 +735,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     </thead>
                                     <tbody>
                                         {filteredRows.map((request) => {
-                                            const isSelected = selectedRequest?.id === request.id;
-                                            const priority = getRequestPriority(request);
                                             return (
-                                                <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => setSelectedRequestId(request.id)}>
-                                                    <td><strong>{request.id}</strong><span className={`transport-priority priority-${priority.toLowerCase()}`}>Priority: {priority}</span></td>
+                                                <tr key={request.id}>
+                                                    <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
                                                     <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
                                                     <td>{request.requestedByName || 'Unassigned'}</td>
                                                     <td>{request.scaffoldingSystem || 'Kwikstage'}</td>
@@ -827,59 +758,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             </div>
                         )}
                     </section>
-
-                    <aside className="transport-management-detail">
-                        {selectedRequest ? (
-                            <>
-                                <div className="transport-management-detail-head">
-                                    <div><span>Order</span><h2>{selectedRequest.id}</h2></div>
-                                    <button type="button" onClick={() => setSelectedRequestId('')} aria-label="Close detail">x</button>
-                                </div>
-                                <section className="transport-management-panel">
-                                    <div className="transport-management-panel-title">
-                                        <strong>Picking Card Summary</strong>
-                                        <button type="button" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>Download PDF</button>
-                                    </div>
-                                    <dl className="transport-management-summary-grid">
-                                        <div><dt>Builder</dt><dd>{selectedRequest.builderName || '-'}</dd></div>
-                                        <div><dt>Project</dt><dd>{selectedRequest.projectName || '-'}</dd></div>
-                                        <div><dt>Delivery Address</dt><dd>{selectedSiteLocation || 'No site location saved'}</dd></div>
-                                        <div><dt>Requested By</dt><dd>{selectedRequest.requestedByName || '-'}</dd></div>
-                                        <div><dt>Scaffold System</dt><dd>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</dd></div>
-                                        <div><dt>Submitted</dt><dd>{formatDateTime(selectedRequest.submittedAt)}</dd></div>
-                                    </dl>
-                                    <div className="transport-management-items">
-                                        <div className="transport-management-items-head"><span>Item Description</span><span>Qty</span></div>
-                                        {selectedItems.length > 0 ? selectedItems.map(item => <div key={item.key}><span>{item.label}</span><strong>{item.qty}</strong></div>) : <p>No quantity lines were entered on this request.</p>}
-                                    </div>
-                                    <label className="transport-management-notes"><span>Notes</span><textarea readOnly value={selectedRequest.notes || selectedRequest.details || 'No notes supplied.'} /></label>
-                                </section>
-
-                                <section className="transport-management-panel">
-                                    <strong>Assign Truck</strong>
-                                    <div className="transport-management-truck-tabs">
-                                        {TRUCK_LANES.map(lane => <button key={lane.id} type="button" className={managementScheduleTruckId === lane.id ? 'active' : ''} onClick={() => setManagementScheduleTruckId(lane.id)}>{lane.rego}</button>)}
-                                    </div>
-                                    <div className="transport-management-schedule-grid">
-                                        <label><span>Date</span><input type="date" value={managementScheduleDate} onChange={(event) => setManagementScheduleDate(event.target.value)} /></label>
-                                        <label><span>Hour</span><select value={managementScheduleHour} onChange={(event) => setManagementScheduleHour(Number(event.target.value))}>{Array.from({ length: 12 }).map((_, index) => <option key={index} value={6 + index}>{formatTimeChip(6 + index, 0)}</option>)}</select></label>
-                                        <label><span>Minute</span><select value={managementScheduleMinute} onChange={(event) => setManagementScheduleMinute(Number(event.target.value))}>{[0, 15, 30, 45].map(minute => <option key={minute} value={minute}>{String(minute).padStart(2, '0')}</option>)}</select></label>
-                                    </div>
-                                    <div className="transport-management-route-card">
-                                        <div><span>From</span><strong>Ingleburn Yard</strong></div>
-                                        <div><span>To</span><strong>{selectedRequest.projectName || 'Selected project'}</strong></div>
-                                        <div><span>Planned Window</span><strong>{formatTimeChip(Number(managementScheduleHour), Number(managementScheduleMinute))}</strong></div>
-                                    </div>
-                                    <div className="transport-management-validation">
-                                        {!selectedSiteLocation ? <span>Site location is missing, route estimate may be limited.</span> : null}
-                                        {!selectedRequest.scheduledAtIso ? <span>Delivery has not been placed on the schedule yet.</span> : null}
-                                    </div>
-                                    <button type="button" className="transport-management-save" disabled={managementScheduleSaving || !isActive} onClick={() => saveManagementSchedule(selectedRequest)}>{managementScheduleSaving ? 'Saving...' : 'Save Schedule'}</button>
-                                    <button type="button" className="transport-management-secondary-action" onClick={() => onNavigate?.('truck-schedule')}>View Dynamic Schedule</button>
-                                </section>
-                            </>
-                        ) : <div className="transport-management-empty-detail">Select an order to review schedule details.</div>}
-                    </aside>
                 </div>
             </div>
         );

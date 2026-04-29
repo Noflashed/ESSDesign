@@ -315,14 +315,6 @@ function InspectorIcon({ type }) {
   return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
 }
 
-function requestPriorityLabel(request) {
-  const submitted = request?.submittedAt ? new Date(request.submittedAt).getTime() : Date.now();
-  const ageHours = Math.max(0, (Date.now() - submitted) / 3600000);
-  if (ageHours > 24) return 'High';
-  if (ageHours > 8) return 'Medium';
-  return 'Low';
-}
-
 function formatLastRefreshTime() {
   return new Date().toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -1013,17 +1005,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
           <div className="transport-reference-pending-tools">
             <label><span>Search pending requests...</span><input type="text" aria-label="Search pending requests" readOnly /></label>
-            <button type="button">All Priorities</button>
             <button type="button">Earliest First</button>
             <button type="button" className="active">▦</button>
             <button type="button">▤</button>
           </div>
           <div className="transport-reference-pending-list">
             {pendingRequests.length > 0 ? pendingRequests.slice(0, 6).map(request => {
-              const priority = requestPriorityLabel(request);
               return (
                 <article key={request.id} className="transport-reference-pending-card">
-                  <div><span className={`transport-priority priority-${priority.toLowerCase()}`}>{priority}</span><b>{request.id}</b></div>
+                  <div><b>{request.id}</b></div>
                   <strong>{request.builderName || 'Material Order'}</strong>
                   <span>{request.projectName || 'Awaiting site assignment'}</span>
                   <small>Requested by {request.requestedByName || 'Transport'}</small>

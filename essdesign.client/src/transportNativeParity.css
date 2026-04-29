@@ -2341,3 +2341,75 @@
     background: #f8fafc !important;
     opacity: 1 !important;
 }
+
+/* Transport cleanup: remove priority UI, flatten Schedule Management, compact search. */
+.transport-page-frame .transport-reference-pending-tools,
+.transport-desktop-workspace .transport-reference-pending-tools {
+    grid-template-columns: minmax(220px, 1fr) 120px 34px 34px !important;
+}
+
+.transport-page-frame .transport-reference-pending-card div,
+.transport-desktop-workspace .transport-reference-pending-card div {
+    justify-content: flex-start !important;
+}
+
+.transport-page-frame .transport-reference-pending-card div b,
+.transport-desktop-workspace .transport-reference-pending-card div b {
+    color: #475569 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-management-layout,
+.transport-desktop-workspace .transport-management-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.transport-page-frame .transport-management-main,
+.transport-desktop-workspace .transport-management-main {
+    border-right: 0 !important;
+}
+
+.transport-page-frame .transport-management-tools,
+.transport-desktop-workspace .transport-management-tools {
+    display: grid !important;
+    grid-template-columns: minmax(0, 340px) auto !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-search,
+.transport-desktop-workspace .transport-management-tools .material-ordering-queue-search {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    border-color: #dbe4f0 !important;
+    background: #ffffff !important;
+}
+
+.transport-page-frame .material-ordering-queue-search-icon,
+.transport-desktop-workspace .material-ordering-queue-search-icon {
+    color: #94a3b8 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-search input,
+.transport-desktop-workspace .transport-management-tools .material-ordering-queue-search input {
+    font-size: 12px !important;
+    line-height: 14px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-chip-row,
+.transport-desktop-workspace .transport-management-tools .material-ordering-queue-chip-row {
+    justify-content: flex-end !important;
+    gap: 8px !important;
+}
+
+.transport-page-frame .transport-management-tools .material-ordering-queue-chip,
+.transport-desktop-workspace .transport-management-tools .material-ordering-queue-chip {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    font-size: 11px !important;
+}
