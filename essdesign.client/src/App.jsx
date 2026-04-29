@@ -186,7 +186,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
-const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['design', 'site-information', 'settings']);
+const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -488,7 +488,6 @@ function App() {
         : isScaffoldDesigner
         ? [
             { key: 'design', label: 'ESS Design' },
-            { key: 'site-information', label: 'Site Registry' },
         ]
         : isTruckDeviceUser
         ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
@@ -560,7 +559,7 @@ function App() {
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
             : isScaffoldDesigner
-            ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'design')
+            ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'landing')
             : isTruckDeviceUser
             ? (transportPages.has(page) ? page : 'truck-schedule')
             : isTransportManagement
@@ -821,7 +820,7 @@ function App() {
             isEmployeePortalRole
                 ? 'employee-home'
                 : isScaffoldDesigner
-                ? 'design'
+                ? 'landing'
                 : (isTruckDeviceUser || isTransportManagement)
                 ? 'truck-schedule'
                 : 'landing',
@@ -1003,13 +1002,13 @@ function App() {
         const fallbackPage = isEmployeePortalRole
             ? 'employee-home'
             : isScaffoldDesigner
-            ? 'design'
+            ? 'landing'
             : (isTruckDeviceUser || isTransportManagement)
             ? 'truck-schedule'
             : 'landing';
         const pageFromUrl = urlParams.get('page') || fallbackPage;
         const resolvedPageFromUrl = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
-            ? 'design'
+            ? 'landing'
             : pageFromUrl;
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
@@ -1040,7 +1039,7 @@ function App() {
             const folderId = e.state?.folderId ?? null;
             const page = e.state?.page ?? fallbackPage;
             const resolvedPage = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
-                ? 'design'
+                ? 'landing'
                 : page;
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
