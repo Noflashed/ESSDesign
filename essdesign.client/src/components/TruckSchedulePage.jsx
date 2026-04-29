@@ -247,6 +247,11 @@ function getCollisionMessage(event, startMap, durationMap) {
   return `That slot overlaps ${event.builderName || 'another delivery'} (${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}).`;
 }
 
+function getSnapSideFromPointer(clientX, element) {
+  const rect = element.getBoundingClientRect();
+  return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+}
+
 function setScheduleDragImage(event, request, options = {}) {
   if (!event.dataTransfer || typeof document === 'undefined') {
     return;
@@ -1173,13 +1178,47 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     scheduleRequestAt(requestId, truckId, minutes, dragPreviewDurationMinutes);
   }, [dragPreviewDurationMinutes, draggedRequestId, scheduleRequestAt]);
 
-  const handleEventSnapDrop = useCallback((event, scheduleEvent, side) => {
+  const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
     if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
       return;
     }
     event.preventDefault();
     event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    const side = getSnapSideFromPointer(event.clientX, event.currentTarget);
+    const targetStart = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+    const targetDuration = eventDurationMinutesMap[scheduleEvent.orderId] ?? 90;
+    const nextStart = side === 'before'
+      ? clampScheduleMinutes(targetStart - dragPreviewDurationMinutes, dragPreviewDurationMinutes)
+      : clampScheduleMinutes(targetStart + targetDuration, dragPreviewDurationMinutes);
+    const collision = getScheduleCollision({
+      requestId,
+      truckId: scheduleEvent.truckId,
+      startMinutes: nextStart,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    setDropPreview({
+      truckId: scheduleEvent.truckId,
+      minutes: nextStart,
+      durationMinutes: dragPreviewDurationMinutes,
+      blocked: Boolean(collision),
+      snapOrderId: scheduleEvent.orderId,
+      snapSide: side,
+    });
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
+
+  const handleEventSnapDrop = useCallback((event, scheduleEvent) => {
+    const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const side = getSnapSideFromPointer(event.clientX, event.currentTarget);
     const targetStart = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
     const targetDuration = eventDurationMinutesMap[scheduleEvent.orderId] ?? 90;
     const nextStart = side === 'before'
@@ -1551,6 +1590,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           draggable={!dragSchedulingId}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
                           onDragEnd={handleScheduledDragEnd}
+                          onDragOver={(dragEvent) => handleEventSnapDragOver(dragEvent, event)}
+                          onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event)}
                           onContextMenu={(menuEvent) => {
                             menuEvent.preventDefault();
                             setTileMenu({
@@ -1561,32 +1602,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           }}
                         >
                           {draggedRequestId && draggedRequestId !== event.orderId ? (
-                            <>
-                              <button
-                                type="button"
-                                className="transport-snap-zone before"
-                                onDragOver={(dragEvent) => {
-                                  dragEvent.preventDefault();
-                                  dragEvent.dataTransfer.dropEffect = 'move';
-                                }}
-                                onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'before')}
-                                aria-label="Schedule before this delivery"
-                              >
-                                <span>+</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="transport-snap-zone after"
-                                onDragOver={(dragEvent) => {
-                                  dragEvent.preventDefault();
-                                  dragEvent.dataTransfer.dropEffect = 'move';
-                                }}
-                                onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'after')}
-                                aria-label="Schedule after this delivery"
-                              >
-                                <span>+</span>
-                              </button>
-                            </>
+                            <div
+                              className={`transport-snap-hover${dropPreview?.snapOrderId === event.orderId ? ` ${dropPreview.snapSide}` : ''}${dropPreview?.snapOrderId === event.orderId && dropPreview.blocked ? ' blocked' : ''}`}
+                              aria-hidden="true"
+                            />
                           ) : null}
                           <button
                             type="button"

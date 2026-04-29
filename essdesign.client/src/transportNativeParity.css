@@ -3230,6 +3230,55 @@
     opacity: 0.42 !important;
 }
 
+.transport-page-frame .transport-snap-hover,
+.transport-desktop-workspace .transport-snap-hover {
+    position: absolute !important;
+    inset: -7px !important;
+    z-index: 15 !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    transition: opacity 120ms ease !important;
+}
+
+.transport-page-frame .transport-snap-hover::before,
+.transport-desktop-workspace .transport-snap-hover::before {
+    content: "" !important;
+    position: absolute !important;
+    top: 5px !important;
+    bottom: 5px !important;
+    width: 10px !important;
+    border-radius: 999px !important;
+    background: #16a34a !important;
+    box-shadow: 0 0 0 5px rgba(22, 163, 74, 0.14), 0 0 22px rgba(22, 163, 74, 0.34) !important;
+    transform: scaleY(0.68) !important;
+    transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease !important;
+}
+
+.transport-page-frame .transport-snap-hover.before,
+.transport-page-frame .transport-snap-hover.after,
+.transport-desktop-workspace .transport-snap-hover.before,
+.transport-desktop-workspace .transport-snap-hover.after {
+    opacity: 1 !important;
+}
+
+.transport-page-frame .transport-snap-hover.before::before,
+.transport-desktop-workspace .transport-snap-hover.before::before {
+    left: -6px !important;
+    transform: scaleY(1) translateX(-2px) !important;
+}
+
+.transport-page-frame .transport-snap-hover.after::before,
+.transport-desktop-workspace .transport-snap-hover.after::before {
+    right: -6px !important;
+    transform: scaleY(1) translateX(2px) !important;
+}
+
+.transport-page-frame .transport-snap-hover.blocked::before,
+.transport-desktop-workspace .transport-snap-hover.blocked::before {
+    background: #dc2626 !important;
+    box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12), 0 0 18px rgba(220, 38, 38, 0.24) !important;
+}
+
 .transport-page-frame .transport-snap-zone,
 .transport-desktop-workspace .transport-snap-zone {
     position: absolute !important;
