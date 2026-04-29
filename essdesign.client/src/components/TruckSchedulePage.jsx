@@ -11,13 +11,13 @@ import {
   buildScheduleIso,
   deliveredTileAppearance,
   eventTruckIndex,
-  fetchRouteData,
   findProjectLocation,
   formatActionTimestamp,
   formatBoardDay,
   formatDistance,
   formatDuration,
   formatTimeChip,
+  getCachedRouteData,
   getCachedRouteEstimate,
   getCachedRouteEstimateValue,
   getDeliveryActionRows,
@@ -606,7 +606,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return `${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}`;
   }, [eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, selectedScheduleEvent, selectedScheduleTiming?.totalMinutes]);
   useEffect(() => {
-    if (!scheduleInspectorOpen || !selectedScheduleEvent || !selectedScheduleSiteLocation) {
+    if (!scheduleInspectorOpen || !selectedScheduleEventId || !selectedScheduleSiteLocation) {
       setSelectedScheduleRouteData(null);
       setSelectedScheduleRouteLoading(false);
       return undefined;
@@ -616,7 +616,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleRouteLoading(true);
     setSelectedScheduleRouteData(null);
 
-    fetchRouteData(selectedScheduleSiteLocation)
+    getCachedRouteData(selectedScheduleSiteLocation)
       .then(data => {
         if (active) {
           setSelectedScheduleRouteData(data);
@@ -636,7 +636,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [scheduleInspectorOpen, selectedScheduleEvent, selectedScheduleSiteLocation]);
+  }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleSiteLocation]);
   const selectedRouteDurationMinutes = useMemo(
     () => Math.max(30, selectedRouteEstimate?.durationMinutes ? selectedRouteEstimate.durationMinutes * 2 + 30 : 90),
     [selectedRouteEstimate],
@@ -697,7 +697,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setRequestModalLoading(false);
     if (siteLocation) {
       setRequestModalRouteLoading(true);
-      fetchRouteData(siteLocation)
+      getCachedRouteData(siteLocation)
         .then(data => setRequestModalRouteData(data))
         .finally(() => setRequestModalRouteLoading(false));
     }
@@ -729,7 +729,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setEventOverviewLoading(false);
     if (siteLocation) {
       setEventOverviewRouteLoading(true);
-      fetchRouteData(siteLocation)
+      getCachedRouteData(siteLocation)
         .then(data => setEventOverviewRouteData(data))
         .finally(() => setEventOverviewRouteLoading(false));
     }
@@ -841,7 +841,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
         <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
         <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}>⟳ Refresh</button>
-        <button type="button" className="transport-toolbar-button route">⟳ Route Analysis</button>
         {!isTruckRole ? (
           <label className="transport-toolbar-filter">
             <span>Truck Filter</span>

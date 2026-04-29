@@ -17,10 +17,12 @@ export const TRUCK_LANES = [
 
 const geocodeCache = new Map();
 const routeDataCache = new Map();
+const routeEstimatePromiseCache = new Map();
 const routeEstimateValueCache = new Map();
 let safetyBuildersCache = null;
 let safetyBuildersCacheAt = 0;
 const SAFETY_BUILDERS_CACHE_MS = 60 * 1000;
+const ROUTE_FETCH_TIMEOUT_MS = 8000;
 
 export function isTruckDeviceRole(role) {
   return role === 'truck_ess01' || role === 'truck_ess02' || role === 'truck_ess03';
@@ -230,29 +232,52 @@ export async function geocodeAddress(address) {
   if (!geocodeCache.has(key)) {
     geocodeCache.set(
       key,
-      fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`, {
+      fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`, {
         headers: {
           Accept: 'application/json',
-          'User-Agent': 'ESSDesignApp/1.0 (transport-suite)'
         },
       })
         .then(async response => {
-          if (!response.ok) {
+          if (!response?.ok) {
+            geocodeCache.delete(key);
             return null;
           }
           const data = await response.json();
           const first = data?.[0];
           if (!first?.lat || !first?.lon) {
+            geocodeCache.delete(key);
             return null;
           }
           const lat = Number(first.lat);
           const lon = Number(first.lon);
-          return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            geocodeCache.delete(key);
+            return null;
+          }
+          return { lat, lon };
         })
-        .catch(() => null),
+        .catch(() => {
+          geocodeCache.delete(key);
+          return null;
+        }),
     );
   }
   return geocodeCache.get(key);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = ROUTE_FETCH_TIMEOUT_MS) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    return await fetch(url, controller ? { ...options, signal: controller.signal } : options);
+  } catch {
+    return null;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export async function fetchRouteData(siteLocation) {
@@ -267,10 +292,10 @@ export async function fetchRouteData(siteLocation) {
     return null;
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://router.project-osrm.org/route/v1/driving/${yard.lon},${yard.lat};${site.lon},${site.lat}?overview=full&geometries=geojson`,
     { headers: { Accept: 'application/json' } },
-  ).catch(() => null);
+  );
 
   if (!response?.ok) {
     return null;
@@ -291,7 +316,7 @@ export async function fetchRouteData(siteLocation) {
   };
 }
 
-export async function getCachedRouteEstimate(siteLocation) {
+export async function getCachedRouteData(siteLocation) {
   const key = String(siteLocation || '').trim().toLowerCase();
   if (!key) {
     return null;
@@ -300,6 +325,25 @@ export async function getCachedRouteEstimate(siteLocation) {
     routeDataCache.set(
       key,
       fetchRouteData(siteLocation).then(routeData => {
+        if (!routeData) {
+          routeDataCache.delete(key);
+        }
+        return routeData;
+      }),
+    );
+  }
+  return routeDataCache.get(key);
+}
+
+export async function getCachedRouteEstimate(siteLocation) {
+  const key = String(siteLocation || '').trim().toLowerCase();
+  if (!key) {
+    return null;
+  }
+  if (!routeEstimatePromiseCache.has(key)) {
+    routeEstimatePromiseCache.set(
+      key,
+      getCachedRouteData(siteLocation).then(routeData => {
         const estimate = routeData
           ? {
               durationMinutes: Math.max(1, Math.round(routeData.durationSeconds / 60)),
@@ -307,11 +351,14 @@ export async function getCachedRouteEstimate(siteLocation) {
             }
           : null;
         routeEstimateValueCache.set(key, estimate);
+        if (!estimate) {
+          routeEstimatePromiseCache.delete(key);
+        }
         return estimate;
       }),
     );
   }
-  return routeDataCache.get(key);
+  return routeEstimatePromiseCache.get(key);
 }
 
 export function getCachedRouteEstimateValue(siteLocation) {
