@@ -253,15 +253,6 @@ function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSite
   };
 }
 
-function LegendDot({ color, label }) {
-  return (
-    <span className="ts2-legend-item">
-      <span className="ts2-legend-dot" style={{ backgroundColor: color }} />
-      {label}
-    </span>
-  );
-}
-
 function TruckLaneIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#102B5C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -271,6 +262,42 @@ function TruckLaneIcon() {
       <circle cx="17.5" cy="17.5" r="1.5" />
     </svg>
   );
+}
+
+function ToolbarIcon({ type }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+  if (type === 'chevron-left') {
+    return <svg {...common}><path d="m15 18-6-6 6-6" /></svg>;
+  }
+  if (type === 'chevron-right') {
+    return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>;
+  }
+  if (type === 'calendar') {
+    return <svg {...common}><path d="M8 2v4M16 2v4" /><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18" /></svg>;
+  }
+  if (type === 'refresh') {
+    return <svg {...common}><path d="M20 11a8 8 0 1 0 2.3 5.7" /><path d="M20 4v7h-7" /></svg>;
+  }
+  if (type === 'analysis') {
+    return <svg {...common}><path d="M4 19h16" /><path d="M7 15V9" /><path d="M12 15V5" /><path d="M17 15v-3" /></svg>;
+  }
+  if (type === 'filter') {
+    return <svg {...common}><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>;
+  }
+  if (type === 'more') {
+    return <svg {...common}><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none" /></svg>;
+  }
+  return null;
 }
 
 function InspectorIcon({ type }) {
@@ -313,6 +340,22 @@ function InspectorIcon({ type }) {
     return <svg {...common}><path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z" /><path d="M9 3v15M15 6v15" /></svg>;
   }
   return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
+}
+
+function ScheduleLegend() {
+  return (
+    <div className="transport-reference-legend">
+      <span className="transport-reference-legend-label">Legend:</span>
+      <span className="transport-reference-legend-icon-item"><InspectorIcon type="truck" />Travel</span>
+      <span className="transport-reference-legend-icon-item"><InspectorIcon type="unload" />Unload</span>
+      <span className="transport-reference-legend-icon-item"><InspectorIcon type="return" />Return</span>
+      <span className="transport-reference-legend-pill scheduled">Scheduled</span>
+      <span className="transport-reference-legend-pill in-transit">In Transit</span>
+      <span className="transport-reference-legend-pill unloading">Unloading</span>
+      <span className="transport-reference-legend-pill return-transit">Return Transit</span>
+      <span className="transport-reference-legend-pill complete">Complete</span>
+    </div>
+  );
 }
 
 function formatLastRefreshTime() {
@@ -827,12 +870,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       </div>
 
       <div className="transport-reference-toolbar">
-        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
-        <button type="button" className="transport-toolbar-date">{selectedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</button>
-        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(startOfDay(new Date()))}>▣</button>
-        <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
+        <div className="transport-toolbar-date-group">
+          <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))} aria-label="Previous day"><ToolbarIcon type="chevron-left" /></button>
+          <button type="button" className="transport-toolbar-date" onClick={() => setSelectedDate(startOfDay(new Date()))}>
+            <span>{selectedDate.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            <ToolbarIcon type="calendar" />
+          </button>
+          <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))} aria-label="Next day"><ToolbarIcon type="chevron-right" /></button>
+        </div>
         <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
-        <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}>⟳ Refresh</button>
+        <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}><ToolbarIcon type="refresh" />Refresh</button>
+        <button type="button" className="transport-toolbar-button route" disabled={!selectedScheduleEvent} onClick={() => selectedScheduleEvent && openEventOverview(selectedScheduleEvent)}><ToolbarIcon type="analysis" />Route Analysis</button>
         {!isTruckRole ? (
           <label className="transport-toolbar-filter">
             <span>Truck Filter</span>
@@ -842,8 +890,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </select>
           </label>
         ) : null}
-        <button type="button" className="transport-toolbar-icon">⌯</button>
-        <button type="button" className="transport-toolbar-icon">⋯</button>
+        <button type="button" className="transport-toolbar-icon" aria-label="Filter options"><ToolbarIcon type="filter" /></button>
+        <button type="button" className="transport-toolbar-icon" aria-label="More options"><ToolbarIcon type="more" /></button>
       </div>
 
       {error ? <div className="ts2-error">{error}</div> : null}
@@ -897,14 +945,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
             <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
           </div>
-        </div>
-
-        <div className="ts2-legend-row ts2-legend-row-inline">
-          <LegendDot color="#16A34A" label="Scheduled" />
-          <LegendDot color="#2563EB" label="In transit" />
-          <LegendDot color="#F47C20" label="Offloading" />
-          <LegendDot color="#7C3AED" label="Delivered" />
-          <LegendDot color="#6B7280" label="Return transit" />
         </div>
 
         <div className="ts2-board-scroll" ref={boardScrollRef}>
@@ -999,6 +1039,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       </div>
       {!isTruckRole ? (
         <section className="transport-reference-pending">
+          <ScheduleLegend />
           <div className="transport-reference-pending-head">
             <strong>Pending Requests ({pendingRequests.length})</strong>
             <button type="button" onClick={() => setShowPendingPanel(open => !open)}>{showPendingPanel ? 'Collapse' : 'Expand'}</button>
@@ -1025,6 +1066,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
         </section>
       ) : null}
+      {isTruckRole ? <ScheduleLegend /> : null}
       </div>
       {scheduleInspectorOpen ? (
       <aside className="transport-schedule-inspector">

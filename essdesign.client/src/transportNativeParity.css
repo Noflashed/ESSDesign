@@ -2413,3 +2413,213 @@
     border-radius: 10px !important;
     font-size: 11px !important;
 }
+
+/* Dynamic Schedule: match reference toolbar + bottom legend strip more closely. */
+.transport-page-frame .transport-reference-toolbar,
+.transport-desktop-workspace .transport-reference-toolbar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 48px !important;
+    padding: 12px 14px !important;
+    border-top: 1px solid #e5edf5 !important;
+    border-bottom: 1px solid #e5edf5 !important;
+    background: #ffffff !important;
+}
+
+.transport-page-frame .transport-toolbar-date-group,
+.transport-desktop-workspace .transport-toolbar-date-group {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.transport-page-frame .transport-toolbar-icon,
+.transport-desktop-workspace .transport-toolbar-icon,
+.transport-page-frame .transport-toolbar-date,
+.transport-desktop-workspace .transport-toolbar-date,
+.transport-page-frame .transport-toolbar-button,
+.transport-desktop-workspace .transport-toolbar-button,
+.transport-page-frame .transport-toolbar-filter select,
+.transport-desktop-workspace .transport-toolbar-filter select {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    height: 38px !important;
+    border: 1px solid #d7e0eb !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-toolbar-icon,
+.transport-desktop-workspace .transport-toolbar-icon {
+    width: 38px !important;
+    padding: 0 !important;
+}
+
+.transport-page-frame .transport-toolbar-date,
+.transport-desktop-workspace .transport-toolbar-date {
+    min-width: 118px !important;
+    justify-content: space-between !important;
+    padding: 0 12px !important;
+}
+
+.transport-page-frame .transport-toolbar-button,
+.transport-desktop-workspace .transport-toolbar-button {
+    padding: 0 14px !important;
+}
+
+.transport-page-frame .transport-toolbar-button.route,
+.transport-desktop-workspace .transport-toolbar-button.route {
+    border-color: #a8c4fb !important;
+    background: #f8fbff !important;
+    color: #2563eb !important;
+}
+
+.transport-page-frame .transport-toolbar-button:disabled,
+.transport-desktop-workspace .transport-toolbar-button:disabled {
+    opacity: 0.52 !important;
+}
+
+.transport-page-frame .transport-live-refresh,
+.transport-desktop-workspace .transport-live-refresh {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    margin-left: 10px !important;
+    color: #334155 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-live-refresh i,
+.transport-desktop-workspace .transport-live-refresh i {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 999px !important;
+    background: #16a34a !important;
+}
+
+.transport-page-frame .transport-live-refresh b,
+.transport-desktop-workspace .transport-live-refresh b {
+    padding: 2px 6px !important;
+    border-radius: 999px !important;
+    background: #dcfce7 !important;
+    color: #15803d !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-toolbar-filter,
+.transport-desktop-workspace .transport-toolbar-filter {
+    display: grid !important;
+    gap: 3px !important;
+    margin-left: auto !important;
+}
+
+.transport-page-frame .transport-toolbar-filter span,
+.transport-desktop-workspace .transport-toolbar-filter span {
+    color: #64748b !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-toolbar-filter select,
+.transport-desktop-workspace .transport-toolbar-filter select {
+    min-width: 148px !important;
+    padding: 0 10px !important;
+    justify-content: space-between !important;
+}
+
+.transport-page-frame .transport-reference-legend,
+.transport-desktop-workspace .transport-reference-legend {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 34px !important;
+    padding: 0 0 10px !important;
+}
+
+.transport-page-frame .transport-reference-legend-label,
+.transport-desktop-workspace .transport-reference-legend-label {
+    color: #475569 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-reference-legend-icon-item,
+.transport-desktop-workspace .transport-reference-legend-icon-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    color: #475569 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-reference-legend-icon-item svg,
+.transport-desktop-workspace .transport-reference-legend-icon-item svg {
+    width: 12px !important;
+    height: 12px !important;
+    color: #4b5563 !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill,
+.transport-desktop-workspace .transport-reference-legend-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 22px !important;
+    padding: 0 9px !important;
+    border-radius: 999px !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-weight: 700 !important;
+    border: 1px solid transparent !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill.scheduled,
+.transport-desktop-workspace .transport-reference-legend-pill.scheduled {
+    background: #eaf8ee !important;
+    color: #15803d !important;
+    border-color: #b9e4c6 !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill.in-transit,
+.transport-desktop-workspace .transport-reference-legend-pill.in-transit {
+    background: #e8f0ff !important;
+    color: #2563eb !important;
+    border-color: #bfd2ff !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill.unloading,
+.transport-desktop-workspace .transport-reference-legend-pill.unloading {
+    background: #fff0e3 !important;
+    color: #f47c20 !important;
+    border-color: #ffd0ab !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill.return-transit,
+.transport-desktop-workspace .transport-reference-legend-pill.return-transit {
+    background: #eef2f7 !important;
+    color: #6b7280 !important;
+    border-color: #d5dbe4 !important;
+}
+
+.transport-page-frame .transport-reference-legend-pill.complete,
+.transport-desktop-workspace .transport-reference-legend-pill.complete {
+    background: #ebfdf3 !important;
+    color: #16a34a !important;
+    border-color: #b8f0cb !important;
+}
+
+.transport-page-frame .transport-reference-pending,
+.transport-desktop-workspace .transport-reference-pending {
+    padding-top: 12px !important;
+}
