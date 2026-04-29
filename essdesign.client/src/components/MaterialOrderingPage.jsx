@@ -852,6 +852,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         ) : (
                             <div className="transport-management-table-wrap">
                                 <table className="transport-management-table">
+                                    <colgroup>
+                                        <col className="transport-management-col-details" />
+                                        <col className="transport-management-col-builder" />
+                                        <col className="transport-management-col-requested" />
+                                        <col className="transport-management-col-system" />
+                                        <col className="transport-management-col-submitted" />
+                                        <col className="transport-management-col-truck" />
+                                        <col className="transport-management-col-time" />
+                                        <col className="transport-management-col-status" />
+                                        <col className="transport-management-col-pdf" />
+                                        {isActive ? <col className="transport-management-col-action" /> : null}
+                                    </colgroup>
                                     <thead>
                                         <tr>
                                             <th>Scaffold Details</th>
@@ -892,8 +904,12 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                                                 }}
                                                                 disabled={saving}
                                                             >
-                                                                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                                                                    <path d="M6.25 2.5h3.5l.5 1H13a.75.75 0 0 1 0 1.5h-.63l-.43 6.38A1.75 1.75 0 0 1 10.2 13H5.8a1.75 1.75 0 0 1-1.74-1.62L3.63 5H3a.75.75 0 0 1 0-1.5h2.75l.5-1Zm-.98 2.5.29 6.27a.25.25 0 0 0 .24.23h4.4a.25.25 0 0 0 .24-.23L10.73 5H5.27Zm1.48 1.25a.75.75 0 0 1 .75.75v2.75a.75.75 0 0 1-1.5 0V7a.75.75 0 0 1 .75-.75Zm2.5 0A.75.75 0 0 1 10 7v2.75a.75.75 0 0 1-1.5 0V7a.75.75 0 0 1 .75-.75Z" fill="currentColor" />
+                                                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                                    <path d="M3 6h18" />
+                                                                    <path d="M8 6V4h8v2" />
+                                                                    <path d="M18 6l-.7 13.2A2 2 0 0 1 15.3 21H8.7a2 2 0 0 1-2-1.8L6 6" />
+                                                                    <path d="M10 11v5" />
+                                                                    <path d="M14 11v5" />
                                                                 </svg>
                                                             </button>
                                                         </td>

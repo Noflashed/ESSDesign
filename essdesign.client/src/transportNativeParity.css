@@ -2623,10 +2623,12 @@
 
 .transport-page-frame .transport-management-row-action-cell,
 .transport-desktop-workspace .transport-management-row-action-cell {
-    width: 28px !important;
-    padding-left: 2px !important;
+    width: 22px !important;
+    min-width: 22px !important;
+    padding-left: 0 !important;
     padding-right: 4px !important;
-    text-align: right !important;
+    text-align: center !important;
+    vertical-align: middle !important;
 }
 
 .transport-page-frame .transport-management-row-delete,
@@ -2634,21 +2636,29 @@
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 22px !important;
-    height: 22px !important;
-    border: 1px solid rgba(248, 113, 113, 0.24) !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    padding: 0 !important;
+    border: 1px solid transparent !important;
     border-radius: 999px !important;
-    background: rgba(254, 242, 242, 0.96) !important;
+    background: transparent !important;
     color: #dc2626 !important;
     opacity: 0 !important;
-    transform: scale(0.86) !important;
-    transition: opacity 120ms ease, transform 120ms ease, background-color 120ms ease !important;
+    transform: scale(0.78) !important;
+    transition: opacity 120ms ease, transform 120ms ease, background-color 120ms ease, border-color 120ms ease !important;
 }
 
 .transport-page-frame .transport-management-row-delete svg,
 .transport-desktop-workspace .transport-management-row-delete svg {
-    width: 10px !important;
-    height: 10px !important;
+    width: 11px !important;
+    height: 11px !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 2 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    pointer-events: none !important;
 }
 
 .transport-page-frame .transport-management-table tr:hover .transport-management-row-delete,
@@ -2663,13 +2673,78 @@
 .transport-page-frame .transport-management-row-delete:focus-visible,
 .transport-desktop-workspace .transport-management-row-delete:hover,
 .transport-desktop-workspace .transport-management-row-delete:focus-visible {
-    background: #fee2e2 !important;
+    background: #fef2f2 !important;
+    border-color: #fecaca !important;
     outline: none !important;
 }
 
 .transport-page-frame .transport-management-row-delete:disabled,
 .transport-desktop-workspace .transport-management-row-delete:disabled {
     opacity: 0.3 !important;
+}
+
+.transport-page-frame .transport-management-table,
+.transport-desktop-workspace .transport-management-table {
+    table-layout: auto !important;
+    min-width: clamp(900px, 100%, 1180px) !important;
+}
+
+.transport-page-frame .transport-management-table th,
+.transport-page-frame .transport-management-table td,
+.transport-desktop-workspace .transport-management-table th,
+.transport-desktop-workspace .transport-management-table td {
+    padding-left: clamp(8px, 0.8vw, 14px) !important;
+    padding-right: clamp(8px, 0.8vw, 14px) !important;
+}
+
+.transport-page-frame .transport-management-col-details,
+.transport-desktop-workspace .transport-management-col-details {
+    width: 20% !important;
+}
+
+.transport-page-frame .transport-management-col-builder,
+.transport-desktop-workspace .transport-management-col-builder {
+    width: 18% !important;
+}
+
+.transport-page-frame .transport-management-col-requested,
+.transport-desktop-workspace .transport-management-col-requested {
+    width: 12% !important;
+}
+
+.transport-page-frame .transport-management-col-system,
+.transport-desktop-workspace .transport-management-col-system {
+    width: 9% !important;
+}
+
+.transport-page-frame .transport-management-col-submitted,
+.transport-desktop-workspace .transport-management-col-submitted {
+    width: 12% !important;
+}
+
+.transport-page-frame .transport-management-col-truck,
+.transport-desktop-workspace .transport-management-col-truck {
+    width: 8% !important;
+}
+
+.transport-page-frame .transport-management-col-time,
+.transport-desktop-workspace .transport-management-col-time {
+    width: 13% !important;
+}
+
+.transport-page-frame .transport-management-col-status,
+.transport-desktop-workspace .transport-management-col-status {
+    width: 9% !important;
+}
+
+.transport-page-frame .transport-management-col-pdf,
+.transport-desktop-workspace .transport-management-col-pdf {
+    width: 56px !important;
+}
+
+.transport-page-frame .transport-management-col-action,
+.transport-desktop-workspace .transport-management-col-action {
+    width: 24px !important;
 }
 
 .transport-page-frame .transport-management-detail-actions,
