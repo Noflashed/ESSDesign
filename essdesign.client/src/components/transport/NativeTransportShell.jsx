@@ -1,5 +1,7 @@
 import React from 'react';
 
+const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+
 function TransportIcon({ type }) {
   const common = {
     width: 16,
@@ -66,8 +68,7 @@ export default function NativeTransportShell({
       <aside className="transport-desktop-rail">
         <div className="transport-desktop-rail-top">
           <div className="transport-desktop-brand">
-            <strong>ESS</strong>
-            <span>Transport</span>
+            <img src={ESS_LOGO_URL} alt="ESS Transport" className="transport-desktop-brand-logo" />
           </div>
           <nav className="transport-desktop-nav" aria-label="ESS Transport">
             {navItems.map(item => {
