@@ -95,7 +95,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -124,7 +124,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -150,7 +150,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -172,7 +172,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -305,7 +305,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -326,7 +326,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -352,7 +352,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -379,7 +379,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -513,7 +513,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireAdminAsync();
+                var adminResult = await RequireDesignManagerAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -828,7 +828,7 @@ namespace ESSDesign.Server.Controllers
             return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
         }
 
-        private async Task<(UserInfo? User, ActionResult? Error)> RequireAdminAsync()
+        private async Task<(UserInfo? User, ActionResult? Error)> RequireDesignManagerAsync()
         {
             var currentUser = await GetCurrentUserAsync();
             if (currentUser == null)
@@ -836,9 +836,13 @@ namespace ESSDesign.Server.Controllers
                 return (null, Unauthorized(new { error = "Not authenticated" }));
             }
 
-            if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+            var canManageDesign =
+                string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.ScaffoldDesigner, StringComparison.OrdinalIgnoreCase);
+
+            if (!canManageDesign)
             {
-                return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" }));
+                return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Design manager access required" }));
             }
 
             return (currentUser, null);

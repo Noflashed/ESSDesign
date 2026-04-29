@@ -1070,6 +1070,7 @@ function App() {
     }, []);
     const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
     const isAdmin = user?.role === 'admin';
+    const canManageEssDesign = isAdmin || isScaffoldDesigner;
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = getRoleDisplayName(user?.role);
     const userInitials = user?.fullName
@@ -1202,7 +1203,7 @@ function App() {
                     viewMode={viewMode}
                     onViewModeChange={handleViewModeChange}
                     onRefreshNeeded={triggerRefresh}
-                    canManage={isAdmin}
+                    canManage={canManageEssDesign}
                 />
             </div>
         );
