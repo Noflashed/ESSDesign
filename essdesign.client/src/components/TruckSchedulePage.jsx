@@ -50,8 +50,10 @@ const TRACK_GUTTER = 14;
 const TRACK_OFFSET = LANE_META_WIDTH + TRACK_GUTTER;
 const TIME_PICKER_MINUTE_STEP = 15;
 const DRAG_SCHEDULE_MINUTE_STEP = 1;
+const SNAP_EDGE_THRESHOLD_MINUTES = 10;
 const OPTIMISTIC_BOARD_LOCK_MS = 12000;
 const OPTIMISTIC_BOARD_SUCCESS_LOCK_MS = 8000;
+const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 
 function dedupeRequests(items) {
@@ -59,6 +61,24 @@ function dedupeRequests(items) {
   (items || []).forEach(item => {
     if (item?.id) {
       map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
+}
+
+function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) {
+  const map = new Map((requests || []).filter(item => item?.id).map(item => [item.id, item]));
+  overrides.forEach((entry, requestId) => {
+    if (!entry || entry.expiresAt <= now) {
+      overrides.delete(requestId);
+      return;
+    }
+    if (entry.deleted) {
+      map.delete(requestId);
+      return;
+    }
+    if (entry.request) {
+      map.set(requestId, { ...(map.get(requestId) || {}), ...entry.request });
     }
   });
   return Array.from(map.values());
@@ -251,9 +271,35 @@ function getCollisionMessage(event, startMap, durationMap) {
   return `That slot overlaps ${event.builderName || 'another delivery'} (${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}).`;
 }
 
-function getSnapSideFromPointer(clientX, element) {
-  const rect = element.getBoundingClientRect();
-  return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+function getEdgeSnapCandidate({ requestId, truckId, startMinutes, durationMinutes, dayEvents, startMap, durationMap, thresholdMinutes = SNAP_EDGE_THRESHOLD_MINUTES }) {
+  const endMinutes = startMinutes + durationMinutes;
+  let best = null;
+  dayEvents.forEach(event => {
+    if (event.truckId !== truckId || event.orderId === requestId) {
+      return;
+    }
+    const existingStart = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+    const existingEnd = existingStart + (durationMap[event.orderId] ?? 90);
+    const beforeDistance = Math.abs(endMinutes - existingStart);
+    const afterDistance = Math.abs(startMinutes - existingEnd);
+    if (beforeDistance <= thresholdMinutes && (!best || beforeDistance < best.distance)) {
+      best = {
+        event,
+        side: 'before',
+        minutes: clampScheduleMinutes(existingStart - durationMinutes, durationMinutes),
+        distance: beforeDistance,
+      };
+    }
+    if (afterDistance <= thresholdMinutes && (!best || afterDistance < best.distance)) {
+      best = {
+        event,
+        side: 'after',
+        minutes: clampScheduleMinutes(existingEnd, durationMinutes),
+        distance: afterDistance,
+      };
+    }
+  });
+  return best;
 }
 
 function sameDropPreview(left, right) {
@@ -628,6 +674,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
   const optimisticBoardLockUntilRef = useRef(0);
+  const optimisticRequestOverridesRef = useRef(new Map());
   const dragPointerOffsetMinutesRef = useRef(0);
 
   const visibleTruckLanes = useMemo(() => {
@@ -650,7 +697,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         materialOrderRequestsAPI.listActiveRequests({ includeArchived: true }).catch(() => []),
         materialOrderRequestsAPI.listArchivedRequests().catch(() => []),
       ]);
-      const merged = dedupeRequests([...active, ...archived]);
+      const merged = applyOptimisticRequestOverrides(
+        dedupeRequests([...active, ...archived]),
+        optimisticRequestOverridesRef.current,
+      );
       setAllRequests(merged);
       const dateKey = formatDateKey(selectedDate);
       const requestsForDay = merged.filter(request => request.scheduledDate === dateKey);
@@ -982,6 +1032,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleEventId(requestId);
     setScheduleInspectorOpen(true);
     closeRequestModal();
+    optimisticRequestOverridesRef.current.set(requestId, {
+      request: updatedRequest,
+      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    });
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
     materialOrderRequestsAPI.setSchedule(requestId, {
@@ -997,6 +1051,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       })
       .catch(err => {
         optimisticBoardLockUntilRef.current = 0;
+        optimisticRequestOverridesRef.current.delete(requestId);
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1090,6 +1145,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDragPreviewDurationMinutes(90);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
+    if (updatedRequest) {
+      optimisticRequestOverridesRef.current.set(requestId, {
+        request: updatedRequest,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
+    }
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
     materialOrderRequestsAPI.setSchedule(requestId, {
@@ -1105,6 +1166,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       })
       .catch(err => {
         optimisticBoardLockUntilRef.current = 0;
+        optimisticRequestOverridesRef.current.delete(requestId);
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1184,7 +1246,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
     });
-    const collision = getScheduleCollision({
+    const snapCandidate = getEdgeSnapCandidate({
       requestId: draggedRequestId,
       truckId,
       startMinutes: minutes,
@@ -1193,7 +1255,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
-    const nextPreview = { truckId, minutes, durationMinutes: dragPreviewDurationMinutes, blocked: Boolean(collision) };
+    const previewMinutes = snapCandidate?.minutes ?? minutes;
+    const collision = getScheduleCollision({
+      requestId: draggedRequestId,
+      truckId,
+      startMinutes: previewMinutes,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    const nextPreview = {
+      truckId,
+      minutes: previewMinutes,
+      durationMinutes: dragPreviewDurationMinutes,
+      blocked: Boolean(collision),
+      snapOrderId: snapCandidate?.event?.orderId,
+      snapSide: snapCandidate?.side,
+    };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
   }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
 
@@ -1214,8 +1293,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
     });
-    scheduleRequestAt(requestId, truckId, minutes, dragPreviewDurationMinutes);
-  }, [dragPreviewDurationMinutes, draggedRequestId, scheduleRequestAt]);
+    const snapCandidate = getEdgeSnapCandidate({
+      requestId,
+      truckId,
+      startMinutes: minutes,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    scheduleRequestAt(requestId, truckId, snapCandidate?.minutes ?? minutes, dragPreviewDurationMinutes, snapCandidate ? { exact: true } : undefined);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
 
   const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
@@ -1225,16 +1313,32 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
-    const side = getSnapSideFromPointer(event.clientX, event.currentTarget);
-    const targetStart = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
-    const targetDuration = eventDurationMinutesMap[scheduleEvent.orderId] ?? 90;
-    const nextStart = side === 'before'
-      ? clampScheduleMinutes(targetStart - dragPreviewDurationMinutes, dragPreviewDurationMinutes)
-      : clampScheduleMinutes(targetStart + targetDuration, dragPreviewDurationMinutes);
+    const laneTrack = event.currentTarget.closest('.ts2-lane-track');
+    if (!laneTrack) {
+      return;
+    }
+    const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
+      durationMinutes: dragPreviewDurationMinutes,
+      pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+    });
+    const snapCandidate = getEdgeSnapCandidate({
+      requestId,
+      truckId: scheduleEvent.truckId,
+      startMinutes: freeStart,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
+    });
+    if (!snapCandidate) {
+      setDropPreview(current => current?.snapOrderId === scheduleEvent.orderId ? null : current);
+      return;
+    }
     const collision = getScheduleCollision({
       requestId,
       truckId: scheduleEvent.truckId,
-      startMinutes: nextStart,
+      startMinutes: snapCandidate.minutes,
       durationMinutes: dragPreviewDurationMinutes,
       dayEvents,
       startMap: eventStartMinutesMap,
@@ -1242,11 +1346,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     const nextPreview = {
       truckId: scheduleEvent.truckId,
-      minutes: nextStart,
+      minutes: snapCandidate.minutes,
       durationMinutes: dragPreviewDurationMinutes,
       blocked: Boolean(collision),
-      snapOrderId: scheduleEvent.orderId,
-      snapSide: side,
+      snapOrderId: snapCandidate.event.orderId,
+      snapSide: snapCandidate.side,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
   }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
@@ -1258,14 +1362,29 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     event.preventDefault();
     event.stopPropagation();
-    const side = getSnapSideFromPointer(event.clientX, event.currentTarget);
-    const targetStart = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
-    const targetDuration = eventDurationMinutesMap[scheduleEvent.orderId] ?? 90;
-    const nextStart = side === 'before'
-      ? clampScheduleMinutes(targetStart - dragPreviewDurationMinutes, dragPreviewDurationMinutes)
-      : clampScheduleMinutes(targetStart + targetDuration, dragPreviewDurationMinutes);
-    scheduleRequestAt(requestId, scheduleEvent.truckId, nextStart, dragPreviewDurationMinutes, { exact: true });
-  }, [dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+    const laneTrack = event.currentTarget.closest('.ts2-lane-track');
+    if (!laneTrack) {
+      return;
+    }
+    const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
+      durationMinutes: dragPreviewDurationMinutes,
+      pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+    });
+    const snapCandidate = getEdgeSnapCandidate({
+      requestId,
+      truckId: scheduleEvent.truckId,
+      startMinutes: freeStart,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
+    });
+    if (!snapCandidate) {
+      return;
+    }
+    scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, { exact: true });
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
 
   const handleUnscheduleOrder = useCallback((requestId) => {
     if (!requestId) {
@@ -1320,6 +1439,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
     }
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    if (updatedRequest) {
+      optimisticRequestOverridesRef.current.set(requestId, {
+        request: updatedRequest,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
+    }
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
     materialOrderRequestsAPI.clearSchedule(requestId)
@@ -1329,6 +1454,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       })
       .catch(err => {
         optimisticBoardLockUntilRef.current = 0;
+        optimisticRequestOverridesRef.current.delete(requestId);
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1377,6 +1503,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return next;
     });
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    optimisticRequestOverridesRef.current.set(requestId, {
+      deleted: true,
+      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    });
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
     materialOrderRequestsAPI.deleteRequest(requestId)
@@ -1386,6 +1516,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       })
       .catch(err => {
         optimisticBoardLockUntilRef.current = 0;
+        optimisticRequestOverridesRef.current.delete(requestId);
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
