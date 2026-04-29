@@ -3423,6 +3423,151 @@
     cursor: wait;
 }
 
+.transport-manual-time-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100% - 32px));
+    padding: 16px;
+    border: 1px solid #d7e0eb;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+}
+
+.transport-manual-time-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 12px;
+    align-items: start;
+}
+
+.transport-manual-time-head span,
+.transport-manual-time-field span,
+.transport-manual-time-summary span {
+    display: block;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 800;
+}
+
+.transport-manual-time-head h2 {
+    margin: 4px 0 0;
+    color: #102b5c;
+    font-size: 16px;
+    line-height: 20px;
+    font-weight: 850;
+}
+
+.transport-manual-time-head p {
+    margin: 4px 0 0;
+    color: #334155;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 650;
+}
+
+.transport-manual-time-close {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d7e0eb;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.transport-manual-time-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.transport-manual-time-summary div {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+
+.transport-manual-time-summary strong {
+    display: block;
+    margin-top: 3px;
+    color: #102b5c;
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 800;
+}
+
+.transport-manual-time-field {
+    display: grid;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.transport-manual-time-field input {
+    width: 100%;
+    height: 40px;
+    padding: 0 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    color: #102b5c;
+    font-size: 14px;
+    font-weight: 800;
+    background: #ffffff;
+}
+
+.transport-manual-time-field input:focus {
+    border-color: #2563eb;
+    outline: 3px solid rgba(37, 99, 235, 0.14);
+}
+
+.transport-manual-time-error {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    background: #fff7ed;
+    color: #c2410c;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 750;
+}
+
+.transport-manual-time-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.transport-manual-time-actions button {
+    min-height: 38px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.transport-manual-time-secondary {
+    border: 1px solid #d7e0eb;
+    background: #ffffff;
+    color: #102b5c;
+}
+
+.transport-manual-time-primary {
+    border: 1px solid #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
 @keyframes transportDropPreviewPulse {
     from {
         box-shadow: 0 8px 20px rgba(22, 163, 74, 0.10);

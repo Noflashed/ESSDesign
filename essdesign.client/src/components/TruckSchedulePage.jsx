@@ -719,6 +719,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [dropPreview, setDropPreview] = useState(null);
   const [dragSchedulingId, setDragSchedulingId] = useState('');
   const [tileMenu, setTileMenu] = useState(null);
+  const [manualTimeModal, setManualTimeModal] = useState(null);
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
@@ -928,6 +929,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       Boolean(eventOverviewModal.siteLocation),
     );
   }, [eventOverviewModal]);
+  const manualTimeEvent = useMemo(
+    () => manualTimeModal ? dayEvents.find(event => event.orderId === manualTimeModal.requestId) || null : null,
+    [dayEvents, manualTimeModal],
+  );
+  const manualTimeRequest = manualTimeEvent ? requestMetaMap[manualTimeEvent.orderId] : null;
+  const manualTimeDurationMinutes = manualTimeModal ? eventDurationMinutesMap[manualTimeModal.requestId] ?? 90 : 90;
 
   const openRequestModal = useCallback(async requestId => {
     setRequestModalLoading(true);
@@ -1226,35 +1233,70 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap, selectedDate]);
 
-  const handleManualScheduleTime = useCallback((requestId) => {
+  const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
     if (!scheduleEvent) {
       setTileMenu(null);
       return;
     }
-    const durationMinutes = eventDurationMinutesMap[requestId] ?? 90;
     const currentStart = eventStartMinutesMap[requestId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
-    const input = window.prompt('Enter start time (for example 09:30 or 2:15 PM)', formatManualTimeInput(currentStart));
-    if (input === null) {
-      setTileMenu(null);
+    setTileMenu(null);
+    setManualTimeModal({
+      requestId,
+      value: formatManualTimeInput(currentStart),
+      error: '',
+    });
+  }, [dayEvents, eventStartMinutesMap]);
+
+  const closeManualScheduleTime = useCallback(() => {
+    setManualTimeModal(null);
+  }, []);
+
+  const handleManualScheduleTime = useCallback((event) => {
+    event.preventDefault();
+    if (!manualTimeModal?.requestId) {
       return;
     }
-    const parsedMinutes = parseManualScheduleTime(input);
+    const requestId = manualTimeModal.requestId;
+    const scheduleEvent = dayEvents.find(item => item.orderId === requestId);
+    if (!scheduleEvent) {
+      setManualTimeModal(null);
+      return;
+    }
+    const durationMinutes = eventDurationMinutesMap[requestId] ?? 90;
+    const parsedMinutes = parseManualScheduleTime(manualTimeModal.value);
     if (parsedMinutes === null) {
-      window.alert('Enter a valid time, for example 09:30 or 2:15 PM.');
-      setTileMenu(null);
+      setManualTimeModal(current => current ? { ...current, error: 'Enter a valid time, for example 09:30 or 2:15 PM.' } : current);
       return;
     }
     const earliest = SCREEN_START_HOUR * 60;
     const latest = SCREEN_END_HOUR * 60 - durationMinutes;
     if (parsedMinutes < earliest || parsedMinutes > latest) {
-      window.alert(`Choose a time between ${formatTimeChip(SCREEN_START_HOUR, 0)} and ${formatTimeChip(Math.floor(latest / 60), latest % 60)}.`);
-      setTileMenu(null);
+      setManualTimeModal(current => current ? {
+        ...current,
+        error: `Choose a time between ${formatTimeChip(SCREEN_START_HOUR, 0)} and ${formatTimeChip(Math.floor(latest / 60), latest % 60)}.`,
+      } : current);
       return;
     }
-    setTileMenu(null);
+    const collision = getScheduleCollision({
+      requestId,
+      truckId: scheduleEvent.truckId,
+      startMinutes: parsedMinutes,
+      durationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    if (collision) {
+      setManualTimeModal(current => current ? {
+        ...current,
+        error: getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap),
+      } : current);
+      return;
+    }
+    setManualTimeModal(null);
     scheduleRequestAt(requestId, scheduleEvent.truckId, parsedMinutes, durationMinutes, { exact: true });
-  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, manualTimeModal, scheduleRequestAt]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -1266,6 +1308,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDragPreviewDurationMinutes(90);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
+    setManualTimeModal(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', requestId);
     setScheduleDragImage(event, request, {
@@ -1294,6 +1337,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     dragPointerOffsetMinutesRef.current = pointerRatio * (durationMinutes || 90);
     setDropPreview(null);
     setTileMenu(null);
+    setManualTimeModal(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', scheduleEvent.orderId);
     setScheduleDragImage(event, request || scheduleEvent, {
@@ -1997,7 +2041,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
-          <button type="button" role="menuitem" onClick={() => handleManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+          <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Set time manually</span>
             <small>Enter exact start time</small>
           </button>
@@ -2009,6 +2053,43 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <span>Delete order</span>
             <small>Remove this request</small>
           </button>
+        </div>
+      ) : null}
+
+      {manualTimeModal ? (
+        <div className="ts2-modal-root transport-manual-time-root">
+          <div className="ts2-modal-backdrop" onClick={closeManualScheduleTime} />
+          <form className="transport-manual-time-card" onSubmit={handleManualScheduleTime}>
+            <div className="transport-manual-time-head">
+              <div>
+                <span>Manual Schedule Time</span>
+                <h2>{manualTimeRequest?.builderName || manualTimeEvent?.builderName || 'Material Order'}</h2>
+                <p>{getScaffoldDetailText(manualTimeRequest, manualTimeEvent)}</p>
+              </div>
+              <button type="button" className="transport-manual-time-close" onClick={closeManualScheduleTime} aria-label="Close manual time panel">x</button>
+            </div>
+            <div className="transport-manual-time-summary">
+              <div><span>Truck</span><strong>{manualTimeEvent?.truckLabel || TRUCK_LANES.find(lane => lane.id === manualTimeEvent?.truckId)?.rego || 'ESS Transport'}</strong></div>
+              <div><span>Duration</span><strong>{manualTimeDurationMinutes} min</strong></div>
+            </div>
+            <label className="transport-manual-time-field">
+              <span>Start time</span>
+              <input
+                type="time"
+                value={manualTimeModal.value}
+                min={formatManualTimeInput(SCREEN_START_HOUR * 60)}
+                max={formatManualTimeInput(SCREEN_END_HOUR * 60 - manualTimeDurationMinutes)}
+                step="60"
+                onChange={(inputEvent) => setManualTimeModal(current => current ? { ...current, value: inputEvent.target.value, error: '' } : current)}
+                autoFocus
+              />
+            </label>
+            {manualTimeModal.error ? <p className="transport-manual-time-error">{manualTimeModal.error}</p> : null}
+            <div className="transport-manual-time-actions">
+              <button type="button" className="transport-manual-time-secondary" onClick={closeManualScheduleTime}>Cancel</button>
+              <button type="submit" className="transport-manual-time-primary">Move Tile</button>
+            </div>
+          </form>
         </div>
       ) : null}
 
