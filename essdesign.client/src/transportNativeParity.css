@@ -93,6 +93,53 @@
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    scrollbar-color: rgba(244, 124, 32, 0.9) rgba(226, 232, 240, 0.55) !important;
+    scrollbar-width: thin !important;
+    scrollbar-gutter: stable !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar:horizontal,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar:horizontal {
+    height: 16px !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar:vertical,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar:vertical {
+    width: 10px !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar-track,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar-track {
+    background:
+        linear-gradient(90deg, rgba(16, 43, 92, 0.08), rgba(244, 124, 32, 0.10)),
+        rgba(248, 250, 252, 0.96) !important;
+    border-radius: 999px !important;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.20) !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar-track:horizontal,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar-track:horizontal {
+    margin: 8px 18px !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar-thumb,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar-thumb {
+    border: 4px solid transparent !important;
+    border-radius: 999px !important;
+    background:
+        linear-gradient(90deg, #102b5c 0%, #2563eb 46%, #f47c20 100%) padding-box !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 1px 5px rgba(16, 43, 92, 0.22) !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar-thumb:hover,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar-thumb:hover {
+    background:
+        linear-gradient(90deg, #0b1f44 0%, #1d4ed8 44%, #f97316 100%) padding-box !important;
+}
+
+.transport-page-frame .ts2-board-scroll::-webkit-scrollbar-corner,
+.transport-desktop-workspace .ts2-board-scroll::-webkit-scrollbar-corner {
+    background: transparent !important;
 }
 
 .transport-page-frame .ts2-lane-row {
