@@ -382,6 +382,7 @@ export default function TruckDeliverySchedulePage({ user }) {
               siteLocation={deliveryModal.siteLocation}
               showUserPoint={deliveryStarted && Boolean(userLocation)}
               userPoint={userLocation}
+              interactive
             />
             <div className="transport-route-modal-top">
               <div>

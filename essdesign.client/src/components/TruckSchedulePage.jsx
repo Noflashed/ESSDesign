@@ -1061,7 +1061,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
             </div>
             <h3 className="transport-panel-section-title">Route Preview</h3>
-            <RouteMapCanvas className="transport-schedule-inspector-map" routeData={selectedScheduleRouteData} loading={selectedScheduleRouteLoading} siteLocation={selectedScheduleSiteLocation} />
+            <RouteMapCanvas className="transport-schedule-inspector-map" routeData={selectedScheduleRouteData} loading={selectedScheduleRouteLoading} siteLocation={selectedScheduleSiteLocation} expandable viewerTitle="Selected Delivery Route" />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
             <div className="transport-weather-grid">
               <div><span className="transport-weather-icon weather"><InspectorIcon type="sun" /></span><strong>18C</strong><span>Sunny</span></div>
@@ -1104,7 +1104,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   </div>
                   <button type="button" className="ts2-close-btn" onClick={closeRequestModal}>×</button>
                 </div>
-                <RouteMapCanvas className="ts2-compact-map" routeData={requestModalRouteData} loading={requestModalRouteLoading} siteLocation={requestModal.siteLocation} />
+                <RouteMapCanvas className="ts2-compact-map" routeData={requestModalRouteData} loading={requestModalRouteLoading} siteLocation={requestModal.siteLocation} expandable viewerTitle="Request Route" />
                 <div className="ts2-estimate-grid">
                   <div><span>Transit from yard</span><strong>{requestModalSummary.deliveryFromYard}</strong></div>
                   <div><span>Site loading</span><strong>{requestModalSummary.siteLoading}</strong></div>
@@ -1200,7 +1200,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <div className="ts2-modal-loading">Loading delivery overview…</div>
             ) : eventOverviewModal ? (
               <>
-                <RouteMapCanvas className="transport-route-modal-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={eventOverviewModal.siteLocation} />
+                <RouteMapCanvas className="transport-route-modal-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={eventOverviewModal.siteLocation} interactive />
                 <div className="transport-route-modal-top">
                   <div>
                     <h2>Delivery Route</h2>

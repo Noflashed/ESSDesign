@@ -5487,6 +5487,30 @@ button.stat-card {
     overflow: hidden;
 }
 
+.transport-route-canvas.is-interactive,
+.transport-route-canvas.is-viewer-launcher {
+    user-select: none;
+}
+
+.transport-route-canvas.is-interactive {
+    cursor: grab;
+    touch-action: none;
+}
+
+.transport-route-canvas.is-interactive.dragging {
+    cursor: grabbing;
+}
+
+.transport-route-canvas.is-viewer-launcher {
+    cursor: pointer;
+}
+
+.transport-route-scene {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+
 .transport-route-canvas-tiles {
     position: absolute;
     inset: 0;
@@ -5543,6 +5567,128 @@ button.stat-card {
 }
 
 .transport-map-placeholder-icon { font-size: 26px; }
+
+.transport-route-control-cluster {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.transport-route-control-cluster button,
+.transport-route-open-button,
+.transport-route-viewer-close {
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    background: rgba(255,255,255,0.94);
+    color: #102b5c;
+    box-shadow: 0 12px 24px rgba(15,23,42,0.12);
+    cursor: pointer;
+}
+
+.transport-route-control-cluster button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.transport-route-open-button {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 5;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.transport-route-map-hint {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 4;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.9);
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: 0 10px 18px rgba(15,23,42,0.1);
+}
+
+.transport-route-viewer-root {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+}
+
+.transport-route-viewer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.transport-route-viewer-shell {
+    position: absolute;
+    inset: 28px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #f8fafc;
+    box-shadow: 0 28px 84px rgba(15, 23, 42, 0.32);
+}
+
+.transport-route-viewer-head {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 6;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.transport-route-viewer-head strong,
+.transport-route-viewer-head span {
+    display: block;
+}
+
+.transport-route-viewer-head strong {
+    color: #102b5c;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.transport-route-viewer-head span {
+    margin-top: 4px;
+    max-width: min(60vw, 680px);
+    color: #475569;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+}
+
+.transport-route-viewer-close {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.transport-route-viewer-canvas {
+    position: absolute;
+    inset: 0;
+}
 
 .transport-route-modal-top {
     position: absolute;
