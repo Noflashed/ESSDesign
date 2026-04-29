@@ -1066,6 +1066,56 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
+    clearSchedule: async (requestId) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const updated = {
+            ...record,
+            scheduledDate: null,
+            scheduledHour: null,
+            scheduledMinute: null,
+            scheduledAtIso: null,
+            scheduledTruckId: null,
+            scheduledTruckLabel: null,
+            truckId: null,
+            truckLabel: null,
+            deliveryStatus: 'pending',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    scheduledDate: null,
+                    scheduledHour: null,
+                    scheduledMinute: null,
+                    scheduledAtIso: null,
+                    scheduledTruckId: null,
+                    scheduledTruckLabel: null,
+                    truckId: null,
+                    truckLabel: null,
+                    deliveryStatus: 'pending',
+                    deliveryStartedAt: null,
+                    deliveryUnloadingAt: null,
+                    deliveryConfirmedAt: null,
+                }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
     updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
