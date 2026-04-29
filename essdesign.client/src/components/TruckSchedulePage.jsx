@@ -898,48 +898,87 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
   }, [closeRequestModal, loadBoard, requestModal, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
 
-  const scheduleRequestAt = useCallback(async (requestId, truckId, startMinutes, durationMinutes = 90) => {
-    if (!requestId || !truckId || dragSchedulingId) {
+  const scheduleRequestAt = useCallback((requestId, truckId, startMinutes, durationMinutes = 90) => {
+    if (!requestId || !truckId) {
       return;
     }
     const safeMinutes = clampScheduleMinutes(roundScheduleMinutes(startMinutes), durationMinutes);
     const hour = Math.floor(safeMinutes / 60);
     const minute = safeMinutes % 60;
     const truck = TRUCK_LANES.find(lane => lane.id === truckId);
-    setDragSchedulingId(requestId);
-    try {
-      await materialOrderRequestsAPI.setSchedule(requestId, {
+    const dateKey = formatDateKey(selectedDate);
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    const updatedRequest = sourceRequest ? {
+      ...sourceRequest,
+      scheduledDate: dateKey,
+      scheduledHour: hour,
+      scheduledMinute: minute,
+      scheduledAtIso: buildScheduleIso(dateKey, hour, minute),
+      scheduledTruckId: truck?.id ?? truckId,
+      scheduledTruckLabel: truck?.rego ?? null,
+      truckId: truck?.id ?? truckId,
+      truckLabel: truck?.rego ?? null,
+      deliveryStatus: 'scheduled',
+      deliveryStartedAt: null,
+      deliveryUnloadingAt: null,
+      deliveryConfirmedAt: null,
+    } : null;
+
+    if (updatedRequest) {
+      setAllRequests(current => current.map(item => item.id === requestId ? updatedRequest : item));
+      setRequestMetaMap(current => ({ ...current, [requestId]: updatedRequest }));
+      setDayEvents(current => {
+        const nextEvent = {
+          id: current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`,
+          date: dateKey,
+          hour,
+          minute,
+          builderName: updatedRequest.builderName,
+          projectName: updatedRequest.projectName,
+          scaffoldingSystem: updatedRequest.scaffoldingSystem,
+          orderId: requestId,
+          truckId: truck?.id ?? truckId,
+          truckLabel: truck?.rego ?? updatedRequest.scheduledTruckLabel ?? updatedRequest.truckLabel ?? null,
+        };
+        return [...current.filter(event => event.orderId !== requestId), nextEvent]
+          .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
+      });
+      setEventStartMinutesMap(current => ({ ...current, [requestId]: safeMinutes }));
+      setEventDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? durationMinutes }));
+      setEventPrimaryDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? Math.min(durationMinutes, 90) }));
+    }
+
+    setSelectedScheduleEventId(requestId);
+    setScheduleInspectorOpen(true);
+    setDraggedRequestId('');
+    setDraggedScheduledOrderId('');
+    setDragPreviewDurationMinutes(90);
+    setDropPreview(null);
+
+    materialOrderRequestsAPI.setSchedule(requestId, {
         date: formatDateKey(selectedDate),
         hour,
         minute,
         truckId: truck?.id ?? truckId,
         truckLabel: truck?.rego ?? null,
+      })
+      .then(() => loadBoard().catch(() => {}))
+      .catch(err => {
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setError(err?.message || 'Failed to schedule request.');
       });
-      setAllRequests(current => current.map(item => item.id === requestId ? {
-        ...item,
-        scheduledDate: formatDateKey(selectedDate),
-        scheduledHour: hour,
-        scheduledMinute: minute,
-        scheduledTruckId: truck?.id ?? truckId,
-        scheduledTruckLabel: truck?.rego ?? null,
-        truckId: truck?.id ?? truckId,
-        truckLabel: truck?.rego ?? null,
-        deliveryStatus: 'scheduled',
-        deliveryStartedAt: null,
-        deliveryUnloadingAt: null,
-        deliveryConfirmedAt: null,
-      } : item));
-      setSelectedScheduleEventId(requestId);
-      setScheduleInspectorOpen(true);
-      setDraggedRequestId('');
-      setDraggedScheduledOrderId('');
-      setDragPreviewDurationMinutes(90);
-      setDropPreview(null);
-      await loadBoard();
-    } finally {
-      setDragSchedulingId('');
-    }
-  }, [dragSchedulingId, loadBoard, selectedDate]);
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap, selectedDate]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -1017,9 +1056,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     event.preventDefault();
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget);
-    scheduleRequestAt(requestId, truckId, minutes, dragPreviewDurationMinutes).catch(err => {
-      setError(err?.message || 'Failed to schedule request.');
-    });
+    scheduleRequestAt(requestId, truckId, minutes, dragPreviewDurationMinutes);
   }, [dragPreviewDurationMinutes, draggedRequestId, scheduleRequestAt]);
 
   const handleEventSnapDrop = useCallback((event, scheduleEvent, side) => {
@@ -1034,49 +1071,127 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const nextStart = side === 'before'
       ? clampScheduleMinutes(targetStart - dragPreviewDurationMinutes, dragPreviewDurationMinutes)
       : clampScheduleMinutes(targetStart + targetDuration, dragPreviewDurationMinutes);
-    scheduleRequestAt(requestId, scheduleEvent.truckId, nextStart, dragPreviewDurationMinutes).catch(err => {
-      setError(err?.message || 'Failed to schedule request.');
-    });
+    scheduleRequestAt(requestId, scheduleEvent.truckId, nextStart, dragPreviewDurationMinutes);
   }, [dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
 
-  const handleUnscheduleOrder = useCallback(async (requestId) => {
+  const handleUnscheduleOrder = useCallback((requestId) => {
     if (!requestId) {
       return;
     }
-    setTileMenu(null);
-    setDragSchedulingId(requestId);
-    try {
-      const updated = await materialOrderRequestsAPI.clearSchedule(requestId);
-      setAllRequests(current => current.map(item => item.id === requestId ? updated : item));
-      setSelectedScheduleEventId(current => current === requestId ? '' : current);
-      await loadBoard();
-    } catch (err) {
-      setError(err?.message || 'Failed to unschedule order.');
-    } finally {
-      setDragSchedulingId('');
-    }
-  }, [loadBoard]);
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    const updatedRequest = sourceRequest ? {
+      ...sourceRequest,
+      scheduledDate: null,
+      scheduledHour: null,
+      scheduledMinute: null,
+      scheduledAtIso: null,
+      scheduledTruckId: null,
+      scheduledTruckLabel: null,
+      truckId: null,
+      truckLabel: null,
+      deliveryStatus: 'pending',
+      deliveryStartedAt: null,
+      deliveryUnloadingAt: null,
+      deliveryConfirmedAt: null,
+    } : null;
 
-  const handleDeleteScheduledOrder = useCallback(async (requestId) => {
+    setTileMenu(null);
+    if (updatedRequest) {
+      setAllRequests(current => current.map(item => item.id === requestId ? updatedRequest : item));
+      setRequestMetaMap(current => {
+        const next = { ...current };
+        delete next[requestId];
+        return next;
+      });
+      setDayEvents(current => current.filter(event => event.orderId !== requestId));
+      setEventStartMinutesMap(current => {
+        const next = { ...current };
+        delete next[requestId];
+        return next;
+      });
+      setEventDurationMinutesMap(current => {
+        const next = { ...current };
+        delete next[requestId];
+        return next;
+      });
+      setEventPrimaryDurationMinutesMap(current => {
+        const next = { ...current };
+        delete next[requestId];
+        return next;
+      });
+    }
+    setSelectedScheduleEventId(current => current === requestId ? '' : current);
+
+    materialOrderRequestsAPI.clearSchedule(requestId)
+      .then(() => loadBoard().catch(() => {}))
+      .catch(err => {
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setError(err?.message || 'Failed to unschedule order.');
+      });
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap]);
+
+  const handleDeleteScheduledOrder = useCallback((requestId) => {
     if (!requestId) {
       return;
     }
     if (!window.confirm('Delete this transport order? This removes it from the active schedule and request list.')) {
       return;
     }
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+
     setTileMenu(null);
-    setDragSchedulingId(requestId);
-    try {
-      await materialOrderRequestsAPI.deleteRequest(requestId);
-      setAllRequests(current => current.filter(item => item.id !== requestId));
-      setSelectedScheduleEventId(current => current === requestId ? '' : current);
-      await loadBoard();
-    } catch (err) {
-      setError(err?.message || 'Failed to delete order.');
-    } finally {
-      setDragSchedulingId('');
-    }
-  }, [loadBoard]);
+    setAllRequests(current => current.filter(item => item.id !== requestId));
+    setRequestMetaMap(current => {
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
+    setDayEvents(current => current.filter(event => event.orderId !== requestId));
+    setEventStartMinutesMap(current => {
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
+    setEventDurationMinutesMap(current => {
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
+    setEventPrimaryDurationMinutesMap(current => {
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
+    setSelectedScheduleEventId(current => current === requestId ? '' : current);
+
+    materialOrderRequestsAPI.deleteRequest(requestId)
+      .then(() => loadBoard().catch(() => {}))
+      .catch(err => {
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setError(err?.message || 'Failed to delete order.');
+      });
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, loadBoard, requestMetaMap]);
 
   const handleOpenPdf = useCallback(async request => {
     if (!request?.pdfPath) {
@@ -1317,9 +1432,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             setTileMenu({
                               orderId: event.orderId,
                               x: Math.max(8, Math.min(menuEvent.clientX, window.innerWidth - 224)),
-                              y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 148)),
-                              title: event.builderName || 'Material Order',
-                              subtitle: event.projectName || 'Scheduled delivery',
+                              y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 104)),
                             });
                           }}
                         >
@@ -1483,10 +1596,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
-          <div className="transport-tile-menu-head">
-            <strong>{tileMenu.title}</strong>
-            <span>{tileMenu.subtitle}</span>
-          </div>
           <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Unschedule order</span>
             <small>Return to pending requests</small>

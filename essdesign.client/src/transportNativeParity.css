@@ -3337,43 +3337,22 @@
     position: fixed;
     z-index: 9999;
     display: grid;
-    gap: 4px;
-    width: 208px;
-    padding: 8px;
+    gap: 2px;
+    width: 176px;
+    padding: 6px;
     border: 1px solid #d7e0eb;
-    border-radius: 8px;
+    border-radius: 7px;
     background: #ffffff;
-    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
-}
-
-.transport-tile-menu-head {
-    display: grid;
-    gap: 3px;
-    padding: 6px 7px 8px;
-    border-bottom: 1px solid #eef2f7;
-}
-
-.transport-tile-menu-head strong {
-    color: #102b5c;
-    font-size: 12px;
-    line-height: 14px;
-    font-weight: 800;
-}
-
-.transport-tile-menu-head span {
-    color: #64748b;
-    font-size: 10px;
-    line-height: 12px;
-    font-weight: 650;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
 }
 
 .transport-tile-menu button {
     display: grid;
-    gap: 2px;
+    gap: 1px;
     width: 100%;
-    padding: 8px 8px;
+    padding: 7px 8px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     background: transparent;
     text-align: left;
     cursor: pointer;
@@ -3389,7 +3368,7 @@
     color: #102b5c;
     font-size: 11px;
     line-height: 13px;
-    font-weight: 800;
+    font-weight: 750;
 }
 
 .transport-tile-menu button small {
