@@ -1775,8 +1775,8 @@ export const analysisAPI = {
         const response = await apiClient.post('/analysis/recommend-time-slot', payload);
         return response.data;
     },
-    routePreview: async (siteLocation) => {
-        const response = await apiClient.post('/analysis/route-preview', { siteLocation });
+    routePreview: async (siteLocation, schedule = {}) => {
+        const response = await apiClient.post('/analysis/route-preview', { siteLocation, ...schedule });
         return response.data;
     },
 };

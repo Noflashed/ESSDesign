@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 
 namespace ESSDesign.Server.Services
 {
@@ -35,6 +36,9 @@ namespace ESSDesign.Server.Services
         public sealed class RoutePreviewRequest
         {
             public string SiteLocation { get; set; } = string.Empty;
+            public string? ScheduledDate { get; set; }
+            public int? ScheduledHour { get; set; }
+            public int? ScheduledMinute { get; set; }
         }
 
         public sealed class RoutePoint
@@ -48,8 +52,25 @@ namespace ESSDesign.Server.Services
             public RoutePoint Yard { get; set; } = new();
             public RoutePoint Site { get; set; } = new();
             public double DistanceMeters { get; set; }
+            public double BaseDurationSeconds { get; set; }
             public double DurationSeconds { get; set; }
+            public double TrafficDelaySeconds { get; set; }
+            public bool HasLiveTraffic { get; set; }
+            public string TrafficProvider { get; set; } = string.Empty;
+            public string TrafficNote { get; set; } = string.Empty;
             public List<RoutePoint> PathPoints { get; set; } = new();
+        }
+
+        private sealed class RouteTimingResult
+        {
+            public double DistanceMeters { get; set; }
+            public double BaseDurationSeconds { get; set; }
+            public double DurationSeconds { get; set; }
+            public bool HasLiveTraffic { get; set; }
+            public string TrafficProvider { get; set; } = string.Empty;
+            public string TrafficNote { get; set; } = string.Empty;
+            public double DistanceKm => Math.Round(DistanceMeters / 1000.0, 1);
+            public double TrafficDelaySeconds => Math.Max(0, DurationSeconds - BaseDurationSeconds);
         }
 
         public sealed class TimeSlotRecommendationRequest
@@ -191,7 +212,166 @@ namespace ESSDesign.Server.Services
             _ => "Cloudy",
         };
 
-        private async Task<(double DistanceKm, int BaseDriveMinutes)?> GetOsrmRouteAsync(
+        private static TimeZoneInfo GetSydneyTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
+            }
+        }
+
+        private static DateTimeOffset GetSydneyNow()
+        {
+            return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, GetSydneyTimeZone());
+        }
+
+        private static DateTimeOffset? BuildSydneyDeparture(string? date, int? hour, int? minute)
+        {
+            if (string.IsNullOrWhiteSpace(date) || !hour.HasValue || !minute.HasValue)
+            {
+                return null;
+            }
+
+            if (!DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            {
+                return null;
+            }
+
+            var localTime = parsedDate.Date.AddHours(Math.Clamp(hour.Value, 0, 23)).AddMinutes(Math.Clamp(minute.Value, 0, 59));
+            var offset = GetSydneyTimeZone().GetUtcOffset(localTime);
+            return new DateTimeOffset(localTime, offset);
+        }
+
+        private static (double DelaySeconds, string Label) EstimateSydneyTrafficDelay(double baseDurationSeconds, DateTimeOffset departure)
+        {
+            var local = TimeZoneInfo.ConvertTime(departure, GetSydneyTimeZone());
+            var hour = local.Hour + local.Minute / 60.0;
+            var isWeekday = local.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
+
+            var factor = 0.04;
+            var label = "Light traffic";
+
+            if (isWeekday && hour >= 6.5 && hour < 9.0)
+            {
+                factor = 0.24;
+                label = "Morning peak traffic";
+            }
+            else if (isWeekday && hour >= 15.5 && hour < 18.5)
+            {
+                factor = 0.28;
+                label = "Afternoon peak traffic";
+            }
+            else if (isWeekday && hour >= 9.0 && hour < 15.5)
+            {
+                factor = 0.10;
+                label = "Steady daytime traffic";
+            }
+            else if (!isWeekday && hour >= 10.0 && hour < 17.0)
+            {
+                factor = 0.08;
+                label = "Weekend daytime traffic";
+            }
+
+            return (Math.Max(0, baseDurationSeconds * factor), label);
+        }
+
+        private string? GetGoogleMapsApiKey()
+        {
+            var candidates = new[]
+            {
+                _configuration["GoogleMaps:ApiKey"],
+                _configuration["Google:MapsApiKey"],
+                _configuration["Traffic:GoogleMapsApiKey"],
+            };
+
+            return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        }
+
+        private async Task<RouteTimingResult?> GetGoogleTrafficRouteAsync(
+            double fromLat,
+            double fromLon,
+            double toLat,
+            double toLon,
+            HttpClient client,
+            DateTimeOffset departure)
+        {
+            var apiKey = GetGoogleMapsApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return null;
+            }
+
+            try
+            {
+                var departureTime = departure <= DateTimeOffset.UtcNow.AddMinutes(2)
+                    ? "now"
+                    : departure.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                var origin = FormattableString.Invariant($"{fromLat:F6},{fromLon:F6}");
+                var destination = FormattableString.Invariant($"{toLat:F6},{toLon:F6}");
+                var url = "https://maps.googleapis.com/maps/api/directions/json" +
+                          $"?origin={Uri.EscapeDataString(origin)}" +
+                          $"&destination={Uri.EscapeDataString(destination)}" +
+                          "&mode=driving&traffic_model=best_guess" +
+                          $"&departure_time={departureTime}" +
+                          $"&key={Uri.EscapeDataString(apiKey)}";
+
+                using var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+                if (!root.TryGetProperty("status", out var statusEl) || statusEl.GetString() != "OK")
+                {
+                    return null;
+                }
+
+                var routes = root.GetProperty("routes").EnumerateArray().ToList();
+                if (routes.Count == 0)
+                {
+                    return null;
+                }
+
+                var legs = routes[0].GetProperty("legs").EnumerateArray().ToList();
+                if (legs.Count == 0)
+                {
+                    return null;
+                }
+
+                var leg = legs[0];
+                var baseSeconds = leg.GetProperty("duration").GetProperty("value").GetDouble();
+                var trafficSeconds = leg.TryGetProperty("duration_in_traffic", out var trafficEl)
+                    ? trafficEl.GetProperty("value").GetDouble()
+                    : baseSeconds;
+                var distanceMeters = leg.GetProperty("distance").GetProperty("value").GetDouble();
+                var delayMinutes = Math.Max(0, Math.Round((trafficSeconds - baseSeconds) / 60.0));
+
+                return new RouteTimingResult
+                {
+                    DistanceMeters = distanceMeters,
+                    BaseDurationSeconds = baseSeconds,
+                    DurationSeconds = Math.Max(baseSeconds, trafficSeconds),
+                    HasLiveTraffic = true,
+                    TrafficProvider = "Google live traffic",
+                    TrafficNote = delayMinutes > 0
+                        ? $"Live traffic adding about {delayMinutes:F0} min"
+                        : "Live traffic showing no extra delay",
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Google traffic routing failed");
+                return null;
+            }
+        }
+
+        private async Task<RouteTimingResult?> GetOsrmRouteAsync(
             double fromLat, double fromLon, double toLat, double toLon, HttpClient client)
         {
             try
@@ -216,7 +396,15 @@ namespace ESSDesign.Server.Services
                 var distanceM = route.GetProperty("distance").GetDouble();
                 var durationS = route.GetProperty("duration").GetDouble();
 
-                return (Math.Round(distanceM / 1000.0, 1), (int)Math.Round(durationS / 60.0));
+                return new RouteTimingResult
+                {
+                    DistanceMeters = distanceM,
+                    BaseDurationSeconds = durationS,
+                    DurationSeconds = durationS,
+                    HasLiveTraffic = false,
+                    TrafficProvider = "OSRM",
+                    TrafficNote = "Free-flow route timing",
+                };
             }
             catch (Exception ex)
             {
@@ -225,12 +413,41 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        private async Task<RouteTimingResult?> GetTrafficAwareRouteAsync(
+            double fromLat,
+            double fromLon,
+            double toLat,
+            double toLon,
+            HttpClient client,
+            DateTimeOffset? departure = null)
+        {
+            var departureTime = departure ?? GetSydneyNow();
+            var googleRoute = await GetGoogleTrafficRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime);
+            if (googleRoute != null)
+            {
+                return googleRoute;
+            }
+
+            var osrmRoute = await GetOsrmRouteAsync(fromLat, fromLon, toLat, toLon, client);
+            if (osrmRoute == null)
+            {
+                return null;
+            }
+
+            var traffic = EstimateSydneyTrafficDelay(osrmRoute.BaseDurationSeconds, departureTime);
+            osrmRoute.DurationSeconds = osrmRoute.BaseDurationSeconds + traffic.DelaySeconds;
+            osrmRoute.TrafficProvider = "Sydney traffic estimate";
+            osrmRoute.TrafficNote = $"{traffic.Label}; configure GoogleMaps:ApiKey for live traffic";
+            return osrmRoute;
+        }
+
         private async Task<RoutePreviewResult?> GetOsrmRoutePreviewAsync(
             double fromLat,
             double fromLon,
             double toLat,
             double toLon,
-            HttpClient client)
+            HttpClient client,
+            DateTimeOffset? departure = null)
         {
             try
             {
@@ -266,12 +483,22 @@ namespace ESSDesign.Server.Services
 
                 if (pathPoints.Count == 0) return null;
 
+                var timing = await GetTrafficAwareRouteAsync(fromLat, fromLon, toLat, toLon, client, departure);
+                var distanceMeters = timing?.DistanceMeters ?? route.GetProperty("distance").GetDouble();
+                var baseDurationSeconds = timing?.BaseDurationSeconds ?? route.GetProperty("duration").GetDouble();
+                var durationSeconds = timing?.DurationSeconds ?? baseDurationSeconds;
+
                 return new RoutePreviewResult
                 {
                     Yard = new RoutePoint { Lat = fromLat, Lon = fromLon },
                     Site = new RoutePoint { Lat = toLat, Lon = toLon },
-                    DistanceMeters = route.GetProperty("distance").GetDouble(),
-                    DurationSeconds = route.GetProperty("duration").GetDouble(),
+                    DistanceMeters = distanceMeters,
+                    BaseDurationSeconds = baseDurationSeconds,
+                    DurationSeconds = durationSeconds,
+                    TrafficDelaySeconds = Math.Max(0, durationSeconds - baseDurationSeconds),
+                    HasLiveTraffic = timing?.HasLiveTraffic ?? false,
+                    TrafficProvider = timing?.TrafficProvider ?? "OSRM",
+                    TrafficNote = timing?.TrafficNote ?? "Free-flow route timing",
                     PathPoints = pathPoints,
                 };
             }
@@ -286,14 +513,19 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var dt = DateTime.ParseExact(date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                var dt = DateTime.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
                 var result = dt.Date.AddHours(hour).AddMinutes(minute + addMinutes);
-                return result.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+                return result.ToString("h:mm tt", CultureInfo.InvariantCulture);
             }
             catch
             {
                 return "N/A";
             }
+        }
+
+        private static int SecondsToWholeMinutes(double seconds)
+        {
+            return Math.Max(1, (int)Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero));
         }
 
         public async Task<DeliveryAnalysisResult> AnalyzeAsync(DeliveryAnalysisRequest request)
@@ -309,15 +541,16 @@ namespace ESSDesign.Server.Services
             // Geocode the site and fetch routing + weather in parallel
             var siteCoords = await GeocodeAsync(request.SiteLocation, httpClient);
 
-            (double DistanceKm, int BaseDriveMinutes)? osrmRoute = null;
+            RouteTimingResult? trafficRoute = null;
             string weatherSummary;
+            var scheduledDeparture = BuildSydneyDeparture(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute);
 
             if (siteCoords.HasValue)
             {
-                var routeTask = GetOsrmRouteAsync(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon, httpClient);
+                var routeTask = GetTrafficAwareRouteAsync(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon, httpClient, scheduledDeparture);
                 var weatherTask = GetWeatherSummaryAsync(siteCoords.Value.Lat, siteCoords.Value.Lon, request.ScheduledDate, request.ScheduledHour, httpClient);
                 await Task.WhenAll(routeTask, weatherTask);
-                osrmRoute = routeTask.Result;
+                trafficRoute = routeTask.Result;
                 weatherSummary = weatherTask.Result;
             }
             else
@@ -325,8 +558,8 @@ namespace ESSDesign.Server.Services
                 weatherSummary = "Weather data unavailable (site could not be geocoded)";
             }
 
-            // Use road distance from OSRM; fall back to straight-line if OSRM unavailable
-            var displayDistanceKm = osrmRoute?.DistanceKm
+            // Use road distance from routing; fall back to straight-line if routing unavailable
+            var displayDistanceKm = trafficRoute?.DistanceKm
                 ?? (siteCoords.HasValue ? HaversineKm(YardLat, YardLon, siteCoords.Value.Lat, siteCoords.Value.Lon) : 0);
 
             var dayOfWeek = "Unknown";
@@ -340,19 +573,19 @@ namespace ESSDesign.Server.Services
             var departureTime = $"{request.ScheduledHour:D2}:{request.ScheduledMinute:D2}";
 
             // Build routing context line — tells the AI exactly what the router measured
-            var routingContext = osrmRoute.HasValue
-                ? $"Road distance (OSM routing): {osrmRoute.Value.DistanceKm:F1} km | Free-flow drive time (no traffic): {osrmRoute.Value.BaseDriveMinutes} min"
+            var routingContext = trafficRoute != null
+                ? $"Road distance: {trafficRoute.DistanceKm:F1} km | Free-flow drive time: {SecondsToWholeMinutes(trafficRoute.BaseDurationSeconds)} min | Traffic-aware drive time: {SecondsToWholeMinutes(trafficRoute.DurationSeconds)} min | Provider: {trafficRoute.TrafficProvider} | {trafficRoute.TrafficNote}"
                 : $"Straight-line distance (routing unavailable): {displayDistanceKm:F1} km";
 
             var systemPrompt = """
                 You are a delivery logistics analyst for ESS (Erect Safe Scaffolding), a scaffolding company based in Sydney, Australia.
                 The ESS delivery yard is at 130 Gilba Road, Girraween NSW 2145.
 
-                You are given the actual road distance and free-flow drive time from an OSM router.
-                Your job is to apply realistic Sydney-specific traffic and weather adjustments to produce precise minute-level timing.
+                You are given the actual road distance, free-flow drive time, and traffic-aware drive time.
+                Your job is to use that routing data and weather context to produce precise minute-level timing.
 
                 Rules:
-                - travelToSiteMinutes must be >= the free-flow drive time provided. Add traffic delay on top of it.
+                - travelToSiteMinutes must match the traffic-aware drive time provided when available.
                 - returnTravelMinutes should account for the time of day when the driver will be heading back.
                 - Do not round to the nearest 5 or 10; give the most precise estimate you can.
                 - Always respond with valid JSON only.
@@ -369,8 +602,8 @@ namespace ESSDesign.Server.Services
                 {{routingContext}}
                 Weather at site at departure time: {{weatherSummary}}
 
-                Using the road distance and free-flow time above as your baseline, apply realistic traffic
-                adjustments for {{dayOfWeek}} at {{departureTime}} on Sydney roads.
+                Use the traffic-aware drive time above as the source of truth. Do not replace it with
+                a rounded generic estimate. Apply weather only where it genuinely affects unloading or risk.
 
                 Return exactly this JSON:
                 {
@@ -394,12 +627,11 @@ namespace ESSDesign.Server.Services
                 }
             };
 
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
             };
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var response = await httpClient.SendAsync(httpRequest);
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -425,6 +657,33 @@ namespace ESSDesign.Server.Services
             var trafficNote = analysisJson.GetProperty("trafficNote").GetString() ?? string.Empty;
             var weatherImpact = analysisJson.GetProperty("weatherImpact").GetString() ?? string.Empty;
             var summaryText = analysisJson.GetProperty("summaryText").GetString() ?? string.Empty;
+
+            if (trafficRoute != null)
+            {
+                travelToSite = SecondsToWholeMinutes(trafficRoute.DurationSeconds);
+                trafficNote = trafficRoute.TrafficNote;
+            }
+
+            if (siteCoords.HasValue && trafficRoute != null)
+            {
+                var returnDeparture = (scheduledDeparture ?? GetSydneyNow()).AddMinutes(travelToSite + unloading);
+                var returnRoute = await GetTrafficAwareRouteAsync(
+                    siteCoords.Value.Lat,
+                    siteCoords.Value.Lon,
+                    YardLat,
+                    YardLon,
+                    httpClient,
+                    returnDeparture);
+
+                if (returnRoute != null)
+                {
+                    returnTravel = SecondsToWholeMinutes(returnRoute.DurationSeconds);
+                    if (!string.IsNullOrWhiteSpace(returnRoute.TrafficNote) && returnRoute.TrafficNote != trafficNote)
+                    {
+                        trafficNote = $"{trafficNote}; return {returnRoute.TrafficNote}";
+                    }
+                }
+            }
 
             return new DeliveryAnalysisResult
             {
@@ -463,7 +722,8 @@ namespace ESSDesign.Server.Services
                 YardLon,
                 siteCoords.Value.Lat,
                 siteCoords.Value.Lon,
-                httpClient);
+                httpClient,
+                BuildSydneyDeparture(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute));
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)
@@ -559,12 +819,11 @@ namespace ESSDesign.Server.Services
                 }
             };
 
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
             };
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var response = await httpClient.SendAsync(httpRequest);
             var responseBody = await response.Content.ReadAsStringAsync();

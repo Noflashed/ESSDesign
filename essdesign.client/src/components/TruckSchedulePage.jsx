@@ -403,9 +403,9 @@ function setScheduleDragImage(event, request, options = {}) {
 }
 
 function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation) {
-  const transitMinutes = routeEstimate?.durationMinutes ?? 0;
+  const transitMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const loadingMinutes = 30;
-  const returnMinutes = routeEstimate?.durationMinutes ?? 0;
+  const returnMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0, 0);
   const arrival = new Date(start.getTime() + transitMinutes * 60 * 1000);
   const loadingComplete = new Date(arrival.getTime() + loadingMinutes * 60 * 1000);
@@ -443,6 +443,49 @@ function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSite
     arrivalTime: formatTimeChip(arrival.getHours(), arrival.getMinutes()),
     loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
     returnTime: formatTimeChip(returned.getHours(), returned.getMinutes()),
+  };
+}
+
+function buildRouteScheduleFromRequest(request, fallbackDate) {
+  if (!request) {
+    return {};
+  }
+  return {
+    scheduledDate: request.scheduledDate || (fallbackDate ? formatDateKey(fallbackDate) : undefined),
+    scheduledHour: typeof request.scheduledHour === 'number' ? request.scheduledHour : undefined,
+    scheduledMinute: typeof request.scheduledMinute === 'number' ? request.scheduledMinute : undefined,
+  };
+}
+
+function buildRouteScheduleFromEvent(event) {
+  if (!event) {
+    return {};
+  }
+  return {
+    scheduledDate: event.date,
+    scheduledHour: event.hour,
+    scheduledMinute: event.minute,
+  };
+}
+
+function getTrafficPanelCopy(routeData, loading) {
+  if (loading) {
+    return { title: 'Checking traffic', detail: 'Live ETA loading' };
+  }
+  if (!routeData) {
+    return { title: 'Traffic pending', detail: 'Add route details' };
+  }
+  const delayMinutes = Math.max(0, Math.round((routeData.trafficDelaySeconds || 0) / 60));
+  const title = delayMinutes >= 15
+    ? 'Heavy traffic'
+    : delayMinutes >= 6
+      ? 'Moderate traffic'
+      : 'Light traffic';
+  const provider = routeData.hasLiveTraffic ? 'Live' : 'Estimated';
+  const detail = routeData.trafficNote || (delayMinutes > 0 ? `ETA impact +${delayMinutes} min` : 'No extra delay');
+  return {
+    title: `${provider} ${title.toLowerCase()}`,
+    detail,
   };
 }
 
@@ -766,7 +809,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const cachedRouteMap = Object.fromEntries(
         requestsForDay.map(request => {
           const siteLocation = siteLocationMap[request.id];
-          return [request.id, siteLocation ? getCachedRouteEstimateValue(siteLocation) ?? null : null];
+          return [request.id, siteLocation ? getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) ?? null : null];
         }),
       );
       const initialBoard = buildBoardState(requestsForDay, cachedRouteMap);
@@ -780,7 +823,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
           const siteLocation = siteLocationMap[request.id];
-          return [request.id, siteLocation ? await getCachedRouteEstimate(siteLocation) : null];
+          return [request.id, siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) : null];
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries);
@@ -876,7 +919,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
-  const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation) ?? null) : null;
+  const selectedScheduleRouteSchedule = useMemo(() => buildRouteScheduleFromEvent(selectedScheduleEvent), [selectedScheduleEvent]);
+  const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null) : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
     if (!selectedScheduleEvent) return 'No delivery selected';
@@ -896,7 +940,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleRouteLoading(true);
     setSelectedScheduleRouteData(null);
 
-    getCachedRouteData(selectedScheduleSiteLocation)
+    getCachedRouteData(selectedScheduleSiteLocation, selectedScheduleRouteSchedule)
       .then(data => {
         if (active) {
           setSelectedScheduleRouteData(data);
@@ -916,10 +960,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleSiteLocation]);
+  }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteSchedule, selectedScheduleSiteLocation]);
   const selectedRouteDurationMinutes = useMemo(
-    () => Math.max(30, selectedRouteEstimate?.durationMinutes ? selectedRouteEstimate.durationMinutes * 2 + 30 : 90),
+    () => Math.max(30, selectedRouteEstimate?.durationMinutes ? Math.round(selectedRouteEstimate.durationMinutes) * 2 + 30 : 90),
     [selectedRouteEstimate],
+  );
+  const selectedScheduleTrafficCopy = useMemo(
+    () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
+    [selectedScheduleRouteData, selectedScheduleRouteLoading],
   );
   const requestModalSummary = useMemo(
     () => buildEstimateSummary(selectedDate, selectedHour, selectedMinute, selectedRouteEstimate, Boolean(requestModal?.siteLocation)),
@@ -972,7 +1020,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
     const nextTruckId = request.scheduledTruckId ?? request.truckId ?? selectedTruckId ?? TRUCK_LANES[0].id;
-    const nextRouteEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation) : null;
+    const nextRouteEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) : null;
     setSelectedRouteEstimate(nextRouteEstimate);
     setSelectedTruckId(nextTruckId);
     if (typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number') {
@@ -993,7 +1041,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setRequestModalLoading(false);
     if (siteLocation) {
       setRequestModalRouteLoading(true);
-      getCachedRouteData(siteLocation)
+      getCachedRouteData(siteLocation, buildRouteScheduleFromRequest(request, selectedDate))
         .then(data => setRequestModalRouteData(data))
         .finally(() => setRequestModalRouteLoading(false));
     }
@@ -1018,14 +1066,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
-    const routeEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation) : null;
+    const routeEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromEvent(event)) : null;
     const cycleState = eventCycleStateMap[event.orderId] ?? null;
     const modalState = { event, request, siteLocation, routeEstimate, cycleState };
     setEventOverviewModal(modalState);
     setEventOverviewLoading(false);
     if (siteLocation) {
       setEventOverviewRouteLoading(true);
-      getCachedRouteData(siteLocation)
+      getCachedRouteData(siteLocation, buildRouteScheduleFromEvent(event))
         .then(data => setEventOverviewRouteData(data))
         .finally(() => setEventOverviewRouteLoading(false));
     }
@@ -1883,7 +1931,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const primaryEnd = startMinutes + primaryDurationMinutes;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
-                      const timing = getTimingProfile(getCachedRouteEstimateValue(siteLocation) ?? null);
+                      const timing = getTimingProfile(getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null);
                       const siteArrivalMinutes = startMinutes + timing.transitMinutes;
                       const siteArrivalLabel = siteLocation
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
@@ -2013,7 +2061,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
             <div className="transport-weather-grid">
               <div><span className="transport-weather-icon weather"><InspectorIcon type="sun" /></span><strong>18C</strong><span>Sunny</span></div>
-              <div><span className="transport-weather-icon traffic"><InspectorIcon type="traffic" /></span><strong>Low Traffic</strong><span>ETA impact +5 min</span></div>
+              <div><span className="transport-weather-icon traffic"><InspectorIcon type="traffic" /></span><strong>{selectedScheduleTrafficCopy.title}</strong><span>{selectedScheduleTrafficCopy.detail}</span></div>
             </div>
             <h3 className="transport-panel-section-title">Recommended Time Slot</h3>
             <div className="transport-schedule-recommendation">

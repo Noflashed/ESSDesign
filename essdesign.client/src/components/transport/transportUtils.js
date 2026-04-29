@@ -98,6 +98,17 @@ export function formatDistance(meters) {
   return km >= 10 ? `${km.toFixed(0)} km` : `${km.toFixed(1)} km`;
 }
 
+function routeCacheKey(siteLocation, schedule = {}) {
+  const location = String(siteLocation || '').trim().toLowerCase();
+  if (!location) {
+    return '';
+  }
+  const date = schedule.scheduledDate || schedule.date || '';
+  const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
+  const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
+  return `${location}|${date}|${hour}|${minute}`;
+}
+
 export function formatActionTimestamp(isoValue) {
   if (!isoValue) {
     return null;
@@ -224,13 +235,13 @@ export async function getSafetyBuildersCached(getBuildersFn) {
   return builders;
 }
 
-export async function fetchRouteData(siteLocation) {
+export async function fetchRouteData(siteLocation, schedule = {}) {
   if (!siteLocation) {
     return null;
   }
 
   try {
-    const preview = await analysisAPI.routePreview(siteLocation);
+    const preview = await analysisAPI.routePreview(siteLocation, schedule);
     if (!preview?.yard || !preview?.site || !Array.isArray(preview?.pathPoints) || preview.pathPoints.length === 0) {
       return null;
     }
@@ -245,7 +256,12 @@ export async function fetchRouteData(siteLocation) {
         lon: Number(preview.site.lon),
       },
       distanceMeters: Number(preview.distanceMeters) || 0,
+      baseDurationSeconds: Number(preview.baseDurationSeconds) || Number(preview.durationSeconds) || 0,
       durationSeconds: Number(preview.durationSeconds) || 0,
+      trafficDelaySeconds: Number(preview.trafficDelaySeconds) || 0,
+      hasLiveTraffic: Boolean(preview.hasLiveTraffic),
+      trafficProvider: preview.trafficProvider || '',
+      trafficNote: preview.trafficNote || '',
       pathPoints: preview.pathPoints
         .map(point => ({
           lat: Number(point.lat),
@@ -258,15 +274,15 @@ export async function fetchRouteData(siteLocation) {
   }
 }
 
-export async function getCachedRouteData(siteLocation) {
-  const key = String(siteLocation || '').trim().toLowerCase();
+export async function getCachedRouteData(siteLocation, schedule = {}) {
+  const key = routeCacheKey(siteLocation, schedule);
   if (!key) {
     return null;
   }
   if (!routeDataCache.has(key)) {
     routeDataCache.set(
       key,
-      fetchRouteData(siteLocation).then(routeData => {
+      fetchRouteData(siteLocation, schedule).then(routeData => {
         if (!routeData) {
           routeDataCache.delete(key);
         }
@@ -277,19 +293,24 @@ export async function getCachedRouteData(siteLocation) {
   return routeDataCache.get(key);
 }
 
-export async function getCachedRouteEstimate(siteLocation) {
-  const key = String(siteLocation || '').trim().toLowerCase();
+export async function getCachedRouteEstimate(siteLocation, schedule = {}) {
+  const key = routeCacheKey(siteLocation, schedule);
   if (!key) {
     return null;
   }
   if (!routeEstimatePromiseCache.has(key)) {
     routeEstimatePromiseCache.set(
       key,
-      getCachedRouteData(siteLocation).then(routeData => {
+      getCachedRouteData(siteLocation, schedule).then(routeData => {
         const estimate = routeData
           ? {
-              durationMinutes: Math.max(1, Math.round(routeData.durationSeconds / 60)),
+              durationMinutes: Math.max(1, routeData.durationSeconds / 60),
+              baseDurationMinutes: Math.max(1, (routeData.baseDurationSeconds || routeData.durationSeconds) / 60),
+              trafficDelayMinutes: Math.max(0, (routeData.trafficDelaySeconds || 0) / 60),
               distanceMeters: routeData.distanceMeters,
+              hasLiveTraffic: routeData.hasLiveTraffic,
+              trafficProvider: routeData.trafficProvider,
+              trafficNote: routeData.trafficNote,
             }
           : null;
         routeEstimateValueCache.set(key, estimate);
@@ -303,8 +324,8 @@ export async function getCachedRouteEstimate(siteLocation) {
   return routeEstimatePromiseCache.get(key);
 }
 
-export function getCachedRouteEstimateValue(siteLocation) {
-  const key = String(siteLocation || '').trim().toLowerCase();
+export function getCachedRouteEstimateValue(siteLocation, schedule = {}) {
+  const key = routeCacheKey(siteLocation, schedule);
   if (!key) {
     return null;
   }
@@ -321,7 +342,7 @@ export function getPlannedDurationMinutes(routeEstimate) {
 export function getTimingProfile(routeEstimate) {
   const transitMinutes = Math.max(
     15,
-    routeEstimate?.durationMinutes ?? Math.round((SCHEDULE_BLOCK_MINUTES - BLOCK_LOADING_MINUTES) / 2),
+    routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : Math.round((SCHEDULE_BLOCK_MINUTES - BLOCK_LOADING_MINUTES) / 2),
   );
   const loadingMinutes = BLOCK_LOADING_MINUTES;
   const returnMinutes = transitMinutes;
