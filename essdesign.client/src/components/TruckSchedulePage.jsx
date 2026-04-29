@@ -226,6 +226,28 @@ function getDropMinutesFromPointer(clientX, trackElement) {
   return clampScheduleMinutes(roundScheduleMinutes(SCREEN_START_HOUR * 60 + ratio * rangeMinutes), 90);
 }
 
+function setScheduleDragImage(event, request) {
+  if (!event.dataTransfer || typeof document === 'undefined') {
+    return;
+  }
+  const ghost = document.createElement('div');
+  ghost.className = 'transport-drag-ghost';
+  const label = document.createElement('span');
+  label.textContent = 'Drop to schedule';
+  const title = document.createElement('strong');
+  title.textContent = request?.builderName || 'Material Order';
+  const subtitle = document.createElement('small');
+  subtitle.textContent = request?.projectName || 'Scheduled delivery';
+  const status = document.createElement('em');
+  const dot = document.createElement('i');
+  status.appendChild(dot);
+  status.appendChild(document.createTextNode('Scheduled'));
+  ghost.append(label, title, subtitle, status);
+  document.body.appendChild(ghost);
+  event.dataTransfer.setDragImage(ghost, 18, 18);
+  window.setTimeout(() => ghost.remove(), 0);
+}
+
 function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation) {
   const transitMinutes = routeEstimate?.durationMinutes ?? 0;
   const loadingMinutes = 30;
@@ -889,11 +911,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
   }, [dragSchedulingId, loadBoard, selectedDate]);
 
-  const handlePendingDragStart = useCallback((event, requestId) => {
+  const handlePendingDragStart = useCallback((event, request) => {
+    const requestId = request?.id;
+    if (!requestId) {
+      return;
+    }
     setDraggedRequestId(requestId);
     setDropPreview(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', requestId);
+    setScheduleDragImage(event, request);
   }, []);
 
   const handlePendingDragEnd = useCallback(() => {
@@ -1061,7 +1088,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   key={request.id}
                   className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
                   draggable={!dragSchedulingId}
-                  onDragStart={(event) => handlePendingDragStart(event, request.id)}
+                  onDragStart={(event) => handlePendingDragStart(event, request)}
                   onDragEnd={handlePendingDragEnd}
                 >
                   <div>
@@ -1187,7 +1214,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'before')}
                                 aria-label="Schedule before this delivery"
                               >
-                                <span>Before</span>
+                                <span>+</span>
                               </button>
                               <button
                                 type="button"
@@ -1199,7 +1226,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event, 'after')}
                                 aria-label="Schedule after this delivery"
                               >
-                                <span>After</span>
+                                <span>+</span>
                               </button>
                             </>
                           ) : null}
@@ -1259,7 +1286,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   key={request.id}
                   className={`transport-reference-pending-card${draggedRequestId === request.id ? ' dragging' : ''}`}
                   draggable={!dragSchedulingId}
-                  onDragStart={(event) => handlePendingDragStart(event, request.id)}
+                  onDragStart={(event) => handlePendingDragStart(event, request)}
                   onDragEnd={handlePendingDragEnd}
                 >
                   <div><b>{request.id}</b></div>
