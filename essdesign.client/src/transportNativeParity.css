@@ -2613,6 +2613,31 @@
     font-weight: 700 !important;
 }
 
+.transport-page-frame .transport-management-detail-actions,
+.transport-desktop-workspace .transport-management-detail-actions {
+    display: grid !important;
+    gap: 10px !important;
+    margin-top: 14px !important;
+}
+
+.transport-page-frame .transport-management-detail-actions .transport-management-save,
+.transport-desktop-workspace .transport-management-detail-actions .transport-management-save {
+    margin-top: 0 !important;
+}
+
+.transport-page-frame .transport-management-delete,
+.transport-desktop-workspace .transport-management-delete {
+    width: 100% !important;
+    min-height: 40px !important;
+    border: 1px solid #fecaca !important;
+    border-radius: 6px !important;
+    background: #ffffff !important;
+    color: #dc2626 !important;
+    font-size: 11px !important;
+    line-height: 14px !important;
+    font-weight: 700 !important;
+}
+
 /* Dynamic Schedule: match reference toolbar + bottom legend strip more closely. */
 .transport-page-frame .transport-reference-toolbar,
 .transport-desktop-workspace .transport-reference-toolbar {

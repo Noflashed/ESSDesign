@@ -145,8 +145,26 @@ function getProjectLocation(builders, request) {
     return project?.siteLocation || request?.projectName || '';
 }
 
-function summarizeItems(itemValues) {
+function appendSummaryItem(grouped, description, qty, uom = 'ea') {
+    const numericQty = Number(qty || 0);
+    const cleanDescription = String(description || '').trim();
+    if (!cleanDescription || !Number.isFinite(numericQty) || numericQty <= 0) {
+        return;
+    }
+    const cleanUom = String(uom || 'ea').trim() || 'ea';
+    const existing = grouped.get(cleanDescription) || { description: cleanDescription, qty: 0, uom: cleanUom };
+    existing.qty += numericQty;
+    existing.uom = existing.uom || cleanUom;
+    grouped.set(cleanDescription, existing);
+}
+
+function summarizeItems(request) {
     const grouped = new Map();
+    const itemValues = request?.itemValues && typeof request.itemValues === 'object'
+        ? request.itemValues
+        : request?.item_values && typeof request.item_values === 'object'
+            ? request.item_values
+            : {};
 
     PICKING_CARD_ROWS.forEach((row) => {
         [['left', row.left], ['middle', row.middle], ['right', row.right]].forEach(([side, entry]) => {
@@ -155,11 +173,31 @@ function summarizeItems(itemValues) {
 
             const [label, spec] = entry;
             const description = [label, spec].map(value => String(value || '').trim()).filter(Boolean).join(' ');
-            if (!description) return;
+            appendSummaryItem(grouped, description, quantity, 'ea');
+        });
+    });
 
-            const existing = grouped.get(description) || { description, qty: 0, uom: 'ea' };
-            existing.qty += quantity;
-            grouped.set(description, existing);
+    const arraySources = [
+        request?.items,
+        request?.materials,
+        request?.materialsList,
+        request?.materialItems,
+        request?.lineItems,
+        request?.pickingItems,
+        itemValues?.items,
+        itemValues?.materials,
+        itemValues?.lineItems,
+        itemValues?.pickingItems,
+    ];
+
+    arraySources.forEach((source) => {
+        if (!Array.isArray(source)) return;
+        source.forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            const description = item.description || item.name || item.label || item.itemName || item.title || item.material;
+            const qty = item.qty ?? item.quantity ?? item.count ?? item.amount ?? item.value;
+            const uom = item.uom || item.unit || item.units;
+            appendSummaryItem(grouped, description, qty, uom);
         });
     });
 
@@ -290,6 +328,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestSortOrder, setRequestSortOrder] = useState('newest');
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
     const [selectedRequestId, setSelectedRequestId] = useState('');
+    const [selectedRequestDetail, setSelectedRequestDetail] = useState(null);
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -350,10 +389,12 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             });
     }, [archivedRequests, builders, isActiveQueueView, requestSearch, requestSortOrder, requestStatusFilter, visibleOrders]);
 
-    const selectedRequest = useMemo(
+    const selectedRequestListItem = useMemo(
         () => (selectedRequestId ? queueRows.find((request) => request.id === selectedRequestId) || null : null),
         [queueRows, selectedRequestId]
     );
+
+    const selectedRequest = selectedRequestDetail || selectedRequestListItem;
 
     useEffect(() => {
         if (!isActiveQueueView && !isArchivedQueueView) return;
@@ -368,6 +409,33 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             setSelectedRequestId(queueRows[0].id);
         }
     }, [isActiveQueueView, isArchivedQueueView, queueRows, selectedRequestId]);
+
+    useEffect(() => {
+        let active = true;
+
+        if (!selectedRequestListItem?.id) {
+            setSelectedRequestDetail(null);
+            return () => {
+                active = false;
+            };
+        }
+
+        setSelectedRequestDetail(current => current?.id === selectedRequestListItem.id ? current : selectedRequestListItem);
+
+        materialOrderRequestsAPI.getRequest(selectedRequestListItem.id)
+            .then((fullRequest) => {
+                if (!active) return;
+                setSelectedRequestDetail(fullRequest || selectedRequestListItem);
+            })
+            .catch(() => {
+                if (!active) return;
+                setSelectedRequestDetail(selectedRequestListItem);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [selectedRequestListItem]);
 
     const loadPageData = React.useCallback(() => {
         let active = true;
@@ -527,6 +595,26 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             setError(err.message || 'Failed to open archived PDF');
         } finally {
             setOpeningArchivedPdfId(null);
+        }
+    };
+
+    const handleDeleteRequest = async (request) => {
+        if (!request?.id) return;
+        const confirmed = window.confirm('Delete this active delivery? This will remove it from the ESS Transport schedule.');
+        if (!confirmed) return;
+        setSaving(true);
+        setError('');
+        try {
+            await materialOrderRequestsAPI.deleteRequest(request.id);
+            if (selectedRequestId === request.id) {
+                setSelectedRequestId('');
+                setSelectedRequestDetail(null);
+            }
+            await loadPageData();
+        } catch (err) {
+            setError(err.message || 'Failed to delete delivery');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -707,13 +795,13 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const renderListTable = () => {
         const isActive = isActiveQueueView;
         const activeCount = visibleOrders.length;
-        const scheduledCount = visibleOrders.filter(request => request.scheduledAtIso || request.scheduledDate).length;
         const pendingCount = visibleOrders.filter(request => !request.scheduledAtIso && !request.scheduledDate).length;
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
-        const selectedItems = summarizeItems(selectedRequest?.itemValues);
+        const selectedItems = summarizeItems(selectedRequest);
         const selectedOrderLabel = selectedRequest?.id
             ? (String(selectedRequest.id).startsWith('#') ? String(selectedRequest.id) : `#${selectedRequest.id}`)
             : '#Pending';
+        const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
 
         return (
             <div className="ts2-page material-ordering-transport-page transport-management-redesign">
@@ -732,8 +820,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 <div className={`transport-management-layout${selectedRequest ? '' : ' detail-closed'}`}>
                     <section className="transport-management-main">
                         <div className="transport-management-tabs">
-                            <button type="button" className={isActive && requestStatusFilter === 'all' ? 'active' : ''} onClick={() => { setRequestStatusFilter('all'); onNavigate?.('material-ordering-active'); }}>Active <span>{activeCount}</span></button>
-                            <button type="button" className={isActive && requestStatusFilter === 'scheduled' ? 'active' : ''} onClick={() => { setRequestStatusFilter('scheduled'); onNavigate?.('material-ordering-active'); }}>Scheduled <span>{scheduledCount}</span></button>
+                            <button type="button" className={isActive ? 'active' : ''} onClick={() => { setRequestStatusFilter('all'); onNavigate?.('material-ordering-active'); }}>Active <span>{activeCount}</span></button>
                             <button type="button" className={!isActive ? 'active' : ''} onClick={() => onNavigate?.('material-ordering-archived')}>Archived <span>{archivedRequests.length}</span></button>
                         </div>
 
@@ -748,8 +835,8 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 />
                             </label>
                             <div className="material-ordering-queue-chip-row">
-                                <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestStatusFilter(current => current === 'all' ? 'scheduled' : current === 'scheduled' ? 'pending' : 'all')}>
-                                    {requestStatusFilter === 'all' ? `All Statuses (${activeCount})` : requestStatusFilter === 'scheduled' ? `Scheduled (${scheduledCount})` : `Pending (${pendingCount})`}
+                                <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestStatusFilter(current => current === 'all' ? 'pending' : 'all')}>
+                                    {requestStatusFilter === 'all' ? `All Statuses (${activeCount})` : `Pending (${pendingCount})`}
                                 </button>
                                 <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestSortOrder(current => current === 'newest' ? 'oldest' : 'newest')}>
                                     {requestSortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
@@ -882,9 +969,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 </label>
                             </section>
 
-                            <button type="button" className="transport-management-save" onClick={() => onNavigate?.('truck-schedule')}>
-                                Schedule order
-                            </button>
+                            <div className="transport-management-detail-actions">
+                                {!selectedRequestIsScheduled && isActive ? (
+                                    <button type="button" className="transport-management-save" onClick={() => onNavigate?.('truck-schedule')}>
+                                        Schedule order
+                                    </button>
+                                ) : null}
+                                {isActive ? (
+                                    <button type="button" className="transport-management-delete" onClick={() => handleDeleteRequest(selectedRequest)} disabled={saving}>
+                                        {saving ? 'Deleting...' : 'Delete delivery'}
+                                    </button>
+                                ) : null}
+                            </div>
                         </aside>
                     ) : null}
                 </div>
@@ -917,8 +1013,8 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         />
                     </label>
                     <div className="material-ordering-queue-chip-row">
-                        <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestStatusFilter(current => current === 'all' ? 'scheduled' : current === 'scheduled' ? 'pending' : 'all')}>
-                            Filters: {requestStatusFilter === 'all' ? 'All' : requestStatusFilter === 'scheduled' ? 'Scheduled' : 'Pending'}
+                        <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestStatusFilter(current => current === 'all' ? 'pending' : 'all')}>
+                            Filters: {requestStatusFilter === 'all' ? 'All' : 'Pending'}
                         </button>
                         <button type="button" className="material-ordering-queue-chip" onClick={() => setRequestSortOrder(current => current === 'newest' ? 'oldest' : 'newest')}>
                             {requestSortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
@@ -935,7 +1031,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 {queueRows.length === 0 ? (
                     <div className="transport-placeholder-card material-ordering-transport-empty">
                         <span className="transport-placeholder-eyebrow">ESS Transport</span>
-                        <h2>{isActive ? 'No scheduled orders' : 'No archived orders'}</h2>
+                        <h2>{isActive ? 'No active orders' : 'No archived orders'}</h2>
                         <p>{isActive ? 'Submitted transport requests will appear here as soon as they enter the active queue.' : 'Completed transport requests will appear here once they have rolled out of the active queue.'}</p>
                     </div>
                 ) : (
@@ -950,7 +1046,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             <span className={"material-ordering-request-chip material-ordering-request-chip-scheduled" + (isScheduled ? ' active' : '')}>{isScheduled ? formatSchedulePill(request) : 'Not Scheduled'}</span>
                                             {request.scaffoldingSystem ? <span className="material-ordering-request-chip material-ordering-request-chip-scaffold">{request.scaffoldingSystem}</span> : null}
                                         </div>
-                                        <button type="button" className="material-ordering-request-delete" onClick={() => window.alert('Delete request support will be added here in the web transport suite.')}>🗑</button>
+                                        <button type="button" className="material-ordering-request-delete" onClick={() => handleDeleteRequest(request)}>🗑</button>
                                     </div>
 
                                     <div className="material-ordering-request-ios-brief">
@@ -976,10 +1072,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     </div>
 
                                     <div className="material-ordering-request-ios-footer">
-                                        <button type="button" className="material-ordering-request-ios-action" onClick={() => onNavigate?.('truck-schedule')}>
-                                            <span>{isScheduled ? 'Edit Schedule' : 'Schedule Order'}</span>
-                                        </button>
-                                        <span className="material-ordering-request-ios-chevron">›</span>
+                                        {!isScheduled ? (
+                                            <>
+                                                <button type="button" className="material-ordering-request-ios-action" onClick={() => onNavigate?.('truck-schedule')}>
+                                                    <span>Schedule Order</span>
+                                                </button>
+                                                <span className="material-ordering-request-ios-chevron">›</span>
+                                            </>
+                                        ) : null}
                                     </div>
                                 </article>
                             );

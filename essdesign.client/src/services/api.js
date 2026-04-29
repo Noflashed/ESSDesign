@@ -811,6 +811,12 @@ function normalizeMaterialOrderRequestListItem(item) {
         pdfPath: item?.pdfPath || '',
         scaffoldingSystem: item?.scaffoldingSystem || '',
         details: item?.details || '',
+        notes: item?.notes || '',
+        itemValues: item?.itemValues && typeof item.itemValues === 'object'
+            ? item.itemValues
+            : item?.item_values && typeof item.item_values === 'object'
+                ? item.item_values
+                : {},
         scheduledDate,
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
@@ -843,6 +849,14 @@ function normalizeMaterialOrderRequestRecord(record) {
     return {
         ...record,
         requestedByUserId: record.requestedByUserId || null,
+        notes: record.notes || '',
+        details: record.details || record?.itemValues?.__details || record?.item_values?.__details || '',
+        scaffoldingSystem: record.scaffoldingSystem || record?.itemValues?.__scaffoldingSystem || record?.item_values?.__scaffoldingSystem || '',
+        itemValues: record.itemValues && typeof record.itemValues === 'object'
+            ? record.itemValues
+            : record.item_values && typeof record.item_values === 'object'
+                ? record.item_values
+                : {},
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
@@ -942,6 +956,8 @@ export const materialOrderRequestsAPI = {
                     pdfPath: '',
                     scaffoldingSystem,
                     details,
+                    notes: record.notes || '',
+                    itemValues: record.itemValues || {},
                     scheduledDate: null,
                     scheduledHour: null,
                     scheduledMinute: null,
@@ -1023,6 +1039,10 @@ export const materialOrderRequestsAPI = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
+                    notes: updated.notes || item.notes || '',
+                    itemValues: updated.itemValues || item.itemValues || {},
+                    scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
+                    details: updated.details || updated?.itemValues?.__details || item.details || '',
                     scheduledDate: date,
                     scheduledHour: hour,
                     scheduledMinute: minute,
@@ -1065,6 +1085,10 @@ export const materialOrderRequestsAPI = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
+                    notes: updated.notes || item.notes || '',
+                    itemValues: updated.itemValues || item.itemValues || {},
+                    scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
+                    details: updated.details || updated?.itemValues?.__details || item.details || '',
                     deliveryStatus: status,
                     deliveryStartedAt: startedAt,
                     deliveryUnloadingAt: unloadingAt,
@@ -1078,6 +1102,26 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
+    },
+
+    deleteRequest: async (requestId) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.filter(item => item.id !== requestId),
+            updatedAt: nowIso(),
+        };
+
+        await Promise.all([
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+            deleteStorageObject(`material-order-requests/requests/${requestId}.json`).catch(() => {}),
+        ]);
     },
 };
 
