@@ -1730,29 +1730,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   return (
     <div className="ts2-page transport-dynamic-reference">
-      <div className="ts2-header transport-reference-header">
-        <div className="ts2-header-left">
-          {!isTruckRole ? (
-            <button type="button" className="ts2-header-icon-btn" aria-label="Transport menu">☰</button>
-          ) : null}
-          <h1>{isTruckRole ? (assignedTruck?.rego || 'Truck') + ' Schedule' : 'Dynamic Schedule'}</h1>
-        </div>
-        <div className="ts2-header-actions">
-          {!isTruckRole ? (
-            <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
-          ) : null}
-          <div className="ts2-header-date-pill">{selectedDate.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</div>
-          <button type="button" className="ts2-secondary-btn" onClick={() => setSelectedDate(startOfDay(new Date()))}>Today</button>
-          {!isTruckRole ? <button type="button" className="ts2-secondary-btn">Filter</button> : null}
-          {!isTruckRole ? <button type="button" className="ts2-secondary-btn" onClick={() => window.alert('Debug controls will be surfaced here in the web transport suite.')}>Debug</button> : null}
-          {!isTruckRole ? (
-            <button type="button" className="ts2-primary-btn solid" onClick={() => setShowPendingPanel(open => !open)}>
-              Pending Requests <span>{pendingRequests.length}</span>
-            </button>
-          ) : null}
-        </div>
-      </div>
-
       <div className="transport-reference-toolbar">
         <div className="transport-toolbar-date-group">
           <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))} aria-label="Previous day"><ToolbarIcon type="chevron-left" /></button>
@@ -1782,9 +1759,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <strong>Scheduled Orders</strong>
             <span>{pendingRequests.length}</span>
           </div>
-          {pendingRequests.length === 0 ? (
-            <p>All material requests are scheduled.</p>
-          ) : (
+          {pendingRequests.length > 0 ? (
             <div className="ts2-pending-list">
               {pendingRequests.map(request => (
                 <div
@@ -1802,7 +1777,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       ) : null}
 
@@ -1981,13 +1956,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           <ScheduleLegend />
           <div className="transport-reference-pending-head">
             <strong>Pending Requests ({pendingRequests.length})</strong>
-            <button type="button" onClick={() => setShowPendingPanel(open => !open)}>{showPendingPanel ? 'Collapse' : 'Expand'}</button>
           </div>
           <div className="transport-reference-pending-tools">
             <label><span>Search pending requests...</span><input type="text" aria-label="Search pending requests" readOnly /></label>
-            <button type="button">Earliest First</button>
-            <button type="button" className="active">▦</button>
-            <button type="button">▤</button>
           </div>
           <div className="transport-reference-pending-list">
             {pendingRequests.length > 0 ? pendingRequests.map(request => {
@@ -2007,7 +1978,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
                 </article>
               );
-            }) : <p>All material requests are scheduled.</p>}
+            }) : null}
           </div>
         </section>
       ) : null}
