@@ -145,6 +145,27 @@ function getProjectLocation(builders, request) {
     return project?.siteLocation || request?.projectName || '';
 }
 
+function summarizeItems(itemValues) {
+    const grouped = new Map();
+
+    PICKING_CARD_ROWS.forEach((row) => {
+        [['left', row.left], ['middle', row.middle], ['right', row.right]].forEach(([side, entry]) => {
+            const quantity = Number(itemValues?.[quantityKey(row.id, side)] || 0);
+            if (!quantity) return;
+
+            const [label, spec] = entry;
+            const description = [label, spec].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+            if (!description) return;
+
+            const existing = grouped.get(description) || { description, qty: 0, uom: 'ea' };
+            existing.qty += quantity;
+            grouped.set(description, existing);
+        });
+    });
+
+    return Array.from(grouped.values());
+}
+
 function createBlankOrder(user) {
     return {
         id: null,
@@ -268,6 +289,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('newest');
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
+    const [selectedRequestId, setSelectedRequestId] = useState('');
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -298,6 +320,54 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         }, 0),
         [form.itemValues]
     );
+
+    const queueRows = useMemo(() => {
+        const baseRows = isActiveQueueView ? visibleOrders : archivedRequests;
+        return [...baseRows]
+            .filter((request) => {
+                const query = requestSearch.trim().toLowerCase();
+                const matchesQuery = !query || [
+                    request.builderName,
+                    request.projectName,
+                    request.requestedByName,
+                    request.scaffoldingSystem,
+                    request.details,
+                    getProjectLocation(builders, request),
+                ].some(value => String(value || '').toLowerCase().includes(query));
+                if (!matchesQuery) return false;
+                if (requestStatusFilter === 'scheduled') {
+                    return Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
+                }
+                if (requestStatusFilter === 'pending') {
+                    return !request.scheduledAtIso && !(request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number');
+                }
+                return true;
+            })
+            .sort((left, right) => {
+                const leftValue = requestSortOrder === 'oldest' ? String(left.submittedAt || '') : String(right.submittedAt || '');
+                const rightValue = requestSortOrder === 'oldest' ? String(right.submittedAt || '') : String(left.submittedAt || '');
+                return leftValue.localeCompare(rightValue);
+            });
+    }, [archivedRequests, builders, isActiveQueueView, requestSearch, requestSortOrder, requestStatusFilter, visibleOrders]);
+
+    const selectedRequest = useMemo(
+        () => (selectedRequestId ? queueRows.find((request) => request.id === selectedRequestId) || null : null),
+        [queueRows, selectedRequestId]
+    );
+
+    useEffect(() => {
+        if (!isActiveQueueView && !isArchivedQueueView) return;
+        if (queueRows.length === 0) {
+            if (selectedRequestId !== '') {
+                setSelectedRequestId('');
+            }
+            return;
+        }
+        if (selectedRequestId === null) return;
+        if (selectedRequestId === '' || !queueRows.some((request) => request.id === selectedRequestId)) {
+            setSelectedRequestId(queueRows[0].id);
+        }
+    }, [isActiveQueueView, isArchivedQueueView, queueRows, selectedRequestId]);
 
     const loadPageData = React.useCallback(() => {
         let active = true;
@@ -636,36 +706,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     const renderListTable = () => {
         const isActive = isActiveQueueView;
-        const baseRows = isActive ? visibleOrders : archivedRequests;
-        const filteredRows = [...baseRows]
-            .filter((request) => {
-                const query = requestSearch.trim().toLowerCase();
-                const matchesQuery = !query || [
-                    request.builderName,
-                    request.projectName,
-                    request.requestedByName,
-                    request.scaffoldingSystem,
-                    request.details,
-                    getProjectLocation(builders, request),
-                ].some(value => String(value || '').toLowerCase().includes(query));
-                if (!matchesQuery) return false;
-                if (requestStatusFilter === 'scheduled') {
-                    return Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
-                }
-                if (requestStatusFilter === 'pending') {
-                    return !request.scheduledAtIso && !(request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number');
-                }
-                return true;
-            })
-            .sort((left, right) => {
-                const leftValue = requestSortOrder === 'oldest' ? String(left.submittedAt || '') : String(right.submittedAt || '');
-                const rightValue = requestSortOrder === 'oldest' ? String(right.submittedAt || '') : String(left.submittedAt || '');
-                return leftValue.localeCompare(rightValue);
-            });
-
         const activeCount = visibleOrders.length;
         const scheduledCount = visibleOrders.filter(request => request.scheduledAtIso || request.scheduledDate).length;
         const pendingCount = visibleOrders.filter(request => !request.scheduledAtIso && !request.scheduledDate).length;
+        const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
+        const selectedItems = summarizeItems(selectedRequest?.itemValues);
+        const selectedOrderLabel = selectedRequest?.id
+            ? (String(selectedRequest.id).startsWith('#') ? String(selectedRequest.id) : `#${selectedRequest.id}`)
+            : '#Pending';
 
         return (
             <div className="ts2-page material-ordering-transport-page transport-management-redesign">
@@ -681,7 +729,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </div>
                 </div>
 
-                <div className="transport-management-layout">
+                <div className={`transport-management-layout${selectedRequest ? '' : ' detail-closed'}`}>
                     <section className="transport-management-main">
                         <div className="transport-management-tabs">
                             <button type="button" className={isActive && requestStatusFilter === 'all' ? 'active' : ''} onClick={() => { setRequestStatusFilter('all'); onNavigate?.('material-ordering-active'); }}>Active <span>{activeCount}</span></button>
@@ -711,7 +759,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
                         {error ? <div className="module-error material-ordering-inline-error">{error}</div> : null}
 
-                        {filteredRows.length === 0 ? (
+                        {queueRows.length === 0 ? (
                             <div className="transport-placeholder-card material-ordering-transport-empty">
                                 <span className="transport-placeholder-eyebrow">ESS Transport</span>
                                 <h2>{isActive ? 'No active orders' : 'No archived orders'}</h2>
@@ -734,9 +782,10 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredRows.map((request) => {
+                                        {queueRows.map((request) => {
+                                            const isSelected = selectedRequest?.id === request.id;
                                             return (
-                                                <tr key={request.id}>
+                                                <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => setSelectedRequestId(request.id)}>
                                                     <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
                                                     <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
                                                     <td>{request.requestedByName || 'Unassigned'}</td>
@@ -753,11 +802,91 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 </table>
                                 <div className="transport-management-table-foot">
                                     <span>Last updated: {formatLastUpdated(requestUpdatedAt)}</span>
-                                    <span>1 - {filteredRows.length} of {filteredRows.length}</span>
+                                    <span>1 - {queueRows.length} of {queueRows.length}</span>
                                 </div>
                             </div>
                         )}
                     </section>
+                    {selectedRequest ? (
+                        <aside className="transport-management-detail">
+                            <div className="transport-management-detail-head">
+                                <div>
+                                    <span>Order</span>
+                                    <h2>{selectedOrderLabel}</h2>
+                                </div>
+                                <button type="button" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>×</button>
+                            </div>
+
+                            <section className="transport-management-panel">
+                                <div className="transport-management-panel-title">
+                                    <strong>Picking Card Summary</strong>
+                                    <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                            <path d="M8 2.5a.75.75 0 0 1 .75.75v5.19l1.72-1.72a.75.75 0 1 1 1.06 1.06L8.53 10.81a.75.75 0 0 1-1.06 0L4.47 7.78a.75.75 0 0 1 1.06-1.06l1.72 1.72V3.25A.75.75 0 0 1 8 2.5ZM3.25 12a.75.75 0 0 1 .75.75v.5h8v-.5a.75.75 0 0 1 1.5 0V14a.75.75 0 0 1-.75.75h-9.5A.75.75 0 0 1 2.5 14v-1.25A.75.75 0 0 1 3.25 12Z" fill="currentColor" />
+                                        </svg>
+                                        <span>Download PDF</span>
+                                    </button>
+                                </div>
+
+                                <dl className="transport-management-summary-grid">
+                                    <div>
+                                        <dt>Builder</dt>
+                                        <dd>{selectedRequest.builderName || 'Material Order'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Project</dt>
+                                        <dd>{selectedRequest.projectName || 'Awaiting project'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Delivery Address</dt>
+                                        <dd>{selectedSiteLocation || 'Awaiting site address'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested By</dt>
+                                        <dd>{selectedRequest.requestedByName || 'Unassigned'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Scaffold System</dt>
+                                        <dd>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Submitted</dt>
+                                        <dd>{formatDateTime(selectedRequest.submittedAt)}</dd>
+                                    </div>
+                                </dl>
+
+                                <div className="transport-management-items">
+                                    <div className="transport-management-items-head">
+                                        <strong>Items</strong>
+                                        <span>Qty</span>
+                                        <span>UOM</span>
+                                    </div>
+                                    {selectedItems.length > 0 ? selectedItems.map((item) => (
+                                        <div key={item.description}>
+                                            <strong>{item.description}</strong>
+                                            <span>{item.qty}</span>
+                                            <span>{item.uom}</span>
+                                        </div>
+                                    )) : (
+                                        <div className="transport-management-items-empty">
+                                            <strong>No picking items added</strong>
+                                            <span>0</span>
+                                            <span>ea</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <label className="transport-management-notes">
+                                    <strong>Notes</strong>
+                                    <textarea value={selectedRequest.notes || ''} readOnly placeholder="No notes supplied." />
+                                </label>
+                            </section>
+
+                            <button type="button" className="transport-management-save" onClick={() => onNavigate?.('truck-schedule')}>
+                                Schedule order
+                            </button>
+                        </aside>
+                    ) : null}
                 </div>
             </div>
         );
@@ -796,14 +925,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         </button>
                     </div>
                     <div className="material-ordering-queue-meta">
-                        <span>Total {filteredRows.length} {filteredRows.length === 1 ? 'picking card' : 'picking cards'}</span>
+                        <span>Total {queueRows.length} {queueRows.length === 1 ? 'picking card' : 'picking cards'}</span>
                         <span>Last updated: {formatLastUpdated(requestUpdatedAt)}</span>
                     </div>
                 </div>
 
                 {error ? <div className="module-error material-ordering-inline-error">{error}</div> : null}
 
-                {filteredRows.length === 0 ? (
+                {queueRows.length === 0 ? (
                     <div className="transport-placeholder-card material-ordering-transport-empty">
                         <span className="transport-placeholder-eyebrow">ESS Transport</span>
                         <h2>{isActive ? 'No scheduled orders' : 'No archived orders'}</h2>
@@ -811,7 +940,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </div>
                 ) : (
                     <div className="material-ordering-request-stack material-ordering-request-stack-ios">
-                        {filteredRows.map((request) => {
+                        {queueRows.map((request) => {
                             const isScheduled = Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
                             const siteLocation = getProjectLocation(builders, request);
                             return (
