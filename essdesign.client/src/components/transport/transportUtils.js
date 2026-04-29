@@ -1,3 +1,5 @@
+import { analysisAPI } from '../../services/api';
+
 export const ESS_NAVY = '#102B5C';
 export const ESS_ORANGE = '#F47C20';
 export const YARD_LOCATION = '130 Gilba Road, Girraween, NSW, Australia';
@@ -15,14 +17,12 @@ export const TRUCK_LANES = [
   { id: 'truck-3', rego: 'ESS03', role: 'truck_ess03' },
 ];
 
-const geocodeCache = new Map();
 const routeDataCache = new Map();
 const routeEstimatePromiseCache = new Map();
 const routeEstimateValueCache = new Map();
 let safetyBuildersCache = null;
 let safetyBuildersCacheAt = 0;
 const SAFETY_BUILDERS_CACHE_MS = 60 * 1000;
-const ROUTE_FETCH_TIMEOUT_MS = 8000;
 
 export function isTruckDeviceRole(role) {
   return role === 'truck_ess01' || role === 'truck_ess02' || role === 'truck_ess03';
@@ -224,96 +224,38 @@ export async function getSafetyBuildersCached(getBuildersFn) {
   return builders;
 }
 
-export async function geocodeAddress(address) {
-  const key = String(address || '').trim().toLowerCase();
-  if (!key) {
-    return null;
-  }
-  if (!geocodeCache.has(key)) {
-    geocodeCache.set(
-      key,
-      fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(address)}`, {
-        headers: {
-          Accept: 'application/json',
-        },
-      })
-        .then(async response => {
-          if (!response?.ok) {
-            geocodeCache.delete(key);
-            return null;
-          }
-          const data = await response.json();
-          const first = data?.[0];
-          if (!first?.lat || !first?.lon) {
-            geocodeCache.delete(key);
-            return null;
-          }
-          const lat = Number(first.lat);
-          const lon = Number(first.lon);
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-            geocodeCache.delete(key);
-            return null;
-          }
-          return { lat, lon };
-        })
-        .catch(() => {
-          geocodeCache.delete(key);
-          return null;
-        }),
-    );
-  }
-  return geocodeCache.get(key);
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = ROUTE_FETCH_TIMEOUT_MS) {
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-
-  try {
-    return await fetch(url, controller ? { ...options, signal: controller.signal } : options);
-  } catch {
-    return null;
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
-
 export async function fetchRouteData(siteLocation) {
   if (!siteLocation) {
     return null;
   }
-  const [yard, site] = await Promise.all([
-    geocodeAddress(YARD_LOCATION),
-    geocodeAddress(siteLocation),
-  ]);
-  if (!yard || !site) {
+
+  try {
+    const preview = await analysisAPI.routePreview(siteLocation);
+    if (!preview?.yard || !preview?.site || !Array.isArray(preview?.pathPoints) || preview.pathPoints.length === 0) {
+      return null;
+    }
+
+    return {
+      yard: {
+        lat: Number(preview.yard.lat),
+        lon: Number(preview.yard.lon),
+      },
+      site: {
+        lat: Number(preview.site.lat),
+        lon: Number(preview.site.lon),
+      },
+      distanceMeters: Number(preview.distanceMeters) || 0,
+      durationSeconds: Number(preview.durationSeconds) || 0,
+      pathPoints: preview.pathPoints
+        .map(point => ({
+          lat: Number(point.lat),
+          lon: Number(point.lon),
+        }))
+        .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon)),
+    };
+  } catch {
     return null;
   }
-
-  const response = await fetchWithTimeout(
-    `https://router.project-osrm.org/route/v1/driving/${yard.lon},${yard.lat};${site.lon},${site.lat}?overview=full&geometries=geojson`,
-    { headers: { Accept: 'application/json' } },
-  );
-
-  if (!response?.ok) {
-    return null;
-  }
-
-  const payload = await response.json().catch(() => null);
-  const route = payload?.routes?.[0];
-  if (!route?.geometry?.coordinates?.length) {
-    return null;
-  }
-
-  return {
-    yard,
-    site,
-    distanceMeters: Number(route.distance) || 0,
-    durationSeconds: Number(route.duration) || 0,
-    pathPoints: route.geometry.coordinates.map(([lon, lat]) => ({ lat, lon })),
-  };
 }
 
 export async function getCachedRouteData(siteLocation) {

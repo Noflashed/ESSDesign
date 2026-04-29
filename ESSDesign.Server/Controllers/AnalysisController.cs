@@ -68,5 +68,29 @@ namespace ESSDesign.Server.Controllers
                 return StatusCode(500, new { error = "Recommendation failed. Please try again." });
             }
         }
+
+        [HttpPost("route-preview")]
+        public async Task<IActionResult> RoutePreview(
+            [FromBody] DeliveryAnalysisService.RoutePreviewRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.SiteLocation))
+                return BadRequest(new { error = "siteLocation is required." });
+
+            try
+            {
+                var result = await _deliveryAnalysisService.GetRoutePreviewAsync(request);
+                if (result == null)
+                {
+                    return NotFound(new { error = "Route preview unavailable for this site." });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Route preview failed for site {Site}", request.SiteLocation);
+                return StatusCode(500, new { error = "Route preview failed. Please try again." });
+            }
+        }
     }
 }

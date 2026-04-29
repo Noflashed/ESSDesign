@@ -32,6 +32,26 @@ namespace ESSDesign.Server.Services
             public string EstimatedReturn { get; set; } = string.Empty;
         }
 
+        public sealed class RoutePreviewRequest
+        {
+            public string SiteLocation { get; set; } = string.Empty;
+        }
+
+        public sealed class RoutePoint
+        {
+            public double Lat { get; set; }
+            public double Lon { get; set; }
+        }
+
+        public sealed class RoutePreviewResult
+        {
+            public RoutePoint Yard { get; set; } = new();
+            public RoutePoint Site { get; set; } = new();
+            public double DistanceMeters { get; set; }
+            public double DurationSeconds { get; set; }
+            public List<RoutePoint> PathPoints { get; set; } = new();
+        }
+
         public sealed class TimeSlotRecommendationRequest
         {
             public string SiteLocation { get; set; } = string.Empty;
@@ -205,6 +225,63 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        private async Task<RoutePreviewResult?> GetOsrmRoutePreviewAsync(
+            double fromLat,
+            double fromLon,
+            double toLat,
+            double toLon,
+            HttpClient client)
+        {
+            try
+            {
+                var url = $"https://router.project-osrm.org/route/v1/driving/{fromLon:F6},{fromLat:F6};{toLon:F6},{toLat:F6}?overview=full&geometries=geojson";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("User-Agent", "ESSDesignApp/1.0 (nathanb@erectsafe.com.au)");
+
+                var response = await client.SendAsync(request);
+                if (!response.IsSuccessStatusCode) return null;
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+
+                if (!root.TryGetProperty("code", out var codeEl) || codeEl.GetString() != "Ok") return null;
+                if (!root.TryGetProperty("routes", out var routesEl)) return null;
+
+                var routes = routesEl.EnumerateArray().ToList();
+                if (routes.Count == 0) return null;
+
+                var route = routes[0];
+                if (!route.TryGetProperty("geometry", out var geometryEl)) return null;
+                if (!geometryEl.TryGetProperty("coordinates", out var coordinatesEl)) return null;
+
+                var pathPoints = new List<RoutePoint>();
+                foreach (var coordinate in coordinatesEl.EnumerateArray())
+                {
+                    var parts = coordinate.EnumerateArray().ToArray();
+                    if (parts.Length < 2) continue;
+                    var lon = parts[0].GetDouble();
+                    var lat = parts[1].GetDouble();
+                    pathPoints.Add(new RoutePoint { Lat = lat, Lon = lon });
+                }
+
+                if (pathPoints.Count == 0) return null;
+
+                return new RoutePreviewResult
+                {
+                    Yard = new RoutePoint { Lat = fromLat, Lon = fromLon },
+                    Site = new RoutePoint { Lat = toLat, Lon = toLon },
+                    DistanceMeters = route.GetProperty("distance").GetDouble(),
+                    DurationSeconds = route.GetProperty("duration").GetDouble(),
+                    PathPoints = pathPoints,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OSRM route preview failed");
+                return null;
+            }
+        }
+
         private static string AddMinutesFormatted(string date, int hour, int minute, int addMinutes)
         {
             try
@@ -363,6 +440,30 @@ namespace ESSDesign.Server.Services
                 EstimatedUnloadComplete = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading),
                 EstimatedReturn = AddMinutesFormatted(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute, travelToSite + unloading + returnTravel),
             };
+        }
+
+        public async Task<RoutePreviewResult?> GetRoutePreviewAsync(RoutePreviewRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.SiteLocation))
+            {
+                return null;
+            }
+
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+            var siteCoords = await GeocodeAsync(request.SiteLocation, httpClient);
+            if (!siteCoords.HasValue)
+            {
+                return null;
+            }
+
+            return await GetOsrmRoutePreviewAsync(
+                YardLat,
+                YardLon,
+                siteCoords.Value.Lat,
+                siteCoords.Value.Lon,
+                httpClient);
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)
