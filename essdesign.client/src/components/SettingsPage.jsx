@@ -3,6 +3,7 @@ import React from 'react';
 function getRoleDisplayName(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';
         case 'leading_hand': return 'Leading Hand';

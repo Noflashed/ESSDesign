@@ -34,6 +34,7 @@ function normalizePreferredSiteIds(siteIds) {
 function getRoleLabel(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';
         case 'leading_hand': return 'Leading Hand';
@@ -618,6 +619,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 >
                                     <option value="general_scaffolder">Scaffolder</option>
                                     <option value="leading_hand">Leading Hand</option>
+                                    <option value="scaffold_designer">Scaffold Designer</option>
                                     <option value="site_supervisor">Site Supervisor</option>
                                     <option value="project_manager">Project Manager</option>
                                     <option value="transport_management">Transport Management</option>
@@ -746,6 +748,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 >
                                     <option value="viewer">Viewer</option>
                                     <option value="admin">Admin</option>
+                                    <option value="scaffold_designer">Scaffold Designer</option>
                                     <option value="site_supervisor">Site Supervisor</option>
                                     <option value="project_manager">Project Manager</option>
                                     <option value="leading_hand">Leading Hand</option>

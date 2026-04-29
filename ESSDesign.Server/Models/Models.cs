@@ -217,6 +217,7 @@ namespace ESSDesign.Server.Models
     {
         public const string Admin = "admin";
         public const string Viewer = "viewer";
+        public const string ScaffoldDesigner = "scaffold_designer";
         public const string SiteSupervisor = "site_supervisor";
         public const string ProjectManager = "project_manager";
         public const string LeadingHand = "leading_hand";
@@ -228,7 +229,7 @@ namespace ESSDesign.Server.Models
 
         public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
         {
-            Admin, Viewer, SiteSupervisor, ProjectManager,
+            Admin, Viewer, ScaffoldDesigner, SiteSupervisor, ProjectManager,
             LeadingHand, GeneralScaffolder, TransportManagement,
             TruckEss01, TruckEss02, TruckEss03,
         };
