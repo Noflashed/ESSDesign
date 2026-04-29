@@ -2215,3 +2215,82 @@
     color: #111827 !important;
     font-weight: 800 !important;
 }
+
+/* Typography correction for the Dynamic Schedule right-side inspector.
+   The reference uses crisp small text with medium-bold values, not heavy black UI text. */
+.transport-page-frame .transport-schedule-inspector,
+.transport-desktop-workspace .transport-schedule-inspector {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+}
+
+.transport-page-frame .transport-schedule-inspector *,
+.transport-desktop-workspace .transport-schedule-inspector * {
+    letter-spacing: 0 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head span:first-child,
+.transport-desktop-workspace .transport-schedule-inspector-head span:first-child,
+.transport-page-frame .transport-panel-section-title,
+.transport-desktop-workspace .transport-panel-section-title,
+.transport-page-frame .transport-schedule-detail-list dt,
+.transport-desktop-workspace .transport-schedule-detail-list dt,
+.transport-page-frame .transport-schedule-estimate-card span,
+.transport-desktop-workspace .transport-schedule-estimate-card span,
+.transport-page-frame .transport-schedule-timeline > strong,
+.transport-desktop-workspace .transport-schedule-timeline > strong {
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head h2,
+.transport-desktop-workspace .transport-schedule-inspector-head h2 {
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    line-height: 16px !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head .transport-status-pill,
+.transport-desktop-workspace .transport-schedule-inspector-head .transport-status-pill {
+    font-weight: 700 !important;
+    font-size: 9px !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list dd,
+.transport-desktop-workspace .transport-schedule-detail-list dd {
+    font-weight: 700 !important;
+    font-size: 10px !important;
+    line-height: 13px !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card strong,
+.transport-desktop-workspace .transport-schedule-estimate-card strong,
+.transport-page-frame .transport-weather-grid strong,
+.transport-desktop-workspace .transport-weather-grid strong {
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-weather-grid span:not(.transport-weather-icon),
+.transport-desktop-workspace .transport-weather-grid span:not(.transport-weather-icon),
+.transport-page-frame .transport-schedule-recommendation small,
+.transport-desktop-workspace .transport-schedule-recommendation small,
+.transport-page-frame .transport-timeline-row span,
+.transport-desktop-workspace .transport-timeline-row span,
+.transport-page-frame .transport-timeline-row b,
+.transport-desktop-workspace .transport-timeline-row b {
+    font-weight: 600 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation strong,
+.transport-desktop-workspace .transport-schedule-recommendation strong {
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    line-height: 15px !important;
+}
+
+.transport-page-frame .transport-inspector-action,
+.transport-desktop-workspace .transport-inspector-action {
+    font-weight: 700 !important;
+}
