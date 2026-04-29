@@ -115,6 +115,55 @@ function cycleScaleMode(mode) {
   return SCALE_ORDER[(index + 1) % SCALE_ORDER.length];
 }
 
+function parseManualScheduleTime(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) {
+    return null;
+  }
+  const compact = raw.replace(/\s+/g, '');
+  const match = compact.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)?$/);
+  if (!match) {
+    return null;
+  }
+  let hour = Number(match[1]);
+  const minute = match[2] === undefined ? 0 : Number(match[2]);
+  const suffix = match[3];
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+    return null;
+  }
+  if (suffix) {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    if (suffix === 'pm' && hour !== 12) {
+      hour += 12;
+    }
+    if (suffix === 'am' && hour === 12) {
+      hour = 0;
+    }
+  } else if (hour < 0 || hour > 23) {
+    return null;
+  }
+  return hour * 60 + minute;
+}
+
+function formatManualTimeInput(minutes) {
+  const hour = Math.floor(minutes / 60);
+  const minute = Math.floor(minutes % 60);
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function getScaffoldDetailText(request, event) {
+  return (
+    request?.details ||
+    request?.itemValues?.__details ||
+    request?.item_values?.__details ||
+    event?.scaffoldingSystem ||
+    request?.scaffoldingSystem ||
+    'Scaffold details pending'
+  );
+}
+
 function buildBoardState(requestsForDay, routeMap) {
   const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
   const groupedByTruck = new Map();
@@ -1177,6 +1226,36 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, dayEvents, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, requestMetaMap, selectedDate]);
 
+  const handleManualScheduleTime = useCallback((requestId) => {
+    const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
+    if (!scheduleEvent) {
+      setTileMenu(null);
+      return;
+    }
+    const durationMinutes = eventDurationMinutesMap[requestId] ?? 90;
+    const currentStart = eventStartMinutesMap[requestId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+    const input = window.prompt('Enter start time (for example 09:30 or 2:15 PM)', formatManualTimeInput(currentStart));
+    if (input === null) {
+      setTileMenu(null);
+      return;
+    }
+    const parsedMinutes = parseManualScheduleTime(input);
+    if (parsedMinutes === null) {
+      window.alert('Enter a valid time, for example 09:30 or 2:15 PM.');
+      setTileMenu(null);
+      return;
+    }
+    const earliest = SCREEN_START_HOUR * 60;
+    const latest = SCREEN_END_HOUR * 60 - durationMinutes;
+    if (parsedMinutes < earliest || parsedMinutes > latest) {
+      window.alert(`Choose a time between ${formatTimeChip(SCREEN_START_HOUR, 0)} and ${formatTimeChip(Math.floor(latest / 60), latest % 60)}.`);
+      setTileMenu(null);
+      return;
+    }
+    setTileMenu(null);
+    scheduleRequestAt(requestId, scheduleEvent.truckId, parsedMinutes, durationMinutes, { exact: true });
+  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
     if (!requestId) {
@@ -1753,6 +1832,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         : scheduleStatusAppearance(status);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const primaryEnd = startMinutes + primaryDurationMinutes;
+                      const siteLocation = requestSiteLocationMap[event.orderId] || '';
+                      const timing = getTimingProfile(getCachedRouteEstimateValue(siteLocation) ?? null);
+                      const siteArrivalMinutes = startMinutes + timing.transitMinutes;
+                      const siteArrivalLabel = siteLocation
+                        ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
+                        : 'pending';
+                      const scaffoldDetailText = getScaffoldDetailText(request, event);
                       return (
                         <div
                           key={event.id}
@@ -1768,7 +1854,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             setTileMenu({
                               orderId: event.orderId,
                               x: Math.max(8, Math.min(menuEvent.clientX, window.innerWidth - 224)),
-                              y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 104)),
+                              y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 144)),
                             });
                           }}
                         >
@@ -1788,7 +1874,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           >
                             <span className="ts2-event-time">{formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} – {formatTimeChip(Math.floor(primaryEnd / 60), Math.floor(primaryEnd % 60))}</span>
                             <strong className="ts2-event-title">{event.builderName || 'Material Order'}</strong>
-                            <span className="ts2-event-subtitle">{event.projectName || 'Scheduled delivery'}</span>
+                            <span className="ts2-event-subtitle">{scaffoldDetailText}</span>
+                            <span className="ts2-event-arrival">ETA site {siteArrivalLabel}</span>
                             <div className="ts2-event-status-row">
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
                               <span>{groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
@@ -1837,7 +1924,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   onDragStart={(event) => handlePendingDragStart(event, request)}
                   onDragEnd={handlePendingDragEnd}
                 >
-                  <div><b>{request.id}</b></div>
+                  <div><b>{getScaffoldDetailText(request)}</b></div>
                   <strong>{request.builderName || 'Material Order'}</strong>
                   <span>{request.projectName || 'Awaiting site assignment'}</span>
                   <small>Requested by {request.requestedByName || 'Transport'}</small>
@@ -1910,6 +1997,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
+          <button type="button" role="menuitem" onClick={() => handleManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+            <span>Set time manually</span>
+            <small>Enter exact start time</small>
+          </button>
           <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Unschedule order</span>
             <small>Return to pending requests</small>

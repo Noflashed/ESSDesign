@@ -1336,6 +1336,30 @@
     font-size: 10px !important;
 }
 
+.transport-page-frame .ts2-event-subtitle,
+.transport-desktop-workspace .ts2-event-subtitle {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden !important;
+    margin-top: 3px !important;
+    color: #475569 !important;
+    line-height: 12px !important;
+}
+
+.transport-page-frame .ts2-event-arrival,
+.transport-desktop-workspace .ts2-event-arrival {
+    display: block !important;
+    margin-top: 4px !important;
+    color: #102b5c !important;
+    font-size: 9px !important;
+    line-height: 11px !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
 .transport-reference-pending {
     grid-column: 1;
     grid-row: 2;
