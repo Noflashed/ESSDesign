@@ -926,7 +926,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
-  const timelineScaleLabel = useMemo(() => SCALE_MODES[timelineScaleMode]?.label || 'Scale', [timelineScaleMode]);
   const setTimelineScaleWithAnchor = useCallback((nextMode) => {
     if (!SCALE_MODES[nextMode]) {
       return;
@@ -1822,7 +1821,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 onChange={(event) => setSnapToTimeMarks(event.target.checked)}
               />
               <span>Snap</span>
-              <small>{snapToTimeMarks ? `${timelineSnapStep} min marks` : 'Free move'}</small>
             </label>
             <div className="transport-scale-control">
               <span>Scale</span>
@@ -1835,10 +1833,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 onChange={(event) => setTimelineScaleWithAnchor(SCALE_ORDER[Number(event.target.value)] || 'standard')}
                 aria-label="Timeline scale"
               />
-              <button type="button" onClick={() => setTimelineScaleWithAnchor(cycleScaleMode(timelineScaleMode))}>{timelineScaleLabel}</button>
             </div>
-            <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
-            <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
           </div>
         </div>
 
