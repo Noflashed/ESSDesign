@@ -687,7 +687,8 @@
     color: #3730A3 !important;
 }
 
-.transport-page-frame .status-scheduled { background: #DCFCE7 !important; color: #166534 !important; }
+.transport-page-frame .status-scheduled,
+.transport-desktop-workspace .status-scheduled { background: #CFFAFE !important; color: #0E7490 !important; }
 .transport-page-frame .status-in_transit { background: #DBEAFE !important; color: #1D4ED8 !important; }
 .transport-page-frame .status-unloading { background: #FEF3C7 !important; color: #B45309 !important; }
 .transport-page-frame .status-return_transit { background: #F3E8FF !important; color: #7E22CE !important; }
@@ -1054,17 +1055,8 @@
 .transport-desktop-workspace .transport-reference-header .ts2-header-actions::after,
 .transport-page-frame .transport-management-redesign .ts2-header-actions::after,
 .transport-desktop-workspace .transport-management-redesign .ts2-header-actions::after {
-    content: "?";
-    display: inline-flex;
-    width: 24px;
-    height: 24px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #cbd5e1;
-    border-radius: 50%;
-    color: #1f2937;
-    font-size: 14px;
-    font-weight: 900;
+    content: none !important;
+    display: none !important;
 }
 
 .transport-reference-toolbar {
@@ -2996,9 +2988,9 @@
 
 .transport-page-frame .transport-reference-legend-pill.scheduled,
 .transport-desktop-workspace .transport-reference-legend-pill.scheduled {
-    background: #eaf8ee !important;
-    color: #15803d !important;
-    border-color: #b9e4c6 !important;
+    background: #ecfeff !important;
+    color: #0e7490 !important;
+    border-color: #a5f3fc !important;
 }
 
 .transport-page-frame .transport-reference-legend-pill.in-transit,
@@ -3317,7 +3309,7 @@
 }
 
 .transport-drag-ghost span {
-    color: #15803d;
+    color: #0e7490;
     font-size: 10px;
     line-height: 12px;
     font-weight: 800;
@@ -3342,7 +3334,7 @@
     align-items: center;
     gap: 5px;
     margin-top: 2px;
-    color: #15803d;
+    color: #0e7490;
     font-size: 10px;
     line-height: 12px;
     font-style: normal;
@@ -3353,7 +3345,7 @@
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: #16a34a;
+    background: #0891b2;
 }
 
 .transport-tile-menu {

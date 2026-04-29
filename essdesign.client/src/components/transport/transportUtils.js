@@ -148,7 +148,7 @@ export function scheduleStatusAppearance(status) {
     case 'return_transit':
       return { accent: '#6B7280', background: '#EEF2F7', text: '#667085', title: '#0F2A62' };
     default:
-      return { accent: '#16A34A', background: '#EAF8EE', text: '#15803D', title: '#0F2A62' };
+      return { accent: '#0891B2', background: '#ECFEFF', text: '#0E7490', title: '#0F2A62' };
   }
 }
 
