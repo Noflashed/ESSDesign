@@ -2294,3 +2294,50 @@
 .transport-desktop-workspace .transport-inspector-action {
     font-weight: 700 !important;
 }
+
+.transport-page-frame .transport-schedule-redesign-grid--inspector-closed,
+.transport-desktop-workspace .transport-schedule-redesign-grid--inspector-closed {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.transport-page-frame .transport-inspector-close,
+.transport-desktop-workspace .transport-inspector-close {
+    align-self: start !important;
+    width: 14px !important;
+    height: 14px !important;
+    min-width: 14px !important;
+    min-height: 14px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #64748b !important;
+    font-size: 18px !important;
+    line-height: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer;
+}
+
+.transport-page-frame .transport-inspector-close:hover,
+.transport-desktop-workspace .transport-inspector-close:hover {
+    color: #475569 !important;
+}
+
+.transport-page-frame .transport-inspector-pdf-action,
+.transport-desktop-workspace .transport-inspector-pdf-action {
+    min-height: 38px !important;
+    margin-top: 10px !important;
+    border: 1px solid #8bb9ff !important;
+    background: #ffffff !important;
+    color: #2563eb !important;
+    box-shadow: none !important;
+}
+
+.transport-page-frame .transport-inspector-pdf-action:disabled,
+.transport-desktop-workspace .transport-inspector-pdf-action:disabled {
+    border-color: #d7e0eb !important;
+    color: #94a3b8 !important;
+    background: #f8fafc !important;
+    opacity: 1 !important;
+}
