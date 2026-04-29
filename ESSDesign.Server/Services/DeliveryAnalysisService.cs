@@ -61,7 +61,7 @@ namespace ESSDesign.Server.Services
             public List<RoutePoint> PathPoints { get; set; } = new();
         }
 
-        private sealed class RouteTimingResult
+        private class RouteTimingResult
         {
             public double DistanceMeters { get; set; }
             public double BaseDurationSeconds { get; set; }
@@ -71,6 +71,11 @@ namespace ESSDesign.Server.Services
             public string TrafficNote { get; set; } = string.Empty;
             public double DistanceKm => Math.Round(DistanceMeters / 1000.0, 1);
             public double TrafficDelaySeconds => Math.Max(0, DurationSeconds - BaseDurationSeconds);
+        }
+
+        private sealed class RouteProviderResult : RouteTimingResult
+        {
+            public List<RoutePoint> PathPoints { get; set; } = new();
         }
 
         public sealed class TimeSlotRecommendationRequest
@@ -291,6 +296,131 @@ namespace ESSDesign.Server.Services
             return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
         }
 
+        private string? GetTomTomApiKey()
+        {
+            var candidates = new[]
+            {
+                _configuration["TomTom:ApiKey"],
+                _configuration["TomTom:Key"],
+                _configuration["Routing:TomTomApiKey"],
+            };
+
+            return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        }
+
+        private static string BuildTomTomDepartureValue(DateTimeOffset departure)
+        {
+            return departure <= DateTimeOffset.UtcNow.AddMinutes(2)
+                ? "now"
+                : departure.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+        }
+
+        private async Task<RouteProviderResult?> GetTomTomRouteAsync(
+            double fromLat,
+            double fromLon,
+            double toLat,
+            double toLon,
+            HttpClient client,
+            DateTimeOffset departure)
+        {
+            var apiKey = GetTomTomApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return null;
+            }
+
+            try
+            {
+                var locations = FormattableString.Invariant($"{fromLat:F6},{fromLon:F6}:{toLat:F6},{toLon:F6}");
+                var url = $"https://api.tomtom.com/routing/1/calculateRoute/{locations}/json" +
+                          "?traffic=true" +
+                          "&computeTravelTimeFor=all" +
+                          "&routeRepresentation=polyline" +
+                          "&travelMode=truck" +
+                          "&vehicleCommercial=true" +
+                          $"&departAt={Uri.EscapeDataString(BuildTomTomDepartureValue(departure))}" +
+                          $"&key={Uri.EscapeDataString(apiKey)}";
+
+                using var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+                if (!root.TryGetProperty("routes", out var routesEl))
+                {
+                    return null;
+                }
+
+                var routes = routesEl.EnumerateArray().ToList();
+                if (routes.Count == 0 || !routes[0].TryGetProperty("summary", out var summary))
+                {
+                    return null;
+                }
+
+                var distanceMeters = summary.TryGetProperty("lengthInMeters", out var lengthEl)
+                    ? lengthEl.GetDouble()
+                    : 0;
+                var durationSeconds = summary.TryGetProperty("travelTimeInSeconds", out var travelEl)
+                    ? travelEl.GetDouble()
+                    : 0;
+                var baseDurationSeconds = summary.TryGetProperty("noTrafficTravelTimeInSeconds", out var noTrafficEl)
+                    ? noTrafficEl.GetDouble()
+                    : durationSeconds;
+                var trafficDelaySeconds = summary.TryGetProperty("trafficDelayInSeconds", out var delayEl)
+                    ? Math.Max(0, delayEl.GetDouble())
+                    : Math.Max(0, durationSeconds - baseDurationSeconds);
+
+                if (distanceMeters <= 0 || durationSeconds <= 0)
+                {
+                    return null;
+                }
+
+                var pathPoints = new List<RoutePoint>();
+                if (routes[0].TryGetProperty("legs", out var legsEl))
+                {
+                    foreach (var leg in legsEl.EnumerateArray())
+                    {
+                        if (!leg.TryGetProperty("points", out var pointsEl))
+                        {
+                            continue;
+                        }
+
+                        foreach (var point in pointsEl.EnumerateArray())
+                        {
+                            if (!point.TryGetProperty("latitude", out var latEl) || !point.TryGetProperty("longitude", out var lonEl))
+                            {
+                                continue;
+                            }
+
+                            pathPoints.Add(new RoutePoint { Lat = latEl.GetDouble(), Lon = lonEl.GetDouble() });
+                        }
+                    }
+                }
+
+                var delayMinutes = Math.Round(trafficDelaySeconds / 60.0);
+                return new RouteProviderResult
+                {
+                    DistanceMeters = distanceMeters,
+                    BaseDurationSeconds = baseDurationSeconds,
+                    DurationSeconds = Math.Max(baseDurationSeconds, durationSeconds),
+                    HasLiveTraffic = true,
+                    TrafficProvider = "TomTom traffic",
+                    TrafficNote = delayMinutes > 0
+                        ? $"TomTom traffic adding about {delayMinutes:F0} min"
+                        : "TomTom traffic showing no extra delay",
+                    PathPoints = pathPoints,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "TomTom routing failed");
+                return null;
+            }
+        }
+
         private async Task<RouteTimingResult?> GetGoogleTrafficRouteAsync(
             double fromLat,
             double fromLon,
@@ -422,6 +552,12 @@ namespace ESSDesign.Server.Services
             DateTimeOffset? departure = null)
         {
             var departureTime = departure ?? GetSydneyNow();
+            var tomTomRoute = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime);
+            if (tomTomRoute != null)
+            {
+                return tomTomRoute;
+            }
+
             var googleRoute = await GetGoogleTrafficRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime);
             if (googleRoute != null)
             {
@@ -507,6 +643,35 @@ namespace ESSDesign.Server.Services
                 _logger.LogWarning(ex, "OSRM route preview failed");
                 return null;
             }
+        }
+
+        private async Task<RoutePreviewResult?> GetTomTomRoutePreviewAsync(
+            double fromLat,
+            double fromLon,
+            double toLat,
+            double toLon,
+            HttpClient client,
+            DateTimeOffset? departure = null)
+        {
+            var route = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departure ?? GetSydneyNow());
+            if (route == null || route.PathPoints.Count == 0)
+            {
+                return null;
+            }
+
+            return new RoutePreviewResult
+            {
+                Yard = new RoutePoint { Lat = fromLat, Lon = fromLon },
+                Site = new RoutePoint { Lat = toLat, Lon = toLon },
+                DistanceMeters = route.DistanceMeters,
+                BaseDurationSeconds = route.BaseDurationSeconds,
+                DurationSeconds = route.DurationSeconds,
+                TrafficDelaySeconds = route.TrafficDelaySeconds,
+                HasLiveTraffic = route.HasLiveTraffic,
+                TrafficProvider = route.TrafficProvider,
+                TrafficNote = route.TrafficNote,
+                PathPoints = route.PathPoints,
+            };
         }
 
         private static string AddMinutesFormatted(string date, int hour, int minute, int addMinutes)
@@ -717,13 +882,26 @@ namespace ESSDesign.Server.Services
                 return null;
             }
 
+            var departure = BuildSydneyDeparture(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute);
+            var tomTomRoute = await GetTomTomRoutePreviewAsync(
+                YardLat,
+                YardLon,
+                siteCoords.Value.Lat,
+                siteCoords.Value.Lon,
+                httpClient,
+                departure);
+            if (tomTomRoute != null)
+            {
+                return tomTomRoute;
+            }
+
             return await GetOsrmRoutePreviewAsync(
                 YardLat,
                 YardLon,
                 siteCoords.Value.Lat,
                 siteCoords.Value.Lon,
                 httpClient,
-                BuildSydneyDeparture(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute));
+                departure);
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)
