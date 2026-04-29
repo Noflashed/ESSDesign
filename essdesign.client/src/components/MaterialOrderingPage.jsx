@@ -798,9 +798,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const pendingCount = visibleOrders.filter(request => !request.scheduledAtIso && !request.scheduledDate).length;
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
         const selectedItems = summarizeItems(selectedRequest);
-        const selectedOrderLabel = selectedRequest?.id
-            ? (String(selectedRequest.id).startsWith('#') ? String(selectedRequest.id) : `#${selectedRequest.id}`)
-            : '#Pending';
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
 
         return (
@@ -866,6 +863,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             <th>Scheduled Time</th>
                                             <th>Status</th>
                                             <th>PDF</th>
+                                            {isActive ? <th aria-label="Delete delivery" /> : null}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -882,6 +880,24 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                                     <td>{getScheduledTimeRange(request)}</td>
                                                     <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
                                                     <td><button type="button" className="transport-management-pdf-btn" disabled={!request.pdfPath} onClick={(event) => openArchivedPdf(request, event)}>PDF</button></td>
+                                                    {isActive ? (
+                                                        <td className="transport-management-row-action-cell">
+                                                            <button
+                                                                type="button"
+                                                                className="transport-management-row-delete"
+                                                                aria-label="Delete delivery"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    handleDeleteRequest(request);
+                                                                }}
+                                                                disabled={saving}
+                                                            >
+                                                                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                                                    <path d="M6.25 2.5h3.5l.5 1H13a.75.75 0 0 1 0 1.5h-.63l-.43 6.38A1.75 1.75 0 0 1 10.2 13H5.8a1.75 1.75 0 0 1-1.74-1.62L3.63 5H3a.75.75 0 0 1 0-1.5h2.75l.5-1Zm-.98 2.5.29 6.27a.25.25 0 0 0 .24.23h4.4a.25.25 0 0 0 .24-.23L10.73 5H5.27Zm1.48 1.25a.75.75 0 0 1 .75.75v2.75a.75.75 0 0 1-1.5 0V7a.75.75 0 0 1 .75-.75Zm2.5 0A.75.75 0 0 1 10 7v2.75a.75.75 0 0 1-1.5 0V7a.75.75 0 0 1 .75-.75Z" fill="currentColor" />
+                                                                </svg>
+                                                            </button>
+                                                        </td>
+                                                    ) : null}
                                                 </tr>
                                             );
                                         })}
@@ -896,11 +912,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </section>
                     {selectedRequest ? (
                         <aside className="transport-management-detail">
-                            <div className="transport-management-detail-head">
-                                <div>
-                                    <span>Order</span>
-                                    <h2>{selectedOrderLabel}</h2>
-                                </div>
+                            <div className="transport-management-detail-head no-title">
                                 <button type="button" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>×</button>
                             </div>
 
@@ -973,11 +985,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 {!selectedRequestIsScheduled && isActive ? (
                                     <button type="button" className="transport-management-save" onClick={() => onNavigate?.('truck-schedule')}>
                                         Schedule order
-                                    </button>
-                                ) : null}
-                                {isActive ? (
-                                    <button type="button" className="transport-management-delete" onClick={() => handleDeleteRequest(selectedRequest)} disabled={saving}>
-                                        {saving ? 'Deleting...' : 'Delete delivery'}
                                     </button>
                                 ) : null}
                             </div>

@@ -2443,6 +2443,14 @@
     border-bottom: 1px solid #edf2f7 !important;
 }
 
+.transport-page-frame .transport-management-detail-head.no-title,
+.transport-desktop-workspace .transport-management-detail-head.no-title {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    min-height: 20px !important;
+}
+
 .transport-page-frame .transport-management-detail-head span,
 .transport-desktop-workspace .transport-management-detail-head span {
     margin: 0 0 6px !important;
@@ -2611,6 +2619,38 @@
     font-size: 11px !important;
     line-height: 14px !important;
     font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-management-row-action-cell,
+.transport-desktop-workspace .transport-management-row-action-cell {
+    width: 40px !important;
+    padding-left: 4px !important;
+    padding-right: 6px !important;
+    text-align: right !important;
+}
+
+.transport-page-frame .transport-management-row-delete,
+.transport-desktop-workspace .transport-management-row-delete {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    border: 1px solid #fee2e2 !important;
+    border-radius: 7px !important;
+    background: #ffffff !important;
+    color: #dc2626 !important;
+}
+
+.transport-page-frame .transport-management-row-delete svg,
+.transport-desktop-workspace .transport-management-row-delete svg {
+    width: 13px !important;
+    height: 13px !important;
+}
+
+.transport-page-frame .transport-management-row-delete:disabled,
+.transport-desktop-workspace .transport-management-row-delete:disabled {
+    opacity: 0.45 !important;
 }
 
 .transport-page-frame .transport-management-detail-actions,
