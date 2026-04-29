@@ -273,6 +273,48 @@ function TruckLaneIcon() {
   );
 }
 
+function InspectorIcon({ type }) {
+  const common = {
+    width: 13,
+    height: 13,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+  if (type === 'truck') {
+    return <svg {...common}><path d="M10 17H4V7h10v10h-2" /><path d="M14 10h4l3 3v4h-3" /><circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" /></svg>;
+  }
+  if (type === 'unload') {
+    return <svg {...common}><path d="M6 4v16" /><path d="M18 4v16" /><path d="M9 8h6M9 12h6M9 16h6" /></svg>;
+  }
+  if (type === 'return') {
+    return <svg {...common}><path d="M9 14 4 9l5-5" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>;
+  }
+  if (type === 'clock') {
+    return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
+  }
+  if (type === 'sun') {
+    return <svg {...common}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
+  }
+  if (type === 'traffic') {
+    return <svg {...common}><path d="M12 22a9 9 0 0 0 9-9" /><path d="M12 22a9 9 0 0 1-9-9" /><path d="M12 2v10l5 5" /><circle cx="12" cy="12" r="2" /></svg>;
+  }
+  if (type === 'spark') {
+    return <svg {...common}><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z" /><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" /></svg>;
+  }
+  if (type === 'file') {
+    return <svg {...common}><path d="M6 2h8l4 4v16H6z" /><path d="M14 2v5h5" /></svg>;
+  }
+  if (type === 'map') {
+    return <svg {...common}><path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z" /><path d="M9 3v15M15 6v15" /></svg>;
+  }
+  return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
+}
+
 function requestPriorityLabel(request) {
   const submitted = request?.submittedAt ? new Date(request.submittedAt).getTime() : Date.now();
   const ageHours = Math.max(0, (Date.now() - submitted) / 3600000);
@@ -974,28 +1016,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <div><dt>Scaffold System</dt><dd>{selectedScheduleEvent.scaffoldingSystem || selectedScheduleRequest?.scaffoldingSystem || '-'}</dd></div>
             </dl>
             <div className="transport-schedule-estimate-card">
-              <div><span>Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
-              <div><span>Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
-              <div><span>Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
-              <div><span>Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
+              <div><span><InspectorIcon type="truck" /> Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
+              <div><span><InspectorIcon type="unload" /> Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
+              <div><span><InspectorIcon type="return" /> Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
+              <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
             </div>
             <h3 className="transport-panel-section-title">Route Preview</h3>
             <RouteMapCanvas className="transport-schedule-inspector-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={selectedScheduleSiteLocation} />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
             <div className="transport-weather-grid">
-              <div><strong>18°C</strong><span>Sunny</span></div>
-              <div><strong>Low Traffic</strong><span>ETA impact +5 min</span></div>
+              <div><span className="transport-weather-icon weather"><InspectorIcon type="sun" /></span><strong>18C</strong><span>Sunny</span></div>
+              <div><span className="transport-weather-icon traffic"><InspectorIcon type="traffic" /></span><strong>Low Traffic</strong><span>ETA impact +5 min</span></div>
             </div>
             <h3 className="transport-panel-section-title">Recommended Time Slot</h3>
             <div className="transport-schedule-recommendation">
-              <strong>{selectedScheduleWindowLabel}</strong>
-              <small>{selectedScheduleTiming ? `Allow ${selectedScheduleTiming.totalMinutes} min total cycle` : 'Add a project site location to improve recommendations.'}</small>
+              <div>
+                <strong>{selectedScheduleWindowLabel}</strong>
+                <small>{selectedScheduleTiming ? `Allow ${selectedScheduleTiming.totalMinutes} min total cycle` : 'Add a project site location to improve recommendations.'}</small>
+              </div>
+              <InspectorIcon type="spark" />
             </div>
-            <button type="button" className="transport-management-secondary-action" onClick={() => openEventOverview(selectedScheduleEvent)}>View Full Route Analysis</button>
-            <button type="button" className="transport-management-save" disabled={!selectedScheduleRequest?.pdfPath} onClick={() => handleOpenPdf(selectedScheduleRequest)}>PDF Picking Card</button>
+            <button type="button" className="transport-management-secondary-action transport-inspector-action" onClick={() => openEventOverview(selectedScheduleEvent)}><InspectorIcon type="map" /> View Full Route Analysis</button>
+            <button type="button" className="transport-management-save transport-inspector-action" disabled={!selectedScheduleRequest?.pdfPath} onClick={() => handleOpenPdf(selectedScheduleRequest)}><InspectorIcon type="file" /> PDF Picking Card</button>
             <div className="transport-schedule-timeline">
               <strong>Driver Status Timeline</strong>
-              {selectedScheduleActionRows.length > 0 ? selectedScheduleActionRows.map(row => <div key={row.key}><span>{row.label}</span><b>{row.value}</b></div>) : <p>No driver status updates yet.</p>}
+              {selectedScheduleActionRows.length > 0 ? selectedScheduleActionRows.map(row => <div key={row.key} className="transport-timeline-row"><i /><span>{row.label}</span><b>{row.value}</b></div>) : <p>No driver status updates yet.</p>}
             </div>
           </>
         ) : (

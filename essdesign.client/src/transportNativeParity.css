@@ -1901,3 +1901,317 @@
     font-size: 11px !important;
     line-height: 15px !important;
 }
+
+/* Dynamic Schedule right column: reference-size typography, icons, spacing. */
+.transport-page-frame .transport-schedule-inspector,
+.transport-desktop-workspace .transport-schedule-inspector {
+    padding: 14px 16px 18px !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head,
+.transport-desktop-workspace .transport-schedule-inspector-head {
+    grid-template-columns: minmax(0, 1fr) auto 18px !important;
+    gap: 8px !important;
+    padding-bottom: 13px !important;
+    border-bottom: 1px solid #e6edf5 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head span:first-child,
+.transport-desktop-workspace .transport-schedule-inspector-head span:first-child {
+    margin-bottom: 7px !important;
+    color: #475569 !important;
+    font-size: 11px !important;
+    line-height: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head h2,
+.transport-desktop-workspace .transport-schedule-inspector-head h2 {
+    color: #1d4ed8 !important;
+    font-size: 14px !important;
+    line-height: 17px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head .transport-status-pill,
+.transport-desktop-workspace .transport-schedule-inspector-head .transport-status-pill {
+    align-self: end !important;
+    margin: 0 0 1px !important;
+    padding: 4px 9px !important;
+    border-radius: 999px !important;
+    background: #dff7e9 !important;
+    color: #15803d !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-head button,
+.transport-desktop-workspace .transport-schedule-inspector-head button {
+    align-self: start !important;
+    width: 18px !important;
+    height: 18px !important;
+    padding: 0 !important;
+    color: #64748b !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list,
+.transport-desktop-workspace .transport-schedule-detail-list {
+    gap: 7px !important;
+    margin: 12px 0 13px !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list dt,
+.transport-desktop-workspace .transport-schedule-detail-list dt {
+    color: #64748b !important;
+    font-size: 10px !important;
+    line-height: 11px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-detail-list dd,
+.transport-desktop-workspace .transport-schedule-detail-list dd {
+    color: #0f172a !important;
+    font-size: 11px !important;
+    line-height: 13px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card,
+.transport-desktop-workspace .transport-schedule-estimate-card {
+    margin: 0 0 12px !important;
+    padding: 9px 11px !important;
+    border: 1px solid #dce5f0 !important;
+    border-radius: 5px !important;
+    background: #f8fafc !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card div,
+.transport-desktop-workspace .transport-schedule-estimate-card div {
+    min-height: 23px !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card span,
+.transport-desktop-workspace .transport-schedule-estimate-card span {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    color: #475569 !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card svg,
+.transport-desktop-workspace .transport-schedule-estimate-card svg {
+    color: #64748b !important;
+}
+
+.transport-page-frame .transport-schedule-estimate-card strong,
+.transport-desktop-workspace .transport-schedule-estimate-card strong {
+    color: #0f172a !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-panel-section-title,
+.transport-desktop-workspace .transport-panel-section-title {
+    margin: 12px 0 7px !important;
+    color: #111827 !important;
+    font-size: 11px !important;
+    line-height: 13px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-inspector-map,
+.transport-desktop-workspace .transport-schedule-inspector-map {
+    height: 122px !important;
+    min-height: 122px !important;
+    margin-bottom: 10px !important;
+    border: 1px solid #dce5f0 !important;
+    border-radius: 5px !important;
+    background: #f8fafc !important;
+}
+
+.transport-weather-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 11px !important;
+}
+
+.transport-weather-grid div {
+    position: relative;
+    min-height: 49px !important;
+    padding: 9px 8px 8px 34px !important;
+    border: 1px solid #dce5f0 !important;
+    border-radius: 5px !important;
+    background: #f8fafc !important;
+}
+
+.transport-weather-icon {
+    position: absolute;
+    left: 9px;
+    top: 12px;
+    display: inline-flex !important;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+}
+
+.transport-weather-icon.weather { color: #f59e0b; }
+.transport-weather-icon.traffic { color: #16a34a; }
+
+.transport-weather-grid strong {
+    color: #111827 !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-weight: 900 !important;
+}
+
+.transport-weather-grid span:not(.transport-weather-icon) {
+    margin-top: 3px !important;
+    color: #475569 !important;
+    font-size: 9px !important;
+    line-height: 11px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation,
+.transport-desktop-workspace .transport-schedule-recommendation {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 18px !important;
+    align-items: center !important;
+    gap: 8px !important;
+    min-height: 66px !important;
+    padding: 10px 11px !important;
+    border: 1px solid #a7e7c4 !important;
+    border-radius: 5px !important;
+    background: #eafff3 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation strong,
+.transport-desktop-workspace .transport-schedule-recommendation strong {
+    display: block !important;
+    color: #047857 !important;
+    font-size: 13px !important;
+    line-height: 16px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation small,
+.transport-desktop-workspace .transport-schedule-recommendation small {
+    display: block !important;
+    margin-top: 3px !important;
+    color: #047857 !important;
+    font-size: 9px !important;
+    line-height: 12px !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-schedule-recommendation svg,
+.transport-desktop-workspace .transport-schedule-recommendation svg {
+    color: #16a34a !important;
+}
+
+.transport-page-frame .transport-inspector-action,
+.transport-desktop-workspace .transport-inspector-action {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    min-height: 36px !important;
+    width: 100% !important;
+    margin-top: 8px !important;
+    border-radius: 5px !important;
+    font-size: 11px !important;
+    line-height: 13px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-inspector-action svg,
+.transport-desktop-workspace .transport-inspector-action svg {
+    flex: 0 0 auto !important;
+}
+
+.transport-page-frame .transport-schedule-timeline,
+.transport-desktop-workspace .transport-schedule-timeline {
+    margin-top: 15px !important;
+    padding-top: 0 !important;
+    border-top: 0 !important;
+}
+
+.transport-page-frame .transport-schedule-timeline > strong,
+.transport-desktop-workspace .transport-schedule-timeline > strong {
+    display: block !important;
+    margin-bottom: 8px !important;
+    color: #111827 !important;
+    font-size: 11px !important;
+    line-height: 13px !important;
+    font-weight: 900 !important;
+}
+
+.transport-page-frame .transport-timeline-row,
+.transport-desktop-workspace .transport-timeline-row {
+    position: relative !important;
+    display: grid !important;
+    grid-template-columns: 12px 68px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    min-height: 32px !important;
+    padding: 0 0 0 0 !important;
+    color: #475569 !important;
+}
+
+.transport-page-frame .transport-timeline-row::before,
+.transport-desktop-workspace .transport-timeline-row::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 12px;
+    bottom: -13px;
+    width: 1px;
+    background: #cbd5e1;
+}
+
+.transport-page-frame .transport-timeline-row:last-child::before,
+.transport-desktop-workspace .transport-timeline-row:last-child::before {
+    display: none;
+}
+
+.transport-page-frame .transport-timeline-row i,
+.transport-desktop-workspace .transport-timeline-row i {
+    position: relative;
+    z-index: 1;
+    width: 7px;
+    height: 7px;
+    margin-top: 3px;
+    border-radius: 50%;
+    background: #16a34a;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px #16a34a;
+}
+
+.transport-page-frame .transport-timeline-row span,
+.transport-desktop-workspace .transport-timeline-row span,
+.transport-page-frame .transport-timeline-row b,
+.transport-desktop-workspace .transport-timeline-row b {
+    font-size: 10px !important;
+    line-height: 12px !important;
+}
+
+.transport-page-frame .transport-timeline-row span,
+.transport-desktop-workspace .transport-timeline-row span {
+    color: #64748b !important;
+    font-weight: 800 !important;
+}
+
+.transport-page-frame .transport-timeline-row b,
+.transport-desktop-workspace .transport-timeline-row b {
+    color: #111827 !important;
+    font-weight: 800 !important;
+}
