@@ -985,6 +985,15 @@
     color: #123457;
     font-size: 10px;
     font-weight: 900;
+    overflow: hidden;
+    flex: 0 0 32px;
+}
+
+.transport-desktop-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .transport-desktop-user strong,

@@ -1,6 +1,74 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png';
+const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
+
+function normalizeAvatarSource(value) {
+  if (!value || typeof value !== 'string') {
+    return [];
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return [trimmed];
+  }
+
+  const normalizedPath = trimmed.replace(/^\/+/, '');
+  if (normalizedPath.startsWith('storage/v1/')) {
+    return [`${SUPABASE_BASE_URL}/${normalizedPath}`];
+  }
+
+  return [
+    `${SUPABASE_BASE_URL}/storage/v1/object/public/${normalizedPath}`,
+    `${SUPABASE_BASE_URL}/storage/v1/object/public/public-assets/${normalizedPath}`,
+  ];
+}
+
+function buildAvatarCandidates(user) {
+  const rawValues = [
+    user?.avatarUrl,
+    user?.avatar_url,
+    user?.picture,
+    user?.profileImageUrl,
+    user?.profile_image_url,
+    user?.profileImage,
+    user?.profile_image,
+    user?.avatarPath,
+    user?.avatar_path,
+  ].filter(Boolean);
+
+  return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
+}
+
+function getInitials(user, fallback = 'U') {
+  const name = user?.fullName || user?.name || '';
+  if (name.trim()) {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(part => part[0]?.toUpperCase())
+      .join('');
+  }
+  return user?.email?.[0]?.toUpperCase() || fallback;
+}
+
+function getRoleDisplayName(role) {
+  switch (role) {
+    case 'admin': return 'Admin';
+    case 'site_supervisor': return 'Site Supervisor';
+    case 'project_manager': return 'Project Manager';
+    case 'leading_hand': return 'Leading Hand';
+    case 'general_scaffolder': return 'General Scaffolder';
+    case 'transport_management': return 'Transport Management';
+    case 'truck_ess01': return 'Truck ESS01';
+    case 'truck_ess02': return 'Truck ESS02';
+    case 'truck_ess03': return 'Truck ESS03';
+    default: return 'Viewer';
+  }
+}
 
 function TransportIcon({ type }) {
   const common = {
@@ -54,15 +122,35 @@ function TransportIcon({ type }) {
   return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></svg>;
 }
 
+function ExitIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
 export default function NativeTransportShell({
   navItems,
   currentPage,
   content,
+  user,
   isTruckRole,
   assignedTruck,
   onNavigate,
   onExit,
 }) {
+  const avatarCandidates = useMemo(() => buildAvatarCandidates(user), [user]);
+  const [avatarIndex, setAvatarIndex] = useState(0);
+  const avatarUrl = avatarCandidates[avatarIndex] || null;
+  const displayName = user?.fullName || user?.name || user?.email || assignedTruck?.rego || 'User';
+  const displayRole = getRoleDisplayName(user?.role);
+  const initials = getInitials(user, isTruckRole ? (assignedTruck?.rego || 'TR').slice(-2) : 'U');
+
+  useEffect(() => {
+    setAvatarIndex(0);
+  }, [user?.id, user?.avatarUrl, user?.avatar_url, user?.picture, user?.profileImageUrl, user?.profile_image_url, user?.avatarPath, user?.avatar_path]);
+
   return (
     <div className="transport-desktop-shell">
       <aside className="transport-desktop-rail">
@@ -90,12 +178,24 @@ export default function NativeTransportShell({
         </div>
 
         <div className="transport-desktop-user">
-          <div className="transport-desktop-avatar">{isTruckRole ? (assignedTruck?.rego || 'TR').slice(-2) : 'JS'}</div>
-          <div>
-            <strong>{isTruckRole ? assignedTruck?.rego || 'Truck' : 'John Smith'}</strong>
-            <span>{isTruckRole ? 'Truck Device' : 'Transport Ops'}</span>
+          <div className="transport-desktop-avatar" aria-hidden="true">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt=""
+                onError={() => setAvatarIndex(current => (current + 1 < avatarCandidates.length ? current + 1 : current))}
+              />
+            ) : (
+              initials
+            )}
           </div>
-          <button type="button" onClick={onExit || (() => window.history.back())} aria-label="Back to ESS app">›</button>
+          <div>
+            <strong title={displayName}>{displayName}</strong>
+            <span title={displayRole}>{displayRole}</span>
+          </div>
+          <button type="button" onClick={onExit || (() => window.history.back())} aria-label="Back to ESS app">
+            <ExitIcon />
+          </button>
         </div>
       </aside>
 

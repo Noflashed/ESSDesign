@@ -761,6 +761,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [selectedScheduleRouteData, setSelectedScheduleRouteData] = useState(null);
   const [selectedScheduleEventId, setSelectedScheduleEventId] = useState('');
   const [scheduleInspectorOpen, setScheduleInspectorOpen] = useState(true);
+  const selectedScheduleRouteRequestKeyRef = useRef('');
+  const selectedScheduleRouteDataKeyRef = useRef('');
   const [draggedRequestId, setDraggedRequestId] = useState('');
   const [draggedScheduledOrderId, setDraggedScheduledOrderId] = useState('');
   const [dragPreviewDurationMinutes, setDragPreviewDurationMinutes] = useState(90);
@@ -919,7 +921,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
-  const selectedScheduleRouteSchedule = useMemo(() => buildRouteScheduleFromEvent(selectedScheduleEvent), [selectedScheduleEvent]);
+  const selectedScheduleRouteSchedule = useMemo(
+    () => buildRouteScheduleFromEvent(selectedScheduleEvent),
+    [selectedScheduleEvent?.date, selectedScheduleEvent?.hour, selectedScheduleEvent?.minute],
+  );
+  const selectedScheduleRouteKey = useMemo(
+    () => [
+      selectedScheduleSiteLocation || '',
+      selectedScheduleRouteSchedule.scheduledDate || '',
+      selectedScheduleRouteSchedule.scheduledHour ?? '',
+      selectedScheduleRouteSchedule.scheduledMinute ?? '',
+    ].join('|'),
+    [
+      selectedScheduleRouteSchedule.scheduledDate,
+      selectedScheduleRouteSchedule.scheduledHour,
+      selectedScheduleRouteSchedule.scheduledMinute,
+      selectedScheduleSiteLocation,
+    ],
+  );
   const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null) : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
@@ -931,28 +950,38 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, selectedScheduleEvent, selectedScheduleTiming?.totalMinutes]);
   useEffect(() => {
     if (!scheduleInspectorOpen || !selectedScheduleEventId || !selectedScheduleSiteLocation) {
+      selectedScheduleRouteRequestKeyRef.current = '';
+      selectedScheduleRouteDataKeyRef.current = '';
       setSelectedScheduleRouteData(null);
       setSelectedScheduleRouteLoading(false);
       return undefined;
     }
 
     let active = true;
+    const routeKey = selectedScheduleRouteKey;
+    if (selectedScheduleRouteDataKeyRef.current === routeKey) {
+      setSelectedScheduleRouteLoading(false);
+      return undefined;
+    }
+
+    selectedScheduleRouteRequestKeyRef.current = routeKey;
     setSelectedScheduleRouteLoading(true);
-    setSelectedScheduleRouteData(null);
 
     getCachedRouteData(selectedScheduleSiteLocation, selectedScheduleRouteSchedule)
       .then(data => {
-        if (active) {
+        if (active && selectedScheduleRouteRequestKeyRef.current === routeKey) {
+          selectedScheduleRouteDataKeyRef.current = data ? routeKey : '';
           setSelectedScheduleRouteData(data);
         }
       })
       .catch(() => {
-        if (active) {
+        if (active && selectedScheduleRouteRequestKeyRef.current === routeKey) {
+          selectedScheduleRouteDataKeyRef.current = '';
           setSelectedScheduleRouteData(null);
         }
       })
       .finally(() => {
-        if (active) {
+        if (active && selectedScheduleRouteRequestKeyRef.current === routeKey) {
           setSelectedScheduleRouteLoading(false);
         }
       });
@@ -960,7 +989,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteSchedule, selectedScheduleSiteLocation]);
+  }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteKey, selectedScheduleRouteSchedule, selectedScheduleSiteLocation]);
   const selectedRouteDurationMinutes = useMemo(
     () => Math.max(30, selectedRouteEstimate?.durationMinutes ? Math.round(selectedRouteEstimate.durationMinutes) * 2 + 30 : 90),
     [selectedRouteEstimate],

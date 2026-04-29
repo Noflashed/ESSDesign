@@ -437,7 +437,7 @@ namespace ESSDesign.Server.Services
             var traffic = EstimateSydneyTrafficDelay(osrmRoute.BaseDurationSeconds, departureTime);
             osrmRoute.DurationSeconds = osrmRoute.BaseDurationSeconds + traffic.DelaySeconds;
             osrmRoute.TrafficProvider = "Sydney traffic estimate";
-            osrmRoute.TrafficNote = $"{traffic.Label}; configure GoogleMaps:ApiKey for live traffic";
+            osrmRoute.TrafficNote = $"{traffic.Label}; ETA includes local time-of-day delay";
             return osrmRoute;
         }
 

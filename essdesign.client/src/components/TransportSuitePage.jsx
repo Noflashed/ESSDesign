@@ -105,6 +105,7 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       navItems={navItems}
       currentPage={currentPage}
       content={content}
+      user={user}
       isTruckRole={isTruckRole}
       assignedTruck={assignedTruck}
       onNavigate={onNavigate}
