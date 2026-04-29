@@ -27,8 +27,8 @@ function Login({ onLoginSuccess, theme, onThemeChange }) {
         setLoading(true);
 
         try {
-            await authAPI.signIn(formData.email, formData.password);
-            onLoginSuccess();
+            const session = await authAPI.signIn(formData.email, formData.password);
+            onLoginSuccess(session);
         } catch (err) {
             setError(err.response?.data?.error || 'Invalid email, device ID, or password');
         } finally {

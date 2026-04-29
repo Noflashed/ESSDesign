@@ -583,21 +583,44 @@ function App() {
     }, [isEmployeePortalRole]);
 
     const checkAuth = useCallback(async () => {
+        const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
+        const authUrlParams = new URLSearchParams(window.location.search);
+        const emailFromUrl = authUrlParams.get('email') || '';
+
+        if (callbackResult?.hasSession) {
+            setAuthView('signup-confirmed');
+            setInviteEmail(emailFromUrl);
+            setInviteFirstName(authUrlParams.get('firstName') || '');
+            setInviteLastName(authUrlParams.get('lastName') || '');
+            setInviteEmployeeId(authUrlParams.get('employeeId') || '');
+        }
+
         try {
-            const response = await authAPI.getCurrentUser();
-            if (response?.user) {
-                setUser(response.user);
-                setIsAuthenticated(true);
-                const initialPage = ['leading_hand', 'general_scaffolder'].includes(response.user.role) ? 'employee-home' : 'landing';
-                setCurrentPage(initialPage);
-                window.history.replaceState({ page: initialPage, safetyContext: { builder: null, project: null }, employeeContext: { leadingHand: null }, rosteringContext: { planDate: null } }, '', window.location.pathname);
-                await loadUserPreferences();
-            } else {
+            if (!authAPI.isAuthenticated()) {
                 setIsAuthenticated(false);
+                setUser(null);
+                return;
             }
+
+            let currentUser = authAPI.getCurrentUser();
+            setIsAuthenticated(true);
+
+            try {
+                currentUser = await authAPI.restoreSession();
+            } catch (restoreError) {
+                console.error('Error restoring session:', restoreError);
+                currentUser = await authAPI.refreshCurrentUser();
+            }
+
+            setUser(currentUser);
+            const initialPage = ['leading_hand', 'general_scaffolder'].includes(currentUser?.role) ? 'employee-home' : 'landing';
+            setCurrentPage(initialPage);
+            window.history.replaceState({ page: initialPage, safetyContext: { builder: null, project: null }, employeeContext: { leadingHand: null }, rosteringContext: { planDate: null } }, '', window.location.pathname);
+            await loadUserPreferences();
         } catch (error) {
             console.error('Error checking auth:', error);
             setIsAuthenticated(false);
+            setUser(null);
         } finally {
             setLoading(false);
         }
@@ -688,19 +711,20 @@ function App() {
     }, [searchQuery, isAuthenticated]);
 
     const handleLoginSuccess = async (response) => {
-        setUser(response.user);
+        const signedInUser = response?.user || authAPI.getCurrentUser();
+        setUser(signedInUser);
         setIsAuthenticated(true);
         setShowNavDrawer(false);
         setAuthView('landing');
         window.history.replaceState({}, '', window.location.pathname);
         await loadUserPreferences();
-        const initialPage = ['leading_hand', 'general_scaffolder'].includes(response.user.role) ? 'employee-home' : 'landing';
+        const initialPage = ['leading_hand', 'general_scaffolder'].includes(signedInUser?.role) ? 'employee-home' : 'landing';
         applyPageState(initialPage, { builder: null, project: null }, { leadingHand: null }, { planDate: null });
     };
 
     const handleLogout = async () => {
         try {
-            await authAPI.logout();
+            await authAPI.signOut();
         } catch (error) {
             console.error('Error logging out:', error);
         } finally {
