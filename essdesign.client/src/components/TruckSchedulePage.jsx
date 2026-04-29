@@ -38,7 +38,7 @@ import {
 } from './transport/transportUtils';
 
 const SCALE_MODES = {
-  standard: { label: 'Scale', pxPerHour: 160, tickMinutes: 30, labelEveryMinutes: 60 },
+  standard: { label: 'Hourly', pxPerHour: 150, tickMinutes: 60, labelEveryMinutes: 60 },
   detailed: { label: '10 min', pxPerHour: 260, tickMinutes: 10, labelEveryMinutes: 30 },
   fine: { label: '5 min', pxPerHour: 360, tickMinutes: 5, labelEveryMinutes: 30 },
   ultraFine: { label: '1 min', pxPerHour: 720, tickMinutes: 1, labelEveryMinutes: 30 },
@@ -55,6 +55,7 @@ const OPTIMISTIC_BOARD_LOCK_MS = 12000;
 const OPTIMISTIC_BOARD_SUCCESS_LOCK_MS = 8000;
 const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
+const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 
 function dedupeRequests(items) {
   const map = new Map();
@@ -695,6 +696,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const saved = localStorage.getItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved && SCALE_MODES[saved] ? saved : 'standard';
   });
+  const [snapToTimeMarks, setSnapToTimeMarks] = useState(() => {
+    const saved = localStorage.getItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
+    return saved === 'true';
+  });
   const [requestModal, setRequestModal] = useState(null);
   const [requestModalLoading, setRequestModalLoading] = useState(false);
   const [requestModalRouteData, setRequestModalRouteData] = useState(null);
@@ -812,6 +817,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [timelineScaleMode, user?.id, user?.role]);
 
   useEffect(() => {
+    localStorage.setItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(snapToTimeMarks));
+  }, [snapToTimeMarks, user?.id, user?.role]);
+
+  useEffect(() => {
     if (scaleAnchorRef.current == null || !boardScrollRef.current) {
       return;
     }
@@ -839,6 +848,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const timelineMarkers = useMemo(() => buildTimelineMarkers(timelineScaleMode), [timelineScaleMode]);
   const timelineWidth = useMemo(() => getTimelineWidth(timelineScaleMode), [timelineScaleMode]);
+  const timelineScaleIndex = Math.max(0, SCALE_ORDER.indexOf(timelineScaleMode));
+  const timelineSnapStep = snapToTimeMarks
+    ? SCALE_MODES[timelineScaleMode]?.tickMinutes || DRAG_SCHEDULE_MINUTE_STEP
+    : DRAG_SCHEDULE_MINUTE_STEP;
   const pendingRequests = useMemo(
     () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt),
     [allRequests],
@@ -914,6 +927,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
   const timelineScaleLabel = useMemo(() => SCALE_MODES[timelineScaleMode]?.label || 'Scale', [timelineScaleMode]);
+  const setTimelineScaleWithAnchor = useCallback((nextMode) => {
+    if (!SCALE_MODES[nextMode]) {
+      return;
+    }
+    if (boardScrollRef.current) {
+      const node = boardScrollRef.current;
+      const maxScroll = Math.max(1, node.scrollWidth - node.clientWidth);
+      scaleAnchorRef.current = node.scrollLeft / maxScroll;
+    }
+    setTimelineScaleMode(nextMode);
+  }, []);
   const overviewActionRows = useMemo(() => getDeliveryActionRows(eventOverviewModal?.request), [eventOverviewModal]);
   const overviewSummary = useMemo(() => {
     if (!eventOverviewModal?.request) {
@@ -1368,6 +1392,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+      step: timelineSnapStep,
     });
     const snapCandidate = getEdgeSnapCandidate({
       requestId: draggedRequestId,
@@ -1397,7 +1422,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       snapSide: snapCandidate?.side,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, timelineSnapStep]);
 
   const handleLaneDragLeave = useCallback((event, truckId) => {
     if (event.currentTarget.contains(event.relatedTarget)) {
@@ -1415,6 +1440,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+      step: timelineSnapStep,
     });
     const snapCandidate = getEdgeSnapCandidate({
       requestId,
@@ -1425,8 +1451,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
-    scheduleRequestAt(requestId, truckId, snapCandidate?.minutes ?? minutes, dragPreviewDurationMinutes, snapCandidate ? { exact: true } : undefined);
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+    scheduleRequestAt(requestId, truckId, snapCandidate?.minutes ?? minutes, dragPreviewDurationMinutes, snapCandidate ? { exact: true } : { step: timelineSnapStep });
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, timelineSnapStep]);
 
   const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
@@ -1443,6 +1469,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+      step: timelineSnapStep,
     });
     const snapCandidate = getEdgeSnapCandidate({
       requestId,
@@ -1476,7 +1503,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       snapSide: snapCandidate.side,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, timelineSnapStep]);
 
   const handleEventSnapDrop = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
@@ -1492,6 +1519,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+      step: timelineSnapStep,
     });
     const snapCandidate = getEdgeSnapCandidate({
       requestId,
@@ -1507,7 +1535,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, { exact: true });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, timelineSnapStep]);
 
   const handleUnscheduleOrder = useCallback((requestId) => {
     if (!requestId) {
@@ -1787,20 +1815,28 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <span className="ts2-board-card-subtitle">{formatBoardDay(selectedDate)}</span>
           </div>
           <div className="ts2-board-card-controls">
-            <button
-              type="button"
-              className={'ts2-chip-btn' + (timelineScaleMode !== 'standard' ? ' active' : '')}
-              onClick={() => {
-                if (boardScrollRef.current) {
-                  const node = boardScrollRef.current;
-                  const maxScroll = Math.max(1, node.scrollWidth - node.clientWidth);
-                  scaleAnchorRef.current = node.scrollLeft / maxScroll;
-                }
-                setTimelineScaleMode(current => cycleScaleMode(current));
-              }}
-            >
-              {timelineScaleLabel}
-            </button>
+            <label className={`transport-snap-toggle${snapToTimeMarks ? ' active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={snapToTimeMarks}
+                onChange={(event) => setSnapToTimeMarks(event.target.checked)}
+              />
+              <span>Snap</span>
+              <small>{snapToTimeMarks ? `${timelineSnapStep} min marks` : 'Free move'}</small>
+            </label>
+            <div className="transport-scale-control">
+              <span>Scale</span>
+              <input
+                type="range"
+                min="0"
+                max={SCALE_ORDER.length - 1}
+                step="1"
+                value={timelineScaleIndex}
+                onChange={(event) => setTimelineScaleWithAnchor(SCALE_ORDER[Number(event.target.value)] || 'standard')}
+                aria-label="Timeline scale"
+              />
+              <button type="button" onClick={() => setTimelineScaleWithAnchor(cycleScaleMode(timelineScaleMode))}>{timelineScaleLabel}</button>
+            </div>
             <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() - 86400000))}>‹</button>
             <button type="button" className="ts2-nav-btn" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))}>›</button>
           </div>
