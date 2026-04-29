@@ -3279,57 +3279,6 @@
     box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12), 0 0 18px rgba(220, 38, 38, 0.24) !important;
 }
 
-.transport-page-frame .transport-snap-zone,
-.transport-desktop-workspace .transport-snap-zone {
-    position: absolute !important;
-    top: 8px !important;
-    bottom: 8px !important;
-    z-index: 16 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 22px !important;
-    border: 1px dashed #16a34a !important;
-    border-radius: 6px !important;
-    background: rgba(22, 163, 74, 0.18) !important;
-    color: #15803d !important;
-    opacity: 0.92 !important;
-    transform: scaleX(0.9) !important;
-    transform-origin: center !important;
-    box-shadow: 0 8px 18px rgba(22, 163, 74, 0.14) !important;
-    transition: opacity 140ms ease, transform 140ms ease, background 140ms ease !important;
-}
-
-.transport-page-frame .transport-snap-zone.before,
-.transport-desktop-workspace .transport-snap-zone.before {
-    left: -13px !important;
-}
-
-.transport-page-frame .transport-snap-zone.after,
-.transport-desktop-workspace .transport-snap-zone.after {
-    right: -13px !important;
-}
-
-.transport-page-frame .transport-snap-zone:hover,
-.transport-desktop-workspace .transport-snap-zone:hover,
-.transport-page-frame .transport-snap-zone:focus-visible,
-.transport-desktop-workspace .transport-snap-zone:focus-visible {
-    opacity: 1 !important;
-    transform: scaleX(1.08) !important;
-    background: rgba(22, 163, 74, 0.28) !important;
-}
-
-.transport-page-frame .transport-snap-zone span,
-.transport-desktop-workspace .transport-snap-zone span {
-    writing-mode: horizontal-tb !important;
-    text-orientation: mixed !important;
-    color: currentColor !important;
-    font-size: 13px !important;
-    line-height: 13px !important;
-    font-weight: 800 !important;
-    letter-spacing: 0 !important;
-}
-
 .transport-drag-ghost {
     position: fixed;
     top: -1000px;
