@@ -1859,6 +1859,10 @@ export const analysisAPI = {
         const response = await apiClient.post('/analysis/route-preview-between', { fromLocation, toLocation, ...schedule });
         return response.data;
     },
+    addressSuggestions: async (query, options = {}) => {
+        const response = await apiClient.post('/analysis/address-suggestions', { query, limit: 6 }, { signal: options.signal });
+        return response.data;
+    },
 };
 
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI, essNewsAPI };

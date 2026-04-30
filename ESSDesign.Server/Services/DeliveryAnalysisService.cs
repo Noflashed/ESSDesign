@@ -50,6 +50,20 @@ namespace ESSDesign.Server.Services
             public int? ScheduledMinute { get; set; }
         }
 
+        public sealed class AddressSuggestionRequest
+        {
+            public string Query { get; set; } = string.Empty;
+            public int Limit { get; set; } = 6;
+        }
+
+        public sealed class AddressSuggestionResult
+        {
+            public string Label { get; set; } = string.Empty;
+            public string Address { get; set; } = string.Empty;
+            public double? Lat { get; set; }
+            public double? Lon { get; set; }
+        }
+
         public sealed class RoutePoint
         {
             public double Lat { get; set; }
@@ -169,6 +183,81 @@ namespace ESSDesign.Server.Services
             {
                 _logger.LogWarning(ex, "Geocoding failed for: {Address}", address);
                 return null;
+            }
+        }
+
+        private async Task<List<AddressSuggestionResult>> SearchTomTomAddressesAsync(string query, int limit, HttpClient client)
+        {
+            var apiKey = GetTomTomApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return new List<AddressSuggestionResult>();
+            }
+
+            try
+            {
+                var safeLimit = Math.Clamp(limit, 1, 10);
+                var url = $"https://api.tomtom.com/search/2/search/{Uri.EscapeDataString(query)}.json" +
+                          "?typeahead=true" +
+                          $"&limit={safeLimit}" +
+                          "&countrySet=AU" +
+                          "&idxSet=PAD,Addr,Str,POI" +
+                          "&lat=-33.8122&lon=150.9354&radius=500000" +
+                          $"&key={Uri.EscapeDataString(apiKey)}";
+
+                using var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return new List<AddressSuggestionResult>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+                if (!root.TryGetProperty("results", out var resultsEl))
+                {
+                    return new List<AddressSuggestionResult>();
+                }
+
+                return resultsEl.EnumerateArray()
+                    .Select(result =>
+                    {
+                        var address = result.TryGetProperty("address", out var addressEl)
+                            ? addressEl
+                            : default;
+                        var freeform = address.ValueKind == JsonValueKind.Object && address.TryGetProperty("freeformAddress", out var freeformEl)
+                            ? freeformEl.GetString() ?? string.Empty
+                            : string.Empty;
+                        var poiName = result.TryGetProperty("poi", out var poiEl) && poiEl.TryGetProperty("name", out var nameEl)
+                            ? nameEl.GetString() ?? string.Empty
+                            : string.Empty;
+                        var label = string.IsNullOrWhiteSpace(poiName) || freeform.Contains(poiName, StringComparison.OrdinalIgnoreCase)
+                            ? freeform
+                            : $"{poiName}, {freeform}";
+                        double? lat = null;
+                        double? lon = null;
+                        if (result.TryGetProperty("position", out var positionEl))
+                        {
+                            if (positionEl.TryGetProperty("lat", out var latEl)) lat = latEl.GetDouble();
+                            if (positionEl.TryGetProperty("lon", out var lonEl)) lon = lonEl.GetDouble();
+                        }
+                        return new AddressSuggestionResult
+                        {
+                            Label = label,
+                            Address = freeform,
+                            Lat = lat,
+                            Lon = lon,
+                        };
+                    })
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Address))
+                    .GroupBy(item => item.Address.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First())
+                    .Take(safeLimit)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "TomTom address suggestions failed for {Query}", query);
+                return new List<AddressSuggestionResult>();
             }
         }
 
@@ -951,6 +1040,20 @@ namespace ESSDesign.Server.Services
                 toCoords.Value.Lon,
                 httpClient,
                 departure);
+        }
+
+        public async Task<List<AddressSuggestionResult>> SuggestAddressesAsync(AddressSuggestionRequest request)
+        {
+            var query = (request.Query ?? string.Empty).Trim();
+            if (query.Length < 3)
+            {
+                return new List<AddressSuggestionResult>();
+            }
+
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(6);
+
+            return await SearchTomTomAddressesAsync(query, request.Limit, httpClient);
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)

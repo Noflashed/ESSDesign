@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   ESS_NAVY,
@@ -796,6 +796,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [manualTimeModal, setManualTimeModal] = useState(null);
   const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
   const [secondaryRouteSaving, setSecondaryRouteSaving] = useState(false);
+  const [secondaryAddressSuggestions, setSecondaryAddressSuggestions] = useState([]);
+  const [secondaryAddressLoading, setSecondaryAddressLoading] = useState(false);
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
@@ -916,6 +918,72 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       window.removeEventListener('scroll', close, true);
     };
   }, [tileMenu]);
+
+  useEffect(() => {
+    const query = secondaryRouteModal?.destination?.trim() || '';
+    if (!secondaryRouteModal || query.length < 3) {
+      setSecondaryAddressSuggestions([]);
+      setSecondaryAddressLoading(false);
+      return undefined;
+    }
+
+    const normalizedQuery = query.toLowerCase();
+    const localMatches = (secondaryRouteModal.addressOptions || [])
+      .filter(option => {
+        const address = (option.siteLocation || '').toLowerCase();
+        const label = (option.label || '').toLowerCase();
+        return address.includes(normalizedQuery) || label.includes(normalizedQuery);
+      })
+      .map(option => ({
+        id: `${option.source || 'local'}-${option.id}`,
+        label: option.label,
+        address: option.siteLocation,
+        source: option.source === 'pending' ? 'Pending request' : 'Saved project',
+      }))
+      .slice(0, 4);
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSecondaryAddressLoading(true);
+      analysisAPI.addressSuggestions(query, { signal: controller.signal })
+        .then(remoteResults => {
+          const remoteMatches = (Array.isArray(remoteResults) ? remoteResults : [])
+            .map((item, index) => ({
+              id: `tomtom-${item.address || item.label || index}`,
+              label: item.label || item.address,
+              address: item.address || item.label,
+              source: 'TomTom',
+            }))
+            .filter(item => item.address);
+          const seen = new Set();
+          const merged = [...localMatches, ...remoteMatches].filter(item => {
+            const key = item.address.trim().toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setSecondaryAddressSuggestions(merged.slice(0, 6));
+        })
+        .catch(error => {
+          if (error?.name !== 'CanceledError' && error?.code !== 'ERR_CANCELED') {
+            setSecondaryAddressSuggestions(localMatches);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setSecondaryAddressLoading(false);
+          }
+        });
+    }, 250);
+
+    setSecondaryAddressSuggestions(localMatches);
+    setSecondaryAddressLoading(localMatches.length === 0);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [secondaryRouteModal?.addressOptions, secondaryRouteModal?.destination]);
 
   const timelineMarkers = useMemo(() => buildTimelineMarkers(timelineScaleMode), [timelineScaleMode]);
   const timelineWidth = useMemo(() => getTimelineWidth(timelineScaleMode), [timelineScaleMode]);
@@ -1050,7 +1118,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     selectedScheduleTiming?.totalMinutes,
   ]);
   useEffect(() => {
-    if (!scheduleInspectorOpen || !selectedScheduleEventId || !selectedScheduleRouteContext.toLocation) {
+    if (
+      !scheduleInspectorOpen ||
+      !selectedScheduleEventId ||
+      !selectedScheduleRouteContext.toLocation ||
+      (selectedScheduleRouteContext.segment === 'secondary' && !selectedScheduleRouteContext.fromLocation)
+    ) {
       selectedScheduleRouteRequestKeyRef.current = '';
       selectedScheduleRouteDataKeyRef.current = '';
       setSelectedScheduleRouteData(null);
@@ -1582,6 +1655,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSecondaryRouteModal({
       requestId,
       primarySiteLocation: primarySiteLocation || '',
+      parentLabel: `${request.builderName || 'Material Order'} - ${request.projectName || 'Scheduled delivery'}`,
       reason: existingSecondaryRoute?.reason || 'secondary_drop_off',
       destination: existingSecondaryRoute?.destination || '',
       selectedAddressSourceId: '',
@@ -1599,6 +1673,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     setSecondaryRouteModal(null);
+    setSecondaryAddressSuggestions([]);
+    setSecondaryAddressLoading(false);
   }, [secondaryRouteSaving]);
 
   const handleSecondaryRouteSave = useCallback(async (event) => {
@@ -2534,7 +2610,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <button type="button" className="transport-manual-time-close" onClick={closeSecondaryRouteModal} aria-label="Close secondary route panel">×</button>
             </div>
             <div className="transport-secondary-route-summary">
-              <div><span>Primary site</span><strong>{secondaryRouteModal.primarySiteLocation || 'Pending site location'}</strong></div>
+              <div><span>Starting location (parent tile)</span><strong>{secondaryRouteModal.parentLabel || 'Selected delivery'}</strong><small>{secondaryRouteModal.primarySiteLocation || 'Pending site location'}</small></div>
               <div><span>Service allowance</span><strong>{SECONDARY_ROUTE_SERVICE_MINUTES} min</strong></div>
             </div>
             <label className="transport-manual-time-field">
@@ -2573,18 +2649,35 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             ) : null}
             <label className="transport-manual-time-field">
               <span>Secondary destination</span>
-              <input
-                type="text"
-                list="transport-secondary-destination-options"
-                value={secondaryRouteModal.destination}
-                onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, destination: inputEvent.target.value, selectedAddressSourceId: '', error: '' } : current)}
-                placeholder="Enter second stop location"
-              />
-              <datalist id="transport-secondary-destination-options">
-                {secondaryRouteModal.addressOptions.map(option => (
-                  <option key={`${option.source}-address-${option.id}`} value={option.siteLocation}>{option.label}</option>
-                ))}
-              </datalist>
+              <div className="transport-address-autocomplete">
+                <input
+                  type="text"
+                  value={secondaryRouteModal.destination}
+                  onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, destination: inputEvent.target.value, selectedAddressSourceId: '', error: '' } : current)}
+                  placeholder="Start typing the second stop address"
+                  autoComplete="off"
+                />
+                {(secondaryAddressLoading || secondaryAddressSuggestions.length > 0) ? (
+                  <div className="transport-address-suggestions" role="listbox">
+                    {secondaryAddressSuggestions.map(suggestion => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        className="transport-address-suggestion"
+                        onClick={() => {
+                          setSecondaryRouteModal(current => current ? { ...current, destination: suggestion.address, selectedAddressSourceId: suggestion.id, error: '' } : current);
+                          setSecondaryAddressSuggestions([]);
+                        }}
+                        role="option"
+                      >
+                        <strong>{suggestion.address}</strong>
+                        <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                      </button>
+                    ))}
+                    {secondaryAddressLoading ? <div className="transport-address-suggestion loading">Searching addresses...</div> : null}
+                  </div>
+                ) : null}
+              </div>
             </label>
             {secondaryRouteModal.error ? <p className="transport-manual-time-error">{secondaryRouteModal.error}</p> : null}
             <div className="transport-manual-time-actions">

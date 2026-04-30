@@ -119,5 +119,24 @@ namespace ESSDesign.Server.Controllers
                 return StatusCode(500, new { error = "Route preview failed. Please try again." });
             }
         }
+
+        [HttpPost("address-suggestions")]
+        public async Task<IActionResult> AddressSuggestions(
+            [FromBody] DeliveryAnalysisService.AddressSuggestionRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Query))
+                return BadRequest(new { error = "query is required." });
+
+            try
+            {
+                var result = await _deliveryAnalysisService.SuggestAddressesAsync(request);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Address suggestions failed for {Query}", request.Query);
+                return StatusCode(500, new { error = "Address suggestions failed. Please try again." });
+            }
+        }
     }
 }

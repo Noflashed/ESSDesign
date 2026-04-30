@@ -6432,6 +6432,15 @@ button.stat-card {
     font-size: 14px;
 }
 
+.transport-secondary-route-summary small {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
 .transport-manual-time-field {
     display: flex;
     flex-direction: column;
@@ -6450,6 +6459,69 @@ button.stat-card {
     color: #102b5c;
     font-size: 14px;
     font-weight: 600;
+}
+
+.transport-address-autocomplete {
+    position: relative;
+}
+
+.transport-address-autocomplete input {
+    width: 100%;
+}
+
+.transport-address-suggestions {
+    position: absolute;
+    z-index: 20;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    max-height: 240px;
+    overflow: auto;
+    padding: 6px;
+    border: 1px solid rgba(148,163,184,0.28);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+}
+
+.transport-address-suggestion {
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #102b5c;
+    cursor: pointer;
+    padding: 10px;
+    text-align: left;
+}
+
+.transport-address-suggestion:hover,
+.transport-address-suggestion:focus {
+    background: #f1f5f9;
+}
+
+.transport-address-suggestion strong,
+.transport-address-suggestion span {
+    display: block;
+}
+
+.transport-address-suggestion strong {
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.transport-address-suggestion span {
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.transport-address-suggestion.loading {
+    cursor: default;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 800;
 }
 
 .transport-manual-time-error {
