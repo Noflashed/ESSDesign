@@ -6486,7 +6486,7 @@ button.stat-card {
 
 .transport-address-suggestion {
     width: 100%;
-    border: none;
+    border: 1px solid rgba(16, 43, 92, 0.14);
     border-radius: 10px;
     background: transparent;
     color: #102b5c;
@@ -7256,7 +7256,8 @@ button.stat-card {
 }
 
 .transport-page-frame .ts2-event-card,
-.transport-page-frame .ts2-return-card {
+.transport-page-frame .ts2-return-card,
+.transport-page-frame .ts2-secondary-route-card {
     border-radius: 12px;
     box-shadow: none;
 }

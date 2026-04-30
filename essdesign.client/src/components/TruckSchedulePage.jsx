@@ -79,6 +79,24 @@ function dedupeRequests(items) {
   return Array.from(map.values());
 }
 
+function isSecondaryRouteRequest(request) {
+  return request?.routeType === 'secondary_route' && Boolean(request?.secondaryRoute);
+}
+
+function getSecondaryRouteTiming(secondaryRoute) {
+  const transitMinutes = Math.max(1, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
+  const loadingMinutes = Math.max(0, Number(secondaryRoute?.serviceMinutes) || 0);
+  const returnMinutes = Math.max(1, Math.round((secondaryRoute?.returnDurationSeconds || 0) / 60));
+  return {
+    transitMinutes,
+    loadingMinutes,
+    secondaryTravelMinutes: 0,
+    secondaryServiceMinutes: 0,
+    returnMinutes,
+    totalMinutes: transitMinutes + loadingMinutes + returnMinutes,
+  };
+}
+
 function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) {
   const map = new Map((requests || []).filter(item => item?.id).map(item => [item.id, item]));
   overrides.forEach((entry, requestId) => {
@@ -207,7 +225,9 @@ function buildBoardState(requestsForDay, routeMap) {
         return String(left.submittedAt || '').localeCompare(String(right.submittedAt || ''));
       })
       .forEach((request, index, ordered) => {
-        const timing = getTimingProfile(routeMap[request.id] ?? null, request.secondaryRoute || null);
+        const timing = isSecondaryRouteRequest(request)
+          ? getSecondaryRouteTiming(request.secondaryRoute)
+          : getTimingProfile(routeMap[request.id] ?? null, null);
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
         const shiftedScheduledStart = Math.max(SCREEN_START_HOUR * 60, scheduledStart + cumulativeShiftMinutes);
         const laterRequests = ordered.slice(index + 1);
@@ -250,9 +270,9 @@ function buildBoardState(requestsForDay, routeMap) {
           date: dateKey,
           hour: Math.floor(startMinutes / 60),
           minute: Math.floor(startMinutes % 60),
-          builderName: request.builderName,
-          projectName: request.projectName,
-          scaffoldingSystem: request.scaffoldingSystem,
+          builderName: isSecondaryRouteRequest(request) ? request.secondaryRoute.destination : request.builderName,
+          projectName: isSecondaryRouteRequest(request) ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : request.projectName,
+          scaffoldingSystem: isSecondaryRouteRequest(request) ? request.secondaryRoute.label : request.scaffoldingSystem,
           orderId: request.id,
           truckId,
           truckLabel: request.scheduledTruckLabel ?? request.truckLabel ?? TRUCK_LANES.find(lane => lane.id === truckId)?.rego ?? null,
@@ -833,11 +853,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const dateKey = formatDateKey(selectedDate);
       const requestsForDay = merged.filter(request => request.scheduledDate === dateKey);
       const siteLocationMap = Object.fromEntries(
-        requestsForDay.map(request => [request.id, requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request)]),
+        requestsForDay.map(request => [
+          request.id,
+          isSecondaryRouteRequest(request)
+            ? request.secondaryRoute.startingLocation || requestSiteLocationMap[request.id] || ''
+            : requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request),
+        ]),
       );
       setRequestSiteLocationMap(current => ({ ...current, ...siteLocationMap }));
       const cachedRouteMap = Object.fromEntries(
         requestsForDay.map(request => {
+          if (isSecondaryRouteRequest(request)) {
+            return [request.id, null];
+          }
           const siteLocation = siteLocationMap[request.id];
           return [request.id, siteLocation ? getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) ?? null : null];
         }),
@@ -852,6 +880,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setLoadingBoard(false);
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
+          if (isSecondaryRouteRequest(request)) {
+            return [request.id, null];
+          }
           const siteLocation = siteLocationMap[request.id];
           return [request.id, siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) : null];
         }),
@@ -1021,13 +1052,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [selectedScheduleEvent?.date, selectedScheduleEvent?.hour, selectedScheduleEvent?.minute],
   );
   const selectedSchedulePrimaryRouteEstimate = selectedScheduleRequest
-    ? getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null
+    ? isSecondaryRouteRequest(selectedScheduleRequest)
+      ? null
+      : getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null
     : null;
   const selectedScheduleSecondaryRoute = selectedScheduleRequest?.secondaryRoute || null;
-  const selectedScheduleIsSecondarySegment = selectedScheduleSegment === 'secondary' && Boolean(selectedScheduleSecondaryRoute);
+  const selectedScheduleIsStandaloneSecondary = isSecondaryRouteRequest(selectedScheduleRequest);
+  const selectedScheduleIsSecondarySegment = selectedScheduleIsStandaloneSecondary || (selectedScheduleSegment === 'secondary' && Boolean(selectedScheduleSecondaryRoute));
   const selectedScheduleSecondaryRouteSchedule = useMemo(() => {
     if (!selectedScheduleEvent || !selectedScheduleSecondaryRoute) {
       return {};
+    }
+
+    if (selectedScheduleIsStandaloneSecondary) {
+      return selectedScheduleRouteSchedule;
     }
 
     const start = eventStartMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleEvent.hour * 60 + selectedScheduleEvent.minute;
@@ -1041,14 +1079,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [
     eventStartMinutesMap,
     selectedScheduleEvent,
+    selectedScheduleIsStandaloneSecondary,
     selectedSchedulePrimaryRouteEstimate,
+    selectedScheduleRouteSchedule,
     selectedScheduleSecondaryRoute,
   ]);
   const selectedScheduleRouteContext = useMemo(() => {
     if (selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute) {
       return {
         segment: 'secondary',
-        fromLocation: selectedScheduleSiteLocation || '',
+        fromLocation: selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || '',
         toLocation: selectedScheduleSecondaryRoute.destination || '',
         siteLocation: selectedScheduleSecondaryRoute.destination || '',
         schedule: selectedScheduleSecondaryRouteSchedule,
@@ -1085,16 +1125,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ],
   );
   const selectedScheduleTiming = selectedScheduleRequest
-    ? getTimingProfile(
-      selectedSchedulePrimaryRouteEstimate,
-      selectedScheduleRequest.secondaryRoute || null,
-    )
+    ? isSecondaryRouteRequest(selectedScheduleRequest)
+      ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute)
+      : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
     : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
     if (!selectedScheduleEvent) return 'No delivery selected';
     const startMinutes = (eventStartMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleEvent.hour * 60 + selectedScheduleEvent.minute);
     if (selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute) {
+      if (selectedScheduleIsStandaloneSecondary) {
+        const secondaryEnd = startMinutes + (selectedScheduleTiming?.transitMinutes || 0) + (selectedScheduleTiming?.loadingMinutes || 0);
+        return `${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(secondaryEnd / 60), Math.floor(secondaryEnd % 60))}`;
+      }
       const secondaryStart = startMinutes + getPrimaryPhaseMinutes(selectedSchedulePrimaryRouteEstimate, selectedScheduleSecondaryRoute);
       const secondaryDuration = Math.max(
         1,
@@ -1112,6 +1155,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     eventPrimaryDurationMinutesMap,
     eventStartMinutesMap,
     selectedScheduleEvent,
+    selectedScheduleIsStandaloneSecondary,
     selectedScheduleIsSecondarySegment,
     selectedSchedulePrimaryRouteEstimate,
     selectedScheduleSecondaryRoute,
@@ -1176,9 +1220,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
   }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteContext, selectedScheduleRouteKey]);
   const selectedRouteDurationMinutes = useMemo(() => {
+    if (isSecondaryRouteRequest(requestModal?.request)) {
+      return Math.max(30, getSecondaryRouteTiming(requestModal.request.secondaryRoute).totalMinutes || 90);
+    }
     const timing = getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null);
     return Math.max(30, timing.totalMinutes || 90);
-  }, [requestModal?.request?.secondaryRoute, selectedRouteEstimate]);
+  }, [requestModal?.request, selectedRouteEstimate]);
   const selectedScheduleTrafficCopy = useMemo(
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
@@ -1277,7 +1324,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
-    const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
+    const siteLocation = isSecondaryRouteRequest(request)
+      ? request.secondaryRoute.startingLocation || requestSiteLocationMap[request.id] || ''
+      : requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
     const nextTruckId = request.scheduledTruckId ?? request.truckId ?? selectedTruckId ?? TRUCK_LANES[0].id;
     setSelectedTruckId(nextTruckId);
     if (typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number') {
@@ -1746,6 +1795,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
       const secondaryRoute = {
         reason: secondaryRouteModal.reason,
+        startingLocation: secondaryRouteModal.primarySiteLocation,
         destination,
         label: getSecondaryRouteReasonLabel(secondaryRouteModal.reason),
         linkedRequestId: null,
@@ -1766,14 +1816,41 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         serviceMinutes: secondaryServiceMinutes,
       };
 
-      const updatedRequest = await materialOrderRequestsAPI.setSecondaryRoute(secondaryRouteModal.requestId, secondaryRoute);
-      setAllRequests(current => current.map(item => item.id === updatedRequest.id ? updatedRequest : item));
-      setRequestMetaMap(current => ({ ...current, [updatedRequest.id]: updatedRequest }));
-      const nextTiming = getTimingProfile(primaryRouteEstimate, secondaryRoute);
-      setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: nextTiming.totalMinutes }));
-      setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: getPrimaryPhaseMinutes(primaryRouteEstimate, secondaryRoute) }));
+      const updatedRequest = await materialOrderRequestsAPI.setSecondaryRoute(secondaryRouteModal.requestId, secondaryRoute, {
+        ...outboundSchedule,
+        truckId: scheduleEvent.truckId,
+        truckLabel: scheduleEvent.truckLabel,
+      });
+      const parentRequest = { ...request, secondaryRoute: null };
+      setAllRequests(current => dedupeRequests([
+        ...current.map(item => item.id === parentRequest.id ? parentRequest : item).filter(item => item.id !== updatedRequest.id),
+        updatedRequest,
+      ]));
+      setRequestMetaMap(current => ({ ...current, [parentRequest.id]: parentRequest, [updatedRequest.id]: updatedRequest }));
+      setRequestSiteLocationMap(current => ({ ...current, [updatedRequest.id]: secondaryRoute.startingLocation }));
+      const secondaryStartMinutes = outboundSchedule.scheduledHour * 60 + outboundSchedule.scheduledMinute;
+      const secondaryTiming = getSecondaryRouteTiming(secondaryRoute);
+      setDayEvents(current => {
+        const nextEvent = {
+          id: `remote-${updatedRequest.id}`,
+          date: outboundSchedule.scheduledDate,
+          hour: outboundSchedule.scheduledHour,
+          minute: outboundSchedule.scheduledMinute,
+          builderName: secondaryRoute.destination,
+          projectName: secondaryRoute.label,
+          scaffoldingSystem: secondaryRoute.label,
+          orderId: updatedRequest.id,
+          truckId: scheduleEvent.truckId,
+          truckLabel: scheduleEvent.truckLabel,
+        };
+        return [...current.filter(item => item.orderId !== updatedRequest.id), nextEvent]
+          .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
+      });
+      setEventStartMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryStartMinutes }));
+      setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.totalMinutes }));
+      setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.transitMinutes + secondaryTiming.loadingMinutes }));
       setSelectedScheduleEventId(updatedRequest.id);
-      setSelectedScheduleSegment('secondary');
+      setSelectedScheduleSegment('primary');
       setScheduleInspectorOpen(true);
       setSecondaryRouteModal(null);
       setError('');
@@ -1791,14 +1868,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     setDraggedRequestId(requestId);
     setDraggedScheduledOrderId('');
-    setDragPreviewDurationMinutes(90);
+    const durationMinutes = isSecondaryRouteRequest(request) ? getSecondaryRouteTiming(request.secondaryRoute).totalMinutes : 90;
+    setDragPreviewDurationMinutes(durationMinutes);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
     setManualTimeModal(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', requestId);
     setScheduleDragImage(event, request, {
-      width: getEventFlex(90) * timelineWidth,
+      width: getEventFlex(durationMinutes) * timelineWidth,
       height: 78,
     });
   }, [timelineWidth]);
@@ -2330,6 +2408,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       {laneEvents.map(event => {
                       const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
+                      const isSecondaryRequest = isSecondaryRouteRequest(request);
                       const status = request?.deliveryStatus || 'scheduled';
                       const durationMinutes = eventDurationMinutesMap[event.orderId] ?? 90;
                       const primaryDurationMinutes = eventPrimaryDurationMinutesMap[event.orderId] ?? durationMinutes;
@@ -2346,23 +2425,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const primaryEnd = startMinutes + primaryDurationMinutes;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
-                      const timing = getTimingProfile(
-                        getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
-                        request?.secondaryRoute || null,
-                      );
-                      const plannedPrimaryDurationMinutes = request?.secondaryRoute
+                      const timing = isSecondaryRequest
+                        ? getSecondaryRouteTiming(request.secondaryRoute)
+                        : getTimingProfile(
+                          getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
+                          request?.secondaryRoute || null,
+                        );
+                      const plannedPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute
                         ? getPrimaryPhaseMinutes(
                           getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
                           request?.secondaryRoute || null,
                         )
                         : primaryDurationMinutes;
-                      const displayPrimaryDurationMinutes = request?.secondaryRoute && status !== 'return_transit'
+                      const displayPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute && status !== 'return_transit'
                         ? Math.min(durationMinutes, plannedPrimaryDurationMinutes)
                         : primaryDurationMinutes;
                       const displayPrimaryRatio = Math.max(0, Math.min(1, displayPrimaryDurationMinutes / Math.max(1, durationMinutes)));
                       const displayPrimaryWidth = displayPrimaryRatio * 100;
                       const displaySecondaryWidth = Math.max(0, 100 - displayPrimaryWidth);
-                      const hasSecondaryRouteTile = Boolean(request?.secondaryRoute) && status !== 'return_transit' && displaySecondaryWidth > 0;
+                      const hasSecondaryRouteTile = !isSecondaryRequest && Boolean(request?.secondaryRoute) && status !== 'return_transit' && displaySecondaryWidth > 0;
                       const secondaryStartMinutes = startMinutes + displayPrimaryDurationMinutes;
                       const secondaryEndMinutes = startMinutes + durationMinutes;
                       const secondaryArrivalMinutes = secondaryStartMinutes + Math.round((request?.secondaryRoute?.travelDurationSeconds || 0) / 60);
@@ -2371,6 +2452,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
                         : 'pending';
                       const scaffoldDetailText = getScaffoldDetailText(request, event);
+                      const eventTitle = isSecondaryRequest ? request.secondaryRoute.destination : event.builderName || 'Material Order';
+                      const eventSubtitle = isSecondaryRequest ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : scaffoldDetailText;
+                      const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       return (
                         <div
                           key={event.id}
@@ -2398,19 +2482,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           ) : null}
                           <button
                             type="button"
-                            className="ts2-event-card"
+                            className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
                             style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
                             onClick={() => {
                               handleSelectScheduleEvent(event.orderId);
                             }}
                           >
                             <span className="ts2-event-time">{formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} – {formatTimeChip(Math.floor(primaryEnd / 60), Math.floor(primaryEnd % 60))}</span>
-                            <strong className="ts2-event-title">{event.builderName || 'Material Order'}</strong>
-                            <span className="ts2-event-subtitle">{scaffoldDetailText}</span>
-                            <span className="ts2-event-arrival">ETA site {siteArrivalLabel}</span>
+                            <strong className="ts2-event-title">{eventTitle}</strong>
+                            <span className="ts2-event-subtitle">{eventSubtitle}</span>
+                            <span className="ts2-event-arrival">{eventArrival}</span>
                             <div className="ts2-event-status-row">
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
-                              <span>{groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
+                              <span>{isSecondaryRequest ? 'Secondary transit' : groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
                             </div>
                           </button>
                           {hasSecondaryRouteTile ? (
@@ -2500,7 +2584,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <dl className="transport-schedule-detail-list">
               {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
                 <>
-                  <div><dt>Starting Location</dt><dd>{selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
+                  <div><dt>Starting Location</dt><dd>{selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
                   <div><dt>Destination</dt><dd>{selectedScheduleSecondaryRoute.destination || 'Secondary destination pending'}</dd></div>
                   <div><dt>Reason</dt><dd>{getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason)}</dd></div>
                 </>

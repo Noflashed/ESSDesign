@@ -798,6 +798,7 @@ function normalizeSecondaryRoute(raw) {
     const serviceMinutes = Number(raw.serviceMinutes);
     const normalized = {
         reason: typeof raw.reason === 'string' ? raw.reason : '',
+        startingLocation: typeof raw.startingLocation === 'string' ? raw.startingLocation : '',
         destination: typeof raw.destination === 'string' ? raw.destination : '',
         label: typeof raw.label === 'string' ? raw.label : '',
         linkedRequestId: typeof raw.linkedRequestId === 'string' ? raw.linkedRequestId : null,
@@ -843,6 +844,7 @@ function normalizeMaterialOrderRequestListItem(item) {
         submittedAt: item?.submittedAt || nowIso(),
         orderDate: item?.orderDate || new Date().toISOString().slice(0, 10),
         sourceOrderId: item?.sourceOrderId || null,
+        routeType: item?.routeType || null,
         pdfPath: item?.pdfPath || '',
         scaffoldingSystem: item?.scaffoldingSystem || '',
         details: item?.details || '',
@@ -944,6 +946,7 @@ export const materialOrderRequestsAPI = {
         const record = {
             id: requestId,
             sourceOrderId: form?.id || null,
+            routeType: null,
             builderId: form?.builderId || '',
             builderName: form?.builderName || '',
             projectId: form?.projectId || '',
@@ -991,6 +994,7 @@ export const materialOrderRequestsAPI = {
                     submittedAt,
                     orderDate: record.orderDate,
                     sourceOrderId: record.sourceOrderId,
+                    routeType: null,
                     pdfPath: '',
                     scaffoldingSystem,
                     details,
@@ -1197,7 +1201,7 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
-    setSecondaryRoute: async (requestId, secondaryRoute) => {
+    setSecondaryRoute: async (requestId, secondaryRoute, schedule = {}) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`),
@@ -1205,29 +1209,96 @@ export const materialOrderRequestsAPI = {
         ]);
         if (!record) throw new Error('Request not found');
         const normalizedSecondaryRoute = normalizeSecondaryRoute(secondaryRoute);
-        const updated = {
+        if (!normalizedSecondaryRoute) throw new Error('Secondary route details are invalid');
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const existingSecondaryIndexItem = existingIndex.find(item =>
+            item?.routeType === 'secondary_route'
+            && item?.sourceOrderId === requestId
+            && !item?.archivedAt
+        );
+        const secondaryRequestId = existingSecondaryIndexItem?.id || `secondary-${requestId}-${makeId()}`;
+        const existingSecondaryRecord = existingSecondaryIndexItem?.id
+            ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => null)
+            : null;
+        const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
+        const scheduledHour = typeof schedule.hour === 'number'
+            ? schedule.hour
+            : typeof schedule.scheduledHour === 'number'
+                ? schedule.scheduledHour
+                : record.scheduledHour;
+        const scheduledMinute = typeof schedule.minute === 'number'
+            ? schedule.minute
+            : typeof schedule.scheduledMinute === 'number'
+                ? schedule.scheduledMinute
+                : record.scheduledMinute;
+        const scheduledAtIso = scheduledDate && typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
+            ? `${scheduledDate}T${String(scheduledHour).padStart(2, '0')}:${String(scheduledMinute).padStart(2, '0')}:00`
+            : null;
+        const scheduledTruckId = schedule.truckId || schedule.scheduledTruckId || record.scheduledTruckId || record.truckId || null;
+        const scheduledTruckLabel = schedule.truckLabel || schedule.scheduledTruckLabel || record.scheduledTruckLabel || record.truckLabel || null;
+        const submittedAt = existingSecondaryRecord?.submittedAt || existingSecondaryIndexItem?.submittedAt || nowIso();
+        const parentUpdated = {
             ...record,
+            secondaryRoute: null,
+        };
+        const secondaryRecord = {
+            ...(existingSecondaryRecord || {}),
+            id: secondaryRequestId,
+            sourceOrderId: requestId,
+            routeType: 'secondary_route',
+            builderId: '',
+            builderName: normalizedSecondaryRoute.destination || 'Secondary route',
+            projectId: '',
+            projectName: normalizedSecondaryRoute.label || 'Secondary route',
+            requestedByUserId: record.requestedByUserId || null,
+            requestedByName: record.requestedByName || '',
+            orderDate: record.orderDate || new Date().toISOString().slice(0, 10),
+            submittedAt,
+            notes: `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`,
+            itemValues: {
+                __scaffoldingSystem: normalizedSecondaryRoute.label || 'Secondary route',
+                __details: normalizedSecondaryRoute.destination || '',
+            },
+            scaffoldingSystem: normalizedSecondaryRoute.label || 'Secondary route',
+            details: normalizedSecondaryRoute.destination || '',
+            pdfPath: '',
+            scheduledDate,
+            scheduledHour,
+            scheduledMinute,
+            scheduledAtIso,
+            scheduledTruckId,
+            scheduledTruckLabel,
+            truckId: scheduledTruckId,
+            truckLabel: scheduledTruckLabel,
+            deliveryStatus: scheduledAtIso ? 'scheduled' : 'pending',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            archivedAt: null,
             secondaryRoute: normalizedSecondaryRoute,
         };
-        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const secondaryIndexItem = {
+            ...secondaryRecord,
+            secondaryRoute: normalizedSecondaryRoute,
+        };
         const nextIndex = {
-            requests: existingIndex.map(item => item.id === requestId
+            requests: [
+                ...existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
-                    notes: updated.notes || item.notes || '',
-                    itemValues: updated.itemValues || item.itemValues || {},
-                    scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
-                    details: updated.details || updated?.itemValues?.__details || item.details || '',
-                    secondaryRoute: normalizedSecondaryRoute,
+                    secondaryRoute: null,
                 }
-                : item),
+                : item).filter(item => item.id !== secondaryRequestId),
+                secondaryIndexItem,
+            ],
             updatedAt: nowIso(),
         };
         await Promise.all([
-            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(parentUpdated), 'application/json'),
+            uploadStorageObject(`material-order-requests/requests/${secondaryRequestId}.json`, JSON.stringify(secondaryRecord), 'application/json'),
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
-        return normalizeMaterialOrderRequestRecord(updated);
+        return normalizeMaterialOrderRequestRecord(secondaryRecord);
     },
 
     deleteRequest: async (requestId) => {
