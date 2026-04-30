@@ -370,6 +370,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestFiltersOpen, setRequestFiltersOpen] = useState(false);
     const [requestDateFilter, setRequestDateFilter] = useState('');
     const [requestTruckFilter, setRequestTruckFilter] = useState('all');
+    const [requestSystemFilter, setRequestSystemFilter] = useState('all');
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
     const [selectedRequestId, setSelectedRequestId] = useState('');
     const [selectedRequestDetail, setSelectedRequestDetail] = useState(null);
@@ -427,6 +428,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 if (requestTruckFilter !== 'all' && getRequestTruckKey(request) !== requestTruckFilter) {
                     return false;
                 }
+                if (requestSystemFilter !== 'all') {
+                    const systemValue = isSecondaryRouteRequest(request)
+                        ? getSecondaryRouteReasonLabel(request.secondaryRoute?.reason)
+                        : request.scaffoldingSystem || '';
+                    if (systemValue !== requestSystemFilter) {
+                        return false;
+                    }
+                }
                 if (requestStatusFilter === 'scheduled') {
                     return Boolean(request.scheduledAtIso || (request.scheduledDate && typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number'));
                 }
@@ -443,7 +452,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 const rightValue = requestSortOrder === 'oldest' ? String(right.submittedAt || '') : String(left.submittedAt || '');
                 return leftValue.localeCompare(rightValue);
             });
-    }, [archivedRequests, builders, isActiveQueueView, requestDateFilter, requestSearch, requestSortOrder, requestStatusFilter, requestTruckFilter, visibleOrders]);
+    }, [archivedRequests, builders, isActiveQueueView, requestDateFilter, requestSearch, requestSortOrder, requestStatusFilter, requestSystemFilter, requestTruckFilter, visibleOrders]);
 
     const requestTruckOptions = useMemo(() => {
         const rows = isActiveQueueView ? visibleOrders : archivedRequests;
@@ -455,6 +464,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             map.set(key, label);
         });
         return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    }, [archivedRequests, isActiveQueueView, visibleOrders]);
+
+    const requestSystemOptions = useMemo(() => {
+        const rows = isActiveQueueView ? visibleOrders : archivedRequests;
+        const values = new Set();
+        rows.forEach((request) => {
+            const value = isSecondaryRouteRequest(request)
+                ? getSecondaryRouteReasonLabel(request.secondaryRoute?.reason)
+                : request.scaffoldingSystem || '';
+            if (value) values.add(value);
+        });
+        return Array.from(values).sort().map(value => ({ value, label: value }));
     }, [archivedRequests, isActiveQueueView, visibleOrders]);
 
     const selectedRequestListItem = useMemo(
@@ -875,8 +896,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
         const selectedItems = summarizeItems(selectedRequest);
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
-        const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
+        const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all', requestSystemFilter !== 'all'].filter(Boolean).length;
         const selectedRequestIsSecondaryRoute = isSecondaryRouteRequest(selectedRequest);
+        const selectedRouteMinutes = getSecondaryRouteMinutes(selectedRequest?.secondaryRoute);
         const renderMaterialOrdersTable = (rows) => (
             <div className="transport-management-table-wrap">
                 <table className="transport-management-table">
@@ -1035,23 +1057,77 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
         return (
             <div className="ts2-page material-ordering-transport-page transport-management-redesign">
-                <div className="ts2-header material-ordering-transport-header material-ordering-transport-header-queue">
-                    <div className="ts2-header-left material-ordering-transport-header-copy material-ordering-transport-header-copy-row">
-                        <div>
-                            <h1>{isActive ? 'Schedule Management' : 'Archived Orders'}</h1>
-                        </div>
+                <header className="transport-management-hero">
+                    <h1>{isActive ? 'Schedule Management' : 'Archived Orders'}</h1>
+                    <div className="transport-management-refresh">
+                        <span>Last updated: {formatLastUpdated(requestUpdatedAt)}</span>
+                        <button type="button" onClick={() => { setLoading(true); loadPageData(); }}>
+                            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
+                                <path d="M13.5 2.5v3.6H9.9" />
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
                     </div>
-                    <div className="ts2-header-actions">
-                        <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
-                        <button type="button" className="ts2-secondary-btn" onClick={() => { setLoading(true); loadPageData(); }}>Refresh</button>
-                    </div>
-                </div>
+                </header>
 
                 <div className={`transport-management-layout${selectedRequest ? '' : ' detail-closed'}`}>
                     <section className="transport-management-main">
                         <div className="transport-management-tabs">
-                            <button type="button" className={isActive ? 'active' : ''} onClick={() => { setRequestStatusFilter('all'); onNavigate?.('material-ordering-active'); }}>Active <span>{activeCount}</span></button>
-                            <button type="button" className={!isActive ? 'active' : ''} onClick={() => onNavigate?.('material-ordering-archived')}>Archived <span>{archivedRequests.length}</span></button>
+                            <button type="button" className="active">Material Orders <span>{materialQueueRows.length}</span></button>
+                            <button type="button">Secondary Routes <span>{secondaryRouteQueueRows.length}</span></button>
+                            <button type="button" className="transport-management-archive-tab" onClick={() => onNavigate?.(isActive ? 'material-ordering-archived' : 'material-ordering-active')}>
+                                {isActive ? 'Archived' : 'Active'} <span>{isActive ? archivedRequests.length : activeCount}</span>
+                            </button>
+                            {activeFilterCount > 0 ? (
+                                <button
+                                    type="button"
+                                    className="transport-management-clear-tab"
+                                    onClick={() => {
+                                        setRequestStatusFilter('all');
+                                        setRequestDateFilter('');
+                                        setRequestTruckFilter('all');
+                                        setRequestSystemFilter('all');
+                                        setRequestSortOrder('newest');
+                                    }}
+                                >
+                                    Clear filters
+                                </button>
+                            ) : null}
+                        </div>
+
+                        <div className="transport-management-filter-row">
+                            <label>
+                                <input type="date" value={requestDateFilter} onChange={(event) => setRequestDateFilter(event.target.value)} />
+                            </label>
+                            <label>
+                                <select value={requestSystemFilter} onChange={(event) => setRequestSystemFilter(event.target.value)}>
+                                    <option value="all">All Systems</option>
+                                    {requestSystemOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                </select>
+                            </label>
+                            <label>
+                                <select value={requestStatusFilter} onChange={(event) => setRequestStatusFilter(event.target.value)}>
+                                    <option value="all">All Statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="scheduled">Scheduled</option>
+                                    <option value="in_transit">In transit</option>
+                                    <option value="unloading">Unloading</option>
+                                    <option value="return_transit">Return transit</option>
+                                </select>
+                            </label>
+                            <label className="transport-management-search">
+                                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                    <path d="m11.25 11.25 3 3" />
+                                    <circle cx="7" cy="7" r="4.25" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    value={requestSearch}
+                                    onChange={(event) => setRequestSearch(event.target.value)}
+                                    placeholder="Search by order, builder, project, truck, route..."
+                                />
+                            </label>
                         </div>
 
                         <div className="material-ordering-queue-tools transport-management-tools">
@@ -1179,15 +1255,15 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             </div>
                                             <div>
                                                 <dt>Travel</dt>
-                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).travelMinutes} min</dd>
+                                                <dd>{selectedRouteMinutes.travelMinutes} min</dd>
                                             </div>
                                             <div>
                                                 <dt>Service</dt>
-                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).serviceMinutes} min</dd>
+                                                <dd>{selectedRouteMinutes.serviceMinutes} min</dd>
                                             </div>
                                             <div>
                                                 <dt>Return</dt>
-                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).returnMinutes} min</dd>
+                                                <dd>{selectedRouteMinutes.returnMinutes} min</dd>
                                             </div>
                                         </>
                                     ) : (
@@ -1224,7 +1300,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     <div className="transport-management-items">
                                         <div>
                                             <strong>Total route time</strong>
-                                            <span>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).totalMinutes} min</span>
+                                            <span>{selectedRouteMinutes.totalMinutes} min</span>
                                         </div>
                                     </div>
                                 ) : (
@@ -1254,9 +1330,24 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             </section>
 
                             <div className="transport-management-detail-actions">
-                                {!selectedRequestIsScheduled && isActive ? (
+                                {!selectedRequestIsSecondaryRoute ? (
+                                    <button type="button" className="transport-management-save" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                        View / Print Picking Card
+                                    </button>
+                                ) : null}
+                                {selectedRequestIsSecondaryRoute ? (
                                     <button type="button" className="transport-management-save" onClick={() => onNavigate?.('truck-schedule')}>
+                                        View Route Schedule
+                                    </button>
+                                ) : null}
+                                {!selectedRequestIsScheduled && isActive ? (
+                                    <button type="button" className="transport-management-secondary-action" onClick={() => onNavigate?.('truck-schedule')}>
                                         Schedule order
+                                    </button>
+                                ) : null}
+                                {isActive ? (
+                                    <button type="button" className="transport-management-cancel-action" onClick={() => handleDeleteRequest(selectedRequest)} disabled={saving}>
+                                        Cancel Order
                                     </button>
                                 ) : null}
                             </div>
