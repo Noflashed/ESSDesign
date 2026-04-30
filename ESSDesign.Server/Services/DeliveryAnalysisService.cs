@@ -347,6 +347,7 @@ namespace ESSDesign.Server.Services
                           "&routeRepresentation=polyline" +
                           "&travelMode=truck" +
                           "&vehicleCommercial=true" +
+                          "&avoid=tollRoads" +
                           $"&departAt={Uri.EscapeDataString(BuildTomTomDepartureValue(departure))}" +
                           $"&key={Uri.EscapeDataString(apiKey)}";
 
@@ -418,8 +419,8 @@ namespace ESSDesign.Server.Services
                     HasLiveTraffic = true,
                     TrafficProvider = "TomTom traffic",
                     TrafficNote = delayMinutes > 0
-                        ? $"TomTom traffic adding about {delayMinutes:F0} min"
-                        : "TomTom traffic showing no extra delay",
+                        ? $"TomTom toll-free route adding about {delayMinutes:F0} min"
+                        : "TomTom toll-free route with no extra delay",
                     PathPoints = pathPoints,
                 };
             }
