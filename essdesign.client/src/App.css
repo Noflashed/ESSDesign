@@ -6307,16 +6307,16 @@ button.stat-card {
     color: #667085;
 }
 .ts2-event-time,
-.ts2-return-card span,
-.ts2-secondary-route-card span {
+.ts2-return-card > span,
+.ts2-secondary-route-card > span {
     display: block;
     font-size: 11px;
     font-weight: 800;
     margin-bottom: 4px;
 }
 .ts2-event-title,
-.ts2-return-card strong,
-.ts2-secondary-route-card strong {
+.ts2-return-card > strong,
+.ts2-secondary-route-card > strong {
     display: block;
     font-size: 14px;
     font-weight: 800;
@@ -6346,6 +6346,9 @@ button.stat-card {
     width: 8px;
     height: 8px;
     border-radius: 999px;
+}
+.ts2-secondary-route-card .ts2-event-status-dot {
+    background: #f47c20;
 }
 
 .ts2-modal-card,

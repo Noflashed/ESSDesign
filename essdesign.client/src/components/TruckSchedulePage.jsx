@@ -1769,15 +1769,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const updatedRequest = await materialOrderRequestsAPI.setSecondaryRoute(secondaryRouteModal.requestId, secondaryRoute);
       setAllRequests(current => current.map(item => item.id === updatedRequest.id ? updatedRequest : item));
       setRequestMetaMap(current => ({ ...current, [updatedRequest.id]: updatedRequest }));
+      const nextTiming = getTimingProfile(primaryRouteEstimate, secondaryRoute);
+      setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: nextTiming.totalMinutes }));
+      setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: getPrimaryPhaseMinutes(primaryRouteEstimate, secondaryRoute) }));
+      setSelectedScheduleEventId(updatedRequest.id);
+      setSelectedScheduleSegment('secondary');
+      setScheduleInspectorOpen(true);
       setSecondaryRouteModal(null);
-      await loadBoard();
       setError('');
     } catch (err) {
       setSecondaryRouteModal(current => current ? { ...current, error: err?.message || 'Failed to save secondary route.' } : current);
     } finally {
       setSecondaryRouteSaving(false);
     }
-  }, [allRequests, dayEvents, loadBoard, requestMetaMap, secondaryRouteModal]);
+  }, [allRequests, dayEvents, requestMetaMap, secondaryRouteModal]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -2358,6 +2363,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const displayPrimaryWidth = displayPrimaryRatio * 100;
                       const displaySecondaryWidth = Math.max(0, 100 - displayPrimaryWidth);
                       const hasSecondaryRouteTile = Boolean(request?.secondaryRoute) && status !== 'return_transit' && displaySecondaryWidth > 0;
+                      const secondaryStartMinutes = startMinutes + displayPrimaryDurationMinutes;
+                      const secondaryEndMinutes = startMinutes + durationMinutes;
+                      const secondaryArrivalMinutes = secondaryStartMinutes + Math.round((request?.secondaryRoute?.travelDurationSeconds || 0) / 60);
                       const siteArrivalMinutes = startMinutes + timing.transitMinutes;
                       const siteArrivalLabel = siteLocation
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
@@ -2414,8 +2422,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 handleSelectScheduleEvent(event.orderId, 'secondary');
                               }}
                             >
-                              <span>{getSecondaryRouteReasonLabel(request.secondaryRoute.reason)}</span>
-                              <strong>{request.secondaryRoute.destination}</strong>
+                              <span className="ts2-event-time">{formatTimeChip(Math.floor(secondaryStartMinutes / 60), Math.floor(secondaryStartMinutes % 60))} – {formatTimeChip(Math.floor(secondaryEndMinutes / 60), Math.floor(secondaryEndMinutes % 60))}</span>
+                              <strong className="ts2-event-title">{request.secondaryRoute.destination}</strong>
+                              <span className="ts2-event-subtitle">{getSecondaryRouteReasonLabel(request.secondaryRoute.reason)}</span>
+                              <span className="ts2-event-arrival">ETA stop {formatTimeChip(Math.floor(secondaryArrivalMinutes / 60), Math.floor(secondaryArrivalMinutes % 60))}</span>
+                              <div className="ts2-event-status-row">
+                                <span className="ts2-event-status-dot" />
+                                <span>Secondary transit</span>
+                              </div>
                             </button>
                           ) : null}
                           {hasReturnTransitTile ? (
@@ -2475,8 +2489,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       <aside className="transport-schedule-inspector">
         <div className="transport-schedule-inspector-head">
           <div>
-            <span>Selected Delivery</span>
-            <h2>{selectedScheduleWindowLabel}</h2>
+            <span>{selectedScheduleIsSecondarySegment ? 'Selected Secondary Route' : 'Selected Delivery'}</span>
+            <h2>{selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason) : selectedScheduleWindowLabel}</h2>
           </div>
           {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleRequest.deliveryStatus || 'scheduled'}`}>{scheduleStatusLabel(selectedScheduleRequest.deliveryStatus || 'scheduled')}</span> : null}
           <button type="button" className="transport-inspector-close" onClick={() => setScheduleInspectorOpen(false)} aria-label="Close selected delivery panel">×</button>
@@ -2484,11 +2498,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         {selectedScheduleEvent ? (
           <>
             <dl className="transport-schedule-detail-list">
-              <div><dt>Builder</dt><dd>{selectedScheduleEvent.builderName || 'Material Order'}</dd></div>
-              <div><dt>Project</dt><dd>{selectedScheduleEvent.projectName || 'Scheduled delivery'}</dd></div>
-              <div><dt>{selectedScheduleIsSecondarySegment ? 'Secondary Destination' : 'Destination'}</dt><dd>{selectedScheduleRouteContext.siteLocation || 'Site location pending'}</dd></div>
-              {selectedScheduleIsSecondarySegment ? <div><dt>Primary Site</dt><dd>{selectedScheduleSiteLocation || 'Site location pending'}</dd></div> : null}
-              <div><dt>Scaffold System</dt><dd>{selectedScheduleEvent.scaffoldingSystem || selectedScheduleRequest?.scaffoldingSystem || '-'}</dd></div>
+              {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
+                <>
+                  <div><dt>Starting Location</dt><dd>{selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
+                  <div><dt>Destination</dt><dd>{selectedScheduleSecondaryRoute.destination || 'Secondary destination pending'}</dd></div>
+                  <div><dt>Reason</dt><dd>{getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason)}</dd></div>
+                </>
+              ) : (
+                <>
+                  <div><dt>Builder</dt><dd>{selectedScheduleEvent.builderName || 'Material Order'}</dd></div>
+                  <div><dt>Project</dt><dd>{selectedScheduleEvent.projectName || 'Scheduled delivery'}</dd></div>
+                  <div><dt>Destination</dt><dd>{selectedScheduleRouteContext.siteLocation || 'Site location pending'}</dd></div>
+                  <div><dt>Scaffold System</dt><dd>{selectedScheduleEvent.scaffoldingSystem || selectedScheduleRequest?.scaffoldingSystem || '-'}</dd></div>
+                </>
+              )}
             </dl>
             <div className="transport-schedule-estimate-card">
               {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
