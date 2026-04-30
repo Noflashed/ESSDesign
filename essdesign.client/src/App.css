@@ -8123,6 +8123,26 @@ button.stat-card {
     border-radius: 0;
 }
 
+.transport-page-frame .transport-management-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.transport-page-frame .transport-management-table th,
+.transport-page-frame .transport-management-table td {
+    border-right: 1px solid #DCE4EF;
+    border-bottom: 1px solid #DCE4EF;
+}
+
+.transport-page-frame .transport-management-table th:last-child,
+.transport-page-frame .transport-management-table td:last-child {
+    border-right: 0;
+}
+
+.transport-page-frame .transport-management-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
 .transport-management-category-empty {
     padding: 18px 16px;
     color: #64748B;
