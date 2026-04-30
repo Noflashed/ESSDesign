@@ -118,6 +118,30 @@ function getDeliveryStatusLabel(status) {
     return 'Pending';
 }
 
+function isSecondaryRouteRequest(request) {
+    return request?.routeType === 'secondary_route' && Boolean(request?.secondaryRoute);
+}
+
+function getSecondaryRouteReasonLabel(reason) {
+    if (reason === 'secondary_drop_off') return 'Secondary material drop off';
+    if (reason === 'material_pick_up') return 'Material pick-up';
+    if (reason === 'yard_collection') return 'Yard collection';
+    if (reason === 'other') return 'Other route task';
+    return 'Secondary route';
+}
+
+function getSecondaryRouteMinutes(route) {
+    const travelMinutes = Math.max(0, Math.round((route?.travelDurationSeconds || 0) / 60));
+    const serviceMinutes = Math.max(0, Number(route?.serviceMinutes) || 0);
+    const returnMinutes = Math.max(0, Math.round((route?.returnDurationSeconds || 0) / 60));
+    return {
+        travelMinutes,
+        serviceMinutes,
+        returnMinutes,
+        totalMinutes: travelMinutes + serviceMinutes + returnMinutes,
+    };
+}
+
 function getRequestFilterDate(request) {
     const value = request?.scheduledDate || request?.scheduledAtIso || request?.submittedAt || request?.orderDate || '';
     if (!value) return '';
@@ -154,6 +178,9 @@ function getScheduledTimeRange(request) {
 }
 
 function getProjectLocation(builders, request) {
+    if (isSecondaryRouteRequest(request)) {
+        return request.secondaryRoute?.destination || '';
+    }
     const builder = (builders || []).find(item => item.id === request?.builderId || item.name === request?.builderName);
     const project = (builder?.projects || []).find(item => item.id === request?.projectId || item.name === request?.projectName);
     return project?.siteLocation || request?.projectName || '';
@@ -388,6 +415,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     request.requestedByName,
                     request.scaffoldingSystem,
                     request.details,
+                    request.secondaryRoute?.startingLocation,
+                    request.secondaryRoute?.destination,
+                    getSecondaryRouteReasonLabel(request.secondaryRoute?.reason),
                     getProjectLocation(builders, request),
                 ].some(value => String(value || '').toLowerCase().includes(query));
                 if (!matchesQuery) return false;
@@ -433,6 +463,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     );
 
     const selectedRequest = selectedRequestDetail || selectedRequestListItem;
+    const materialQueueRows = useMemo(
+        () => queueRows.filter((request) => !isSecondaryRouteRequest(request)),
+        [queueRows]
+    );
+    const secondaryRouteQueueRows = useMemo(
+        () => queueRows.filter((request) => isSecondaryRouteRequest(request)),
+        [queueRows]
+    );
 
     useEffect(() => {
         if (!isActiveQueueView && !isArchivedQueueView) return;
@@ -838,6 +876,162 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const selectedItems = summarizeItems(selectedRequest);
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
         const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
+        const selectedRequestIsSecondaryRoute = isSecondaryRouteRequest(selectedRequest);
+        const renderMaterialOrdersTable = (rows) => (
+            <div className="transport-management-table-wrap">
+                <table className="transport-management-table">
+                    <colgroup>
+                        <col className="transport-management-col-details" />
+                        <col className="transport-management-col-builder" />
+                        <col className="transport-management-col-requested" />
+                        <col className="transport-management-col-system" />
+                        <col className="transport-management-col-submitted" />
+                        <col className="transport-management-col-truck" />
+                        <col className="transport-management-col-time" />
+                        <col className="transport-management-col-status" />
+                        <col className="transport-management-col-pdf" />
+                        {isActive ? <col className="transport-management-col-action" /> : null}
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Scaffold Details</th>
+                            <th>Builder / Project</th>
+                            <th>Requested By</th>
+                            <th>System</th>
+                            <th>Submitted</th>
+                            <th>Truck</th>
+                            <th>Scheduled Time</th>
+                            <th>Status</th>
+                            <th>PDF</th>
+                            {isActive ? <th aria-label="Delete delivery" /> : null}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((request) => {
+                            const isSelected = selectedRequest?.id === request.id;
+                            return (
+                                <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => setSelectedRequestId(request.id)}>
+                                    <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
+                                    <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
+                                    <td>{request.requestedByName || 'Unassigned'}</td>
+                                    <td>{request.scaffoldingSystem || 'Kwikstage'}</td>
+                                    <td><strong>{getSubmittedDateLabel(request.submittedAt)}</strong><span>{getSubmittedTimeLabel(request.submittedAt)}</span></td>
+                                    <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
+                                    <td>{getScheduledTimeRange(request)}</td>
+                                    <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                    <td><button type="button" className="transport-management-pdf-btn" disabled={!request.pdfPath} onClick={(event) => openArchivedPdf(request, event)}>PDF</button></td>
+                                    {isActive ? (
+                                        <td className="transport-management-row-action-cell">
+                                            <button
+                                                type="button"
+                                                className="transport-management-row-delete"
+                                                aria-label="Delete delivery"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleDeleteRequest(request);
+                                                }}
+                                                disabled={saving}
+                                            >
+                                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path d="M3 6h18" />
+                                                    <path d="M8 6V4h8v2" />
+                                                    <path d="M18 6l-.7 13.2A2 2 0 0 1 15.3 21H8.7a2 2 0 0 1-2-1.8L6 6" />
+                                                    <path d="M10 11v5" />
+                                                    <path d="M14 11v5" />
+                                                </svg>
+                                            </button>
+                                        </td>
+                                    ) : null}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
+        const renderSecondaryRoutesTable = (rows) => (
+            <div className="transport-management-table-wrap secondary-routes">
+                <table className="transport-management-table transport-management-secondary-table">
+                    <colgroup>
+                        <col className="transport-management-col-builder" />
+                        <col className="transport-management-col-details" />
+                        <col className="transport-management-col-details" />
+                        <col className="transport-management-col-system" />
+                        <col className="transport-management-col-truck" />
+                        <col className="transport-management-col-time" />
+                        <col className="transport-management-col-status" />
+                        {isActive ? <col className="transport-management-col-action" /> : null}
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Destination</th>
+                            <th>Starting Location</th>
+                            <th>Reason</th>
+                            <th>Route Time</th>
+                            <th>Truck</th>
+                            <th>Scheduled Time</th>
+                            <th>Status</th>
+                            {isActive ? <th aria-label="Delete route" /> : null}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((request) => {
+                            const route = request.secondaryRoute || {};
+                            const routeMinutes = getSecondaryRouteMinutes(route);
+                            const isSelected = selectedRequest?.id === request.id;
+                            return (
+                                <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => setSelectedRequestId(request.id)}>
+                                    <td><strong>{route.destination || request.details || 'Secondary route'}</strong><span>{getSubmittedDateLabel(request.submittedAt)}</span></td>
+                                    <td>{route.startingLocation || 'Starting location pending'}</td>
+                                    <td>{getSecondaryRouteReasonLabel(route.reason)}</td>
+                                    <td><strong>{routeMinutes.totalMinutes} min</strong><span>{routeMinutes.travelMinutes} travel / {routeMinutes.serviceMinutes} service / {routeMinutes.returnMinutes} return</span></td>
+                                    <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
+                                    <td>{getScheduledTimeRange(request)}</td>
+                                    <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                    {isActive ? (
+                                        <td className="transport-management-row-action-cell">
+                                            <button
+                                                type="button"
+                                                className="transport-management-row-delete"
+                                                aria-label="Delete secondary route"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    handleDeleteRequest(request);
+                                                }}
+                                                disabled={saving}
+                                            >
+                                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path d="M3 6h18" />
+                                                    <path d="M8 6V4h8v2" />
+                                                    <path d="M18 6l-.7 13.2A2 2 0 0 1 15.3 21H8.7a2 2 0 0 1-2-1.8L6 6" />
+                                                    <path d="M10 11v5" />
+                                                    <path d="M14 11v5" />
+                                                </svg>
+                                            </button>
+                                        </td>
+                                    ) : null}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
+        const renderQueueSection = (title, rows, kind) => (
+            <section className={`transport-management-category ${kind}`}>
+                <div className="transport-management-category-head">
+                    <strong>{title}</strong>
+                    <span>{rows.length}</span>
+                </div>
+                {rows.length > 0 ? (
+                    kind === 'secondary' ? renderSecondaryRoutesTable(rows) : renderMaterialOrdersTable(rows)
+                ) : (
+                    <div className="transport-management-category-empty">
+                        {kind === 'secondary' ? 'No secondary routes match the current filters.' : 'No material orders match the current filters.'}
+                    </div>
+                )}
+            </section>
+        );
 
         return (
             <div className="ts2-page material-ordering-transport-page transport-management-redesign">
@@ -939,75 +1133,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <p>{isActive ? 'Submitted transport requests will appear here as soon as they enter the active queue.' : 'Completed transport requests will appear here once they have rolled out of the active queue.'}</p>
                             </div>
                         ) : (
-                            <div className="transport-management-table-wrap">
-                                <table className="transport-management-table">
-                                    <colgroup>
-                                        <col className="transport-management-col-details" />
-                                        <col className="transport-management-col-builder" />
-                                        <col className="transport-management-col-requested" />
-                                        <col className="transport-management-col-system" />
-                                        <col className="transport-management-col-submitted" />
-                                        <col className="transport-management-col-truck" />
-                                        <col className="transport-management-col-time" />
-                                        <col className="transport-management-col-status" />
-                                        <col className="transport-management-col-pdf" />
-                                        {isActive ? <col className="transport-management-col-action" /> : null}
-                                    </colgroup>
-                                    <thead>
-                                        <tr>
-                                            <th>Scaffold Details</th>
-                                            <th>Builder / Project</th>
-                                            <th>Requested By</th>
-                                            <th>System</th>
-                                            <th>Submitted</th>
-                                            <th>Truck</th>
-                                            <th>Scheduled Time</th>
-                                            <th>Status</th>
-                                            <th>PDF</th>
-                                            {isActive ? <th aria-label="Delete delivery" /> : null}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {queueRows.map((request) => {
-                                            const isSelected = selectedRequest?.id === request.id;
-                                            return (
-                                                <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => setSelectedRequestId(request.id)}>
-                                                    <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
-                                                    <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
-                                                    <td>{request.requestedByName || 'Unassigned'}</td>
-                                                    <td>{request.scaffoldingSystem || 'Kwikstage'}</td>
-                                                    <td><strong>{getSubmittedDateLabel(request.submittedAt)}</strong><span>{getSubmittedTimeLabel(request.submittedAt)}</span></td>
-                                                    <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
-                                                    <td>{getScheduledTimeRange(request)}</td>
-                                                    <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
-                                                    <td><button type="button" className="transport-management-pdf-btn" disabled={!request.pdfPath} onClick={(event) => openArchivedPdf(request, event)}>PDF</button></td>
-                                                    {isActive ? (
-                                                        <td className="transport-management-row-action-cell">
-                                                            <button
-                                                                type="button"
-                                                                className="transport-management-row-delete"
-                                                                aria-label="Delete delivery"
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    handleDeleteRequest(request);
-                                                                }}
-                                                                disabled={saving}
-                                                            >
-                                                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                                    <path d="M3 6h18" />
-                                                                    <path d="M8 6V4h8v2" />
-                                                                    <path d="M18 6l-.7 13.2A2 2 0 0 1 15.3 21H8.7a2 2 0 0 1-2-1.8L6 6" />
-                                                                    <path d="M10 11v5" />
-                                                                    <path d="M14 11v5" />
-                                                                </svg>
-                                                            </button>
-                                                        </td>
-                                                    ) : null}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                            <div className="transport-management-category-stack">
+                                {renderQueueSection('Material Orders', materialQueueRows, 'material')}
+                                {renderQueueSection('Secondary Routes', secondaryRouteQueueRows, 'secondary')}
                                 <div className="transport-management-table-foot">
                                     <span>Last updated: {formatLastUpdated(requestUpdatedAt)}</span>
                                     <span>1 - {queueRows.length} of {queueRows.length}</span>
@@ -1023,59 +1151,101 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
                             <section className="transport-management-panel">
                                 <div className="transport-management-panel-title">
-                                    <strong>Picking Card Summary</strong>
-                                    <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
-                                        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                                            <path d="M8 2.5a.75.75 0 0 1 .75.75v5.19l1.72-1.72a.75.75 0 1 1 1.06 1.06L8.53 10.81a.75.75 0 0 1-1.06 0L4.47 7.78a.75.75 0 0 1 1.06-1.06l1.72 1.72V3.25A.75.75 0 0 1 8 2.5ZM3.25 12a.75.75 0 0 1 .75.75v.5h8v-.5a.75.75 0 0 1 1.5 0V14a.75.75 0 0 1-.75.75h-9.5A.75.75 0 0 1 2.5 14v-1.25A.75.75 0 0 1 3.25 12Z" fill="currentColor" />
-                                        </svg>
-                                        <span>Download PDF</span>
-                                    </button>
+                                    <strong>{selectedRequestIsSecondaryRoute ? 'Secondary Route Summary' : 'Picking Card Summary'}</strong>
+                                    {!selectedRequestIsSecondaryRoute ? (
+                                        <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                                                <path d="M8 2.5a.75.75 0 0 1 .75.75v5.19l1.72-1.72a.75.75 0 1 1 1.06 1.06L8.53 10.81a.75.75 0 0 1-1.06 0L4.47 7.78a.75.75 0 0 1 1.06-1.06l1.72 1.72V3.25A.75.75 0 0 1 8 2.5ZM3.25 12a.75.75 0 0 1 .75.75v.5h8v-.5a.75.75 0 0 1 1.5 0V14a.75.75 0 0 1-.75.75h-9.5A.75.75 0 0 1 2.5 14v-1.25A.75.75 0 0 1 3.25 12Z" fill="currentColor" />
+                                            </svg>
+                                            <span>Download PDF</span>
+                                        </button>
+                                    ) : null}
                                 </div>
 
                                 <dl className="transport-management-summary-grid">
-                                    <div>
-                                        <dt>Builder</dt>
-                                        <dd>{selectedRequest.builderName || 'Material Order'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Project</dt>
-                                        <dd>{selectedRequest.projectName || 'Awaiting project'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Delivery Address</dt>
-                                        <dd>{selectedSiteLocation || 'Awaiting site address'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Requested By</dt>
-                                        <dd>{selectedRequest.requestedByName || 'Unassigned'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Scaffold System</dt>
-                                        <dd>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt>Submitted</dt>
-                                        <dd>{formatDateTime(selectedRequest.submittedAt)}</dd>
-                                    </div>
+                                    {selectedRequestIsSecondaryRoute ? (
+                                        <>
+                                            <div>
+                                                <dt>Starting Location</dt>
+                                                <dd>{selectedRequest.secondaryRoute?.startingLocation || 'Starting location pending'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Destination</dt>
+                                                <dd>{selectedRequest.secondaryRoute?.destination || 'Destination pending'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Reason</dt>
+                                                <dd>{getSecondaryRouteReasonLabel(selectedRequest.secondaryRoute?.reason)}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Travel</dt>
+                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).travelMinutes} min</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Service</dt>
+                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).serviceMinutes} min</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Return</dt>
+                                                <dd>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).returnMinutes} min</dd>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div>
+                                                <dt>Builder</dt>
+                                                <dd>{selectedRequest.builderName || 'Material Order'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Project</dt>
+                                                <dd>{selectedRequest.projectName || 'Awaiting project'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Delivery Address</dt>
+                                                <dd>{selectedSiteLocation || 'Awaiting site address'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Requested By</dt>
+                                                <dd>{selectedRequest.requestedByName || 'Unassigned'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Scaffold System</dt>
+                                                <dd>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>Submitted</dt>
+                                                <dd>{formatDateTime(selectedRequest.submittedAt)}</dd>
+                                            </div>
+                                        </>
+                                    )}
                                 </dl>
 
-                                <div className="transport-management-items">
-                                    <div className="transport-management-items-head">
-                                        <strong>Items</strong>
-                                        <span>Qty</span>
+                                {selectedRequestIsSecondaryRoute ? (
+                                    <div className="transport-management-items">
+                                        <div>
+                                            <strong>Total route time</strong>
+                                            <span>{getSecondaryRouteMinutes(selectedRequest.secondaryRoute).totalMinutes} min</span>
+                                        </div>
                                     </div>
-                                    {selectedItems.length > 0 ? selectedItems.map((item) => (
-                                        <div key={item.description}>
-                                            <strong>{item.description}</strong>
-                                            <span>{item.qty}</span>
+                                ) : (
+                                    <div className="transport-management-items">
+                                        <div className="transport-management-items-head">
+                                            <strong>Items</strong>
+                                            <span>Qty</span>
                                         </div>
-                                    )) : (
-                                        <div className="transport-management-items-empty">
-                                            <strong>No picking items added</strong>
-                                            <span>0</span>
-                                        </div>
-                                    )}
-                                </div>
+                                        {selectedItems.length > 0 ? selectedItems.map((item) => (
+                                            <div key={item.description}>
+                                                <strong>{item.description}</strong>
+                                                <span>{item.qty}</span>
+                                            </div>
+                                        )) : (
+                                            <div className="transport-management-items-empty">
+                                                <strong>No picking items added</strong>
+                                                <span>0</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <label className="transport-management-notes">
                                     <strong>Notes</strong>
