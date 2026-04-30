@@ -921,7 +921,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   useEffect(() => {
     const query = secondaryRouteModal?.destination?.trim() || '';
-    if (!secondaryRouteModal || query.length < 3) {
+    if (!secondaryRouteModal || secondaryRouteModal.selectedAddressSourceId || query.length < 3) {
       setSecondaryAddressSuggestions([]);
       setSecondaryAddressLoading(false);
       return undefined;
@@ -983,7 +983,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [secondaryRouteModal?.addressOptions, secondaryRouteModal?.destination]);
+  }, [secondaryRouteModal?.addressOptions, secondaryRouteModal?.destination, secondaryRouteModal?.selectedAddressSourceId]);
 
   const timelineMarkers = useMemo(() => buildTimelineMarkers(timelineScaleMode), [timelineScaleMode]);
   const timelineWidth = useMemo(() => getTimelineWidth(timelineScaleMode), [timelineScaleMode]);
@@ -1655,9 +1655,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSecondaryRouteModal({
       requestId,
       primarySiteLocation: primarySiteLocation || '',
-      parentLabel: `${request.builderName || 'Material Order'} - ${request.projectName || 'Scheduled delivery'}`,
       reason: existingSecondaryRoute?.reason || 'secondary_drop_off',
       destination: existingSecondaryRoute?.destination || '',
+      serviceMinutes: String(existingSecondaryRoute?.serviceMinutes || SECONDARY_ROUTE_SERVICE_MINUTES),
       selectedAddressSourceId: '',
       pendingOptions,
       addressOptions: [
@@ -1699,6 +1699,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setSecondaryRouteModal(current => current ? { ...current, error: 'Select or enter the secondary route destination.' } : current);
       return;
     }
+    const secondaryServiceMinutes = Math.max(0, Math.round(Number(secondaryRouteModal.serviceMinutes)));
+    if (!Number.isFinite(secondaryServiceMinutes) || secondaryServiceMinutes < 0 || secondaryServiceMinutes > 240) {
+      setSecondaryRouteModal(current => current ? { ...current, error: 'Enter a service time between 0 and 240 minutes.' } : current);
+      return;
+    }
 
     const primaryRouteEstimate = getCachedRouteEstimateValue(
       secondaryRouteModal.primarySiteLocation,
@@ -1724,7 +1729,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         throw new Error('Secondary route could not be calculated for that destination.');
       }
 
-      const secondaryServiceMinutes = SECONDARY_ROUTE_SERVICE_MINUTES;
       const returnDeparture = new Date(
         outboundDeparture.getTime()
         + Math.round(outbound.durationSeconds / 60) * 60 * 1000
@@ -2609,10 +2613,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               </div>
               <button type="button" className="transport-manual-time-close" onClick={closeSecondaryRouteModal} aria-label="Close secondary route panel">×</button>
             </div>
-            <div className="transport-secondary-route-summary">
-              <div><span>Starting location (parent tile)</span><strong>{secondaryRouteModal.parentLabel || 'Selected delivery'}</strong><small>{secondaryRouteModal.primarySiteLocation || 'Pending site location'}</small></div>
-              <div><span>Service allowance</span><strong>{SECONDARY_ROUTE_SERVICE_MINUTES} min</strong></div>
-            </div>
             <label className="transport-manual-time-field">
               <span>Reason</span>
               <select
@@ -2624,29 +2624,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 ))}
               </select>
             </label>
-            {secondaryRouteModal.reason === 'secondary_drop_off' ? (
-              <label className="transport-manual-time-field">
-                <span>Use address from request</span>
-                <select
-                  value={secondaryRouteModal.selectedAddressSourceId}
-                  onChange={(inputEvent) => {
-                    const nextId = inputEvent.target.value;
-                    const selectedAddress = secondaryRouteModal.addressOptions.find(item => item.id === nextId) || null;
-                    setSecondaryRouteModal(current => current ? {
-                      ...current,
-                      selectedAddressSourceId: nextId,
-                      destination: selectedAddress?.siteLocation || current.destination,
-                      error: '',
-                    } : current);
-                  }}
-                >
-                  <option value="">Enter address manually</option>
-                  {secondaryRouteModal.addressOptions.map(option => (
-                    <option key={`${option.source}-${option.id}`} value={option.id}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <label className="transport-manual-time-field">
+              <span>Service time</span>
+              <div className="transport-service-time-input">
+                <input
+                  type="number"
+                  min="0"
+                  max="240"
+                  step="5"
+                  value={secondaryRouteModal.serviceMinutes}
+                  onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, serviceMinutes: inputEvent.target.value, error: '' } : current)}
+                />
+                <b>min</b>
+              </div>
+            </label>
             <label className="transport-manual-time-field">
               <span>Secondary destination</span>
               <div className="transport-address-autocomplete">

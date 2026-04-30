@@ -6470,13 +6470,10 @@ button.stat-card {
 }
 
 .transport-address-suggestions {
-    position: absolute;
-    z-index: 20;
-    left: 0;
-    right: 0;
-    top: calc(100% + 6px);
-    max-height: 240px;
+    position: static;
+    max-height: 168px;
     overflow: auto;
+    margin-top: 8px;
     padding: 6px;
     border: 1px solid rgba(148,163,184,0.28);
     border-radius: 14px;
@@ -6522,6 +6519,18 @@ button.stat-card {
     color: #64748b;
     font-size: 12px;
     font-weight: 800;
+}
+
+.transport-service-time-input {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.transport-service-time-input b {
+    color: #64748b;
+    font-size: 13px;
 }
 
 .transport-manual-time-error {
