@@ -344,6 +344,84 @@ function getScheduleCollision({ requestId, truckId, startMinutes, durationMinute
   }) || null;
 }
 
+function buildScheduledRequestUpdate(sourceRequest, { dateKey, minutes, truckId, truckLabel }) {
+  const hour = Math.floor(minutes / 60);
+  const minute = Math.floor(minutes % 60);
+  return {
+    ...sourceRequest,
+    scheduledDate: dateKey,
+    scheduledHour: hour,
+    scheduledMinute: minute,
+    scheduledAtIso: buildScheduleIso(dateKey, hour, minute),
+    scheduledTruckId: truckId,
+    scheduledTruckLabel: truckLabel,
+    truckId,
+    truckLabel,
+    deliveryStatus: 'scheduled',
+    deliveryStartedAt: null,
+    deliveryUnloadingAt: null,
+    deliveryConfirmedAt: null,
+  };
+}
+
+function buildCalendarEventFromRequest(request, fallbackId = '') {
+  return {
+    id: fallbackId || `remote-${request.id}`,
+    date: request.scheduledDate,
+    hour: request.scheduledHour,
+    minute: request.scheduledMinute,
+    builderName: isSecondaryRouteRequest(request) ? request.secondaryRoute.destination : request.builderName,
+    projectName: isSecondaryRouteRequest(request) ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : request.projectName,
+    scaffoldingSystem: isSecondaryRouteRequest(request) ? request.secondaryRoute.label : request.scaffoldingSystem,
+    orderId: request.id,
+    truckId: request.scheduledTruckId ?? request.truckId,
+    truckLabel: request.scheduledTruckLabel ?? request.truckLabel ?? null,
+  };
+}
+
+function getShiftedScheduleUpdates({
+  requestId,
+  truckId,
+  insertionStartMinutes,
+  shiftMinutes,
+  dayEvents,
+  startMap,
+  durationMap,
+  requestMap,
+  dateKey,
+}) {
+  const insertionEndMinutes = insertionStartMinutes + shiftMinutes;
+  return dayEvents
+    .filter(event => {
+      if (event.truckId !== truckId || event.orderId === requestId) {
+        return false;
+      }
+      const start = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+      const end = start + (durationMap[event.orderId] ?? 90);
+      return start >= insertionStartMinutes || (start < insertionStartMinutes && end > insertionStartMinutes);
+    })
+    .sort((left, right) => {
+      const leftStart = startMap[left.orderId] ?? left.hour * 60 + left.minute;
+      const rightStart = startMap[right.orderId] ?? right.hour * 60 + right.minute;
+      return leftStart - rightStart;
+    })
+    .map(event => {
+      const sourceRequest = requestMap[event.orderId];
+      if (!sourceRequest) {
+        return null;
+      }
+      const currentStart = startMap[event.orderId] ?? event.hour * 60 + event.minute;
+      const nextStart = currentStart < insertionStartMinutes ? insertionEndMinutes : currentStart + shiftMinutes;
+      return buildScheduledRequestUpdate(sourceRequest, {
+        dateKey,
+        minutes: nextStart,
+        truckId: event.truckId,
+        truckLabel: event.truckLabel,
+      });
+    })
+    .filter(Boolean);
+}
+
 function getCollisionMessage(event, startMap, durationMap) {
   if (!event) {
     return 'That time overlaps another delivery.';
@@ -1026,6 +1104,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt),
     [allRequests],
   );
+  const pendingMaterialRequests = useMemo(
+    () => pendingRequests.filter(request => !isSecondaryRouteRequest(request)),
+    [pendingRequests],
+  );
+  const pendingSecondaryRequests = useMemo(
+    () => pendingRequests.filter(request => isSecondaryRouteRequest(request)),
+    [pendingRequests],
+  );
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -1396,7 +1482,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       window.alert('Please choose a future time for this delivery.');
       return;
     }
-    const collision = getScheduleCollision({
+    const requestId = requestModal.request.id;
+    const shouldShiftLater = !requestModal.request.scheduledDate;
+    const collision = shouldShiftLater ? null : getScheduleCollision({
       requestId: requestModal.request.id,
       truckId: selectedTruckId,
       startMinutes: selectedHour * 60 + selectedMinute,
@@ -1412,7 +1500,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     setScheduleSaving(true);
-    const requestId = requestModal.request.id;
     const truck = TRUCK_LANES.find(lane => lane.id === selectedTruckId);
     const dateKey = formatDateKey(selectedDate);
     const previousRequests = allRequests;
@@ -1421,40 +1508,53 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousStartMap = eventStartMinutesMap;
     const previousDurationMap = eventDurationMinutesMap;
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
-    const updatedRequest = {
-      ...requestModal.request,
-      scheduledDate: dateKey,
-      scheduledHour: selectedHour,
-      scheduledMinute: selectedMinute,
-      scheduledAtIso: scheduleDateIso,
-      scheduledTruckId: truck?.id ?? selectedTruckId,
-      scheduledTruckLabel: truck?.rego ?? null,
+    const startMinutes = selectedHour * 60 + selectedMinute;
+    const updatedRequest = buildScheduledRequestUpdate(requestModal.request, {
+      dateKey,
+      minutes: startMinutes,
       truckId: truck?.id ?? selectedTruckId,
       truckLabel: truck?.rego ?? null,
-      deliveryStatus: 'scheduled',
-      deliveryStartedAt: null,
-      deliveryUnloadingAt: null,
-      deliveryConfirmedAt: null,
+    });
+    const requestMap = {
+      ...requestMetaMap,
+      ...Object.fromEntries(allRequests.filter(item => item?.id).map(item => [item.id, item])),
     };
-    setAllRequests(current => current.map(item => item.id === requestId ? updatedRequest : item));
-    setRequestMetaMap(current => ({ ...current, [requestId]: updatedRequest }));
+    const shiftedRequests = shouldShiftLater ? getShiftedScheduleUpdates({
+      requestId,
+      truckId: truck?.id ?? selectedTruckId,
+      insertionStartMinutes: startMinutes,
+      shiftMinutes: selectedRouteDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      requestMap,
+      dateKey,
+    }) : [];
+    setAllRequests(current => current.map(item => shiftedRequests.find(shifted => shifted.id === item.id) || (item.id === requestId ? updatedRequest : item)));
+    setRequestMetaMap(current => ({
+      ...current,
+      ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted])),
+      [requestId]: updatedRequest,
+    }));
     setDayEvents(current => {
-      const nextEvent = {
-        id: current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`,
-        date: dateKey,
-        hour: selectedHour,
-        minute: selectedMinute,
-        builderName: updatedRequest.builderName,
-        projectName: updatedRequest.projectName,
-        scaffoldingSystem: updatedRequest.scaffoldingSystem,
-        orderId: requestId,
-        truckId: truck?.id ?? selectedTruckId,
-        truckLabel: truck?.rego ?? updatedRequest.scheduledTruckLabel ?? updatedRequest.truckLabel ?? null,
-      };
-      return [...current.filter(event => event.orderId !== requestId), nextEvent]
+      const shiftedEventMap = new Map(shiftedRequests.map(shifted => [shifted.id, buildCalendarEventFromRequest(
+        shifted,
+        current.find(event => event.orderId === shifted.id)?.id || `remote-${shifted.id}`,
+      )]));
+      const nextEvent = buildCalendarEventFromRequest(updatedRequest, current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`);
+      return [
+        ...current
+          .filter(event => event.orderId !== requestId)
+          .map(event => shiftedEventMap.get(event.orderId) || event),
+        nextEvent,
+      ]
         .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
     });
-    setEventStartMinutesMap(current => ({ ...current, [requestId]: selectedHour * 60 + selectedMinute }));
+    setEventStartMinutesMap(current => ({
+      ...current,
+      ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted.scheduledHour * 60 + shifted.scheduledMinute])),
+      [requestId]: startMinutes,
+    }));
     setEventDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? selectedRouteDurationMinutes }));
     setEventPrimaryDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? Math.min(selectedRouteDurationMinutes, 90) }));
     setSelectedScheduleEventId(requestId);
@@ -1464,15 +1564,30 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       request: updatedRequest,
       expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
     });
+    shiftedRequests.forEach(shiftedRequest => {
+      optimisticRequestOverridesRef.current.set(shiftedRequest.id, {
+        request: shiftedRequest,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
+    });
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
-    materialOrderRequestsAPI.setSchedule(requestId, {
+    Promise.all([
+      materialOrderRequestsAPI.setSchedule(requestId, {
         date: formatDateKey(selectedDate),
         hour: selectedHour,
         minute: selectedMinute,
         truckId: truck?.id ?? selectedTruckId,
         truckLabel: truck?.rego ?? requestModal.request.scheduledTruckLabel ?? null,
-      })
+      }),
+      ...shiftedRequests.map(shiftedRequest => materialOrderRequestsAPI.setSchedule(shiftedRequest.id, {
+        date: shiftedRequest.scheduledDate,
+        hour: shiftedRequest.scheduledHour,
+        minute: shiftedRequest.scheduledMinute,
+        truckId: shiftedRequest.scheduledTruckId,
+        truckLabel: shiftedRequest.scheduledTruckLabel,
+      })),
+    ])
       .then(() => {
         optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_SUCCESS_LOCK_MS;
         setError('');
@@ -1505,7 +1620,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const minute = safeMinutes % 60;
     const truck = TRUCK_LANES.find(lane => lane.id === truckId);
     const dateKey = formatDateKey(selectedDate);
-    const collision = getScheduleCollision({
+    const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    const shouldShiftLater = options.shiftLater ?? !sourceRequest?.scheduledDate;
+    const collision = shouldShiftLater ? null : getScheduleCollision({
       requestId,
       truckId: truck?.id ?? truckId,
       startMinutes: safeMinutes,
@@ -1525,43 +1642,57 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousStartMap = eventStartMinutesMap;
     const previousDurationMap = eventDurationMinutesMap;
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
-    const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
-    const updatedRequest = sourceRequest ? {
-      ...sourceRequest,
-      scheduledDate: dateKey,
-      scheduledHour: hour,
-      scheduledMinute: minute,
-      scheduledAtIso: buildScheduleIso(dateKey, hour, minute),
-      scheduledTruckId: truck?.id ?? truckId,
-      scheduledTruckLabel: truck?.rego ?? null,
+    const updatedRequest = sourceRequest ? buildScheduledRequestUpdate(sourceRequest, {
+      dateKey,
+      minutes: safeMinutes,
       truckId: truck?.id ?? truckId,
       truckLabel: truck?.rego ?? null,
-      deliveryStatus: 'scheduled',
-      deliveryStartedAt: null,
-      deliveryUnloadingAt: null,
-      deliveryConfirmedAt: null,
-    } : null;
+    }) : null;
+    const requestMap = {
+      ...requestMetaMap,
+      ...Object.fromEntries(allRequests.filter(item => item?.id).map(item => [item.id, item])),
+    };
+    const shiftedRequests = shouldShiftLater ? getShiftedScheduleUpdates({
+      requestId,
+      truckId: truck?.id ?? truckId,
+      insertionStartMinutes: safeMinutes,
+      shiftMinutes: durationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      requestMap,
+      dateKey,
+    }) : [];
 
     if (updatedRequest) {
-      setAllRequests(current => current.map(item => item.id === requestId ? updatedRequest : item));
-      setRequestMetaMap(current => ({ ...current, [requestId]: updatedRequest }));
+      setAllRequests(current => current.map(item => shiftedRequests.find(shifted => shifted.id === item.id) || (item.id === requestId ? updatedRequest : item)));
+      setRequestMetaMap(current => ({
+        ...current,
+        ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted])),
+        [requestId]: updatedRequest,
+      }));
       setDayEvents(current => {
-        const nextEvent = {
-          id: current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`,
-          date: dateKey,
-          hour,
-          minute,
-          builderName: updatedRequest.builderName,
-          projectName: updatedRequest.projectName,
-          scaffoldingSystem: updatedRequest.scaffoldingSystem,
-          orderId: requestId,
-          truckId: truck?.id ?? truckId,
-          truckLabel: truck?.rego ?? updatedRequest.scheduledTruckLabel ?? updatedRequest.truckLabel ?? null,
-        };
-        return [...current.filter(event => event.orderId !== requestId), nextEvent]
+        const shiftedEventMap = new Map(shiftedRequests.map(shifted => [shifted.id, buildCalendarEventFromRequest(
+          shifted,
+          current.find(event => event.orderId === shifted.id)?.id || `remote-${shifted.id}`,
+        )]));
+        const nextEvent = buildCalendarEventFromRequest(
+          updatedRequest,
+          current.find(event => event.orderId === requestId)?.id || `remote-${requestId}`,
+        );
+        return [
+          ...current
+            .filter(event => event.orderId !== requestId)
+            .map(event => shiftedEventMap.get(event.orderId) || event),
+          nextEvent,
+        ]
           .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
       });
-      setEventStartMinutesMap(current => ({ ...current, [requestId]: safeMinutes }));
+      setEventStartMinutesMap(current => ({
+        ...current,
+        ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted.scheduledHour * 60 + shifted.scheduledMinute])),
+        [requestId]: safeMinutes,
+      }));
       setEventDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? durationMinutes }));
       setEventPrimaryDurationMinutesMap(current => ({ ...current, [requestId]: current[requestId] ?? Math.min(durationMinutes, 90) }));
     }
@@ -1578,16 +1709,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         request: updatedRequest,
         expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
       });
+      shiftedRequests.forEach(shiftedRequest => {
+        optimisticRequestOverridesRef.current.set(shiftedRequest.id, {
+          request: shiftedRequest,
+          expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+        });
+      });
     }
     optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_LOCK_MS;
 
-    materialOrderRequestsAPI.setSchedule(requestId, {
+    Promise.all([
+      materialOrderRequestsAPI.setSchedule(requestId, {
         date: formatDateKey(selectedDate),
         hour,
         minute,
         truckId: truck?.id ?? truckId,
         truckLabel: truck?.rego ?? null,
-      })
+      }),
+      ...shiftedRequests.map(shiftedRequest => materialOrderRequestsAPI.setSchedule(shiftedRequest.id, {
+        date: shiftedRequest.scheduledDate,
+        hour: shiftedRequest.scheduledHour,
+        minute: shiftedRequest.scheduledMinute,
+        truckId: shiftedRequest.scheduledTruckId,
+        truckLabel: shiftedRequest.scheduledTruckLabel,
+      })),
+    ])
       .then(() => {
         optimisticBoardLockUntilRef.current = Date.now() + OPTIMISTIC_BOARD_SUCCESS_LOCK_MS;
         setError('');
@@ -1595,6 +1741,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       .catch(err => {
         optimisticBoardLockUntilRef.current = 0;
         optimisticRequestOverridesRef.current.delete(requestId);
+        shiftedRequests.forEach(shiftedRequest => optimisticRequestOverridesRef.current.delete(shiftedRequest.id));
+        shiftedRequests.forEach(shiftedRequest => optimisticRequestOverridesRef.current.delete(shiftedRequest.id));
         setAllRequests(previousRequests);
         setDayEvents(previousEvents);
         setRequestMetaMap(previousMetaMap);
@@ -1758,9 +1906,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       secondaryRouteModal.primarySiteLocation,
       buildRouteScheduleFromEvent(scheduleEvent),
     ) ?? null;
-    const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
+    const parentCycleMinutes = getTimingProfile(primaryRouteEstimate, null).totalMinutes;
     const baseStart = new Date(`${scheduleEvent.date}T${String(scheduleEvent.hour).padStart(2, '0')}:${String(scheduleEvent.minute).padStart(2, '0')}:00`);
-    const outboundDeparture = new Date(baseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+    const outboundDeparture = new Date(baseStart.getTime() + parentCycleMinutes * 60 * 1000);
     const outboundSchedule = {
       scheduledDate: formatDateKey(outboundDeparture),
       scheduledHour: outboundDeparture.getHours(),
@@ -1822,31 +1970,64 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         truckLabel: scheduleEvent.truckLabel,
       });
       const parentRequest = { ...request, secondaryRoute: null };
-      setAllRequests(current => dedupeRequests([
-        ...current.map(item => item.id === parentRequest.id ? parentRequest : item).filter(item => item.id !== updatedRequest.id),
-        updatedRequest,
-      ]));
-      setRequestMetaMap(current => ({ ...current, [parentRequest.id]: parentRequest, [updatedRequest.id]: updatedRequest }));
-      setRequestSiteLocationMap(current => ({ ...current, [updatedRequest.id]: secondaryRoute.startingLocation }));
       const secondaryStartMinutes = outboundSchedule.scheduledHour * 60 + outboundSchedule.scheduledMinute;
       const secondaryTiming = getSecondaryRouteTiming(secondaryRoute);
+      const requestMap = {
+        ...requestMetaMap,
+        ...Object.fromEntries(allRequests.filter(item => item?.id).map(item => [item.id, item])),
+      };
+      const shiftedRequests = getShiftedScheduleUpdates({
+        requestId: updatedRequest.id,
+        truckId: scheduleEvent.truckId,
+        insertionStartMinutes: secondaryStartMinutes,
+        shiftMinutes: secondaryTiming.totalMinutes,
+        dayEvents,
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+        requestMap,
+        dateKey: outboundSchedule.scheduledDate,
+      });
+      if (shiftedRequests.length > 0) {
+        await Promise.all(shiftedRequests.map(shiftedRequest => materialOrderRequestsAPI.setSchedule(shiftedRequest.id, {
+          date: shiftedRequest.scheduledDate,
+          hour: shiftedRequest.scheduledHour,
+          minute: shiftedRequest.scheduledMinute,
+          truckId: shiftedRequest.scheduledTruckId,
+          truckLabel: shiftedRequest.scheduledTruckLabel,
+        })));
+      }
+      setAllRequests(current => dedupeRequests([
+        ...current
+          .map(item => shiftedRequests.find(shifted => shifted.id === item.id) || (item.id === parentRequest.id ? parentRequest : item))
+          .filter(item => item.id !== updatedRequest.id),
+        updatedRequest,
+      ]));
+      setRequestMetaMap(current => ({
+        ...current,
+        ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted])),
+        [parentRequest.id]: parentRequest,
+        [updatedRequest.id]: updatedRequest,
+      }));
+      setRequestSiteLocationMap(current => ({ ...current, [updatedRequest.id]: secondaryRoute.startingLocation }));
       setDayEvents(current => {
-        const nextEvent = {
-          id: `remote-${updatedRequest.id}`,
-          date: outboundSchedule.scheduledDate,
-          hour: outboundSchedule.scheduledHour,
-          minute: outboundSchedule.scheduledMinute,
-          builderName: secondaryRoute.destination,
-          projectName: secondaryRoute.label,
-          scaffoldingSystem: secondaryRoute.label,
-          orderId: updatedRequest.id,
-          truckId: scheduleEvent.truckId,
-          truckLabel: scheduleEvent.truckLabel,
-        };
-        return [...current.filter(item => item.orderId !== updatedRequest.id), nextEvent]
+        const shiftedEventMap = new Map(shiftedRequests.map(shifted => [shifted.id, buildCalendarEventFromRequest(
+          shifted,
+          current.find(item => item.orderId === shifted.id)?.id || `remote-${shifted.id}`,
+        )]));
+        const nextEvent = buildCalendarEventFromRequest(updatedRequest, `remote-${updatedRequest.id}`);
+        return [
+          ...current
+            .filter(item => item.orderId !== updatedRequest.id)
+            .map(item => shiftedEventMap.get(item.orderId) || item),
+          nextEvent,
+        ]
           .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
       });
-      setEventStartMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryStartMinutes }));
+      setEventStartMinutesMap(current => ({
+        ...current,
+        ...Object.fromEntries(shiftedRequests.map(shifted => [shifted.id, shifted.scheduledHour * 60 + shifted.scheduledMinute])),
+        [updatedRequest.id]: secondaryStartMinutes,
+      }));
       setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.totalMinutes }));
       setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.transitMinutes + secondaryTiming.loadingMinutes }));
       setSelectedScheduleEventId(updatedRequest.id);
@@ -1859,7 +2040,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     } finally {
       setSecondaryRouteSaving(false);
     }
-  }, [allRequests, dayEvents, requestMetaMap, secondaryRouteModal]);
+  }, [allRequests, dayEvents, eventDurationMinutesMap, eventStartMinutesMap, requestMetaMap, secondaryRouteModal]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -2297,28 +2478,61 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       {!isTruckRole && showPendingPanel ? (
         <div className="ts2-pending-panel">
           <div className="ts2-pending-head">
-            <strong>Scheduled Orders</strong>
+            <strong>Schedule Management</strong>
             <span>{pendingRequests.length}</span>
           </div>
-          {pendingRequests.length > 0 ? (
-            <div className="ts2-pending-list">
-              {pendingRequests.map(request => (
-                <div
-                  key={request.id}
-                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
-                  draggable={!dragSchedulingId}
-                  onDragStart={(event) => handlePendingDragStart(event, request)}
-                  onDragEnd={handlePendingDragEnd}
-                >
-                  <div>
-                    <strong>{request.builderName || 'Material Order'}</strong>
-                    <span>{request.projectName || 'Awaiting site assignment'}</span>
-                  </div>
-                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+          <div className="ts2-pending-columns">
+            <section className="ts2-pending-column">
+              <div className="ts2-pending-column-head">
+                <strong>Material Orders</strong>
+                <span>{pendingMaterialRequests.length}</span>
+              </div>
+              {pendingMaterialRequests.length > 0 ? (
+                <div className="ts2-pending-list">
+                  {pendingMaterialRequests.map(request => (
+                    <div
+                      key={request.id}
+                      className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
+                      draggable={!dragSchedulingId}
+                      onDragStart={(event) => handlePendingDragStart(event, request)}
+                      onDragEnd={handlePendingDragEnd}
+                    >
+                      <div>
+                        <strong>{request.builderName || 'Material Order'}</strong>
+                        <span>{request.projectName || 'Awaiting site assignment'}</span>
+                      </div>
+                      <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : null}
+              ) : <p className="ts2-pending-empty">No unscheduled material orders</p>}
+            </section>
+            <section className="ts2-pending-column secondary">
+              <div className="ts2-pending-column-head">
+                <strong>Secondary Routes</strong>
+                <span>{pendingSecondaryRequests.length}</span>
+              </div>
+              {pendingSecondaryRequests.length > 0 ? (
+                <div className="ts2-pending-list">
+                  {pendingSecondaryRequests.map(request => (
+                    <div
+                      key={request.id}
+                      className={`ts2-pending-item secondary${draggedRequestId === request.id ? ' dragging' : ''}`}
+                      draggable={!dragSchedulingId}
+                      onDragStart={(event) => handlePendingDragStart(event, request)}
+                      onDragEnd={handlePendingDragEnd}
+                    >
+                      <div>
+                        <strong>{request.secondaryRoute?.destination || 'Secondary route'}</strong>
+                        <span>{getSecondaryRouteReasonLabel(request.secondaryRoute?.reason)}</span>
+                      </div>
+                      <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="ts2-pending-empty">No unscheduled secondary routes</p>}
+            </section>
+          </div>
         </div>
       ) : null}
 
@@ -2545,25 +2759,59 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           <div className="transport-reference-pending-tools">
             <label><span>Search pending requests...</span><input type="text" aria-label="Search pending requests" readOnly /></label>
           </div>
-          <div className="transport-reference-pending-list">
-            {pendingRequests.length > 0 ? pendingRequests.map(request => {
-              return (
-                <article
-                  key={request.id}
-                  className={`transport-reference-pending-card${draggedRequestId === request.id ? ' dragging' : ''}`}
-                  draggable={!dragSchedulingId}
-                  onDragStart={(event) => handlePendingDragStart(event, request)}
-                  onDragEnd={handlePendingDragEnd}
-                >
-                  <div><b>{getScaffoldDetailText(request)}</b></div>
-                  <strong>{request.builderName || 'Material Order'}</strong>
-                  <span>{request.projectName || 'Awaiting site assignment'}</span>
-                  <small>Requested by {request.requestedByName || 'Transport'}</small>
-                  <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
-                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
-                </article>
-              );
-            }) : null}
+          <div className="transport-reference-pending-columns">
+            <section>
+              <div className="transport-reference-column-head">
+                <strong>Material Orders</strong>
+                <span>{pendingMaterialRequests.length}</span>
+              </div>
+              <div className="transport-reference-pending-list">
+                {pendingMaterialRequests.length > 0 ? pendingMaterialRequests.map(request => {
+                  return (
+                    <article
+                      key={request.id}
+                      className={`transport-reference-pending-card${draggedRequestId === request.id ? ' dragging' : ''}`}
+                      draggable={!dragSchedulingId}
+                      onDragStart={(event) => handlePendingDragStart(event, request)}
+                      onDragEnd={handlePendingDragEnd}
+                    >
+                      <div><b>{getScaffoldDetailText(request)}</b></div>
+                      <strong>{request.builderName || 'Material Order'}</strong>
+                      <span>{request.projectName || 'Awaiting site assignment'}</span>
+                      <small>Requested by {request.requestedByName || 'Transport'}</small>
+                      <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
+                      <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                    </article>
+                  );
+                }) : <p className="transport-reference-empty">No material orders waiting</p>}
+              </div>
+            </section>
+            <section>
+              <div className="transport-reference-column-head">
+                <strong>Secondary Routes</strong>
+                <span>{pendingSecondaryRequests.length}</span>
+              </div>
+              <div className="transport-reference-pending-list">
+                {pendingSecondaryRequests.length > 0 ? pendingSecondaryRequests.map(request => {
+                  return (
+                    <article
+                      key={request.id}
+                      className={`transport-reference-pending-card secondary${draggedRequestId === request.id ? ' dragging' : ''}`}
+                      draggable={!dragSchedulingId}
+                      onDragStart={(event) => handlePendingDragStart(event, request)}
+                      onDragEnd={handlePendingDragEnd}
+                    >
+                      <div><b>{getSecondaryRouteReasonLabel(request.secondaryRoute?.reason)}</b></div>
+                      <strong>{request.secondaryRoute?.destination || 'Secondary route'}</strong>
+                      <span>{request.secondaryRoute?.startingLocation || 'Starting location pending'}</span>
+                      <small>Service {Math.max(0, Number(request.secondaryRoute?.serviceMinutes) || 0)} min</small>
+                      <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
+                      <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                    </article>
+                  );
+                }) : <p className="transport-reference-empty">No secondary routes waiting</p>}
+              </div>
+            </section>
           </div>
         </section>
       ) : null}
