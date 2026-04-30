@@ -8067,32 +8067,32 @@ button.stat-card {
 .transport-management-category-stack {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
 }
 
 .transport-management-category {
-    border: 1px solid #E8EDF5;
-    border-radius: 16px;
+    border: 1px solid #DCE4EF;
+    border-radius: 7px;
     background: #FFFFFF;
     overflow: hidden;
 }
 
 .transport-management-category.secondary {
-    border-color: rgba(8, 145, 178, 0.22);
+    border-color: #DCE4EF;
 }
 
 .transport-management-category-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 13px 16px;
     border-bottom: 1px solid #E8EDF5;
-    background: #F8FAFC;
+    background: #FFFFFF;
 }
 
 .transport-management-category.secondary .transport-management-category-head {
-    background: #ECFEFF;
+    background: #FFFFFF;
 }
 
 .transport-management-category-head strong {
@@ -8101,21 +8101,17 @@ button.stat-card {
     font-weight: 900;
 }
 
-.transport-management-category-head span {
-    min-width: 28px;
-    height: 28px;
+.transport-management-category-head small {
+    min-width: 24px;
+    height: 24px;
     border-radius: 999px;
-    background: #102B5C;
-    color: #fff;
+    background: #EEF2F7;
+    color: #475569;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
     font-weight: 900;
-}
-
-.transport-management-category.secondary .transport-management-category-head span {
-    background: #0891B2;
 }
 
 .transport-management-category .transport-management-table-wrap {
@@ -8132,6 +8128,10 @@ button.stat-card {
 .transport-page-frame .transport-management-table td {
     border-right: 1px solid #DCE4EF;
     border-bottom: 1px solid #DCE4EF;
+}
+
+.transport-page-frame .transport-management-table th {
+    background: #F8FAFC;
 }
 
 .transport-page-frame .transport-management-table th:last-child,

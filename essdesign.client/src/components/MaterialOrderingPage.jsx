@@ -981,7 +981,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             const isSelected = selectedRequest?.id === request.id;
                             return (
                                 <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => setSelectedRequestId(request.id)}>
-                                    <td><strong>{route.destination || request.details || 'Secondary route'}</strong><span>{getSubmittedDateLabel(request.submittedAt)}</span></td>
+                                    <td><strong>{route.destination || request.details || 'Secondary route'}</strong></td>
                                     <td>{route.startingLocation || 'Starting location pending'}</td>
                                     <td>{getSecondaryRouteReasonLabel(route.reason)}</td>
                                     <td><strong>{routeMinutes.totalMinutes} min</strong><span>{routeMinutes.travelMinutes} travel / {routeMinutes.serviceMinutes} service / {routeMinutes.returnMinutes} return</span></td>
@@ -1021,7 +1021,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             <section className={`transport-management-category ${kind}`}>
                 <div className="transport-management-category-head">
                     <strong>{title}</strong>
-                    <span>{rows.length}</span>
+                    <small>{rows.length}</small>
                 </div>
                 {rows.length > 0 ? (
                     kind === 'secondary' ? renderSecondaryRoutesTable(rows) : renderMaterialOrdersTable(rows)
