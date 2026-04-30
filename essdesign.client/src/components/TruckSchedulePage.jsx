@@ -18,12 +18,13 @@ import {
   formatDuration,
   formatTimeChip,
   getCachedRouteData,
+  getCachedRouteDataBetween,
   getCachedRouteEstimate,
   getCachedRouteEstimateValue,
   getDeliveryActionRows,
   getEventFlex,
   getEventOffset,
-  getPlannedDurationMinutes,
+  getPrimaryPhaseMinutes,
   getSafetyBuildersCached,
   getTimingProfile,
   getTruckAssignment,
@@ -56,6 +57,17 @@ const OPTIMISTIC_BOARD_SUCCESS_LOCK_MS = 8000;
 const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
+const SECONDARY_ROUTE_REASON_OPTIONS = [
+  { value: 'secondary_drop_off', label: 'Secondary material drop off' },
+  { value: 'material_pick_up', label: 'Material pick-up' },
+  { value: 'yard_collection', label: 'Yard collection' },
+  { value: 'other', label: 'Other route task' },
+];
+const SECONDARY_ROUTE_SERVICE_MINUTES = 30;
+
+function getSecondaryRouteReasonLabel(reason) {
+  return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
+}
 
 function dedupeRequests(items) {
   const map = new Map();
@@ -195,7 +207,7 @@ function buildBoardState(requestsForDay, routeMap) {
         return String(left.submittedAt || '').localeCompare(String(right.submittedAt || ''));
       })
       .forEach((request, index, ordered) => {
-        const timing = getTimingProfile(routeMap[request.id] ?? null);
+        const timing = getTimingProfile(routeMap[request.id] ?? null, request.secondaryRoute || null);
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
         const shiftedScheduledStart = Math.max(SCREEN_START_HOUR * 60, scheduledStart + cumulativeShiftMinutes);
         const laterRequests = ordered.slice(index + 1);
@@ -402,23 +414,30 @@ function setScheduleDragImage(event, request, options = {}) {
   window.setTimeout(() => ghost.remove(), 0);
 }
 
-function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation) {
+function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation, secondaryRoute = null) {
   const transitMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const loadingMinutes = 30;
-  const returnMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
+  const secondaryTravelMinutes = secondaryRoute?.travelDurationSeconds ? Math.round(secondaryRoute.travelDurationSeconds / 60) : 0;
+  const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
+  const returnMinutes = secondaryRoute?.returnDurationSeconds
+    ? Math.round(secondaryRoute.returnDurationSeconds / 60)
+    : routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0, 0);
   const arrival = new Date(start.getTime() + transitMinutes * 60 * 1000);
   const loadingComplete = new Date(arrival.getTime() + loadingMinutes * 60 * 1000);
-  const returned = new Date(loadingComplete.getTime() + returnMinutes * 60 * 1000);
+  const secondaryComplete = new Date(loadingComplete.getTime() + (secondaryTravelMinutes + secondaryServiceMinutes) * 60 * 1000);
+  const returned = new Date(secondaryComplete.getTime() + returnMinutes * 60 * 1000);
   if (!hasSiteLocation) {
     return {
       deliveryFromYard: 'Pending site location',
       siteLoading: `${loadingMinutes} min`,
+      secondaryRoute: secondaryRoute ? 'Pending secondary route' : null,
       returnTransit: 'Pending site location',
-      overall: `${loadingMinutes} min onsite`,
+      overall: `${loadingMinutes + secondaryTravelMinutes + secondaryServiceMinutes} min onsite`,
       aestTime: formatTimeChip(hour, minute),
       arrivalTime: 'Pending',
       loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+      secondaryCompleteTime: secondaryRoute ? formatTimeChip(secondaryComplete.getHours(), secondaryComplete.getMinutes()) : null,
       returnTime: 'Pending',
     };
   }
@@ -426,22 +445,26 @@ function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSite
     return {
       deliveryFromYard: 'Calculating route',
       siteLoading: `${loadingMinutes} min`,
+      secondaryRoute: secondaryRoute ? 'Calculating route' : null,
       returnTransit: 'Calculating route',
-      overall: `${loadingMinutes} min onsite`,
+      overall: `${loadingMinutes + secondaryTravelMinutes + secondaryServiceMinutes} min onsite`,
       aestTime: formatTimeChip(hour, minute),
       arrivalTime: 'Calculating',
       loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+      secondaryCompleteTime: secondaryRoute ? formatTimeChip(secondaryComplete.getHours(), secondaryComplete.getMinutes()) : null,
       returnTime: 'Calculating',
     };
   }
   return {
     deliveryFromYard: `${transitMinutes} min`,
     siteLoading: `${loadingMinutes} min`,
+    secondaryRoute: secondaryRoute ? `${secondaryTravelMinutes + secondaryServiceMinutes} min` : null,
     returnTransit: `${returnMinutes} min`,
-    overall: `${transitMinutes + loadingMinutes + returnMinutes} min`,
+    overall: `${transitMinutes + loadingMinutes + secondaryTravelMinutes + secondaryServiceMinutes + returnMinutes} min`,
     aestTime: formatTimeChip(hour, minute),
     arrivalTime: formatTimeChip(arrival.getHours(), arrival.getMinutes()),
     loadingCompleteTime: formatTimeChip(loadingComplete.getHours(), loadingComplete.getMinutes()),
+    secondaryCompleteTime: secondaryRoute ? formatTimeChip(secondaryComplete.getHours(), secondaryComplete.getMinutes()) : null,
     returnTime: formatTimeChip(returned.getHours(), returned.getMinutes()),
   };
 }
@@ -770,6 +793,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [dragSchedulingId, setDragSchedulingId] = useState('');
   const [tileMenu, setTileMenu] = useState(null);
   const [manualTimeModal, setManualTimeModal] = useState(null);
+  const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
+  const [secondaryRouteSaving, setSecondaryRouteSaving] = useState(false);
   const boardScrollRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
@@ -939,7 +964,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       selectedScheduleSiteLocation,
     ],
   );
-  const selectedScheduleTiming = selectedScheduleRequest ? getTimingProfile(getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null) : null;
+  const selectedScheduleTiming = selectedScheduleRequest
+    ? getTimingProfile(
+      getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null,
+      selectedScheduleRequest.secondaryRoute || null,
+    )
+    : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
     if (!selectedScheduleEvent) return 'No delivery selected';
@@ -990,19 +1020,64 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       active = false;
     };
   }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteKey, selectedScheduleRouteSchedule, selectedScheduleSiteLocation]);
-  const selectedRouteDurationMinutes = useMemo(
-    () => Math.max(30, selectedRouteEstimate?.durationMinutes ? Math.round(selectedRouteEstimate.durationMinutes) * 2 + 30 : 90),
-    [selectedRouteEstimate],
-  );
+  const selectedRouteDurationMinutes = useMemo(() => {
+    const timing = getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null);
+    return Math.max(30, timing.totalMinutes || 90);
+  }, [requestModal?.request?.secondaryRoute, selectedRouteEstimate]);
   const selectedScheduleTrafficCopy = useMemo(
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
   );
   const requestModalSummary = useMemo(
-    () => buildEstimateSummary(selectedDate, selectedHour, selectedMinute, selectedRouteEstimate, Boolean(requestModal?.siteLocation)),
-    [requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
+    () => buildEstimateSummary(
+      selectedDate,
+      selectedHour,
+      selectedMinute,
+      selectedRouteEstimate,
+      Boolean(requestModal?.siteLocation),
+      requestModal?.request?.secondaryRoute || null,
+    ),
+    [requestModal?.request?.secondaryRoute, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
+
+  useEffect(() => {
+    if (!requestModal?.siteLocation) {
+      setSelectedRouteEstimate(null);
+      setRequestModalRouteData(null);
+      setRequestModalRouteLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    const schedule = {
+      scheduledDate: formatDateKey(selectedDate),
+      scheduledHour: selectedHour,
+      scheduledMinute: selectedMinute,
+    };
+
+    setRequestModalRouteLoading(true);
+    Promise.all([
+      getCachedRouteEstimate(requestModal.siteLocation, schedule),
+      getCachedRouteData(requestModal.siteLocation, schedule),
+    ])
+      .then(([estimate, routeData]) => {
+        if (!active) {
+          return;
+        }
+        setSelectedRouteEstimate(estimate);
+        setRequestModalRouteData(routeData);
+      })
+      .finally(() => {
+        if (active) {
+          setRequestModalRouteLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute]);
   const setTimelineScaleWithAnchor = useCallback((nextMode) => {
     if (!SCALE_MODES[nextMode]) {
       return;
@@ -1019,14 +1094,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!eventOverviewModal?.request) {
       return null;
     }
-    const request = eventOverviewModal.request;
     return buildEstimateSummary(
-      eventOverviewModal.siteLocation,
       new Date(`${eventOverviewModal.event.date}T00:00:00`),
       eventOverviewModal.event.hour,
       eventOverviewModal.event.minute,
       eventOverviewModal.routeEstimate,
       Boolean(eventOverviewModal.siteLocation),
+      eventOverviewModal.request.secondaryRoute || null,
     );
   }, [eventOverviewModal]);
   const manualTimeEvent = useMemo(
@@ -1039,6 +1113,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const openRequestModal = useCallback(async requestId => {
     setRequestModalLoading(true);
     setRequestModal(null);
+    setSelectedRouteEstimate(null);
     setRequestModalRouteData(null);
     setRequestModalRouteLoading(false);
     const request = allRequests.find(item => item.id === requestId) ?? await materialOrderRequestsAPI.getRequest(requestId);
@@ -1049,8 +1124,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
     const nextTruckId = request.scheduledTruckId ?? request.truckId ?? selectedTruckId ?? TRUCK_LANES[0].id;
-    const nextRouteEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) : null;
-    setSelectedRouteEstimate(nextRouteEstimate);
     setSelectedTruckId(nextTruckId);
     if (typeof request.scheduledHour === 'number' && typeof request.scheduledMinute === 'number') {
       setSelectedHour(request.scheduledHour);
@@ -1068,17 +1141,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     setRequestModal({ request, siteLocation });
     setRequestModalLoading(false);
-    if (siteLocation) {
-      setRequestModalRouteLoading(true);
-      getCachedRouteData(siteLocation, buildRouteScheduleFromRequest(request, selectedDate))
-        .then(data => setRequestModalRouteData(data))
-        .finally(() => setRequestModalRouteLoading(false));
-    }
   }, [allRequests, dayEvents, eventDurationMinutesMap, eventStartMinutesMap, requestSiteLocationMap, selectedDate, selectedTruckId]);
 
   const closeRequestModal = useCallback(() => {
     setRequestModal(null);
     setRequestModalLoading(false);
+    setSelectedRouteEstimate(null);
     setRequestModalRouteData(null);
     setRequestModalRouteLoading(false);
     setTimePickerVisible(false);
@@ -1397,6 +1465,150 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setManualTimeModal(null);
     scheduleRequestAt(requestId, scheduleEvent.truckId, parsedMinutes, durationMinutes, { exact: true });
   }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, manualTimeModal, scheduleRequestAt]);
+
+  const openSecondaryRouteModal = useCallback(async (requestId) => {
+    const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
+    const request = requestMetaMap[requestId] || allRequests.find(item => item.id === requestId) || null;
+    if (!scheduleEvent || !request) {
+      setTileMenu(null);
+      return;
+    }
+
+    const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+    const primarySiteLocation = requestSiteLocationMap[requestId] ?? findProjectLocation(builders, request);
+    const pendingOptions = pendingRequests
+      .filter(item => item.id !== requestId)
+      .map(item => {
+        const siteLocation = requestSiteLocationMap[item.id] ?? findProjectLocation(builders, item);
+        return {
+          id: item.id,
+          label: `${item.builderName || 'Material Order'} · ${item.projectName || 'Pending request'}`,
+          siteLocation: siteLocation || '',
+        };
+      })
+      .filter(item => item.siteLocation);
+
+    const existingSecondaryRoute = request.secondaryRoute || null;
+    setTileMenu(null);
+    setSecondaryRouteModal({
+      requestId,
+      primarySiteLocation: primarySiteLocation || '',
+      reason: existingSecondaryRoute?.reason || 'secondary_drop_off',
+      destination: existingSecondaryRoute?.destination || '',
+      linkedRequestId: existingSecondaryRoute?.linkedRequestId || '',
+      linkedRequestLabel: existingSecondaryRoute?.linkedRequestLabel || '',
+      pendingOptions,
+      error: '',
+    });
+  }, [allRequests, dayEvents, pendingRequests, requestMetaMap, requestSiteLocationMap]);
+
+  const closeSecondaryRouteModal = useCallback(() => {
+    if (secondaryRouteSaving) {
+      return;
+    }
+    setSecondaryRouteModal(null);
+  }, [secondaryRouteSaving]);
+
+  const handleSecondaryRouteSave = useCallback(async (event) => {
+    event.preventDefault();
+    if (!secondaryRouteModal?.requestId) {
+      return;
+    }
+
+    const request = requestMetaMap[secondaryRouteModal.requestId] || allRequests.find(item => item.id === secondaryRouteModal.requestId) || null;
+    const scheduleEvent = dayEvents.find(item => item.orderId === secondaryRouteModal.requestId);
+    if (!request || !scheduleEvent) {
+      setSecondaryRouteModal(current => current ? { ...current, error: 'Scheduled delivery not found.' } : current);
+      return;
+    }
+    if (!secondaryRouteModal.primarySiteLocation) {
+      setSecondaryRouteModal(current => current ? { ...current, error: 'Primary site location is missing for this delivery.' } : current);
+      return;
+    }
+
+    const linkedRequest = secondaryRouteModal.linkedRequestId
+      ? secondaryRouteModal.pendingOptions.find(item => item.id === secondaryRouteModal.linkedRequestId) || null
+      : null;
+    const destination = (linkedRequest?.siteLocation || secondaryRouteModal.destination || '').trim();
+    if (!destination) {
+      setSecondaryRouteModal(current => current ? { ...current, error: 'Select or enter the secondary route destination.' } : current);
+      return;
+    }
+
+    const primaryRouteEstimate = getCachedRouteEstimateValue(
+      secondaryRouteModal.primarySiteLocation,
+      buildRouteScheduleFromEvent(scheduleEvent),
+    ) ?? null;
+    const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
+    const baseStart = new Date(`${scheduleEvent.date}T${String(scheduleEvent.hour).padStart(2, '0')}:${String(scheduleEvent.minute).padStart(2, '0')}:00`);
+    const outboundDeparture = new Date(baseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+    const outboundSchedule = {
+      scheduledDate: formatDateKey(outboundDeparture),
+      scheduledHour: outboundDeparture.getHours(),
+      scheduledMinute: outboundDeparture.getMinutes(),
+    };
+
+    setSecondaryRouteSaving(true);
+    try {
+      const outbound = await getCachedRouteDataBetween(
+        secondaryRouteModal.primarySiteLocation,
+        destination,
+        outboundSchedule,
+      );
+      if (!outbound) {
+        throw new Error('Secondary route could not be calculated for that destination.');
+      }
+
+      const secondaryServiceMinutes = SECONDARY_ROUTE_SERVICE_MINUTES;
+      const returnDeparture = new Date(
+        outboundDeparture.getTime()
+        + Math.round(outbound.durationSeconds / 60) * 60 * 1000
+        + secondaryServiceMinutes * 60 * 1000,
+      );
+      const returnSchedule = {
+        scheduledDate: formatDateKey(returnDeparture),
+        scheduledHour: returnDeparture.getHours(),
+        scheduledMinute: returnDeparture.getMinutes(),
+      };
+      const returnRoute = await getCachedRouteDataBetween(destination, YARD_LOCATION, returnSchedule);
+      if (!returnRoute) {
+        throw new Error('Return-to-yard timing could not be calculated for that secondary route.');
+      }
+
+      const secondaryRoute = {
+        reason: secondaryRouteModal.reason,
+        destination,
+        label: getSecondaryRouteReasonLabel(secondaryRouteModal.reason),
+        linkedRequestId: linkedRequest?.id || null,
+        linkedRequestLabel: linkedRequest?.label || '',
+        linkedRequestSiteLocation: linkedRequest?.siteLocation || '',
+        travelDistanceMeters: outbound.distanceMeters,
+        travelDurationSeconds: outbound.durationSeconds,
+        travelBaseDurationSeconds: outbound.baseDurationSeconds,
+        travelTrafficDelaySeconds: outbound.trafficDelaySeconds,
+        travelTrafficProvider: outbound.trafficProvider,
+        travelTrafficNote: outbound.trafficNote,
+        returnDistanceMeters: returnRoute.distanceMeters,
+        returnDurationSeconds: returnRoute.durationSeconds,
+        returnBaseDurationSeconds: returnRoute.baseDurationSeconds,
+        returnTrafficDelaySeconds: returnRoute.trafficDelaySeconds,
+        returnTrafficProvider: returnRoute.trafficProvider,
+        returnTrafficNote: returnRoute.trafficNote,
+        serviceMinutes: secondaryServiceMinutes,
+      };
+
+      const updatedRequest = await materialOrderRequestsAPI.setSecondaryRoute(secondaryRouteModal.requestId, secondaryRoute);
+      setAllRequests(current => current.map(item => item.id === updatedRequest.id ? updatedRequest : item));
+      setRequestMetaMap(current => ({ ...current, [updatedRequest.id]: updatedRequest }));
+      setSecondaryRouteModal(null);
+      await loadBoard();
+      setError('');
+    } catch (err) {
+      setSecondaryRouteModal(current => current ? { ...current, error: err?.message || 'Failed to save secondary route.' } : current);
+    } finally {
+      setSecondaryRouteSaving(false);
+    }
+  }, [allRequests, dayEvents, loadBoard, requestMetaMap, secondaryRouteModal]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -1960,7 +2172,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const primaryEnd = startMinutes + primaryDurationMinutes;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
-                      const timing = getTimingProfile(getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null);
+                      const timing = getTimingProfile(
+                        getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
+                        request?.secondaryRoute || null,
+                      );
+                      const plannedPrimaryDurationMinutes = request?.secondaryRoute
+                        ? getPrimaryPhaseMinutes(
+                          getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
+                          request?.secondaryRoute || null,
+                        )
+                        : primaryDurationMinutes;
+                      const displayPrimaryDurationMinutes = request?.secondaryRoute && status !== 'return_transit'
+                        ? Math.min(durationMinutes, plannedPrimaryDurationMinutes)
+                        : primaryDurationMinutes;
+                      const displayPrimaryRatio = Math.max(0, Math.min(1, displayPrimaryDurationMinutes / Math.max(1, durationMinutes)));
+                      const displayPrimaryWidth = displayPrimaryRatio * 100;
+                      const displaySecondaryWidth = Math.max(0, 100 - displayPrimaryWidth);
+                      const hasSecondaryRouteTile = Boolean(request?.secondaryRoute) && status !== 'return_transit' && displaySecondaryWidth > 0;
                       const siteArrivalMinutes = startMinutes + timing.transitMinutes;
                       const siteArrivalLabel = siteLocation
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
@@ -1994,7 +2222,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           <button
                             type="button"
                             className="ts2-event-card"
-                            style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : '100%' }}
+                            style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
                             onClick={() => {
                               handleSelectScheduleEvent(event.orderId);
                             }}
@@ -2008,6 +2236,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               <span>{groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
                             </div>
                           </button>
+                          {hasSecondaryRouteTile ? (
+                            <button
+                              type="button"
+                              className="ts2-secondary-route-card"
+                              style={{ left: `${displayPrimaryWidth}%`, width: `${displaySecondaryWidth}%` }}
+                              onClick={() => {
+                                handleSelectScheduleEvent(event.orderId);
+                              }}
+                            >
+                              <span>{getSecondaryRouteReasonLabel(request.secondaryRoute.reason)}</span>
+                              <strong>{request.secondaryRoute.destination}</strong>
+                            </button>
+                          ) : null}
                           {hasReturnTransitTile ? (
                             <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => {
                               handleSelectScheduleEvent(event.orderId);
@@ -2082,6 +2323,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <div className="transport-schedule-estimate-card">
               <div><span><InspectorIcon type="truck" /> Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
               <div><span><InspectorIcon type="unload" /> Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
+              {selectedScheduleRequest?.secondaryRoute ? (
+                <div><span><InspectorIcon type="map" /> {getSecondaryRouteReasonLabel(selectedScheduleRequest.secondaryRoute.reason)}</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.secondaryTravelMinutes + selectedScheduleTiming.secondaryServiceMinutes} min` : 'Pending'}</strong></div>
+              ) : null}
               <div><span><InspectorIcon type="return" /> Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
               <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
             </div>
@@ -2123,6 +2367,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Set time manually</span>
             <small>Enter exact start time</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+            <span>Add secondary route</span>
+            <small>Extend this delivery with another stop</small>
           </button>
           <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Unschedule order</span>
@@ -2172,6 +2420,75 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         </div>
       ) : null}
 
+      {secondaryRouteModal ? (
+        <div className="ts2-modal-root">
+          <div className="ts2-modal-backdrop" onClick={closeSecondaryRouteModal} />
+          <form className="transport-secondary-route-card" onSubmit={handleSecondaryRouteSave}>
+            <div className="transport-secondary-route-head">
+              <div>
+                <span>Secondary Route</span>
+                <h2>Add another stop</h2>
+                <p>Extend this scheduled delivery with a second route leg and return timing.</p>
+              </div>
+              <button type="button" className="transport-manual-time-close" onClick={closeSecondaryRouteModal} aria-label="Close secondary route panel">×</button>
+            </div>
+            <div className="transport-secondary-route-summary">
+              <div><span>Primary site</span><strong>{secondaryRouteModal.primarySiteLocation || 'Pending site location'}</strong></div>
+              <div><span>Service allowance</span><strong>{SECONDARY_ROUTE_SERVICE_MINUTES} min</strong></div>
+            </div>
+            <label className="transport-manual-time-field">
+              <span>Reason</span>
+              <select
+                value={secondaryRouteModal.reason}
+                onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, reason: inputEvent.target.value, error: '' } : current)}
+              >
+                {SECONDARY_ROUTE_REASON_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {secondaryRouteModal.reason === 'secondary_drop_off' ? (
+              <label className="transport-manual-time-field">
+                <span>Optional pending request</span>
+                <select
+                  value={secondaryRouteModal.linkedRequestId}
+                  onChange={(inputEvent) => {
+                    const nextId = inputEvent.target.value;
+                    const linked = secondaryRouteModal.pendingOptions.find(item => item.id === nextId) || null;
+                    setSecondaryRouteModal(current => current ? {
+                      ...current,
+                      linkedRequestId: nextId,
+                      linkedRequestLabel: linked?.label || '',
+                      destination: linked?.siteLocation || current.destination,
+                      error: '',
+                    } : current);
+                  }}
+                >
+                  <option value="">No linked request</option>
+                  {secondaryRouteModal.pendingOptions.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="transport-manual-time-field">
+              <span>Secondary destination</span>
+              <input
+                type="text"
+                value={secondaryRouteModal.destination}
+                onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, destination: inputEvent.target.value, error: '' } : current)}
+                placeholder="Enter second stop location"
+              />
+            </label>
+            {secondaryRouteModal.error ? <p className="transport-manual-time-error">{secondaryRouteModal.error}</p> : null}
+            <div className="transport-manual-time-actions">
+              <button type="button" className="transport-manual-time-secondary" onClick={closeSecondaryRouteModal} disabled={secondaryRouteSaving}>Cancel</button>
+              <button type="submit" className="transport-manual-time-primary" disabled={secondaryRouteSaving}>{secondaryRouteSaving ? 'Saving…' : 'Save Secondary Route'}</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
       {(requestModal || requestModalLoading) ? (
         <div className="ts2-modal-root">
           <div className="ts2-modal-backdrop" onClick={closeRequestModal} />
@@ -2192,6 +2509,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 <div className="ts2-estimate-grid">
                   <div><span>Transit from yard</span><strong>{requestModalSummary.deliveryFromYard}</strong></div>
                   <div><span>Site loading</span><strong>{requestModalSummary.siteLoading}</strong></div>
+                  {requestModalSummary.secondaryRoute ? <div><span>Secondary route</span><strong>{requestModalSummary.secondaryRoute}</strong></div> : null}
                   <div><span>Return transit</span><strong>{requestModalSummary.returnTransit}</strong></div>
                   <div><span>Overall</span><strong>{requestModalSummary.overall}</strong></div>
                 </div>
@@ -2307,10 +2625,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   {overviewSummary ? (
                     <div className="transport-route-info-card">
                       <div className="transport-route-info-row"><span>Scheduled</span><strong>{formatBoardDay(eventOverviewModal.event.date)} · {formatTimeChip(eventOverviewModal.event.hour, eventOverviewModal.event.minute)}</strong></div>
-                      <div className="transport-route-info-row"><span>Transit from yard</span><strong>{overviewSummary.deliveryFromYard}</strong></div>
-                      <div className="transport-route-info-row"><span>Site loading</span><strong>{overviewSummary.siteLoading}</strong></div>
-                      <div className="transport-route-info-row"><span>Return transit</span><strong>{overviewSummary.returnTransit}</strong></div>
-                      <div className="transport-route-info-row"><span>Overall planned</span><strong>{overviewSummary.overall}</strong></div>
+                    <div className="transport-route-info-row"><span>Transit from yard</span><strong>{overviewSummary.deliveryFromYard}</strong></div>
+                    <div className="transport-route-info-row"><span>Site loading</span><strong>{overviewSummary.siteLoading}</strong></div>
+                    {overviewSummary.secondaryRoute ? <div className="transport-route-info-row"><span>Secondary route</span><strong>{overviewSummary.secondaryRoute}</strong></div> : null}
+                    <div className="transport-route-info-row"><span>Return transit</span><strong>{overviewSummary.returnTransit}</strong></div>
+                    <div className="transport-route-info-row"><span>Overall planned</span><strong>{overviewSummary.overall}</strong></div>
                     </div>
                   ) : null}
                   {overviewActionRows.length > 0 ? (

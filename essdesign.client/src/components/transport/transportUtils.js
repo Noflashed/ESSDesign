@@ -18,8 +18,11 @@ export const TRUCK_LANES = [
 ];
 
 const routeDataCache = new Map();
+const routeBetweenDataCache = new Map();
 const routeEstimatePromiseCache = new Map();
 const routeEstimateValueCache = new Map();
+const routeBetweenEstimatePromiseCache = new Map();
+const routeBetweenEstimateValueCache = new Map();
 let safetyBuildersCache = null;
 let safetyBuildersCacheAt = 0;
 const SAFETY_BUILDERS_CACHE_MS = 60 * 1000;
@@ -107,6 +110,18 @@ function routeCacheKey(siteLocation, schedule = {}) {
   const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
   const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
   return `${location}|${date}|${hour}|${minute}`;
+}
+
+function routeBetweenCacheKey(fromLocation, toLocation, schedule = {}) {
+  const from = String(fromLocation || '').trim().toLowerCase();
+  const to = String(toLocation || '').trim().toLowerCase();
+  if (!from || !to) {
+    return '';
+  }
+  const date = schedule.scheduledDate || schedule.date || '';
+  const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
+  const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
+  return `${from}|${to}|${date}|${hour}|${minute}`;
 }
 
 export function formatActionTimestamp(isoValue) {
@@ -332,6 +347,103 @@ export function getCachedRouteEstimateValue(siteLocation, schedule = {}) {
   return routeEstimateValueCache.has(key) ? routeEstimateValueCache.get(key) : undefined;
 }
 
+export async function fetchRouteDataBetween(fromLocation, toLocation, schedule = {}) {
+  if (!fromLocation || !toLocation) {
+    return null;
+  }
+
+  try {
+    const preview = await analysisAPI.routePreviewBetween(fromLocation, toLocation, schedule);
+    if (!preview?.yard || !preview?.site || !Array.isArray(preview?.pathPoints) || preview.pathPoints.length === 0) {
+      return null;
+    }
+
+    return {
+      yard: {
+        lat: Number(preview.yard.lat),
+        lon: Number(preview.yard.lon),
+      },
+      site: {
+        lat: Number(preview.site.lat),
+        lon: Number(preview.site.lon),
+      },
+      distanceMeters: Number(preview.distanceMeters) || 0,
+      baseDurationSeconds: Number(preview.baseDurationSeconds) || Number(preview.durationSeconds) || 0,
+      durationSeconds: Number(preview.durationSeconds) || 0,
+      trafficDelaySeconds: Number(preview.trafficDelaySeconds) || 0,
+      hasLiveTraffic: Boolean(preview.hasLiveTraffic),
+      trafficProvider: preview.trafficProvider || '',
+      trafficNote: preview.trafficNote || '',
+      pathPoints: preview.pathPoints
+        .map(point => ({
+          lat: Number(point.lat),
+          lon: Number(point.lon),
+        }))
+        .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getCachedRouteDataBetween(fromLocation, toLocation, schedule = {}) {
+  const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
+  if (!key) {
+    return null;
+  }
+  if (!routeBetweenDataCache.has(key)) {
+    routeBetweenDataCache.set(
+      key,
+      fetchRouteDataBetween(fromLocation, toLocation, schedule).then(routeData => {
+        if (!routeData) {
+          routeBetweenDataCache.delete(key);
+        }
+        return routeData;
+      }),
+    );
+  }
+  return routeBetweenDataCache.get(key);
+}
+
+export async function getCachedRouteEstimateBetween(fromLocation, toLocation, schedule = {}) {
+  const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
+  if (!key) {
+    return null;
+  }
+  if (!routeBetweenEstimatePromiseCache.has(key)) {
+    routeBetweenEstimatePromiseCache.set(
+      key,
+      getCachedRouteDataBetween(fromLocation, toLocation, schedule).then(routeData => {
+        const estimate = routeData
+          ? {
+              durationMinutes: Math.max(1, routeData.durationSeconds / 60),
+              baseDurationMinutes: Math.max(1, (routeData.baseDurationSeconds || routeData.durationSeconds) / 60),
+              trafficDelayMinutes: Math.max(0, (routeData.trafficDelaySeconds || 0) / 60),
+              distanceMeters: routeData.distanceMeters,
+              hasLiveTraffic: routeData.hasLiveTraffic,
+              trafficProvider: routeData.trafficProvider,
+              trafficNote: routeData.trafficNote,
+            }
+          : null;
+        routeBetweenEstimateValueCache.set(key, estimate);
+        if (!estimate) {
+          routeBetweenEstimatePromiseCache.delete(key);
+        }
+        return estimate;
+      }),
+    );
+  }
+  return routeBetweenEstimatePromiseCache.get(key);
+}
+
+export function getCachedRouteEstimateBetweenValue(fromLocation, toLocation, schedule = {}) {
+  const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
+  if (!key) {
+    return null;
+  }
+  return routeBetweenEstimateValueCache.has(key) ? routeBetweenEstimateValueCache.get(key) : undefined;
+}
+
 export function getPlannedDurationMinutes(routeEstimate) {
   if (!routeEstimate) {
     return SCHEDULE_BLOCK_MINUTES;
@@ -339,19 +451,30 @@ export function getPlannedDurationMinutes(routeEstimate) {
   return Math.max(30, routeEstimate.durationMinutes + BLOCK_LOADING_MINUTES + routeEstimate.durationMinutes);
 }
 
-export function getTimingProfile(routeEstimate) {
+export function getTimingProfile(routeEstimate, secondaryRoute = null) {
   const transitMinutes = Math.max(
     15,
     routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : Math.round((SCHEDULE_BLOCK_MINUTES - BLOCK_LOADING_MINUTES) / 2),
   );
   const loadingMinutes = BLOCK_LOADING_MINUTES;
-  const returnMinutes = transitMinutes;
+  const secondaryTravelMinutes = Math.max(0, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
+  const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
+  const returnMinutes = secondaryRoute
+    ? Math.max(15, Math.round((secondaryRoute.returnDurationSeconds || 0) / 60))
+    : transitMinutes;
   return {
     transitMinutes,
     loadingMinutes,
+    secondaryTravelMinutes,
+    secondaryServiceMinutes,
     returnMinutes,
-    totalMinutes: transitMinutes + loadingMinutes + returnMinutes,
+    totalMinutes: transitMinutes + loadingMinutes + secondaryTravelMinutes + secondaryServiceMinutes + returnMinutes,
   };
+}
+
+export function getPrimaryPhaseMinutes(routeEstimate, secondaryRoute = null) {
+  const timing = getTimingProfile(routeEstimate, secondaryRoute);
+  return timing.transitMinutes + timing.loadingMinutes;
 }
 
 export function minutesFromIsoOnDate(isoValue, dateKey) {

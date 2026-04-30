@@ -41,6 +41,15 @@ namespace ESSDesign.Server.Services
             public int? ScheduledMinute { get; set; }
         }
 
+        public sealed class RoutePreviewBetweenRequest
+        {
+            public string FromLocation { get; set; } = string.Empty;
+            public string ToLocation { get; set; } = string.Empty;
+            public string? ScheduledDate { get; set; }
+            public int? ScheduledHour { get; set; }
+            public int? ScheduledMinute { get; set; }
+        }
+
         public sealed class RoutePoint
         {
             public double Lat { get; set; }
@@ -900,6 +909,45 @@ namespace ESSDesign.Server.Services
                 YardLon,
                 siteCoords.Value.Lat,
                 siteCoords.Value.Lon,
+                httpClient,
+                departure);
+        }
+
+        public async Task<RoutePreviewResult?> GetRoutePreviewBetweenAsync(RoutePreviewBetweenRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.FromLocation) || string.IsNullOrWhiteSpace(request.ToLocation))
+            {
+                return null;
+            }
+
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+            var fromCoords = await GeocodeAsync(request.FromLocation, httpClient);
+            var toCoords = await GeocodeAsync(request.ToLocation, httpClient);
+            if (!fromCoords.HasValue || !toCoords.HasValue)
+            {
+                return null;
+            }
+
+            var departure = BuildSydneyDeparture(request.ScheduledDate, request.ScheduledHour, request.ScheduledMinute);
+            var tomTomRoute = await GetTomTomRoutePreviewAsync(
+                fromCoords.Value.Lat,
+                fromCoords.Value.Lon,
+                toCoords.Value.Lat,
+                toCoords.Value.Lon,
+                httpClient,
+                departure);
+            if (tomTomRoute != null)
+            {
+                return tomTomRoute;
+            }
+
+            return await GetOsrmRoutePreviewAsync(
+                fromCoords.Value.Lat,
+                fromCoords.Value.Lon,
+                toCoords.Value.Lat,
+                toCoords.Value.Lon,
                 httpClient,
                 departure);
         }

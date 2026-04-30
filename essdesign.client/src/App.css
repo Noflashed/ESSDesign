@@ -6284,7 +6284,8 @@ button.stat-card {
     min-width: 112px;
 }
 .ts2-event-card,
-.ts2-return-card {
+.ts2-return-card,
+.ts2-secondary-route-card {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -6297,19 +6298,25 @@ button.stat-card {
     box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
 }
 .ts2-event-card { left: 0; }
+.ts2-secondary-route-card {
+    background: #FFF4E8;
+    color: #C25B0E;
+}
 .ts2-return-card {
     background: #eef2f7;
     color: #667085;
 }
 .ts2-event-time,
-.ts2-return-card span {
+.ts2-return-card span,
+.ts2-secondary-route-card span {
     display: block;
     font-size: 11px;
     font-weight: 800;
     margin-bottom: 4px;
 }
 .ts2-event-title,
-.ts2-return-card strong {
+.ts2-return-card strong,
+.ts2-secondary-route-card strong {
     display: block;
     font-size: 14px;
     font-weight: 800;
@@ -6351,6 +6358,145 @@ button.stat-card {
     max-height: calc(100% - 44px);
     overflow: auto;
     padding: 18px;
+}
+
+.transport-secondary-route-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(540px, calc(100% - 44px));
+    max-height: calc(100% - 44px);
+    overflow: auto;
+    padding: 18px;
+    background: rgba(255,255,255,0.98);
+    border: 1px solid rgba(148,163,184,0.22);
+    border-radius: 22px;
+    box-shadow: 0 18px 34px rgba(15,23,42,0.12);
+}
+
+.transport-secondary-route-head,
+.transport-secondary-route-summary,
+.transport-manual-time-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.transport-secondary-route-head {
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.transport-secondary-route-head h2 {
+    margin: 8px 0 0;
+    color: #102b5c;
+    font-size: 24px;
+}
+
+.transport-secondary-route-head p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.transport-secondary-route-summary {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transport-secondary-route-summary > div,
+.transport-manual-time-field {
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid rgba(226,232,240,0.85);
+}
+
+.transport-secondary-route-summary > div {
+    padding: 12px 14px;
+}
+
+.transport-secondary-route-summary span,
+.transport-manual-time-field > span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.transport-secondary-route-summary strong {
+    display: block;
+    margin-top: 4px;
+    color: #102b5c;
+    font-size: 14px;
+}
+
+.transport-manual-time-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 12px 14px;
+}
+
+.transport-manual-time-field input,
+.transport-manual-time-field select {
+    border: 1px solid rgba(148,163,184,0.24);
+    border-radius: 12px;
+    min-height: 42px;
+    padding: 0 12px;
+    background: #fff;
+    color: #102b5c;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.transport-manual-time-error {
+    margin: 12px 0 0;
+    color: #b91c1c;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.transport-manual-time-actions {
+    margin-top: 16px;
+    justify-content: flex-end;
+}
+
+.transport-manual-time-secondary,
+.transport-manual-time-primary,
+.transport-manual-time-close {
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.transport-manual-time-secondary,
+.transport-manual-time-primary {
+    min-height: 42px;
+    padding: 0 14px;
+    border: 1px solid rgba(16, 43, 92, 0.12);
+    cursor: pointer;
+}
+
+.transport-manual-time-secondary {
+    background: #fff;
+    color: #102b5c;
+}
+
+.transport-manual-time-primary {
+    background: #102b5c;
+    color: #fff;
+}
+
+.transport-manual-time-close {
+    width: 34px;
+    height: 34px;
+    border: none;
+    background: #f1f5f9;
+    color: #102b5c;
+    cursor: pointer;
 }
 
 .ts2-time-picker-card {

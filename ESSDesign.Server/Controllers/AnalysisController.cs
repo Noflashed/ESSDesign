@@ -92,5 +92,32 @@ namespace ESSDesign.Server.Controllers
                 return StatusCode(500, new { error = "Route preview failed. Please try again." });
             }
         }
+
+        [HttpPost("route-preview-between")]
+        public async Task<IActionResult> RoutePreviewBetween(
+            [FromBody] DeliveryAnalysisService.RoutePreviewBetweenRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.FromLocation))
+                return BadRequest(new { error = "fromLocation is required." });
+
+            if (string.IsNullOrWhiteSpace(request.ToLocation))
+                return BadRequest(new { error = "toLocation is required." });
+
+            try
+            {
+                var result = await _deliveryAnalysisService.GetRoutePreviewBetweenAsync(request);
+                if (result == null)
+                {
+                    return NotFound(new { error = "Route preview unavailable for this route." });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Route preview failed between {From} and {To}", request.FromLocation, request.ToLocation);
+                return StatusCode(500, new { error = "Route preview failed. Please try again." });
+            }
+        }
     }
 }

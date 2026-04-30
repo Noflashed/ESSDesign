@@ -790,6 +790,41 @@ function buildMaterialOrderRequestScheduleIso(item) {
     return `${item.scheduledDate}T${String(item.scheduledHour).padStart(2, '0')}:${String(item.scheduledMinute).padStart(2, '0')}:00`;
 }
 
+function normalizeSecondaryRoute(raw) {
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+
+    const serviceMinutes = Number(raw.serviceMinutes);
+    const normalized = {
+        reason: typeof raw.reason === 'string' ? raw.reason : '',
+        destination: typeof raw.destination === 'string' ? raw.destination : '',
+        label: typeof raw.label === 'string' ? raw.label : '',
+        linkedRequestId: typeof raw.linkedRequestId === 'string' ? raw.linkedRequestId : null,
+        linkedRequestLabel: typeof raw.linkedRequestLabel === 'string' ? raw.linkedRequestLabel : '',
+        linkedRequestSiteLocation: typeof raw.linkedRequestSiteLocation === 'string' ? raw.linkedRequestSiteLocation : '',
+        travelDistanceMeters: Number(raw.travelDistanceMeters) || 0,
+        travelDurationSeconds: Number(raw.travelDurationSeconds) || 0,
+        travelBaseDurationSeconds: Number(raw.travelBaseDurationSeconds) || 0,
+        travelTrafficDelaySeconds: Number(raw.travelTrafficDelaySeconds) || 0,
+        travelTrafficProvider: typeof raw.travelTrafficProvider === 'string' ? raw.travelTrafficProvider : '',
+        travelTrafficNote: typeof raw.travelTrafficNote === 'string' ? raw.travelTrafficNote : '',
+        returnDistanceMeters: Number(raw.returnDistanceMeters) || 0,
+        returnDurationSeconds: Number(raw.returnDurationSeconds) || 0,
+        returnBaseDurationSeconds: Number(raw.returnBaseDurationSeconds) || 0,
+        returnTrafficDelaySeconds: Number(raw.returnTrafficDelaySeconds) || 0,
+        returnTrafficProvider: typeof raw.returnTrafficProvider === 'string' ? raw.returnTrafficProvider : '',
+        returnTrafficNote: typeof raw.returnTrafficNote === 'string' ? raw.returnTrafficNote : '',
+        serviceMinutes: Number.isFinite(serviceMinutes) && serviceMinutes > 0 ? serviceMinutes : 30,
+    };
+
+    if (!normalized.reason || !normalized.destination) {
+        return null;
+    }
+
+    return normalized;
+}
+
 function normalizeMaterialOrderRequestListItem(item) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
     const archivedAt = item?.archivedAt || null;
@@ -829,7 +864,8 @@ function normalizeMaterialOrderRequestListItem(item) {
         deliveryStartedAt: item?.deliveryStartedAt || null,
         deliveryUnloadingAt: item?.deliveryUnloadingAt || null,
         deliveryConfirmedAt: item?.deliveryConfirmedAt || null,
-        archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
+        archivedAt: archivedAt || (shouldArchive ? nowIso() : null),
+        secondaryRoute: normalizeSecondaryRoute(item?.secondaryRoute),
     };
 }
 
@@ -869,7 +905,8 @@ function normalizeMaterialOrderRequestRecord(record) {
         deliveryStartedAt: record.deliveryStartedAt || null,
         deliveryUnloadingAt: record.deliveryUnloadingAt || null,
         deliveryConfirmedAt: record.deliveryConfirmedAt || null,
-        archivedAt: archivedAt || (shouldArchive ? nowIso() : null)
+        archivedAt: archivedAt || (shouldArchive ? nowIso() : null),
+        secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
     };
 }
 
@@ -931,6 +968,7 @@ export const materialOrderRequestsAPI = {
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
             archivedAt: null,
+            secondaryRoute: null,
         };
 
         await uploadStorageObject(
@@ -971,6 +1009,7 @@ export const materialOrderRequestsAPI = {
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
                     archivedAt: null,
+                    secondaryRoute: null,
                 },
                 ...existingItems.filter(item => item.id !== requestId)
             ].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))),
@@ -1033,6 +1072,7 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
@@ -1055,6 +1095,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: null,
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
+                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
             updatedAt: nowIso(),
@@ -1087,6 +1128,7 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
@@ -1105,6 +1147,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: null,
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
+                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
             updatedAt: nowIso(),
@@ -1143,6 +1186,39 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: startedAt,
                     deliveryUnloadingAt: unloadingAt,
                     deliveryConfirmedAt: confirmedAt,
+                }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
+    setSecondaryRoute: async (requestId, secondaryRoute) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(secondaryRoute);
+        const updated = {
+            ...record,
+            secondaryRoute: normalizedSecondaryRoute,
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    notes: updated.notes || item.notes || '',
+                    itemValues: updated.itemValues || item.itemValues || {},
+                    scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
+                    details: updated.details || updated?.itemValues?.__details || item.details || '',
+                    secondaryRoute: normalizedSecondaryRoute,
                 }
                 : item),
             updatedAt: nowIso(),
@@ -1777,6 +1853,10 @@ export const analysisAPI = {
     },
     routePreview: async (siteLocation, schedule = {}) => {
         const response = await apiClient.post('/analysis/route-preview', { siteLocation, ...schedule });
+        return response.data;
+    },
+    routePreviewBetween: async (fromLocation, toLocation, schedule = {}) => {
+        const response = await apiClient.post('/analysis/route-preview-between', { fromLocation, toLocation, ...schedule });
         return response.data;
     },
 };
