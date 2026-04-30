@@ -6138,50 +6138,6 @@ button.stat-card {
 }
 
 .ts2-pending-list { display: flex; flex-direction: column; gap: 10px; }
-.ts2-pending-columns {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-}
-.ts2-pending-column {
-    min-width: 0;
-    border: 1px solid rgba(226,232,240,0.9);
-    border-radius: 16px;
-    padding: 12px;
-    background: rgba(248,250,252,0.72);
-}
-.ts2-pending-column.secondary {
-    background: rgba(236,254,255,0.66);
-}
-.ts2-pending-column-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-}
-.ts2-pending-column-head strong {
-    color: #102b5c;
-    font-size: 13px;
-    font-weight: 900;
-}
-.ts2-pending-column-head span {
-    min-width: 24px;
-    height: 24px;
-    border-radius: 999px;
-    background: #102b5c;
-    color: #fff;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 900;
-}
-.ts2-pending-empty {
-    margin: 0;
-    color: #64748b;
-    font-size: 13px;
-    font-weight: 700;
-}
 .ts2-pending-item {
     display: flex;
     align-items: center;
@@ -6191,10 +6147,6 @@ button.stat-card {
     border-radius: 16px;
     background: #f8fafc;
     border: 1px solid rgba(226,232,240,0.85);
-}
-.ts2-pending-item.secondary {
-    border-color: rgba(8,145,178,0.24);
-    background: #ecfeff;
 }
 .ts2-pending-item strong { display: block; color: #102b5c; font-size: 14px; }
 .ts2-pending-item span { display: block; margin-top: 4px; color: #64748b; font-size: 13px; }
@@ -6337,7 +6289,7 @@ button.stat-card {
     position: absolute;
     top: 0;
     bottom: 0;
-    border: 1px solid rgba(16, 43, 92, 0.14);
+    border: none;
     border-radius: 14px;
     text-align: left;
     padding: 12px;
@@ -7320,54 +7272,6 @@ button.stat-card {
 
 .transport-page-frame .transport-placeholder-card-shell {
     padding: 28px;
-}
-
-.transport-reference-pending-columns {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-}
-
-.transport-reference-column-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 4px 0 12px;
-}
-
-.transport-reference-column-head strong {
-    color: #102B5C;
-    font-size: 14px;
-    font-weight: 900;
-}
-
-.transport-reference-column-head span {
-    min-width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    background: #102B5C;
-    color: #fff;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 900;
-}
-
-.transport-reference-pending-card.secondary {
-    border-color: rgba(8,145,178,0.24);
-    background: #ECFEFF;
-}
-
-.transport-reference-empty {
-    margin: 0;
-    border: 1px dashed #DCE4EF;
-    border-radius: 12px;
-    padding: 14px;
-    color: #64748B;
-    font-size: 13px;
-    font-weight: 700;
 }
 
 @media (max-width: 1100px) {
