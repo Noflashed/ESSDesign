@@ -8264,7 +8264,7 @@ button.stat-card {
 
 .transport-page-frame .transport-management-detail {
     min-width: 0;
-    padding: 16px 14px;
+    padding: 18px 16px 22px;
     background: #FFFFFF;
 }
 
@@ -8286,7 +8286,7 @@ button.stat-card {
 .transport-page-frame .transport-management-panel {
     border: 1px solid #DCE4EF;
     border-radius: 7px;
-    padding: 14px;
+    padding: 16px;
     background: #FFFFFF;
 }
 
@@ -8321,14 +8321,20 @@ button.stat-card {
 
 .transport-page-frame .transport-management-summary-grid {
     display: grid;
-    gap: 10px;
-    margin: 14px 0;
+    gap: 13px;
+    margin: 16px 0;
 }
 
-.transport-page-frame .transport-management-summary-grid div,
+.transport-page-frame .transport-management-summary-grid div {
+    display: block;
+    min-width: 0;
+    color: #17233D;
+    font-size: 12px;
+}
+
 .transport-page-frame .transport-management-items div {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
     color: #17233D;
     font-size: 12px;
@@ -8342,10 +8348,16 @@ button.stat-card {
     font-weight: 800;
 }
 
+.transport-page-frame .transport-management-summary-grid dt {
+    margin-bottom: 4px;
+}
+
 .transport-page-frame .transport-management-summary-grid dd {
     margin: 0;
     color: #17233D;
     font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .transport-page-frame .transport-management-items {
@@ -8442,6 +8454,8 @@ button.stat-card {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
+    font-family: inherit;
+    font-size: 12px;
 }
 
 .transport-page-frame .transport-management-col-check {
@@ -8507,8 +8521,9 @@ button.stat-card {
     vertical-align: middle;
 }
 
-.transport-page-frame .transport-management-table th {
-    background: #F8FAFC;
+.transport-page-frame .transport-management-table th,
+.transport-management-redesign .transport-management-table th {
+    background: #F4F6F9;
     color: #1D2A44;
     font-size: 12px;
     font-weight: 700;
@@ -8518,7 +8533,8 @@ button.stat-card {
     white-space: nowrap;
 }
 
-.transport-page-frame .transport-management-table td {
+.transport-page-frame .transport-management-table td,
+.transport-management-redesign .transport-management-table td {
     color: #18243C;
     font-size: 12px;
     font-weight: 500;
@@ -8526,7 +8542,8 @@ button.stat-card {
     padding: 11px 12px;
 }
 
-.transport-page-frame .transport-management-table td strong {
+.transport-page-frame .transport-management-table td strong,
+.transport-management-redesign .transport-management-table td strong {
     display: block;
     color: #17233D;
     font-size: 12px;
@@ -8534,7 +8551,8 @@ button.stat-card {
     line-height: 1.35;
 }
 
-.transport-page-frame .transport-management-table td span:not(.transport-status-pill) {
+.transport-page-frame .transport-management-table td span:not(.transport-status-pill),
+.transport-management-redesign .transport-management-table td span:not(.transport-status-pill) {
     display: block;
     margin-top: 4px;
     color: #475569;
@@ -8552,8 +8570,7 @@ button.stat-card {
     background: #F8FBFC;
 }
 
-.transport-page-frame .transport-management-table tbody tr.selected,
-.transport-page-frame .transport-management-secondary-table .secondary-route-row.selected {
+.transport-page-frame .transport-management-table tbody tr.selected {
     background: #EAF8FA;
 }
 
@@ -8666,6 +8683,3 @@ button.stat-card {
     font-weight: 700;
 }
 
-.transport-management-secondary-table .secondary-route-row {
-    background: #FFFFFF;
-}

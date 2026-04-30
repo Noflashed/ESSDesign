@@ -506,9 +506,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         }
         if (selectedRequestId === null) return;
         if (selectedRequestId === '' || !queueRows.some((request) => request.id === selectedRequestId)) {
-            const nextSelectedId = queueRows[0].id;
-            setSelectedRequestId(nextSelectedId);
-            setSelectedQueueIds((current) => current.includes(nextSelectedId) ? current : [...current, nextSelectedId]);
+            setSelectedRequestId(queueRows[0].id);
         }
     }, [isActiveQueueView, isArchivedQueueView, queueRows, selectedRequestId]);
 
@@ -915,7 +913,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const isQueueRowChecked = (requestId) => selectedQueueIds.includes(requestId);
         const activateQueueRow = (request) => {
             setSelectedRequestId(request.id);
-            setSelectedQueueIds((current) => current.includes(request.id) ? current : [...current, request.id]);
         };
         const toggleQueueRow = (request, checked) => {
             setSelectedQueueIds((current) => {
@@ -995,7 +992,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </thead>
                     <tbody>
                         {rows.map((request) => {
-                            const isSelected = selectedRequest?.id === request.id || isQueueRowChecked(request.id);
+                            const isSelected = isQueueRowChecked(request.id);
                             return (
                                 <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => activateQueueRow(request)}>
                                     {renderRowSelectCell(request, `Select material order ${request.id}`)}
@@ -1071,7 +1068,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     <tbody>
                         {rows.map((request) => {
                             const route = request.secondaryRoute || {};
-                            const isSelected = selectedRequest?.id === request.id || isQueueRowChecked(request.id);
+                            const isSelected = isQueueRowChecked(request.id);
                             return (
                                 <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => activateQueueRow(request)}>
                                     {renderRowSelectCell(request, `Select secondary route ${request.id}`)}
