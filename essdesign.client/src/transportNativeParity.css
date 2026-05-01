@@ -3763,6 +3763,15 @@
     min-width: 0 !important;
 }
 
+.transport-page-frame .transport-desktop-workspace .transport-management-category.schedule,
+.transport-desktop-workspace .transport-management-category.schedule {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+}
+
 .transport-page-frame .transport-desktop-workspace .transport-management-table-wrap,
 .transport-desktop-workspace .transport-management-table-wrap {
     width: 100% !important;
@@ -3778,7 +3787,7 @@
     width: 100% !important;
     min-width: 0 !important;
     table-layout: fixed !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table th,
@@ -3796,7 +3805,7 @@
     height: 42px !important;
     background: #F8FAFC !important;
     color: #6B7280 !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     line-height: 1.4 !important;
     font-weight: 600 !important;
     white-space: normal !important;
@@ -3804,9 +3813,9 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table td,
 .transport-desktop-workspace .transport-management-table td {
-    height: 64px !important;
+    height: 60px !important;
     color: #111827 !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
     line-height: 1.45 !important;
     font-weight: 400 !important;
 }
@@ -3814,7 +3823,7 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table td strong,
 .transport-desktop-workspace .transport-management-table td strong {
     color: #0F172A !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
     line-height: 1.45 !important;
     font-weight: 600 !important;
 }
@@ -3823,7 +3832,7 @@
 .transport-desktop-workspace .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill) {
     margin-top: 4px !important;
     color: #6B7280 !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     line-height: 1.45 !important;
     font-weight: 400 !important;
 }
@@ -3869,87 +3878,89 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-type,
 .transport-desktop-workspace .transport-management-col-type {
-    width: 9% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-destination,
-.transport-desktop-workspace .transport-management-col-destination {
-    width: 16% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-start,
-.transport-desktop-workspace .transport-management-col-start,
-.transport-page-frame .transport-desktop-workspace .transport-management-col-task,
-.transport-desktop-workspace .transport-management-col-task {
     width: 13% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-builder,
+.transport-desktop-workspace .transport-management-col-builder {
+    width: 20% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-project,
+.transport-desktop-workspace .transport-management-col-project {
+    width: 25% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-requested,
 .transport-desktop-workspace .transport-management-col-requested {
-    width: 12% !important;
+    width: 16% !important;
 }
 
-.transport-page-frame .transport-desktop-workspace .transport-management-col-route-time,
-.transport-desktop-workspace .transport-management-col-route-time {
-    width: 8% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-truck,
-.transport-desktop-workspace .transport-management-col-truck {
-    width: 5.5% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-time,
-.transport-desktop-workspace .transport-management-col-time {
-    width: 10% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-status,
-.transport-desktop-workspace .transport-management-col-status {
-    width: 7% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-pdf,
-.transport-desktop-workspace .transport-management-col-pdf {
-    width: 4% !important;
-}
-
-.transport-page-frame .transport-desktop-workspace .transport-management-col-action,
-.transport-desktop-workspace .transport-management-col-action {
-    width: 2.5% !important;
+.transport-page-frame .transport-desktop-workspace .transport-management-col-request-date,
+.transport-desktop-workspace .transport-management-col-request-date,
+.transport-page-frame .transport-desktop-workspace .transport-management-col-eta,
+.transport-desktop-workspace .transport-management-col-eta {
+    width: 13% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-type-pill,
-.transport-page-frame .transport-desktop-workspace .transport-status-pill,
-.transport-desktop-workspace .transport-management-type-pill,
-.transport-desktop-workspace .transport-status-pill {
-    min-height: 24px !important;
-    padding: 0 8px !important;
+.transport-desktop-workspace .transport-management-type-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 26px !important;
+    min-width: 106px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
     font-size: 10px !important;
     line-height: 1.2 !important;
+    font-weight: 800 !important;
     white-space: normal !important;
     text-align: center !important;
 }
 
-.transport-page-frame .transport-desktop-workspace .transport-management-pdf-btn,
-.transport-desktop-workspace .transport-management-pdf-btn {
-    min-width: 0 !important;
+.transport-page-frame .transport-desktop-workspace .transport-management-detail-head.no-title,
+.transport-desktop-workspace .transport-management-detail-head.no-title {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    min-height: 42px !important;
+    margin: -20px -20px 16px !important;
+    padding: 10px 14px !important;
+    border-bottom: 1px solid #E5E7EB !important;
+    background: #FFFFFF !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-detail-head.no-title button,
+.transport-desktop-workspace .transport-management-detail-head.no-title button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     width: 30px !important;
     height: 30px !important;
-    padding: 0 !important;
-    gap: 0 !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 999px !important;
+    background: #F8FAFC !important;
+    color: #0F172A !important;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08) !important;
+    cursor: pointer !important;
 }
 
-.transport-page-frame .transport-desktop-workspace .transport-management-pdf-btn span,
-.transport-desktop-workspace .transport-management-pdf-btn span {
-    display: none !important;
+.transport-page-frame .transport-desktop-workspace .transport-management-detail-head.no-title button svg,
+.transport-desktop-workspace .transport-management-detail-head.no-title button svg {
+    width: 17px !important;
+    height: 17px !important;
+    stroke-width: 2.4 !important;
 }
 
-.transport-page-frame .transport-desktop-workspace .transport-management-row-action-cell,
-.transport-desktop-workspace .transport-management-row-action-cell {
-    width: auto !important;
-    min-width: 0 !important;
-    padding-right: 6px !important;
+.transport-page-frame .transport-desktop-workspace .transport-management-detail-head.no-title button:hover,
+.transport-desktop-workspace .transport-management-detail-head.no-title button:hover {
+    background: #E2E8F0 !important;
 }
 
 @keyframes transportManagementDrawerIn {

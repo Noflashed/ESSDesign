@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, FileText, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Download, Search, SlidersHorizontal, X } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import { formatTimeChip } from './transport/transportUtils';
 
@@ -164,18 +164,14 @@ function getSubmittedDateLabel(value) {
     return date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function getSubmittedTimeLabel(value) {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-}
-
 function getScheduledTimeRange(request) {
-    if (!request?.scheduledDate || typeof request?.scheduledHour !== 'number' || typeof request?.scheduledMinute !== 'number') {
-        return 'Not scheduled';
+    if (request?.scheduledDate && typeof request?.scheduledHour === 'number' && typeof request?.scheduledMinute === 'number') {
+        return `${getSubmittedDateLabel(request.scheduledDate)} ${formatTimeChip(request.scheduledHour, request.scheduledMinute)}`;
     }
-    return `${getSubmittedDateLabel(request.scheduledDate)} ${formatTimeChip(request.scheduledHour, request.scheduledMinute)}`;
+    if (request?.scheduledAtIso) {
+        return formatDateTime(request.scheduledAtIso);
+    }
+    return 'Not scheduled';
 }
 
 function getRequestScheduleSortValue(request) {
@@ -483,14 +479,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     );
 
     const selectedRequest = selectedRequestDetail || selectedRequestListItem;
-    const materialQueueRows = useMemo(
-        () => queueRows.filter((request) => !isSecondaryRouteRequest(request)),
-        [queueRows]
-    );
-    const secondaryRouteQueueRows = useMemo(
-        () => queueRows.filter((request) => isSecondaryRouteRequest(request)),
-        [queueRows]
-    );
 
     useEffect(() => {
         if (!isActiveQueueView && !isArchivedQueueView) return;
@@ -891,67 +879,52 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const renderListTable = () => {
         const isActive = isActiveQueueView;
         const activeCount = visibleOrders.length;
-        const pendingCount = visibleOrders.filter(request => !request.scheduledAtIso && !request.scheduledDate).length;
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
         const selectedItems = summarizeItems(selectedRequest);
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
         const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
         const selectedRequestIsSecondaryRoute = isSecondaryRouteRequest(selectedRequest);
+        const getTableEtaTime = (request) => {
+            if (typeof request?.scheduledHour === 'number' && typeof request?.scheduledMinute === 'number') {
+                return formatTimeChip(request.scheduledHour, request.scheduledMinute);
+            }
+            if (request?.scheduledAtIso) {
+                const date = new Date(request.scheduledAtIso);
+                return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+            }
+            return 'N/A';
+        };
         const renderDeliveryScheduleTable = (rows) => (
             <section className="transport-management-category schedule">
-                <div className="transport-management-category-head">
-                    <div>
-                        <strong>Current Delivery Schedule</strong>
-                        <p>{materialQueueRows.length} material orders / {secondaryRouteQueueRows.length} secondary routes</p>
-                    </div>
-                    <span>{rows.length}</span>
-                </div>
                 <div className="transport-management-table-wrap">
                     <table className="transport-management-table transport-management-schedule-table">
                         <colgroup>
                             <col className="transport-management-col-type" />
-                            <col className="transport-management-col-destination" />
-                            <col className="transport-management-col-start" />
-                            <col className="transport-management-col-task" />
+                            <col className="transport-management-col-builder" />
+                            <col className="transport-management-col-project" />
                             <col className="transport-management-col-requested" />
-                            <col className="transport-management-col-route-time" />
-                            <col className="transport-management-col-truck" />
-                            <col className="transport-management-col-time" />
-                            <col className="transport-management-col-status" />
-                            <col className="transport-management-col-pdf" />
-                            {isActive ? <col className="transport-management-col-action" /> : null}
+                            <col className="transport-management-col-request-date" />
+                            <col className="transport-management-col-eta" />
                         </colgroup>
                         <thead>
                             <tr>
-                                <th>Type</th>
-                                <th>Destination</th>
-                                <th>Start / Project</th>
-                                <th>Details / Reason</th>
-                                <th>Requested / Submitted</th>
-                                <th>Route Time</th>
-                                <th>Truck</th>
-                                <th>Scheduled Time</th>
-                                <th>Status</th>
-                                <th>PDF</th>
-                                {isActive ? <th aria-label="Delete delivery" /> : null}
+                                <th>Type of order</th>
+                                <th>Builder</th>
+                                <th>Project</th>
+                                <th>Requested</th>
+                                <th>Request Date</th>
+                                <th>ETA Time</th>
                             </tr>
                         </thead>
                         <tbody>
                             {rows.map((request) => {
                                 const isSecondaryRoute = isSecondaryRouteRequest(request);
-                                const route = request.secondaryRoute || {};
-                                const routeMinutes = getSecondaryRouteMinutes(route);
-                                const routeTimeLabel = routeMinutes.totalMinutes > 0 ? `${routeMinutes.totalMinutes} min` : '-';
                                 const isSelected = selectedRequest?.id === request.id;
-                                const destination = isSecondaryRoute
-                                    ? route.destination || request.details || 'Secondary route'
-                                    : getProjectLocation(builders, request) || request.projectName || 'Awaiting project';
-                                const startOrProject = isSecondaryRoute
-                                    ? route.startingLocation || 'Starting location pending'
-                                    : request.projectName || 'Awaiting project';
-                                const detailLabel = isSecondaryRoute
-                                    ? getSecondaryRouteReasonLabel(route.reason)
-                                    : request.details || request.scaffoldingSystem || 'Material delivery';
+                                const builderLabel = isSecondaryRoute ? 'N/A' : request.builderName || 'N/A';
+                                const projectLabel = isSecondaryRoute ? 'N/A' : request.projectName || 'N/A';
+                                const requestedLabel = request.requestedByName || 'N/A';
+                                const requestDateLabel = request.submittedAt ? getSubmittedDateLabel(request.submittedAt) : 'N/A';
+                                const etaLabel = getTableEtaTime(request);
                                 const rowClassName = [
                                     isSelected ? 'selected' : '',
                                     isSecondaryRoute ? 'secondary-route-row' : 'material-order-row'
@@ -964,53 +937,11 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                                 {isSecondaryRoute ? 'Secondary Route' : 'Material Order'}
                                             </span>
                                         </td>
-                                        <td><strong>{destination}</strong><span>{isSecondaryRoute ? 'Route stop' : request.builderName || 'Material Order'}</span></td>
-                                        <td><strong>{startOrProject}</strong><span>{isSecondaryRoute ? 'Starting location' : 'Project'}</span></td>
-                                        <td><strong>{detailLabel}</strong><span>{isSecondaryRoute ? 'Secondary transit' : request.scaffoldingSystem || 'Kwikstage'}</span></td>
-                                        <td><strong>{request.requestedByName || (isSecondaryRoute ? 'Route task' : 'Unassigned')}</strong><span>{getSubmittedDateLabel(request.submittedAt)} {getSubmittedTimeLabel(request.submittedAt)}</span></td>
-                                        <td>
-                                            {isSecondaryRoute ? (
-                                                <><strong>{routeTimeLabel}</strong><span>{routeMinutes.travelMinutes} travel / {routeMinutes.serviceMinutes} service / {routeMinutes.returnMinutes} return</span></>
-                                            ) : (
-                                                <span className="transport-management-muted-cell">-</span>
-                                            )}
-                                        </td>
-                                        <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
-                                        <td>{getScheduledTimeRange(request)}</td>
-                                        <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
-                                        <td>
-                                            <button
-                                                type="button"
-                                                className="transport-management-pdf-btn"
-                                                disabled={isSecondaryRoute || !request.pdfPath}
-                                                onClick={(event) => openArchivedPdf(request, event)}
-                                            >
-                                                <FileText size={14} aria-hidden="true" />
-                                                <span>PDF</span>
-                                            </button>
-                                        </td>
-                                        {isActive ? (
-                                            <td className="transport-management-row-action-cell">
-                                                <button
-                                                    type="button"
-                                                    className="transport-management-row-delete"
-                                                    aria-label={isSecondaryRoute ? 'Delete secondary route' : 'Delete delivery'}
-                                                    onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        handleDeleteRequest(request);
-                                                    }}
-                                                    disabled={saving}
-                                                >
-                                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                                        <path d="M3 6h18" />
-                                                        <path d="M8 6V4h8v2" />
-                                                        <path d="M18 6l-.7 13.2A2 2 0 0 1 15.3 21H8.7a2 2 0 0 1-2-1.8L6 6" />
-                                                        <path d="M10 11v5" />
-                                                        <path d="M14 11v5" />
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        ) : null}
+                                        <td><strong>{builderLabel}</strong></td>
+                                        <td><strong>{projectLabel}</strong></td>
+                                        <td><strong>{requestedLabel}</strong></td>
+                                        <td><strong>{requestDateLabel}</strong></td>
+                                        <td><strong>{etaLabel}</strong></td>
                                     </tr>
                                 );
                             })}
