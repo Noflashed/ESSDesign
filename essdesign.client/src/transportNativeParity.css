@@ -4483,3 +4483,30 @@
     position: relative !important;
     top: 55px !important;
 }
+
+.material-ordering-transport-page .transport-management-detail {
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+}
+
+.material-ordering-transport-page .transport-management-panel .transport-management-items {
+    max-height: calc(28px + (29px * 8)) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+.material-ordering-transport-page .transport-management-panel .transport-management-items-head {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1 !important;
+}
+
+.material-ordering-transport-page .transport-management-panel .transport-management-items::-webkit-scrollbar {
+    width: 8px !important;
+}
+
+.material-ordering-transport-page .transport-management-panel .transport-management-items::-webkit-scrollbar-thumb {
+    border: 2px solid #ffffff !important;
+    border-radius: 999px !important;
+    background: #cbd5e1 !important;
+}
