@@ -4190,22 +4190,22 @@
 }
 
 .transport-desktop-nav-item {
-    grid-template-columns: 34px minmax(0, 1fr) auto !important;
+    grid-template-columns: 30px minmax(0, 1fr) auto !important;
     align-items: center !important;
-    min-height: 38px !important;
-    gap: 9px !important;
+    min-height: 36px !important;
+    gap: 8px !important;
     padding: 0 8px !important;
     border-radius: 10px !important;
     background: transparent !important;
     color: #203A59 !important;
-    font-size: 12px !important;
-    font-weight: 650 !important;
+    font-size: 11px !important;
+    font-weight: 560 !important;
     transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
 }
 
 .transport-desktop-nav-item svg {
-    width: 17px !important;
-    height: 17px !important;
+    width: 15px !important;
+    height: 15px !important;
 }
 
 .transport-desktop-nav-item::before {
@@ -4221,10 +4221,10 @@
 
 .transport-desktop-nav-item > svg {
     box-sizing: content-box !important;
-    width: 17px !important;
-    height: 17px !important;
-    padding: 8px !important;
-    border-radius: 9px !important;
+    width: 15px !important;
+    height: 15px !important;
+    padding: 7px !important;
+    border-radius: 8px !important;
     background: #F4F7FB !important;
     color: #39526E !important;
     box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04) !important;
@@ -4235,11 +4235,11 @@
     align-items: center !important;
     justify-content: center !important;
     justify-self: center !important;
-    min-height: 26px !important;
+    min-height: 24px !important;
     color: currentColor !important;
-    font-size: 12px !important;
-    line-height: 13px !important;
-    font-weight: 650 !important;
+    font-size: 11px !important;
+    line-height: 12px !important;
+    font-weight: 560 !important;
     white-space: normal !important;
     text-align: center !important;
     transition: opacity 160ms ease, transform 200ms ease !important;
@@ -4268,11 +4268,11 @@
 }
 
 .transport-desktop-nav-item b {
-    min-width: 18px !important;
-    height: 18px !important;
+    min-width: 16px !important;
+    height: 16px !important;
     background: #FB5664 !important;
     color: #FFFFFF !important;
-    font-size: 10px !important;
+    font-size: 9px !important;
     font-weight: 800 !important;
     box-shadow: 0 5px 12px rgba(251, 86, 100, 0.24) !important;
 }
@@ -4357,7 +4357,7 @@
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {
-    grid-template-columns: 34px !important;
+    grid-template-columns: 30px !important;
     justify-content: center !important;
     gap: 0 !important;
     padding: 0 !important;
