@@ -6282,6 +6282,8 @@ button.stat-card {
     top: 14px;
     bottom: 14px;
     min-width: 112px;
+    will-change: left, width;
+    transform: translateZ(0);
 }
 .ts2-event-card,
 .ts2-return-card,
@@ -6296,6 +6298,7 @@ button.stat-card {
     cursor: pointer;
     overflow: hidden;
     box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+    backface-visibility: hidden;
 }
 .ts2-event-card { left: 0; }
 .ts2-secondary-route-card {
