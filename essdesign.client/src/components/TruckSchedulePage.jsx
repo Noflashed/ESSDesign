@@ -69,6 +69,29 @@ function getSecondaryRouteReasonLabel(reason) {
   return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
 }
 
+function getDeliveryTypePill(request, segment = 'primary') {
+  const secondaryRoute = request?.secondaryRoute || null;
+  const isSecondarySegment = segment === 'secondary' || isSecondaryRouteRequest(request);
+
+  if (!isSecondarySegment) {
+    return { label: 'Material order', tone: 'material' };
+  }
+
+  if (secondaryRoute?.reason === 'material_pick_up') {
+    return { label: 'Material pick-up', tone: 'pickup' };
+  }
+
+  if (secondaryRoute?.reason === 'yard_collection') {
+    return { label: 'Yard pick-up', tone: 'yard' };
+  }
+
+  if (secondaryRoute?.reason === 'other') {
+    return { label: 'Route task', tone: 'task' };
+  }
+
+  return { label: 'Secondary route', tone: 'secondary' };
+}
+
 function dedupeRequests(items) {
   const map = new Map();
   (items || []).forEach(item => {
@@ -2455,6 +2478,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const eventTitle = isSecondaryRequest ? request.secondaryRoute.destination : event.builderName || 'Material Order';
                       const eventSubtitle = isSecondaryRequest ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : scaffoldDetailText;
                       const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
+                      const primaryDeliveryType = getDeliveryTypePill(request);
+                      const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
                       return (
                         <div
                           key={event.id}
@@ -2488,6 +2513,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               handleSelectScheduleEvent(event.orderId);
                             }}
                           >
+                            <span className={`ts2-delivery-type-pill ${primaryDeliveryType.tone}`}>{primaryDeliveryType.label}</span>
                             <span className="ts2-event-time">{formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} – {formatTimeChip(Math.floor(primaryEnd / 60), Math.floor(primaryEnd % 60))}</span>
                             <strong className="ts2-event-title">{eventTitle}</strong>
                             <span className="ts2-event-subtitle">{eventSubtitle}</span>
@@ -2506,6 +2532,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 handleSelectScheduleEvent(event.orderId, 'secondary');
                               }}
                             >
+                              <span className={`ts2-delivery-type-pill ${secondaryDeliveryType.tone}`}>{secondaryDeliveryType.label}</span>
                               <span className="ts2-event-time">{formatTimeChip(Math.floor(secondaryStartMinutes / 60), Math.floor(secondaryStartMinutes % 60))} – {formatTimeChip(Math.floor(secondaryEndMinutes / 60), Math.floor(secondaryEndMinutes % 60))}</span>
                               <strong className="ts2-event-title">{request.secondaryRoute.destination}</strong>
                               <span className="ts2-event-subtitle">{getSecondaryRouteReasonLabel(request.secondaryRoute.reason)}</span>
@@ -2520,6 +2547,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => {
                               handleSelectScheduleEvent(event.orderId);
                             }}>
+                              <span className="ts2-delivery-type-pill return">Return</span>
                               <span>Return transit</span>
                               <strong>Back to yard</strong>
                             </button>

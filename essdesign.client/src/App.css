@@ -6306,6 +6306,55 @@ button.stat-card {
     background: #eef2f7;
     color: #667085;
 }
+.ts2-delivery-type-pill {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100% - 16px);
+    min-height: 18px;
+    padding: 0 7px;
+    border: 1px solid rgba(16, 43, 92, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.84);
+    color: #102B5C;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    box-shadow: 0 6px 12px rgba(16, 43, 92, 0.12);
+    pointer-events: none;
+}
+.ts2-delivery-type-pill.material {
+    background: #eaf2ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.ts2-delivery-type-pill.secondary {
+    background: #ecfeff;
+    color: #0e7490;
+    border-color: #a5f3fc;
+}
+.ts2-delivery-type-pill.pickup,
+.ts2-delivery-type-pill.yard {
+    background: #fff7ed;
+    color: #c2410c;
+    border-color: #fed7aa;
+}
+.ts2-delivery-type-pill.task {
+    background: #f8fafc;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+.ts2-delivery-type-pill.return {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
 .ts2-event-time,
 .ts2-return-card > span,
 .ts2-secondary-route-card > span {
@@ -6313,6 +6362,19 @@ button.stat-card {
     font-size: 11px;
     font-weight: 800;
     margin-bottom: 4px;
+}
+.ts2-event-time,
+.ts2-return-card > span:not(.ts2-delivery-type-pill),
+.ts2-secondary-route-card > .ts2-event-time {
+    max-width: calc(100% - 82px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ts2-secondary-route-card > .ts2-delivery-type-pill,
+.ts2-return-card > .ts2-delivery-type-pill {
+    display: inline-flex !important;
+    margin-bottom: 0;
 }
 .ts2-event-title,
 .ts2-return-card > strong,

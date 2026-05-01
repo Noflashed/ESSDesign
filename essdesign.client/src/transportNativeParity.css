@@ -4535,3 +4535,80 @@
     line-height: 1.35 !important;
     font-weight: 500 !important;
 }
+
+.transport-page-frame .ts2-delivery-type-pill,
+.transport-desktop-workspace .ts2-delivery-type-pill {
+    position: absolute !important;
+    top: 6px !important;
+    right: 6px !important;
+    z-index: 4 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    max-width: calc(100% - 12px) !important;
+    min-height: 17px !important;
+    padding: 0 7px !important;
+    border: 1px solid rgba(16, 43, 92, 0.12) !important;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    color: #102B5C !important;
+    font-size: 8.5px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
+    white-space: nowrap !important;
+    box-shadow: 0 6px 12px rgba(16, 43, 92, 0.12) !important;
+    pointer-events: none !important;
+}
+
+.transport-page-frame .ts2-delivery-type-pill.material,
+.transport-desktop-workspace .ts2-delivery-type-pill.material {
+    background: #eaf2ff !important;
+    color: #1d4ed8 !important;
+    border-color: #bfdbfe !important;
+}
+
+.transport-page-frame .ts2-delivery-type-pill.secondary,
+.transport-desktop-workspace .ts2-delivery-type-pill.secondary {
+    background: #ecfeff !important;
+    color: #0e7490 !important;
+    border-color: #a5f3fc !important;
+}
+
+.transport-page-frame .ts2-delivery-type-pill.pickup,
+.transport-page-frame .ts2-delivery-type-pill.yard,
+.transport-desktop-workspace .ts2-delivery-type-pill.pickup,
+.transport-desktop-workspace .ts2-delivery-type-pill.yard {
+    background: #fff7ed !important;
+    color: #c2410c !important;
+    border-color: #fed7aa !important;
+}
+
+.transport-page-frame .ts2-delivery-type-pill.task,
+.transport-page-frame .ts2-delivery-type-pill.return,
+.transport-desktop-workspace .ts2-delivery-type-pill.task,
+.transport-desktop-workspace .ts2-delivery-type-pill.return {
+    background: #f8fafc !important;
+    color: #475569 !important;
+    border-color: #cbd5e1 !important;
+}
+
+.transport-page-frame .ts2-event-time,
+.transport-page-frame .ts2-return-card > span:not(.ts2-delivery-type-pill),
+.transport-page-frame .ts2-secondary-route-card > .ts2-event-time,
+.transport-desktop-workspace .ts2-event-time,
+.transport-desktop-workspace .ts2-return-card > span:not(.ts2-delivery-type-pill),
+.transport-desktop-workspace .ts2-secondary-route-card > .ts2-event-time {
+    max-width: calc(100% - 78px) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.transport-page-frame .ts2-secondary-route-card > .ts2-delivery-type-pill,
+.transport-page-frame .ts2-return-card > .ts2-delivery-type-pill,
+.transport-desktop-workspace .ts2-secondary-route-card > .ts2-delivery-type-pill,
+.transport-desktop-workspace .ts2-return-card > .ts2-delivery-type-pill {
+    display: inline-flex !important;
+    margin-bottom: 0 !important;
+}
