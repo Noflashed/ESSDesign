@@ -3699,7 +3699,7 @@
 .transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header {
     min-height: 68px !important;
     width: 100% !important;
-    padding: 20px 18px 12px !important;
+    padding: 18px 10px 10px !important;
     box-sizing: border-box !important;
 }
 
@@ -3720,7 +3720,7 @@
     max-width: none !important;
     min-height: calc(100vh - 68px) !important;
     margin: 0 !important;
-    padding: 12px 18px 24px !important;
+    padding: 8px 10px 20px !important;
     box-sizing: border-box !important;
 }
 
@@ -3794,7 +3794,7 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table td,
 .transport-desktop-workspace .transport-management-table th,
 .transport-desktop-workspace .transport-management-table td {
-    padding: 10px 8px !important;
+    padding: 9px 6px !important;
     border-bottom: 1px solid #E5E7EB !important;
     overflow-wrap: anywhere !important;
     word-break: normal !important;
@@ -4386,8 +4386,25 @@
 }
 
 /* Schedule management inspector positioning overrides. */
-.transport-desktop-shell:not(.rail-collapsed) .transport-desktop-nav .active span {
-    width: 136px !important;
+.transport-desktop-shell:not(.rail-collapsed) .transport-desktop-nav-item span {
+    width: auto !important;
+    white-space: nowrap !important;
+}
+
+.transport-management-panel-title {
+    align-items: flex-start !important;
+}
+
+.transport-management-panel-actions {
+    display: inline-flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    margin-left: auto !important;
+}
+
+.transport-management-panel-title .transport-management-panel-close {
+    margin-top: 2px !important;
 }
 
 .transport-management-detail .transport-management-detail-actions .transport-management-save {
@@ -4407,8 +4424,4 @@
 .transport-management-detail .transport-management-panel .transport-management-items {
     position: relative !important;
     top: 55px !important;
-}
-
-.material-ordering-transport-page .transport-management-detail .transport-management-detail-head {
-    display: none !important;
 }

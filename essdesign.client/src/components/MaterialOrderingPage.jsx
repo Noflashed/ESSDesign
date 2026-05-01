@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Download, Eye, FileText, MoreVertical, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { Archive, Download, Eye, FileText, MoreVertical, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import { formatTimeChip } from './transport/transportUtils';
 
@@ -1141,21 +1141,25 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </section>
                     {selectedRequest ? (
                         <aside className="transport-management-detail">
-                            <div className="transport-management-detail-head no-title">
-                                <button type="button" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>
-                                    <X size={18} aria-hidden="true" />
-                                </button>
-                            </div>
-
                             <section className="transport-management-panel">
                                 <div className="transport-management-panel-title">
                                     <strong>{selectedRequestIsSecondaryRoute ? 'Secondary Route Summary' : 'Picking Card Summary'}</strong>
-                                    {!selectedRequestIsSecondaryRoute ? (
-                                        <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
-                                            <Download size={15} aria-hidden="true" />
-                                            <span>Download PDF</span>
+                                    <div className="transport-management-panel-actions">
+                                        {!selectedRequestIsSecondaryRoute ? (
+                                            <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                                <Download size={15} aria-hidden="true" />
+                                                <span>Download PDF</span>
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            className="transport-inspector-close transport-management-panel-close"
+                                            onClick={() => setSelectedRequestId(null)}
+                                            aria-label="Close summary"
+                                        >
+                                            ×
                                         </button>
-                                    ) : null}
+                                    </div>
                                 </div>
 
                                 <dl className="transport-management-summary-grid">
