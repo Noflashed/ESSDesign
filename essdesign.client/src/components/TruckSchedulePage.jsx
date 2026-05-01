@@ -120,6 +120,32 @@ function getSecondaryRouteTiming(secondaryRoute) {
   };
 }
 
+function removeReturnLegFromTiming(timing) {
+  return {
+    ...timing,
+    returnMinutes: 0,
+    totalMinutes:
+      (timing?.transitMinutes || 0) +
+      (timing?.loadingMinutes || 0) +
+      (timing?.secondaryTravelMinutes || 0) +
+      (timing?.secondaryServiceMinutes || 0),
+  };
+}
+
+function getRequestScheduledStartMinutes(request, fallbackMinutes = SCREEN_START_HOUR * 60) {
+  if (typeof request?.scheduledHour === 'number' && typeof request?.scheduledMinute === 'number') {
+    return request.scheduledHour * 60 + request.scheduledMinute;
+  }
+
+  return fallbackMinutes;
+}
+
+function getDateAtScheduleMinutes(dateKey, minutes) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  date.setMinutes(Math.max(0, Math.round(minutes)));
+  return date;
+}
+
 function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) {
   const map = new Map((requests || []).filter(item => item?.id).map(item => [item.id, item]));
   overrides.forEach((entry, requestId) => {
@@ -227,6 +253,13 @@ function buildBoardState(requestsForDay, routeMap) {
   const startMap = {};
   const primaryDurationMap = {};
   const cycleStateMap = {};
+  const secondaryContinuationBySourceId = new Map();
+
+  requestsForDay.forEach(request => {
+    if (isSecondaryRouteRequest(request) && request.sourceOrderId && request.scheduledDate === dateKey && !request.archivedAt) {
+      secondaryContinuationBySourceId.set(request.sourceOrderId, request);
+    }
+  });
 
   requestsForDay.forEach(request => {
     const event = requestToCalendarEvent(request);
@@ -238,6 +271,7 @@ function buildBoardState(requestsForDay, routeMap) {
 
   groupedByTruck.forEach((truckRequests, truckId) => {
     let cumulativeShiftMinutes = 0;
+    let laneCursorMinutes = SCREEN_START_HOUR * 60;
     truckRequests
       .sort((left, right) => {
         const leftStart = (left.scheduledHour ?? SCREEN_START_HOUR) * 60 + (left.scheduledMinute ?? 0);
@@ -248,11 +282,19 @@ function buildBoardState(requestsForDay, routeMap) {
         return String(left.submittedAt || '').localeCompare(String(right.submittedAt || ''));
       })
       .forEach((request, index, ordered) => {
-        const timing = isSecondaryRouteRequest(request)
+        const continuation = secondaryContinuationBySourceId.get(request.id);
+        const continuationTruckId = continuation?.scheduledTruckId ?? continuation?.truckId ?? null;
+        const hasSecondaryContinuation = !isSecondaryRouteRequest(request) && continuationTruckId === truckId;
+        const baseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute)
           : getTimingProfile(routeMap[request.id] ?? null, null);
+        const timing = hasSecondaryContinuation ? removeReturnLegFromTiming(baseTiming) : baseTiming;
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
-        const shiftedScheduledStart = Math.max(SCREEN_START_HOUR * 60, scheduledStart + cumulativeShiftMinutes);
+        const shiftedScheduledStart = Math.max(
+          SCREEN_START_HOUR * 60,
+          scheduledStart + Math.max(0, cumulativeShiftMinutes),
+          laneCursorMinutes,
+        );
         const laterRequests = ordered.slice(index + 1);
         const nextStartedRequest = laterRequests.find(nextRequest => {
           const iso = nextRequest.deliveryStartedAt;
@@ -278,7 +320,8 @@ function buildBoardState(requestsForDay, routeMap) {
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
-        cumulativeShiftMinutes = projected.projectedEndMinutes - projected.plannedEndMinutes;
+        laneCursorMinutes = Math.max(laneCursorMinutes, projected.projectedEndMinutes);
+        cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         startMap[request.id] = startMinutes;
         durationMap[request.id] = durationMinutes;
         primaryDurationMap[request.id] = primaryDurationMinutesValue;
@@ -287,6 +330,7 @@ function buildBoardState(requestsForDay, routeMap) {
           showReturnTransitTile: projected.showReturnTransitTile,
           returnTransitEndMinutes: projected.returnTransitEndMinutes,
           isLastScheduledForDay: laterRequests.length === 0,
+          hasSecondaryContinuation,
         };
         dayEvents.push({
           id: `remote-${request.id}`,
@@ -1082,6 +1126,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleSecondaryRoute = selectedScheduleRequest?.secondaryRoute || null;
   const selectedScheduleIsStandaloneSecondary = isSecondaryRouteRequest(selectedScheduleRequest);
   const selectedScheduleIsSecondarySegment = selectedScheduleIsStandaloneSecondary || (selectedScheduleSegment === 'secondary' && Boolean(selectedScheduleSecondaryRoute));
+  const selectedScheduleHasSecondaryContinuation = Boolean(
+    selectedScheduleEvent ? eventCycleStateMap[selectedScheduleEvent.orderId]?.hasSecondaryContinuation : false,
+  );
   const selectedScheduleSecondaryRouteSchedule = useMemo(() => {
     if (!selectedScheduleEvent || !selectedScheduleSecondaryRoute) {
       return {};
@@ -1150,7 +1197,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleTiming = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute)
-      : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
+      : selectedScheduleHasSecondaryContinuation
+        ? removeReturnLegFromTiming(getTimingProfile(selectedSchedulePrimaryRouteEstimate, null))
+        : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
     : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
@@ -1782,12 +1831,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       buildRouteScheduleFromEvent(scheduleEvent),
     ) ?? null;
     const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
-    const baseStart = new Date(`${scheduleEvent.date}T${String(scheduleEvent.hour).padStart(2, '0')}:${String(scheduleEvent.minute).padStart(2, '0')}:00`);
-    const outboundDeparture = new Date(baseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
-    const outboundSchedule = {
+    const visibleParentStartMinutes = eventStartMinutesMap[request.id] ?? (scheduleEvent.hour * 60 + scheduleEvent.minute);
+    const plannedParentStartMinutes = getRequestScheduledStartMinutes(request, scheduleEvent.hour * 60 + scheduleEvent.minute);
+    const visibleBaseStart = getDateAtScheduleMinutes(scheduleEvent.date, visibleParentStartMinutes);
+    const plannedBaseStart = getDateAtScheduleMinutes(request.scheduledDate || scheduleEvent.date, plannedParentStartMinutes);
+    const outboundDeparture = new Date(visibleBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+    const persistedSecondaryDeparture = new Date(plannedBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+    const outboundRouteSchedule = {
       scheduledDate: formatDateKey(outboundDeparture),
       scheduledHour: outboundDeparture.getHours(),
       scheduledMinute: outboundDeparture.getMinutes(),
+    };
+    const persistedSecondarySchedule = {
+      scheduledDate: formatDateKey(persistedSecondaryDeparture),
+      scheduledHour: persistedSecondaryDeparture.getHours(),
+      scheduledMinute: persistedSecondaryDeparture.getMinutes(),
     };
 
     setSecondaryRouteSaving(true);
@@ -1795,7 +1853,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const outbound = await getCachedRouteDataBetween(
         secondaryRouteModal.primarySiteLocation,
         destination,
-        outboundSchedule,
+        outboundRouteSchedule,
       );
       if (!outbound) {
         throw new Error('Secondary route could not be calculated for that destination.');
@@ -1840,38 +1898,43 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       };
 
       const updatedRequest = await materialOrderRequestsAPI.setSecondaryRoute(secondaryRouteModal.requestId, secondaryRoute, {
-        ...outboundSchedule,
+        ...persistedSecondarySchedule,
         truckId: scheduleEvent.truckId,
         truckLabel: scheduleEvent.truckLabel,
       });
       const parentRequest = { ...request, secondaryRoute: null };
-      setAllRequests(current => dedupeRequests([
-        ...current.map(item => item.id === parentRequest.id ? parentRequest : item).filter(item => item.id !== updatedRequest.id),
+      const nextRequests = dedupeRequests([
+        ...allRequests.map(item => item.id === parentRequest.id ? parentRequest : item).filter(item => item.id !== updatedRequest.id),
         updatedRequest,
-      ]));
-      setRequestMetaMap(current => ({ ...current, [parentRequest.id]: parentRequest, [updatedRequest.id]: updatedRequest }));
-      setRequestSiteLocationMap(current => ({ ...current, [updatedRequest.id]: secondaryRoute.startingLocation }));
-      const secondaryStartMinutes = outboundSchedule.scheduledHour * 60 + outboundSchedule.scheduledMinute;
-      const secondaryTiming = getSecondaryRouteTiming(secondaryRoute);
-      setDayEvents(current => {
-        const nextEvent = {
-          id: `remote-${updatedRequest.id}`,
-          date: outboundSchedule.scheduledDate,
-          hour: outboundSchedule.scheduledHour,
-          minute: outboundSchedule.scheduledMinute,
-          builderName: secondaryRoute.destination,
-          projectName: secondaryRoute.label,
-          scaffoldingSystem: secondaryRoute.label,
-          orderId: updatedRequest.id,
-          truckId: scheduleEvent.truckId,
-          truckLabel: scheduleEvent.truckLabel,
-        };
-        return [...current.filter(item => item.orderId !== updatedRequest.id), nextEvent]
-          .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
-      });
-      setEventStartMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryStartMinutes }));
-      setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.totalMinutes }));
-      setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.transitMinutes + secondaryTiming.loadingMinutes }));
+      ]);
+      const nextSiteLocationMap = {
+        ...requestSiteLocationMap,
+        [parentRequest.id]: secondaryRouteModal.primarySiteLocation,
+        [updatedRequest.id]: secondaryRoute.startingLocation,
+      };
+      const dateKey = scheduleEvent.date || formatDateKey(selectedDate);
+      const requestsForDay = nextRequests.filter(item => item.scheduledDate === dateKey);
+      const nextRouteMap = Object.fromEntries(
+        requestsForDay.map(item => {
+          if (isSecondaryRouteRequest(item)) {
+            return [item.id, null];
+          }
+          const siteLocation = nextSiteLocationMap[item.id] || '';
+          return [
+            item.id,
+            siteLocation ? getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromRequest(item, selectedDate)) ?? null : null,
+          ];
+        }),
+      );
+      const nextBoard = buildBoardState(requestsForDay, nextRouteMap);
+      setAllRequests(nextRequests);
+      setRequestMetaMap(Object.fromEntries(requestsForDay.map(item => [item.id, item])));
+      setRequestSiteLocationMap(current => ({ ...current, ...nextSiteLocationMap }));
+      setDayEvents(nextBoard.dayEvents);
+      setEventStartMinutesMap(nextBoard.startMap);
+      setEventDurationMinutesMap(nextBoard.durationMap);
+      setEventPrimaryDurationMinutesMap(nextBoard.primaryDurationMap);
+      setEventCycleStateMap(nextBoard.cycleStateMap);
       setSelectedScheduleEventId(updatedRequest.id);
       setSelectedScheduleSegment('primary');
       setScheduleInspectorOpen(true);
@@ -1882,7 +1945,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     } finally {
       setSecondaryRouteSaving(false);
     }
-  }, [allRequests, dayEvents, requestMetaMap, secondaryRouteModal]);
+  }, [allRequests, dayEvents, eventStartMinutesMap, requestMetaMap, requestSiteLocationMap, secondaryRouteModal, selectedDate]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -2640,7 +2703,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   {selectedScheduleRequest?.secondaryRoute ? (
                 <div><span><InspectorIcon type="map" /> {getSecondaryRouteReasonLabel(selectedScheduleRequest.secondaryRoute.reason)}</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.secondaryTravelMinutes + selectedScheduleTiming.secondaryServiceMinutes} min` : 'Pending'}</strong></div>
                   ) : null}
-                  <div><span><InspectorIcon type="return" /> Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
+                  {!selectedScheduleHasSecondaryContinuation ? (
+                    <div><span><InspectorIcon type="return" /> Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
+                  ) : null}
                   <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
                 </>
               )}
