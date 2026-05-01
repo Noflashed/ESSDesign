@@ -1145,19 +1145,13 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <div className="transport-management-panel-title">
                                     <strong>{selectedRequestIsSecondaryRoute ? 'Secondary Route Summary' : 'Picking Card Summary'}</strong>
                                     <div className="transport-management-panel-actions">
-                                        {!selectedRequestIsSecondaryRoute ? (
-                                            <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
-                                                <Download size={15} aria-hidden="true" />
-                                                <span>Download PDF</span>
-                                            </button>
-                                        ) : null}
                                         <button
                                             type="button"
                                             className="transport-inspector-close transport-management-panel-close"
                                             onClick={() => setSelectedRequestId(null)}
                                             aria-label="Close summary"
                                         >
-                                            ×
+                                            &times;
                                         </button>
                                     </div>
                                 </div>
@@ -1219,6 +1213,13 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         </>
                                     )}
                                 </dl>
+
+                                {!selectedRequestIsSecondaryRoute && selectedRequest.pdfPath ? (
+                                    <button type="button" className="transport-management-material-card-action" onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                        <Download size={15} aria-hidden="true" />
+                                        <span>Download Material card</span>
+                                    </button>
+                                ) : null}
 
                                 {selectedRequestIsSecondaryRoute ? (
                                     <div className="transport-management-items">
