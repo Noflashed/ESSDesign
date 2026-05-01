@@ -119,6 +119,15 @@ function getDeliveryStatusLabel(status) {
     return 'Pending';
 }
 
+function getScaffoldDetailText(request) {
+    return (
+        request?.details ||
+        request?.itemValues?.__details ||
+        request?.scaffoldingSystem ||
+        'Scaffold details pending'
+    );
+}
+
 function isSecondaryRouteRequest(request) {
     return request?.routeType === 'secondary_route' && Boolean(request?.secondaryRoute);
 }
@@ -511,6 +520,22 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             document.removeEventListener('pointerdown', closeMenuFromOutsideClick);
         };
     }, [openRequestMenuId]);
+
+    useEffect(() => {
+        if (!requestFiltersOpen) return undefined;
+
+        const closeFiltersFromOutsideClick = (event) => {
+            if (event.target?.closest?.('.transport-management-filter-wrap')) {
+                return;
+            }
+            setRequestFiltersOpen(false);
+        };
+
+        document.addEventListener('pointerdown', closeFiltersFromOutsideClick);
+        return () => {
+            document.removeEventListener('pointerdown', closeFiltersFromOutsideClick);
+        };
+    }, [requestFiltersOpen]);
 
     useEffect(() => {
         let active = true;
@@ -958,7 +983,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <th>Request Date</th>
                                 <th>ETA Time</th>
                                 <th>Status</th>
-                                <th>PDF</th>
+                                <th className="transport-management-pdf-heading">PDF</th>
                                 <th aria-label="Actions" />
                             </tr>
                         </thead>
@@ -968,6 +993,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 const isSelected = selectedRequest?.id === request.id;
                                 const builderLabel = isSecondaryRoute ? 'N/A' : request.builderName || 'N/A';
                                 const projectLabel = isSecondaryRoute ? 'N/A' : request.projectName || 'N/A';
+                                const scaffoldDetailLabel = isSecondaryRoute ? '' : getScaffoldDetailText(request);
                                 const requestedLabel = request.requestedByName || 'N/A';
                                 const requestDateLabel = request.submittedAt ? getSubmittedDateLabel(request.submittedAt) : 'N/A';
                                 const etaLabel = getTableEtaTime(request);
@@ -987,7 +1013,10 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             </span>
                                         </td>
                                         <td><strong>{builderLabel}</strong></td>
-                                        <td><strong>{projectLabel}</strong></td>
+                                        <td className="transport-management-project-cell">
+                                            <strong>{projectLabel}</strong>
+                                            {!isSecondaryRoute ? <span>{scaffoldDetailLabel}</span> : null}
+                                        </td>
                                         <td><strong>{requestedLabel}</strong></td>
                                         <td><strong>{requestDateLabel}</strong></td>
                                         <td><strong>{etaLabel}</strong></td>

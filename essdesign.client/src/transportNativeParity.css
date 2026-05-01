@@ -4510,3 +4510,28 @@
     border-radius: 999px !important;
     background: #cbd5e1 !important;
 }
+
+.material-ordering-transport-page .transport-management-table th.transport-management-pdf-heading {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center !important;
+}
+
+.material-ordering-transport-page .transport-management-table .transport-management-pdf-cell {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center !important;
+}
+
+.material-ordering-transport-page .transport-management-pdf-cell .transport-management-pdf-icon-btn {
+    margin: 0 auto !important;
+}
+
+.material-ordering-transport-page .transport-management-project-cell span {
+    display: block !important;
+    margin-top: 3px !important;
+    color: #64748b !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+    font-weight: 500 !important;
+}
