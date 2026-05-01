@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Download, FileText, Search, SlidersHorizontal, X } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import { formatTimeChip } from './transport/transportUtils';
 
@@ -984,11 +985,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                                 disabled={isSecondaryRoute || !request.pdfPath}
                                                 onClick={(event) => openArchivedPdf(request, event)}
                                             >
-                                                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                                                    <path d="M10 3v8" />
-                                                    <path d="m6.5 8.5 3.5 3.5 3.5-3.5" />
-                                                    <path d="M4 15.5h12" />
-                                                </svg>
+                                                <FileText size={14} aria-hidden="true" />
                                                 <span>PDF</span>
                                             </button>
                                         </td>
@@ -1046,11 +1043,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
                         <div className="material-ordering-queue-tools transport-management-tools">
                             <label className="material-ordering-queue-search">
-                                <svg className="transport-management-search-svg" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-                                    <circle cx="9" cy="9" r="5.25" />
-                                    <path d="m13 13 3.5 3.5" />
-                                </svg>
-                                <span className="material-ordering-queue-search-icon" aria-hidden="true">⌕</span>
+                                <Search size={16} className="transport-management-search-icon" aria-hidden="true" />
                                 <input
                                     type="text"
                                     value={requestSearch}
@@ -1065,9 +1058,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     onClick={() => setRequestFiltersOpen(open => !open)}
                                     aria-expanded={requestFiltersOpen}
                                 >
-                                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                                        <path d="M2.25 4.25h11.5M4.5 8h7M6.75 11.75h2.5" />
-                                    </svg>
+                                    <SlidersHorizontal size={16} aria-hidden="true" />
                                     <span>Filters</span>
                                     {activeFilterCount > 0 ? <b>{activeFilterCount}</b> : null}
                                 </button>
@@ -1139,7 +1130,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     {selectedRequest ? (
                         <aside className="transport-management-detail">
                             <div className="transport-management-detail-head no-title">
-                                <button type="button" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>×</button>
+                                <button type="button" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>
+                                    <X size={18} aria-hidden="true" />
+                                </button>
                             </div>
 
                             <section className="transport-management-panel">
@@ -1147,9 +1140,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     <strong>{selectedRequestIsSecondaryRoute ? 'Secondary Route Summary' : 'Picking Card Summary'}</strong>
                                     {!selectedRequestIsSecondaryRoute ? (
                                         <button type="button" className="transport-management-panel-action" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
-                                            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                                                <path d="M8 2.5a.75.75 0 0 1 .75.75v5.19l1.72-1.72a.75.75 0 1 1 1.06 1.06L8.53 10.81a.75.75 0 0 1-1.06 0L4.47 7.78a.75.75 0 0 1 1.06-1.06l1.72 1.72V3.25A.75.75 0 0 1 8 2.5ZM3.25 12a.75.75 0 0 1 .75.75v.5h8v-.5a.75.75 0 0 1 1.5 0V14a.75.75 0 0 1-.75.75h-9.5A.75.75 0 0 1 2.5 14v-1.25A.75.75 0 0 1 3.25 12Z" fill="currentColor" />
-                                            </svg>
+                                            <Download size={15} aria-hidden="true" />
                                             <span>Download PDF</span>
                                         </button>
                                     ) : null}

@@ -8498,7 +8498,7 @@ button.stat-card {
     display: none;
 }
 
-.transport-page-frame .transport-management-search-svg {
+.transport-page-frame .transport-management-search-icon {
     position: absolute;
     left: 14px;
     width: 16px;
@@ -8791,6 +8791,9 @@ button.stat-card {
 }
 
 .transport-page-frame .transport-management-detail-head button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 32px;
     height: 32px;
     border: 0;
@@ -8798,13 +8801,6 @@ button.stat-card {
     background: transparent;
     color: #334155;
     cursor: pointer;
-    font-size: 0;
-}
-
-.transport-page-frame .transport-management-detail-head button::before {
-    content: '\00d7';
-    font-size: 24px;
-    line-height: 1;
 }
 
 .transport-page-frame .transport-management-panel {
