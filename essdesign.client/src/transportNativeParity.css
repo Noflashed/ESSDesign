@@ -4384,3 +4384,31 @@
     justify-content: center !important;
     padding: 6px !important;
 }
+
+/* Schedule management inspector positioning overrides. */
+.transport-desktop-shell:not(.rail-collapsed) .transport-desktop-nav .active span {
+    width: 136px !important;
+}
+
+.transport-management-detail .transport-management-detail-actions .transport-management-save {
+    transform: translateX(4px) translateY(66px) !important;
+}
+
+.transport-management-panel .transport-management-notes textarea {
+    transform: translateX(4px) translateY(50px) !important;
+}
+
+.transport-management-panel .transport-management-notes strong {
+    position: relative !important;
+    top: 47px !important;
+    left: 6px !important;
+}
+
+.transport-management-detail .transport-management-panel .transport-management-items {
+    position: relative !important;
+    top: 55px !important;
+}
+
+.material-ordering-transport-page .transport-management-detail .transport-management-detail-head {
+    display: none !important;
+}
