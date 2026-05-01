@@ -8068,11 +8068,12 @@ button.stat-card {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    padding: 0 18px 18px;
 }
 
 .transport-management-category {
     border: 1px solid #E8EDF5;
-    border-radius: 16px;
+    border-radius: 12px;
     background: #FFFFFF;
     overflow: hidden;
 }
@@ -8091,6 +8092,10 @@ button.stat-card {
     background: #F8FAFC;
 }
 
+.transport-management-category-head > div {
+    min-width: 0;
+}
+
 .transport-management-category.secondary .transport-management-category-head {
     background: #ECFEFF;
 }
@@ -8099,6 +8104,13 @@ button.stat-card {
     color: #102B5C;
     font-size: 14px;
     font-weight: 900;
+}
+
+.transport-management-category-head p {
+    margin: 4px 0 0;
+    color: #64748B;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .transport-management-category-head span {
@@ -8121,6 +8133,7 @@ button.stat-card {
 .transport-management-category .transport-management-table-wrap {
     border: 0;
     border-radius: 0;
+    overflow: auto;
 }
 
 .transport-management-category-empty {
@@ -8140,4 +8153,222 @@ button.stat-card {
 
 .transport-management-secondary-table .secondary-route-row {
     background: rgba(236, 254, 255, 0.38);
+}
+
+.transport-page-frame .transport-management-table {
+    width: 100%;
+    min-width: 1240px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 12px;
+}
+
+.transport-page-frame .transport-management-table th,
+.transport-page-frame .transport-management-table td {
+    border-right: 1px solid #E1E7F0;
+    border-bottom: 1px solid #E1E7F0;
+    vertical-align: middle;
+}
+
+.transport-page-frame .transport-management-table th {
+    background: #F4F6F9;
+    color: #1D2A44;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    padding: 11px 12px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.transport-page-frame .transport-management-table td {
+    color: #18243C;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    padding: 11px 12px;
+}
+
+.transport-page-frame .transport-management-table td strong {
+    display: block;
+    color: #102B5C;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.transport-page-frame .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill) {
+    display: block;
+    margin-top: 4px;
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.transport-page-frame .transport-management-table tbody tr {
+    background: #FFFFFF;
+    cursor: pointer;
+}
+
+.transport-page-frame .transport-management-table tbody tr.secondary-route-row {
+    background: #F4FCFD;
+}
+
+.transport-page-frame .transport-management-table tbody tr:hover {
+    background: #F8FBFC;
+}
+
+.transport-page-frame .transport-management-table tbody tr.selected {
+    background: #EAF8FA;
+}
+
+.transport-page-frame .transport-management-table th:last-child,
+.transport-page-frame .transport-management-table td:last-child {
+    border-right: 0;
+}
+
+.transport-page-frame .transport-management-col-type {
+    width: 118px;
+}
+
+.transport-page-frame .transport-management-col-destination {
+    width: 180px;
+}
+
+.transport-page-frame .transport-management-col-start {
+    width: 165px;
+}
+
+.transport-page-frame .transport-management-col-task {
+    width: 175px;
+}
+
+.transport-page-frame .transport-management-col-requested {
+    width: 155px;
+}
+
+.transport-page-frame .transport-management-col-route-time {
+    width: 145px;
+}
+
+.transport-page-frame .transport-management-col-truck {
+    width: 78px;
+}
+
+.transport-page-frame .transport-management-col-time {
+    width: 145px;
+}
+
+.transport-page-frame .transport-management-col-status {
+    width: 112px;
+}
+
+.transport-page-frame .transport-management-col-pdf {
+    width: 68px;
+}
+
+.transport-page-frame .transport-management-col-action {
+    width: 64px;
+}
+
+.transport-page-frame .transport-management-type-pill,
+.transport-page-frame .transport-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    border-radius: 999px;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.transport-page-frame .transport-management-type-pill.material {
+    background: #EFF6FF;
+    color: #102B5C;
+    border: 1px solid #CFE0F6;
+}
+
+.transport-page-frame .transport-management-type-pill.secondary {
+    background: #ECFEFF;
+    color: #0E7490;
+    border: 1px solid #A5F3FC;
+}
+
+.transport-page-frame .transport-status-pill {
+    border: 1px solid #FF8A3D;
+    background: #FFF7ED;
+    color: #F26A00;
+}
+
+.transport-page-frame .transport-status-pill.status-pending {
+    background: #FFFBEB;
+    color: #D97706;
+}
+
+.transport-page-frame .transport-status-pill.status-in_transit,
+.transport-page-frame .transport-status-pill.status-unloading,
+.transport-page-frame .transport-status-pill.status-return_transit {
+    border-color: #93C5FD;
+    background: #EFF6FF;
+    color: #1D4ED8;
+}
+
+.transport-page-frame .transport-management-muted-cell {
+    color: #94A3B8 !important;
+}
+
+.transport-page-frame .transport-management-pdf-btn,
+.transport-page-frame .transport-management-row-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 30px;
+    border: 1px solid #DCE4EF;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #102B5C;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.transport-page-frame .transport-management-pdf-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.transport-page-frame .transport-management-row-action-cell {
+    text-align: center;
+}
+
+.transport-page-frame .transport-management-row-delete {
+    width: 32px;
+    min-width: 32px;
+    color: #DC2626;
+}
+
+.transport-page-frame .transport-management-row-delete svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.transport-page-frame .transport-management-table-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    color: #64748B;
+    font-size: 12px;
+    font-weight: 700;
 }
