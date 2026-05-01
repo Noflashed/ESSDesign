@@ -97,15 +97,6 @@ function getSecondaryRouteTiming(secondaryRoute) {
   };
 }
 
-function getPrimaryDeliveryTiming(routeEstimate) {
-  const timing = getTimingProfile(routeEstimate, null);
-  return {
-    ...timing,
-    returnMinutes: 0,
-    totalMinutes: timing.transitMinutes + timing.loadingMinutes,
-  };
-}
-
 function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) {
   const map = new Map((requests || []).filter(item => item?.id).map(item => [item.id, item]));
   overrides.forEach((entry, requestId) => {
@@ -207,12 +198,6 @@ function getScaffoldDetailText(request, event) {
 function buildBoardState(requestsForDay, routeMap) {
   const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
   const groupedByTruck = new Map();
-  const secondaryRouteParentIds = new Set(
-    requestsForDay
-      .filter(isSecondaryRouteRequest)
-      .map(request => request.sourceOrderId)
-      .filter(Boolean),
-  );
   const now = new Date();
   const dayEvents = [];
   const durationMap = {};
@@ -242,9 +227,7 @@ function buildBoardState(requestsForDay, routeMap) {
       .forEach((request, index, ordered) => {
         const timing = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute)
-          : secondaryRouteParentIds.has(request.id)
-            ? getPrimaryDeliveryTiming(routeMap[request.id] ?? null)
-            : getTimingProfile(routeMap[request.id] ?? null, null);
+          : getTimingProfile(routeMap[request.id] ?? null, null);
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
         const shiftedScheduledStart = Math.max(SCREEN_START_HOUR * 60, scheduledStart + cumulativeShiftMinutes);
         const laterRequests = ordered.slice(index + 1);
@@ -1075,12 +1058,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     : null;
   const selectedScheduleSecondaryRoute = selectedScheduleRequest?.secondaryRoute || null;
   const selectedScheduleIsStandaloneSecondary = isSecondaryRouteRequest(selectedScheduleRequest);
-  const selectedScheduleHasSecondaryContinuation = selectedScheduleRequest
-    ? dayEvents.some(event => {
-      const request = requestMetaMap[event.orderId];
-      return isSecondaryRouteRequest(request) && request.sourceOrderId === selectedScheduleRequest.id;
-    })
-    : false;
   const selectedScheduleIsSecondarySegment = selectedScheduleIsStandaloneSecondary || (selectedScheduleSegment === 'secondary' && Boolean(selectedScheduleSecondaryRoute));
   const selectedScheduleSecondaryRouteSchedule = useMemo(() => {
     if (!selectedScheduleEvent || !selectedScheduleSecondaryRoute) {
@@ -1102,7 +1079,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [
     eventStartMinutesMap,
     selectedScheduleEvent,
-    selectedScheduleHasSecondaryContinuation,
     selectedScheduleIsStandaloneSecondary,
     selectedSchedulePrimaryRouteEstimate,
     selectedScheduleRouteSchedule,
@@ -1151,9 +1127,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleTiming = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute)
-      : selectedScheduleHasSecondaryContinuation
-        ? getPrimaryDeliveryTiming(selectedSchedulePrimaryRouteEstimate)
-        : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
+      : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
     : null;
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
@@ -1873,16 +1847,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
       });
       setEventStartMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryStartMinutes }));
-      setEventDurationMinutesMap(current => ({
-        ...current,
-        [parentRequest.id]: primaryPhaseMinutes,
-        [updatedRequest.id]: secondaryTiming.totalMinutes,
-      }));
-      setEventPrimaryDurationMinutesMap(current => ({
-        ...current,
-        [parentRequest.id]: primaryPhaseMinutes,
-        [updatedRequest.id]: secondaryTiming.transitMinutes + secondaryTiming.loadingMinutes,
-      }));
+      setEventDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.totalMinutes }));
+      setEventPrimaryDurationMinutesMap(current => ({ ...current, [updatedRequest.id]: secondaryTiming.transitMinutes + secondaryTiming.loadingMinutes }));
       setSelectedScheduleEventId(updatedRequest.id);
       setSelectedScheduleSegment('primary');
       setScheduleInspectorOpen(true);
