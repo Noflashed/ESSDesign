@@ -4147,33 +4147,33 @@
 
 .transport-desktop-brand {
     position: relative !important;
-    min-height: 76px !important;
-    padding: 4px 34px 14px 6px !important;
+    min-height: 68px !important;
+    padding: 4px 30px 12px 6px !important;
     color: #17314F !important;
     transition: padding 220ms ease, min-height 220ms ease !important;
 }
 
 .transport-desktop-brand-logo {
-    width: 126px !important;
+    width: 108px !important;
     max-width: 100% !important;
     transition: width 220ms ease, opacity 180ms ease, transform 220ms ease !important;
 }
 
 .transport-desktop-collapse {
     position: absolute !important;
-    top: 0 !important;
-    right: 4px !important;
+    top: 2px !important;
+    right: 2px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 32px !important;
-    height: 32px !important;
+    width: 26px !important;
+    height: 26px !important;
     border: 1px solid #DCE7F3 !important;
     border-radius: 999px !important;
     background: #FFFFFF !important;
     color: #39526E !important;
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08) !important;
-    font-size: 18px !important;
+    box-shadow: 0 5px 12px rgba(15, 23, 42, 0.08) !important;
+    font-size: 14px !important;
     line-height: 1 !important;
     font-weight: 800 !important;
     cursor: pointer !important;
@@ -4191,6 +4191,7 @@
 
 .transport-desktop-nav-item {
     grid-template-columns: 34px minmax(0, 1fr) auto !important;
+    align-items: center !important;
     min-height: 38px !important;
     gap: 9px !important;
     padding: 0 8px !important;
@@ -4230,11 +4231,17 @@
 }
 
 .transport-desktop-nav-item span {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-self: center !important;
+    min-height: 26px !important;
     color: currentColor !important;
     font-size: 12px !important;
     line-height: 13px !important;
     font-weight: 650 !important;
     white-space: normal !important;
+    text-align: center !important;
     transition: opacity 160ms ease, transform 200ms ease !important;
 }
 
@@ -4332,20 +4339,21 @@
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-brand {
-    min-height: 58px !important;
-    padding: 0 0 12px !important;
+    min-height: 50px !important;
+    padding: 0 0 10px !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-brand-logo {
-    width: 40px !important;
+    width: 34px !important;
     opacity: 0 !important;
     transform: translateX(-10px) !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-collapse {
-    right: 8px !important;
-    width: 30px !important;
-    height: 30px !important;
+    top: 2px !important;
+    right: 10px !important;
+    width: 24px !important;
+    height: 24px !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {
