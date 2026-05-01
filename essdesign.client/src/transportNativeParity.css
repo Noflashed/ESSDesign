@@ -3685,3 +3685,165 @@
         box-shadow: 0 10px 28px rgba(22, 163, 74, 0.22);
     }
 }
+
+/* Schedule Management: use the full desktop workspace instead of the compact transport lock. */
+.transport-page-frame .transport-desktop-workspace .transport-management-redesign,
+.transport-desktop-workspace .transport-management-redesign {
+    width: 100% !important;
+    min-height: 100% !important;
+    background: #F8FAFC !important;
+    overflow: visible !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header,
+.transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header {
+    min-height: 78px !important;
+    width: 100% !important;
+    padding: 24px 32px 16px !important;
+    box-sizing: border-box !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-redesign h1,
+.transport-desktop-workspace .transport-management-redesign h1 {
+    font-size: 28px !important;
+    line-height: 1.25 !important;
+    font-weight: 600 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-layout,
+.transport-desktop-workspace .transport-management-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 24vw, 420px) !important;
+    gap: 24px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: calc(100vh - 78px) !important;
+    margin: 0 !important;
+    padding: 16px 32px 32px !important;
+    box-sizing: border-box !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-layout.detail-closed,
+.transport-desktop-workspace .transport-management-layout.detail-closed {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-main,
+.transport-desktop-workspace .transport-management-main {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border-right: 0 !important;
+    background: transparent !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-tools,
+.transport-desktop-workspace .transport-management-tools {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    margin: 0 0 20px !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-tools .material-ordering-queue-search,
+.transport-desktop-workspace .transport-management-tools .material-ordering-queue-search {
+    flex: 1 1 420px !important;
+    max-width: 520px !important;
+    min-height: 40px !important;
+    padding: 0 12px 0 40px !important;
+    border-radius: 8px !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-category-stack,
+.transport-desktop-workspace .transport-management-category-stack,
+.transport-page-frame .transport-desktop-workspace .transport-management-category,
+.transport-desktop-workspace .transport-management-category {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table-wrap,
+.transport-desktop-workspace .transport-management-table-wrap {
+    width: 100% !important;
+    overflow-x: auto !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 12px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.04) !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table,
+.transport-desktop-workspace .transport-management-table {
+    width: 100% !important;
+    min-width: 1180px !important;
+    table-layout: fixed !important;
+    font-size: 14px !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table th,
+.transport-page-frame .transport-desktop-workspace .transport-management-table td,
+.transport-desktop-workspace .transport-management-table th,
+.transport-desktop-workspace .transport-management-table td {
+    padding: 14px 16px !important;
+    border-bottom: 1px solid #E5E7EB !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table th,
+.transport-desktop-workspace .transport-management-table th {
+    height: 48px !important;
+    background: #F8FAFC !important;
+    color: #6B7280 !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    font-weight: 500 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table td,
+.transport-desktop-workspace .transport-management-table td {
+    height: 72px !important;
+    color: #111827 !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+    font-weight: 400 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table td strong,
+.transport-desktop-workspace .transport-management-table td strong {
+    color: #0F172A !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+    font-weight: 600 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill),
+.transport-desktop-workspace .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill) {
+    margin-top: 6px !important;
+    color: #6B7280 !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    font-weight: 400 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-detail,
+.transport-desktop-workspace .transport-management-detail {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 20px !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 12px !important;
+    background: #FFFFFF !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 1280px) {
+    .transport-page-frame .transport-desktop-workspace .transport-management-layout,
+    .transport-desktop-workspace .transport-management-layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .transport-page-frame .transport-desktop-workspace .transport-management-detail,
+    .transport-desktop-workspace .transport-management-detail {
+        position: static !important;
+    }
+}

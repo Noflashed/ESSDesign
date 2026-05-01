@@ -8377,14 +8377,16 @@ button.stat-card {
 .transport-page-frame .transport-management-redesign {
     min-width: 0 !important;
     min-height: 100vh;
+    width: 100%;
     background: #F8FAFC;
     color: #0F172A;
 }
 
 .transport-page-frame .transport-management-redesign .material-ordering-transport-header {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 24px 24px 16px;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 24px 32px 16px;
     border-bottom: 1px solid #E5E7EB;
 }
 
@@ -8402,12 +8404,13 @@ button.stat-card {
 
 .transport-page-frame .transport-management-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 24vw, 420px);
     gap: 24px;
     align-items: start;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 16px 24px 32px;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 16px 32px 32px;
 }
 
 .transport-page-frame .transport-management-layout.detail-closed {
@@ -8416,6 +8419,7 @@ button.stat-card {
 
 .transport-page-frame .transport-management-main {
     min-width: 0;
+    width: 100%;
 }
 
 .transport-page-frame .transport-management-tabs {
@@ -8656,7 +8660,7 @@ button.stat-card {
 }
 
 .transport-page-frame .transport-management-redesign .transport-management-table {
-    min-width: 1180px;
+    min-width: min(1180px, 100%);
     font-size: 14px;
 }
 
@@ -8780,6 +8784,7 @@ button.stat-card {
     position: sticky;
     top: 24px;
     min-width: 0;
+    width: 100%;
 }
 
 .transport-page-frame .transport-management-detail-head {
