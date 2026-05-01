@@ -435,11 +435,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             .filter((request) => {
                 const query = requestSearch.trim().toLowerCase();
                 const matchesQuery = !query || [
+                    request.id,
                     request.builderName,
                     request.projectName,
                     request.requestedByName,
                     request.scaffoldingSystem,
                     request.details,
+                    request.scheduledTruckLabel,
+                    request.truckLabel,
                     request.secondaryRoute?.startingLocation,
                     request.secondaryRoute?.destination,
                     getSecondaryRouteReasonLabel(request.secondaryRoute?.reason),
@@ -1111,6 +1114,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             <col className="transport-management-col-secondary-destination" />
                             <col className="transport-management-col-secondary-start" />
                             <col className="transport-management-col-secondary-reason" />
+                            <col className="transport-management-col-secondary-route-time" />
                             <col className="transport-management-col-truck" />
                             <col className="transport-management-col-time" />
                             <col className="transport-management-col-status" />
@@ -1122,6 +1126,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <th>Destination</th>
                                 <th>Starting Location</th>
                                 <th>Reason</th>
+                                <th>Route Time</th>
                                 <th>Truck</th>
                                 <th>Scheduled Time <span aria-hidden="true">&uarr;</span></th>
                                 <th>Status</th>
@@ -1131,6 +1136,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         <tbody>
                             {rows.map((request) => {
                                 const route = request.secondaryRoute || {};
+                                const routeMinutes = getSecondaryRouteMinutes(route);
                                 const isSelected = isQueueRowChecked(request.id);
                                 return (
                                     <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => activateQueueRow(request)}>
@@ -1138,6 +1144,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <td><strong>{route.destination || request.details || 'Secondary route'}</strong></td>
                                         <td>{route.startingLocation || 'Starting location pending'}</td>
                                         <td>{getSecondaryRouteReasonLabel(route.reason)}</td>
+                                        <td>{formatMinutesLabel(routeMinutes.totalMinutes)}</td>
                                         <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
                                         <td>{renderScheduledTimeCell(request)}</td>
                                         <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
@@ -1382,8 +1389,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             </>
                                         ) : (
                                             <>
-                                                <div className="transport-management-detail-row"><span>Builder</span><strong>{selectedRequest.builderName || 'Material Order'}</strong></div>
-                                                <div className="transport-management-detail-row"><span>Project</span><strong>{selectedRequest.projectName || 'Awaiting project'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Builder / Project</span><strong>{selectedRequest.builderName || 'Material Order'} / {selectedRequest.projectName || 'Awaiting project'}</strong></div>
                                                 <div className="transport-management-detail-row"><span>Requested By</span><strong>{selectedRequest.requestedByName || 'Unassigned'}</strong></div>
                                                 <div className="transport-management-detail-row"><span>System</span><strong>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</strong></div>
                                                 <div className="transport-management-detail-row"><span>Scaffold Size</span><strong>{selectedRequest.details || 'No scaffold details supplied'}</strong></div>

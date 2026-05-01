@@ -8717,55 +8717,59 @@ button.stat-card {
 }
 
 .transport-page-frame .transport-management-col-details {
-    width: 150px;
+    width: 124px;
 }
 
 .transport-page-frame .transport-management-col-builder {
-    width: 170px;
+    width: 142px;
 }
 
 .transport-page-frame .transport-management-col-requested {
-    width: 132px;
+    width: 112px;
 }
 
 .transport-page-frame .transport-management-col-system {
-    width: 122px;
+    width: 100px;
 }
 
 .transport-page-frame .transport-management-col-submitted {
-    width: 120px;
+    width: 108px;
 }
 
 .transport-page-frame .transport-management-col-truck {
-    width: 82px;
+    width: 70px;
 }
 
 .transport-page-frame .transport-management-col-time {
-    width: 152px;
+    width: 138px;
 }
 
 .transport-page-frame .transport-management-col-status {
-    width: 118px;
+    width: 104px;
 }
 
 .transport-page-frame .transport-management-col-pdf {
-    width: 60px;
+    width: 54px;
 }
 
 .transport-page-frame .transport-management-col-action {
-    width: 78px;
+    width: 64px;
 }
 
 .transport-page-frame .transport-management-col-secondary-destination {
-    width: 170px;
+    width: 142px;
 }
 
 .transport-page-frame .transport-management-col-secondary-start {
-    width: 170px;
+    width: 142px;
 }
 
 .transport-page-frame .transport-management-col-secondary-reason {
-    width: 230px;
+    width: 240px;
+}
+
+.transport-page-frame .transport-management-col-secondary-route-time {
+    width: 95px;
 }
 
 .transport-page-frame .transport-management-table th,
