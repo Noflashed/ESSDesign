@@ -3697,9 +3697,9 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header,
 .transport-desktop-workspace .transport-management-redesign .material-ordering-transport-header {
-    min-height: 78px !important;
+    min-height: 68px !important;
     width: 100% !important;
-    padding: 24px 32px 16px !important;
+    padding: 20px 18px 12px !important;
     box-sizing: border-box !important;
 }
 
@@ -3714,13 +3714,13 @@
 .transport-desktop-workspace .transport-management-layout {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
-    gap: 24px !important;
+    gap: 16px !important;
     align-items: start !important;
     width: 100% !important;
     max-width: none !important;
-    min-height: calc(100vh - 78px) !important;
+    min-height: calc(100vh - 68px) !important;
     margin: 0 !important;
-    padding: 16px 32px 32px !important;
+    padding: 12px 18px 24px !important;
     box-sizing: border-box !important;
 }
 
@@ -3742,8 +3742,8 @@
 .transport-desktop-workspace .transport-management-tools {
     display: flex !important;
     align-items: center !important;
-    gap: 16px !important;
-    margin: 0 0 20px !important;
+    gap: 12px !important;
+    margin: 0 0 14px !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-tools .material-ordering-queue-search,
@@ -3888,17 +3888,17 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-project,
 .transport-desktop-workspace .transport-management-col-project {
-    width: 22% !important;
+    width: 20% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-requested,
 .transport-desktop-workspace .transport-management-col-requested {
-    width: 14% !important;
+    width: 13% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-request-date,
 .transport-desktop-workspace .transport-management-col-request-date {
-    width: 11% !important;
+    width: 12% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-eta,
@@ -3918,7 +3918,7 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-action,
 .transport-desktop-workspace .transport-management-col-action {
-    width: 2% !important;
+    width: 4% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-type-pill,
@@ -4119,41 +4119,42 @@
 
 /* Transport sidebar: light reference style with animated collapse. */
 .transport-desktop-shell {
-    grid-template-columns: 286px minmax(0, 1fr) !important;
+    grid-template-columns: 196px minmax(0, 1fr) !important;
     background: #F8FAFC !important;
     transition: grid-template-columns 220ms ease !important;
 }
 
 .transport-desktop-shell.rail-collapsed {
-    grid-template-columns: 88px minmax(0, 1fr) !important;
+    grid-template-columns: 70px minmax(0, 1fr) !important;
 }
 
 .transport-desktop-rail {
     position: relative !important;
     min-width: 0 !important;
-    padding: 28px 22px 20px !important;
+    padding: 16px 12px 12px !important;
     background: rgba(255, 255, 255, 0.96) !important;
     color: #17314F !important;
     border-right: 1px solid #DCE7F3 !important;
-    box-shadow: 10px 0 34px rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 8px 0 28px rgba(15, 23, 42, 0.07) !important;
     overflow-x: hidden !important;
+    overflow-y: hidden !important;
     transition: padding 220ms ease, background-color 220ms ease !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-rail {
-    padding: 22px 14px 16px !important;
+    padding: 16px 9px 12px !important;
 }
 
 .transport-desktop-brand {
     position: relative !important;
-    min-height: 130px !important;
-    padding: 6px 48px 28px 14px !important;
+    min-height: 76px !important;
+    padding: 4px 34px 14px 6px !important;
     color: #17314F !important;
     transition: padding 220ms ease, min-height 220ms ease !important;
 }
 
 .transport-desktop-brand-logo {
-    width: 178px !important;
+    width: 126px !important;
     max-width: 100% !important;
     transition: width 220ms ease, opacity 180ms ease, transform 220ms ease !important;
 }
@@ -4161,18 +4162,18 @@
 .transport-desktop-collapse {
     position: absolute !important;
     top: 0 !important;
-    right: 10px !important;
+    right: 4px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 42px !important;
-    height: 42px !important;
+    width: 32px !important;
+    height: 32px !important;
     border: 1px solid #DCE7F3 !important;
     border-radius: 999px !important;
     background: #FFFFFF !important;
     color: #39526E !important;
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08) !important;
-    font-size: 22px !important;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08) !important;
+    font-size: 18px !important;
     line-height: 1 !important;
     font-weight: 800 !important;
     cursor: pointer !important;
@@ -4185,55 +4186,55 @@
 }
 
 .transport-desktop-nav {
-    gap: 10px !important;
+    gap: 4px !important;
 }
 
 .transport-desktop-nav-item {
-    grid-template-columns: 48px minmax(0, 1fr) auto !important;
-    min-height: 58px !important;
-    gap: 16px !important;
-    padding: 0 16px !important;
-    border-radius: 14px !important;
+    grid-template-columns: 34px minmax(0, 1fr) auto !important;
+    min-height: 38px !important;
+    gap: 9px !important;
+    padding: 0 8px !important;
+    border-radius: 10px !important;
     background: transparent !important;
     color: #203A59 !important;
-    font-size: 15px !important;
+    font-size: 12px !important;
     font-weight: 650 !important;
     transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
 }
 
 .transport-desktop-nav-item svg {
-    width: 22px !important;
-    height: 22px !important;
+    width: 17px !important;
+    height: 17px !important;
 }
 
 .transport-desktop-nav-item::before {
     content: '' !important;
     position: absolute !important;
     left: 0 !important;
-    top: 10px !important;
-    bottom: 10px !important;
-    width: 4px !important;
+    top: 7px !important;
+    bottom: 7px !important;
+    width: 3px !important;
     border-radius: 999px !important;
     background: transparent !important;
 }
 
 .transport-desktop-nav-item > svg {
     box-sizing: content-box !important;
-    width: 22px !important;
-    height: 22px !important;
-    padding: 13px !important;
-    border-radius: 12px !important;
+    width: 17px !important;
+    height: 17px !important;
+    padding: 8px !important;
+    border-radius: 9px !important;
     background: #F4F7FB !important;
     color: #39526E !important;
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04) !important;
 }
 
 .transport-desktop-nav-item span {
     color: currentColor !important;
-    font-size: 15px !important;
-    line-height: 18px !important;
+    font-size: 12px !important;
+    line-height: 13px !important;
     font-weight: 650 !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
     transition: opacity 160ms ease, transform 200ms ease !important;
 }
 
@@ -4260,19 +4261,19 @@
 }
 
 .transport-desktop-nav-item b {
-    min-width: 24px !important;
-    height: 24px !important;
+    min-width: 18px !important;
+    height: 18px !important;
     background: #FB5664 !important;
     color: #FFFFFF !important;
-    font-size: 12px !important;
+    font-size: 10px !important;
     font-weight: 800 !important;
-    box-shadow: 0 7px 16px rgba(251, 86, 100, 0.28) !important;
+    box-shadow: 0 5px 12px rgba(251, 86, 100, 0.24) !important;
 }
 
 .transport-desktop-nav-item:nth-child(5),
 .transport-desktop-nav-item:nth-child(9),
 .transport-desktop-nav-item:nth-child(12) {
-    margin-top: 16px !important;
+    margin-top: 8px !important;
 }
 
 .transport-desktop-nav-item:nth-child(5)::after,
@@ -4280,48 +4281,48 @@
 .transport-desktop-nav-item:nth-child(12)::after {
     content: '' !important;
     position: absolute !important;
-    left: 14px !important;
-    right: 14px !important;
-    top: -13px !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: -6px !important;
     height: 1px !important;
     background: #E2E8F0 !important;
 }
 
 .transport-desktop-user {
-    grid-template-columns: 50px minmax(0, 1fr) 22px !important;
-    gap: 14px !important;
-    min-height: 74px !important;
-    padding: 12px !important;
+    grid-template-columns: 38px minmax(0, 1fr) 16px !important;
+    gap: 8px !important;
+    min-height: 52px !important;
+    padding: 7px !important;
     border: 1px solid #BFDBFE !important;
-    border-radius: 16px !important;
+    border-radius: 12px !important;
     background: #FFFFFF !important;
     color: #0F172A !important;
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08) !important;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.07) !important;
 }
 
 .transport-desktop-avatar {
-    width: 50px !important;
-    height: 50px !important;
-    flex-basis: 50px !important;
+    width: 38px !important;
+    height: 38px !important;
+    flex-basis: 38px !important;
     border: 2px solid #FFFFFF !important;
     background: #DBEAFE !important;
     color: #17314F !important;
-    font-size: 14px !important;
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12) !important;
+    font-size: 11px !important;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1) !important;
 }
 
 .transport-desktop-user strong {
     color: #0F172A !important;
-    font-size: 14px !important;
-    line-height: 18px !important;
+    font-size: 11px !important;
+    line-height: 14px !important;
     font-weight: 850 !important;
 }
 
 .transport-desktop-user span {
-    margin-top: 4px !important;
+    margin-top: 2px !important;
     color: #55729A !important;
-    font-size: 12px !important;
-    line-height: 14px !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
     font-weight: 650 !important;
 }
 
@@ -4331,22 +4332,24 @@
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-brand {
-    min-height: 76px !important;
-    padding: 2px 0 18px !important;
+    min-height: 58px !important;
+    padding: 0 0 12px !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-brand-logo {
-    width: 54px !important;
+    width: 40px !important;
     opacity: 0 !important;
-    transform: translateX(-16px) !important;
+    transform: translateX(-10px) !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-collapse {
     right: 8px !important;
+    width: 30px !important;
+    height: 30px !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {
-    grid-template-columns: 48px !important;
+    grid-template-columns: 34px !important;
     justify-content: center !important;
     gap: 0 !important;
     padding: 0 !important;
@@ -4369,7 +4372,7 @@
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-user {
-    grid-template-columns: 50px !important;
+    grid-template-columns: 38px !important;
     justify-content: center !important;
-    padding: 8px !important;
+    padding: 6px !important;
 }
