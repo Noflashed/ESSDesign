@@ -3775,7 +3775,7 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table-wrap,
 .transport-desktop-workspace .transport-management-table-wrap {
     width: 100% !important;
-    overflow-x: hidden !important;
+    overflow: visible !important;
     border: 1px solid #E5E7EB !important;
     border-radius: 12px !important;
     background: #FFFFFF !important;
@@ -3878,29 +3878,47 @@
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-type,
 .transport-desktop-workspace .transport-management-col-type {
-    width: 13% !important;
+    width: 11% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-builder,
 .transport-desktop-workspace .transport-management-col-builder {
-    width: 20% !important;
+    width: 17% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-project,
 .transport-desktop-workspace .transport-management-col-project {
-    width: 25% !important;
+    width: 22% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-requested,
 .transport-desktop-workspace .transport-management-col-requested {
-    width: 16% !important;
+    width: 14% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-col-request-date,
-.transport-desktop-workspace .transport-management-col-request-date,
+.transport-desktop-workspace .transport-management-col-request-date {
+    width: 11% !important;
+}
+
 .transport-page-frame .transport-desktop-workspace .transport-management-col-eta,
 .transport-desktop-workspace .transport-management-col-eta {
-    width: 13% !important;
+    width: 9% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-status,
+.transport-desktop-workspace .transport-management-col-status {
+    width: 10% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-pdf,
+.transport-desktop-workspace .transport-management-col-pdf {
+    width: 4% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-action,
+.transport-desktop-workspace .transport-management-col-action {
+    width: 2% !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-type-pill,
@@ -3911,6 +3929,18 @@
     min-height: 26px !important;
     min-width: 106px !important;
     padding: 4px 10px !important;
+    border-radius: 999px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    font-weight: 800 !important;
+    white-space: normal !important;
+    text-align: center !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-status-pill,
+.transport-desktop-workspace .transport-status-pill {
+    min-height: 24px !important;
+    padding: 4px 9px !important;
     border-radius: 999px !important;
     font-size: 10px !important;
     line-height: 1.2 !important;
@@ -3963,6 +3993,119 @@
     background: #E2E8F0 !important;
 }
 
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-cell,
+.transport-desktop-workspace .transport-management-pdf-cell,
+.transport-page-frame .transport-desktop-workspace .transport-management-row-action-cell,
+.transport-desktop-workspace .transport-management-row-action-cell {
+    overflow: visible !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-icon-btn,
+.transport-desktop-workspace .transport-management-pdf-icon-btn,
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-trigger,
+.transport-desktop-workspace .transport-management-row-menu-trigger {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    padding: 0 !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 8px !important;
+    background: #FFFFFF !important;
+    color: #334155 !important;
+    cursor: pointer !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-icon-btn:hover,
+.transport-desktop-workspace .transport-management-pdf-icon-btn:hover,
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-trigger:hover,
+.transport-desktop-workspace .transport-management-row-menu-trigger:hover,
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-trigger[aria-expanded="true"],
+.transport-desktop-workspace .transport-management-row-menu-trigger[aria-expanded="true"] {
+    background: #EFF6FF !important;
+    border-color: #BFDBFE !important;
+    color: #1D4ED8 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-icon-btn:disabled,
+.transport-desktop-workspace .transport-management-pdf-icon-btn:disabled {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-na-cell,
+.transport-desktop-workspace .transport-management-na-cell {
+    color: #94A3B8 !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu,
+.transport-desktop-workspace .transport-management-row-menu {
+    position: relative !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover,
+.transport-desktop-workspace .transport-management-row-menu-popover {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    z-index: 250 !important;
+    display: grid !important;
+    gap: 4px !important;
+    width: 148px !important;
+    padding: 6px !important;
+    border: 1px solid #D8E2F2 !important;
+    border-radius: 10px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16) !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover button,
+.transport-desktop-workspace .transport-management-row-menu-popover button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    min-height: 32px !important;
+    padding: 0 9px !important;
+    border: 0 !important;
+    border-radius: 7px !important;
+    background: transparent !important;
+    color: #0F172A !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-align: left !important;
+    cursor: pointer !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover button:hover,
+.transport-desktop-workspace .transport-management-row-menu-popover button:hover {
+    background: #F1F5F9 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover button.danger,
+.transport-desktop-workspace .transport-management-row-menu-popover button.danger {
+    color: #DC2626 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover button:disabled,
+.transport-desktop-workspace .transport-management-row-menu-popover button:disabled {
+    color: #94A3B8 !important;
+    cursor: not-allowed !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-menu-popover button:disabled:hover,
+.transport-desktop-workspace .transport-management-row-menu-popover button:disabled:hover {
+    background: transparent !important;
+}
+
 @keyframes transportManagementDrawerIn {
     from {
         opacity: 0;
@@ -3972,4 +4115,261 @@
         opacity: 1;
         transform: translateX(0);
     }
+}
+
+/* Transport sidebar: light reference style with animated collapse. */
+.transport-desktop-shell {
+    grid-template-columns: 286px minmax(0, 1fr) !important;
+    background: #F8FAFC !important;
+    transition: grid-template-columns 220ms ease !important;
+}
+
+.transport-desktop-shell.rail-collapsed {
+    grid-template-columns: 88px minmax(0, 1fr) !important;
+}
+
+.transport-desktop-rail {
+    position: relative !important;
+    min-width: 0 !important;
+    padding: 28px 22px 20px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    color: #17314F !important;
+    border-right: 1px solid #DCE7F3 !important;
+    box-shadow: 10px 0 34px rgba(15, 23, 42, 0.08) !important;
+    overflow-x: hidden !important;
+    transition: padding 220ms ease, background-color 220ms ease !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-rail {
+    padding: 22px 14px 16px !important;
+}
+
+.transport-desktop-brand {
+    position: relative !important;
+    min-height: 130px !important;
+    padding: 6px 48px 28px 14px !important;
+    color: #17314F !important;
+    transition: padding 220ms ease, min-height 220ms ease !important;
+}
+
+.transport-desktop-brand-logo {
+    width: 178px !important;
+    max-width: 100% !important;
+    transition: width 220ms ease, opacity 180ms ease, transform 220ms ease !important;
+}
+
+.transport-desktop-collapse {
+    position: absolute !important;
+    top: 0 !important;
+    right: 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 42px !important;
+    height: 42px !important;
+    border: 1px solid #DCE7F3 !important;
+    border-radius: 999px !important;
+    background: #FFFFFF !important;
+    color: #39526E !important;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08) !important;
+    font-size: 22px !important;
+    line-height: 1 !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+}
+
+.transport-desktop-collapse:hover {
+    background: #EFF6FF !important;
+    border-color: #BFDBFE !important;
+    color: #1672F7 !important;
+}
+
+.transport-desktop-nav {
+    gap: 10px !important;
+}
+
+.transport-desktop-nav-item {
+    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+    min-height: 58px !important;
+    gap: 16px !important;
+    padding: 0 16px !important;
+    border-radius: 14px !important;
+    background: transparent !important;
+    color: #203A59 !important;
+    font-size: 15px !important;
+    font-weight: 650 !important;
+    transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
+}
+
+.transport-desktop-nav-item svg {
+    width: 22px !important;
+    height: 22px !important;
+}
+
+.transport-desktop-nav-item::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 10px !important;
+    bottom: 10px !important;
+    width: 4px !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+}
+
+.transport-desktop-nav-item > svg {
+    box-sizing: content-box !important;
+    width: 22px !important;
+    height: 22px !important;
+    padding: 13px !important;
+    border-radius: 12px !important;
+    background: #F4F7FB !important;
+    color: #39526E !important;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
+}
+
+.transport-desktop-nav-item span {
+    color: currentColor !important;
+    font-size: 15px !important;
+    line-height: 18px !important;
+    font-weight: 650 !important;
+    white-space: nowrap !important;
+    transition: opacity 160ms ease, transform 200ms ease !important;
+}
+
+.transport-desktop-nav-item:hover {
+    background: #F4F8FF !important;
+    color: #1672F7 !important;
+    transform: none !important;
+}
+
+.transport-desktop-nav-item:hover > svg,
+.transport-desktop-nav-item.active > svg {
+    background: #EEF6FF !important;
+    color: #1672F7 !important;
+}
+
+.transport-desktop-nav-item.active {
+    background: #F2F7FF !important;
+    color: #1672F7 !important;
+    box-shadow: none !important;
+}
+
+.transport-desktop-nav-item.active::before {
+    background: #1672F7 !important;
+}
+
+.transport-desktop-nav-item b {
+    min-width: 24px !important;
+    height: 24px !important;
+    background: #FB5664 !important;
+    color: #FFFFFF !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    box-shadow: 0 7px 16px rgba(251, 86, 100, 0.28) !important;
+}
+
+.transport-desktop-nav-item:nth-child(5),
+.transport-desktop-nav-item:nth-child(9),
+.transport-desktop-nav-item:nth-child(12) {
+    margin-top: 16px !important;
+}
+
+.transport-desktop-nav-item:nth-child(5)::after,
+.transport-desktop-nav-item:nth-child(9)::after,
+.transport-desktop-nav-item:nth-child(12)::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 14px !important;
+    right: 14px !important;
+    top: -13px !important;
+    height: 1px !important;
+    background: #E2E8F0 !important;
+}
+
+.transport-desktop-user {
+    grid-template-columns: 50px minmax(0, 1fr) 22px !important;
+    gap: 14px !important;
+    min-height: 74px !important;
+    padding: 12px !important;
+    border: 1px solid #BFDBFE !important;
+    border-radius: 16px !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08) !important;
+}
+
+.transport-desktop-avatar {
+    width: 50px !important;
+    height: 50px !important;
+    flex-basis: 50px !important;
+    border: 2px solid #FFFFFF !important;
+    background: #DBEAFE !important;
+    color: #17314F !important;
+    font-size: 14px !important;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12) !important;
+}
+
+.transport-desktop-user strong {
+    color: #0F172A !important;
+    font-size: 14px !important;
+    line-height: 18px !important;
+    font-weight: 850 !important;
+}
+
+.transport-desktop-user span {
+    margin-top: 4px !important;
+    color: #55729A !important;
+    font-size: 12px !important;
+    line-height: 14px !important;
+    font-weight: 650 !important;
+}
+
+.transport-desktop-user button {
+    color: #8AA1BD !important;
+    cursor: pointer !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-brand {
+    min-height: 76px !important;
+    padding: 2px 0 18px !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-brand-logo {
+    width: 54px !important;
+    opacity: 0 !important;
+    transform: translateX(-16px) !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-collapse {
+    right: 8px !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {
+    grid-template-columns: 48px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    padding: 0 !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item span,
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item b,
+.transport-desktop-shell.rail-collapsed .transport-desktop-user > div,
+.transport-desktop-shell.rail-collapsed .transport-desktop-user button {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(-8px) !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item:nth-child(5)::after,
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item:nth-child(9)::after,
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item:nth-child(12)::after {
+    left: 6px !important;
+    right: 6px !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-user {
+    grid-template-columns: 50px !important;
+    justify-content: center !important;
+    padding: 8px !important;
 }

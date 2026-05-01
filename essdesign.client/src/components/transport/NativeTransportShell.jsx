@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png';
+const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 function normalizeAvatarSource(value) {
@@ -143,6 +143,7 @@ export default function NativeTransportShell({
 }) {
   const avatarCandidates = useMemo(() => buildAvatarCandidates(user), [user]);
   const [avatarIndex, setAvatarIndex] = useState(0);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const avatarUrl = avatarCandidates[avatarIndex] || null;
   const displayName = user?.fullName || user?.name || user?.email || assignedTruck?.rego || 'User';
   const displayRole = getRoleDisplayName(user?.role);
@@ -153,11 +154,20 @@ export default function NativeTransportShell({
   }, [user?.id, user?.avatarUrl, user?.avatar_url, user?.picture, user?.profileImageUrl, user?.profile_image_url, user?.avatarPath, user?.avatar_path]);
 
   return (
-    <div className="transport-desktop-shell">
+    <div className={`transport-desktop-shell${railCollapsed ? ' rail-collapsed' : ''}`}>
       <aside className="transport-desktop-rail">
         <div className="transport-desktop-rail-top">
           <div className="transport-desktop-brand">
             <img src={ESS_LOGO_URL} alt="ESS Transport" className="transport-desktop-brand-logo" />
+            <button
+              type="button"
+              className="transport-desktop-collapse"
+              onClick={() => setRailCollapsed(current => !current)}
+              aria-label={railCollapsed ? 'Expand transport sidebar' : 'Collapse transport sidebar'}
+              aria-expanded={!railCollapsed}
+            >
+              {railCollapsed ? '>' : '<'}
+            </button>
           </div>
           <nav className="transport-desktop-nav" aria-label="ESS Transport">
             {navItems.map(item => {
@@ -168,6 +178,7 @@ export default function NativeTransportShell({
                   type="button"
                   className={`transport-desktop-nav-item${active ? ' active' : ''}`}
                   onClick={() => onNavigate(item.key)}
+                  title={item.label}
                 >
                   <TransportIcon type={item.icon} />
                   <span>{item.label}</span>

@@ -1054,6 +1054,37 @@ export const materialOrderRequestsAPI = {
 
     getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
 
+    archiveRequest: async (requestId) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const archivedAt = nowIso();
+        const updated = {
+            ...record,
+            archivedAt,
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    archivedAt,
+                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
+                }
+                : item),
+            updatedAt: archivedAt,
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
     setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel }) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Archive, Download, Eye, FileText, MoreVertical, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import { formatTimeChip } from './transport/transportUtils';
 
@@ -386,6 +386,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [requestUpdatedAt, setRequestUpdatedAt] = useState(() => new Date().toISOString());
     const [selectedRequestId, setSelectedRequestId] = useState('');
     const [selectedRequestDetail, setSelectedRequestDetail] = useState(null);
+    const [openRequestMenuId, setOpenRequestMenuId] = useState('');
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -684,6 +685,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     const handleDeleteRequest = async (request) => {
         if (!request?.id) return;
+        setOpenRequestMenuId('');
         const confirmed = window.confirm('Delete this active delivery? This will remove it from the ESS Transport schedule.');
         if (!confirmed) return;
         setSaving(true);
@@ -697,6 +699,27 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             await loadPageData();
         } catch (err) {
             setError(err.message || 'Failed to delete delivery');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleArchiveRequest = async (request) => {
+        if (!request?.id || request.archivedAt) return;
+        setOpenRequestMenuId('');
+        const confirmed = window.confirm('Archive this delivery? It will move out of the active schedule management list.');
+        if (!confirmed) return;
+        setSaving(true);
+        setError('');
+        try {
+            await materialOrderRequestsAPI.archiveRequest(request.id);
+            if (selectedRequestId === request.id) {
+                setSelectedRequestId('');
+                setSelectedRequestDetail(null);
+            }
+            await loadPageData();
+        } catch (err) {
+            setError(err.message || 'Failed to archive delivery');
         } finally {
             setSaving(false);
         }
@@ -905,6 +928,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             <col className="transport-management-col-requested" />
                             <col className="transport-management-col-request-date" />
                             <col className="transport-management-col-eta" />
+                            <col className="transport-management-col-status" />
+                            <col className="transport-management-col-pdf" />
+                            <col className="transport-management-col-action" />
                         </colgroup>
                         <thead>
                             <tr>
@@ -914,6 +940,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <th>Requested</th>
                                 <th>Request Date</th>
                                 <th>ETA Time</th>
+                                <th>Status</th>
+                                <th>PDF</th>
+                                <th aria-label="Actions" />
                             </tr>
                         </thead>
                         <tbody>
@@ -925,13 +954,16 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 const requestedLabel = request.requestedByName || 'N/A';
                                 const requestDateLabel = request.submittedAt ? getSubmittedDateLabel(request.submittedAt) : 'N/A';
                                 const etaLabel = getTableEtaTime(request);
+                                const canOpenPdf = !isSecondaryRoute && Boolean(request.pdfPath);
+                                const canArchive = isActive && !request.archivedAt;
+                                const menuOpen = openRequestMenuId === request.id;
                                 const rowClassName = [
                                     isSelected ? 'selected' : '',
                                     isSecondaryRoute ? 'secondary-route-row' : 'material-order-row'
                                 ].filter(Boolean).join(' ');
 
                                 return (
-                                    <tr key={request.id} className={rowClassName} onClick={() => setSelectedRequestId(request.id)}>
+                                    <tr key={request.id} className={rowClassName} onClick={() => { setOpenRequestMenuId(''); setSelectedRequestId(request.id); }}>
                                         <td>
                                             <span className={`transport-management-type-pill ${isSecondaryRoute ? 'secondary' : 'material'}`}>
                                                 {isSecondaryRoute ? 'Secondary Route' : 'Material Order'}
@@ -942,6 +974,55 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <td><strong>{requestedLabel}</strong></td>
                                         <td><strong>{requestDateLabel}</strong></td>
                                         <td><strong>{etaLabel}</strong></td>
+                                        <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                        <td className="transport-management-pdf-cell">
+                                            {canOpenPdf ? (
+                                                <button
+                                                    type="button"
+                                                    className="transport-management-pdf-icon-btn"
+                                                    onClick={(event) => openArchivedPdf(request, event)}
+                                                    disabled={openingArchivedPdfId === request.id}
+                                                    aria-label="Download PDF"
+                                                    title="Download PDF"
+                                                >
+                                                    <FileText size={15} aria-hidden="true" />
+                                                </button>
+                                            ) : (
+                                                <span className="transport-management-na-cell">N/A</span>
+                                            )}
+                                        </td>
+                                        <td className="transport-management-row-action-cell">
+                                            <div className="transport-management-row-menu">
+                                                <button
+                                                    type="button"
+                                                    className="transport-management-row-menu-trigger"
+                                                    aria-label="Open row actions"
+                                                    aria-expanded={menuOpen}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setOpenRequestMenuId(current => current === request.id ? '' : request.id);
+                                                    }}
+                                                >
+                                                    <MoreVertical size={16} aria-hidden="true" />
+                                                </button>
+                                                {menuOpen ? (
+                                                    <div className="transport-management-row-menu-popover" onClick={(event) => event.stopPropagation()}>
+                                                        <button type="button" disabled={!canOpenPdf} onClick={(event) => { openArchivedPdf(request, event); setOpenRequestMenuId(''); }}>
+                                                            <Eye size={14} aria-hidden="true" />
+                                                            <span>View PDF</span>
+                                                        </button>
+                                                        <button type="button" disabled={!canArchive} onClick={() => handleArchiveRequest(request)}>
+                                                            <Archive size={14} aria-hidden="true" />
+                                                            <span>Archive</span>
+                                                        </button>
+                                                        <button type="button" className="danger" onClick={() => handleDeleteRequest(request)}>
+                                                            <Trash2 size={14} aria-hidden="true" />
+                                                            <span>Delete</span>
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </td>
                                     </tr>
                                 );
                             })}
@@ -986,7 +1067,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <button
                                     type="button"
                                     className={`transport-management-filter-button${requestFiltersOpen ? ' active' : ''}`}
-                                    onClick={() => setRequestFiltersOpen(open => !open)}
+                                    onClick={() => { setOpenRequestMenuId(''); setRequestFiltersOpen(open => !open); }}
                                     aria-expanded={requestFiltersOpen}
                                 >
                                     <SlidersHorizontal size={16} aria-hidden="true" />
