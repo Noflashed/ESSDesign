@@ -978,8 +978,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <td>{getScheduledTimeRange(request)}</td>
                                         <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
                                         <td>
-                                            <button type="button" className="transport-management-pdf-btn" disabled={isSecondaryRoute || !request.pdfPath} onClick={(event) => openArchivedPdf(request, event)}>
-                                                PDF
+                                            <button
+                                                type="button"
+                                                className="transport-management-pdf-btn"
+                                                disabled={isSecondaryRoute || !request.pdfPath}
+                                                onClick={(event) => openArchivedPdf(request, event)}
+                                            >
+                                                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                                                    <path d="M10 3v8" />
+                                                    <path d="m6.5 8.5 3.5 3.5 3.5-3.5" />
+                                                    <path d="M4 15.5h12" />
+                                                </svg>
+                                                <span>PDF</span>
                                             </button>
                                         </td>
                                         {isActive ? (
@@ -1036,6 +1046,10 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
                         <div className="material-ordering-queue-tools transport-management-tools">
                             <label className="material-ordering-queue-search">
+                                <svg className="transport-management-search-svg" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                                    <circle cx="9" cy="9" r="5.25" />
+                                    <path d="m13 13 3.5 3.5" />
+                                </svg>
                                 <span className="material-ordering-queue-search-icon" aria-hidden="true">⌕</span>
                                 <input
                                     type="text"
