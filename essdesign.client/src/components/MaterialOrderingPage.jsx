@@ -389,6 +389,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [form, setForm] = useState(() => createBlankOrder(user));
     const [requestSearch, setRequestSearch] = useState('');
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
+    const [requestSystemFilter, setRequestSystemFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('newest');
     const [requestFiltersOpen, setRequestFiltersOpen] = useState(false);
     const [requestDateFilter, setRequestDateFilter] = useState('');
@@ -448,6 +449,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 if (requestDateFilter && getRequestFilterDate(request) !== requestDateFilter) {
                     return false;
                 }
+                if (requestSystemFilter !== 'all' && String(request.scaffoldingSystem || '').toLowerCase() !== requestSystemFilter) {
+                    return false;
+                }
                 if (requestTruckFilter !== 'all' && getRequestTruckKey(request) !== requestTruckFilter) {
                     return false;
                 }
@@ -467,7 +471,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 const rightValue = requestSortOrder === 'oldest' ? String(right.submittedAt || '') : String(left.submittedAt || '');
                 return leftValue.localeCompare(rightValue);
             });
-    }, [archivedRequests, builders, isActiveQueueView, requestDateFilter, requestSearch, requestSortOrder, requestStatusFilter, requestTruckFilter, visibleOrders]);
+    }, [archivedRequests, builders, isActiveQueueView, requestDateFilter, requestSearch, requestSortOrder, requestStatusFilter, requestSystemFilter, requestTruckFilter, visibleOrders]);
 
     const requestTruckOptions = useMemo(() => {
         const rows = isActiveQueueView ? visibleOrders : archivedRequests;
@@ -479,6 +483,12 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             map.set(key, label);
         });
         return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    }, [archivedRequests, isActiveQueueView, visibleOrders]);
+
+    const requestSystemOptions = useMemo(() => {
+        const rows = isActiveQueueView ? visibleOrders : archivedRequests;
+        return Array.from(new Set(rows.map(request => request.scaffoldingSystem).filter(Boolean)))
+            .sort((left, right) => String(left).localeCompare(String(right)));
     }, [archivedRequests, isActiveQueueView, visibleOrders]);
 
     const selectedRequestListItem = useMemo(
@@ -908,8 +918,40 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         const selectedSiteLocation = selectedRequest ? getProjectLocation(builders, selectedRequest) : '';
         const selectedItems = summarizeItems(selectedRequest);
         const selectedRequestIsScheduled = Boolean(selectedRequest?.scheduledAtIso || (selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'));
-        const activeFilterCount = [requestStatusFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
+        const activeFilterCount = [requestStatusFilter !== 'all', requestSystemFilter !== 'all', Boolean(requestDateFilter), requestTruckFilter !== 'all'].filter(Boolean).length;
         const selectedRequestIsSecondaryRoute = isSecondaryRouteRequest(selectedRequest);
+        const selectedRouteMinutes = getSecondaryRouteMinutes(selectedRequest?.secondaryRoute);
+        const selectedScheduledDateTime = selectedRequest?.scheduledDate && typeof selectedRequest?.scheduledHour === 'number' && typeof selectedRequest?.scheduledMinute === 'number'
+            ? new Date(`${selectedRequest.scheduledDate}T${String(selectedRequest.scheduledHour).padStart(2, '0')}:${String(selectedRequest.scheduledMinute).padStart(2, '0')}:00`)
+            : null;
+        const selectedScheduleDateLabel = selectedScheduledDateTime && !Number.isNaN(selectedScheduledDateTime.getTime())
+            ? selectedScheduledDateTime.toLocaleDateString('en-AU')
+            : 'Not scheduled';
+        const selectedScheduleTimeLabel = selectedScheduledDateTime && !Number.isNaN(selectedScheduledDateTime.getTime())
+            ? formatTimeChip(selectedScheduledDateTime.getHours(), selectedScheduledDateTime.getMinutes())
+            : 'Not scheduled';
+        const addMinutesLabel = (date, minutes) => {
+            if (!date || Number.isNaN(date.getTime())) return 'Pending';
+            const next = new Date(date.getTime() + minutes * 60000);
+            return `${next.toLocaleDateString('en-AU')} ${formatTimeChip(next.getHours(), next.getMinutes())}`;
+        };
+        const subtractMinutesLabel = (date, minutes) => {
+            if (!date || Number.isNaN(date.getTime()) || !minutes) return 'Pending';
+            const next = new Date(date.getTime() - minutes * 60000);
+            return `${next.toLocaleDateString('en-AU')} ${formatTimeChip(next.getHours(), next.getMinutes())}`;
+        };
+        const formatMinutesLabel = (minutes) => minutes > 0 ? `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)}h ` : ''}${minutes % 60}m`.trim() : 'Pending';
+        const renderScheduledTimeCell = (request) => {
+            if (!request?.scheduledDate || typeof request?.scheduledHour !== 'number' || typeof request?.scheduledMinute !== 'number') {
+                return 'Not scheduled';
+            }
+            return (
+                <>
+                    <strong>{getSubmittedDateLabel(request.scheduledDate)}</strong>
+                    <span>{formatTimeChip(request.scheduledHour, request.scheduledMinute)}</span>
+                </>
+            );
+        };
         const isQueueRowChecked = (requestId) => selectedQueueIds.includes(requestId);
         const activateQueueRow = (request) => {
             setSelectedRequestId(request.id);
@@ -959,154 +1001,186 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                 />
             </td>
         );
-        const renderMaterialOrdersTable = (rows) => (
-            <div className="transport-management-table-wrap">
-                <table className="transport-management-table">
-                    <colgroup>
-                        <col className="transport-management-col-check" />
-                        <col className="transport-management-col-details" />
-                        <col className="transport-management-col-builder" />
-                        <col className="transport-management-col-requested" />
-                        <col className="transport-management-col-system" />
-                        <col className="transport-management-col-submitted" />
-                        <col className="transport-management-col-truck" />
-                        <col className="transport-management-col-time" />
-                        <col className="transport-management-col-status" />
-                        <col className="transport-management-col-pdf" />
-                        {isActive ? <col className="transport-management-col-action" /> : null}
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            {renderSelectAllCell(rows, 'Select all material orders')}
-                            <th>Scaffold Details</th>
-                            <th>Builder / Project</th>
-                            <th>Requested By</th>
-                            <th>System</th>
-                            <th>Submitted</th>
-                            <th>Truck</th>
-                            <th>Scheduled Time <span aria-hidden="true">&uarr;</span></th>
-                            <th>Status</th>
-                            <th>PDF</th>
-                            {isActive ? <th>Actions</th> : null}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((request) => {
-                            const isSelected = isQueueRowChecked(request.id);
-                            return (
-                                <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => activateQueueRow(request)}>
-                                    {renderRowSelectCell(request, `Select material order ${request.id}`)}
-                                    <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
-                                    <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
-                                    <td>{request.requestedByName || 'Unassigned'}</td>
-                                    <td>{request.scaffoldingSystem || 'Kwikstage'}</td>
-                                    <td><strong>{getSubmittedDateLabel(request.submittedAt)}</strong><span>{getSubmittedTimeLabel(request.submittedAt)}</span></td>
-                                    <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
-                                    <td>{getScheduledTimeRange(request)}</td>
-                                    <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
-                                    <td>
-                                        <button
-                                            type="button"
-                                            className="transport-management-pdf-btn"
-                                            aria-label="Open picking card PDF"
-                                            title="Open picking card PDF"
-                                            disabled={!request.pdfPath}
-                                            onClick={(event) => openArchivedPdf(request, event)}
-                                        >
-                                            <PdfTableIcon />
-                                        </button>
-                                    </td>
-                                    {isActive ? (
-                                        <td className="transport-management-row-action-cell">
-                                            <button
-                                                type="button"
-                                                className="transport-management-row-delete"
-                                                aria-label="Delete material order"
-                                                title="Delete material order"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    handleDeleteRequest(request);
-                                                }}
-                                                disabled={saving}
-                                            >
-                                                <MoreVerticalIcon />
-                                            </button>
-                                        </td>
-                                    ) : null}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+        const renderTablePager = (rows, totalCount) => (
+            <div className="transport-management-table-pager">
+                <span>Showing 1 to {rows.length} of {totalCount} entries</span>
+                <div className="transport-management-page-buttons" aria-hidden="true">
+                    <button type="button">‹</button>
+                    <button type="button" className="active">1</button>
+                    <button type="button">2</button>
+                    <button type="button">›</button>
+                </div>
+                <label>
+                    <span>Rows per page:</span>
+                    <select value="25" onChange={() => {}}>
+                        <option value="25">25</option>
+                    </select>
+                </label>
             </div>
         );
-        const renderSecondaryRoutesTable = (rows) => (
-            <div className="transport-management-table-wrap secondary-routes">
-                <table className="transport-management-table transport-management-secondary-table">
-                    <colgroup>
-                        <col className="transport-management-col-check" />
-                        <col className="transport-management-col-secondary-destination" />
-                        <col className="transport-management-col-secondary-start" />
-                        <col className="transport-management-col-secondary-reason" />
-                        <col className="transport-management-col-truck" />
-                        <col className="transport-management-col-time" />
-                        <col className="transport-management-col-status" />
-                        {isActive ? <col className="transport-management-col-action" /> : null}
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            {renderSelectAllCell(rows, 'Select all secondary routes')}
-                            <th>Destination</th>
-                            <th>Starting Location</th>
-                            <th>Reason</th>
-                            <th>Truck</th>
-                            <th>Scheduled Time <span aria-hidden="true">&uarr;</span></th>
-                            <th>Status</th>
-                            {isActive ? <th>Actions</th> : null}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((request) => {
-                            const route = request.secondaryRoute || {};
-                            const isSelected = isQueueRowChecked(request.id);
-                            return (
-                                <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => activateQueueRow(request)}>
-                                    {renderRowSelectCell(request, `Select secondary route ${request.id}`)}
-                                    <td><strong>{route.destination || request.details || 'Secondary route'}</strong></td>
-                                    <td>{route.startingLocation || 'Starting location pending'}</td>
-                                    <td>{getSecondaryRouteReasonLabel(route.reason)}</td>
-                                    <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
-                                    <td>{getScheduledTimeRange(request)}</td>
-                                    <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
-                                    {isActive ? (
-                                        <td className="transport-management-row-action-cell">
+        const renderMaterialOrdersTable = (rows) => (
+            <>
+                <div className="transport-management-table-wrap">
+                    <table className="transport-management-table">
+                        <colgroup>
+                            <col className="transport-management-col-check" />
+                            <col className="transport-management-col-details" />
+                            <col className="transport-management-col-builder" />
+                            <col className="transport-management-col-requested" />
+                            <col className="transport-management-col-system" />
+                            <col className="transport-management-col-submitted" />
+                            <col className="transport-management-col-truck" />
+                            <col className="transport-management-col-time" />
+                            <col className="transport-management-col-status" />
+                            <col className="transport-management-col-pdf" />
+                            {isActive ? <col className="transport-management-col-action" /> : null}
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                {renderSelectAllCell(rows, 'Select all material orders')}
+                                <th>Scaffold Details</th>
+                                <th>Builder / Project</th>
+                                <th>Requested By</th>
+                                <th>System</th>
+                                <th>Submitted</th>
+                                <th>Truck</th>
+                                <th>Scheduled Time <span aria-hidden="true">&uarr;</span></th>
+                                <th>Status</th>
+                                <th>PDF</th>
+                                {isActive ? <th>Actions</th> : null}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((request) => {
+                                const isSelected = isQueueRowChecked(request.id);
+                                return (
+                                    <tr key={request.id} className={isSelected ? 'selected' : ''} onClick={() => activateQueueRow(request)}>
+                                        {renderRowSelectCell(request, `Select material order ${request.id}`)}
+                                        <td><strong>{request.details || 'No scaffold details supplied'}</strong><span>{request.scaffoldingSystem || 'Kwikstage'}</span></td>
+                                        <td><strong>{request.builderName || 'Material Order'}</strong><span>{request.projectName || getProjectLocation(builders, request) || 'Awaiting project'}</span></td>
+                                        <td>{request.requestedByName || 'Unassigned'}</td>
+                                        <td>{request.scaffoldingSystem || 'Kwikstage'}</td>
+                                        <td><strong>{getSubmittedDateLabel(request.submittedAt)}</strong><span>{getSubmittedTimeLabel(request.submittedAt)}</span></td>
+                                        <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
+                                        <td>{renderScheduledTimeCell(request)}</td>
+                                        <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                        <td>
                                             <button
                                                 type="button"
-                                                className="transport-management-row-delete"
-                                                aria-label="Delete secondary route"
-                                                title="Delete secondary route"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    handleDeleteRequest(request);
-                                                }}
-                                                disabled={saving}
+                                                className="transport-management-pdf-btn"
+                                                aria-label="Open picking card PDF"
+                                                title="Open picking card PDF"
+                                                disabled={!request.pdfPath}
+                                                onClick={(event) => openArchivedPdf(request, event)}
                                             >
-                                                <MoreVerticalIcon />
+                                                <PdfTableIcon />
                                             </button>
                                         </td>
-                                    ) : null}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+                                        {isActive ? (
+                                            <td className="transport-management-row-action-cell">
+                                                <button
+                                                    type="button"
+                                                    className="transport-management-row-delete"
+                                                    aria-label="Delete material order"
+                                                    title="Delete material order"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        handleDeleteRequest(request);
+                                                    }}
+                                                    disabled={saving}
+                                                >
+                                                    <MoreVerticalIcon />
+                                                </button>
+                                            </td>
+                                        ) : null}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                {renderTablePager(rows, materialQueueRows.length)}
+            </>
+        );
+        const renderSecondaryRoutesTable = (rows) => (
+            <>
+                <div className="transport-management-table-wrap secondary-routes">
+                    <table className="transport-management-table transport-management-secondary-table">
+                        <colgroup>
+                            <col className="transport-management-col-check" />
+                            <col className="transport-management-col-secondary-destination" />
+                            <col className="transport-management-col-secondary-start" />
+                            <col className="transport-management-col-secondary-reason" />
+                            <col className="transport-management-col-truck" />
+                            <col className="transport-management-col-time" />
+                            <col className="transport-management-col-status" />
+                            {isActive ? <col className="transport-management-col-action" /> : null}
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                {renderSelectAllCell(rows, 'Select all secondary routes')}
+                                <th>Destination</th>
+                                <th>Starting Location</th>
+                                <th>Reason</th>
+                                <th>Truck</th>
+                                <th>Scheduled Time <span aria-hidden="true">&uarr;</span></th>
+                                <th>Status</th>
+                                {isActive ? <th>Actions</th> : null}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((request) => {
+                                const route = request.secondaryRoute || {};
+                                const isSelected = isQueueRowChecked(request.id);
+                                return (
+                                    <tr key={request.id} className={isSelected ? 'selected secondary-route-row' : 'secondary-route-row'} onClick={() => activateQueueRow(request)}>
+                                        {renderRowSelectCell(request, `Select secondary route ${request.id}`)}
+                                        <td><strong>{route.destination || request.details || 'Secondary route'}</strong></td>
+                                        <td>{route.startingLocation || 'Starting location pending'}</td>
+                                        <td>{getSecondaryRouteReasonLabel(route.reason)}</td>
+                                        <td>{request.scheduledTruckLabel || request.truckLabel || '-'}</td>
+                                        <td>{renderScheduledTimeCell(request)}</td>
+                                        <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                        {isActive ? (
+                                            <td className="transport-management-row-action-cell">
+                                                <button
+                                                    type="button"
+                                                    className="transport-management-row-delete"
+                                                    aria-label="Delete secondary route"
+                                                    title="Delete secondary route"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        handleDeleteRequest(request);
+                                                    }}
+                                                    disabled={saving}
+                                                >
+                                                    <MoreVerticalIcon />
+                                                </button>
+                                            </td>
+                                        ) : null}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                {renderTablePager(rows, secondaryRouteQueueRows.length)}
+            </>
         );
         const renderQueueSection = (title, rows, kind) => (
             <section className={`transport-management-category ${kind}`}>
-                <div className="transport-management-category-head">
-                    <strong>{title}</strong>
-                    <small>{rows.length}</small>
+                <div className={`transport-management-category-head${kind === 'material' ? ' transport-management-category-head-tabs' : ''}`}>
+                    {kind === 'material' ? (
+                        <>
+                            <button type="button" className="active">Material Orders <small>{materialQueueRows.length}</small></button>
+                            <button type="button">Secondary Routes <small>{secondaryRouteQueueRows.length}</small></button>
+                        </>
+                    ) : (
+                        <>
+                            <strong>{title}</strong>
+                            <small>{rows.length}</small>
+                        </>
+                    )}
                 </div>
                 {rows.length > 0 ? (
                     kind === 'secondary' ? renderSecondaryRoutesTable(rows) : renderMaterialOrdersTable(rows)
@@ -1126,20 +1200,68 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             <h1>{isActive ? 'Schedule Management' : 'Archived Orders'}</h1>
                         </div>
                     </div>
-                    <div className="ts2-header-actions">
-                        <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
-                        <button type="button" className="ts2-secondary-btn" onClick={() => { setLoading(true); loadPageData(); }}>Refresh</button>
+                    <div className="transport-management-header-actions">
+                        <span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M20 11a8 8 0 0 0-14.5-4.5L4 8" />
+                                <path d="M4 4v4h4" />
+                                <path d="M4 13a8 8 0 0 0 14.5 4.5L20 16" />
+                                <path d="M20 20v-4h-4" />
+                            </svg>
+                            Last updated: {formatLastUpdated(requestUpdatedAt)}
+                        </span>
+                        <button type="button" onClick={() => { setLoading(true); loadPageData(); }}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M20 11a8 8 0 0 0-14.5-4.5L4 8" />
+                                <path d="M4 4v4h4" />
+                                <path d="M4 13a8 8 0 0 0 14.5 4.5L20 16" />
+                                <path d="M20 20v-4h-4" />
+                            </svg>
+                            Refresh
+                        </button>
                     </div>
                 </div>
 
                 <div className={`transport-management-layout${selectedRequest ? '' : ' detail-closed'}`}>
                     <section className="transport-management-main">
-                        <div className="transport-management-tabs">
-                            <button type="button" className={isActive ? 'active' : ''} onClick={() => { setRequestStatusFilter('all'); onNavigate?.('material-ordering-active'); }}>Active <span>{activeCount}</span></button>
-                            <button type="button" className={!isActive ? 'active' : ''} onClick={() => onNavigate?.('material-ordering-archived')}>Archived <span>{archivedRequests.length}</span></button>
+                        <div className="transport-management-reference-tools">
+                            <label className="transport-management-control date">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M7 3v3M17 3v3M4.5 9h15M6 5.5h12a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18V7A1.5 1.5 0 0 1 6 5.5Z" />
+                                </svg>
+                                <input type="date" value={requestDateFilter} onChange={(event) => setRequestDateFilter(event.target.value)} aria-label="Filter date" />
+                            </label>
+                            <label className="transport-management-control">
+                                <select value={requestSystemFilter} onChange={(event) => setRequestSystemFilter(event.target.value)} aria-label="Filter system">
+                                    <option value="all">All Systems</option>
+                                    {requestSystemOptions.map(system => <option key={system} value={String(system).toLowerCase()}>{system}</option>)}
+                                </select>
+                            </label>
+                            <label className="transport-management-control">
+                                <select value={requestStatusFilter} onChange={(event) => setRequestStatusFilter(event.target.value)} aria-label="Filter status">
+                                    <option value="all">All Statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="scheduled">Scheduled</option>
+                                    <option value="in_transit">In transit</option>
+                                    <option value="unloading">Unloading</option>
+                                    <option value="return_transit">Return transit</option>
+                                </select>
+                            </label>
+                            <label className="transport-management-search">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="m21 21-4.35-4.35" />
+                                    <circle cx="11" cy="11" r="6.5" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    value={requestSearch}
+                                    onChange={(event) => setRequestSearch(event.target.value)}
+                                    placeholder="Search by order, builder, project, truck, route..."
+                                />
+                            </label>
                         </div>
 
-                        <div className="material-ordering-queue-tools transport-management-tools">
+                        <div className="material-ordering-queue-tools transport-management-tools legacy">
                             <label className="material-ordering-queue-search">
                                 <span className="material-ordering-queue-search-icon" aria-hidden="true">⌕</span>
                                 <input
@@ -1221,10 +1343,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             <div className="transport-management-category-stack">
                                 {renderQueueSection('Material Orders', materialQueueRows, 'material')}
                                 {renderQueueSection('Secondary Routes', secondaryRouteQueueRows, 'secondary')}
-                                <div className="transport-management-table-foot">
-                                    <span>Last updated: {formatLastUpdated(requestUpdatedAt)}</span>
-                                    <span>1 - {queueRows.length} of {queueRows.length}</span>
-                                </div>
                             </div>
                         )}
                     </section>
@@ -1245,6 +1363,95 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             <span>Download PDF</span>
                                         </button>
                                     ) : null}
+                                    <button type="button" className="transport-management-panel-close" aria-label="Close summary" onClick={() => setSelectedRequestId(null)}>×</button>
+                                </div>
+
+                                <div className="transport-management-reference-detail-body">
+                                    <div className="transport-management-detail-order">Order: <b>{selectedRequest.id || 'Pending'}</b></div>
+
+                                    <section className="transport-management-detail-section">
+                                        <h3>General Information</h3>
+                                        {selectedRequestIsSecondaryRoute ? (
+                                            <>
+                                                <div className="transport-management-detail-row"><span>Starting Location</span><strong>{selectedRequest.secondaryRoute?.startingLocation || 'Starting location pending'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Destination</span><strong>{selectedRequest.secondaryRoute?.destination || 'Destination pending'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Reason</span><strong>{getSecondaryRouteReasonLabel(selectedRequest.secondaryRoute?.reason)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Status</span><strong><span className={`transport-status-pill status-${selectedRequest.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(selectedRequest.deliveryStatus)}</span></strong></div>
+                                                <div className="transport-management-detail-row"><span>Truck</span><strong>{selectedRequest.scheduledTruckLabel || selectedRequest.truckLabel || '-'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Scheduled Time</span><strong>{selectedScheduleDateLabel} {selectedScheduleTimeLabel !== 'Not scheduled' ? selectedScheduleTimeLabel : ''}</strong></div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="transport-management-detail-row"><span>Builder</span><strong>{selectedRequest.builderName || 'Material Order'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Project</span><strong>{selectedRequest.projectName || 'Awaiting project'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Requested By</span><strong>{selectedRequest.requestedByName || 'Unassigned'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>System</span><strong>{selectedRequest.scaffoldingSystem || 'Kwikstage'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Scaffold Size</span><strong>{selectedRequest.details || 'No scaffold details supplied'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Submitted</span><strong>{formatDateTime(selectedRequest.submittedAt)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Status</span><strong><span className={`transport-status-pill status-${selectedRequest.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(selectedRequest.deliveryStatus)}</span></strong></div>
+                                                <div className="transport-management-detail-row"><span>Truck</span><strong>{selectedRequest.scheduledTruckLabel || selectedRequest.truckLabel || '-'}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Scheduled Time</span><strong>{selectedScheduleDateLabel} {selectedScheduleTimeLabel !== 'Not scheduled' ? selectedScheduleTimeLabel : ''}</strong></div>
+                                            </>
+                                        )}
+                                    </section>
+
+                                    <section className="transport-management-detail-section">
+                                        <h3>Route Timing</h3>
+                                        {selectedRequestIsSecondaryRoute ? (
+                                            <>
+                                                <div className="transport-management-detail-row"><span>Travel Time</span><strong>{formatMinutesLabel(selectedRouteMinutes.travelMinutes)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Service Time</span><strong>{formatMinutesLabel(selectedRouteMinutes.serviceMinutes)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Return Time</span><strong>{formatMinutesLabel(selectedRouteMinutes.returnMinutes)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Total Route</span><strong>{formatMinutesLabel(selectedRouteMinutes.totalMinutes)}</strong></div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="transport-management-detail-row"><span>Yard Departure (ETA)</span><strong>{subtractMinutesLabel(selectedScheduledDateTime, 0)}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Transit Time</span><strong>Pending</strong></div>
+                                                <div className="transport-management-detail-row"><span>Jobsite Arrival (ETA)</span><strong>{selectedScheduleDateLabel} {selectedScheduleTimeLabel !== 'Not scheduled' ? selectedScheduleTimeLabel : ''}</strong></div>
+                                                <div className="transport-management-detail-row"><span>Unload Time (Est.)</span><strong>45m</strong></div>
+                                                <div className="transport-management-detail-row"><span>Onsite Complete (ETA)</span><strong>{addMinutesLabel(selectedScheduledDateTime, 45)}</strong></div>
+                                            </>
+                                        )}
+                                    </section>
+
+                                    <section className="transport-management-detail-section">
+                                        <h3>Notes</h3>
+                                        <p>{selectedRequest.notes || 'No notes supplied.'}</p>
+                                    </section>
+
+                                    <section className="transport-management-detail-section">
+                                        <h3>Documents</h3>
+                                        {!selectedRequestIsSecondaryRoute && selectedRequest.pdfPath ? (
+                                            <button type="button" className="transport-management-document-link" onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                                <PdfTableIcon />
+                                                Picking Card {selectedRequest.id}.pdf
+                                            </button>
+                                        ) : (
+                                            <p>No document attached.</p>
+                                        )}
+                                    </section>
+
+                                    <div className="transport-management-reference-actions">
+                                        {!selectedRequestIsSecondaryRoute ? (
+                                            <button type="button" className="transport-management-print" disabled={!selectedRequest.pdfPath} onClick={(event) => openArchivedPdf(selectedRequest, event)}>
+                                                View / Print Picking Card
+                                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path d="M6 9V3h12v6" />
+                                                    <path d="M6 17H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+                                                    <path d="M6 14h12v7H6z" />
+                                                </svg>
+                                            </button>
+                                        ) : null}
+                                        <button type="button" className="transport-management-reschedule" onClick={() => onNavigate?.('truck-schedule')}>
+                                            {selectedRequestIsSecondaryRoute ? 'Reschedule Route' : 'Reschedule Order'}
+                                        </button>
+                                        {isActive ? (
+                                            <button type="button" className="transport-management-cancel" onClick={() => handleDeleteRequest(selectedRequest)} disabled={saving}>
+                                                {selectedRequestIsSecondaryRoute ? 'Cancel Route' : 'Cancel Order'}
+                                            </button>
+                                        ) : null}
+                                    </div>
                                 </div>
 
                                 <dl className="transport-management-summary-grid">
