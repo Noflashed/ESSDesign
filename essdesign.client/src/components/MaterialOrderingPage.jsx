@@ -484,16 +484,33 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     useEffect(() => {
         if (!isActiveQueueView && !isArchivedQueueView) return;
         if (queueRows.length === 0) {
-            if (selectedRequestId !== '') {
+            if (selectedRequestId) {
                 setSelectedRequestId('');
+                setSelectedRequestDetail(null);
             }
             return;
         }
-        if (selectedRequestId === null) return;
-        if (selectedRequestId === '' || !queueRows.some((request) => request.id === selectedRequestId)) {
-            setSelectedRequestId(queueRows[0].id);
+        if (selectedRequestId && !queueRows.some((request) => request.id === selectedRequestId)) {
+            setSelectedRequestId('');
+            setSelectedRequestDetail(null);
         }
     }, [isActiveQueueView, isArchivedQueueView, queueRows, selectedRequestId]);
+
+    useEffect(() => {
+        if (!openRequestMenuId) return undefined;
+
+        const closeMenuFromOutsideClick = (event) => {
+            if (event.target?.closest?.('.transport-management-row-menu')) {
+                return;
+            }
+            setOpenRequestMenuId('');
+        };
+
+        document.addEventListener('pointerdown', closeMenuFromOutsideClick);
+        return () => {
+            document.removeEventListener('pointerdown', closeMenuFromOutsideClick);
+        };
+    }, [openRequestMenuId]);
 
     useEffect(() => {
         let active = true;
