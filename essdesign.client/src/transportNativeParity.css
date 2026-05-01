@@ -3713,7 +3713,7 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-layout,
 .transport-desktop-workspace .transport-management-layout {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) clamp(360px, 24vw, 420px) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 24px !important;
     align-items: start !important;
     width: 100% !important;
@@ -3766,7 +3766,7 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table-wrap,
 .transport-desktop-workspace .transport-management-table-wrap {
     width: 100% !important;
-    overflow-x: auto !important;
+    overflow-x: hidden !important;
     border: 1px solid #E5E7EB !important;
     border-radius: 12px !important;
     background: #FFFFFF !important;
@@ -3776,34 +3776,37 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table,
 .transport-desktop-workspace .transport-management-table {
     width: 100% !important;
-    min-width: 1180px !important;
+    min-width: 0 !important;
     table-layout: fixed !important;
-    font-size: 14px !important;
+    font-size: 12px !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table th,
 .transport-page-frame .transport-desktop-workspace .transport-management-table td,
 .transport-desktop-workspace .transport-management-table th,
 .transport-desktop-workspace .transport-management-table td {
-    padding: 14px 16px !important;
+    padding: 10px 8px !important;
     border-bottom: 1px solid #E5E7EB !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table th,
 .transport-desktop-workspace .transport-management-table th {
-    height: 48px !important;
+    height: 42px !important;
     background: #F8FAFC !important;
     color: #6B7280 !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     line-height: 1.4 !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
+    white-space: normal !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table td,
 .transport-desktop-workspace .transport-management-table td {
-    height: 72px !important;
+    height: 64px !important;
     color: #111827 !important;
-    font-size: 14px !important;
+    font-size: 12px !important;
     line-height: 1.45 !important;
     font-weight: 400 !important;
 }
@@ -3811,29 +3814,44 @@
 .transport-page-frame .transport-desktop-workspace .transport-management-table td strong,
 .transport-desktop-workspace .transport-management-table td strong {
     color: #0F172A !important;
-    font-size: 14px !important;
+    font-size: 12px !important;
     line-height: 1.45 !important;
     font-weight: 600 !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill),
 .transport-desktop-workspace .transport-management-table td span:not(.transport-status-pill):not(.transport-management-type-pill) {
-    margin-top: 6px !important;
+    margin-top: 4px !important;
     color: #6B7280 !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     line-height: 1.45 !important;
     font-weight: 400 !important;
 }
 
 .transport-page-frame .transport-desktop-workspace .transport-management-detail,
 .transport-desktop-workspace .transport-management-detail {
-    width: 100% !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    z-index: 100 !important;
+    width: clamp(360px, 28vw, 430px) !important;
+    max-width: calc(100vw - 164px) !important;
+    height: 100vh !important;
     min-width: 0 !important;
+    min-height: 0 !important;
     padding: 20px !important;
     border: 1px solid #E5E7EB !important;
+    border-top: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
     border-radius: 12px !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
     background: #FFFFFF !important;
-    box-shadow: none !important;
+    box-shadow: -18px 0 42px rgba(15, 23, 42, 0.16) !important;
+    overflow-y: auto !important;
+    transform: translateX(0) !important;
+    animation: transportManagementDrawerIn 180ms ease-out both !important;
 }
 
 @media (max-width: 1280px) {
@@ -3844,6 +3862,103 @@
 
     .transport-page-frame .transport-desktop-workspace .transport-management-detail,
     .transport-desktop-workspace .transport-management-detail {
-        position: static !important;
+        width: min(420px, 92vw) !important;
+        max-width: 92vw !important;
+    }
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-type,
+.transport-desktop-workspace .transport-management-col-type {
+    width: 9% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-destination,
+.transport-desktop-workspace .transport-management-col-destination {
+    width: 16% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-start,
+.transport-desktop-workspace .transport-management-col-start,
+.transport-page-frame .transport-desktop-workspace .transport-management-col-task,
+.transport-desktop-workspace .transport-management-col-task {
+    width: 13% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-requested,
+.transport-desktop-workspace .transport-management-col-requested {
+    width: 12% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-route-time,
+.transport-desktop-workspace .transport-management-col-route-time {
+    width: 8% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-truck,
+.transport-desktop-workspace .transport-management-col-truck {
+    width: 5.5% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-time,
+.transport-desktop-workspace .transport-management-col-time {
+    width: 10% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-status,
+.transport-desktop-workspace .transport-management-col-status {
+    width: 7% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-pdf,
+.transport-desktop-workspace .transport-management-col-pdf {
+    width: 4% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-col-action,
+.transport-desktop-workspace .transport-management-col-action {
+    width: 2.5% !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-type-pill,
+.transport-page-frame .transport-desktop-workspace .transport-status-pill,
+.transport-desktop-workspace .transport-management-type-pill,
+.transport-desktop-workspace .transport-status-pill {
+    min-height: 24px !important;
+    padding: 0 8px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
+    text-align: center !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-btn,
+.transport-desktop-workspace .transport-management-pdf-btn {
+    min-width: 0 !important;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-pdf-btn span,
+.transport-desktop-workspace .transport-management-pdf-btn span {
+    display: none !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-row-action-cell,
+.transport-desktop-workspace .transport-management-row-action-cell {
+    width: auto !important;
+    min-width: 0 !important;
+    padding-right: 6px !important;
+}
+
+@keyframes transportManagementDrawerIn {
+    from {
+        opacity: 0;
+        transform: translateX(28px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
     }
 }
