@@ -975,7 +975,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [selectedScheduleEventId, setSelectedScheduleEventId] = useState('');
   const [selectedScheduleEventIds, setSelectedScheduleEventIds] = useState([]);
   const [selectedScheduleSegment, setSelectedScheduleSegment] = useState('primary');
-  const [scheduleInspectorOpen, setScheduleInspectorOpen] = useState(true);
+  const [scheduleInspectorOpen, setScheduleInspectorOpen] = useState(false);
   const selectedScheduleRouteRequestKeyRef = useRef('');
   const selectedScheduleRouteDataKeyRef = useRef('');
   const [draggedRequestId, setDraggedRequestId] = useState('');
