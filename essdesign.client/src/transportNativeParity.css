@@ -4166,23 +4166,30 @@
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 26px !important;
-    height: 26px !important;
-    border: 1px solid #DCE7F3 !important;
+    width: 28px !important;
+    height: 28px !important;
+    border: 1px solid #cbd5e1 !important;
     border-radius: 999px !important;
-    background: #FFFFFF !important;
-    color: #39526E !important;
-    box-shadow: 0 5px 12px rgba(15, 23, 42, 0.08) !important;
-    font-size: 14px !important;
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
     line-height: 1 !important;
-    font-weight: 800 !important;
     cursor: pointer !important;
+    transition: all 0.2s ease-in-out !important;
 }
 
 .transport-desktop-collapse:hover {
-    background: #EFF6FF !important;
-    border-color: #BFDBFE !important;
-    color: #1672F7 !important;
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+    border-color: #94a3b8 !important;
+}
+
+.transport-desktop-collapse svg {
+    transition: transform 0.2s ease-in-out !important;
+}
+
+.transport-desktop-shell.rail-collapsed .transport-desktop-collapse svg {
+    transform: rotate(180deg) !important;
 }
 
 .transport-desktop-nav {
@@ -4352,8 +4359,8 @@
 .transport-desktop-shell.rail-collapsed .transport-desktop-collapse {
     top: 2px !important;
     right: 10px !important;
-    width: 24px !important;
-    height: 24px !important;
+    width: 28px !important;
+    height: 28px !important;
 }
 
 .transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {

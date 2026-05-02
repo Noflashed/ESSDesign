@@ -166,7 +166,9 @@ export default function NativeTransportShell({
               aria-label={railCollapsed ? 'Expand transport sidebar' : 'Collapse transport sidebar'}
               aria-expanded={!railCollapsed}
             >
-              {railCollapsed ? '>' : '<'}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
           <nav className="transport-desktop-nav" aria-label="ESS Transport">
