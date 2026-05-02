@@ -1187,9 +1187,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ? SCALE_MODES[timelineScaleMode]?.tickMinutes || DRAG_SCHEDULE_MINUTE_STEP
     : DRAG_SCHEDULE_MINUTE_STEP;
   const pendingRequests = useMemo(
-    () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt),
+    () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt && !isSecondaryRouteRequest(request)),
     [allRequests],
   );
+  const tileMenuRequest = tileMenu
+    ? requestMetaMap[tileMenu.orderId] || allRequests.find(request => request.id === tileMenu.orderId) || null
+    : null;
+  const tileMenuIsSecondaryRoute = isSecondaryRouteRequest(tileMenuRequest);
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2005,7 +2009,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
-    if (!requestId) {
+    if (!requestId || isSecondaryRouteRequest(request)) {
       return;
     }
     setDraggedRequestId(requestId);
@@ -2231,6 +2235,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
     const previousCycleStateMap = eventCycleStateMap;
     const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    if (isSecondaryRouteRequest(sourceRequest)) {
+      setTileMenu(null);
+      setError('Secondary routes can only be deleted, not unscheduled.');
+      return;
+    }
     const updatedRequest = sourceRequest ? {
       ...sourceRequest,
       scheduledDate: null,
@@ -2765,21 +2774,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
-          <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-            <span>Set time manually</span>
-            <small>Enter exact start time</small>
-          </button>
-          <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-            <span>Add secondary route</span>
-            <small>Extend this delivery with another stop</small>
-          </button>
-          <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-            <span>Unschedule order</span>
-            <small>Return to pending requests</small>
-          </button>
+          {!tileMenuIsSecondaryRoute ? (
+            <>
+              <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+                <span>Set time manually</span>
+                <small>Enter exact start time</small>
+              </button>
+              <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+                <span>Add secondary route</span>
+                <small>Extend this delivery with another stop</small>
+              </button>
+              <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+                <span>Unschedule order</span>
+                <small>Return to pending requests</small>
+              </button>
+            </>
+          ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Delete order</span>
-            <small>Remove this request</small>
+            <small>{tileMenuIsSecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
           </button>
         </div>
       ) : null}
