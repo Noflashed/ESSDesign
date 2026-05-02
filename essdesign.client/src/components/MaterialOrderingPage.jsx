@@ -134,7 +134,7 @@ function isSecondaryRouteRequest(request) {
 
 function getSecondaryRouteReasonLabel(reason) {
     if (reason === 'secondary_drop_off') return 'Secondary material drop off';
-    if (reason === 'material_pick_up') return 'Material pick-up';
+    if (reason === 'material_pick_up') return 'Material order';
     if (reason === 'yard_collection') return 'Yard collection';
     if (reason === 'other') return 'Other route task';
     return 'Secondary route';

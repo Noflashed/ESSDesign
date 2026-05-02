@@ -816,7 +816,7 @@ function normalizeSecondaryRoute(raw) {
         returnTrafficDelaySeconds: Number(raw.returnTrafficDelaySeconds) || 0,
         returnTrafficProvider: typeof raw.returnTrafficProvider === 'string' ? raw.returnTrafficProvider : '',
         returnTrafficNote: typeof raw.returnTrafficNote === 'string' ? raw.returnTrafficNote : '',
-        serviceMinutes: Number.isFinite(serviceMinutes) && serviceMinutes > 0 ? serviceMinutes : 30,
+        serviceMinutes: Number.isFinite(serviceMinutes) && serviceMinutes >= 0 ? serviceMinutes : 30,
     };
 
     if (!normalized.reason || !normalized.destination) {
@@ -1247,10 +1247,26 @@ export const materialOrderRequestsAPI = {
             && item?.sourceOrderId === requestId
             && !item?.archivedAt
         );
-        const secondaryRequestId = existingSecondaryIndexItem?.id || `secondary-${requestId}-${makeId()}`;
-        const existingSecondaryRecord = existingSecondaryIndexItem?.id
-            ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => null)
+        const linkedRequestId = normalizedSecondaryRoute.linkedRequestId && normalizedSecondaryRoute.linkedRequestId !== requestId
+            ? normalizedSecondaryRoute.linkedRequestId
             : null;
+        const linkedIndexItem = linkedRequestId
+            ? existingIndex.find(item => item?.id === linkedRequestId && !item?.archivedAt && item?.routeType !== 'secondary_route')
+            : null;
+        if (linkedRequestId && (!linkedIndexItem || linkedIndexItem.scheduledDate || linkedIndexItem.scheduledAtIso)) {
+            throw new Error('Selected material order is no longer available to add as a secondary route');
+        }
+        const linkedRecord = linkedIndexItem?.id
+            ? await readStorageJson(`material-order-requests/requests/${linkedIndexItem.id}.json`).catch(() => null)
+            : null;
+        if (linkedRequestId && (linkedRecord?.scheduledDate || linkedRecord?.scheduledAtIso)) {
+            throw new Error('Selected material order is no longer available to add as a secondary route');
+        }
+        const linkedSourceRecord = linkedRecord || linkedIndexItem || null;
+        const secondaryRequestId = linkedSourceRecord?.id || existingSecondaryIndexItem?.id || `secondary-${requestId}-${makeId()}`;
+        const existingSecondaryRecord = linkedSourceRecord || (existingSecondaryIndexItem?.id
+            ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => null)
+            : null);
         const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
         const scheduledHour = typeof schedule.hour === 'number'
             ? schedule.hour
@@ -1267,7 +1283,15 @@ export const materialOrderRequestsAPI = {
             : null;
         const scheduledTruckId = schedule.truckId || schedule.scheduledTruckId || record.scheduledTruckId || record.truckId || null;
         const scheduledTruckLabel = schedule.truckLabel || schedule.scheduledTruckLabel || record.scheduledTruckLabel || record.truckLabel || null;
-        const submittedAt = existingSecondaryRecord?.submittedAt || existingSecondaryIndexItem?.submittedAt || nowIso();
+        const isLinkedMaterialOrder = Boolean(linkedSourceRecord);
+        const linkedItemValues = linkedSourceRecord?.itemValues && typeof linkedSourceRecord.itemValues === 'object'
+            ? linkedSourceRecord.itemValues
+            : linkedSourceRecord?.item_values && typeof linkedSourceRecord.item_values === 'object'
+                ? linkedSourceRecord.item_values
+                : {};
+        const submittedAt = isLinkedMaterialOrder
+            ? linkedSourceRecord.submittedAt || nowIso()
+            : existingSecondaryRecord?.submittedAt || existingSecondaryIndexItem?.submittedAt || nowIso();
         const parentUpdated = {
             ...record,
             secondaryRoute: null,
@@ -1277,22 +1301,38 @@ export const materialOrderRequestsAPI = {
             id: secondaryRequestId,
             sourceOrderId: requestId,
             routeType: 'secondary_route',
-            builderId: '',
-            builderName: normalizedSecondaryRoute.destination || 'Secondary route',
-            projectId: '',
-            projectName: normalizedSecondaryRoute.label || 'Secondary route',
-            requestedByUserId: record.requestedByUserId || null,
-            requestedByName: record.requestedByName || '',
-            orderDate: record.orderDate || new Date().toISOString().slice(0, 10),
+            builderId: isLinkedMaterialOrder ? linkedSourceRecord.builderId || '' : '',
+            builderName: isLinkedMaterialOrder
+                ? linkedSourceRecord.builderName || normalizedSecondaryRoute.destination || 'Material order'
+                : normalizedSecondaryRoute.destination || 'Secondary route',
+            projectId: isLinkedMaterialOrder ? linkedSourceRecord.projectId || '' : '',
+            projectName: isLinkedMaterialOrder
+                ? linkedSourceRecord.projectName || normalizedSecondaryRoute.label || 'Material order'
+                : normalizedSecondaryRoute.label || 'Secondary route',
+            requestedByUserId: isLinkedMaterialOrder
+                ? linkedSourceRecord.requestedByUserId || record.requestedByUserId || null
+                : record.requestedByUserId || null,
+            requestedByName: isLinkedMaterialOrder
+                ? linkedSourceRecord.requestedByName || record.requestedByName || ''
+                : record.requestedByName || '',
+            orderDate: isLinkedMaterialOrder
+                ? linkedSourceRecord.orderDate || record.orderDate || new Date().toISOString().slice(0, 10)
+                : record.orderDate || new Date().toISOString().slice(0, 10),
             submittedAt,
-            notes: `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`,
-            itemValues: {
+            notes: isLinkedMaterialOrder
+                ? linkedSourceRecord.notes || `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`
+                : `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`,
+            itemValues: isLinkedMaterialOrder ? linkedItemValues : {
                 __scaffoldingSystem: normalizedSecondaryRoute.label || 'Secondary route',
                 __details: normalizedSecondaryRoute.destination || '',
             },
-            scaffoldingSystem: normalizedSecondaryRoute.label || 'Secondary route',
-            details: normalizedSecondaryRoute.destination || '',
-            pdfPath: '',
+            scaffoldingSystem: isLinkedMaterialOrder
+                ? linkedSourceRecord.scaffoldingSystem || linkedItemValues.__scaffoldingSystem || normalizedSecondaryRoute.label || 'Material order'
+                : normalizedSecondaryRoute.label || 'Secondary route',
+            details: isLinkedMaterialOrder
+                ? linkedSourceRecord.details || linkedItemValues.__details || normalizedSecondaryRoute.destination || ''
+                : normalizedSecondaryRoute.destination || '',
+            pdfPath: isLinkedMaterialOrder ? linkedSourceRecord.pdfPath || '' : '',
             scheduledDate,
             scheduledHour,
             scheduledMinute,
@@ -1312,6 +1352,10 @@ export const materialOrderRequestsAPI = {
             ...secondaryRecord,
             secondaryRoute: normalizedSecondaryRoute,
         };
+        const replacedSecondaryIds = new Set([secondaryRequestId]);
+        if (existingSecondaryIndexItem?.id) {
+            replacedSecondaryIds.add(existingSecondaryIndexItem.id);
+        }
         const nextIndex = {
             requests: [
                 ...existingIndex.map(item => item.id === requestId
@@ -1319,16 +1363,20 @@ export const materialOrderRequestsAPI = {
                     ...item,
                     secondaryRoute: null,
                 }
-                : item).filter(item => item.id !== secondaryRequestId),
+                : item).filter(item => !replacedSecondaryIds.has(item.id)),
                 secondaryIndexItem,
             ],
             updatedAt: nowIso(),
         };
-        await Promise.all([
+        const writes = [
             uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(parentUpdated), 'application/json'),
             uploadStorageObject(`material-order-requests/requests/${secondaryRequestId}.json`, JSON.stringify(secondaryRecord), 'application/json'),
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
-        ]);
+        ];
+        if (existingSecondaryIndexItem?.id && existingSecondaryIndexItem.id !== secondaryRequestId) {
+            writes.push(deleteStorageObject(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => {}));
+        }
+        await Promise.all(writes);
         return normalizeMaterialOrderRequestRecord(secondaryRecord);
     },
 

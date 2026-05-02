@@ -57,7 +57,7 @@ const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'secondary_drop_off', label: 'Secondary material drop off' },
-  { value: 'material_pick_up', label: 'Material pick-up' },
+  { value: 'material_pick_up', label: 'Material order' },
   { value: 'yard_collection', label: 'Yard collection' },
   { value: 'other', label: 'Other route task' },
 ];
@@ -65,6 +65,22 @@ const SECONDARY_ROUTE_SERVICE_MINUTES = 30;
 
 function getSecondaryRouteReasonLabel(reason) {
   return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
+}
+
+function getLinkedSecondaryRequestFields(option) {
+  if (!option) {
+    return {
+      linkedRequestId: '',
+      linkedRequestLabel: '',
+      linkedRequestSiteLocation: '',
+    };
+  }
+
+  return {
+    linkedRequestId: option.id || '',
+    linkedRequestLabel: option.displayLabel || option.label || '',
+    linkedRequestSiteLocation: option.siteLocation || '',
+  };
 }
 
 function getDeliveryTypePill(request, segment = 'primary') {
@@ -76,7 +92,7 @@ function getDeliveryTypePill(request, segment = 'primary') {
   }
 
   if (secondaryRoute?.reason === 'material_pick_up') {
-    return { label: 'Material pick-up', tone: 'pickup' };
+    return { label: 'Material order', tone: 'pickup' };
   }
 
   if (secondaryRoute?.reason === 'yard_collection') {
@@ -413,6 +429,9 @@ function getRequestListSignature(requests) {
       request.secondaryRoute.serviceMinutes,
       request.secondaryRoute.travelDurationSeconds,
       request.secondaryRoute.returnDurationSeconds,
+      request.secondaryRoute.linkedRequestId,
+      request.secondaryRoute.linkedRequestLabel,
+      request.secondaryRoute.linkedRequestSiteLocation,
     ] : null,
   ]));
 }
@@ -1131,9 +1150,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       })
       .map(option => ({
         id: `${option.source || 'local'}-${option.id}`,
-        label: option.label,
+        label: option.displayLabel || option.label,
         address: option.siteLocation,
         source: option.source === 'pending' ? 'Pending request' : 'Saved project',
+        linkedRequestId: option.source === 'pending' ? option.id : '',
+        linkedRequestLabel: option.source === 'pending' ? (option.displayLabel || option.label) : '',
+        linkedRequestSiteLocation: option.source === 'pending' ? option.siteLocation : '',
       }))
       .slice(0, 4);
 
@@ -1837,6 +1859,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         return {
           id: item.id,
           label: `${item.builderName || 'Material Order'} · ${item.projectName || 'Pending request'}`,
+          displayLabel: `${item.builderName || 'Material Order'} - ${item.projectName || 'Pending request'}`,
           siteLocation: siteLocation || '',
         };
       })
@@ -1851,6 +1874,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       destination: existingSecondaryRoute?.destination || '',
       serviceMinutes: String(existingSecondaryRoute?.serviceMinutes || SECONDARY_ROUTE_SERVICE_MINUTES),
       selectedAddressSourceId: '',
+      linkedRequestId: existingSecondaryRoute?.linkedRequestId || '',
+      linkedRequestLabel: existingSecondaryRoute?.linkedRequestLabel || '',
+      linkedRequestSiteLocation: existingSecondaryRoute?.linkedRequestSiteLocation || '',
       pendingOptions,
       addressOptions: [
         ...pendingOptions.map(item => ({ ...item, source: 'pending' })),
@@ -1945,14 +1971,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         throw new Error('Return-to-yard timing could not be calculated for that secondary route.');
       }
 
+      const linkedMaterialOrder = secondaryRouteModal.reason === 'material_pick_up' && secondaryRouteModal.linkedRequestId
+        ? allRequests.find(item => item.id === secondaryRouteModal.linkedRequestId)
+          || (secondaryRouteModal.pendingOptions || []).find(item => item.id === secondaryRouteModal.linkedRequestId)
+          || null
+        : null;
+      const linkedRequestId = linkedMaterialOrder ? linkedMaterialOrder.id : '';
+      const linkedRequestLabel = linkedRequestId
+        ? secondaryRouteModal.linkedRequestLabel
+          || [linkedMaterialOrder.builderName, linkedMaterialOrder.projectName].filter(Boolean).join(' - ')
+          || 'Selected material order'
+        : '';
       const secondaryRoute = {
         reason: secondaryRouteModal.reason,
         startingLocation: secondaryRouteModal.primarySiteLocation,
         destination,
         label: getSecondaryRouteReasonLabel(secondaryRouteModal.reason),
-        linkedRequestId: null,
-        linkedRequestLabel: '',
-        linkedRequestSiteLocation: '',
+        linkedRequestId: linkedRequestId || null,
+        linkedRequestLabel,
+        linkedRequestSiteLocation: linkedRequestId ? (secondaryRouteModal.linkedRequestSiteLocation || destination) : '',
         travelDistanceMeters: outbound.distanceMeters,
         travelDurationSeconds: outbound.durationSeconds,
         travelBaseDurationSeconds: outbound.baseDurationSeconds,
@@ -1975,7 +2012,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
       const parentRequest = { ...request, secondaryRoute: null };
       const nextRequests = dedupeRequests([
-        ...allRequests.map(item => item.id === parentRequest.id ? parentRequest : item).filter(item => item.id !== updatedRequest.id),
+        ...allRequests
+          .map(item => item.id === parentRequest.id ? parentRequest : item)
+          .filter(item =>
+            item.id !== updatedRequest.id
+            && !(isSecondaryRouteRequest(item) && item.sourceOrderId === parentRequest.id && item.id !== updatedRequest.id)
+          ),
         updatedRequest,
       ]);
       const nextSiteLocationMap = {
@@ -2850,13 +2892,55 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <span>Reason</span>
               <select
                 value={secondaryRouteModal.reason}
-                onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, reason: inputEvent.target.value, error: '' } : current)}
+                onChange={(inputEvent) => {
+                  const nextReason = inputEvent.target.value;
+                  setSecondaryRouteModal(current => current ? {
+                    ...current,
+                    reason: nextReason,
+                    linkedRequestId: nextReason === 'material_pick_up' ? current.linkedRequestId : '',
+                    linkedRequestLabel: nextReason === 'material_pick_up' ? current.linkedRequestLabel : '',
+                    linkedRequestSiteLocation: nextReason === 'material_pick_up' ? current.linkedRequestSiteLocation : '',
+                    error: '',
+                  } : current);
+                }}
               >
                 {SECONDARY_ROUTE_REASON_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </label>
+            {secondaryRouteModal.reason === 'material_pick_up' ? (
+              <label className="transport-manual-time-field">
+                <span>Material order (optional)</span>
+                <select
+                  value={secondaryRouteModal.linkedRequestId || ''}
+                  onChange={(inputEvent) => {
+                    const selectedOrder = (secondaryRouteModal.pendingOptions || []).find(option => option.id === inputEvent.target.value) || null;
+                    setSecondaryRouteModal(current => current ? {
+                      ...current,
+                      ...getLinkedSecondaryRequestFields(selectedOrder),
+                      destination: selectedOrder?.siteLocation || current.destination,
+                      selectedAddressSourceId: selectedOrder ? `pending-${selectedOrder.id}` : '',
+                      error: '',
+                    } : current);
+                    if (selectedOrder) {
+                      setSecondaryAddressSuggestions([]);
+                    }
+                  }}
+                >
+                  <option value="">Select an unscheduled material order...</option>
+                  {(secondaryRouteModal.pendingOptions || []).map(option => (
+                    <option key={option.id} value={option.id}>{option.displayLabel || option.label}</option>
+                  ))}
+                </select>
+                {(secondaryRouteModal.pendingOptions || []).length === 0 ? (
+                  <small className="transport-linked-order-note">No unscheduled material orders are available.</small>
+                ) : null}
+                {secondaryRouteModal.linkedRequestId ? (
+                  <small className="transport-linked-order-note">Selected order will be added as this secondary stop.</small>
+                ) : null}
+              </label>
+            ) : null}
             <label className="transport-manual-time-field">
               <span>Service time</span>
               <div className="transport-service-time-input">
@@ -2877,7 +2961,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 <input
                   type="text"
                   value={secondaryRouteModal.destination}
-                  onChange={(inputEvent) => setSecondaryRouteModal(current => current ? { ...current, destination: inputEvent.target.value, selectedAddressSourceId: '', error: '' } : current)}
+                  onChange={(inputEvent) => setSecondaryRouteModal(current => current ? {
+                    ...current,
+                    destination: inputEvent.target.value,
+                    selectedAddressSourceId: '',
+                    linkedRequestId: '',
+                    linkedRequestLabel: '',
+                    linkedRequestSiteLocation: '',
+                    error: '',
+                  } : current)}
                   placeholder="Start typing the second stop address"
                   autoComplete="off"
                 />
@@ -2889,7 +2981,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         type="button"
                         className="transport-address-suggestion"
                         onClick={() => {
-                          setSecondaryRouteModal(current => current ? { ...current, destination: suggestion.address, selectedAddressSourceId: suggestion.id, error: '' } : current);
+                          setSecondaryRouteModal(current => {
+                            if (!current) return current;
+                            const shouldLinkOrder = current.reason === 'material_pick_up' && suggestion.linkedRequestId;
+                            return {
+                              ...current,
+                              destination: suggestion.address,
+                              selectedAddressSourceId: suggestion.id,
+                              linkedRequestId: shouldLinkOrder ? suggestion.linkedRequestId : '',
+                              linkedRequestLabel: shouldLinkOrder ? suggestion.linkedRequestLabel : '',
+                              linkedRequestSiteLocation: shouldLinkOrder ? suggestion.linkedRequestSiteLocation : '',
+                              error: '',
+                            };
+                          });
                           setSecondaryAddressSuggestions([]);
                         }}
                         role="option"
