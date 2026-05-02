@@ -963,6 +963,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [dragPreviewDurationMinutes, setDragPreviewDurationMinutes] = useState(90);
   const [dropPreview, setDropPreview] = useState(null);
   const [dragSchedulingId, setDragSchedulingId] = useState('');
+  const [routePlacementPreview, setRoutePlacementPreview] = useState(null);
   const [tileMenu, setTileMenu] = useState(null);
   const [manualTimeModal, setManualTimeModal] = useState(null);
   const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
@@ -1684,32 +1685,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, closeRequestModal, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, requestModal, selectedDate, selectedHour, selectedMinute, selectedRouteDurationMinutes, selectedTruckId]);
 
-  const scheduleRequestAt = useCallback((requestId, truckId, startMinutes, durationMinutes = 90, options = {}) => {
-    if (!requestId || !truckId) {
+  const scheduleRequestAt = useCallback(async (requestId, truckId, startMinutes, durationMinutes = 90, options = {}) => {
+    if (!requestId || !truckId || dragSchedulingId) {
       return;
     }
     const roundedStart = options.exact
       ? Math.round(startMinutes)
       : roundScheduleMinutes(startMinutes, options.step || DRAG_SCHEDULE_MINUTE_STEP);
     const safeMinutes = clampScheduleMinutes(roundedStart, durationMinutes);
-    const hour = Math.floor(safeMinutes / 60);
-    const minute = safeMinutes % 60;
     const truck = TRUCK_LANES.find(lane => lane.id === truckId);
     const dateKey = formatDateKey(selectedDate);
-    const collision = getScheduleCollision({
-      requestId,
-      truckId: truck?.id ?? truckId,
-      startMinutes: safeMinutes,
-      durationMinutes,
-      dayEvents,
-      startMap: eventStartMinutesMap,
-      durationMap: eventDurationMinutesMap,
-    });
-    if (collision) {
-      setError(getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap));
-      setDropPreview(null);
-      return;
-    }
     const previousRequests = allRequests;
     const previousEvents = dayEvents;
     const previousMetaMap = requestMetaMap;
@@ -1718,6 +1703,88 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
     const previousCycleStateMap = eventCycleStateMap;
     const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    if (!sourceRequest) {
+      setDropPreview(null);
+      return;
+    }
+
+    let siteLocation = requestSiteLocationMapRef.current[requestId] || '';
+    let exactDurationMinutes = durationMinutes;
+    let finalSafeMinutes = safeMinutes;
+    const isStoredSecondaryRoute = isSecondaryRouteRequest(sourceRequest);
+    const previewTitle = sourceRequest.builderName || sourceRequest.secondaryRoute?.destination || 'Material Order';
+    const previewSubtitle = sourceRequest.projectName || getSecondaryRouteReasonLabel(sourceRequest.secondaryRoute?.reason) || 'Calculating exact timing';
+    setDragSchedulingId(requestId);
+    setDropPreview(null);
+    setTileMenu(null);
+    setRoutePlacementPreview({
+      requestId,
+      truckId: truck?.id ?? truckId,
+      minutes: safeMinutes,
+      durationMinutes: Math.max(60, durationMinutes || 90),
+      title: previewTitle,
+      subtitle: previewSubtitle,
+    });
+
+    try {
+      if (isStoredSecondaryRoute) {
+        exactDurationMinutes = getSecondaryRouteTiming(sourceRequest.secondaryRoute).totalMinutes;
+      } else {
+        if (!siteLocation) {
+          const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+          siteLocation = findProjectLocation(builders, sourceRequest);
+          if (siteLocation) {
+            mergeRequestSiteLocationMap({
+              ...requestSiteLocationMapRef.current,
+              [requestId]: siteLocation,
+            });
+          }
+        }
+
+        if (!siteLocation) {
+          throw new Error('Site location is missing, so TomTom route timing cannot be calculated.');
+        }
+
+        const resolveExactTiming = async (minutesToCheck) => {
+          const routeSchedule = {
+            scheduledDate: dateKey,
+            scheduledHour: Math.floor(minutesToCheck / 60),
+            scheduledMinute: Math.floor(minutesToCheck % 60),
+          };
+          const cachedEstimate = getCachedRouteEstimateValue(siteLocation, routeSchedule);
+          const routeEstimate = cachedEstimate !== undefined
+            ? cachedEstimate
+            : await getCachedRouteEstimate(siteLocation, routeSchedule);
+          if (!routeEstimate) {
+            throw new Error('TomTom route timing could not be calculated for this order.');
+          }
+          return getTimingProfile(routeEstimate, sourceRequest.secondaryRoute || null).totalMinutes;
+        };
+
+        exactDurationMinutes = await resolveExactTiming(safeMinutes);
+        finalSafeMinutes = clampScheduleMinutes(roundedStart, exactDurationMinutes);
+        if (finalSafeMinutes !== safeMinutes) {
+          exactDurationMinutes = await resolveExactTiming(finalSafeMinutes);
+          finalSafeMinutes = clampScheduleMinutes(roundedStart, exactDurationMinutes);
+        }
+      }
+
+      const exactCollision = getScheduleCollision({
+        requestId,
+        truckId: truck?.id ?? truckId,
+        startMinutes: finalSafeMinutes,
+        durationMinutes: exactDurationMinutes,
+        dayEvents,
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+      });
+      if (exactCollision) {
+        setError(getCollisionMessage(exactCollision, eventStartMinutesMap, eventDurationMinutesMap));
+        return;
+      }
+
+      const hour = Math.floor(finalSafeMinutes / 60);
+      const minute = Math.floor(finalSafeMinutes % 60);
     const updatedRequest = sourceRequest ? {
       ...sourceRequest,
       scheduledDate: dateKey,
@@ -1779,7 +1846,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+      setError('');
+    } catch (err) {
+      setError(err?.message || 'Failed to calculate TomTom route timing.');
+    } finally {
+      setRoutePlacementPreview(null);
+      setDragSchedulingId('');
+      setDraggedRequestId('');
+      setDraggedScheduledOrderId('');
+      setDragPreviewDurationMinutes(90);
+      dragPointerOffsetMinutesRef.current = 0;
+      setDropPreview(null);
+    }
+  }, [allRequests, dayEvents, dragSchedulingId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2481,7 +2560,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               {pendingRequests.map(request => (
                 <div
                   key={request.id}
-                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
+                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}${dragSchedulingId === request.id ? ' scheduling' : ''}`}
                   draggable={!dragSchedulingId}
                   onDragStart={(event) => handlePendingDragStart(event, request)}
                   onDragEnd={handlePendingDragEnd}
@@ -2490,7 +2569,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     <strong>{request.builderName || 'Material Order'}</strong>
                     <span>{request.projectName || 'Awaiting site assignment'}</span>
                   </div>
-                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
+                  <button type="button" onClick={() => openRequestModal(request.id)} disabled={Boolean(dragSchedulingId)}>Schedule</button>
                 </div>
               ))}
             </div>
@@ -2579,6 +2658,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         >
                           <span>{formatTimeChip(Math.floor(dropPreview.minutes / 60), dropPreview.minutes % 60)}</span>
                           <strong>{dropPreview.blocked ? 'Slot unavailable' : 'Drop to schedule'}</strong>
+                        </div>
+                      ) : null}
+                      {routePlacementPreview?.truckId === lane.id ? (
+                        <div
+                          className="transport-route-loading-tile"
+                          style={{
+                            left: `${getEventOffset(routePlacementPreview.minutes) * 100}%`,
+                            width: `${getEventFlex(routePlacementPreview.durationMinutes || 90) * 100}%`,
+                          }}
+                        >
+                          <span>{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
+                          <strong>Calculating route...</strong>
+                          <small>{routePlacementPreview.title}</small>
+                          <em><i className="spinner-tiny" /> TomTom exact timing</em>
                         </div>
                       ) : null}
                       {laneEvents.map(event => {

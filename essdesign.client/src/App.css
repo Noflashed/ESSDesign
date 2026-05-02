@@ -6150,6 +6150,10 @@ button.stat-card {
 }
 .ts2-pending-item strong { display: block; color: #102b5c; font-size: 14px; }
 .ts2-pending-item span { display: block; margin-top: 4px; color: #64748b; font-size: 13px; }
+.ts2-pending-item.scheduling {
+    opacity: 0.62;
+    pointer-events: none;
+}
 
 .ts2-board-scroll {
     overflow: auto;
@@ -6285,6 +6289,83 @@ button.stat-card {
     will-change: left, width;
     transform: translateZ(0);
 }
+
+.transport-route-loading-tile {
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    min-width: 132px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid rgba(37, 99, 235, 0.24);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(239, 246, 255, 0.98), rgba(255, 247, 237, 0.96));
+    color: #102b5c;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.10);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.transport-route-loading-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.58), transparent);
+    transform: translateX(-100%);
+    animation: transport-route-loading-sheen 1.25s ease-in-out infinite;
+}
+
+.transport-route-loading-tile span,
+.transport-route-loading-tile strong,
+.transport-route-loading-tile small,
+.transport-route-loading-tile em {
+    position: relative;
+    z-index: 1;
+}
+
+.transport-route-loading-tile span {
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.transport-route-loading-tile strong {
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1.15;
+}
+
+.transport-route-loading-tile small {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-route-loading-tile em {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 800;
+}
+
+@keyframes transport-route-loading-sheen {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
 .ts2-event-card,
 .ts2-return-card,
 .ts2-secondary-route-card {
@@ -7326,6 +7407,12 @@ button.stat-card {
 .transport-page-frame .ts2-event-wrap {
     top: 8px;
     bottom: 8px;
+}
+
+.transport-page-frame .transport-route-loading-tile {
+    top: 8px;
+    bottom: 8px;
+    border-radius: 12px;
 }
 
 .transport-page-frame .ts2-event-card,
