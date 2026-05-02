@@ -545,6 +545,25 @@ function sameDropPreview(left, right) {
     && left.snapSide === right.snapSide;
 }
 
+function intersectRects(a, b) {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+function sameDropPreviewGroup(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    return false;
+  }
+  return left.every((item, index) => {
+    const other = right[index];
+    return other
+      && item.orderId === other.orderId
+      && item.truckId === other.truckId
+      && item.minutes === other.minutes
+      && item.durationMinutes === other.durationMinutes
+      && Boolean(item.blocked) === Boolean(other.blocked);
+  });
+}
+
 function setScheduleDragImage(event, request, options = {}) {
   if (!event.dataTransfer || typeof document === 'undefined') {
     return;
@@ -954,6 +973,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [selectedScheduleRouteLoading, setSelectedScheduleRouteLoading] = useState(false);
   const [selectedScheduleRouteData, setSelectedScheduleRouteData] = useState(null);
   const [selectedScheduleEventId, setSelectedScheduleEventId] = useState('');
+  const [selectedScheduleEventIds, setSelectedScheduleEventIds] = useState([]);
   const [selectedScheduleSegment, setSelectedScheduleSegment] = useState('primary');
   const [scheduleInspectorOpen, setScheduleInspectorOpen] = useState(true);
   const selectedScheduleRouteRequestKeyRef = useRef('');
@@ -962,6 +982,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [draggedScheduledOrderId, setDraggedScheduledOrderId] = useState('');
   const [dragPreviewDurationMinutes, setDragPreviewDurationMinutes] = useState(90);
   const [dropPreview, setDropPreview] = useState(null);
+  const [dropPreviewGroup, setDropPreviewGroup] = useState([]);
   const [dragSchedulingId, setDragSchedulingId] = useState('');
   const [routeLoadingRequestIds, setRouteLoadingRequestIds] = useState(() => new Set());
   const [tileMenu, setTileMenu] = useState(null);
@@ -971,6 +992,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [secondaryAddressSuggestions, setSecondaryAddressSuggestions] = useState([]);
   const [secondaryAddressLoading, setSecondaryAddressLoading] = useState(false);
   const boardScrollRef = useRef(null);
+  const boardBodyRef = useRef(null);
   const scaleAnchorRef = useRef(null);
   const loadPromiseRef = useRef(null);
   const optimisticRequestOverridesRef = useRef(new Map());
@@ -978,6 +1000,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
   const dragPointerOffsetMinutesRef = useRef(0);
+  const selectionDragContextRef = useRef(null);
+  const selectionStateRef = useRef(null);
+  const [selectionBox, setSelectionBox] = useState(null);
 
   const setRouteLoading = useCallback((requestId, loading) => {
     if (!requestId) {
@@ -1179,6 +1204,80 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
   }, [tileMenu]);
 
+  const updateSelectionFromBox = useCallback((boxRect) => {
+    if (!boardBodyRef.current) {
+      return;
+    }
+    const nodes = Array.from(boardBodyRef.current.querySelectorAll('.ts2-event-wrap[data-order-id]'));
+    const nextIds = nodes
+      .filter(node => intersectRects(boxRect, node.getBoundingClientRect()))
+      .map(node => node.getAttribute('data-order-id'))
+      .filter(Boolean);
+    setSelectedScheduleEventIds(current => {
+      if (current.length === nextIds.length && current.every((value, index) => value === nextIds[index])) {
+        return current;
+      }
+      return nextIds;
+    });
+    if (nextIds.length > 0) {
+      setSelectedScheduleEventId(current => (nextIds.includes(current) ? current : nextIds[0]));
+    }
+  }, []);
+
+  const finishSelectionBox = useCallback(() => {
+    const state = selectionStateRef.current;
+    selectionStateRef.current = null;
+    setSelectionBox(null);
+    if (!state?.active) {
+      return;
+    }
+    if (selectedScheduleEventIds.length === 0) {
+      setSelectedScheduleEventId('');
+    }
+  }, [selectedScheduleEventIds.length]);
+
+  useEffect(() => {
+    const handleMove = (event) => {
+      const state = selectionStateRef.current;
+      if (!state) {
+        return;
+      }
+      const width = Math.abs(event.clientX - state.startClientX);
+      const height = Math.abs(event.clientY - state.startClientY);
+      if (!state.active && Math.max(width, height) < 6) {
+        return;
+      }
+      if (!boardBodyRef.current) {
+        return;
+      }
+      const bodyRect = boardBodyRef.current.getBoundingClientRect();
+      state.active = true;
+      const left = Math.max(bodyRect.left, Math.min(state.startClientX, event.clientX));
+      const top = Math.max(bodyRect.top, Math.min(state.startClientY, event.clientY));
+      const right = Math.min(bodyRect.right, Math.max(state.startClientX, event.clientX));
+      const bottom = Math.min(bodyRect.bottom, Math.max(state.startClientY, event.clientY));
+      const boxRect = { left, top, right, bottom };
+      setSelectionBox({
+        left: left - bodyRect.left,
+        top: top - bodyRect.top,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+      });
+      updateSelectionFromBox(boxRect);
+    };
+
+    const handleUp = () => {
+      finishSelectionBox();
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [finishSelectionBox, updateSelectionFromBox]);
+
   useEffect(() => {
     const query = secondaryRouteModal?.destination?.trim() || '';
     if (!secondaryRouteModal || secondaryRouteModal.selectedAddressSourceId || query.length < 3) {
@@ -1271,14 +1370,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
   );
+  const selectedScheduleEventIdSet = useMemo(
+    () => new Set(selectedScheduleEventIds),
+    [selectedScheduleEventIds],
+  );
   useEffect(() => {
     if (selectedScheduleEventId && dayEvents.some(event => event.orderId === selectedScheduleEventId)) {
       return;
     }
     setSelectedScheduleEventId(dayEvents[0]?.orderId || '');
   }, [dayEvents, selectedScheduleEventId]);
+  useEffect(() => {
+    setSelectedScheduleEventIds(current => current.filter(orderId => dayEvents.some(event => event.orderId === orderId)));
+  }, [dayEvents]);
   const handleSelectScheduleEvent = useCallback((orderId, segment = 'primary') => {
     setSelectedScheduleEventId(orderId);
+    setSelectedScheduleEventIds([orderId]);
     setSelectedScheduleSegment(segment);
     setScheduleInspectorOpen(true);
   }, []);
@@ -1689,6 +1796,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setAllRequests(nextRequests);
     projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
     setSelectedScheduleEventId(requestId);
+    setSelectedScheduleEventIds([requestId]);
     setScheduleInspectorOpen(true);
     closeRequestModal();
     optimisticRequestOverridesRef.current.set(requestId, {
@@ -1808,6 +1916,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
 
     setSelectedScheduleEventId(requestId);
+    setSelectedScheduleEventIds([requestId]);
     setScheduleInspectorOpen(true);
     setDraggedRequestId('');
     setDraggedScheduledOrderId('');
@@ -1845,6 +1954,139 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setError(err?.message || 'Failed to schedule request.');
       });
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
+
+  const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
+    if (!selectionContext?.items?.length || !targetTruckId) {
+      return;
+    }
+
+    const targetTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === targetTruckId);
+    if (targetTruckIndex < 0) {
+      return;
+    }
+
+    const selectedIds = new Set(selectionContext.items.map(item => item.orderId));
+    const updates = [];
+    let blockedMessage = '';
+
+    for (const item of selectionContext.items) {
+      const nextTruckIndex = targetTruckIndex + item.laneOffset;
+      if (nextTruckIndex < 0 || nextTruckIndex >= TRUCK_LANES.length) {
+        blockedMessage = 'Selection cannot be moved outside the available truck lanes.';
+        break;
+      }
+      const nextTruck = TRUCK_LANES[nextTruckIndex];
+      const nextStartMinutes = anchorMinutes + item.minuteOffset;
+      if (clampScheduleMinutes(nextStartMinutes, item.durationMinutes) !== nextStartMinutes) {
+        blockedMessage = 'Selection extends outside the available schedule window.';
+        break;
+      }
+      const collision = getScheduleCollision({
+        requestId: item.orderId,
+        truckId: nextTruck.id,
+        startMinutes: nextStartMinutes,
+        durationMinutes: item.durationMinutes,
+        dayEvents: dayEvents.filter(event => !selectedIds.has(event.orderId)),
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+      });
+      if (collision) {
+        blockedMessage = getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap);
+        break;
+      }
+      updates.push({
+        requestId: item.orderId,
+        truckId: nextTruck.id,
+        truckLabel: nextTruck.rego,
+        startMinutes: nextStartMinutes,
+        hour: Math.floor(nextStartMinutes / 60),
+        minute: nextStartMinutes % 60,
+      });
+    }
+
+    if (blockedMessage) {
+      setError(blockedMessage);
+      setDropPreview(null);
+      setDropPreviewGroup([]);
+      return;
+    }
+
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const previousCycleStateMap = eventCycleStateMap;
+    const dateKey = formatDateKey(selectedDate);
+    const nextRequests = allRequests.map(request => {
+      const update = updates.find(entry => entry.requestId === request.id);
+      if (!update) {
+        return request;
+      }
+      return {
+        ...request,
+        scheduledDate: dateKey,
+        scheduledHour: update.hour,
+        scheduledMinute: update.minute,
+        scheduledAtIso: buildScheduleIso(dateKey, update.hour, update.minute),
+        scheduledTruckId: update.truckId,
+        scheduledTruckLabel: update.truckLabel,
+        truckId: update.truckId,
+        truckLabel: update.truckLabel,
+      };
+    });
+
+    setAllRequests(nextRequests);
+    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    setSelectedScheduleEventIds(updates.map(item => item.requestId));
+    setSelectedScheduleEventId(selectionContext.anchorOrderId);
+    setSelectedScheduleSegment('primary');
+    setScheduleInspectorOpen(true);
+    setDraggedRequestId('');
+    setDraggedScheduledOrderId('');
+    setDragPreviewDurationMinutes(90);
+    dragPointerOffsetMinutesRef.current = 0;
+    setDropPreview(null);
+    setDropPreviewGroup([]);
+    selectionDragContextRef.current = null;
+
+    updates.forEach(update => {
+      const request = nextRequests.find(item => item.id === update.requestId);
+      if (request) {
+        optimisticRequestOverridesRef.current.set(update.requestId, {
+          request,
+          expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+        });
+      }
+    });
+
+    Promise.all(
+      updates.map(update => materialOrderRequestsAPI.setSchedule(update.requestId, {
+        date: dateKey,
+        hour: update.hour,
+        minute: update.minute,
+        truckId: update.truckId,
+        truckLabel: update.truckLabel,
+      })),
+    )
+      .then(() => {
+        setError('');
+      })
+      .catch(err => {
+        updates.forEach(update => optimisticRequestOverridesRef.current.delete(update.requestId));
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setError(err?.message || 'Failed to move selected deliveries.');
+      });
+  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2155,12 +2397,59 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDragPreviewDurationMinutes(90);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
+    setDropPreviewGroup([]);
+    selectionDragContextRef.current = null;
   }, []);
+
+  const handleLanePointerDown = useCallback((event) => {
+    if (event.button !== 0 || draggedRequestId || dragSchedulingId) {
+      return;
+    }
+    if (event.target.closest('.ts2-event-wrap, .transport-drop-preview, .transport-snap-hover')) {
+      return;
+    }
+    event.preventDefault();
+    selectionStateRef.current = {
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      active: false,
+    };
+    setSelectionBox(null);
+    setSelectedScheduleEventIds([]);
+  }, [dragSchedulingId, draggedRequestId]);
 
   const handleScheduledDragStart = useCallback((event, scheduleEvent, request, durationMinutes, palette) => {
     if (!scheduleEvent?.orderId) {
       return;
     }
+    const selectedIds = selectedScheduleEventIdSet.has(scheduleEvent.orderId) && selectedScheduleEventIds.length > 1
+      ? selectedScheduleEventIds
+      : [scheduleEvent.orderId];
+    const anchorTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === scheduleEvent.truckId);
+    const anchorStartMinutes = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+    selectionDragContextRef.current = {
+      anchorOrderId: scheduleEvent.orderId,
+      anchorTruckId: scheduleEvent.truckId,
+      anchorTruckIndex,
+      anchorStartMinutes,
+      items: selectedIds
+        .map(orderId => {
+          const sourceEvent = dayEvents.find(item => item.orderId === orderId);
+          if (!sourceEvent) {
+            return null;
+          }
+          const sourceTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === sourceEvent.truckId);
+          const sourceStartMinutes = eventStartMinutesMap[orderId] ?? sourceEvent.hour * 60 + sourceEvent.minute;
+          return {
+            orderId,
+            truckId: sourceEvent.truckId,
+            durationMinutes: eventDurationMinutesMap[orderId] ?? 90,
+            minuteOffset: sourceStartMinutes - anchorStartMinutes,
+            laneOffset: sourceTruckIndex - anchorTruckIndex,
+          };
+        })
+        .filter(Boolean),
+    };
     const rect = event.currentTarget.getBoundingClientRect();
     const pointerRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
     setDraggedRequestId(scheduleEvent.orderId);
@@ -2168,6 +2457,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDragPreviewDurationMinutes(durationMinutes || 90);
     dragPointerOffsetMinutesRef.current = pointerRatio * (durationMinutes || 90);
     setDropPreview(null);
+    setDropPreviewGroup([]);
     setTileMenu(null);
     setManualTimeModal(null);
     event.dataTransfer.effectAllowed = 'move';
@@ -2181,7 +2471,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       color: palette?.text,
       label: 'Move schedule',
     });
-  }, []);
+  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, selectedScheduleEventIdSet, selectedScheduleEventIds]);
 
   const handleScheduledDragEnd = useCallback(() => {
     setDraggedRequestId('');
@@ -2189,6 +2479,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setDragPreviewDurationMinutes(90);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
+    setDropPreviewGroup([]);
+    selectionDragContextRef.current = null;
   }, []);
 
   const handleLaneDragOver = useCallback((event, truckId) => {
@@ -2197,11 +2489,41 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
+    const selectionContext = selectionDragContextRef.current;
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
+    if (selectionContext?.items?.length > 1) {
+      const targetTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === truckId);
+      const selectedIds = new Set(selectionContext.items.map(item => item.orderId));
+      const nextGroup = selectionContext.items.map(item => {
+        const nextTruckIndex = targetTruckIndex + item.laneOffset;
+        const nextTruck = TRUCK_LANES[nextTruckIndex];
+        const nextMinutes = minutes + item.minuteOffset;
+        const blockedByBounds = !nextTruck || clampScheduleMinutes(nextMinutes, item.durationMinutes) !== nextMinutes;
+        const collision = !blockedByBounds && getScheduleCollision({
+          requestId: item.orderId,
+          truckId: nextTruck.id,
+          startMinutes: nextMinutes,
+          durationMinutes: item.durationMinutes,
+          dayEvents: dayEvents.filter(entry => !selectedIds.has(entry.orderId)),
+          startMap: eventStartMinutesMap,
+          durationMap: eventDurationMinutesMap,
+        });
+        return {
+          orderId: item.orderId,
+          truckId: nextTruck?.id || '',
+          minutes: nextMinutes,
+          durationMinutes: item.durationMinutes,
+          blocked: blockedByBounds || Boolean(collision),
+        };
+      });
+      setDropPreview(null);
+      setDropPreviewGroup(current => sameDropPreviewGroup(current, nextGroup) ? current : nextGroup);
+      return;
+    }
     const snapCandidate = getEdgeSnapCandidate({
       requestId: draggedRequestId,
       truckId,
@@ -2230,6 +2552,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       snapSide: snapCandidate?.side,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
+    setDropPreviewGroup([]);
   }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, timelineSnapStep]);
 
   const handleLaneDragLeave = useCallback((event, truckId) => {
@@ -2237,6 +2560,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     setDropPreview(current => current?.truckId === truckId ? null : current);
+    setDropPreviewGroup(current => current.some(item => item.truckId === truckId) ? [] : current);
   }, []);
 
   const handleLaneDrop = useCallback((event, truckId) => {
@@ -2245,11 +2569,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     event.preventDefault();
+    const selectionContext = selectionDragContextRef.current;
     const minutes = getDropMinutesFromPointer(event.clientX, event.currentTarget, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
+    if (selectionContext?.items?.length > 1) {
+      scheduleRequestGroupAt(selectionContext, truckId, minutes);
+      return;
+    }
     const snapCandidate = getEdgeSnapCandidate({
       requestId,
       truckId,
@@ -2260,10 +2589,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       durationMap: eventDurationMinutesMap,
     });
     scheduleRequestAt(requestId, truckId, snapCandidate?.minutes ?? minutes, dragPreviewDurationMinutes, snapCandidate ? { exact: true } : { step: timelineSnapStep });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, timelineSnapStep]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, scheduleRequestGroupAt, timelineSnapStep]);
 
   const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    if (selectionDragContextRef.current?.items?.length > 1) {
+      return;
+    }
     if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
       return;
     }
@@ -2315,6 +2647,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const handleEventSnapDrop = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    if (selectionDragContextRef.current?.items?.length > 1) {
+      return;
+    }
     if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
       return;
     }
@@ -2389,6 +2724,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
     }
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    setSelectedScheduleEventIds(current => current.filter(id => id !== requestId));
     if (updatedRequest) {
       optimisticRequestOverridesRef.current.set(requestId, {
         request: updatedRequest,
@@ -2435,6 +2771,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setAllRequests(nextRequests);
     projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
     setSelectedScheduleEventId(current => current === requestId ? '' : current);
+    setSelectedScheduleEventIds(current => current.filter(id => id !== requestId));
     optimisticRequestOverridesRef.current.set(requestId, {
       deleted: true,
       expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
@@ -2608,8 +2945,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               </div>
             </div>
           </div>
-          <div className="ts2-board-body">
+          <div className="ts2-board-body" ref={boardBodyRef}>
             <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} laneOffset={TRACK_OFFSET} />
+            {selectionBox ? (
+              <div
+                className="ts2-selection-box"
+                style={{
+                  left: selectionBox.left,
+                  top: selectionBox.top,
+                  width: selectionBox.width,
+                  height: selectionBox.height,
+                }}
+              />
+            ) : null}
             {visibleTruckLanes.map((lane, laneIndex) => {
               const laneEvents = groupedEventsByTruck[laneIndex] || [];
               return (
@@ -2626,6 +2974,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     <div
                       className={`ts2-lane-track${dropPreview?.truckId === lane.id ? ' is-drop-target' : ''}`}
                       style={{ width: timelineWidth }}
+                      onPointerDown={handleLanePointerDown}
                       onDragOver={(event) => handleLaneDragOver(event, lane.id)}
                       onDragLeave={(event) => handleLaneDragLeave(event, lane.id)}
                       onDrop={(event) => handleLaneDrop(event, lane.id)}
@@ -2646,6 +2995,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           <strong>{dropPreview.blocked ? 'Slot unavailable' : 'Drop to schedule'}</strong>
                         </div>
                       ) : null}
+                      {dropPreviewGroup
+                        .filter(item => item.truckId === lane.id)
+                        .map(item => (
+                          <div
+                            key={`group-preview-${item.orderId}`}
+                            className={`transport-drop-preview group${item.blocked ? ' blocked' : ''}`}
+                            style={{
+                              left: `${getEventOffset(item.minutes) * 100}%`,
+                              width: `${getEventFlex(item.durationMinutes || 90) * 100}%`,
+                            }}
+                          >
+                            <span>{formatTimeChip(Math.floor(item.minutes / 60), item.minutes % 60)}</span>
+                            <strong>{item.blocked ? 'Slot unavailable' : 'Move selection'}</strong>
+                          </div>
+                        ))}
                       {laneEvents.map(event => {
                       const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
@@ -2702,7 +3066,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       return (
                         <div
                           key={event.id}
-                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}`}
+                          data-order-id={event.orderId}
+                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
                           draggable={!dragSchedulingId}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}

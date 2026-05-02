@@ -6239,6 +6239,15 @@ button.stat-card {
     white-space: nowrap;
 }
 
+.ts2-selection-box {
+    position: absolute;
+    border: 1px dashed #2A66D9;
+    background: rgba(42, 102, 217, 0.12);
+    border-radius: 10px;
+    z-index: 20;
+    pointer-events: none;
+}
+
 .ts2-lane-row {
     min-height: 110px;
     border-bottom: 1px solid rgba(226,232,240,0.88);
@@ -6284,6 +6293,14 @@ button.stat-card {
     min-width: 112px;
     will-change: left, width;
     transform: translateZ(0);
+}
+.ts2-event-wrap.selected {
+    z-index: 9;
+}
+.ts2-event-wrap.selected .ts2-event-card,
+.ts2-event-wrap.selected .ts2-secondary-route-card,
+.ts2-event-wrap.selected .ts2-return-card {
+    box-shadow: 0 0 0 3px rgba(42, 102, 217, 0.28), 0 12px 22px rgba(15, 23, 42, 0.12);
 }
 .ts2-event-card,
 .ts2-return-card,
@@ -7680,6 +7697,11 @@ button.stat-card {
 
 .transport-page-frame .ts2-now-marker {
     z-index: 8;
+}
+
+.transport-page-frame .ts2-selection-box {
+    border-color: #2A66D9;
+    background: rgba(42, 102, 217, 0.10);
 }
 
 .transport-page-frame .material-ordering-transport-page {
