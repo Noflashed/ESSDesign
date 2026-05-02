@@ -6150,10 +6150,6 @@ button.stat-card {
 }
 .ts2-pending-item strong { display: block; color: #102b5c; font-size: 14px; }
 .ts2-pending-item span { display: block; margin-top: 4px; color: #64748b; font-size: 13px; }
-.ts2-pending-item.scheduling {
-    opacity: 0.62;
-    pointer-events: none;
-}
 
 .ts2-board-scroll {
     overflow: auto;
@@ -6289,48 +6285,6 @@ button.stat-card {
     will-change: left, width;
     transform: translateZ(0);
 }
-
-.ts2-event-wrap.route-loading {
-    z-index: 5;
-    pointer-events: none;
-}
-
-.ts2-event-card.is-route-loading {
-    cursor: default;
-    pointer-events: none;
-}
-
-.transport-route-loading-bar {
-    position: absolute !important;
-    right: 10px;
-    bottom: 10px;
-    width: 42px;
-    height: 4px;
-    border-radius: 999px;
-    background: rgba(16, 43, 92, 0.14);
-    overflow: hidden;
-}
-
-.transport-route-loading-bar::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    width: 45%;
-    border-radius: inherit;
-    background: #f47c20;
-    animation: transport-route-loading-bar 0.85s ease-in-out infinite;
-}
-
-@keyframes transport-route-loading-bar {
-    0% {
-        transform: translateX(-120%);
-    }
-
-    100% {
-        transform: translateX(240%);
-    }
-}
-
 .ts2-event-card,
 .ts2-return-card,
 .ts2-secondary-route-card {
@@ -6460,6 +6414,39 @@ button.stat-card {
 }
 .ts2-secondary-route-card .ts2-event-status-dot {
     background: #f47c20;
+}
+
+.transport-route-loading-bar {
+    position: absolute !important;
+    right: 10px;
+    bottom: 10px;
+    z-index: 3;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(16, 43, 92, 0.14);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.transport-route-loading-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 45%;
+    border-radius: inherit;
+    background: #f47c20;
+    animation: transport-route-loading-bar 0.85s ease-in-out infinite;
+}
+
+@keyframes transport-route-loading-bar {
+    0% {
+        transform: translateX(-120%);
+    }
+
+    100% {
+        transform: translateX(240%);
+    }
 }
 
 .ts2-modal-card,

@@ -963,7 +963,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [dragPreviewDurationMinutes, setDragPreviewDurationMinutes] = useState(90);
   const [dropPreview, setDropPreview] = useState(null);
   const [dragSchedulingId, setDragSchedulingId] = useState('');
-  const [routePlacementPreview, setRoutePlacementPreview] = useState(null);
+  const [routeLoadingRequestIds, setRouteLoadingRequestIds] = useState(() => new Set());
   const [tileMenu, setTileMenu] = useState(null);
   const [manualTimeModal, setManualTimeModal] = useState(null);
   const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
@@ -978,6 +978,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
   const dragPointerOffsetMinutesRef = useRef(0);
+
+  const setRouteLoading = useCallback((requestId, loading) => {
+    if (!requestId) {
+      return;
+    }
+    setRouteLoadingRequestIds(current => {
+      const hasRequest = current.has(requestId);
+      if (loading === hasRequest) {
+        return current;
+      }
+      const next = new Set(current);
+      if (loading) {
+        next.add(requestId);
+      } else {
+        next.delete(requestId);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     requestSiteLocationMapRef.current = requestSiteLocationMap;
@@ -1076,7 +1095,27 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             return [request.id, null];
           }
           const siteLocation = siteLocationMap[request.id];
-          return [request.id, siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromRequest(request, selectedDate)) : null];
+          if (!siteLocation) {
+            return [request.id, null];
+          }
+          const routeSchedule = buildRouteScheduleFromRequest(request, selectedDate);
+          const cachedEstimate = getCachedRouteEstimateValue(siteLocation, routeSchedule);
+          const shouldShowLoading = cachedEstimate === undefined;
+          if (shouldShowLoading) {
+            setRouteLoading(request.id, true);
+          }
+          try {
+            return [
+              request.id,
+              cachedEstimate !== undefined
+                ? cachedEstimate
+                : await getCachedRouteEstimate(siteLocation, routeSchedule),
+            ];
+          } finally {
+            if (shouldShowLoading) {
+              setRouteLoading(request.id, false);
+            }
+          }
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries);
@@ -1093,7 +1132,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { dateKey, promise: task };
     return task;
-  }, [applyBoardProjection, mergeRequestSiteLocationMap, selectedDate]);
+  }, [applyBoardProjection, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -1685,16 +1724,32 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, closeRequestModal, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, requestModal, selectedDate, selectedHour, selectedMinute, selectedRouteDurationMinutes, selectedTruckId]);
 
-  const scheduleRequestAt = useCallback(async (requestId, truckId, startMinutes, durationMinutes = 90, options = {}) => {
-    if (!requestId || !truckId || dragSchedulingId) {
+  const scheduleRequestAt = useCallback((requestId, truckId, startMinutes, durationMinutes = 90, options = {}) => {
+    if (!requestId || !truckId) {
       return;
     }
     const roundedStart = options.exact
       ? Math.round(startMinutes)
       : roundScheduleMinutes(startMinutes, options.step || DRAG_SCHEDULE_MINUTE_STEP);
     const safeMinutes = clampScheduleMinutes(roundedStart, durationMinutes);
+    const hour = Math.floor(safeMinutes / 60);
+    const minute = safeMinutes % 60;
     const truck = TRUCK_LANES.find(lane => lane.id === truckId);
     const dateKey = formatDateKey(selectedDate);
+    const collision = getScheduleCollision({
+      requestId,
+      truckId: truck?.id ?? truckId,
+      startMinutes: safeMinutes,
+      durationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    if (collision) {
+      setError(getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap));
+      setDropPreview(null);
+      return;
+    }
     const previousRequests = allRequests;
     const previousEvents = dayEvents;
     const previousMetaMap = requestMetaMap;
@@ -1703,88 +1758,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
     const previousCycleStateMap = eventCycleStateMap;
     const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
-    if (!sourceRequest) {
-      setDropPreview(null);
-      return;
-    }
-
-    let siteLocation = requestSiteLocationMapRef.current[requestId] || '';
-    let exactDurationMinutes = durationMinutes;
-    let finalSafeMinutes = safeMinutes;
-    const isStoredSecondaryRoute = isSecondaryRouteRequest(sourceRequest);
-    const previewTitle = sourceRequest.builderName || sourceRequest.secondaryRoute?.destination || 'Material Order';
-    const previewSubtitle = sourceRequest.projectName || getSecondaryRouteReasonLabel(sourceRequest.secondaryRoute?.reason) || 'Calculating exact timing';
-    setDragSchedulingId(requestId);
-    setDropPreview(null);
-    setTileMenu(null);
-    setRoutePlacementPreview({
-      requestId,
-      truckId: truck?.id ?? truckId,
-      minutes: safeMinutes,
-      durationMinutes: Math.max(60, durationMinutes || 90),
-      title: previewTitle,
-      subtitle: previewSubtitle,
-    });
-
-    try {
-      if (isStoredSecondaryRoute) {
-        exactDurationMinutes = getSecondaryRouteTiming(sourceRequest.secondaryRoute).totalMinutes;
-      } else {
-        if (!siteLocation) {
-          const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
-          siteLocation = findProjectLocation(builders, sourceRequest);
-          if (siteLocation) {
-            mergeRequestSiteLocationMap({
-              ...requestSiteLocationMapRef.current,
-              [requestId]: siteLocation,
-            });
-          }
-        }
-
-        if (!siteLocation) {
-          throw new Error('Site location is missing, so TomTom route timing cannot be calculated.');
-        }
-
-        const resolveExactTiming = async (minutesToCheck) => {
-          const routeSchedule = {
-            scheduledDate: dateKey,
-            scheduledHour: Math.floor(minutesToCheck / 60),
-            scheduledMinute: Math.floor(minutesToCheck % 60),
-          };
-          const cachedEstimate = getCachedRouteEstimateValue(siteLocation, routeSchedule);
-          const routeEstimate = cachedEstimate !== undefined
-            ? cachedEstimate
-            : await getCachedRouteEstimate(siteLocation, routeSchedule);
-          if (!routeEstimate) {
-            throw new Error('TomTom route timing could not be calculated for this order.');
-          }
-          return getTimingProfile(routeEstimate, sourceRequest.secondaryRoute || null).totalMinutes;
-        };
-
-        exactDurationMinutes = await resolveExactTiming(safeMinutes);
-        finalSafeMinutes = clampScheduleMinutes(roundedStart, exactDurationMinutes);
-        if (finalSafeMinutes !== safeMinutes) {
-          exactDurationMinutes = await resolveExactTiming(finalSafeMinutes);
-          finalSafeMinutes = clampScheduleMinutes(roundedStart, exactDurationMinutes);
-        }
-      }
-
-      const exactCollision = getScheduleCollision({
-        requestId,
-        truckId: truck?.id ?? truckId,
-        startMinutes: finalSafeMinutes,
-        durationMinutes: exactDurationMinutes,
-        dayEvents,
-        startMap: eventStartMinutesMap,
-        durationMap: eventDurationMinutesMap,
-      });
-      if (exactCollision) {
-        setError(getCollisionMessage(exactCollision, eventStartMinutesMap, eventDurationMinutesMap));
-        return;
-      }
-
-      const hour = Math.floor(finalSafeMinutes / 60);
-      const minute = Math.floor(finalSafeMinutes % 60);
     const updatedRequest = sourceRequest ? {
       ...sourceRequest,
       scheduledDate: dateKey,
@@ -1807,6 +1780,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         : dedupeRequests([...previousRequests, updatedRequest]);
       setAllRequests(nextRequests);
       projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+      if (!isSecondaryRouteRequest(updatedRequest)) {
+        setRouteLoading(requestId, true);
+        (async () => {
+          let siteLocation = requestSiteLocationMapRef.current[requestId] || '';
+          if (!siteLocation) {
+            const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+            siteLocation = findProjectLocation(builders, updatedRequest);
+            if (siteLocation) {
+              mergeRequestSiteLocationMap({ [requestId]: siteLocation });
+            }
+          }
+          if (!siteLocation) {
+            return;
+          }
+          const routeSchedule = buildRouteScheduleFromRequest(updatedRequest, selectedDate);
+          if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
+            await getCachedRouteEstimate(siteLocation, routeSchedule);
+          }
+          projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+        })()
+          .catch(() => {})
+          .finally(() => {
+            setRouteLoading(requestId, false);
+          });
+      }
     }
 
     setSelectedScheduleEventId(requestId);
@@ -1846,19 +1844,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-      setError('');
-    } catch (err) {
-      setError(err?.message || 'Failed to calculate TomTom route timing.');
-    } finally {
-      setRoutePlacementPreview(null);
-      setDragSchedulingId('');
-      setDraggedRequestId('');
-      setDraggedScheduledOrderId('');
-      setDragPreviewDurationMinutes(90);
-      dragPointerOffsetMinutesRef.current = 0;
-      setDropPreview(null);
-    }
-  }, [allRequests, dayEvents, dragSchedulingId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2560,7 +2546,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               {pendingRequests.map(request => (
                 <div
                   key={request.id}
-                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}${dragSchedulingId === request.id ? ' scheduling' : ''}`}
+                  className={`ts2-pending-item${draggedRequestId === request.id ? ' dragging' : ''}`}
                   draggable={!dragSchedulingId}
                   onDragStart={(event) => handlePendingDragStart(event, request)}
                   onDragEnd={handlePendingDragEnd}
@@ -2569,7 +2555,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     <strong>{request.builderName || 'Material Order'}</strong>
                     <span>{request.projectName || 'Awaiting site assignment'}</span>
                   </div>
-                  <button type="button" onClick={() => openRequestModal(request.id)} disabled={Boolean(dragSchedulingId)}>Schedule</button>
+                  <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
                 </div>
               ))}
             </div>
@@ -2660,29 +2646,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           <strong>{dropPreview.blocked ? 'Slot unavailable' : 'Drop to schedule'}</strong>
                         </div>
                       ) : null}
-                      {routePlacementPreview?.truckId === lane.id ? (
-                        <div
-                          className="ts2-event-wrap route-loading"
-                          style={{
-                            left: `${getEventOffset(routePlacementPreview.minutes) * 100}%`,
-                            width: `${getEventFlex(routePlacementPreview.durationMinutes || 90) * 100}%`,
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="ts2-event-card is-route-loading"
-                            style={{ backgroundColor: '#eaf2ff', color: '#102b5c', width: '100%' }}
-                            disabled
-                            aria-busy="true"
-                          >
-                            <span className="ts2-delivery-type-pill material">Material order</span>
-                            <span className="ts2-event-time">{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
-                            <strong className="ts2-event-title">{routePlacementPreview.title}</strong>
-                            <span className="ts2-event-subtitle">{routePlacementPreview.subtitle}</span>
-                            <i className="transport-route-loading-bar" aria-hidden="true" />
-                          </button>
-                        </div>
-                      ) : null}
                       {laneEvents.map(event => {
                       const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
@@ -2735,6 +2698,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       const primaryDeliveryType = getDeliveryTypePill(request);
                       const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
+                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId);
                       return (
                         <div
                           key={event.id}
@@ -2777,6 +2741,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
                               <span>{isSecondaryRequest ? 'Secondary transit' : groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
                             </div>
+                            {isRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                           </button>
                           {hasSecondaryRouteTile ? (
                             <button
