@@ -1361,6 +1361,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ),
     [allRequests],
   );
+  const selectedScheduleEventIdSet = useMemo(
+    () => new Set(selectedScheduleEventIds),
+    [selectedScheduleEventIds],
+  );
   const tileMenuRequest = tileMenu
     ? requestMetaMap[tileMenu.orderId] || allRequests.find(request => request.id === tileMenu.orderId) || null
     : null;
@@ -1378,10 +1382,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
-  );
-  const selectedScheduleEventIdSet = useMemo(
-    () => new Set(selectedScheduleEventIds),
-    [selectedScheduleEventIds],
   );
   const clearSelectedScheduleEvents = useCallback(() => {
     setSelectedScheduleEventIds([]);
