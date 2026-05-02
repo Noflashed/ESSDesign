@@ -2668,10 +2668,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             width: `${getEventFlex(routePlacementPreview.durationMinutes || 90) * 100}%`,
                           }}
                         >
-                          <span>{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
-                          <strong>Calculating route...</strong>
-                          <small>{routePlacementPreview.title}</small>
-                          <em><i className="spinner-tiny" /> TomTom exact timing</em>
+                          <span className="ts2-delivery-type-pill material">Material order</span>
+                          <span className="ts2-event-time">{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
+                          <strong className="ts2-event-title">{routePlacementPreview.title}</strong>
+                          <span className="ts2-event-subtitle">{routePlacementPreview.subtitle}</span>
+                          <i className="transport-route-loading-bar" aria-hidden="true" />
                         </div>
                       ) : null}
                       {laneEvents.map(event => {

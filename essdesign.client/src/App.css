@@ -6294,75 +6294,58 @@ button.stat-card {
     position: absolute;
     top: 14px;
     bottom: 14px;
-    min-width: 132px;
+    min-width: 112px;
     z-index: 5;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 4px;
     padding: 12px;
-    border: 1px solid rgba(37, 99, 235, 0.24);
+    border: none;
     border-radius: 14px;
-    background: linear-gradient(135deg, rgba(239, 246, 255, 0.98), rgba(255, 247, 237, 0.96));
+    background: #eaf2ff;
     color: #102b5c;
-    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.10);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
     overflow: hidden;
     pointer-events: none;
 }
 
-.transport-route-loading-tile::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.58), transparent);
-    transform: translateX(-100%);
-    animation: transport-route-loading-sheen 1.25s ease-in-out infinite;
-}
-
 .transport-route-loading-tile span,
 .transport-route-loading-tile strong,
-.transport-route-loading-tile small,
-.transport-route-loading-tile em {
+.transport-route-loading-tile i {
     position: relative;
     z-index: 1;
 }
 
-.transport-route-loading-tile span {
-    color: #2563eb;
-    font-size: 11px;
-    font-weight: 900;
+.transport-route-loading-tile > .ts2-event-subtitle {
+    display: block;
+    margin-top: 4px;
 }
 
-.transport-route-loading-tile strong {
-    font-size: 14px;
-    font-weight: 900;
-    line-height: 1.15;
-}
-
-.transport-route-loading-tile small {
-    color: #475569;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.2;
+.transport-route-loading-bar {
+    position: absolute !important;
+    right: 10px;
+    bottom: 10px;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(16, 43, 92, 0.14);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.transport-route-loading-tile em {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    margin-top: 2px;
-    color: #64748b;
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 800;
+.transport-route-loading-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 45%;
+    border-radius: inherit;
+    background: #f47c20;
+    animation: transport-route-loading-bar 0.85s ease-in-out infinite;
 }
 
-@keyframes transport-route-loading-sheen {
+@keyframes transport-route-loading-bar {
+    0% {
+        transform: translateX(-120%);
+    }
+
     100% {
-        transform: translateX(100%);
+        transform: translateX(240%);
     }
 }
 
