@@ -1108,7 +1108,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const loadBoard = useCallback(async () => {
     const dateKey = formatDateKey(selectedDate);
-    if (loadPromiseRef.current?.dateKey === dateKey) {
+    const loadKey = `${dateKey}:${enableTolls ? 'tolls' : 'no-tolls'}`;
+    if (loadPromiseRef.current?.loadKey === loadKey) {
       return loadPromiseRef.current.promise;
     }
     const task = (async () => {
@@ -1177,7 +1178,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         loadPromiseRef.current = null;
       }
     });
-    loadPromiseRef.current = { dateKey, promise: task };
+    loadPromiseRef.current = { loadKey, promise: task };
     return task;
   }, [applyBoardProjection, enableTolls, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
 

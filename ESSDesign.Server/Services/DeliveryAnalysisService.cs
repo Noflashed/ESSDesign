@@ -655,10 +655,11 @@ namespace ESSDesign.Server.Services
             double toLat,
             double toLon,
             HttpClient client,
-            DateTimeOffset? departure = null)
+            DateTimeOffset? departure = null,
+            bool enableTolls = false)
         {
             var departureTime = departure ?? GetSydneyNow();
-            var tomTomRoute = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime);
+            var tomTomRoute = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime, enableTolls);
             if (tomTomRoute != null)
             {
                 return tomTomRoute;
@@ -689,7 +690,8 @@ namespace ESSDesign.Server.Services
             double toLat,
             double toLon,
             HttpClient client,
-            DateTimeOffset? departure = null)
+            DateTimeOffset? departure = null,
+            bool enableTolls = false)
         {
             try
             {
@@ -725,7 +727,7 @@ namespace ESSDesign.Server.Services
 
                 if (pathPoints.Count == 0) return null;
 
-                var timing = await GetTrafficAwareRouteAsync(fromLat, fromLon, toLat, toLon, client, departure);
+                var timing = await GetTrafficAwareRouteAsync(fromLat, fromLon, toLat, toLon, client, departure, enableTolls);
                 var distanceMeters = timing?.DistanceMeters ?? route.GetProperty("distance").GetDouble();
                 var baseDurationSeconds = timing?.BaseDurationSeconds ?? route.GetProperty("duration").GetDouble();
                 var durationSeconds = timing?.DurationSeconds ?? baseDurationSeconds;
@@ -1009,7 +1011,8 @@ namespace ESSDesign.Server.Services
                 siteCoords.Value.Lat,
                 siteCoords.Value.Lon,
                 httpClient,
-                departure);
+                departure,
+                request.EnableTolls);
         }
 
         public async Task<RoutePreviewResult?> GetRoutePreviewBetweenAsync(RoutePreviewBetweenRequest request)
@@ -1049,7 +1052,8 @@ namespace ESSDesign.Server.Services
                 toCoords.Value.Lat,
                 toCoords.Value.Lon,
                 httpClient,
-                departure);
+                departure,
+                request.EnableTolls);
         }
 
         public async Task<List<AddressSuggestionResult>> SuggestAddressesAsync(AddressSuggestionRequest request)
