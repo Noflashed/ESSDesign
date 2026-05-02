@@ -1998,31 +1998,28 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
 
-  const getProjectedDurationForGroupMove = useCallback(async (request, startMinutes, dateKey, builders) => {
+  const getProjectedDurationForGroupMove = useCallback((request, startMinutes, dateKey, fallbackDurationMinutes = 90) => {
     if (!request) {
-      return 90;
+      return fallbackDurationMinutes;
     }
     if (isSecondaryRouteRequest(request)) {
       return getSecondaryRouteTiming(request.secondaryRoute).totalMinutes;
     }
 
-    let siteLocation = requestSiteLocationMapRef.current[request.id] || '';
-    if (!siteLocation) {
-      siteLocation = findProjectLocation(builders, request);
-      if (siteLocation) {
-        mergeRequestSiteLocationMap({ [request.id]: siteLocation });
-      }
-    }
+    const siteLocation = requestSiteLocationMapRef.current[request.id] || '';
     const schedule = {
       scheduledDate: dateKey,
       scheduledHour: Math.floor(startMinutes / 60),
       scheduledMinute: Math.round(startMinutes % 60),
     };
-    const estimate = siteLocation ? await getCachedRouteEstimate(siteLocation, schedule) : null;
+    const estimate = siteLocation ? getCachedRouteEstimateValue(siteLocation, schedule) : null;
+    if (estimate === undefined) {
+      return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
+    }
     return getTimingProfile(estimate, null).totalMinutes;
-  }, [mergeRequestSiteLocationMap]);
+  }, [eventDurationMinutesMap]);
 
-  const scheduleRequestGroupAt = useCallback(async (selectionContext, targetTruckId, anchorMinutes) => {
+  const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
     if (!selectionContext?.items?.length || !targetTruckId) {
       return;
     }
@@ -2035,7 +2032,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const selectedIds = new Set(selectionContext.items.map(item => item.orderId));
     const updates = [];
     let blockedMessage = '';
-    const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const laneState = new Map();
     const orderedItems = [...selectionContext.items].sort((left, right) => {
       const leftLane = targetTruckIndex + left.laneOffset;
@@ -2067,7 +2063,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         break;
       }
       const request = requestMetaMap[item.orderId] || allRequests.find(entry => entry.id === item.orderId) || null;
-      const projectedDurationMinutes = await getProjectedDurationForGroupMove(request, nextStartMinutes, formatDateKey(selectedDate), builders);
+      const projectedDurationMinutes = getProjectedDurationForGroupMove(
+        request,
+        nextStartMinutes,
+        formatDateKey(selectedDate),
+        item.durationMinutes || 90,
+      );
       const collision = getScheduleCollision({
         requestId: item.orderId,
         truckId: nextTruck.id,
@@ -2152,6 +2153,33 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
     });
 
+    (async () => {
+      const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+      await Promise.all(
+        updates.map(async update => {
+          const request = nextRequests.find(item => item.id === update.requestId);
+          if (!request || isSecondaryRouteRequest(request)) {
+            return;
+          }
+          let siteLocation = requestSiteLocationMapRef.current[update.requestId] || '';
+          if (!siteLocation) {
+            siteLocation = findProjectLocation(builders, request);
+            if (siteLocation) {
+              mergeRequestSiteLocationMap({ [update.requestId]: siteLocation });
+            }
+          }
+          if (!siteLocation) {
+            return;
+          }
+          const routeSchedule = buildRouteScheduleFromRequest(request, selectedDate);
+          if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
+            await getCachedRouteEstimate(siteLocation, routeSchedule);
+          }
+        }),
+      );
+      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    })().catch(() => {});
+
     Promise.all(
       updates.map(update => materialOrderRequestsAPI.setSchedule(update.requestId, {
         date: dateKey,
@@ -2177,7 +2205,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to move selected deliveries.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
