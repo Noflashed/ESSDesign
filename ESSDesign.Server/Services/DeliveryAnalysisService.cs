@@ -39,6 +39,7 @@ namespace ESSDesign.Server.Services
             public string? ScheduledDate { get; set; }
             public int? ScheduledHour { get; set; }
             public int? ScheduledMinute { get; set; }
+            public bool EnableTolls { get; set; }
         }
 
         public sealed class RoutePreviewBetweenRequest
@@ -48,6 +49,7 @@ namespace ESSDesign.Server.Services
             public string? ScheduledDate { get; set; }
             public int? ScheduledHour { get; set; }
             public int? ScheduledMinute { get; set; }
+            public bool EnableTolls { get; set; }
         }
 
         public sealed class AddressSuggestionRequest
@@ -419,7 +421,8 @@ namespace ESSDesign.Server.Services
             double toLat,
             double toLon,
             HttpClient client,
-            DateTimeOffset departure)
+            DateTimeOffset departure,
+            bool enableTolls = false)
         {
             var apiKey = GetTomTomApiKey();
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -436,7 +439,7 @@ namespace ESSDesign.Server.Services
                           "&routeRepresentation=polyline" +
                           "&travelMode=truck" +
                           "&vehicleCommercial=true" +
-                          "&avoid=tollRoads" +
+                          (enableTolls ? string.Empty : "&avoid=tollRoads") +
                           $"&departAt={Uri.EscapeDataString(BuildTomTomDepartureValue(departure))}" +
                           $"&key={Uri.EscapeDataString(apiKey)}";
 
@@ -508,8 +511,12 @@ namespace ESSDesign.Server.Services
                     HasLiveTraffic = true,
                     TrafficProvider = "TomTom traffic",
                     TrafficNote = delayMinutes > 0
-                        ? $"TomTom toll-free route adding about {delayMinutes:F0} min"
-                        : "TomTom toll-free route with no extra delay",
+                        ? enableTolls
+                            ? $"TomTom route adding about {delayMinutes:F0} min"
+                            : $"TomTom toll-free route adding about {delayMinutes:F0} min"
+                        : enableTolls
+                            ? "TomTom route with no extra delay"
+                            : "TomTom toll-free route with no extra delay",
                     PathPoints = pathPoints,
                 };
             }
@@ -750,9 +757,10 @@ namespace ESSDesign.Server.Services
             double toLat,
             double toLon,
             HttpClient client,
-            DateTimeOffset? departure = null)
+            DateTimeOffset? departure = null,
+            bool enableTolls = false)
         {
-            var route = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departure ?? GetSydneyNow());
+            var route = await GetTomTomRouteAsync(fromLat, fromLon, toLat, toLon, client, departure ?? GetSydneyNow(), enableTolls);
             if (route == null || route.PathPoints.Count == 0)
             {
                 return null;
@@ -988,7 +996,8 @@ namespace ESSDesign.Server.Services
                 siteCoords.Value.Lat,
                 siteCoords.Value.Lon,
                 httpClient,
-                departure);
+                departure,
+                request.EnableTolls);
             if (tomTomRoute != null)
             {
                 return tomTomRoute;
@@ -1027,7 +1036,8 @@ namespace ESSDesign.Server.Services
                 toCoords.Value.Lat,
                 toCoords.Value.Lon,
                 httpClient,
-                departure);
+                departure,
+                request.EnableTolls);
             if (tomTomRoute != null)
             {
                 return tomTomRoute;

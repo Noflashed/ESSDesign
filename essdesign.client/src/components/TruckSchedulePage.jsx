@@ -55,6 +55,7 @@ const SNAP_EDGE_THRESHOLD_MINUTES = 10;
 const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
+const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
 const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'secondary_drop_off', label: 'Secondary material drop off' },
   { value: 'material_pick_up', label: 'Material order' },
@@ -378,7 +379,7 @@ function buildBoardState(requestsForDay, routeMap) {
   };
 }
 
-function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate) {
+function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate, enableTolls = false) {
   return Object.fromEntries(
     requestsForDay.map(request => {
       if (isSecondaryRouteRequest(request)) {
@@ -388,7 +389,12 @@ function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbac
       const siteLocation = siteLocationMap[request.id] || '';
       return [
         request.id,
-        siteLocation ? getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromRequest(request, fallbackDate)) ?? null : null,
+        siteLocation
+          ? getCachedRouteEstimateValue(
+            siteLocation,
+            applyRouteMode(buildRouteScheduleFromRequest(request, fallbackDate), enableTolls),
+          ) ?? null
+          : null,
       ];
     }),
   );
@@ -681,6 +687,13 @@ function buildRouteScheduleFromEvent(event) {
   };
 }
 
+function applyRouteMode(schedule = {}, enableTolls = false) {
+  return {
+    ...schedule,
+    enableTolls,
+  };
+}
+
 function getTrafficPanelCopy(routeData, loading) {
   if (loading) {
     return { title: 'Checking traffic', detail: 'Live ETA loading' };
@@ -956,6 +969,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const saved = localStorage.getItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === 'true';
   });
+  const [enableTolls, setEnableTolls] = useState(() => {
+    const saved = localStorage.getItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
+    return saved === 'true';
+  });
   const [requestModal, setRequestModal] = useState(null);
   const [requestModalLoading, setRequestModalLoading] = useState(false);
   const [requestModalRouteData, setRequestModalRouteData] = useState(null);
@@ -1071,11 +1088,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const dateKey = typeof fallbackDate === 'string' ? fallbackDate : formatDateKey(fallbackDate || selectedDate);
     const siteLocationMap = siteLocationMapOverride || requestSiteLocationMapRef.current;
     const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey);
-    const routeMap = buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate || selectedDate);
+    const routeMap = buildCachedRouteMapForRequests(
+      requestsForDay,
+      siteLocationMap,
+      fallbackDate || selectedDate,
+      enableTolls,
+    );
     const board = buildBoardState(requestsForDay, routeMap);
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
-  }, [applyBoardProjection, selectedDate]);
+  }, [applyBoardProjection, enableTolls, selectedDate]);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -1110,7 +1132,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ]),
       );
       const nextSiteLocationMap = mergeRequestSiteLocationMap(siteLocationMap);
-      const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate);
+      const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, enableTolls);
       const initialBoard = buildBoardState(requestsForDay, cachedRouteMap);
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
@@ -1123,7 +1145,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           if (!siteLocation) {
             return [request.id, null];
           }
-          const routeSchedule = buildRouteScheduleFromRequest(request, selectedDate);
+          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(request, selectedDate), enableTolls);
           const cachedEstimate = getCachedRouteEstimateValue(siteLocation, routeSchedule);
           const shouldShowLoading = cachedEstimate === undefined;
           if (shouldShowLoading) {
@@ -1157,7 +1179,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { dateKey, promise: task };
     return task;
-  }, [applyBoardProjection, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
+  }, [applyBoardProjection, enableTolls, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -1177,6 +1199,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     localStorage.setItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(snapToTimeMarks));
   }, [snapToTimeMarks, user?.id, user?.role]);
+  useEffect(() => {
+    localStorage.setItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(enableTolls));
+  }, [enableTolls, user?.id, user?.role]);
 
   useEffect(() => {
     if (scaleAnchorRef.current == null || !boardScrollRef.current) {
@@ -1454,8 +1479,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
   const selectedScheduleRouteSchedule = useMemo(
-    () => buildRouteScheduleFromEvent(selectedScheduleEvent),
-    [selectedScheduleEvent?.date, selectedScheduleEvent?.hour, selectedScheduleEvent?.minute],
+    () => applyRouteMode(buildRouteScheduleFromEvent(selectedScheduleEvent), enableTolls),
+    [enableTolls, selectedScheduleEvent?.date, selectedScheduleEvent?.hour, selectedScheduleEvent?.minute],
   );
   const selectedSchedulePrimaryRouteEstimate = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
@@ -1500,7 +1525,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         fromLocation: selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || '',
         toLocation: selectedScheduleSecondaryRoute.destination || '',
         siteLocation: selectedScheduleSecondaryRoute.destination || '',
-        schedule: selectedScheduleSecondaryRouteSchedule,
+        schedule: applyRouteMode(selectedScheduleSecondaryRouteSchedule, enableTolls),
         title: 'Selected Secondary Route',
       };
     }
@@ -1514,6 +1539,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       title: 'Selected Delivery Route',
     };
   }, [
+    enableTolls,
     selectedScheduleIsSecondarySegment,
     selectedScheduleRouteSchedule,
     selectedScheduleSecondaryRoute,
@@ -1667,6 +1693,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduledDate: formatDateKey(selectedDate),
       scheduledHour: selectedHour,
       scheduledMinute: selectedMinute,
+      enableTolls,
     };
 
     setRequestModalRouteLoading(true);
@@ -1690,7 +1717,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute]);
+  }, [enableTolls, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute]);
   const setTimelineScaleWithAnchor = useCallback((nextMode) => {
     if (!SCALE_MODES[nextMode]) {
       return;
@@ -1778,18 +1805,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const siteLocation = requestSiteLocationMap[request.id] ?? findProjectLocation(builders, request);
-    const routeEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation, buildRouteScheduleFromEvent(event)) : null;
+    const routeEstimate = siteLocation ? await getCachedRouteEstimate(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) : null;
     const cycleState = eventCycleStateMap[event.orderId] ?? null;
     const modalState = { event, request, siteLocation, routeEstimate, cycleState };
     setEventOverviewModal(modalState);
     setEventOverviewLoading(false);
     if (siteLocation) {
       setEventOverviewRouteLoading(true);
-      getCachedRouteData(siteLocation, buildRouteScheduleFromEvent(event))
+      getCachedRouteData(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls))
         .then(data => setEventOverviewRouteData(data))
         .finally(() => setEventOverviewRouteLoading(false));
     }
-  }, [eventCycleStateMap, requestMetaMap, requestSiteLocationMap]);
+  }, [enableTolls, eventCycleStateMap, requestMetaMap, requestSiteLocationMap]);
 
   const closeEventOverview = useCallback(() => {
     setEventOverviewModal(null);
@@ -1960,7 +1987,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           if (!siteLocation) {
             return;
           }
-          const routeSchedule = buildRouteScheduleFromRequest(updatedRequest, selectedDate);
+          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(updatedRequest, selectedDate), enableTolls);
           if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
             await getCachedRouteEstimate(siteLocation, routeSchedule);
           }
@@ -2011,7 +2038,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, enableTolls, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
 
   const getProjectedDurationForGroupMove = useCallback((request, startMinutes, dateKey, fallbackDurationMinutes = 90) => {
     if (!request) {
@@ -2026,6 +2053,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduledDate: dateKey,
       scheduledHour: Math.floor(startMinutes / 60),
       scheduledMinute: Math.round(startMinutes % 60),
+      enableTolls,
     };
     const estimate = siteLocation ? getCachedRouteEstimateValue(siteLocation, schedule) : null;
     if (estimate === undefined) {
@@ -2186,7 +2214,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           if (!siteLocation) {
             return;
           }
-          const routeSchedule = buildRouteScheduleFromRequest(request, selectedDate);
+          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(request, selectedDate), enableTolls);
           if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
             await getCachedRouteEstimate(siteLocation, routeSchedule);
           }
@@ -2220,7 +2248,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to move selected deliveries.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, enableTolls, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2377,7 +2405,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     const primaryRouteEstimate = getCachedRouteEstimateValue(
       secondaryRouteModal.primarySiteLocation,
-      buildRouteScheduleFromEvent(scheduleEvent),
+      applyRouteMode(buildRouteScheduleFromEvent(scheduleEvent), enableTolls),
     ) ?? null;
     const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
     const visibleParentStartMinutes = eventStartMinutesMap[request.id] ?? (scheduleEvent.hour * 60 + scheduleEvent.minute);
@@ -2402,7 +2430,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const outbound = await getCachedRouteDataBetween(
         secondaryRouteModal.primarySiteLocation,
         destination,
-        outboundRouteSchedule,
+        { ...outboundRouteSchedule, enableTolls },
       );
       if (!outbound) {
         throw new Error('Secondary route could not be calculated for that destination.');
@@ -2418,7 +2446,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         scheduledHour: returnDeparture.getHours(),
         scheduledMinute: returnDeparture.getMinutes(),
       };
-      const returnRoute = await getCachedRouteDataBetween(destination, YARD_LOCATION, returnSchedule);
+      const returnRoute = await getCachedRouteDataBetween(destination, YARD_LOCATION, { ...returnSchedule, enableTolls });
       if (!returnRoute) {
         throw new Error('Return-to-yard timing could not be calculated for that secondary route.');
       }
@@ -2499,7 +2527,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     } finally {
       setSecondaryRouteSaving(false);
     }
-  }, [allRequests, dayEvents, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, secondaryRouteModal, selectedDate]);
+  }, [allRequests, dayEvents, enableTolls, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, secondaryRouteModal, selectedDate]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -3190,12 +3218,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const timing = isSecondaryRequest
                         ? getSecondaryRouteTiming(request.secondaryRoute)
                         : getTimingProfile(
-                          getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
+                          getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null,
                           request?.secondaryRoute || null,
                         );
                       const plannedPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute
                         ? getPrimaryPhaseMinutes(
-                          getCachedRouteEstimateValue(siteLocation, buildRouteScheduleFromEvent(event)) ?? null,
+                          getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null,
                           request?.secondaryRoute || null,
                         )
                         : primaryDurationMinutes;
@@ -3349,6 +3377,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleRequest.deliveryStatus || 'scheduled'}`}>{scheduleStatusLabel(selectedScheduleRequest.deliveryStatus || 'scheduled')}</span> : null}
           <button type="button" className="transport-inspector-close" onClick={() => setScheduleInspectorOpen(false)} aria-label="Close selected delivery panel">×</button>
         </div>
+        <label className={`transport-snap-toggle transport-inspector-toggle${enableTolls ? ' active' : ''}`}>
+          <input
+            type="checkbox"
+            checked={enableTolls}
+            onChange={(event) => setEnableTolls(event.target.checked)}
+          />
+          <span>Enable tolls</span>
+        </label>
         {selectedScheduleEvent ? (
           <>
             <dl className="transport-schedule-detail-list">

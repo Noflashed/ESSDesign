@@ -109,7 +109,8 @@ function routeCacheKey(siteLocation, schedule = {}) {
   const date = schedule.scheduledDate || schedule.date || '';
   const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
   const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
-  return `${location}|${date}|${hour}|${minute}`;
+  const enableTolls = schedule.enableTolls ? 'tolls' : 'no-tolls';
+  return `${location}|${date}|${hour}|${minute}|${enableTolls}`;
 }
 
 function routeBetweenCacheKey(fromLocation, toLocation, schedule = {}) {
@@ -121,7 +122,8 @@ function routeBetweenCacheKey(fromLocation, toLocation, schedule = {}) {
   const date = schedule.scheduledDate || schedule.date || '';
   const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
   const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
-  return `${from}|${to}|${date}|${hour}|${minute}`;
+  const enableTolls = schedule.enableTolls ? 'tolls' : 'no-tolls';
+  return `${from}|${to}|${date}|${hour}|${minute}|${enableTolls}`;
 }
 
 export function formatActionTimestamp(isoValue) {

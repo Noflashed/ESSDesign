@@ -7318,6 +7318,11 @@ button.stat-card {
     gap: 8px;
 }
 
+.transport-inspector-toggle {
+    margin: 0 0 14px;
+    width: fit-content;
+}
+
 .transport-page-frame .ts2-legend-row-inline {
     margin: 0 14px 8px;
     padding: 0;
