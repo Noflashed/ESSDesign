@@ -1386,6 +1386,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const clearSelectedScheduleEvents = useCallback(() => {
     setSelectedScheduleEventIds([]);
     setSelectionBox(null);
+    setScheduleInspectorOpen(false);
   }, []);
   useEffect(() => {
     if (selectedScheduleEventId && dayEvents.some(event => event.orderId === selectedScheduleEventId)) {
@@ -1396,6 +1397,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     setSelectedScheduleEventIds(current => current.filter(orderId => dayEvents.some(event => event.orderId === orderId)));
   }, [dayEvents]);
+  useEffect(() => {
+    if (selectedScheduleEventIds.length === 0) {
+      setScheduleInspectorOpen(false);
+    }
+  }, [selectedScheduleEventIds.length]);
   const handleSelectScheduleEvent = useCallback((orderId, segment = 'primary', options = {}) => {
     const additive = Boolean(options.additive);
     if (additive) {
