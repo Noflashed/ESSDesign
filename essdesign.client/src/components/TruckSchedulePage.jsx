@@ -1554,6 +1554,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       selectedScheduleRouteContext.schedule.scheduledDate || '',
       selectedScheduleRouteContext.schedule.scheduledHour ?? '',
       selectedScheduleRouteContext.schedule.scheduledMinute ?? '',
+      selectedScheduleRouteContext.schedule.enableTolls ? 'tolls' : 'no-tolls',
     ].join('|'),
     [
       selectedScheduleRouteContext,
