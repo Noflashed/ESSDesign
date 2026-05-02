@@ -1364,6 +1364,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const tileMenuRequest = tileMenu
     ? requestMetaMap[tileMenu.orderId] || allRequests.find(request => request.id === tileMenu.orderId) || null
     : null;
+  const tileMenuSelectionIds = useMemo(() => {
+    if (!tileMenu?.orderId) {
+      return [];
+    }
+    if (selectedScheduleEventIdSet.has(tileMenu.orderId) && selectedScheduleEventIds.length > 1) {
+      return selectedScheduleEventIds;
+    }
+    return [tileMenu.orderId];
+  }, [selectedScheduleEventIdSet, selectedScheduleEventIds, tileMenu]);
   const tileMenuIsDeleteOnlySecondaryRoute = isSecondaryRouteRequest(tileMenuRequest)
     && !isLinkedSecondaryMaterialOrderRequest(tileMenuRequest);
   const groupedEventsByTruck = useMemo(
@@ -2800,8 +2809,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, { exact: true });
   }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, timelineSnapStep]);
 
-  const handleUnscheduleOrder = useCallback((requestId) => {
-    if (!requestId) {
+  const handleUnscheduleOrder = useCallback((requestIds) => {
+    const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
+    if (!ids.length) {
       return;
     }
     const previousRequests = allRequests;
@@ -2811,53 +2821,63 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousDurationMap = eventDurationMinutesMap;
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
     const previousCycleStateMap = eventCycleStateMap;
-    const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
-    const shouldRestoreAsMaterialOrder = isLinkedSecondaryMaterialOrderRequest(sourceRequest);
-    if (isSecondaryRouteRequest(sourceRequest) && !shouldRestoreAsMaterialOrder) {
+    const sourceRequests = ids
+      .map(requestId => allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null)
+      .filter(Boolean);
+    const invalidSecondaryRoute = sourceRequests.find(sourceRequest =>
+      isSecondaryRouteRequest(sourceRequest) && !isLinkedSecondaryMaterialOrderRequest(sourceRequest),
+    );
+    if (invalidSecondaryRoute) {
       setTileMenu(null);
       setError('Secondary routes can only be deleted, not unscheduled.');
       return;
     }
-    const updatedRequest = sourceRequest ? {
-      ...sourceRequest,
-      sourceOrderId: shouldRestoreAsMaterialOrder ? null : sourceRequest.sourceOrderId,
-      routeType: shouldRestoreAsMaterialOrder ? null : sourceRequest.routeType,
-      scheduledDate: null,
-      scheduledHour: null,
-      scheduledMinute: null,
-      scheduledAtIso: null,
-      scheduledTruckId: null,
-      scheduledTruckLabel: null,
-      truckId: null,
-      truckLabel: null,
-      deliveryStatus: 'pending',
-      deliveryStartedAt: null,
-      deliveryUnloadingAt: null,
-      deliveryConfirmedAt: null,
-      secondaryRoute: shouldRestoreAsMaterialOrder ? null : sourceRequest.secondaryRoute,
-    } : null;
+    const updatesById = new Map(
+      sourceRequests.map(sourceRequest => {
+        const shouldRestoreAsMaterialOrder = isLinkedSecondaryMaterialOrderRequest(sourceRequest);
+        return [
+          sourceRequest.id,
+          {
+            ...sourceRequest,
+            sourceOrderId: shouldRestoreAsMaterialOrder ? null : sourceRequest.sourceOrderId,
+            routeType: shouldRestoreAsMaterialOrder ? null : sourceRequest.routeType,
+            scheduledDate: null,
+            scheduledHour: null,
+            scheduledMinute: null,
+            scheduledAtIso: null,
+            scheduledTruckId: null,
+            scheduledTruckLabel: null,
+            truckId: null,
+            truckLabel: null,
+            deliveryStatus: 'pending',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            secondaryRoute: shouldRestoreAsMaterialOrder ? null : sourceRequest.secondaryRoute,
+          },
+        ];
+      }),
+    );
 
     setTileMenu(null);
-    if (updatedRequest) {
-      const nextRequests = previousRequests.map(item => item.id === requestId ? updatedRequest : item);
-      setAllRequests(nextRequests);
-      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
-    }
-    setSelectedScheduleEventId(current => current === requestId ? '' : current);
-    setSelectedScheduleEventIds(current => current.filter(id => id !== requestId));
-    if (updatedRequest) {
-      optimisticRequestOverridesRef.current.set(requestId, {
-        request: updatedRequest,
+    const nextRequests = previousRequests.map(item => updatesById.get(item.id) || item);
+    setAllRequests(nextRequests);
+    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    setSelectedScheduleEventId(current => ids.includes(current) ? '' : current);
+    setSelectedScheduleEventIds(current => current.filter(id => !ids.includes(id)));
+    sourceRequests.forEach(updatedRequest => {
+      optimisticRequestOverridesRef.current.set(updatedRequest.id, {
+        request: updatesById.get(updatedRequest.id),
         expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
       });
-    }
+    });
 
-    materialOrderRequestsAPI.clearSchedule(requestId)
+    Promise.all(ids.map(requestId => materialOrderRequestsAPI.clearSchedule(requestId)))
       .then(() => {
         setError('');
       })
       .catch(err => {
-        optimisticRequestOverridesRef.current.delete(requestId);
+        ids.forEach(requestId => optimisticRequestOverridesRef.current.delete(requestId));
         boardProjectionSignatureRef.current = '';
         requestMetaSignatureRef.current = '';
         setAllRequests(previousRequests);
@@ -2867,15 +2887,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventDurationMinutesMap(previousDurationMap);
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setEventCycleStateMap(previousCycleStateMap);
-        setError(err?.message || 'Failed to unschedule order.');
+        setError(err?.message || 'Failed to unschedule order selection.');
       });
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
-  const handleDeleteScheduledOrder = useCallback((requestId) => {
-    if (!requestId) {
+  const handleDeleteScheduledOrder = useCallback((requestIds) => {
+    const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
+    if (!ids.length) {
       return;
     }
-    if (!window.confirm('Delete this transport order? This removes it from the active schedule and request list.')) {
+    if (!window.confirm(ids.length > 1
+      ? `Delete ${ids.length} transport orders? This removes them from the active schedule and request list.`
+      : 'Delete this transport order? This removes it from the active schedule and request list.')) {
       return;
     }
     const previousRequests = allRequests;
@@ -2887,22 +2910,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousCycleStateMap = eventCycleStateMap;
 
     setTileMenu(null);
-    const nextRequests = previousRequests.filter(item => item.id !== requestId);
+    const nextRequests = previousRequests.filter(item => !ids.includes(item.id));
     setAllRequests(nextRequests);
     projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
-    setSelectedScheduleEventId(current => current === requestId ? '' : current);
-    setSelectedScheduleEventIds(current => current.filter(id => id !== requestId));
-    optimisticRequestOverridesRef.current.set(requestId, {
-      deleted: true,
-      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    setSelectedScheduleEventId(current => ids.includes(current) ? '' : current);
+    setSelectedScheduleEventIds(current => current.filter(id => !ids.includes(id)));
+    ids.forEach(requestId => {
+      optimisticRequestOverridesRef.current.set(requestId, {
+        deleted: true,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
     });
 
-    materialOrderRequestsAPI.deleteRequest(requestId)
+    Promise.all(ids.map(requestId => materialOrderRequestsAPI.deleteRequest(requestId)))
       .then(() => {
         setError('');
       })
       .catch(err => {
-        optimisticRequestOverridesRef.current.delete(requestId);
+        ids.forEach(requestId => optimisticRequestOverridesRef.current.delete(requestId));
         boardProjectionSignatureRef.current = '';
         requestMetaSignatureRef.current = '';
         setAllRequests(previousRequests);
@@ -2912,7 +2937,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventDurationMinutesMap(previousDurationMap);
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setEventCycleStateMap(previousCycleStateMap);
-        setError(err?.message || 'Failed to delete order.');
+        setError(err?.message || 'Failed to delete order selection.');
       });
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
@@ -3397,15 +3422,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 <span>Add secondary route</span>
                 <small>Extend this delivery with another stop</small>
               </button>
-              <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-                <span>Unschedule order</span>
-                <small>Return to pending requests</small>
+              <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
+                <span>{tileMenuSelectionIds.length > 1 ? `Unschedule ${tileMenuSelectionIds.length} orders` : 'Unschedule order'}</span>
+                <small>{tileMenuSelectionIds.length > 1 ? 'Return selected orders to pending requests' : 'Return to pending requests'}</small>
               </button>
             </>
           ) : null}
-          <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-            <span>Delete order</span>
-            <small>{tileMenuIsDeleteOnlySecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
+          <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
+            <span>{tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
+            <small>{tileMenuSelectionIds.length > 1 ? 'Remove all selected requests' : tileMenuIsDeleteOnlySecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
           </button>
         </div>
       ) : null}
