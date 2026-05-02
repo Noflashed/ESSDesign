@@ -1998,7 +1998,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
 
-  const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
+  const getProjectedDurationForGroupMove = useCallback(async (request, startMinutes, dateKey, builders) => {
+    if (!request) {
+      return 90;
+    }
+    if (isSecondaryRouteRequest(request)) {
+      return getSecondaryRouteTiming(request.secondaryRoute).totalMinutes;
+    }
+
+    let siteLocation = requestSiteLocationMapRef.current[request.id] || '';
+    if (!siteLocation) {
+      siteLocation = findProjectLocation(builders, request);
+      if (siteLocation) {
+        mergeRequestSiteLocationMap({ [request.id]: siteLocation });
+      }
+    }
+    const schedule = {
+      scheduledDate: dateKey,
+      scheduledHour: Math.floor(startMinutes / 60),
+      scheduledMinute: Math.round(startMinutes % 60),
+    };
+    const estimate = siteLocation ? await getCachedRouteEstimate(siteLocation, schedule) : null;
+    return getTimingProfile(estimate, null).totalMinutes;
+  }, [mergeRequestSiteLocationMap]);
+
+  const scheduleRequestGroupAt = useCallback(async (selectionContext, targetTruckId, anchorMinutes) => {
     if (!selectionContext?.items?.length || !targetTruckId) {
       return;
     }
@@ -2011,24 +2035,44 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const selectedIds = new Set(selectionContext.items.map(item => item.orderId));
     const updates = [];
     let blockedMessage = '';
+    const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+    const laneState = new Map();
+    const orderedItems = [...selectionContext.items].sort((left, right) => {
+      const leftLane = targetTruckIndex + left.laneOffset;
+      const rightLane = targetTruckIndex + right.laneOffset;
+      if (leftLane !== rightLane) {
+        return leftLane - rightLane;
+      }
+      return left.sourceStartMinutes - right.sourceStartMinutes;
+    });
 
-    for (const item of selectionContext.items) {
+    for (const item of orderedItems) {
       const nextTruckIndex = targetTruckIndex + item.laneOffset;
       if (nextTruckIndex < 0 || nextTruckIndex >= TRUCK_LANES.length) {
         blockedMessage = 'Selection cannot be moved outside the available truck lanes.';
         break;
       }
       const nextTruck = TRUCK_LANES[nextTruckIndex];
-      const nextStartMinutes = anchorMinutes + item.minuteOffset;
-      if (clampScheduleMinutes(nextStartMinutes, item.durationMinutes) !== nextStartMinutes) {
+      const baseStartMinutes = anchorMinutes + item.minuteOffset;
+      const previousLaneState = laneState.get(nextTruckIndex);
+      const originalGapMinutes = previousLaneState
+        ? Math.max(0, item.sourceStartMinutes - previousLaneState.sourceEndMinutes)
+        : 0;
+      const nextStartMinutes = previousLaneState
+        ? previousLaneState.projectedEndMinutes + originalGapMinutes
+        : baseStartMinutes;
+      const durationForBounds = item.durationMinutes || 90;
+      if (clampScheduleMinutes(nextStartMinutes, durationForBounds) !== nextStartMinutes) {
         blockedMessage = 'Selection extends outside the available schedule window.';
         break;
       }
+      const request = requestMetaMap[item.orderId] || allRequests.find(entry => entry.id === item.orderId) || null;
+      const projectedDurationMinutes = await getProjectedDurationForGroupMove(request, nextStartMinutes, formatDateKey(selectedDate), builders);
       const collision = getScheduleCollision({
         requestId: item.orderId,
         truckId: nextTruck.id,
         startMinutes: nextStartMinutes,
-        durationMinutes: item.durationMinutes,
+        durationMinutes: projectedDurationMinutes,
         dayEvents: dayEvents.filter(event => !selectedIds.has(event.orderId)),
         startMap: eventStartMinutesMap,
         durationMap: eventDurationMinutesMap,
@@ -2044,6 +2088,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         startMinutes: nextStartMinutes,
         hour: Math.floor(nextStartMinutes / 60),
         minute: nextStartMinutes % 60,
+      });
+      laneState.set(nextTruckIndex, {
+        sourceEndMinutes: item.sourceEndMinutes,
+        projectedEndMinutes: nextStartMinutes + projectedDurationMinutes,
       });
     }
 
@@ -2129,7 +2177,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to move selected deliveries.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2488,6 +2536,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             durationMinutes: eventDurationMinutesMap[orderId] ?? 90,
             minuteOffset: sourceStartMinutes - anchorStartMinutes,
             laneOffset: sourceTruckIndex - anchorTruckIndex,
+            sourceStartMinutes,
+            sourceEndMinutes: sourceStartMinutes + (eventDurationMinutesMap[orderId] ?? 90),
           };
         })
         .filter(Boolean),
