@@ -120,6 +120,12 @@ function isSecondaryRouteRequest(request) {
   return request?.routeType === 'secondary_route' && Boolean(request?.secondaryRoute);
 }
 
+function isLinkedSecondaryMaterialOrderRequest(request) {
+  return isSecondaryRouteRequest(request)
+    && request.secondaryRoute?.reason === 'material_pick_up'
+    && Boolean(request.secondaryRoute?.linkedRequestId);
+}
+
 function getSecondaryRouteTiming(secondaryRoute) {
   const transitMinutes = Math.max(1, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
   const loadingMinutes = Math.max(0, Number(secondaryRoute?.serviceMinutes) || 0);
@@ -1209,13 +1215,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ? SCALE_MODES[timelineScaleMode]?.tickMinutes || DRAG_SCHEDULE_MINUTE_STEP
     : DRAG_SCHEDULE_MINUTE_STEP;
   const pendingRequests = useMemo(
-    () => allRequests.filter(request => !request.scheduledDate && !request.archivedAt && !isSecondaryRouteRequest(request)),
+    () => allRequests.filter(request =>
+      !request.scheduledDate
+      && !request.archivedAt
+      && (!isSecondaryRouteRequest(request) || isLinkedSecondaryMaterialOrderRequest(request))
+    ),
     [allRequests],
   );
   const tileMenuRequest = tileMenu
     ? requestMetaMap[tileMenu.orderId] || allRequests.find(request => request.id === tileMenu.orderId) || null
     : null;
-  const tileMenuIsSecondaryRoute = isSecondaryRouteRequest(tileMenuRequest);
+  const tileMenuIsDeleteOnlySecondaryRoute = isSecondaryRouteRequest(tileMenuRequest)
+    && !isLinkedSecondaryMaterialOrderRequest(tileMenuRequest);
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2051,12 +2062,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
-    if (!requestId || isSecondaryRouteRequest(request)) {
+    if (!requestId || (isSecondaryRouteRequest(request) && !isLinkedSecondaryMaterialOrderRequest(request))) {
       return;
     }
     setDraggedRequestId(requestId);
     setDraggedScheduledOrderId('');
-    const durationMinutes = isSecondaryRouteRequest(request) ? getSecondaryRouteTiming(request.secondaryRoute).totalMinutes : 90;
+    const durationMinutes = isLinkedSecondaryMaterialOrderRequest(request)
+      ? 90
+      : isSecondaryRouteRequest(request)
+        ? getSecondaryRouteTiming(request.secondaryRoute).totalMinutes
+        : 90;
     setDragPreviewDurationMinutes(durationMinutes);
     dragPointerOffsetMinutesRef.current = 0;
     setDropPreview(null);
@@ -2277,13 +2292,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
     const previousCycleStateMap = eventCycleStateMap;
     const sourceRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
-    if (isSecondaryRouteRequest(sourceRequest)) {
+    const shouldRestoreAsMaterialOrder = isLinkedSecondaryMaterialOrderRequest(sourceRequest);
+    if (isSecondaryRouteRequest(sourceRequest) && !shouldRestoreAsMaterialOrder) {
       setTileMenu(null);
       setError('Secondary routes can only be deleted, not unscheduled.');
       return;
     }
     const updatedRequest = sourceRequest ? {
       ...sourceRequest,
+      sourceOrderId: shouldRestoreAsMaterialOrder ? null : sourceRequest.sourceOrderId,
+      routeType: shouldRestoreAsMaterialOrder ? null : sourceRequest.routeType,
       scheduledDate: null,
       scheduledHour: null,
       scheduledMinute: null,
@@ -2296,6 +2314,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       deliveryStartedAt: null,
       deliveryUnloadingAt: null,
       deliveryConfirmedAt: null,
+      secondaryRoute: shouldRestoreAsMaterialOrder ? null : sourceRequest.secondaryRoute,
     } : null;
 
     setTileMenu(null);
@@ -2816,7 +2835,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
-          {!tileMenuIsSecondaryRoute ? (
+          {!tileMenuIsDeleteOnlySecondaryRoute ? (
             <>
               <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
                 <span>Set time manually</span>
@@ -2834,7 +2853,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
             <span>Delete order</span>
-            <small>{tileMenuIsSecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
+            <small>{tileMenuIsDeleteOnlySecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
           </button>
         </div>
       ) : null}

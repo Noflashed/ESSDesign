@@ -1149,8 +1149,14 @@ export const materialOrderRequestsAPI = {
             readStorageJson(indexPath),
         ]);
         if (!record) throw new Error('Request not found');
+        const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = record.routeType === 'secondary_route'
+            && secondaryRoute?.reason === 'material_pick_up'
+            && Boolean(secondaryRoute?.linkedRequestId);
         const updated = {
             ...record,
+            sourceOrderId: shouldRestoreMaterialOrder ? null : record.sourceOrderId,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType,
             scheduledDate: null,
             scheduledHour: null,
             scheduledMinute: null,
@@ -1163,13 +1169,15 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
-            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+            secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
+                    sourceOrderId: shouldRestoreMaterialOrder ? null : item.sourceOrderId,
+                    routeType: shouldRestoreMaterialOrder ? null : item.routeType,
                     scheduledDate: null,
                     scheduledHour: null,
                     scheduledMinute: null,
@@ -1182,7 +1190,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: null,
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
-                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
+                    secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
             updatedAt: nowIso(),
