@@ -6297,10 +6297,39 @@ button.stat-card {
 .ts2-event-wrap.selected {
     z-index: 9;
 }
+.ts2-event-wrap.selected::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 18px;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(42, 102, 217, 0.95) 50%, transparent 0) repeat-x top / 14px 2px,
+        linear-gradient(90deg, rgba(42, 102, 217, 0.95) 50%, transparent 0) repeat-x bottom / 14px 2px,
+        linear-gradient(0deg, rgba(42, 102, 217, 0.95) 50%, transparent 0) repeat-y left / 2px 14px,
+        linear-gradient(0deg, rgba(42, 102, 217, 0.95) 50%, transparent 0) repeat-y right / 2px 14px;
+    animation: ts2-selection-dash 0.75s linear infinite;
+}
 .ts2-event-wrap.selected .ts2-event-card,
 .ts2-event-wrap.selected .ts2-secondary-route-card,
 .ts2-event-wrap.selected .ts2-return-card {
     box-shadow: 0 0 0 3px rgba(42, 102, 217, 0.28), 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+@keyframes ts2-selection-dash {
+    from {
+        background-position:
+            0 0,
+            14px 100%,
+            0 14px,
+            100% 0;
+    }
+    to {
+        background-position:
+            14px 0,
+            0 100%,
+            0 0,
+            100% 14px;
+    }
 }
 .ts2-event-card,
 .ts2-return-card,

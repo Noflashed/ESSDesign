@@ -1374,6 +1374,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => new Set(selectedScheduleEventIds),
     [selectedScheduleEventIds],
   );
+  const clearSelectedScheduleEvents = useCallback(() => {
+    setSelectedScheduleEventIds([]);
+    setSelectionBox(null);
+  }, []);
   useEffect(() => {
     if (selectedScheduleEventId && dayEvents.some(event => event.orderId === selectedScheduleEventId)) {
       return;
@@ -1389,6 +1393,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleSegment(segment);
     setScheduleInspectorOpen(true);
   }, []);
+  useEffect(() => {
+    if (!selectedScheduleEventIds.length) {
+      return undefined;
+    }
+
+    const handlePointerDownOutsideSelection = (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      if (
+        event.target.closest('.ts2-event-wrap')
+        || event.target.closest('.transport-tile-menu')
+        || event.target.closest('.transport-schedule-inspector')
+        || event.target.closest('.ts2-modal-root')
+      ) {
+        return;
+      }
+      clearSelectedScheduleEvents();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDownOutsideSelection, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDownOutsideSelection, true);
+    };
+  }, [clearSelectedScheduleEvents, selectedScheduleEventIds.length]);
   const selectedScheduleEvent = useMemo(
     () => dayEvents.find(event => event.orderId === selectedScheduleEventId) || dayEvents[0] || null,
     [dayEvents, selectedScheduleEventId],
@@ -1916,7 +1945,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
 
     setSelectedScheduleEventId(requestId);
-    setSelectedScheduleEventIds([requestId]);
+    clearSelectedScheduleEvents();
     setScheduleInspectorOpen(true);
     setDraggedRequestId('');
     setDraggedScheduledOrderId('');
@@ -1953,7 +1982,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, selectedDate, setRouteLoading]);
 
   const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
     if (!selectionContext?.items?.length || !targetTruckId) {
@@ -2039,7 +2068,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     setAllRequests(nextRequests);
     projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
-    setSelectedScheduleEventIds(updates.map(item => item.requestId));
+    clearSelectedScheduleEvents();
     setSelectedScheduleEventId(selectionContext.anchorOrderId);
     setSelectedScheduleSegment('primary');
     setScheduleInspectorOpen(true);
@@ -2086,7 +2115,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to move selected deliveries.');
       });
-  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId) => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -2414,9 +2443,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startClientY: event.clientY,
       active: false,
     };
-    setSelectionBox(null);
-    setSelectedScheduleEventIds([]);
-  }, [dragSchedulingId, draggedRequestId]);
+    clearSelectedScheduleEvents();
+  }, [clearSelectedScheduleEvents, dragSchedulingId, draggedRequestId]);
 
   const handleScheduledDragStart = useCallback((event, scheduleEvent, request, durationMinutes, palette) => {
     if (!scheduleEvent?.orderId) {
