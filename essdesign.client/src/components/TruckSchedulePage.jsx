@@ -2662,17 +2662,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       ) : null}
                       {routePlacementPreview?.truckId === lane.id ? (
                         <div
-                          className="transport-route-loading-tile"
+                          className="ts2-event-wrap route-loading"
                           style={{
                             left: `${getEventOffset(routePlacementPreview.minutes) * 100}%`,
                             width: `${getEventFlex(routePlacementPreview.durationMinutes || 90) * 100}%`,
                           }}
                         >
-                          <span className="ts2-delivery-type-pill material">Material order</span>
-                          <span className="ts2-event-time">{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
-                          <strong className="ts2-event-title">{routePlacementPreview.title}</strong>
-                          <span className="ts2-event-subtitle">{routePlacementPreview.subtitle}</span>
-                          <i className="transport-route-loading-bar" aria-hidden="true" />
+                          <button
+                            type="button"
+                            className="ts2-event-card is-route-loading"
+                            style={{ backgroundColor: '#eaf2ff', color: '#102b5c', width: '100%' }}
+                            disabled
+                            aria-busy="true"
+                          >
+                            <span className="ts2-delivery-type-pill material">Material order</span>
+                            <span className="ts2-event-time">{formatTimeChip(Math.floor(routePlacementPreview.minutes / 60), Math.floor(routePlacementPreview.minutes % 60))}</span>
+                            <strong className="ts2-event-title">{routePlacementPreview.title}</strong>
+                            <span className="ts2-event-subtitle">{routePlacementPreview.subtitle}</span>
+                            <i className="transport-route-loading-bar" aria-hidden="true" />
+                          </button>
                         </div>
                       ) : null}
                       {laneEvents.map(event => {

@@ -6290,32 +6290,14 @@ button.stat-card {
     transform: translateZ(0);
 }
 
-.transport-route-loading-tile {
-    position: absolute;
-    top: 14px;
-    bottom: 14px;
-    min-width: 112px;
+.ts2-event-wrap.route-loading {
     z-index: 5;
-    padding: 12px;
-    border: none;
-    border-radius: 14px;
-    background: #eaf2ff;
-    color: #102b5c;
-    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
-    overflow: hidden;
     pointer-events: none;
 }
 
-.transport-route-loading-tile span,
-.transport-route-loading-tile strong,
-.transport-route-loading-tile i {
-    position: relative;
-    z-index: 1;
-}
-
-.transport-route-loading-tile > .ts2-event-subtitle {
-    display: block;
-    margin-top: 4px;
+.ts2-event-card.is-route-loading {
+    cursor: default;
+    pointer-events: none;
 }
 
 .transport-route-loading-bar {
@@ -7390,12 +7372,6 @@ button.stat-card {
 .transport-page-frame .ts2-event-wrap {
     top: 8px;
     bottom: 8px;
-}
-
-.transport-page-frame .transport-route-loading-tile {
-    top: 8px;
-    bottom: 8px;
-    border-radius: 12px;
 }
 
 .transport-page-frame .ts2-event-card,
