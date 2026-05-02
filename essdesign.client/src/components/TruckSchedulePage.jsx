@@ -1387,12 +1387,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     setSelectedScheduleEventIds(current => current.filter(orderId => dayEvents.some(event => event.orderId === orderId)));
   }, [dayEvents]);
-  const handleSelectScheduleEvent = useCallback((orderId, segment = 'primary') => {
+  const handleSelectScheduleEvent = useCallback((orderId, segment = 'primary', options = {}) => {
+    const additive = Boolean(options.additive);
+    if (additive) {
+      const nextSelectedIds = selectedScheduleEventIds.includes(orderId)
+        ? selectedScheduleEventIds.filter(id => id !== orderId)
+        : [...selectedScheduleEventIds, orderId];
+      setSelectedScheduleEventId(orderId);
+      setSelectedScheduleEventIds(nextSelectedIds);
+      setSelectedScheduleSegment(segment);
+      if (nextSelectedIds.length === 0) {
+        setScheduleInspectorOpen(false);
+      }
+      return;
+    }
+
     setSelectedScheduleEventId(orderId);
     setSelectedScheduleEventIds([orderId]);
     setSelectedScheduleSegment(segment);
     setScheduleInspectorOpen(true);
-  }, []);
+  }, [selectedScheduleEventIds]);
   useEffect(() => {
     if (!selectedScheduleEventIds.length) {
       return undefined;
@@ -3121,8 +3135,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             type="button"
                             className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
                             style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
-                            onClick={() => {
-                              handleSelectScheduleEvent(event.orderId);
+                            onClick={(clickEvent) => {
+                              handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
                             }}
                           >
                             <span className={`ts2-delivery-type-pill ${primaryDeliveryType.tone}`}>{primaryDeliveryType.label}</span>
@@ -3141,8 +3155,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               type="button"
                               className="ts2-secondary-route-card"
                               style={{ left: `${displayPrimaryWidth}%`, width: `${displaySecondaryWidth}%` }}
-                              onClick={() => {
-                                handleSelectScheduleEvent(event.orderId, 'secondary');
+                              onClick={(clickEvent) => {
+                                handleSelectScheduleEvent(event.orderId, 'secondary', { additive: clickEvent.shiftKey });
                               }}
                             >
                               <span className={`ts2-delivery-type-pill ${secondaryDeliveryType.tone}`}>{secondaryDeliveryType.label}</span>
@@ -3157,8 +3171,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             </button>
                           ) : null}
                           {hasReturnTransitTile ? (
-                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={() => {
-                              handleSelectScheduleEvent(event.orderId);
+                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={(clickEvent) => {
+                              handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
                             }}>
                               <span className="ts2-delivery-type-pill return">Return</span>
                               <span>Return transit</span>
