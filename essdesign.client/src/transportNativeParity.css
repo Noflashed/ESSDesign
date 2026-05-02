@@ -4185,6 +4185,7 @@
 }
 
 .transport-desktop-collapse svg {
+    flex-shrink: 0 !important;
     transition: transform 0.2s ease-in-out !important;
 }
 
