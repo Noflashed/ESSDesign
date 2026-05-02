@@ -2878,11 +2878,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
     });
 
-    Promise.all(ids.map(requestId => materialOrderRequestsAPI.clearSchedule(requestId)))
-      .then(() => {
+    (async () => {
+      try {
+        for (const requestId of ids) {
+          await materialOrderRequestsAPI.clearSchedule(requestId);
+        }
         setError('');
-      })
-      .catch(err => {
+      } catch (err) {
         ids.forEach(requestId => optimisticRequestOverridesRef.current.delete(requestId));
         boardProjectionSignatureRef.current = '';
         requestMetaSignatureRef.current = '';
@@ -2894,7 +2896,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to unschedule order selection.');
-      });
+      }
+    })();
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const handleDeleteScheduledOrder = useCallback((requestIds) => {
@@ -2928,11 +2931,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
     });
 
-    Promise.all(ids.map(requestId => materialOrderRequestsAPI.deleteRequest(requestId)))
-      .then(() => {
+    (async () => {
+      try {
+        for (const requestId of ids) {
+          await materialOrderRequestsAPI.deleteRequest(requestId);
+        }
         setError('');
-      })
-      .catch(err => {
+      } catch (err) {
         ids.forEach(requestId => optimisticRequestOverridesRef.current.delete(requestId));
         boardProjectionSignatureRef.current = '';
         requestMetaSignatureRef.current = '';
@@ -2944,7 +2949,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to delete order selection.');
-      });
+      }
+    })();
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const handleOpenPdf = useCallback(async request => {
