@@ -3762,6 +3762,33 @@
     min-width: 0;
 }
 
+.transport-debug-chain {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.transport-debug-chain span {
+    color: #9a3412;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 850;
+}
+
+.transport-debug-chain code {
+    display: block;
+    padding: 8px 10px;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #102b5c;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: normal;
+    word-break: break-word;
+}
+
 .transport-debug-clock label {
     display: grid;
     gap: 5px;

@@ -401,16 +401,17 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
+        const runHandoffMinutes = startMinutes + primaryDurationMinutesValue;
         const plannedRunEndMinutes = scheduledStart + timing.totalMinutes;
         laneCursorMinutes = followsPreviousRun
-          ? projected.projectedEndMinutes
+          ? runHandoffMinutes
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         previousRunLink = {
           includeReturnTransitToYard: hasEffectiveReturnBreak,
           completed: requestStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
-          projectedEndMinutes: projected.projectedEndMinutes,
+          projectedEndMinutes: runHandoffMinutes,
         };
         startMap[request.id] = startMinutes;
         durationMap[request.id] = durationMinutes;
@@ -423,6 +424,9 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           hasSecondaryContinuation,
           followsPreviousRun,
           presumedInTransitFromParent,
+          runHandoffMinutes,
+          runSourceOrderId: request.sourceOrderId || null,
+          effectiveReturnBreak: hasEffectiveReturnBreak,
         };
         dayEvents.push({
           id: `remote-${request.id}`,
@@ -3485,6 +3489,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 ))}
               </div>
             </div>
+            {selectedScheduleRequest ? (
+              <div className="transport-debug-chain">
+                <span>Chain debug</span>
+                <code>
+                  {[
+                    `id=${selectedScheduleRequest.id}`,
+                    `source=${selectedScheduleRequest.sourceOrderId || 'none'}`,
+                    `status=${selectedScheduleRequest.deliveryStatus || 'scheduled'}`,
+                    `effective=${selectedScheduleEffectiveStatus}`,
+                    `follows=${selectedScheduleCycleState?.followsPreviousRun ? 'yes' : 'no'}`,
+                    `presumeTransit=${selectedScheduleCycleState?.presumedInTransitFromParent ? 'yes' : 'no'}`,
+                    `returnBreak=${selectedScheduleCycleState?.effectiveReturnBreak ? 'yes' : 'no'}`,
+                    `handoff=${typeof selectedScheduleCycleState?.runHandoffMinutes === 'number' ? formatTimeChip(Math.floor(selectedScheduleCycleState.runHandoffMinutes / 60), Math.floor(selectedScheduleCycleState.runHandoffMinutes % 60)) : 'n/a'}`,
+                    `connectedStart=${typeof selectedScheduleRequest.connectedParentStartMinutes === 'number' ? formatTimeChip(Math.floor(selectedScheduleRequest.connectedParentStartMinutes / 60), Math.floor(selectedScheduleRequest.connectedParentStartMinutes % 60)) : 'n/a'}`,
+                  ].join(' | ')}
+                </code>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
