@@ -19,6 +19,7 @@ import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
+import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
@@ -211,6 +212,18 @@ function getRoleDisplayName(role) {
         case 'truck_ess03': return 'Truck ESS03';
         default: return 'Viewer';
     }
+}
+
+function getSharedFolderLinkFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const folderId = urlParams.get('sharedFolder');
+    const token = urlParams.get('token');
+
+    if (!folderId || !token) {
+        return null;
+    }
+
+    return { folderId, token };
 }
 
 function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
@@ -425,6 +438,7 @@ const buildAvatarCandidates = (user) => {
 };
 
 function App() {
+    const sharedFolderLink = getSharedFolderLinkFromUrl();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -1208,6 +1222,14 @@ function App() {
             </div>
         );
     };
+
+    if (sharedFolderLink) {
+        return (
+            <div className="App public-share-app">
+                <PublicSharedFolderPage folderId={sharedFolderLink.folderId} token={sharedFolderLink.token} />
+            </div>
+        );
+    }
 
     if (loading) {
         return (

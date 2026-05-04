@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
+const API_ORIGIN_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const PROFILE_IMAGES_BUCKET = 'profile-images';
 
@@ -1890,6 +1891,21 @@ export const foldersAPI = {
             externalMessage
         });
         return response.data;
+    },
+
+    getPublicSharedFolder: async (folderId, token) => {
+        const response = await apiClient.get(`/folders/${folderId}/public-share-data`, {
+            params: { token }
+        });
+        return response.data;
+    },
+
+    resolvePublicFileUrl: (url) => {
+        if (!url || /^https?:\/\//i.test(url)) {
+            return url;
+        }
+
+        return `${API_ORIGIN_URL}${url}`;
     },
 
     moveDocument: async (documentId, targetFolderId) => {

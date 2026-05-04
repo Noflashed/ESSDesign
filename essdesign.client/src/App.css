@@ -54,6 +54,213 @@ body {
     background: var(--bg-secondary);
 }
 
+.public-share-app {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+    background: #f4f6f8;
+}
+
+.public-share-page {
+    min-height: 100vh;
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 28px 18px 48px;
+    color: #111827;
+    background: #f4f6f8;
+}
+
+.public-share-header,
+.public-share-panel,
+.public-share-folder {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+
+.public-share-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 104px;
+    margin-bottom: 16px;
+    padding: 22px 24px;
+}
+
+.public-share-header img,
+.public-share-error img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.public-share-header h1,
+.public-share-panel h1,
+.public-share-panel h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.public-share-header p,
+.public-share-panel p {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.public-share-loading {
+    margin: 140px auto 0;
+    width: fit-content;
+    color: #475569;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.public-share-panel {
+    padding: 24px;
+}
+
+.public-share-error {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    max-width: 560px;
+    margin: 120px auto 0;
+    text-align: center;
+}
+
+.public-share-folder {
+    margin: 12px 0;
+    padding: 14px;
+}
+
+.public-share-folder .public-share-folder {
+    margin-left: calc(var(--depth, 0) * 6px);
+}
+
+.public-share-folder-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    color: #111827;
+    font-size: 16px;
+}
+
+.public-share-folder-title span,
+.public-share-file-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: #1d4ed8;
+    flex-shrink: 0;
+}
+
+.public-share-folder-title svg,
+.public-share-file-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.public-share-folder-body {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.public-share-file {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    min-height: 72px;
+    border: 1px solid #edf0f3;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #fbfdff;
+}
+
+.public-share-file-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.public-share-file-main strong {
+    display: block;
+    color: #111827;
+    font-size: 14px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.public-share-file-main span,
+.public-share-file-main p {
+    display: block;
+    margin: 3px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.public-share-file-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.public-share-file-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    border-radius: 999px;
+    background: #1a73e8;
+    color: #ffffff;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.public-share-file-actions a.alt {
+    background: #2f855a;
+}
+
+@media (max-width: 700px) {
+    .public-share-header,
+    .public-share-file {
+        align-items: flex-start;
+    }
+
+    .public-share-file {
+        display: grid;
+    }
+
+    .public-share-file-actions {
+        justify-content: flex-start;
+    }
+}
+
 .loading-screen {
     min-height: 100vh;
     display: flex;

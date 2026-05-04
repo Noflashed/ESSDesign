@@ -707,8 +707,8 @@ namespace ESSDesign.Server.Services
             string? scaffold,
             string? customMessage)
         {
-            var publicFolderLink = $"{_appBaseUrl.TrimEnd('/')}/api/folders/{folderId}/public-share?token={HttpUtility.UrlEncode(BuildFolderShareAccessToken(folderId))}";
-            var viewInAppLink = $"{_frontendUrl.TrimEnd('/')}/?page=design&folder={folderId}";
+            var shareToken = BuildFolderShareAccessToken(folderId);
+            var publicFolderLink = $"{_frontendUrl.TrimEnd('/')}/?sharedFolder={folderId:D}&token={HttpUtility.UrlEncode(shareToken)}";
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
             var safeFolderName = HttpUtility.HtmlEncode(folderName);
             var safeSharer = HttpUtility.HtmlEncode(sharedByName);
@@ -717,8 +717,7 @@ namespace ESSDesign.Server.Services
             var safeScaffold = HttpUtility.HtmlEncode(scaffold ?? "-");
             var safeDocumentCount = documentCount == 1 ? "1 document" : $"{documentCount} documents";
             var customMessageHtml = BuildCustomEmailMessageHtml(sharedByName, customMessage);
-            var viewFolderButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{HttpUtility.HtmlAttributeEncode(publicFolderLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;\">View folder files</a></td></tr></table></td>";
-            var appButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a1a2e;\"><a href=\"{HttpUtility.HtmlAttributeEncode(viewInAppLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;\">Open in ESS Design</a></td></tr></table></td>";
+            var viewFolderButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{HttpUtility.HtmlAttributeEncode(publicFolderLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;\">View Design files</a></td></tr></table></td>";
 
             return $@"
 <!DOCTYPE html>
@@ -752,7 +751,7 @@ namespace ESSDesign.Server.Services
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeScaffold}</p></td></tr>
                             </table>
-                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{viewFolderButton}{appButton}</tr></table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{viewFolderButton}</tr></table>
                         </td>
                     </tr>
                     <tr>

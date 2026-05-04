@@ -472,6 +472,8 @@ namespace ESSDesign.Server.Models
         public bool HasThirdPartyDesign { get; set; }
         public string? EssDesignIssueName { get; set; }
         public string? ThirdPartyDesignName { get; set; }
+        public string? EssDesignUrl { get; set; }
+        public string? ThirdPartyDesignUrl { get; set; }
     }
 
     public class SearchResult

@@ -17,6 +17,7 @@ namespace ESSDesign.Server.Controllers
         private readonly EmailService _emailService;
         private readonly PushNotificationService _pushNotificationService;
         private readonly string _shareLinkSecret;
+        private readonly string _frontendUrl;
         private readonly ILogger<FoldersController> _logger;
 
         public FoldersController(
@@ -33,6 +34,7 @@ namespace ESSDesign.Server.Controllers
                 ?? configuration["Supabase:ServiceRoleKey"]
                 ?? configuration["Supabase:Key"]
                 ?? "dev-folder-share-link-secret";
+            _frontendUrl = configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app";
             _logger = logger;
         }
 
@@ -889,8 +891,9 @@ namespace ESSDesign.Server.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden, "This folder share link is invalid or has expired.");
                 }
 
-                var folder = await _supabaseService.GetFolderShareTreeAsync(folderId);
-                return Content(BuildSharedFolderHtml(folder), "text/html; charset=utf-8");
+                await _supabaseService.GetFolderByIdAsync(folderId);
+                var appUrl = $"{_frontendUrl.TrimEnd('/')}/?sharedFolder={folderId:D}&token={WebUtility.UrlEncode(token)}";
+                return Redirect(appUrl);
             }
             catch (FileNotFoundException ex)
             {
@@ -899,6 +902,77 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error rendering shared folder {FolderId}", folderId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("{folderId}/public-share-data")]
+        public async Task<ActionResult<FolderShareTree>> GetSharedFolderData(Guid folderId, [FromQuery] string? token)
+        {
+            try
+            {
+                if (!ValidateFolderShareAccessToken(folderId, token))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "This folder share link is invalid or has expired." });
+                }
+
+                var folder = await _supabaseService.GetFolderShareTreeAsync(folderId);
+                HydrateSharedFolderLinks(folder, token!);
+                return Ok(folder);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading shared folder data {FolderId}", folderId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("{folderId}/public-share/documents/{documentId}/download/{type}")]
+        public async Task<ActionResult> DownloadSharedFolderDocument(Guid folderId, Guid documentId, string type, [FromQuery] string? token)
+        {
+            try
+            {
+                if (!ValidateFolderShareAccessToken(folderId, token))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, "This folder share link is invalid or has expired.");
+                }
+
+                if (!type.Equals("ess", StringComparison.OrdinalIgnoreCase) &&
+                    !type.Equals("thirdparty", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "Type must be 'ess' or 'thirdparty'" });
+                }
+
+                var folder = await _supabaseService.GetFolderShareTreeAsync(folderId);
+                if (!FolderContainsDocument(folder, documentId))
+                {
+                    return NotFound(new { error = "Document is not part of this shared folder." });
+                }
+
+                var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
+                using var httpClient = new HttpClient();
+                var response = await httpClient.GetAsync(fileInfo.Url);
+                response.EnsureSuccessStatusCode();
+
+                var stream = await response.Content.ReadAsStreamAsync();
+                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
+                Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+
+                return new FileStreamResult(stream, contentType);
+            }
+            catch (FileNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error downloading shared folder document {DocumentId}", documentId);
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -997,6 +1071,59 @@ namespace ESSDesign.Server.Controllers
         private static int CountSharedDocuments(FolderShareTree folder)
         {
             return folder.Documents.Count + folder.SubFolders.Sum(CountSharedDocuments);
+        }
+
+        private void HydrateSharedFolderLinks(FolderShareTree folder, string token)
+        {
+            foreach (var document in folder.Documents)
+            {
+                if (document.HasEssDesign)
+                {
+                    document.EssDesignUrl = BuildSharedDocumentDownloadPath(folder.Id, document.Id, "ess", token);
+                }
+
+                if (document.HasThirdPartyDesign)
+                {
+                    document.ThirdPartyDesignUrl = BuildSharedDocumentDownloadPath(folder.Id, document.Id, "thirdparty", token);
+                }
+            }
+
+            foreach (var subfolder in folder.SubFolders)
+            {
+                HydrateSharedFolderLinksForRoot(folder.Id, subfolder, token);
+            }
+        }
+
+        private void HydrateSharedFolderLinksForRoot(Guid rootFolderId, FolderShareTree folder, string token)
+        {
+            foreach (var document in folder.Documents)
+            {
+                if (document.HasEssDesign)
+                {
+                    document.EssDesignUrl = BuildSharedDocumentDownloadPath(rootFolderId, document.Id, "ess", token);
+                }
+
+                if (document.HasThirdPartyDesign)
+                {
+                    document.ThirdPartyDesignUrl = BuildSharedDocumentDownloadPath(rootFolderId, document.Id, "thirdparty", token);
+                }
+            }
+
+            foreach (var subfolder in folder.SubFolders)
+            {
+                HydrateSharedFolderLinksForRoot(rootFolderId, subfolder, token);
+            }
+        }
+
+        private static string BuildSharedDocumentDownloadPath(Guid folderId, Guid documentId, string type, string token)
+        {
+            return $"/api/folders/{folderId}/public-share/documents/{documentId}/download/{type}?token={WebUtility.UrlEncode(token)}";
+        }
+
+        private static bool FolderContainsDocument(FolderShareTree folder, Guid documentId)
+        {
+            return folder.Documents.Any(document => document.Id == documentId)
+                || folder.SubFolders.Any(subfolder => FolderContainsDocument(subfolder, documentId));
         }
 
         private string BuildSharedFolderHtml(FolderShareTree folder)
