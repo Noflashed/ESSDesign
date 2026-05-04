@@ -1001,6 +1001,39 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task<FolderShareTree> GetFolderShareTreeAsync(Guid folderId)
+        {
+            var folder = await GetFolderByIdAsync(folderId);
+            var tree = new FolderShareTree
+            {
+                Id = folder.Id,
+                Name = folder.Name,
+                Documents = folder.Documents
+                    .Select(document => new FolderShareDocument
+                    {
+                        Id = document.Id,
+                        FolderId = document.FolderId,
+                        DisplayName = document.EssDesignIssueName
+                            ?? document.ThirdPartyDesignName
+                            ?? $"Revision {document.RevisionNumber}",
+                        RevisionNumber = document.RevisionNumber,
+                        Description = document.Description,
+                        HasEssDesign = !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
+                        HasThirdPartyDesign = !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
+                        EssDesignIssueName = document.EssDesignIssueName,
+                        ThirdPartyDesignName = document.ThirdPartyDesignName
+                    })
+                    .ToList()
+            };
+
+            foreach (var subfolder in folder.SubFolders)
+            {
+                tree.SubFolders.Add(await GetFolderShareTreeAsync(subfolder.Id));
+            }
+
+            return tree;
+        }
+
         public async Task<Guid> CreateFolderAsync(string name, Guid? parentFolderId, string? userId = null)
         {
             try

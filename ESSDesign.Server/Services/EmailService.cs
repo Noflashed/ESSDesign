@@ -1,6 +1,8 @@
 using Resend;
 using ESSDesign.Server.Models;
 using System.Web;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ESSDesign.Server.Services
 {
@@ -11,6 +13,7 @@ namespace ESSDesign.Server.Services
         private readonly string _fromName;
         private readonly string _appBaseUrl;
         private readonly string _frontendUrl;
+        private readonly string _shareLinkSecret;
         private readonly ILogger<EmailService> _logger;
 
         public EmailService(IResend? resend, IConfiguration configuration, ILogger<EmailService> logger)
@@ -20,6 +23,10 @@ namespace ESSDesign.Server.Services
             _fromName = configuration["Resend:FromName"] ?? "ESS Design System";
             _appBaseUrl = configuration["AppSettings:BaseUrl"] ?? "https://localhost:7001";
             _frontendUrl = configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app";
+            _shareLinkSecret = configuration["AppSettings:ShareLinkSecret"]
+                ?? configuration["Supabase:ServiceRoleKey"]
+                ?? configuration["Supabase:Key"]
+                ?? "dev-folder-share-link-secret";
             _logger = logger;
         }
 
@@ -308,6 +315,60 @@ namespace ESSDesign.Server.Services
                 recipientEmails.Count,
                 documentName,
                 revisionNumber);
+        }
+
+        public async Task SendFolderShareNotificationAsync(
+            List<string> recipientEmails,
+            string folderName,
+            string sharedByName,
+            Guid folderId,
+            int documentCount,
+            string? client = null,
+            string? project = null,
+            string? scaffold = null,
+            string? customMessage = null)
+        {
+            if (recipientEmails == null || !recipientEmails.Any())
+            {
+                _logger.LogWarning("No recipients provided for folder share notification");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping folder share notifications.");
+                return;
+            }
+
+            var subjectParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(client))
+                subjectParts.Add(client);
+            if (!string.IsNullOrWhiteSpace(project))
+                subjectParts.Add(project);
+            if (!string.IsNullOrWhiteSpace(scaffold))
+                subjectParts.Add(scaffold);
+
+            var hierarchyString = subjectParts.Any() ? string.Join(" - ", subjectParts) + " - " : "";
+            var subject = $"Folder Shared: {hierarchyString}{folderName}";
+            var htmlContent = BuildFolderShareEmailContent(
+                folderName,
+                sharedByName,
+                folderId,
+                documentCount,
+                client,
+                project,
+                scaffold,
+                customMessage);
+
+            foreach (var recipientEmail in recipientEmails)
+            {
+                await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            }
+
+            _logger.LogInformation(
+                "Folder share summary: {RecipientCount} sent. Folder: {FolderName}",
+                recipientEmails.Count,
+                folderName);
         }
 
         private async Task SendEmailWithRetryAsync(string recipientEmail, string subject, string htmlContent, int maxRetries = 3)
@@ -636,6 +697,78 @@ namespace ESSDesign.Server.Services
 </html>";
         }
 
+        private string BuildFolderShareEmailContent(
+            string folderName,
+            string sharedByName,
+            Guid folderId,
+            int documentCount,
+            string? client,
+            string? project,
+            string? scaffold,
+            string? customMessage)
+        {
+            var publicFolderLink = $"{_appBaseUrl.TrimEnd('/')}/api/folders/{folderId}/public-share?token={HttpUtility.UrlEncode(BuildFolderShareAccessToken(folderId))}";
+            var viewInAppLink = $"{_frontendUrl.TrimEnd('/')}/?page=design&folder={folderId}";
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
+            var safeFolderName = HttpUtility.HtmlEncode(folderName);
+            var safeSharer = HttpUtility.HtmlEncode(sharedByName);
+            var safeClient = HttpUtility.HtmlEncode(client ?? "-");
+            var safeProject = HttpUtility.HtmlEncode(project ?? "-");
+            var safeScaffold = HttpUtility.HtmlEncode(scaffold ?? "-");
+            var safeDocumentCount = documentCount == 1 ? "1 document" : $"{documentCount} documents";
+            var customMessageHtml = BuildCustomEmailMessageHtml(sharedByName, customMessage);
+            var viewFolderButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a73e8;\"><a href=\"{HttpUtility.HtmlAttributeEncode(publicFolderLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;\">View folder files</a></td></tr></table></td>";
+            var appButton = $"<td align=\"center\" style=\"padding:8px;\"><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius:100px;background-color:#1a1a2e;\"><a href=\"{HttpUtility.HtmlAttributeEncode(viewInAppLink)}\" style=\"display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:180px;text-align:center;\">Open in ESS Design</a></td></tr></table></td>";
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+</head>
+<body style=""margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d3748;background-color:#edf2f7;"">
+    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#edf2f7;padding:40px 20px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""620"" style=""max-width:620px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;"">
+                    <tr>
+                        <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">A Folder Was Shared With You</h1>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">View and download the files in this folder</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
+                                <strong style=""color:#2d3748;"">{safeSharer}</strong> shared the folder <strong style=""color:#2d3748;"">{safeFolderName}</strong> with you.
+                            </p>
+                            {customMessageHtml}
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Folder</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFolderName}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Files</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeDocumentCount}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeClient}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Scaffold</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeScaffold}</p></td></tr>
+                            </table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%""><tr>{viewFolderButton}{appButton}</tr></table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align=""center"" style=""background-color:#f7fafc;padding:24px 32px;border-top:1px solid #e2e8f0;"">
+                            <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
+                            <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">Automated folder share from the ESS Design system.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
+
         private string BuildCustomEmailMessageHtml(string senderName, string? customMessage)
         {
             if (string.IsNullOrWhiteSpace(customMessage))
@@ -659,6 +792,23 @@ namespace ESSDesign.Server.Services
                                     </td>
                                 </tr>
                             </table>";
+        }
+
+        private string BuildFolderShareAccessToken(Guid folderId)
+        {
+            var expires = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+            var payload = $"{folderId:N}.{expires}";
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_shareLinkSecret));
+            var signature = ToBase64Url(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
+            return $"{expires}.{signature}";
+        }
+
+        private static string ToBase64Url(byte[] bytes)
+        {
+            return Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
         }
 
         private string BuildDocumentRevisionReplacementEmailContent(

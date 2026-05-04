@@ -665,7 +665,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setExternalShareRecipients(prev => prev.filter(email => email !== emailToRemove));
     };
 
-    const handleShareDocument = async () => {
+    const handleShareItem = async () => {
         if (!shareTarget || totalShareRecipients === 0) {
             showToast('Select at least one recipient to share with', 'error');
             return;
@@ -677,15 +677,21 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         }
 
         setSharingDocument(true);
-        const toastId = showToast('Sharing PDF...', 'info', 0);
+        const isFolderShare = !shareTarget.isDocument;
+        const shareLabel = isFolderShare ? 'folder' : 'PDF';
+        const toastId = showToast(`Sharing ${shareLabel}...`, 'info', 0);
         const allExternalRecipients = [...externalShareRecipients, ...pendingExternalEmails.filter(isValidEmail)]
             .filter((email, index, allEmails) =>
                 allEmails.findIndex(candidate => candidate.toLowerCase() === email.toLowerCase()) === index
             );
 
         try {
-            await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients, allExternalRecipients, externalShareMessage.trim());
-            updateToast(toastId, 'PDF shared successfully', 'success');
+            if (isFolderShare) {
+                await foldersAPI.shareFolder(shareTarget.id, selectedShareRecipients, allExternalRecipients, externalShareMessage.trim());
+            } else {
+                await foldersAPI.shareDocument(shareTarget.id, selectedShareRecipients, allExternalRecipients, externalShareMessage.trim());
+            }
+            updateToast(toastId, `${isFolderShare ? 'Folder' : 'PDF'} shared successfully`, 'success');
             setShowShareModal(false);
             setShareTarget(null);
             setSelectedShareRecipients([]);
@@ -693,8 +699,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setExternalShareInput('');
             setExternalShareMessage('');
         } catch (error) {
-            updateToast(toastId, 'Failed to share PDF', 'error');
-            console.error('Share document error:', error);
+            updateToast(toastId, `Failed to share ${shareLabel}`, 'error');
+            console.error('Share item error:', error);
         } finally {
             setSharingDocument(false);
         }
@@ -1123,6 +1129,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     {contextMenu.item && !contextMenu.item.isDocument && (
                         <>
                             <div onClick={() => {
+                                handleOpenShareModal(contextMenu.item);
+                                setContextMenu(null);
+                            }}>
+                                Share Folder
+                            </div>
+                            <div className="context-menu-divider"></div>
+                            <div onClick={() => {
                                 setNewFolderParent(contextMenu.item.id);
                                 setShowNewFolderModal(true);
                                 setContextMenu(null);
@@ -1270,9 +1283,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     setExternalShareMessage('');
                 }}>
                     <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>Share PDF</h3>
+                        <h3>{shareTarget.isDocument ? 'Share PDF' : 'Share Folder'}</h3>
                         <p className="share-modal-subtitle">
-                            Send <strong>{shareTarget.essDesignIssueName || shareTarget.thirdPartyDesignName || formatRevisionNumber(shareTarget.revisionNumber)}</strong> by email.
+                            Send <strong>{shareTarget.isDocument
+                                ? (shareTarget.essDesignIssueName || shareTarget.thirdPartyDesignName || formatRevisionNumber(shareTarget.revisionNumber))
+                                : shareTarget.name}</strong> by email.
                         </p>
                         <div className="share-section">
                             <div className="share-section-title">ESS Design users</div>
@@ -1326,7 +1341,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 />
                             </div>
                             <div className="share-helper-text">
-                                External recipients will receive direct PDF links and do not need an ESS Design account.
+                                {shareTarget.isDocument
+                                    ? 'External recipients will receive direct PDF links and do not need an ESS Design account.'
+                                    : 'External recipients will receive a direct folder link and do not need an ESS Design account.'}
                             </div>
                             {invalidExternalInput && (
                                 <div className="share-error-text">
@@ -1350,7 +1367,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             </div>
                         </div>
                         <div className="share-selection-summary">
-                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length} external recipient{externalShareRecipients.length === 1 ? '' : 's'} added
+                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length} external recipient{externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length === 1 ? '' : 's'} added
                         </div>
                         <div className="modal-actions">
                             <button
@@ -1369,10 +1386,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             </button>
                             <button
                                 type="button"
-                                onClick={handleShareDocument}
+                                onClick={handleShareItem}
                                 disabled={sharingDocument || loadingShareUsers || (totalShareRecipients === 0 && !externalShareInput.trim()) || invalidExternalInput}
                             >
-                                {sharingDocument ? 'Sharing...' : 'Share PDF'}
+                                {sharingDocument ? 'Sharing...' : (shareTarget.isDocument ? 'Share PDF' : 'Share Folder')}
                             </button>
                         </div>
                     </div>

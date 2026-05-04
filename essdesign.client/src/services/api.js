@@ -1883,6 +1883,15 @@ export const foldersAPI = {
         return response.data;
     },
 
+    shareFolder: async (folderId, recipientIds = [], externalEmails = [], externalMessage = '') => {
+        const response = await apiClient.post(`/folders/${folderId}/share`, {
+            recipientIds,
+            externalEmails,
+            externalMessage
+        });
+        return response.data;
+    },
+
     moveDocument: async (documentId, targetFolderId) => {
         const response = await apiClient.put(`/folders/documents/${documentId}/move`, {
             targetFolderId

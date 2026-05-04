@@ -371,6 +371,13 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 
+    public class ShareFolderRequest
+    {
+        public List<string> RecipientIds { get; set; } = new();
+        public List<string> ExternalEmails { get; set; } = new();
+        public string? ExternalMessage { get; set; }
+    }
+
     public class MoveDocumentRequest
     {
         public Guid TargetFolderId { get; set; }
@@ -444,6 +451,27 @@ namespace ESSDesign.Server.Models
         public string? Client { get; set; }
         public string? Project { get; set; }
         public string? Scaffold { get; set; }
+    }
+
+    public class FolderShareTree
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public List<FolderShareTree> SubFolders { get; set; } = new();
+        public List<FolderShareDocument> Documents { get; set; } = new();
+    }
+
+    public class FolderShareDocument
+    {
+        public Guid Id { get; set; }
+        public Guid FolderId { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+        public string RevisionNumber { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool HasEssDesign { get; set; }
+        public bool HasThirdPartyDesign { get; set; }
+        public string? EssDesignIssueName { get; set; }
+        public string? ThirdPartyDesignName { get; set; }
     }
 
     public class SearchResult
