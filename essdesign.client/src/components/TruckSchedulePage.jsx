@@ -3863,21 +3863,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <>
               <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
                 <span>Set time manually</span>
-                <small>Enter exact start time</small>
               </button>
               <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-                <span>Add secondary route</span>
-                <small>Extend this delivery with another stop</small>
+                <span>Add external route</span>
               </button>
               <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
                 <span>{tileMenuSelectionIds.length > 1 ? `Unschedule ${tileMenuSelectionIds.length} orders` : 'Unschedule order'}</span>
-                <small>{tileMenuSelectionIds.length > 1 ? 'Return selected orders to pending requests' : 'Return to pending requests'}</small>
               </button>
             </>
           ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
             <span>{tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
-            <small>{tileMenuSelectionIds.length > 1 ? 'Remove all selected requests' : tileMenuIsDeleteOnlySecondaryRoute ? 'Remove secondary route' : 'Remove this request'}</small>
           </button>
         </div>
       ) : null}
