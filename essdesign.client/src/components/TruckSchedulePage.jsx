@@ -56,6 +56,19 @@ const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
+const DEBUG_SPEED_OPTIONS = [
+  { value: 0, label: 'Paused' },
+  { value: 1, label: '1x' },
+  { value: 5, label: '5x' },
+  { value: 15, label: '15x' },
+  { value: 60, label: '60x' },
+];
+const DEBUG_STATUS_OPTIONS = [
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'in_transit', label: 'In Transit' },
+  { value: 'unloading', label: 'Unloading' },
+  { value: 'return_transit', label: 'Return Transit' },
+];
 const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'secondary_drop_off', label: 'Secondary material drop off' },
   { value: 'material_pick_up', label: 'Material order' },
@@ -265,10 +278,10 @@ function getScaffoldDetailText(request, event) {
   );
 }
 
-function buildBoardState(requestsForDay, routeMap) {
+function buildBoardState(requestsForDay, routeMap, nowOverride = null) {
   const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
   const groupedByTruck = new Map();
-  const now = new Date();
+  const now = nowOverride instanceof Date && !Number.isNaN(nowOverride.getTime()) ? nowOverride : new Date();
   const dayEvents = [];
   const durationMap = {};
   const startMap = {};
@@ -834,26 +847,31 @@ function formatNativeDateValue(date) {
   return `${year}-${month}-${day}`;
 }
 
-function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0 }) {
+function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0, nowOverride = null, debugActive = false }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
+    if (nowOverride) {
+      return undefined;
+    }
     const interval = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [nowOverride]);
 
-  if (!isSameDay(now, selectedDate)) {
+  const markerNow = nowOverride || now;
+
+  if (!isSameDay(markerNow, selectedDate)) {
     return null;
   }
-  const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const currentMinutes = markerNow.getHours() * 60 + markerNow.getMinutes() + markerNow.getSeconds() / 60;
   const totalMinutes = (SCREEN_END_HOUR - SCREEN_START_HOUR) * 60;
   const left = laneOffset + ((currentMinutes - SCREEN_START_HOUR * 60) / totalMinutes) * timelineWidth;
   if (left < laneOffset || left > laneOffset + timelineWidth) {
     return null;
   }
   return (
-    <div className="ts2-now-marker" style={{ left }}>
-      <span>{now.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+    <div className={`ts2-now-marker${debugActive ? ' debug' : ''}`} style={{ left }}>
+      <span>{markerNow.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}</span>
     </div>
   );
 }
@@ -1008,6 +1026,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [secondaryRouteSaving, setSecondaryRouteSaving] = useState(false);
   const [secondaryAddressSuggestions, setSecondaryAddressSuggestions] = useState([]);
   const [secondaryAddressLoading, setSecondaryAddressLoading] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+  const [debugNowMs, setDebugNowMs] = useState(() => Date.now());
+  const [debugSpeed, setDebugSpeed] = useState(1);
+  const [debugStatusSavingId, setDebugStatusSavingId] = useState('');
   const boardScrollRef = useRef(null);
   const boardBodyRef = useRef(null);
   const scaleAnchorRef = useRef(null);
@@ -1020,6 +1042,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectionDragContextRef = useRef(null);
   const selectionStateRef = useRef(null);
   const [selectionBox, setSelectionBox] = useState(null);
+  const debugNow = useMemo(() => new Date(debugNowMs), [debugNowMs]);
+  const debugNowRef = useRef(debugNow);
+
+  useEffect(() => {
+    debugNowRef.current = debugNow;
+  }, [debugNow]);
 
   const setRouteLoading = useCallback((requestId, loading) => {
     if (!requestId) {
@@ -1094,10 +1122,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       fallbackDate || selectedDate,
       enableTolls,
     );
-    const board = buildBoardState(requestsForDay, routeMap);
+    const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null);
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
-  }, [applyBoardProjection, enableTolls, selectedDate]);
+  }, [applyBoardProjection, debugMode, enableTolls, selectedDate]);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -1134,7 +1162,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       );
       const nextSiteLocationMap = mergeRequestSiteLocationMap(siteLocationMap);
       const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, enableTolls);
-      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap);
+      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null);
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const resolvedRouteEntries = await Promise.all(
@@ -1167,7 +1195,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries);
-      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap);
+      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null);
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
     })().catch(err => {
@@ -1180,7 +1208,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { loadKey, promise: task };
     return task;
-  }, [applyBoardProjection, enableTolls, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
+  }, [applyBoardProjection, debugMode, enableTolls, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -1192,6 +1220,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }, LIVE_REFRESH_MS);
     return () => window.clearInterval(interval);
   }, [loadBoard]);
+
+  useEffect(() => {
+    if (!debugMode || debugSpeed <= 0) {
+      return undefined;
+    }
+    const interval = window.setInterval(() => {
+      setDebugNowMs(current => current + 1000 * debugSpeed);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [debugMode, debugSpeed]);
+
+  useEffect(() => {
+    if (!debugMode) {
+      return;
+    }
+    projectRequestsToBoard(allRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+  }, [allRequests, debugMode, debugNowMs, projectRequestsToBoard, selectedDate]);
 
   useEffect(() => {
     localStorage.setItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`, timelineScaleMode);
@@ -1478,6 +1523,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [dayEvents, selectedScheduleEventId],
   );
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
+  const selectedDebugStatus = selectedScheduleRequest?.deliveryStatus || 'scheduled';
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
   const selectedScheduleRouteSchedule = useMemo(
     () => applyRouteMode(buildRouteScheduleFromEvent(selectedScheduleEvent), enableTolls),
@@ -1681,6 +1727,105 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [requestModal?.request?.secondaryRoute, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
+
+  const debugTimeValue = useMemo(() => {
+    const minutes = debugNow.getHours() * 60 + debugNow.getMinutes();
+    return formatManualTimeInput(minutes);
+  }, [debugNow]);
+
+  const handleDebugTimeChange = useCallback((event) => {
+    const minutes = parseManualScheduleTime(event.target.value);
+    if (minutes == null) {
+      return;
+    }
+    const next = new Date(selectedDate);
+    next.setHours(Math.floor(minutes / 60), minutes % 60, debugNow.getSeconds(), 0);
+    setDebugNowMs(next.getTime());
+  }, [debugNow, selectedDate]);
+
+  const resetDebugClock = useCallback(() => {
+    const now = new Date();
+    const next = isSameDay(now, selectedDate)
+      ? now
+      : new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), SCREEN_START_HOUR, 0, 0, 0);
+    setDebugNowMs(next.getTime());
+  }, [selectedDate]);
+
+  const updateDebugDeliveryStatus = useCallback((status) => {
+    if (!selectedScheduleRequest?.id) {
+      return;
+    }
+    const requestId = selectedScheduleRequest.id;
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const previousCycleStateMap = eventCycleStateMap;
+    const stamp = debugNow.toISOString();
+    const startedAt = status === 'scheduled'
+      ? null
+      : selectedScheduleRequest.deliveryStartedAt || stamp;
+    const unloadingAt = status === 'unloading' || status === 'return_transit'
+      ? selectedScheduleRequest.deliveryUnloadingAt || stamp
+      : null;
+    const confirmedAt = status === 'return_transit' ? stamp : null;
+    const updatedRequest = {
+      ...selectedScheduleRequest,
+      deliveryStatus: status,
+      deliveryStartedAt: startedAt,
+      deliveryUnloadingAt: unloadingAt,
+      deliveryConfirmedAt: confirmedAt,
+    };
+    const nextRequests = previousRequests.map(item => item.id === requestId ? updatedRequest : item);
+    setDebugStatusSavingId(requestId);
+    setAllRequests(nextRequests);
+    setRequestMetaMap(current => ({ ...current, [requestId]: updatedRequest }));
+    optimisticRequestOverridesRef.current.set(requestId, {
+      request: updatedRequest,
+      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    });
+    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+
+    materialOrderRequestsAPI.updateDeliveryStatus(requestId, {
+      status,
+      startedAt,
+      unloadingAt,
+      confirmedAt,
+    })
+      .then(() => {
+        setError('');
+      })
+      .catch(err => {
+        optimisticRequestOverridesRef.current.delete(requestId);
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setError(err?.message || 'Failed to apply debug delivery status.');
+      })
+      .finally(() => {
+        setDebugStatusSavingId('');
+      });
+  }, [
+    allRequests,
+    dayEvents,
+    debugNow,
+    eventCycleStateMap,
+    eventDurationMinutesMap,
+    eventPrimaryDurationMinutesMap,
+    eventStartMinutesMap,
+    projectRequestsToBoard,
+    requestMetaMap,
+    selectedDate,
+    selectedScheduleRequest,
+  ]);
 
   useEffect(() => {
     if (!requestModal?.siteLocation) {
@@ -3095,6 +3240,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <span className="ts2-board-card-subtitle">{formatBoardDay(selectedDate)}</span>
           </div>
           <div className="ts2-board-card-controls">
+            <button
+              type="button"
+              className={`transport-debug-toggle${debugMode ? ' active' : ''}`}
+              onClick={() => {
+                setDebugMode(current => !current);
+                if (!debugMode) {
+                  resetDebugClock();
+                }
+              }}
+            >
+              Debug
+            </button>
             <label className={`transport-snap-toggle${snapToTimeMarks ? ' active' : ''}`}>
               <input
                 type="checkbox"
@@ -3118,6 +3275,49 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
         </div>
 
+        {debugMode ? (
+          <div className="transport-debug-panel">
+            <div className="transport-debug-clock">
+              <label>
+                <span>Current time marker</span>
+                <input
+                  type="time"
+                  value={debugTimeValue}
+                  min={formatManualTimeInput(SCREEN_START_HOUR * 60)}
+                  max={formatManualTimeInput(SCREEN_END_HOUR * 60)}
+                  step="60"
+                  onChange={handleDebugTimeChange}
+                />
+              </label>
+              <label>
+                <span>Speed</span>
+                <select value={debugSpeed} onChange={(event) => setDebugSpeed(Number(event.target.value))}>
+                  {DEBUG_SPEED_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" onClick={resetDebugClock}>Reset clock</button>
+            </div>
+            <div className="transport-debug-status">
+              <span>{selectedScheduleRequest ? `Tile status: ${selectedScheduleRequest.builderName || selectedScheduleEvent?.builderName || 'Material Order'}` : 'Select a tile to change its debug status'}</span>
+              <div>
+                {DEBUG_STATUS_OPTIONS.map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={selectedDebugStatus === option.value ? 'active' : ''}
+                    disabled={!selectedScheduleRequest || debugStatusSavingId === selectedScheduleRequest.id}
+                    onClick={() => updateDebugDeliveryStatus(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="ts2-board-scroll" ref={boardScrollRef}>
         <div className="ts2-board" style={{ width: timelineWidth + TRACK_OFFSET }}>
           <div className="ts2-board-head" style={{ gridTemplateColumns: `${LANE_META_WIDTH}px minmax(0, 1fr)` }}>
@@ -3133,7 +3333,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </div>
           </div>
           <div className="ts2-board-body" ref={boardBodyRef}>
-            <CurrentTimeMarker selectedDate={selectedDate} timelineWidth={timelineWidth} laneOffset={TRACK_OFFSET} />
+            <CurrentTimeMarker
+              selectedDate={selectedDate}
+              timelineWidth={timelineWidth}
+              laneOffset={TRACK_OFFSET}
+              nowOverride={debugMode ? debugNow : null}
+              debugActive={debugMode}
+            />
             {selectionBox ? (
               <div
                 className="ts2-selection-box"

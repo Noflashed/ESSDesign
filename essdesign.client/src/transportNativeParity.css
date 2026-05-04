@@ -3660,6 +3660,138 @@
     cursor: pointer;
 }
 
+.transport-debug-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid #d7e0eb;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #102b5c;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.transport-debug-toggle:hover,
+.transport-debug-toggle.active {
+    border-color: #f47c20;
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.transport-debug-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+    gap: 12px;
+    margin: 12px 0 0;
+    padding: 12px;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    background: #fffaf3;
+}
+
+.transport-debug-clock,
+.transport-debug-status {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.transport-debug-clock label {
+    display: grid;
+    gap: 5px;
+}
+
+.transport-debug-clock label:first-child {
+    width: 132px;
+}
+
+.transport-debug-clock span,
+.transport-debug-status > span {
+    color: #9a3412;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 850;
+}
+
+.transport-debug-clock input,
+.transport-debug-clock select {
+    height: 34px;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #102b5c;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.transport-debug-clock input {
+    padding: 0 8px;
+}
+
+.transport-debug-clock select {
+    min-width: 86px;
+    padding: 0 8px;
+}
+
+.transport-debug-clock button,
+.transport-debug-status button {
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #9a3412;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.transport-debug-status {
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.transport-debug-status > span {
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-debug-status > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.transport-debug-status button.active {
+    border-color: #f47c20;
+    background: #f47c20;
+    color: #ffffff;
+}
+
+.transport-debug-status button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ts2-now-marker.debug {
+    background: #f47c20;
+    box-shadow: 0 0 0 4px rgba(244, 124, 32, 0.16);
+}
+
+.ts2-now-marker.debug span {
+    background: #f47c20;
+}
+
 @media (max-width: 900px) {
     .transport-page-frame .ts2-board-card-controls,
     .transport-desktop-workspace .ts2-board-card-controls {
@@ -3674,6 +3806,21 @@
 
     .transport-scale-control input[type="range"] {
         width: 100%;
+    }
+
+    .transport-debug-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .transport-debug-clock,
+    .transport-debug-status {
+        align-items: start;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .transport-debug-status > div {
+        justify-content: flex-start;
     }
 }
 
