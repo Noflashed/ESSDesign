@@ -355,6 +355,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
           : getTimingProfile(routeMap[request.id] ?? null, null);
         const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, baseTiming, truckId);
+        const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
@@ -403,7 +404,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         previousRunLink = {
-          includeReturnTransitToYard,
+          includeReturnTransitToYard: hasEffectiveReturnBreak,
           completed: requestStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
           projectedEndMinutes: projected.projectedEndMinutes,
