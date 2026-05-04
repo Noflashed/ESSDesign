@@ -49,6 +49,7 @@ builder.Services.AddScoped<Client>(_ =>
 builder.Services.AddScoped<SupabaseService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
+builder.Services.AddScoped<AdminAssistantService>();
 builder.Services.AddScoped<DeliveryAnalysisService>();
 builder.Services.AddHttpClient();
 

@@ -20,6 +20,7 @@ import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
+import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
@@ -226,7 +227,7 @@ function getSharedFolderLinkFromUrl() {
     return { folderId, token };
 }
 
-function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings }) {
+function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings, isAdmin }) {
     const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
 
     const toggleGroup = (key) => {
@@ -289,6 +290,7 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
 
             <div className="app-nav-sidebar-bottom">
                 <div className="app-nav-sidebar-divider" />
+                {isAdmin ? <AdminAssistantChat sidebarOpen={open} /> : null}
                 <button
                     className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
                     onClick={onGoSettings}
@@ -1493,6 +1495,7 @@ function App() {
                                 setShowUserMenu(false);
                                 applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
+                            isAdmin={isAdmin}
                         />
                         <div className="app-page-content">
                             {renderCurrentPage()}

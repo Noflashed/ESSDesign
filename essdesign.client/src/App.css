@@ -2983,6 +2983,206 @@ body {
     margin: 4px 2px 6px;
 }
 
+.admin-assistant {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+.admin-assistant-orb {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(244, 124, 32, 0.35);
+    border-radius: 8px;
+    background: linear-gradient(135deg, #102B5C, #17407f);
+    color: #fff;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(16, 43, 92, 0.22);
+}
+
+.admin-assistant.collapsed-sidebar .admin-assistant-orb {
+    grid-template-columns: 1fr;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    place-items: center;
+}
+
+.admin-assistant-orb span {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #F47C20;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.admin-assistant-orb strong {
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.admin-assistant-panel {
+    position: fixed;
+    left: 76px;
+    bottom: 20px;
+    width: min(420px, calc(100vw - 96px));
+    height: min(620px, calc(100vh - 96px));
+    background: #fff;
+    border: 1px solid #d9e2ef;
+    border-radius: 8px;
+    box-shadow: 0 22px 70px rgba(15, 23, 42, 0.22);
+    z-index: 1200;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    overflow: hidden;
+}
+
+.app-nav-sidebar:not(.collapsed) .admin-assistant-panel {
+    left: 214px;
+}
+
+.admin-assistant-head {
+    padding: 14px 16px;
+    background: #102B5C;
+    color: #fff;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 12px;
+    align-items: center;
+}
+
+.admin-assistant-head span {
+    display: block;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.76);
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.admin-assistant-head strong {
+    display: block;
+    font-size: 16px;
+}
+
+.admin-assistant-head button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+}
+
+.admin-assistant-messages {
+    padding: 14px;
+    overflow: auto;
+    background: #f7f9fc;
+}
+
+.admin-assistant-message {
+    max-width: 92%;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #172033;
+}
+
+.admin-assistant-message.user {
+    margin-left: auto;
+    background: #102B5C;
+    color: #fff;
+    border-color: #102B5C;
+}
+
+.admin-assistant-message.error {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #991b1b;
+}
+
+.admin-assistant-message p {
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.45;
+    font-size: 13px;
+}
+
+.admin-assistant-links {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.admin-assistant-links a {
+    color: #0f5bd7;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.admin-assistant-prompts {
+    display: grid;
+    gap: 6px;
+    padding: 10px 12px 0;
+    background: #fff;
+}
+
+.admin-assistant-prompts button {
+    border: 1px solid #d9e2ef;
+    border-radius: 6px;
+    background: #fff;
+    color: #102B5C;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.admin-assistant-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+}
+
+.admin-assistant-form input {
+    min-width: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 11px;
+    font-size: 13px;
+}
+
+.admin-assistant-form button {
+    border: 0;
+    border-radius: 6px;
+    background: #F47C20;
+    color: #fff;
+    font-weight: 700;
+    padding: 0 14px;
+    cursor: pointer;
+}
+
+.admin-assistant-form button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .app-page-content {
     flex: 1;
     overflow-y: auto;

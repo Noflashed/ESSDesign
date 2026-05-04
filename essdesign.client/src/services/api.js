@@ -2035,6 +2035,13 @@ export const usersAPI = {
         return response.data;
     }
 };
+
+export const adminAssistantAPI = {
+    chat: async (message, history = []) => {
+        const response = await apiClient.post('/admin-assistant/chat', { message, history });
+        return response.data;
+    }
+};
 export const analysisAPI = {
     recommendTimeSlot: async (payload) => {
         const response = await apiClient.post('/analysis/recommend-time-slot', payload);
