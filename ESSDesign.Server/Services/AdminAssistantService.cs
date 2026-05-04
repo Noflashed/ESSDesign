@@ -176,6 +176,7 @@ ESS context JSON:
         {
             var today = GetSydneyToday();
             var sources = new List<string>();
+            var shouldSearchDesigns = IsDesignLookupQuestion(question);
 
             var employeesTask = GetRestRowsAsync<JsonElement>(
                 "ess_rostering_employees?select=id,first_name,last_name,email,leading_hand,verified_at,preferred_site_1,preferred_site_2,preferred_site_3",
@@ -185,7 +186,9 @@ ESS context JSON:
                 cancellationToken);
             var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, cancellationToken);
             var materialRequestsTask = ReadStorageJsonAsync(SafetyBucket, MaterialRequestsPath, cancellationToken);
-            var searchTask = SearchDesignMatchesAsync(question, cancellationToken);
+            Task<(List<object> Matches, List<AdminAssistantLink> Links)> searchTask = shouldSearchDesigns
+                ? SearchDesignMatchesAsync(question, cancellationToken)
+                : Task.FromResult((new List<object>(), new List<AdminAssistantLink>()));
 
             await Task.WhenAll(employeesTask, planTask, projectsTask, materialRequestsTask, searchTask);
 
@@ -193,7 +196,10 @@ ESS context JSON:
             sources.Add("ess_rostering_plans");
             sources.Add("project-information/projects.json");
             sources.Add("project-information/material-order-requests/index.json");
-            sources.Add("folders/design_documents search");
+            if (shouldSearchDesigns)
+            {
+                sources.Add("folders/design_documents search");
+            }
 
             var employees = employeesTask.Result;
             var planRows = planTask.Result;
@@ -226,6 +232,64 @@ ESS context JSON:
                 Links = search.Links,
                 Sources = sources,
             };
+        }
+
+        private static bool IsDesignLookupQuestion(string question)
+        {
+            var normalized = NormalizeSearchText(question);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            var designPhrases = new[]
+            {
+                "design file",
+                "design files",
+                "design folder",
+                "design folders",
+                "design document",
+                "design documents",
+                "ess design",
+                "third party design",
+                "edge protection",
+                "loading platform",
+                "perimeter scaffold",
+                "internal scaffold",
+                "external scaffold",
+            };
+
+            if (designPhrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            var words = normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var designWords = new[]
+            {
+                "design",
+                "designs",
+                "drawing",
+                "drawings",
+                "pdf",
+                "file",
+                "files",
+                "folder",
+                "folders",
+                "document",
+                "documents",
+                "revision",
+                "revisions",
+                "rev",
+                "scaffold",
+                "scaffolds",
+                "scaffolding",
+            };
+
+            return designWords.Any(words.Contains);
         }
 
         private object BuildRosterSummary(JsonElement planRow, DateOnly today)
