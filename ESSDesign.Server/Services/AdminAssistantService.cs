@@ -136,6 +136,8 @@ For employee questions, use employeeSummary.employeeMatches first, then employee
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
+Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
+
 Be concise, direct, and specific. Avoid generic refusal language and avoid repeating that the answer is "not available in the provided context" unless there is genuinely no related ESS data at all.
 """
                 },
@@ -207,7 +209,10 @@ ESS context JSON:
             }
 
             var withoutMarkdownUrls = Regex.Replace(reply, @"\[([^\]]+)\]\(https?://[^\s)]+\)", "$1");
-            return Regex.Replace(withoutMarkdownUrls, @"https?://\S+", "the link below");
+            var withoutBareUrls = Regex.Replace(withoutMarkdownUrls, @"https?://\S+", "the link below");
+            var withoutEmphasis = Regex.Replace(withoutBareUrls, @"(?<!\*)\*{1,3}([^*\r\n][^*\r\n]*?)\*{1,3}(?!\*)", "$1");
+            withoutEmphasis = Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1");
+            return withoutEmphasis;
         }
 
         private object BuildModelContext(AdminAssistantContext context)

@@ -15,7 +15,7 @@ function AssistantAvatar({ role = 'assistant', loading = false }) {
 
     return (
         <div className={`admin-assistant-avatar ${isUser ? 'user' : 'assistant'}${loading ? ' loading' : ''}`} aria-hidden="true">
-            {loading ? <Loader2 size={16} /> : <Icon size={16} />}
+            <Icon size={16} />
         </div>
     );
 }
