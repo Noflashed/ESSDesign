@@ -501,6 +501,7 @@ export function projectRequestWindow(
   dateKey,
   now,
   shiftedScheduledStartMinutes,
+  nextActualStartMinutes = null,
 ) {
   const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
   const plannedEndMinutes = scheduledStart + timing.totalMinutes;
@@ -516,6 +517,7 @@ export function projectRequestWindow(
   );
 
   let projectedEnd = startMinutes + timing.totalMinutes;
+  let deliveryCompleteAt = projectedEnd;
   let groupedCompletedCycle = false;
   let showReturnTransitTile = false;
   let returnTransitEndMinutes = null;
@@ -529,7 +531,19 @@ export function projectRequestWindow(
         : typeof unloadingAt === 'number'
           ? unloadingAt
           : startMinutes + LIVE_TIMELINE_MINUTES;
-    projectedEnd = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, completedAt);
+    deliveryCompleteAt = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, completedAt);
+    if ((timing.returnMinutes || 0) > 0) {
+      const predictedReturnEnd = completedAt + timing.returnMinutes;
+      const hasNextStarted = typeof nextActualStartMinutes === 'number' && nextActualStartMinutes > completedAt;
+      projectedEnd = hasNextStarted
+        ? nextActualStartMinutes
+        : Math.max(predictedReturnEnd, nowMinutes);
+      groupedCompletedCycle = hasNextStarted;
+      showReturnTransitTile = true;
+      returnTransitEndMinutes = projectedEnd;
+    } else {
+      projectedEnd = deliveryCompleteAt;
+    }
   }
 
   if (request.deliveryStatus === 'in_transit') {
@@ -537,11 +551,6 @@ export function projectRequestWindow(
   } else if (request.deliveryStatus === 'unloading') {
     projectedEnd = Math.max(projectedEnd, nowMinutes + timing.returnMinutes);
   }
-
-  const deliveryCompleteAt =
-    request.deliveryStatus === 'return_transit'
-      ? projectedEnd
-      : projectedEnd;
 
   return {
     startMinutes,

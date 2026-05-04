@@ -30,7 +30,6 @@ import {
   getTruckAssignment,
   isSameDay,
   isTruckDeviceRole,
-  minutesFromIsoOnDate,
   projectRequestWindow,
   requestToCalendarEvent,
   scheduleStatusAppearance,
@@ -331,6 +330,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   groupedByTruck.forEach((truckRequests, truckId) => {
     let cumulativeShiftMinutes = 0;
     let laneCursorMinutes = SCREEN_START_HOUR * 60;
+    let previousRunLink = null;
     truckRequests
       .sort((left, right) => {
         const leftStart = (left.scheduledHour ?? SCREEN_START_HOUR) * 60 + (left.scheduledMinute ?? 0);
@@ -341,6 +341,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         return String(left.submittedAt || '').localeCompare(String(right.submittedAt || ''));
       })
       .forEach((request, index, ordered) => {
+        const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
         const continuation = secondaryContinuationBySourceId.get(request.id);
         const includeReturnTransitToYard = Boolean(returnTransitByRequestId?.[request.id]);
         const baseTiming = isSecondaryRouteRequest(request)
@@ -350,24 +351,49 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
-        const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
-        const shiftedScheduledStart = Math.max(
-          SCREEN_START_HOUR * 60,
-          scheduledStart + Math.max(0, cumulativeShiftMinutes),
-          laneCursorMinutes,
+        const followsPreviousRun = Boolean(
+          previousRunLink &&
+          !previousRunLink.includeReturnTransitToYard &&
+          Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
         );
+        const shiftedScheduledStart = followsPreviousRun
+          ? Math.max(SCREEN_START_HOUR * 60, previousRunLink.projectedEndMinutes)
+          : Math.max(
+            SCREEN_START_HOUR * 60,
+            scheduledStart + Math.max(0, cumulativeShiftMinutes),
+            laneCursorMinutes,
+          );
+        const nextStartedRequest = ordered.slice(index + 1).find(nextRequest => {
+          const parsed = nextRequest.deliveryStartedAt ? new Date(nextRequest.deliveryStartedAt) : null;
+          return parsed && !Number.isNaN(parsed.getTime()) && formatDateKey(parsed) === dateKey;
+        });
+        const nextActualStartMinutes = nextStartedRequest?.deliveryStartedAt
+          ? (() => {
+              const parsed = new Date(nextStartedRequest.deliveryStartedAt);
+              return parsed.getHours() * 60 + parsed.getMinutes() + parsed.getSeconds() / 60 + parsed.getMilliseconds() / 60000;
+            })()
+          : null;
         const projected = projectRequestWindow(
           request,
           timing,
           dateKey,
           now,
           shiftedScheduledStart,
+          nextActualStartMinutes,
         );
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
-        laneCursorMinutes = Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
+        const plannedRunEndMinutes = scheduledStart + timing.totalMinutes;
+        laneCursorMinutes = followsPreviousRun
+          ? projected.projectedEndMinutes
+          : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
+        previousRunLink = {
+          includeReturnTransitToYard,
+          plannedEndMinutes: plannedRunEndMinutes,
+          projectedEndMinutes: projected.projectedEndMinutes,
+        };
         startMap[request.id] = startMinutes;
         durationMap[request.id] = durationMinutes;
         primaryDurationMap[request.id] = primaryDurationMinutesValue;
@@ -377,6 +403,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           returnTransitEndMinutes: projected.returnTransitEndMinutes,
           isLastScheduledForDay: index === ordered.length - 1,
           hasSecondaryContinuation,
+          followsPreviousRun,
         };
         dayEvents.push({
           id: `remote-${request.id}`,
@@ -1504,7 +1531,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ? SCALE_MODES[timelineScaleMode]?.tickMinutes || DRAG_SCHEDULE_MINUTE_STEP
     : DRAG_SCHEDULE_MINUTE_STEP;
   const scheduleNow = debugMode ? debugNow : new Date();
-  const scheduleNowMinutes = scheduleNow.getHours() * 60 + scheduleNow.getMinutes() + scheduleNow.getSeconds() / 60;
   const pendingRequests = useMemo(
     () => allRequests.filter(request =>
       !request.scheduledDate
