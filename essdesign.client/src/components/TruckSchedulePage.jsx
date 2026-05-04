@@ -303,7 +303,7 @@ function getScaffoldDetailText(request, event) {
   );
 }
 
-function buildBoardState(requestsForDay, routeMap, nowOverride = null, includeReturnTransitToYard = false) {
+function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTransitByRequestId = {}) {
   const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
   const groupedByTruck = new Map();
   const now = nowOverride instanceof Date && !Number.isNaN(nowOverride.getTime()) ? nowOverride : new Date();
@@ -342,6 +342,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, includeRe
       })
       .forEach((request, index, ordered) => {
         const continuation = secondaryContinuationBySourceId.get(request.id);
+        const includeReturnTransitToYard = Boolean(returnTransitByRequestId?.[request.id]);
         const baseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
           : getTimingProfile(routeMap[request.id] ?? null, null);
@@ -1038,9 +1039,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const saved = localStorage.getItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === 'true';
   });
-  const [includeReturnTransitToYard, setIncludeReturnTransitToYard] = useState(() => {
+  const [returnTransitByRequestId, setReturnTransitByRequestId] = useState(() => {
     const saved = localStorage.getItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
-    return saved === 'true';
+    if (!saved) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return saved === 'true' ? { __legacy: true } : {};
+    }
   });
   const [requestModal, setRequestModal] = useState(null);
   const [requestModalLoading, setRequestModalLoading] = useState(false);
@@ -1124,6 +1133,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     requestSiteLocationMapRef.current = requestSiteLocationMap;
   }, [requestSiteLocationMap]);
 
+  const getReturnTransitEnabled = useCallback((requestId) => Boolean(returnTransitByRequestId?.[requestId]), [returnTransitByRequestId]);
+
   const mergeRequestSiteLocationMap = useCallback((patch) => {
     const entries = Object.entries(patch || {});
     if (entries.length === 0) {
@@ -1174,10 +1185,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       fallbackDate || selectedDate,
       enableTolls,
     );
-    const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, includeReturnTransitToYard);
+    const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId);
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
-  }, [applyBoardProjection, debugMode, enableTolls, includeReturnTransitToYard, selectedDate]);
+  }, [applyBoardProjection, debugMode, enableTolls, returnTransitByRequestId, selectedDate]);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -1188,7 +1199,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const loadBoard = useCallback(async () => {
     const dateKey = formatDateKey(selectedDate);
-    const loadKey = `${dateKey}:${enableTolls ? 'tolls' : 'no-tolls'}:${includeReturnTransitToYard ? 'return' : 'no-return'}`;
+    const loadKey = `${dateKey}:${enableTolls ? 'tolls' : 'no-tolls'}:${JSON.stringify(returnTransitByRequestId || {})}`;
     if (loadPromiseRef.current?.loadKey === loadKey) {
       return loadPromiseRef.current.promise;
     }
@@ -1214,7 +1225,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       );
       const nextSiteLocationMap = mergeRequestSiteLocationMap(siteLocationMap);
       const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, enableTolls);
-      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, includeReturnTransitToYard);
+      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId);
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const resolvedRouteEntries = await Promise.all(
@@ -1247,7 +1258,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries);
-      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, includeReturnTransitToYard);
+      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId);
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
     })().catch(err => {
@@ -1260,7 +1271,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { loadKey, promise: task };
     return task;
-  }, [applyBoardProjection, debugMode, enableTolls, includeReturnTransitToYard, mergeRequestSiteLocationMap, selectedDate, setRouteLoading]);
+  }, [applyBoardProjection, debugMode, enableTolls, mergeRequestSiteLocationMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -1288,7 +1299,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     projectRequestsToBoard(allRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
-  }, [allRequests, debugMode, debugNowMs, includeReturnTransitToYard, projectRequestsToBoard, selectedDate]);
+  }, [allRequests, debugMode, debugNowMs, projectRequestsToBoard, returnTransitByRequestId, selectedDate]);
 
   useEffect(() => {
     localStorage.setItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`, timelineScaleMode);
@@ -1301,8 +1312,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     localStorage.setItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(enableTolls));
   }, [enableTolls, user?.id, user?.role]);
   useEffect(() => {
-    localStorage.setItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(includeReturnTransitToYard));
-  }, [includeReturnTransitToYard, user?.id, user?.role]);
+    localStorage.setItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`, JSON.stringify(returnTransitByRequestId || {}));
+  }, [returnTransitByRequestId, user?.id, user?.role]);
 
   useEffect(() => {
     if (!returnTransitReprojecting) {
@@ -1310,12 +1321,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     const timeout = window.setTimeout(() => setReturnTransitReprojecting(false), 650);
     return () => window.clearTimeout(timeout);
-  }, [returnTransitReprojecting, includeReturnTransitToYard]);
+  }, [returnTransitReprojecting, returnTransitByRequestId]);
 
   const handleReturnTransitToggle = useCallback((event) => {
+    const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
+    if (!requestId) {
+      return;
+    }
     setReturnTransitReprojecting(true);
-    setIncludeReturnTransitToYard(event.target.checked);
-  }, []);
+    const checked = event.target.checked;
+    setReturnTransitByRequestId(current => {
+      const next = { ...(current || {}) };
+      if (checked) {
+        next[requestId] = true;
+      } else {
+        delete next[requestId];
+      }
+      delete next.__legacy;
+      return next;
+    });
+  }, [selectedScheduleEventId, selectedScheduleEventIds]);
 
   useEffect(() => {
     if (scaleAnchorRef.current == null || !boardScrollRef.current) {
@@ -1677,10 +1702,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       selectedScheduleRouteContext,
     ],
   );
+  const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleTiming = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
-      ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, includeReturnTransitToYard)
-      : selectedScheduleHasSecondaryContinuation || !includeReturnTransitToYard
+      ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleReturnTransitEnabled)
+      : selectedScheduleHasSecondaryContinuation || !selectedScheduleReturnTransitEnabled
         ? removeReturnLegFromTiming(getTimingProfile(selectedSchedulePrimaryRouteEstimate, null))
         : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
     : null;
@@ -1804,13 +1830,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
   }, [scheduleInspectorOpen, selectedScheduleEventId, selectedScheduleRouteContext, selectedScheduleRouteKey]);
   const selectedRouteDurationMinutes = useMemo(() => {
+    const requestModalReturnTransitEnabled = getReturnTransitEnabled(requestModal?.request?.id);
     if (isSecondaryRouteRequest(requestModal?.request)) {
-      return Math.max(30, getSecondaryRouteTiming(requestModal.request.secondaryRoute, includeReturnTransitToYard).totalMinutes || 90);
+      return Math.max(30, getSecondaryRouteTiming(requestModal.request.secondaryRoute, requestModalReturnTransitEnabled).totalMinutes || 90);
     }
     const timing = getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null);
-    const preferredTiming = includeReturnTransitToYard ? timing : removeReturnLegFromTiming(timing);
+    const preferredTiming = requestModalReturnTransitEnabled ? timing : removeReturnLegFromTiming(timing);
     return Math.max(30, preferredTiming.totalMinutes || 90);
-  }, [includeReturnTransitToYard, requestModal?.request, selectedRouteEstimate]);
+  }, [getReturnTransitEnabled, requestModal?.request, selectedRouteEstimate]);
   const selectedScheduleTrafficCopy = useMemo(
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
@@ -1823,9 +1850,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       selectedRouteEstimate,
       Boolean(requestModal?.siteLocation),
       requestModal?.request?.secondaryRoute || null,
-      includeReturnTransitToYard,
+      getReturnTransitEnabled(requestModal?.request?.id),
     ),
-    [includeReturnTransitToYard, requestModal?.request?.secondaryRoute, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
+    [getReturnTransitEnabled, requestModal?.request?.id, requestModal?.request?.secondaryRoute, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
 
@@ -1989,9 +2016,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       eventOverviewModal.routeEstimate,
       Boolean(eventOverviewModal.siteLocation),
       eventOverviewModal.request.secondaryRoute || null,
-      includeReturnTransitToYard,
+      getReturnTransitEnabled(eventOverviewModal.event?.orderId),
     );
-  }, [eventOverviewModal, includeReturnTransitToYard]);
+  }, [eventOverviewModal, getReturnTransitEnabled]);
   const manualTimeEvent = useMemo(
     () => manualTimeModal ? dayEvents.find(event => event.orderId === manualTimeModal.requestId) || null : null,
     [dayEvents, manualTimeModal],
@@ -2294,7 +2321,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return fallbackDurationMinutes;
     }
     if (isSecondaryRouteRequest(request)) {
-      return getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard).totalMinutes;
+      return getSecondaryRouteTiming(request.secondaryRoute, getReturnTransitEnabled(request.id)).totalMinutes;
     }
 
     const siteLocation = requestSiteLocationMapRef.current[request.id] || '';
@@ -2309,8 +2336,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
     }
     const timing = getTimingProfile(estimate, null);
-    return (includeReturnTransitToYard ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
-  }, [enableTolls, eventDurationMinutesMap, includeReturnTransitToYard]);
+    return (getReturnTransitEnabled(request.id) ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
+  }, [enableTolls, eventDurationMinutesMap, getReturnTransitEnabled]);
 
   const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
     if (!selectionContext?.items?.length || !targetTruckId) {
@@ -2796,7 +2823,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const durationMinutes = isLinkedSecondaryMaterialOrderRequest(request)
       ? 90
       : isSecondaryRouteRequest(request)
-        ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard).totalMinutes
+        ? getSecondaryRouteTiming(request.secondaryRoute, getReturnTransitEnabled(request.id)).totalMinutes
         : 90;
     setDragPreviewDurationMinutes(durationMinutes);
     dragPointerOffsetMinutesRef.current = 0;
@@ -2808,7 +2835,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       width: getEventFlex(durationMinutes) * timelineWidth,
       height: 78,
     });
-  }, [includeReturnTransitToYard, timelineWidth]);
+  }, [getReturnTransitEnabled, timelineWidth]);
 
   const handlePendingDragEnd = useCallback(() => {
     setDraggedRequestId('');
@@ -3572,9 +3599,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const primaryEnd = startMinutes + primaryDurationMinutes;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeEstimate = getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null;
+                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId);
                       const timing = isSecondaryRequest
-                        ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
-                        : includeReturnTransitToYard
+                        ? getSecondaryRouteTiming(request.secondaryRoute, eventReturnTransitEnabled)
+                        : eventReturnTransitEnabled
                           ? getTimingProfile(routeEstimate, request?.secondaryRoute || null)
                           : removeReturnLegFromTiming(getTimingProfile(routeEstimate, request?.secondaryRoute || null));
                       const plannedPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute
@@ -3765,7 +3793,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   {selectedScheduleRequest?.secondaryRoute ? (
                 <div><span><InspectorIcon type="map" /> {getSecondaryRouteReasonLabel(selectedScheduleRequest.secondaryRoute.reason)}</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.secondaryTravelMinutes + selectedScheduleTiming.secondaryServiceMinutes} min` : 'Pending'}</strong></div>
                   ) : null}
-                  {includeReturnTransitToYard && !selectedScheduleHasSecondaryContinuation ? (
+                  {selectedScheduleReturnTransitEnabled && !selectedScheduleHasSecondaryContinuation ? (
                     <div><span><InspectorIcon type="return" /> Return</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
                   ) : null}
                   <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
@@ -3788,10 +3816,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </div>
               </div>
             ) : null}
-            <label className={`transport-snap-toggle transport-inspector-toggle${includeReturnTransitToYard ? ' active' : ''}`}>
+            <label className={`transport-snap-toggle transport-inspector-toggle${selectedScheduleReturnTransitEnabled ? ' active' : ''}`}>
               <input
                 type="checkbox"
-                checked={includeReturnTransitToYard}
+                checked={selectedScheduleReturnTransitEnabled}
                 onChange={handleReturnTransitToggle}
               />
               <span>Return transit to yard</span>
