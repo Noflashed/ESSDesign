@@ -501,8 +501,6 @@ export function projectRequestWindow(
   dateKey,
   now,
   shiftedScheduledStartMinutes,
-  nextActualStartMinutes,
-  hasLaterRequest,
 ) {
   const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
   const plannedEndMinutes = scheduledStart + timing.totalMinutes;
@@ -525,39 +523,18 @@ export function projectRequestWindow(
   if (request.deliveryStatus === 'unloading' && typeof unloadingAt === 'number') {
     projectedEnd = unloadingAt + timing.loadingMinutes + timing.returnMinutes;
   } else if (request.deliveryStatus === 'return_transit' && typeof confirmedAt === 'number') {
-    if (typeof nextActualStartMinutes === 'number') {
-      projectedEnd = nextActualStartMinutes;
-      groupedCompletedCycle = true;
-      returnTransitEndMinutes = nextActualStartMinutes;
-    } else if (hasLaterRequest) {
-      projectedEnd = Math.max(confirmedAt, nowMinutes);
-      showReturnTransitTile = true;
-      returnTransitEndMinutes = projectedEnd;
-    } else {
-      projectedEnd = confirmedAt + timing.returnMinutes;
-      showReturnTransitTile = true;
-      returnTransitEndMinutes = projectedEnd;
-    }
+    projectedEnd = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, confirmedAt);
   }
 
   if (request.deliveryStatus === 'in_transit') {
     projectedEnd = Math.max(projectedEnd, nowMinutes + timing.loadingMinutes + timing.returnMinutes);
   } else if (request.deliveryStatus === 'unloading') {
     projectedEnd = Math.max(projectedEnd, nowMinutes + timing.returnMinutes);
-  } else if (
-    request.deliveryStatus === 'return_transit' &&
-    hasLaterRequest &&
-    typeof nextActualStartMinutes !== 'number'
-  ) {
-    projectedEnd = Math.max(projectedEnd, nowMinutes);
-    returnTransitEndMinutes = projectedEnd;
   }
 
   const deliveryCompleteAt =
     request.deliveryStatus === 'return_transit'
-      ? groupedCompletedCycle
-        ? projectedEnd
-        : confirmedAt ?? unloadingAt ?? Math.max(startMinutes + LIVE_TIMELINE_MINUTES, projectedEnd)
+      ? confirmedAt ?? unloadingAt ?? Math.max(startMinutes + LIVE_TIMELINE_MINUTES, projectedEnd)
       : projectedEnd;
 
   return {

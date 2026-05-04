@@ -329,27 +329,12 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null) {
           scheduledStart + Math.max(0, cumulativeShiftMinutes),
           laneCursorMinutes,
         );
-        const laterRequests = ordered.slice(index + 1);
-        const nextStartedRequest = laterRequests.find(nextRequest => {
-          const iso = nextRequest.deliveryStartedAt;
-          if (!iso) return false;
-          const parsed = new Date(iso);
-          return !Number.isNaN(parsed.getTime()) && formatDateKey(parsed) === dateKey;
-        }) || null;
-        const nextActualStartMinutes = nextStartedRequest?.deliveryStartedAt
-          ? (() => {
-              const parsed = new Date(nextStartedRequest.deliveryStartedAt);
-              return parsed.getHours() * 60 + parsed.getMinutes() + parsed.getSeconds() / 60;
-            })()
-          : null;
         const projected = projectRequestWindow(
           request,
           timing,
           dateKey,
           now,
           shiftedScheduledStart,
-          nextActualStartMinutes,
-          laterRequests.length > 0,
         );
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
@@ -363,7 +348,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null) {
           groupedCompletedCycle: projected.groupedCompletedCycle,
           showReturnTransitTile: projected.showReturnTransitTile,
           returnTransitEndMinutes: projected.returnTransitEndMinutes,
-          isLastScheduledForDay: laterRequests.length === 0,
+          isLastScheduledForDay: index === ordered.length - 1,
           hasSecondaryContinuation,
         };
         dayEvents.push({
