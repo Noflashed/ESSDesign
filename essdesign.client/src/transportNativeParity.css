@@ -3279,6 +3279,17 @@
     opacity: 0.42 !important;
 }
 
+.transport-page-frame .ts2-event-wrap.complete,
+.transport-desktop-workspace .ts2-event-wrap.complete {
+    opacity: 0.56 !important;
+}
+
+.transport-page-frame .ts2-event-wrap.complete .ts2-event-card,
+.transport-desktop-workspace .ts2-event-wrap.complete .ts2-event-card {
+    filter: saturate(0.72) !important;
+    box-shadow: 0 5px 12px rgba(15, 23, 42, 0.06) !important;
+}
+
 .transport-page-frame .transport-snap-hover,
 .transport-desktop-workspace .transport-snap-hover {
     position: absolute !important;

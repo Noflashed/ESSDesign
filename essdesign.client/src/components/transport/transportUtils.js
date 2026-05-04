@@ -161,7 +161,7 @@ export function scheduleStatusLabel(status) {
     case 'unloading':
       return 'Offloading material';
     case 'return_transit':
-      return 'In return transit to yard';
+      return 'Complete';
     default:
       return 'Scheduled';
   }
@@ -181,7 +181,7 @@ export function scheduleStatusAppearance(status) {
 }
 
 export function deliveredTileAppearance() {
-  return { accent: '#7C3AED', background: '#F3E8FF', text: '#6D28D9', title: '#4C1D95' };
+  return { accent: '#16A34A', background: '#ECFDF3', text: '#15803D', title: '#14532D' };
 }
 
 export function requestToCalendarEvent(request) {

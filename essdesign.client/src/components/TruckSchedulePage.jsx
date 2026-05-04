@@ -67,7 +67,7 @@ const DEBUG_STATUS_OPTIONS = [
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'in_transit', label: 'In Transit' },
   { value: 'unloading', label: 'Unloading' },
-  { value: 'return_transit', label: 'Return Transit' },
+  { value: 'return_transit', label: 'Complete' },
 ];
 const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'secondary_drop_off', label: 'Secondary material drop off' },
@@ -827,7 +827,6 @@ function ScheduleLegend() {
       <span className="transport-reference-legend-pill scheduled">Scheduled</span>
       <span className="transport-reference-legend-pill in-transit">In Transit</span>
       <span className="transport-reference-legend-pill unloading">Unloading</span>
-      <span className="transport-reference-legend-pill return-transit">Return Transit</span>
       <span className="transport-reference-legend-pill complete">Complete</span>
     </div>
   );
@@ -3404,7 +3403,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           </div>
                         ))}
                       {laneEvents.map(event => {
-                      const cycleState = eventCycleStateMap[event.orderId] || {};
                       const request = requestMetaMap[event.orderId];
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
                       const status = request?.deliveryStatus || 'scheduled';
@@ -3412,12 +3410,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const primaryDurationMinutes = eventPrimaryDurationMinutesMap[event.orderId] ?? durationMinutes;
                       const offset = getEventOffset(eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute) * 100;
                       const width = getEventFlex(durationMinutes) * 100;
-                      const primaryRatio = Math.max(0, Math.min(1, primaryDurationMinutes / Math.max(1, durationMinutes)));
-                      const primaryWidth = primaryRatio * 100;
-                      const returnWidth = Math.max(0, 100 - primaryWidth);
-                      const hasReturnTransitTile = status === 'return_transit' && cycleState.showReturnTransitTile && returnWidth > 0;
-                      const groupedCompletedCycle = status === 'return_transit' && cycleState.groupedCompletedCycle;
-                      const palette = status === 'return_transit' && (hasReturnTransitTile || groupedCompletedCycle)
+                      const isCompleteTile = status === 'return_transit';
+                      const palette = isCompleteTile
                         ? deliveredTileAppearance()
                         : scheduleStatusAppearance(status);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
@@ -3460,7 +3454,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         <div
                           key={event.id}
                           data-order-id={event.orderId}
-                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}`}
+                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
                           draggable={!dragSchedulingId}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
@@ -3485,7 +3479,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           <button
                             type="button"
                             className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
-                            style={{ backgroundColor: palette.background, color: palette.text, width: hasReturnTransitTile ? `${primaryWidth}%` : hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
+                            style={{ backgroundColor: palette.background, color: palette.text, width: hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
                             onClick={(clickEvent) => {
                               handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
                             }}
@@ -3497,7 +3491,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <span className="ts2-event-arrival">{eventArrival}</span>
                             <div className="ts2-event-status-row">
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
-                              <span>{isSecondaryRequest ? 'Secondary transit' : groupedCompletedCycle ? 'Completed delivery cycle' : status === 'return_transit' ? 'Delivered' : scheduleStatusLabel(status)}</span>
+                              <span>{isSecondaryRequest ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
                             </div>
                             {isRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                           </button>
@@ -3519,15 +3513,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 <span className="ts2-event-status-dot" />
                                 <span>Secondary transit</span>
                               </div>
-                            </button>
-                          ) : null}
-                          {hasReturnTransitTile ? (
-                            <button type="button" className="ts2-return-card" style={{ left: `${primaryWidth}%`, width: `${returnWidth}%` }} onClick={(clickEvent) => {
-                              handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
-                            }}>
-                              <span className="ts2-delivery-type-pill return">Return</span>
-                              <span>Return transit</span>
-                              <strong>Back to yard</strong>
                             </button>
                           ) : null}
                         </div>
