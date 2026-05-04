@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ESSDesign.Server.Models;
 
 namespace ESSDesign.Server.Services
@@ -45,6 +46,7 @@ namespace ESSDesign.Server.Services
             public string Name { get; set; } = string.Empty;
             public string Path { get; set; } = string.Empty;
             public string RevisionNumber { get; set; } = string.Empty;
+            public int RevisionSort { get; set; }
             public DateTime UpdatedAt { get; set; } = DateTime.MinValue;
             public bool HasEssDesign { get; set; }
             public bool HasThirdPartyDesign { get; set; }
@@ -107,6 +109,7 @@ Your goal is to always provide a thoughtful, useful answer:
 - Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
 
 For design-file questions, use ranked designSearchMatches and links. Treat "latest" as the newest or highest-confidence available match unless revision details in the context show otherwise. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
+The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
@@ -133,7 +136,7 @@ Admin user: {currentUser.FullName} ({currentUser.Email})
 Question: {cleanQuestion}
 
 ESS context JSON:
-{JsonSerializer.Serialize(context, _jsonOptions)}
+{JsonSerializer.Serialize(BuildModelContext(context), _jsonOptions)}
 """
             });
 
@@ -163,12 +166,43 @@ ESS context JSON:
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString();
+            var cleanReply = CleanAssistantReply(reply);
 
             return new ChatResult
             {
-                Reply = string.IsNullOrWhiteSpace(reply) ? "I could not form a useful answer from the current ESS context." : reply.Trim(),
+                Reply = string.IsNullOrWhiteSpace(cleanReply) ? "I could not form a useful answer from the current ESS context." : cleanReply.Trim(),
                 Links = context.Links,
                 Sources = context.Sources,
+            };
+        }
+
+        private static string CleanAssistantReply(string? reply)
+        {
+            if (string.IsNullOrWhiteSpace(reply))
+            {
+                return string.Empty;
+            }
+
+            var withoutMarkdownUrls = Regex.Replace(reply, @"\[([^\]]+)\]\(https?://[^\s)]+\)", "$1");
+            return Regex.Replace(withoutMarkdownUrls, @"https?://\S+", "the link below");
+        }
+
+        private object BuildModelContext(AdminAssistantContext context)
+        {
+            return new
+            {
+                context.Today,
+                context.EmployeeSummary,
+                context.RosterSummary,
+                context.JobsiteSummary,
+                context.TransportSummary,
+                context.DesignSearchMatches,
+                Links = context.Links.Select(link => new
+                {
+                    link.Label,
+                    link.Type,
+                }).ToList(),
+                context.Sources,
             };
         }
 
@@ -290,6 +324,38 @@ ESS context JSON:
             };
 
             return designWords.Any(words.Contains);
+        }
+
+        private static bool WantsMultipleDesignLinks(string question)
+        {
+            var normalized = NormalizeSearchText(question);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            var phrases = new[]
+            {
+                "all revisions",
+                "all versions",
+                "available revisions",
+                "previous revisions",
+                "revision history",
+                "list revisions",
+                "show revisions",
+            };
+
+            if (phrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            var words = normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return words.Contains("all") &&
+                   (words.Contains("revisions") || words.Contains("versions") || words.Contains("drawings") || words.Contains("files"));
         }
 
         private object BuildRosterSummary(JsonElement planRow, DateOnly today)
@@ -445,6 +511,9 @@ ESS context JSON:
             {
                 return (new List<object>(), new List<AdminAssistantLink>());
             }
+            var wantsMultipleLinks = WantsMultipleDesignLinks(question);
+            var wantsFolderLink = NormalizeSearchText(question).Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("folder");
+            var preferThirdPartyDesign = NormalizeSearchText(question).Contains("third party", StringComparison.OrdinalIgnoreCase);
 
             var foldersTask = GetRestRowsAsync<JsonElement>(
                 "folders?select=id,name,parent_folder_id,updated_at&limit=5000",
@@ -548,6 +617,7 @@ ESS context JSON:
                     Name = essName ?? thirdPartyName ?? $"Revision {revision}",
                     Path = folderPath,
                     RevisionNumber = revision,
+                    RevisionSort = ParseRevisionSort(revision),
                     UpdatedAt = TryGetDate(document, "updated_at", TryGetDate(document, "created_at")),
                     HasEssDesign = !string.IsNullOrWhiteSpace(essPath),
                     HasThirdPartyDesign = !string.IsNullOrWhiteSpace(thirdPartyPath),
@@ -559,14 +629,20 @@ ESS context JSON:
             var ranked = candidates
                 .OrderByDescending(candidate => candidate.Score)
                 .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenByDescending(candidate => candidate.RevisionSort)
                 .ThenByDescending(candidate => candidate.UpdatedAt)
                 .Take(12)
                 .ToList();
             var matches = new List<object>();
             var links = new List<AdminAssistantLink>();
-            var linkedFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var topPath = ranked.FirstOrDefault()?.Path;
+            var responseCandidates = wantsMultipleLinks && !string.IsNullOrWhiteSpace(topPath)
+                ? ranked.Where(candidate => candidate.Path.Equals(topPath, StringComparison.OrdinalIgnoreCase)).Take(8).ToList()
+                : wantsMultipleLinks
+                    ? ranked.Take(8).ToList()
+                    : ranked.Take(1).ToList();
 
-            foreach (var candidate in ranked)
+            foreach (var candidate in responseCandidates)
             {
                 matches.Add(new
                 {
@@ -582,44 +658,60 @@ ESS context JSON:
                     candidate.HasThirdPartyDesign,
                 });
 
-                if (candidate.DocumentId is Guid documentId && links.Count < 8)
+                if (!wantsFolderLink && candidate.DocumentId is Guid documentId && links.Count < (wantsMultipleLinks ? 8 : 1))
                 {
-                    if (candidate.HasEssDesign)
-                    {
-                        var info = await TryGetDownloadInfoAsync(documentId, "ess", cancellationToken);
-                        if (info != null)
-                        {
-                            links.Add(new AdminAssistantLink
-                            {
-                                Label = $"{candidate.Path} - ESS revision {candidate.RevisionNumber}".Trim(' ', '-'),
-                                Url = info.Url,
-                                Type = "ess-design",
-                            });
-                        }
-                    }
+                    var preferredTypes = preferThirdPartyDesign
+                        ? new[] { "third-party", "ess" }
+                        : new[] { "ess", "third-party" };
 
-                    if (candidate.HasThirdPartyDesign && links.Count < 8)
+                    foreach (var type in preferredTypes)
                     {
-                        var info = await TryGetDownloadInfoAsync(documentId, "third-party", cancellationToken);
-                        if (info != null)
+                        if (links.Count >= (wantsMultipleLinks ? 8 : 1))
                         {
-                            links.Add(new AdminAssistantLink
+                            break;
+                        }
+
+                        if (type == "ess" && candidate.HasEssDesign)
+                        {
+                            var info = await TryGetDownloadInfoAsync(documentId, "ess", cancellationToken);
+                            if (info != null)
                             {
-                                Label = $"{candidate.Path} - third-party revision {candidate.RevisionNumber}".Trim(' ', '-'),
-                                Url = info.Url,
-                                Type = "third-party-design",
-                            });
+                                links.Add(new AdminAssistantLink
+                                {
+                                    Label = wantsMultipleLinks ? $"ESS revision {candidate.RevisionNumber}" : "Click here to view",
+                                    Url = info.Url,
+                                    Type = "ess-design",
+                                });
+                            }
+                        }
+
+                        if (type == "third-party" && candidate.HasThirdPartyDesign)
+                        {
+                            var info = await TryGetDownloadInfoAsync(documentId, "third-party", cancellationToken);
+                            if (info != null)
+                            {
+                                links.Add(new AdminAssistantLink
+                                {
+                                    Label = wantsMultipleLinks ? $"Third-party revision {candidate.RevisionNumber}" : "Click here to view",
+                                    Url = info.Url,
+                                    Type = "third-party-design",
+                                });
+                            }
+                        }
+
+                        if (!wantsMultipleLinks && links.Count > 0)
+                        {
+                            break;
                         }
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(candidate.FolderId) &&
-                    links.Count < 8 &&
-                    linkedFolderIds.Add(candidate.FolderId))
+                    links.Count == 0)
                 {
                     links.Add(new AdminAssistantLink
                     {
-                        Label = string.IsNullOrWhiteSpace(candidate.Path) ? "Open matching design folder" : $"Open {candidate.Path}",
+                        Label = "Click here to view",
                         Url = $"/?page=design&folder={Uri.EscapeDataString(candidate.FolderId)}",
                         Type = "design-folder",
                     });
@@ -844,6 +936,12 @@ ESS context JSON:
         {
             var value = TryGetString(element, propertyName);
             return DateTime.TryParse(value, out var parsed) ? parsed : fallback;
+        }
+
+        private static int ParseRevisionSort(string revision)
+        {
+            var digits = new string((revision ?? string.Empty).Where(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var parsed) ? parsed : 0;
         }
 
         private static JsonElement TryGetObject(JsonElement element, string propertyName)
