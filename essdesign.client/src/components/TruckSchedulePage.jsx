@@ -752,20 +752,6 @@ function TruckLaneIcon() {
   );
 }
 
-function ReturnMovementTruckIcon() {
-  return (
-    <svg width="22" height="16" viewBox="0 0 28 20" fill="none" aria-hidden="true">
-      <path d="M2 6.5h15.5v8H2z" fill="#F47C20" />
-      <path d="M17.5 9h4.7l3.3 3.2v2.3h-8z" fill="#102B5C" />
-      <path d="M4 5h10" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" opacity=".9" />
-      <circle cx="7" cy="16" r="2.2" fill="#111827" />
-      <circle cx="21" cy="16" r="2.2" fill="#111827" />
-      <circle cx="7" cy="16" r=".9" fill="#fff" />
-      <circle cx="21" cy="16" r=".9" fill="#fff" />
-    </svg>
-  );
-}
-
 function ToolbarIcon({ type }) {
   const common = {
     width: 14,
@@ -3490,34 +3476,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             ) : null}
             {visibleTruckLanes.map((lane, laneIndex) => {
               const laneEvents = groupedEventsByTruck[laneIndex] || [];
-              const returnMovements = isSameDay(scheduleNow, selectedDate)
-                ? laneEvents.flatMap((event, eventIndex) => {
-                    const request = requestMetaMap[event.orderId];
-                    const nextEvent = laneEvents[eventIndex + 1];
-                    if (request?.deliveryStatus !== 'return_transit' || !nextEvent) {
-                      return [];
-                    }
-                    const completedMinutes = minutesFromIsoOnDate(request.deliveryConfirmedAt, event.date);
-                    const nextStartMinutes = eventStartMinutesMap[nextEvent.orderId] ?? nextEvent.hour * 60 + nextEvent.minute;
-                    if (typeof completedMinutes !== 'number' || nextStartMinutes <= completedMinutes) {
-                      return [];
-                    }
-                    if (scheduleNowMinutes < completedMinutes || scheduleNowMinutes >= nextStartMinutes) {
-                      return [];
-                    }
-                    const progress = Math.max(0, Math.min(1, (scheduleNowMinutes - completedMinutes) / (nextStartMinutes - completedMinutes)));
-                    const startOffset = getEventOffset(completedMinutes) * 100;
-                    const endOffset = getEventOffset(nextStartMinutes) * 100;
-                    return [{
-                      orderId: event.orderId,
-                      nextOrderId: nextEvent.orderId,
-                      startOffset,
-                      endOffset,
-                      progress,
-                      label: `Returning for ${nextEvent.builderName || 'next delivery'}`,
-                    }];
-                  })
-                : [];
               return (
                 <div key={lane.id} className="ts2-lane-row" style={{ gridTemplateColumns: `${LANE_META_WIDTH}px minmax(0, 1fr)` }}>
                   <div className="ts2-lane-meta">
@@ -3568,21 +3526,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <strong>{item.blocked ? 'Slot unavailable' : 'Move selection'}</strong>
                           </div>
                         ))}
-                      {returnMovements.map(movement => (
-                        <div
-                          key={`return-movement-${movement.orderId}-${movement.nextOrderId}`}
-                          className="transport-return-movement"
-                          style={{
-                            left: `${movement.startOffset}%`,
-                            width: `${Math.max(0.5, movement.endOffset - movement.startOffset)}%`,
-                          }}
-                          aria-label={movement.label}
-                        >
-                          <span style={{ left: `${movement.progress * 100}%` }}>
-                            <ReturnMovementTruckIcon />
-                          </span>
-                        </div>
-                      ))}
                       {laneEvents.map(event => {
                       const request = requestMetaMap[event.orderId];
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
@@ -3596,7 +3539,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ? deliveredTileAppearance()
                         : scheduleStatusAppearance(status);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
-                      const primaryEnd = startMinutes + primaryDurationMinutes;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeEstimate = getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null;
                       const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId);
@@ -3605,6 +3547,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         : eventReturnTransitEnabled
                           ? getTimingProfile(routeEstimate, request?.secondaryRoute || null)
                           : removeReturnLegFromTiming(getTimingProfile(routeEstimate, request?.secondaryRoute || null));
+                      const completedReturnSegmentMinutes = isCompleteTile && eventReturnTransitEnabled
+                        ? Math.max(0, durationMinutes - primaryDurationMinutes)
+                        : 0;
+                      const plannedReturnSegmentMinutes = !isCompleteTile && eventReturnTransitEnabled
+                        ? Math.min(Math.max(0, timing.returnMinutes || 0), Math.max(0, durationMinutes - 1))
+                        : 0;
+                      const returnSegmentDurationMinutes = isSecondaryRequest
+                        ? 0
+                        : (completedReturnSegmentMinutes || plannedReturnSegmentMinutes);
+                      const returnSegmentRatio = Math.max(0, Math.min(1, returnSegmentDurationMinutes / Math.max(1, durationMinutes)));
+                      const returnSegmentWidth = returnSegmentRatio * 100;
+                      const hasReturnTransitSegment = returnSegmentWidth > 0;
+                      const nonReturnDurationMinutes = Math.max(1, durationMinutes - returnSegmentDurationMinutes);
+                      const nonReturnWidth = Math.max(0, 100 - returnSegmentWidth);
                       const plannedPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute
                         ? getPrimaryPhaseMinutes(
                           routeEstimate,
@@ -3612,15 +3568,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         )
                         : primaryDurationMinutes;
                       const displayPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute && status !== 'return_transit'
-                        ? Math.min(durationMinutes, plannedPrimaryDurationMinutes)
-                        : primaryDurationMinutes;
+                        ? Math.min(nonReturnDurationMinutes, plannedPrimaryDurationMinutes)
+                        : nonReturnDurationMinutes;
                       const displayPrimaryRatio = Math.max(0, Math.min(1, displayPrimaryDurationMinutes / Math.max(1, durationMinutes)));
-                      const displayPrimaryWidth = displayPrimaryRatio * 100;
-                      const displaySecondaryWidth = Math.max(0, 100 - displayPrimaryWidth);
+                      const displayPrimaryWidth = Math.min(nonReturnWidth, displayPrimaryRatio * 100);
+                      const displaySecondaryWidth = Math.max(0, nonReturnWidth - displayPrimaryWidth);
                       const hasSecondaryRouteTile = !isSecondaryRequest && Boolean(request?.secondaryRoute) && status !== 'return_transit' && displaySecondaryWidth > 0;
+                      const primaryEnd = startMinutes + displayPrimaryDurationMinutes;
                       const secondaryStartMinutes = startMinutes + displayPrimaryDurationMinutes;
-                      const secondaryEndMinutes = startMinutes + durationMinutes;
+                      const secondaryEndMinutes = startMinutes + nonReturnDurationMinutes;
                       const secondaryArrivalMinutes = secondaryStartMinutes + Math.round((request?.secondaryRoute?.travelDurationSeconds || 0) / 60);
+                      const returnStartMinutes = startMinutes + nonReturnDurationMinutes;
+                      const returnEndMinutes = startMinutes + durationMinutes;
                       const siteArrivalMinutes = startMinutes + timing.transitMinutes;
                       const siteArrivalLabel = siteLocation
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
@@ -3661,7 +3620,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           <button
                             type="button"
                             className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
-                            style={{ backgroundColor: palette.background, color: palette.text, width: hasSecondaryRouteTile ? `${displayPrimaryWidth}%` : '100%' }}
+                            style={{ backgroundColor: palette.background, color: palette.text, width: hasSecondaryRouteTile || hasReturnTransitSegment ? `${displayPrimaryWidth}%` : '100%' }}
                             onClick={(clickEvent) => {
                               handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
                             }}
@@ -3694,6 +3653,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               <div className="ts2-event-status-row">
                                 <span className="ts2-event-status-dot" />
                                 <span>Secondary transit</span>
+                              </div>
+                            </button>
+                          ) : null}
+                          {hasReturnTransitSegment ? (
+                            <button
+                              type="button"
+                              className="ts2-return-card"
+                              style={{ left: `${nonReturnWidth}%`, width: `${returnSegmentWidth}%` }}
+                              onClick={(clickEvent) => {
+                                handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
+                              }}
+                            >
+                              <span className="ts2-delivery-type-pill return">Return</span>
+                              <span className="ts2-event-time">{formatTimeChip(Math.floor(returnStartMinutes / 60), Math.floor(returnStartMinutes % 60))} â€“ {formatTimeChip(Math.floor(returnEndMinutes / 60), Math.floor(returnEndMinutes % 60))}</span>
+                              <strong className="ts2-event-title">Return to yard</strong>
+                              <span className="ts2-event-subtitle">Yard transit</span>
+                              <div className="ts2-event-status-row">
+                                <span className="ts2-event-status-dot" />
+                                <span>Returning</span>
                               </div>
                             </button>
                           ) : null}
