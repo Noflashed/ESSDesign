@@ -511,6 +511,7 @@ export function projectRequestWindow(
   const confirmedAt = minutesFromIsoOnDate(request.deliveryConfirmedAt, dateKey);
   const nowMinutes =
     now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / 60000;
+  const liveNowMinutes = formatDateKey(now) === dateKey ? nowMinutes : null;
   const preferShiftedStart = Boolean(options.preferShiftedStart);
 
   const startMinutes = Math.max(
@@ -539,7 +540,7 @@ export function projectRequestWindow(
       const hasNextStarted = typeof nextActualStartMinutes === 'number' && nextActualStartMinutes > completedAt;
       projectedEnd = hasNextStarted
         ? nextActualStartMinutes
-        : Math.max(predictedReturnEnd, nowMinutes);
+        : Math.max(predictedReturnEnd, liveNowMinutes ?? predictedReturnEnd);
       groupedCompletedCycle = hasNextStarted;
       showReturnTransitTile = true;
       returnTransitEndMinutes = projectedEnd;
@@ -549,9 +550,9 @@ export function projectRequestWindow(
   }
 
   if (request.deliveryStatus === 'in_transit') {
-    projectedEnd = Math.max(projectedEnd, nowMinutes + timing.loadingMinutes + timing.returnMinutes);
+    projectedEnd = Math.max(projectedEnd, (liveNowMinutes ?? projectedEnd) + timing.loadingMinutes + timing.returnMinutes);
   } else if (request.deliveryStatus === 'unloading') {
-    projectedEnd = Math.max(projectedEnd, nowMinutes + timing.returnMinutes);
+    projectedEnd = Math.max(projectedEnd, (liveNowMinutes ?? projectedEnd) + timing.returnMinutes);
   }
 
   return {
