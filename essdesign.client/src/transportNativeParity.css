@@ -3367,6 +3367,7 @@
 
 .transport-page-frame .ts2-event-wrap.complete,
 .transport-desktop-workspace .ts2-event-wrap.complete {
+    min-width: 0 !important;
     opacity: 0.56 !important;
 }
 
