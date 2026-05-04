@@ -3140,6 +3140,10 @@ body {
 .admin-assistant-avatar {
     width: 28px;
     height: 28px;
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
     border-radius: 50%;
     flex: 0 0 28px;
     display: grid;
@@ -3159,6 +3163,17 @@ body {
     background: #102B5C;
     border-color: #102B5C;
     color: #fff;
+}
+
+.admin-assistant-avatar.loading {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+}
+
+.admin-assistant-avatar.loading svg {
+    width: 16px;
+    height: 16px;
 }
 
 .admin-assistant-spin-icon {

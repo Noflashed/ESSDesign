@@ -37,6 +37,159 @@ namespace ESSDesign.Server.Services
         private const string SafetyBucket = "project-information";
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
+        private static readonly Dictionary<string, (string Label, string Spec)> MaterialOrderQuantityLabels = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["r09_left_qty"] = ("STANDARDS", "3.0M"),
+            ["r09_middle_qty"] = ("HARDWOOD SOLE BOARDS", "0.5M"),
+            ["r09_right_qty"] = ("SCAFFOLD LADDER", "6.0M / 5.4M"),
+            ["r10_left_qty"] = ("STANDARDS", "2.5M"),
+            ["r10_middle_qty"] = ("HARDWOOD SOLE BOARDS", "1.5M"),
+            ["r10_right_qty"] = ("SCAFFOLD LADDER", "4.8M / 4.2M"),
+            ["r11_left_qty"] = ("STANDARDS", "2.0M"),
+            ["r11_middle_qty"] = ("SCREWJACKS", ""),
+            ["r11_right_qty"] = ("3.6m", ""),
+            ["r12_left_qty"] = ("STANDARDS", "1.5M"),
+            ["r12_middle_qty"] = ("U HEAD JACK", ""),
+            ["r12_right_qty"] = ("3m", ""),
+            ["r13_left_qty"] = ("STANDARDS", "1.0M"),
+            ["r13_middle_qty"] = ("SWIVEL JACK", ""),
+            ["r13_right_qty"] = ("2.4m", ""),
+            ["r14_left_qty"] = ("STANDARDS", "0.5M"),
+            ["r14_middle_qty"] = ("TIMBER BOARDS", ""),
+            ["r14_right_qty"] = ("LADDER HATCHES", ""),
+            ["r15_left_qty"] = ("STANDARD INTERMEDIATE", "2M LOCK"),
+            ["r15_middle_qty"] = ("TIMBER BOARDS", "3.6M"),
+            ["r15_right_qty"] = ("CORNER BRACKET", "1 X 2"),
+            ["r16_left_qty"] = ("OPEN END", "3.0M"),
+            ["r16_middle_qty"] = ("TIMBER BOARDS", "3.0M"),
+            ["r16_right_qty"] = ("CORNER BRACKET", "2 X 2"),
+            ["r17_left_qty"] = ("OPEN END", "2.5M"),
+            ["r17_middle_qty"] = ("TIMBER BOARDS", "2.4M"),
+            ["r17_right_qty"] = ("CORNER BRACKET", "2 X 3"),
+            ["r18_left_qty"] = ("OPEN END", "2.0M"),
+            ["r18_middle_qty"] = ("TIMBER BOARDS", "1.8M"),
+            ["r18_right_qty"] = ("HANDRAIL POST (STANDARD)", "1M"),
+            ["r19_left_qty"] = ("OPEN END", "1.5M"),
+            ["r19_middle_qty"] = ("TIMBER BOARDS", "1.5M"),
+            ["r19_right_qty"] = ("HANDRAIL TIE POST", "0.75"),
+            ["r20_left_qty"] = ("OPEN END", "1.0M"),
+            ["r20_middle_qty"] = ("TIMBER BOARDS", "1.2M"),
+            ["r20_right_qty"] = ("HANDRAIL TIE POST", "0.3"),
+            ["r21_left_qty"] = ("STANDARD 1 STAR OPEN END", "0.5M"),
+            ["r21_middle_qty"] = ("SCAFFOLD CLIPS", ""),
+            ["r21_right_qty"] = ("WALL TIE BRACKETS", ""),
+            ["r22_left_qty"] = ("LEDGERS", "2.4M"),
+            ["r22_middle_qty"] = ("DOUBLE CLIP 90 DEGREES", ""),
+            ["r22_right_qty"] = ("WALL TIE DOUBLE", ""),
+            ["r23_left_qty"] = ("LEDGERS", "1.8M"),
+            ["r23_middle_qty"] = ("DOUBLE SAFETY", ""),
+            ["r23_right_qty"] = ("WALL TIE SAFETY", ""),
+            ["r24_left_qty"] = ("LEDGERS", "1.2M"),
+            ["r24_middle_qty"] = ("SWIVEL", ""),
+            ["r24_right_qty"] = ("LADDER BEAMS", "6.3"),
+            ["r25_left_qty"] = ("LEDGERS", "9.5M"),
+            ["r25_middle_qty"] = ("SWIVEL SAFETY", ""),
+            ["r25_right_qty"] = ("LADDER BEAMS", "5m"),
+            ["r26_left_qty"] = ("LEDGERS", "0.7M"),
+            ["r26_middle_qty"] = ("PUTLOG CLIPS", ""),
+            ["r26_right_qty"] = ("LADDER BEAMS", "4.2"),
+            ["r27_left_qty"] = ("LEDGERS", "1 BOARD"),
+            ["r27_middle_qty"] = ("JOINERS INTERNAL / EXTERNAL", ""),
+            ["r27_right_qty"] = ("LADDER BEAMS", "3.0M"),
+            ["r28_left_qty"] = ("TRANSOMS", "2.4M"),
+            ["r28_middle_qty"] = ("BEAM CLAMPS", ""),
+            ["r28_right_qty"] = ("PALLET CAGE", ""),
+            ["r29_left_qty"] = ("TRANSOMS", "1.8M"),
+            ["r29_middle_qty"] = ("TOE BOARD CLIPS", ""),
+            ["r29_right_qty"] = ("PALLETS", ""),
+            ["r30_left_qty"] = ("TRANSOMS", "1.2M"),
+            ["r30_middle_qty"] = ("COUPLER CLIPS", ""),
+            ["r30_right_qty"] = ("PALLET CASTOR", ""),
+            ["r31_left_qty"] = ("TRANSOMS", "9.50M"),
+            ["r31_middle_qty"] = ("TOE BOARD SPADES", ""),
+            ["r31_right_qty"] = ("UNIT BEAMS", ""),
+            ["r32_left_qty"] = ("TRANSOMS", "0.7M"),
+            ["r32_middle_qty"] = ("V CLIPS", ""),
+            ["r32_right_qty"] = ("UNIT BEAMS", ""),
+            ["r33_left_qty"] = ("TRANSOMS 2 BOARD", "0.51M"),
+            ["r34_left_qty"] = ("TRANSOMS 2 BOARD", "0.48M"),
+            ["r34_right_qty"] = ("UNIT BEAMS", "3.6M"),
+            ["r35_left_qty"] = ("TRANSOMS 1 BOARD", "1 BOARD"),
+            ["r35_middle_qty"] = ("SCAFFOLD TUBE", ""),
+            ["r35_right_qty"] = ("TRANSOM TRUSS", "2.4M"),
+            ["r36_left_qty"] = ("LADDER TRANSOMS", ""),
+            ["r36_middle_qty"] = ("SCAFFOLD TUBE", "6.0M"),
+            ["r36_right_qty"] = ("TRANSOM TRUSS", "1.8M"),
+            ["r37_left_qty"] = ("LADDER TRANSOMS", "1.2M"),
+            ["r37_middle_qty"] = ("SCAFFOLD TUBE", "5.4M"),
+            ["r37_right_qty"] = ("TRANSOM TRUSS", "1.2M"),
+            ["r38_left_qty"] = ("DIAGONAL BRACES", "3.6M"),
+            ["r38_middle_qty"] = ("SCAFFOLD TUBE", "4.8M"),
+            ["r38_right_qty"] = ("LAP PLATES", "2 BOARD"),
+            ["r39_left_qty"] = ("DIAGONAL BRACES", "3.2M"),
+            ["r39_middle_qty"] = ("SCAFFOLD TUBE", "4.2M"),
+            ["r39_right_qty"] = ("LAP PLATES", "3 BOARD"),
+            ["r40_left_qty"] = ("DIAGONAL BRACES", "2.7M"),
+            ["r40_middle_qty"] = ("SCAFFOLD TUBE", "3.6M"),
+            ["r40_right_qty"] = ("CASTOR WHEELS", ""),
+            ["r41_left_qty"] = ("DIAGONAL BRACES", "1.9M"),
+            ["r41_middle_qty"] = ("SCAFFOLD TUBE", "3.0M"),
+            ["r42_left_qty"] = ("STEEL BOARDS", "2.4M"),
+            ["r42_middle_qty"] = ("2.4", "M"),
+            ["r42_right_qty"] = ("CHAIN/SHADE BLUE", "15M"),
+            ["r43_left_qty"] = ("STEEL BOARDS", "1.8M"),
+            ["r43_middle_qty"] = ("1.8", "M"),
+            ["r43_right_qty"] = ("CHAIN/SHADE GREEN", "15M"),
+            ["r44_left_qty"] = ("STEEL BOARDS", "1.2M"),
+            ["r44_middle_qty"] = ("1.5", "M"),
+            ["r44_right_qty"] = ("CHAIN/SHADE BLACK", "15M"),
+            ["r45_left_qty"] = ("STEEL BOARDS", "0.95M"),
+            ["r45_middle_qty"] = ("1.2", "M"),
+            ["r45_right_qty"] = ("CHAIN/SHADE", "0.9 mm"),
+            ["r46_left_qty"] = ("STEEL BOARDS", "0.745"),
+            ["r46_middle_qty"] = ("0.9", "mm"),
+            ["r46_right_qty"] = ("CHAIN WIRE 15M / SHADE 50M", ""),
+            ["r47_left_qty"] = ("INFILL BOARDS", "2.4M"),
+            ["r47_middle_qty"] = ("SCAFFOLD TUBE", "0.6MM"),
+            ["r47_right_qty"] = ("SCREW BOLTS 100MM", "12MM"),
+            ["r48_left_qty"] = ("INFILL BOARDS", "1.8M"),
+            ["r48_middle_qty"] = ("SCAFFOLD TUBE", "0.3MM"),
+            ["r48_right_qty"] = ("SCREW BOLTS 75MM", "12MM"),
+            ["r49_left_qty"] = ("INFILL BOARDS", "1.2M"),
+            ["r49_middle_qty"] = ("SCAFFOLD STAIRS", ""),
+            ["r49_right_qty"] = ("TECH SCREWS", "90MM"),
+            ["r50_left_qty"] = ("HOP-UP 3 SPIGOTS", ""),
+            ["r50_middle_qty"] = ("ALUMINIUM STAIRS", ""),
+            ["r50_right_qty"] = ("TECH SCREWS", "45MM"),
+            ["r51_left_qty"] = ("HOP-UP 2 SPIGOTS", ""),
+            ["r51_middle_qty"] = ("ALUMINIUM HANDRAIL", ""),
+            ["r51_right_qty"] = ("TECH SCREWS TIMBER", "45MM"),
+            ["r52_left_qty"] = ("HOP-UP BRACKETS 3", "3 BOARD"),
+            ["r52_middle_qty"] = ("ALUMINIUM TOP RAIL", ""),
+            ["r52_right_qty"] = ("PLYWOOD 17MM / 12MM", ""),
+            ["r53_left_qty"] = ("HOP-UP BRACKETS 2", "2 BOARD"),
+            ["r53_middle_qty"] = ("STAIR BOLTS", ""),
+            ["r53_right_qty"] = ("3/2 TIMBERS", ""),
+            ["r54_left_qty"] = ("HOP-UP BRACKETS 1", "1 BOARD"),
+            ["r54_middle_qty"] = ("STAIR STRINGER", ""),
+            ["r54_right_qty"] = ("TIE WIRE", ""),
+            ["r55_left_qty"] = ("TIE BARS", "2.4M"),
+            ["r55_middle_qty"] = ("1 BOARD STEP DOWNS", "1 BOARD"),
+            ["r55_right_qty"] = ("INCOMPLETE SIGNS", ""),
+            ["r56_left_qty"] = ("TIE BARS", "1.8M"),
+            ["r56_middle_qty"] = ("2 BOARD STEP DOWNS", "2 BOARD"),
+            ["r56_right_qty"] = ("SCAFF TAGS", ""),
+            ["r57_left_qty"] = ("TIE BARS", "1.2M"),
+            ["r57_middle_qty"] = ("ALUMINIUM STAIR RISER", "2.0M"),
+            ["r57_right_qty"] = ("M20 TREAD ROD", ""),
+            ["r58_left_qty"] = ("TIE BARS", "0.745"),
+            ["r58_middle_qty"] = ("ALUMINIUM STAIR RISER", "1.0M"),
+            ["r58_right_qty"] = ("UNIT BEAM BRACKETS", ""),
+            ["r59_left_qty"] = ("LEDGER", "3.0M"),
+            ["r59_middle_qty"] = ("STAIR BOLTS", ""),
+            ["r60_left_qty"] = ("STEEL BOARDS", "3M"),
+            ["r60_middle_qty"] = ("STAIR DOOR", ""),
+        };
 
         private sealed class ScoredDesignCandidate
         {
@@ -135,6 +288,8 @@ The app renders links separately below your message. Never paste raw URLs or mar
 For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
+
+For material order questions, use transportSummary.requestMatches, activeRequests, scheduledToday, and archivedRequests. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
 
 Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
 
@@ -917,6 +1072,15 @@ ESS context JSON:
                     var minute = TryGetInt(item, "scheduledMinute");
                     var scheduledDate = TryGetString(item, "scheduledDate");
                     var truck = TryGetString(item, "scheduledTruckLabel") ?? TryGetString(item, "truckLabel") ?? TryGetString(item, "scheduledTruckId") ?? TryGetString(item, "truckId");
+                    var requestedMaterials = BuildRequestedMaterials(item);
+                    var materialSummary = string.Join(
+                        " ",
+                        requestedMaterials.Select(material => string.Join(" ", new[]
+                        {
+                            TryGetObjectProperty(material, "quantity"),
+                            TryGetObjectProperty(material, "label"),
+                            TryGetObjectProperty(material, "spec"),
+                        }.Where(value => !string.IsNullOrWhiteSpace(value)))));
                     var row = new
                     {
                         id = TryGetString(item, "id"),
@@ -931,6 +1095,10 @@ ESS context JSON:
                         truck,
                         deliveryStatus = TryGetString(item, "deliveryStatus") ?? "pending",
                         archivedAt = TryGetString(item, "archivedAt"),
+                        scaffoldingSystem = TryGetMaterialMeta(item, "__scaffoldingSystem") ?? TryGetString(item, "scaffoldingSystem"),
+                        details = TryGetMaterialMeta(item, "__details") ?? TryGetString(item, "details"),
+                        notes = TryGetString(item, "notes"),
+                        requestedMaterials,
                     };
                     searchableRequests.Add(new
                     {
@@ -948,6 +1116,10 @@ ESS context JSON:
                             row.scheduledTime,
                             row.truck,
                             row.deliveryStatus,
+                            row.scaffoldingSystem,
+                            row.details,
+                            row.notes,
+                            materialSummary,
                         }.Where(value => !string.IsNullOrWhiteSpace(value))),
                         data = row,
                     });
@@ -1569,6 +1741,82 @@ ESS context JSON:
 
             return rows.EnumerateArray()
                 .Count(row => includeArchived || string.IsNullOrWhiteSpace(TryGetString(row, "archivedAt")));
+        }
+
+        private static List<object> BuildRequestedMaterials(JsonElement request)
+        {
+            var values = TryGetObject(request, "itemValues");
+            if (values.ValueKind != JsonValueKind.Object)
+            {
+                values = TryGetObject(request, "item_values");
+            }
+
+            if (values.ValueKind != JsonValueKind.Object)
+            {
+                return new List<object>();
+            }
+
+            return values.EnumerateObject()
+                .Where(property => !property.Name.StartsWith("__", StringComparison.OrdinalIgnoreCase))
+                .Select(property =>
+                {
+                    var quantity = TryReadMaterialQuantity(property.Value);
+                    if (string.IsNullOrWhiteSpace(quantity))
+                    {
+                        return null;
+                    }
+
+                    var hasKnownLabel = MaterialOrderQuantityLabels.TryGetValue(property.Name, out var known);
+                    var fallbackLabel = property.Name
+                        .Replace("_qty", "", StringComparison.OrdinalIgnoreCase)
+                        .Replace("_", " ", StringComparison.OrdinalIgnoreCase)
+                        .Trim();
+
+                    return new
+                    {
+                        key = property.Name,
+                        label = hasKnownLabel ? known.Label : fallbackLabel,
+                        spec = hasKnownLabel ? known.Spec : string.Empty,
+                        quantity,
+                    };
+                })
+                .Where(item => item != null)
+                .Cast<object>()
+                .Take(120)
+                .ToList();
+        }
+
+        private static string? TryGetMaterialMeta(JsonElement request, string propertyName)
+        {
+            var values = TryGetObject(request, "itemValues");
+            if (values.ValueKind != JsonValueKind.Object)
+            {
+                values = TryGetObject(request, "item_values");
+            }
+
+            return values.ValueKind == JsonValueKind.Object &&
+                   values.TryGetProperty(propertyName, out var value) &&
+                   value.ValueKind != JsonValueKind.Null
+                ? value.ToString()
+                : null;
+        }
+
+        private static string? TryReadMaterialQuantity(JsonElement value)
+        {
+            if (value.ValueKind == JsonValueKind.Number)
+            {
+                return value.TryGetDecimal(out var numericQuantity) && numericQuantity > 0
+                    ? numericQuantity.ToString("0.##")
+                    : null;
+            }
+
+            var text = value.ToString().Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            return decimal.TryParse(text, out var parsedQuantity) && parsedQuantity <= 0 ? null : text;
         }
 
         private static string? TryGetObjectProperty(object value, string propertyName)
