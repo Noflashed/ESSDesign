@@ -37,6 +37,21 @@ namespace ESSDesign.Server.Services
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
 
+        private sealed class ScoredDesignCandidate
+        {
+            public Guid? DocumentId { get; set; }
+            public string? FolderId { get; set; }
+            public string CandidateType { get; set; } = "document";
+            public string Name { get; set; } = string.Empty;
+            public string Path { get; set; } = string.Empty;
+            public string RevisionNumber { get; set; } = string.Empty;
+            public DateTime UpdatedAt { get; set; } = DateTime.MinValue;
+            public bool HasEssDesign { get; set; }
+            public bool HasThirdPartyDesign { get; set; }
+            public int Score { get; set; }
+            public List<string> MatchedTerms { get; set; } = new();
+        }
+
         public AdminAssistantService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
@@ -80,9 +95,10 @@ namespace ESSDesign.Server.Services
                     role = "system",
                     content = """
 You are the ESS Design admin assistant. Answer questions using only the supplied ESS context.
-Be direct, practical, and specific. If the answer is not in the context, say what data is missing.
+Be direct, practical, and specific. If the answer is not in the context, say what data is missing and suggest the closest available ESS lookup.
 When useful links are supplied, mention them by label. Never invent counts, schedules, files, users, or URLs.
 You can answer about rostered manpower, active job-sites, transport schedules, material requests, users, and design file search results.
+For design-file questions, use the ranked designSearchMatches. If there is a likely match, answer with "closest match" or "best match" instead of saying there are no matches.
 """
                 },
             };
@@ -348,60 +364,209 @@ ESS context JSON:
 
         private async Task<(List<object> Matches, List<AdminAssistantLink> Links)> SearchDesignMatchesAsync(string question, CancellationToken cancellationToken)
         {
-            var query = BuildSearchQuery(question);
-            if (string.IsNullOrWhiteSpace(query))
+            var tokens = BuildSearchTokens(question);
+            if (tokens.Count == 0)
             {
                 return (new List<object>(), new List<AdminAssistantLink>());
             }
 
-            var results = await _supabaseService.SearchAsync(query);
+            var foldersTask = GetRestRowsAsync<JsonElement>(
+                "folders?select=id,name,parent_folder_id,updated_at&limit=5000",
+                cancellationToken);
+            var documentsTask = GetRestRowsAsync<JsonElement>(
+                "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,updated_at,created_at&order=updated_at.desc&limit=5000",
+                cancellationToken);
+
+            await Task.WhenAll(foldersTask, documentsTask);
+
+            var folders = foldersTask.Result;
+            var documents = documentsTask.Result;
+            var foldersById = folders
+                .Select(folder => new { Id = TryGetString(folder, "id"), Folder = folder })
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id))
+                .ToDictionary(item => item.Id!, item => item.Folder, StringComparer.OrdinalIgnoreCase);
+            var pathCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string BuildFolderPath(string? folderId, HashSet<string>? seen = null)
+            {
+                if (string.IsNullOrWhiteSpace(folderId) || !foldersById.TryGetValue(folderId, out var folder))
+                {
+                    return string.Empty;
+                }
+
+                if (pathCache.TryGetValue(folderId, out var cachedPath))
+                {
+                    return cachedPath;
+                }
+
+                seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!seen.Add(folderId))
+                {
+                    return TryGetString(folder, "name") ?? string.Empty;
+                }
+
+                var name = TryGetString(folder, "name") ?? string.Empty;
+                var parentId = TryGetString(folder, "parent_folder_id");
+                var parentPath = BuildFolderPath(parentId, seen);
+                var path = string.IsNullOrWhiteSpace(parentPath) ? name : $"{parentPath} / {name}";
+                pathCache[folderId] = path;
+                return path;
+            }
+
+            var candidates = new List<ScoredDesignCandidate>();
+
+            foreach (var folder in folders)
+            {
+                var folderId = TryGetString(folder, "id");
+                var folderPath = BuildFolderPath(folderId);
+                var score = ScoreSearchCandidate(folderPath, tokens, out var matchedTerms);
+                if (score <= 0)
+                {
+                    continue;
+                }
+
+                candidates.Add(new ScoredDesignCandidate
+                {
+                    FolderId = folderId,
+                    CandidateType = "folder",
+                    Name = TryGetString(folder, "name") ?? folderPath,
+                    Path = folderPath,
+                    UpdatedAt = TryGetDate(folder, "updated_at"),
+                    Score = score,
+                    MatchedTerms = matchedTerms,
+                });
+            }
+
+            foreach (var document in documents)
+            {
+                var folderId = TryGetString(document, "folder_id");
+                var folderPath = BuildFolderPath(folderId);
+                var revision = TryGetString(document, "revision_number") ?? string.Empty;
+                var essPath = TryGetString(document, "ess_design_issue_path");
+                var essName = TryGetString(document, "ess_design_issue_name");
+                var thirdPartyPath = TryGetString(document, "third_party_design_path");
+                var thirdPartyName = TryGetString(document, "third_party_design_name");
+                var description = TryGetString(document, "description");
+                var candidateText = string.Join(
+                    " ",
+                    new[]
+                    {
+                        folderPath,
+                        revision,
+                        essName,
+                        thirdPartyName,
+                        description,
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                var score = ScoreSearchCandidate(candidateText, tokens, out var matchedTerms);
+                var minimumMatchedTerms = tokens.Count <= 1 ? 1 : Math.Min(2, tokens.Count);
+                if (score <= 0 || matchedTerms.Count < minimumMatchedTerms)
+                {
+                    continue;
+                }
+
+                candidates.Add(new ScoredDesignCandidate
+                {
+                    DocumentId = Guid.TryParse(TryGetString(document, "id"), out var documentId) ? documentId : null,
+                    FolderId = folderId,
+                    CandidateType = "document",
+                    Name = essName ?? thirdPartyName ?? $"Revision {revision}",
+                    Path = folderPath,
+                    RevisionNumber = revision,
+                    UpdatedAt = TryGetDate(document, "updated_at", TryGetDate(document, "created_at")),
+                    HasEssDesign = !string.IsNullOrWhiteSpace(essPath),
+                    HasThirdPartyDesign = !string.IsNullOrWhiteSpace(thirdPartyPath),
+                    Score = score,
+                    MatchedTerms = matchedTerms,
+                });
+            }
+
+            var ranked = candidates
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenByDescending(candidate => candidate.UpdatedAt)
+                .Take(12)
+                .ToList();
             var matches = new List<object>();
             var links = new List<AdminAssistantLink>();
+            var linkedFolderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var result in results.Take(8))
+            foreach (var candidate in ranked)
             {
                 matches.Add(new
                 {
-                    result.Name,
-                    result.Type,
-                    result.Path,
-                    result.DocumentCount,
-                    folderId = result.Type.Equals("folder", StringComparison.OrdinalIgnoreCase) ? result.Id : result.ParentFolderId,
+                    candidate.CandidateType,
+                    candidate.Name,
+                    candidate.Path,
+                    candidate.FolderId,
+                    candidate.RevisionNumber,
+                    candidate.UpdatedAt,
+                    candidate.Score,
+                    candidate.MatchedTerms,
+                    candidate.HasEssDesign,
+                    candidate.HasThirdPartyDesign,
                 });
 
-                foreach (var document in result.Documents.Take(3))
+                if (candidate.DocumentId is Guid documentId && links.Count < 8)
                 {
-                    if (!string.IsNullOrWhiteSpace(document.EssDesignIssueName))
+                    if (candidate.HasEssDesign)
                     {
-                        var info = await TryGetDownloadInfoAsync(document.Id, "ess", cancellationToken);
+                        var info = await TryGetDownloadInfoAsync(documentId, "ess", cancellationToken);
                         if (info != null)
                         {
                             links.Add(new AdminAssistantLink
                             {
-                                Label = $"{result.Name} - ESS revision {document.RevisionNumber}",
+                                Label = $"{candidate.Path} - ESS revision {candidate.RevisionNumber}".Trim(' ', '-'),
                                 Url = info.Url,
                                 Type = "ess-design",
                             });
                         }
                     }
 
-                    if (!string.IsNullOrWhiteSpace(document.ThirdPartyDesignName))
+                    if (candidate.HasThirdPartyDesign && links.Count < 8)
                     {
-                        var info = await TryGetDownloadInfoAsync(document.Id, "third-party", cancellationToken);
+                        var info = await TryGetDownloadInfoAsync(documentId, "third-party", cancellationToken);
                         if (info != null)
                         {
                             links.Add(new AdminAssistantLink
                             {
-                                Label = $"{result.Name} - third-party revision {document.RevisionNumber}",
+                                Label = $"{candidate.Path} - third-party revision {candidate.RevisionNumber}".Trim(' ', '-'),
                                 Url = info.Url,
                                 Type = "third-party-design",
                             });
                         }
                     }
                 }
+
+                if (!string.IsNullOrWhiteSpace(candidate.FolderId) &&
+                    links.Count < 8 &&
+                    linkedFolderIds.Add(candidate.FolderId))
+                {
+                    links.Add(new AdminAssistantLink
+                    {
+                        Label = string.IsNullOrWhiteSpace(candidate.Path) ? "Open matching design folder" : $"Open {candidate.Path}",
+                        Url = $"/?page=design&folder={Uri.EscapeDataString(candidate.FolderId)}",
+                        Type = "design-folder",
+                    });
+                }
             }
 
-            return (matches, links.Take(8).ToList());
+            if (matches.Count == 0)
+            {
+                var fallbackQuery = string.Join(" ", tokens.Take(4));
+                var fallbackResults = await _supabaseService.SearchAsync(fallbackQuery);
+                foreach (var result in fallbackResults.Take(5))
+                {
+                    matches.Add(new
+                    {
+                        CandidateType = "folder-rpc",
+                        result.Name,
+                        result.Path,
+                        result.DocumentCount,
+                    });
+                }
+            }
+
+            return (matches, links);
         }
 
         private async Task<FileDownloadInfo?> TryGetDownloadInfoAsync(Guid documentId, string type, CancellationToken cancellationToken)
@@ -514,26 +679,90 @@ ESS context JSON:
             }
         }
 
-        private static string BuildSearchQuery(string question)
+        private static List<string> BuildSearchTokens(string question)
         {
-            var cleaned = new string(question
-                .Where(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) || ch == '-' || ch == '_')
-                .ToArray())
-                .Trim();
+            var cleaned = NormalizeSearchText(question);
 
             var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "can", "you", "please", "provide", "link", "access", "specific", "design", "file",
+                "files", "latest", "newest", "recent", "revision", "revisions", "pdf", "download",
                 "the", "for", "with", "from", "have", "any", "how", "many", "today", "currently",
+                "show", "find", "get", "give", "need", "want", "looking", "available", "provide",
             };
 
-            var words = cleaned
+            return cleaned
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Where(word => word.Length > 2 && !stopWords.Contains(word))
-                .Take(6)
+                .Select(word => word.Trim().ToLowerInvariant())
+                .Where(word => word.Length > 1 && !stopWords.Contains(word))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
                 .ToList();
+        }
 
-            return words.Count == 0 ? cleaned : string.Join(' ', words);
+        private static int ScoreSearchCandidate(string candidateText, IReadOnlyList<string> tokens, out List<string> matchedTerms)
+        {
+            matchedTerms = new List<string>();
+            if (string.IsNullOrWhiteSpace(candidateText) || tokens.Count == 0)
+            {
+                return 0;
+            }
+
+            var normalized = NormalizeSearchText(candidateText);
+            var score = 0;
+
+            foreach (var token in tokens)
+            {
+                if (normalized.Contains(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedTerms.Add(token);
+                    score += token.Length >= 4 ? 12 : 8;
+                }
+            }
+
+            for (var index = 0; index < tokens.Count - 1; index += 1)
+            {
+                var phrase = $"{tokens[index]} {tokens[index + 1]}";
+                if (normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 20;
+                }
+            }
+
+            for (var index = 0; index < tokens.Count - 2; index += 1)
+            {
+                var phrase = $"{tokens[index]} {tokens[index + 1]} {tokens[index + 2]}";
+                if (normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 35;
+                }
+            }
+
+            if (matchedTerms.Count == tokens.Count)
+            {
+                score += 80;
+            }
+            else if (tokens.Count > 2 && matchedTerms.Count >= Math.Ceiling(tokens.Count * 0.6))
+            {
+                score += 35;
+            }
+
+            return score;
+        }
+
+        private static string NormalizeSearchText(string value)
+        {
+            var chars = value
+                .ToLowerInvariant()
+                .Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ')
+                .ToArray();
+            return string.Join(" ", new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private static DateTime TryGetDate(JsonElement element, string propertyName, DateTime fallback = default)
+        {
+            var value = TryGetString(element, propertyName);
+            return DateTime.TryParse(value, out var parsed) ? parsed : fallback;
         }
 
         private static JsonElement TryGetObject(JsonElement element, string propertyName)
