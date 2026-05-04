@@ -30,6 +30,7 @@ import {
   getTruckAssignment,
   isSameDay,
   isTruckDeviceRole,
+  minutesFromIsoOnDate,
   projectRequestWindow,
   requestToCalendarEvent,
   scheduleStatusAppearance,
@@ -720,6 +721,20 @@ function TruckLaneIcon() {
       <path d="M15 9h3l2 3v5h-2" />
       <circle cx="7.5" cy="17.5" r="1.5" />
       <circle cx="17.5" cy="17.5" r="1.5" />
+    </svg>
+  );
+}
+
+function ReturnMovementTruckIcon() {
+  return (
+    <svg width="22" height="16" viewBox="0 0 28 20" fill="none" aria-hidden="true">
+      <path d="M2 6.5h15.5v8H2z" fill="#F47C20" />
+      <path d="M17.5 9h4.7l3.3 3.2v2.3h-8z" fill="#102B5C" />
+      <path d="M4 5h10" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" opacity=".9" />
+      <circle cx="7" cy="16" r="2.2" fill="#111827" />
+      <circle cx="21" cy="16" r="2.2" fill="#111827" />
+      <circle cx="7" cy="16" r=".9" fill="#fff" />
+      <circle cx="21" cy="16" r=".9" fill="#fff" />
     </svg>
   );
 }
@@ -1430,6 +1445,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const timelineSnapStep = snapToTimeMarks
     ? SCALE_MODES[timelineScaleMode]?.tickMinutes || DRAG_SCHEDULE_MINUTE_STEP
     : DRAG_SCHEDULE_MINUTE_STEP;
+  const scheduleNow = debugMode ? debugNow : new Date();
+  const scheduleNowMinutes = scheduleNow.getHours() * 60 + scheduleNow.getMinutes() + scheduleNow.getSeconds() / 60;
   const pendingRequests = useMemo(
     () => allRequests.filter(request =>
       !request.scheduledDate
@@ -3388,6 +3405,34 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             ) : null}
             {visibleTruckLanes.map((lane, laneIndex) => {
               const laneEvents = groupedEventsByTruck[laneIndex] || [];
+              const returnMovements = isSameDay(scheduleNow, selectedDate)
+                ? laneEvents.flatMap((event, eventIndex) => {
+                    const request = requestMetaMap[event.orderId];
+                    const nextEvent = laneEvents[eventIndex + 1];
+                    if (request?.deliveryStatus !== 'return_transit' || !nextEvent) {
+                      return [];
+                    }
+                    const completedMinutes = minutesFromIsoOnDate(request.deliveryConfirmedAt, event.date);
+                    const nextStartMinutes = eventStartMinutesMap[nextEvent.orderId] ?? nextEvent.hour * 60 + nextEvent.minute;
+                    if (typeof completedMinutes !== 'number' || nextStartMinutes <= completedMinutes) {
+                      return [];
+                    }
+                    if (scheduleNowMinutes < completedMinutes || scheduleNowMinutes >= nextStartMinutes) {
+                      return [];
+                    }
+                    const progress = Math.max(0, Math.min(1, (scheduleNowMinutes - completedMinutes) / (nextStartMinutes - completedMinutes)));
+                    const startOffset = getEventOffset(completedMinutes) * 100;
+                    const endOffset = getEventOffset(nextStartMinutes) * 100;
+                    return [{
+                      orderId: event.orderId,
+                      nextOrderId: nextEvent.orderId,
+                      startOffset,
+                      endOffset,
+                      progress,
+                      label: `Returning for ${nextEvent.builderName || 'next delivery'}`,
+                    }];
+                  })
+                : [];
               return (
                 <div key={lane.id} className="ts2-lane-row" style={{ gridTemplateColumns: `${LANE_META_WIDTH}px minmax(0, 1fr)` }}>
                   <div className="ts2-lane-meta">
@@ -3438,6 +3483,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <strong>{item.blocked ? 'Slot unavailable' : 'Move selection'}</strong>
                           </div>
                         ))}
+                      {returnMovements.map(movement => (
+                        <div
+                          key={`return-movement-${movement.orderId}-${movement.nextOrderId}`}
+                          className="transport-return-movement"
+                          style={{
+                            left: `${movement.startOffset}%`,
+                            width: `${Math.max(0.5, movement.endOffset - movement.startOffset)}%`,
+                          }}
+                          aria-label={movement.label}
+                        >
+                          <span style={{ left: `${movement.progress * 100}%` }}>
+                            <ReturnMovementTruckIcon />
+                          </span>
+                        </div>
+                      ))}
                       {laneEvents.map(event => {
                       const request = requestMetaMap[event.orderId];
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
