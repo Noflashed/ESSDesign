@@ -9,12 +9,12 @@ const STARTER_PROMPTS = [
     'Find the latest design for a job-site or scaffold.',
 ];
 
-function AssistantAvatar({ role = 'assistant', loading = false }) {
+function AssistantAvatar({ role = 'assistant' }) {
     const isUser = role === 'user';
     const Icon = isUser ? User : Bot;
 
     return (
-        <div className={`admin-assistant-avatar ${isUser ? 'user' : 'assistant'}${loading ? ' loading' : ''}`} aria-hidden="true">
+        <div className={`admin-assistant-avatar ${isUser ? 'user' : 'assistant'}`} aria-hidden="true">
             <Icon size={16} />
         </div>
     );
@@ -117,7 +117,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
                         ))}
                         {loading ? (
                             <div className="admin-assistant-message-row assistant">
-                                <AssistantAvatar loading />
+                                <AssistantAvatar />
                                 <div className="admin-assistant-message assistant loading">
                                     <div className="admin-assistant-loading-line">
                                         <span>Checking ESS data</span>
