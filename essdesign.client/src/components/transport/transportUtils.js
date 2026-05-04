@@ -522,8 +522,14 @@ export function projectRequestWindow(
 
   if (request.deliveryStatus === 'unloading' && typeof unloadingAt === 'number') {
     projectedEnd = unloadingAt + timing.loadingMinutes + timing.returnMinutes;
-  } else if (request.deliveryStatus === 'return_transit' && typeof confirmedAt === 'number') {
-    projectedEnd = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, confirmedAt);
+  } else if (request.deliveryStatus === 'return_transit') {
+    const completedAt =
+      typeof confirmedAt === 'number'
+        ? confirmedAt
+        : typeof unloadingAt === 'number'
+          ? unloadingAt
+          : startMinutes + LIVE_TIMELINE_MINUTES;
+    projectedEnd = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, completedAt);
   }
 
   if (request.deliveryStatus === 'in_transit') {
@@ -534,7 +540,7 @@ export function projectRequestWindow(
 
   const deliveryCompleteAt =
     request.deliveryStatus === 'return_transit'
-      ? confirmedAt ?? unloadingAt ?? Math.max(startMinutes + LIVE_TIMELINE_MINUTES, projectedEnd)
+      ? projectedEnd
       : projectedEnd;
 
   return {
