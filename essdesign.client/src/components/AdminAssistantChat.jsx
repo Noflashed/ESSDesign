@@ -5,7 +5,7 @@ const STARTER_PROMPTS = [
     'How many men do we have scheduled for work today?',
     'Do we have any trucks scheduled for 7am today?',
     'How many active job-sites do we currently have?',
-    'Can you find a design file for a job-site?',
+    'Find the latest design for a job-site or scaffold.',
 ];
 
 export default function AdminAssistantChat({ sidebarOpen }) {
@@ -13,7 +13,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
-            content: 'Ask me about today’s roster, transport schedule, active job-sites, users, or design files.',
+            content: "Ask me natural questions about today's roster, transport schedule, active job-sites, users, or design files.",
             links: [],
         },
     ]);

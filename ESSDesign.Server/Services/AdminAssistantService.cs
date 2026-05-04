@@ -94,11 +94,23 @@ namespace ESSDesign.Server.Services
                 {
                     role = "system",
                     content = """
-You are the ESS Design admin assistant. Answer questions using only the supplied ESS context.
-Be direct, practical, and specific. If the answer is not in the context, say what data is missing and suggest the closest available ESS lookup.
-When useful links are supplied, mention them by label. Never invent counts, schedules, files, users, or URLs.
-You can answer about rostered manpower, active job-sites, transport schedules, material requests, users, and design file search results.
-For design-file questions, use the ranked designSearchMatches. If there is a likely match, answer with "closest match" or "best match" instead of saying there are no matches.
+You are the ESS Design admin assistant for admin users. Think like a skilled, practical human problem-solver who understands the ESS Design app.
+
+Use the supplied ESS context as the source of truth for live operational facts such as counts, schedules, rosters, users, job-sites, file records, and URLs. Do not fabricate live data, URLs, people, files, or schedules.
+
+Your goal is to always provide a thoughtful, useful answer:
+- Interpret the user's intent, even when the wording is vague, misspelled, incomplete, or conversational.
+- Make reasonable assumptions and answer the most likely question first.
+- Break complex questions into smaller parts and address each part.
+- If exact certainty is not possible, give the best supported answer and clearly label the assumption.
+- Offer the closest matches, useful next steps, or alternative interpretations instead of ending with "I can't answer."
+- Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
+
+For design-file questions, use ranked designSearchMatches and links. Treat "latest" as the newest or highest-confidence available match unless revision details in the context show otherwise. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
+
+For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
+
+Be concise, direct, and specific. Avoid generic refusal language and avoid repeating that the answer is "not available in the provided context" unless there is genuinely no related ESS data at all.
 """
                 },
             };
@@ -585,17 +597,22 @@ ESS context JSON:
         private ChatResult BuildFallbackResult(string question, AdminAssistantContext context)
         {
             var reply = new StringBuilder();
-            reply.AppendLine("I can access the ESS admin context, but the OpenAI API key is not configured, so I can only give a direct data summary right now.");
+            reply.AppendLine("I can access the ESS admin context, but the OpenAI API key is not configured, so I am giving the best direct summary from the available data.");
             reply.AppendLine();
+            reply.AppendLine($"Question interpreted as: {question}");
             reply.AppendLine($"Today: {context.Today}");
             reply.AppendLine($"Employees: {JsonSerializer.Serialize(context.EmployeeSummary, _jsonOptions)}");
             reply.AppendLine($"Roster: {JsonSerializer.Serialize(context.RosterSummary, _jsonOptions)}");
             reply.AppendLine($"Transport: {JsonSerializer.Serialize(context.TransportSummary, _jsonOptions)}");
             reply.AppendLine($"Jobsites: {JsonSerializer.Serialize(context.JobsiteSummary, _jsonOptions)}");
+            if (context.DesignSearchMatches.Count > 0)
+            {
+                reply.AppendLine($"Design matches: {JsonSerializer.Serialize(context.DesignSearchMatches.Take(5), _jsonOptions)}");
+            }
             if (context.Links.Count > 0)
             {
                 reply.AppendLine();
-                reply.AppendLine("Matching design links:");
+                reply.AppendLine("Best available links:");
                 foreach (var link in context.Links)
                 {
                     reply.AppendLine($"- {link.Label}: {link.Url}");
