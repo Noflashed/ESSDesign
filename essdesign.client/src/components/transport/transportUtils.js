@@ -502,6 +502,7 @@ export function projectRequestWindow(
   now,
   shiftedScheduledStartMinutes,
   nextActualStartMinutes = null,
+  options = {},
 ) {
   const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
   const plannedEndMinutes = scheduledStart + timing.totalMinutes;
@@ -510,10 +511,11 @@ export function projectRequestWindow(
   const confirmedAt = minutesFromIsoOnDate(request.deliveryConfirmedAt, dateKey);
   const nowMinutes =
     now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60 + now.getMilliseconds() / 60000;
+  const preferShiftedStart = Boolean(options.preferShiftedStart);
 
   const startMinutes = Math.max(
     SCREEN_START_HOUR * 60,
-    typeof actualStart === 'number' ? actualStart : shiftedScheduledStartMinutes,
+    !preferShiftedStart && typeof actualStart === 'number' ? actualStart : shiftedScheduledStartMinutes,
   );
 
   let projectedEnd = startMinutes + timing.totalMinutes;

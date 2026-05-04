@@ -390,6 +390,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           now,
           shiftedScheduledStart,
           nextActualStartMinutes,
+          { preferShiftedStart: followsPreviousRun },
         );
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
@@ -3594,9 +3595,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const plannedReturnSegmentMinutes = !isCompleteTile && eventReturnTransitEnabled
                         ? Math.min(Math.max(0, timing.returnMinutes || 0), Math.max(0, durationMinutes - 1))
                         : 0;
-                      const returnSegmentDurationMinutes = isSecondaryRequest
-                        ? 0
-                        : (completedReturnSegmentMinutes || plannedReturnSegmentMinutes);
+                      const returnSegmentDurationMinutes = completedReturnSegmentMinutes || plannedReturnSegmentMinutes;
                       const returnSegmentRatio = Math.max(0, Math.min(1, returnSegmentDurationMinutes / Math.max(1, durationMinutes)));
                       const returnSegmentWidth = returnSegmentRatio * 100;
                       const hasReturnTransitSegment = returnSegmentWidth > 0;
