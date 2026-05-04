@@ -831,6 +831,28 @@ function formatNativeDateValue(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getActualDurationMinutes(startIso, endIso) {
+  if (!startIso || !endIso) {
+    return null;
+  }
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end.getTime() < start.getTime()) {
+    return null;
+  }
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+function formatActualDuration(minutes) {
+  if (typeof minutes !== 'number') {
+    return 'Pending';
+  }
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} m`;
+}
+
 function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0, nowOverride = null, debugActive = false }) {
   const [now, setNow] = useState(new Date());
 
@@ -1598,6 +1620,35 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ? removeReturnLegFromTiming(getTimingProfile(selectedSchedulePrimaryRouteEstimate, null))
         : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
     : null;
+  const selectedScheduleActualTiming = useMemo(() => {
+    if (!selectedScheduleRequest) {
+      return null;
+    }
+    const travelMinutes = getActualDurationMinutes(
+      selectedScheduleRequest.deliveryStartedAt,
+      selectedScheduleRequest.deliveryUnloadingAt,
+    );
+    const unloadMinutes = getActualDurationMinutes(
+      selectedScheduleRequest.deliveryUnloadingAt,
+      selectedScheduleRequest.deliveryConfirmedAt,
+    );
+    const hasActualTiming =
+      selectedScheduleRequest.deliveryStartedAt ||
+      selectedScheduleRequest.deliveryUnloadingAt ||
+      selectedScheduleRequest.deliveryConfirmedAt;
+
+    if (!hasActualTiming) {
+      return null;
+    }
+
+    return {
+      travelMinutes,
+      unloadMinutes,
+      startedAt: formatActionTimestamp(selectedScheduleRequest.deliveryStartedAt),
+      unloadingAt: formatActionTimestamp(selectedScheduleRequest.deliveryUnloadingAt),
+      confirmedAt: formatActionTimestamp(selectedScheduleRequest.deliveryConfirmedAt),
+    };
+  }, [selectedScheduleRequest]);
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
     if (!selectedScheduleEvent) return 'No delivery selected';
@@ -3603,6 +3654,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </>
               )}
             </div>
+            {selectedScheduleActualTiming ? (
+              <div className="transport-schedule-actual-card">
+                <div>
+                  <span><InspectorIcon type="truck" /> Actual Travel</span>
+                  <strong>{formatActualDuration(selectedScheduleActualTiming.travelMinutes)}</strong>
+                  <small>{selectedScheduleActualTiming.startedAt ? `Started ${selectedScheduleActualTiming.startedAt}` : 'Start pending'}</small>
+                  <small>{selectedScheduleActualTiming.unloadingAt ? `Arrived ${selectedScheduleActualTiming.unloadingAt}` : 'Arrival pending'}</small>
+                </div>
+                <div>
+                  <span><InspectorIcon type="unload" /> Actual Unload</span>
+                  <strong>{formatActualDuration(selectedScheduleActualTiming.unloadMinutes)}</strong>
+                  <small>{selectedScheduleActualTiming.unloadingAt ? `Offloading ${selectedScheduleActualTiming.unloadingAt}` : 'Offload pending'}</small>
+                  <small>{selectedScheduleActualTiming.confirmedAt ? `Completed ${selectedScheduleActualTiming.confirmedAt}` : 'Completion pending'}</small>
+                </div>
+              </div>
+            ) : null}
             <h3 className="transport-panel-section-title">Route Preview</h3>
             <RouteMapCanvas className="transport-schedule-inspector-map" routeData={selectedScheduleRouteData} loading={selectedScheduleRouteLoading} siteLocation={selectedScheduleRouteContext.siteLocation} expandable viewerTitle={selectedScheduleRouteContext.title} />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
