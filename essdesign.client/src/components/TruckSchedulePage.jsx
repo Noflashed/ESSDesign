@@ -1090,7 +1090,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [debugNowMs, setDebugNowMs] = useState(() => Date.now());
   const [debugSpeed, setDebugSpeed] = useState(1);
   const [debugStatusSavingId, setDebugStatusSavingId] = useState('');
-  const [returnTransitReprojecting, setReturnTransitReprojecting] = useState(false);
+  const [returnTransitReprojectingId, setReturnTransitReprojectingId] = useState('');
   const boardScrollRef = useRef(null);
   const boardBodyRef = useRef(null);
   const scaleAnchorRef = useRef(null);
@@ -1316,19 +1316,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [returnTransitByRequestId, user?.id, user?.role]);
 
   useEffect(() => {
-    if (!returnTransitReprojecting) {
+    if (!returnTransitReprojectingId) {
       return undefined;
     }
-    const timeout = window.setTimeout(() => setReturnTransitReprojecting(false), 650);
+    const timeout = window.setTimeout(() => setReturnTransitReprojectingId(''), 650);
     return () => window.clearTimeout(timeout);
-  }, [returnTransitReprojecting, returnTransitByRequestId]);
+  }, [returnTransitReprojectingId, returnTransitByRequestId]);
 
   const handleReturnTransitToggle = useCallback((event) => {
     const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
     if (!requestId) {
       return;
     }
-    setReturnTransitReprojecting(true);
+    setReturnTransitReprojectingId(requestId);
     const checked = event.target.checked;
     setReturnTransitByRequestId(current => {
       const next = { ...(current || {}) };
@@ -3631,7 +3631,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       const primaryDeliveryType = getDeliveryTypePill(request);
                       const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
-                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId) || returnTransitReprojecting;
+                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId) || returnTransitReprojectingId === event.orderId;
                       return (
                         <div
                           key={event.id}
