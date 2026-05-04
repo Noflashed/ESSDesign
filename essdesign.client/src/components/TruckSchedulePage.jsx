@@ -335,7 +335,6 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   });
 
   groupedByTruck.forEach((truckRequests, truckId) => {
-    let cumulativeShiftMinutes = 0;
     let laneCursorMinutes = SCREEN_START_HOUR * 60;
     let previousRunLink = null;
     truckRequests
@@ -375,7 +374,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           ? Math.max(SCREEN_START_HOUR * 60, previousRunLink.projectedEndMinutes)
           : Math.max(
             SCREEN_START_HOUR * 60,
-            scheduledStart + Math.max(0, cumulativeShiftMinutes),
+            scheduledStart,
             laneCursorMinutes,
           );
         const nextStartedRequest = ordered.slice(index + 1).find(nextRequest => {
@@ -407,7 +406,6 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         laneCursorMinutes = followsPreviousRun
           ? runHandoffMinutes
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
-        cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         previousRunLink = {
           includeReturnTransitToYard: hasEffectiveReturnBreak,
           completed: requestStatus === 'return_transit',

@@ -551,9 +551,13 @@ export function projectRequestWindow(
   }
 
   if (request.deliveryStatus === 'in_transit') {
-    projectedEnd = Math.max(projectedEnd, (liveNowMinutes ?? projectedEnd) + timing.loadingMinutes + timing.returnMinutes);
+    const activePrimaryEnd = (liveNowMinutes ?? projectedEnd) + timing.loadingMinutes;
+    deliveryCompleteAt = Math.max(deliveryCompleteAt, activePrimaryEnd);
+    projectedEnd = Math.max(projectedEnd, activePrimaryEnd + timing.returnMinutes);
   } else if (request.deliveryStatus === 'unloading') {
-    projectedEnd = Math.max(projectedEnd, (liveNowMinutes ?? projectedEnd) + timing.returnMinutes);
+    const activePrimaryEnd = liveNowMinutes ?? deliveryCompleteAt;
+    deliveryCompleteAt = Math.max(deliveryCompleteAt, activePrimaryEnd);
+    projectedEnd = Math.max(projectedEnd, activePrimaryEnd + timing.returnMinutes);
   }
 
   return {
