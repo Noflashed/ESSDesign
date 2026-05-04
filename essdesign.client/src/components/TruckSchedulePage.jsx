@@ -169,6 +169,21 @@ function removeReturnLegFromTiming(timing) {
   };
 }
 
+function isBackToBackContinuation(parentRequest, continuationRequest, parentTiming, truckId) {
+  if (!parentRequest || !continuationRequest || isSecondaryRouteRequest(parentRequest)) {
+    return false;
+  }
+  const continuationTruckId = continuationRequest.scheduledTruckId ?? continuationRequest.truckId ?? null;
+  if (continuationTruckId !== truckId) {
+    return false;
+  }
+
+  const parentStart = getRequestScheduledStartMinutes(parentRequest);
+  const continuationStart = getRequestScheduledStartMinutes(continuationRequest);
+  const parentDeliveryEnd = parentStart + (removeReturnLegFromTiming(parentTiming).totalMinutes || 0);
+  return Math.abs(continuationStart - parentDeliveryEnd) <= SNAP_EDGE_THRESHOLD_MINUTES;
+}
+
 function getRequestScheduledStartMinutes(request, fallbackMinutes = SCREEN_START_HOUR * 60) {
   if (typeof request?.scheduledHour === 'number' && typeof request?.scheduledMinute === 'number') {
     return request.scheduledHour * 60 + request.scheduledMinute;
@@ -320,11 +335,10 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, includeRe
       })
       .forEach((request, index, ordered) => {
         const continuation = secondaryContinuationBySourceId.get(request.id);
-        const continuationTruckId = continuation?.scheduledTruckId ?? continuation?.truckId ?? null;
-        const hasSecondaryContinuation = !isSecondaryRouteRequest(request) && continuationTruckId === truckId;
         const baseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
           : getTimingProfile(routeMap[request.id] ?? null, null);
+        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, baseTiming, truckId);
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
@@ -2632,30 +2646,33 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
 
-    const primaryRouteEstimate = getCachedRouteEstimateValue(
-      secondaryRouteModal.primarySiteLocation,
-      applyRouteMode(buildRouteScheduleFromEvent(scheduleEvent), enableTolls),
-    ) ?? null;
-    const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
-    const visibleParentStartMinutes = eventStartMinutesMap[request.id] ?? (scheduleEvent.hour * 60 + scheduleEvent.minute);
-    const plannedParentStartMinutes = getRequestScheduledStartMinutes(request, scheduleEvent.hour * 60 + scheduleEvent.minute);
-    const visibleBaseStart = getDateAtScheduleMinutes(scheduleEvent.date, visibleParentStartMinutes);
-    const plannedBaseStart = getDateAtScheduleMinutes(request.scheduledDate || scheduleEvent.date, plannedParentStartMinutes);
-    const outboundDeparture = new Date(visibleBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
-    const persistedSecondaryDeparture = new Date(plannedBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
-    const outboundRouteSchedule = {
-      scheduledDate: formatDateKey(outboundDeparture),
-      scheduledHour: outboundDeparture.getHours(),
-      scheduledMinute: outboundDeparture.getMinutes(),
-    };
-    const persistedSecondarySchedule = {
-      scheduledDate: formatDateKey(persistedSecondaryDeparture),
-      scheduledHour: persistedSecondaryDeparture.getHours(),
-      scheduledMinute: persistedSecondaryDeparture.getMinutes(),
-    };
-
     setSecondaryRouteSaving(true);
     try {
+      const primaryRouteSchedule = applyRouteMode(buildRouteScheduleFromEvent(scheduleEvent), enableTolls);
+      const cachedPrimaryRouteEstimate = getCachedRouteEstimateValue(
+        secondaryRouteModal.primarySiteLocation,
+        primaryRouteSchedule,
+      );
+      const primaryRouteEstimate = cachedPrimaryRouteEstimate !== undefined
+        ? cachedPrimaryRouteEstimate
+        : await getCachedRouteEstimate(secondaryRouteModal.primarySiteLocation, primaryRouteSchedule);
+      const primaryPhaseMinutes = getPrimaryPhaseMinutes(primaryRouteEstimate);
+      const visibleParentStartMinutes = eventStartMinutesMap[request.id] ?? (scheduleEvent.hour * 60 + scheduleEvent.minute);
+      const plannedParentStartMinutes = getRequestScheduledStartMinutes(request, scheduleEvent.hour * 60 + scheduleEvent.minute);
+      const visibleBaseStart = getDateAtScheduleMinutes(scheduleEvent.date, visibleParentStartMinutes);
+      const plannedBaseStart = getDateAtScheduleMinutes(request.scheduledDate || scheduleEvent.date, plannedParentStartMinutes);
+      const outboundDeparture = new Date(visibleBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+      const persistedSecondaryDeparture = new Date(plannedBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+      const outboundRouteSchedule = {
+        scheduledDate: formatDateKey(outboundDeparture),
+        scheduledHour: outboundDeparture.getHours(),
+        scheduledMinute: outboundDeparture.getMinutes(),
+      };
+      const persistedSecondarySchedule = {
+        scheduledDate: formatDateKey(persistedSecondaryDeparture),
+        scheduledHour: persistedSecondaryDeparture.getHours(),
+        scheduledMinute: persistedSecondaryDeparture.getMinutes(),
+      };
       const outbound = await getCachedRouteDataBetween(
         secondaryRouteModal.primarySiteLocation,
         destination,
