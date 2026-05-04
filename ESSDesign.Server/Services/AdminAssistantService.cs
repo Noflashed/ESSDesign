@@ -54,6 +54,20 @@ namespace ESSDesign.Server.Services
             public List<string> MatchedTerms { get; set; } = new();
         }
 
+        private sealed class EmployeeContextRow
+        {
+            public string? Id { get; set; }
+            public string FirstName { get; set; } = string.Empty;
+            public string LastName { get; set; } = string.Empty;
+            public string FullName { get; set; } = string.Empty;
+            public string? Email { get; set; }
+            public bool LeadingHand { get; set; }
+            public bool Verified { get; set; }
+            public List<string> PreferredSites { get; set; } = new();
+            public int Score { get; set; }
+            public List<string> MatchedTerms { get; set; } = new();
+        }
+
         public AdminAssistantService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
@@ -110,6 +124,8 @@ Your goal is to always provide a thoughtful, useful answer:
 
 For design-file questions, use ranked designSearchMatches and links. Treat "latest" as the newest or highest-confidence available match unless revision details in the context show otherwise. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
 The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
+
+For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
@@ -244,21 +260,12 @@ ESS context JSON:
             var roster = BuildRosterSummary(planRows.FirstOrDefault(), today);
             var jobsites = BuildJobsitesSummary(projectsDoc);
             var transport = BuildTransportSummary(materialRequestsDoc, today);
+            var employeeSummary = BuildEmployeeSummary(employees, question);
 
             return new AdminAssistantContext
             {
                 Today = today.ToString("yyyy-MM-dd"),
-                EmployeeSummary = new
-                {
-                    totalEmployees = employees.Count,
-                    verifiedEmployees = employees.Count(row => TryGetString(row, "verified_at") != null),
-                    leadingHands = employees.Count(row => TryGetBool(row, "leading_hand")),
-                    sampleNames = employees
-                        .Take(12)
-                        .Select(row => $"{TryGetString(row, "first_name")} {TryGetString(row, "last_name")}".Trim())
-                        .Where(name => !string.IsNullOrWhiteSpace(name))
-                        .ToList(),
-                },
+                EmployeeSummary = employeeSummary,
                 RosterSummary = roster,
                 JobsiteSummary = jobsites,
                 TransportSummary = transport,
@@ -356,6 +363,155 @@ ESS context JSON:
 
             return words.Contains("all") &&
                    (words.Contains("revisions") || words.Contains("versions") || words.Contains("drawings") || words.Contains("files"));
+        }
+
+        private object BuildEmployeeSummary(IReadOnlyList<JsonElement> employees, string question)
+        {
+            var directory = employees
+                .Select(row =>
+                {
+                    var firstName = TryGetString(row, "first_name") ?? string.Empty;
+                    var lastName = TryGetString(row, "last_name") ?? string.Empty;
+                    return new EmployeeContextRow
+                    {
+                        Id = TryGetString(row, "id"),
+                        FirstName = firstName,
+                        LastName = lastName,
+                        FullName = $"{firstName} {lastName}".Trim(),
+                        Email = TryGetString(row, "email"),
+                        LeadingHand = TryGetBool(row, "leading_hand"),
+                        Verified = TryGetString(row, "verified_at") != null,
+                        PreferredSites = new[]
+                            {
+                                TryGetString(row, "preferred_site_1"),
+                                TryGetString(row, "preferred_site_2"),
+                                TryGetString(row, "preferred_site_3"),
+                            }
+                            .Where(site => !string.IsNullOrWhiteSpace(site))
+                            .Select(site => site!)
+                            .ToList(),
+                    };
+                })
+                .Where(row => !string.IsNullOrWhiteSpace(row.FullName) || !string.IsNullOrWhiteSpace(row.Email))
+                .OrderBy(row => row.LastName)
+                .ThenBy(row => row.FirstName)
+                .ToList();
+
+            var lookupTokens = BuildEmployeeLookupTokens(question);
+            var matches = directory
+                .Select(row =>
+                {
+                    row.Score = ScoreEmployeeCandidate(row, lookupTokens, out var matchedTerms);
+                    row.MatchedTerms = matchedTerms;
+                    return row;
+                })
+                .Where(row => row.Score > 0)
+                .OrderByDescending(row => row.Score)
+                .ThenBy(row => row.LastName)
+                .ThenBy(row => row.FirstName)
+                .Take(8)
+                .Select(row => new
+                {
+                    row.Id,
+                    row.FullName,
+                    row.Email,
+                    row.LeadingHand,
+                    row.Verified,
+                    row.PreferredSites,
+                    row.Score,
+                    row.MatchedTerms,
+                })
+                .ToList();
+
+            return new
+            {
+                totalEmployees = employees.Count,
+                verifiedEmployees = directory.Count(row => row.Verified),
+                leadingHands = directory.Count(row => row.LeadingHand),
+                employeeMatches = matches,
+                employeeDirectory = directory
+                    .Take(250)
+                    .Select(row => new
+                    {
+                        row.Id,
+                        row.FullName,
+                        row.Email,
+                        row.LeadingHand,
+                        row.Verified,
+                    })
+                    .ToList(),
+            };
+        }
+
+        private static List<string> BuildEmployeeLookupTokens(string question)
+        {
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "do", "we", "have", "an", "a", "employee", "employees", "named", "name",
+                "called", "person", "worker", "staff", "member", "is", "there", "any",
+                "with", "the", "please", "can", "you", "find", "search", "look", "up",
+            };
+
+            return NormalizeSearchText(question)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(word => word.Length > 1 && !stopWords.Contains(word))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList();
+        }
+
+        private static int ScoreEmployeeCandidate(EmployeeContextRow employee, IReadOnlyList<string> tokens, out List<string> matchedTerms)
+        {
+            matchedTerms = new List<string>();
+            if (tokens.Count == 0)
+            {
+                return 0;
+            }
+
+            var firstName = NormalizeSearchText(employee.FirstName);
+            var lastName = NormalizeSearchText(employee.LastName);
+            var fullName = NormalizeSearchText(employee.FullName);
+            var email = NormalizeSearchText(employee.Email ?? string.Empty);
+            var score = 0;
+
+            foreach (var token in tokens)
+            {
+                var matched = false;
+                if (firstName.Equals(token, StringComparison.OrdinalIgnoreCase) ||
+                    lastName.Equals(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 40;
+                    matched = true;
+                }
+                else if (fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                         .Any(namePart => namePart.StartsWith(token, StringComparison.OrdinalIgnoreCase) ||
+                                          token.StartsWith(namePart, StringComparison.OrdinalIgnoreCase)))
+                {
+                    score += 24;
+                    matched = true;
+                }
+                else if (email.Contains(token, StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 12;
+                    matched = true;
+                }
+
+                if (matched)
+                {
+                    matchedTerms.Add(token);
+                }
+            }
+
+            if (tokens.Count > 1 && matchedTerms.Count == tokens.Count)
+            {
+                score += 80;
+            }
+            else if (matchedTerms.Count > 0)
+            {
+                score += 10;
+            }
+
+            return score;
         }
 
         private object BuildRosterSummary(JsonElement planRow, DateOnly today)
