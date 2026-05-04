@@ -363,7 +363,10 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           previousRunLink &&
           request.sourceOrderId &&
           !previousRunLink.includeReturnTransitToYard &&
-          Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
+          (
+            typeof request.connectedParentStartMinutes === 'number' ||
+            Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES
+          ),
         );
         const requestStatus = request.deliveryStatus || 'scheduled';
         const presumedInTransitFromParent = Boolean(followsPreviousRun && previousRunLink?.completed && requestStatus === 'scheduled');
