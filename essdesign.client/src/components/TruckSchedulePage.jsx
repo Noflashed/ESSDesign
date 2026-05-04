@@ -302,6 +302,13 @@ function getScaffoldDetailText(request, event) {
   );
 }
 
+function getEffectiveDeliveryStatus(request, cycleState = null) {
+  const status = request?.deliveryStatus || 'scheduled';
+  return cycleState?.presumedInTransitFromParent && status === 'scheduled'
+    ? 'in_transit'
+    : status;
+}
+
 function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTransitByRequestId = {}) {
   const dateKey = requestsForDay[0]?.scheduledDate || formatDateKey(new Date());
   const groupedByTruck = new Map();
@@ -356,6 +363,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           !previousRunLink.includeReturnTransitToYard &&
           Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
         );
+        const presumedInTransitFromParent = Boolean(followsPreviousRun && previousRunLink?.completed);
         const shiftedScheduledStart = followsPreviousRun
           ? Math.max(SCREEN_START_HOUR * 60, previousRunLink.projectedEndMinutes)
           : Math.max(
@@ -374,7 +382,9 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
             })()
           : null;
         const projected = projectRequestWindow(
-          request,
+          presumedInTransitFromParent
+            ? { ...request, deliveryStatus: 'in_transit' }
+            : request,
           timing,
           dateKey,
           now,
@@ -391,6 +401,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         previousRunLink = {
           includeReturnTransitToYard,
+          completed: request.deliveryStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
           projectedEndMinutes: projected.projectedEndMinutes,
         };
@@ -404,6 +415,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           isLastScheduledForDay: index === ordered.length - 1,
           hasSecondaryContinuation,
           followsPreviousRun,
+          presumedInTransitFromParent,
         };
         dayEvents.push({
           id: `remote-${request.id}`,
@@ -1630,6 +1642,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [dayEvents, selectedScheduleEventId],
   );
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
+  const selectedScheduleCycleState = selectedScheduleEvent ? eventCycleStateMap[selectedScheduleEvent.orderId] : null;
+  const selectedScheduleEffectiveStatus = getEffectiveDeliveryStatus(selectedScheduleRequest, selectedScheduleCycleState);
   const selectedDebugStatus = selectedScheduleRequest?.deliveryStatus || 'scheduled';
   const selectedScheduleSiteLocation = selectedScheduleRequest ? requestSiteLocationMap[selectedScheduleRequest.id] : '';
   const selectedScheduleRouteSchedule = useMemo(
@@ -1645,7 +1659,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleIsStandaloneSecondary = isSecondaryRouteRequest(selectedScheduleRequest);
   const selectedScheduleIsSecondarySegment = selectedScheduleIsStandaloneSecondary || (selectedScheduleSegment === 'secondary' && Boolean(selectedScheduleSecondaryRoute));
   const selectedScheduleHasSecondaryContinuation = Boolean(
-    selectedScheduleEvent ? eventCycleStateMap[selectedScheduleEvent.orderId]?.hasSecondaryContinuation : false,
+    selectedScheduleCycleState?.hasSecondaryContinuation,
   );
   const selectedScheduleSecondaryRouteSchedule = useMemo(() => {
     if (!selectedScheduleEvent || !selectedScheduleSecondaryRoute) {
@@ -3554,8 +3568,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ))}
                       {laneEvents.map(event => {
                       const request = requestMetaMap[event.orderId];
+                      const cycleState = eventCycleStateMap[event.orderId] || null;
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
-                      const status = request?.deliveryStatus || 'scheduled';
+                      const status = getEffectiveDeliveryStatus(request, cycleState);
                       const durationMinutes = eventDurationMinutesMap[event.orderId] ?? 90;
                       const primaryDurationMinutes = eventPrimaryDurationMinutesMap[event.orderId] ?? durationMinutes;
                       const offset = getEventOffset(eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute) * 100;
@@ -3658,7 +3673,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <span className="ts2-event-arrival">{eventArrival}</span>
                             <div className="ts2-event-status-row">
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
-                              <span>{isSecondaryRequest ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
+                              <span>{isSecondaryRequest && status !== 'in_transit' ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
                             </div>
                             {isRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                           </button>
@@ -3753,7 +3768,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <span>{selectedScheduleIsSecondarySegment ? 'Selected Secondary Route' : 'Selected Delivery'}</span>
             <h2>{selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason) : selectedScheduleWindowLabel}</h2>
           </div>
-          {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleRequest.deliveryStatus || 'scheduled'}`}>{scheduleStatusLabel(selectedScheduleRequest.deliveryStatus || 'scheduled')}</span> : null}
+          {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleEffectiveStatus}`}>{scheduleStatusLabel(selectedScheduleEffectiveStatus)}</span> : null}
           <button type="button" className="transport-inspector-close" onClick={() => setScheduleInspectorOpen(false)} aria-label="Close selected delivery panel">×</button>
         </div>
         <label className={`transport-snap-toggle transport-inspector-toggle${enableTolls ? ' active' : ''}`}>
@@ -4183,14 +4198,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 {eventOverviewRouteData ? (
                   <div className="transport-route-hero-pill">
                     <strong>{formatDuration(eventOverviewRouteData.durationSeconds)} · {formatDistance(eventOverviewRouteData.distanceMeters)}</strong>
-                    <span>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(eventOverviewModal.request?.deliveryStatus ?? 'scheduled')}</span>
+                    <span>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(getEffectiveDeliveryStatus(eventOverviewModal.request, eventOverviewModal.cycleState))}</span>
                   </div>
                 ) : null}
                 <div className="transport-route-modal-bottom">
                   <div className="transport-route-info-card">
                     <div className="transport-route-info-row"><span>Destination</span><strong>{eventOverviewModal.siteLocation || 'No site location saved for this project yet.'}</strong></div>
                     <div className="transport-route-info-row"><span>Truck</span><strong>{eventOverviewModal.event.truckLabel || 'ESS Transport'}</strong></div>
-                    <div className="transport-route-info-row"><span>Status</span><strong>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(eventOverviewModal.request?.deliveryStatus ?? 'scheduled')}</strong></div>
+                    <div className="transport-route-info-row"><span>Status</span><strong>{eventOverviewModal.cycleState?.groupedCompletedCycle ? 'Completed delivery cycle' : scheduleStatusLabel(getEffectiveDeliveryStatus(eventOverviewModal.request, eventOverviewModal.cycleState))}</strong></div>
                   </div>
                   {overviewSummary ? (
                     <div className="transport-route-info-card">
