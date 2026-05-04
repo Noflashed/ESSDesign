@@ -359,14 +359,15 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
+        const hasExplicitRunLink = Boolean(request.sourceOrderId && typeof request.connectedParentStartMinutes === 'number');
+        const hasAdjacentRunLink = Boolean(
+          !request.sourceOrderId &&
+          Math.abs(scheduledStart - previousRunLink?.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
+        );
         const followsPreviousRun = Boolean(
           previousRunLink &&
-          request.sourceOrderId &&
           !previousRunLink.includeReturnTransitToYard &&
-          (
-            typeof request.connectedParentStartMinutes === 'number' ||
-            Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES
-          ),
+          (hasExplicitRunLink || hasAdjacentRunLink),
         );
         const requestStatus = request.deliveryStatus || 'scheduled';
         const presumedInTransitFromParent = Boolean(followsPreviousRun && previousRunLink?.completed && requestStatus === 'scheduled');
@@ -426,6 +427,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           presumedInTransitFromParent,
           runHandoffMinutes,
           runSourceOrderId: request.sourceOrderId || null,
+          runLinkReason: hasExplicitRunLink ? 'explicit' : hasAdjacentRunLink ? 'adjacent' : 'none',
           effectiveReturnBreak: hasEffectiveReturnBreak,
         };
         dayEvents.push({
@@ -3499,6 +3501,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     `status=${selectedScheduleRequest.deliveryStatus || 'scheduled'}`,
                     `effective=${selectedScheduleEffectiveStatus}`,
                     `follows=${selectedScheduleCycleState?.followsPreviousRun ? 'yes' : 'no'}`,
+                    `reason=${selectedScheduleCycleState?.runLinkReason || 'none'}`,
                     `presumeTransit=${selectedScheduleCycleState?.presumedInTransitFromParent ? 'yes' : 'no'}`,
                     `returnBreak=${selectedScheduleCycleState?.effectiveReturnBreak ? 'yes' : 'no'}`,
                     `handoff=${typeof selectedScheduleCycleState?.runHandoffMinutes === 'number' ? formatTimeChip(Math.floor(selectedScheduleCycleState.runHandoffMinutes / 60), Math.floor(selectedScheduleCycleState.runHandoffMinutes % 60)) : 'n/a'}`,

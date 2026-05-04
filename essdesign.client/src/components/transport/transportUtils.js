@@ -527,6 +527,7 @@ export function projectRequestWindow(
 
   if (request.deliveryStatus === 'unloading' && typeof unloadingAt === 'number') {
     projectedEnd = unloadingAt + timing.loadingMinutes + timing.returnMinutes;
+    deliveryCompleteAt = Math.max(startMinutes + LIVE_TIMELINE_MINUTES, unloadingAt + timing.loadingMinutes);
   } else if (request.deliveryStatus === 'return_transit') {
     const completedAt =
       typeof confirmedAt === 'number'
