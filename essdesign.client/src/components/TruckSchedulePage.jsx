@@ -360,6 +360,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           : baseTiming;
         const followsPreviousRun = Boolean(
           previousRunLink &&
+          request.sourceOrderId === previousRunLink.requestId &&
           !previousRunLink.includeReturnTransitToYard &&
           Math.abs(scheduledStart - previousRunLink.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
         );
@@ -402,6 +403,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         cumulativeShiftMinutes = Math.max(0, projected.projectedEndMinutes - projected.plannedEndMinutes);
         previousRunLink = {
+          requestId: request.id,
           includeReturnTransitToYard,
           completed: requestStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
