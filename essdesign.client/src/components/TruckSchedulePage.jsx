@@ -1060,6 +1060,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [debugNowMs, setDebugNowMs] = useState(() => Date.now());
   const [debugSpeed, setDebugSpeed] = useState(1);
   const [debugStatusSavingId, setDebugStatusSavingId] = useState('');
+  const [returnTransitReprojecting, setReturnTransitReprojecting] = useState(false);
   const boardScrollRef = useRef(null);
   const boardBodyRef = useRef(null);
   const scaleAnchorRef = useRef(null);
@@ -1281,6 +1282,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     localStorage.setItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(includeReturnTransitToYard));
   }, [includeReturnTransitToYard, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!returnTransitReprojecting) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setReturnTransitReprojecting(false), 650);
+    return () => window.clearTimeout(timeout);
+  }, [returnTransitReprojecting, includeReturnTransitToYard]);
+
+  const handleReturnTransitToggle = useCallback((event) => {
+    setReturnTransitReprojecting(true);
+    setIncludeReturnTransitToYard(event.target.checked);
+  }, []);
 
   useEffect(() => {
     if (scaleAnchorRef.current == null || !boardScrollRef.current) {
@@ -3561,7 +3575,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       const primaryDeliveryType = getDeliveryTypePill(request);
                       const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
-                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId);
+                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId) || returnTransitReprojecting;
                       return (
                         <div
                           key={event.id}
@@ -3690,14 +3704,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           />
           <span>Enable tolls</span>
         </label>
-        <label className={`transport-snap-toggle transport-inspector-toggle${includeReturnTransitToYard ? ' active' : ''}`}>
-          <input
-            type="checkbox"
-            checked={includeReturnTransitToYard}
-            onChange={(event) => setIncludeReturnTransitToYard(event.target.checked)}
-          />
-          <span>Return transit to yard</span>
-        </label>
         {selectedScheduleEvent ? (
           <>
             <dl className="transport-schedule-detail-list">
@@ -3754,6 +3760,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </div>
               </div>
             ) : null}
+            <label className={`transport-snap-toggle transport-inspector-toggle${includeReturnTransitToYard ? ' active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={includeReturnTransitToYard}
+                onChange={handleReturnTransitToggle}
+              />
+              <span>Return transit to yard</span>
+            </label>
             <h3 className="transport-panel-section-title">Route Preview</h3>
             <RouteMapCanvas className="transport-schedule-inspector-map" routeData={selectedScheduleRouteData} loading={selectedScheduleRouteLoading} siteLocation={selectedScheduleRouteContext.siteLocation} expandable viewerTitle={selectedScheduleRouteContext.title} />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
