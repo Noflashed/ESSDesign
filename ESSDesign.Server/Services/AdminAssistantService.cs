@@ -37,6 +37,56 @@ namespace ESSDesign.Server.Services
         private const string SafetyBucket = "project-information";
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
+        private static readonly HashSet<string> VagueDesignLookupWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a",
+            "an",
+            "and",
+            "any",
+            "available",
+            "can",
+            "design",
+            "designs",
+            "document",
+            "documents",
+            "download",
+            "file",
+            "files",
+            "find",
+            "for",
+            "get",
+            "give",
+            "job",
+            "jobsite",
+            "jobsites",
+            "latest",
+            "link",
+            "look",
+            "looking",
+            "newest",
+            "of",
+            "or",
+            "pdf",
+            "please",
+            "recent",
+            "revision",
+            "revisions",
+            "scaffold",
+            "scaffolds",
+            "scaffolding",
+            "search",
+            "show",
+            "site",
+            "specific",
+            "the",
+            "to",
+            "up",
+            "want",
+            "we",
+            "what",
+            "which",
+            "you",
+        };
         private static readonly Dictionary<string, (string Label, string Spec)> MaterialOrderQuantityLabels = new(StringComparer.OrdinalIgnoreCase)
         {
             ["r09_left_qty"] = ("STANDARDS", "3.0M"),
@@ -251,6 +301,16 @@ namespace ESSDesign.Server.Services
                 throw new InvalidOperationException("Question is required.");
             }
 
+            if (IsVagueDesignLookupQuestion(cleanQuestion))
+            {
+                return new ChatResult
+                {
+                    Reply = "Which jobsite and scaffold should I look for?",
+                    Links = new List<AdminAssistantLink>(),
+                    Sources = new List<string>(),
+                };
+            }
+
             var context = await BuildContextAsync(cleanQuestion, cancellationToken);
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -282,7 +342,7 @@ Your goal is to always provide a thoughtful, useful answer:
 - Offer the closest matches, useful next steps, or alternative interpretations instead of ending with "I can't answer."
 - Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
 
-For design-file questions, use ranked designSearchMatches and links. Treat "latest" as the newest or highest-confidence available match unless revision details in the context show otherwise. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
+For design-file questions, use ranked designSearchMatches and links. If the user asks a broad question such as "find the latest design" without naming a jobsite, scaffold, builder, project, or other specific identifier, ask which jobsite and scaffold they want instead of listing recent designs. Treat "latest" as the newest or highest-confidence available match only after the user provides a specific target. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
 The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
 
 For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
@@ -546,6 +606,23 @@ ESS context JSON:
             };
 
             return designWords.Any(words.Contains);
+        }
+
+        private static bool IsVagueDesignLookupQuestion(string question)
+        {
+            if (!IsDesignLookupQuestion(question))
+            {
+                return false;
+            }
+
+            var normalized = NormalizeSearchText(question);
+            var specificWords = normalized
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(word => word.Length > 1)
+                .Where(word => !VagueDesignLookupWords.Contains(word))
+                .ToList();
+
+            return specificWords.Count == 0;
         }
 
         private static bool WantsMultipleDesignLinks(string question)
