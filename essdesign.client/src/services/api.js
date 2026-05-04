@@ -845,6 +845,7 @@ function normalizeMaterialOrderRequestListItem(item) {
         submittedAt: item?.submittedAt || nowIso(),
         orderDate: item?.orderDate || new Date().toISOString().slice(0, 10),
         sourceOrderId: item?.sourceOrderId || null,
+        connectedParentStartMinutes: typeof item?.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
         routeType: item?.routeType || null,
         pdfPath: item?.pdfPath || '',
         scaffoldingSystem: item?.scaffoldingSystem || '',
@@ -899,6 +900,7 @@ function normalizeMaterialOrderRequestRecord(record) {
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
+        connectedParentStartMinutes: typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
         scheduledAtIso,
         scheduledTruckId,
         scheduledTruckLabel,
@@ -1290,6 +1292,9 @@ export const materialOrderRequestsAPI = {
         const scheduledAtIso = scheduledDate && typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
             ? `${scheduledDate}T${String(scheduledHour).padStart(2, '0')}:${String(scheduledMinute).padStart(2, '0')}:00`
             : null;
+        const connectedParentStartMinutes = typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
+            ? scheduledHour * 60 + scheduledMinute
+            : null;
         const scheduledTruckId = schedule.truckId || schedule.scheduledTruckId || record.scheduledTruckId || record.truckId || null;
         const scheduledTruckLabel = schedule.truckLabel || schedule.scheduledTruckLabel || record.scheduledTruckLabel || record.truckLabel || null;
         const isLinkedMaterialOrder = Boolean(linkedSourceRecord);
@@ -1309,6 +1314,7 @@ export const materialOrderRequestsAPI = {
             ...(existingSecondaryRecord || {}),
             id: secondaryRequestId,
             sourceOrderId: requestId,
+            connectedParentStartMinutes,
             routeType: 'secondary_route',
             builderId: isLinkedMaterialOrder ? linkedSourceRecord.builderId || '' : '',
             builderName: isLinkedMaterialOrder
