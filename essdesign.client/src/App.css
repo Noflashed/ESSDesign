@@ -6921,7 +6921,7 @@ button.stat-card {
 .ts2-actual-marker-line {
     position: absolute;
     left: -1px;
-    top: -34px;
+    top: 0;
     bottom: -1px;
     width: 2px;
     border-radius: 999px;
@@ -6932,8 +6932,8 @@ button.stat-card {
 .ts2-actual-marker-label {
     position: absolute;
     left: 0;
-    top: -34px;
-    transform: translate(-50%, -100%);
+    top: 6px;
+    transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
     min-height: 18px;
@@ -6953,9 +6953,9 @@ button.stat-card {
     content: "";
     position: absolute;
     left: 50%;
-    bottom: -7px;
+    bottom: -8px;
     width: 2px;
-    height: 7px;
+    height: 8px;
     transform: translateX(-50%);
     background: currentColor;
 }
@@ -6964,7 +6964,7 @@ button.stat-card {
     content: "";
     position: absolute;
     left: 50%;
-    bottom: -11px;
+    bottom: -13px;
     width: 7px;
     height: 7px;
     transform: translateX(-50%);
