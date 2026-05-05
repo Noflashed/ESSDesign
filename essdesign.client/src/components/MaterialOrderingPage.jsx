@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Download, Eye, FileText, MoreVertical, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreHorizontal, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import {
     formatTimeChip,
@@ -274,6 +274,58 @@ function summarizeItems(request) {
     return Array.from(grouped.values());
 }
 
+function getMaterialGroupName(label) {
+    const value = String(label || '').toUpperCase();
+    if (value.includes('STANDARD')) return 'Standards';
+    if (value.includes('LEDGER')) return 'Ledgers';
+    if (value.includes('TRANSOM')) return 'Transoms';
+    if (value.includes('BOARD') || value.includes('PLYWOOD') || value.includes('TIMBER')) return 'Boards';
+    if (value.includes('JACK')) return 'Jacks';
+    if (value.includes('CLIP') || value.includes('COUPLER') || value.includes('JOINER')) return 'Clips & Couplers';
+    if (value.includes('LADDER') || value.includes('STAIR')) return 'Ladders & Stairs';
+    if (value.includes('BRACKET') || value.includes('TIE')) return 'Brackets & Ties';
+    if (value.includes('BEAM') || value.includes('TUBE')) return 'Tubes & Beams';
+    return 'Accessories';
+}
+
+function getMaterialOrderGroups(itemValues = {}) {
+    const groups = new Map();
+
+    PICKING_CARD_ROWS.forEach((row) => {
+        [
+            ['left', row.left],
+            ['middle', row.middle],
+            ['right', row.right],
+        ].forEach(([side, entry]) => {
+            const [label = '', spec = ''] = entry;
+            const cleanLabel = String(label || '').trim();
+            const cleanSpec = String(spec || '').trim();
+            const isSectionHeader = SECTION_HEADER_LABELS.has(cleanLabel.toUpperCase()) && !cleanSpec;
+
+            if ((!cleanLabel && !cleanSpec) || isSectionHeader) {
+                return;
+            }
+
+            const groupName = getMaterialGroupName(cleanLabel);
+            if (!groups.has(groupName)) {
+                groups.set(groupName, []);
+            }
+
+            const key = quantityKey(row.id, side);
+            const quantity = Number(itemValues?.[key] || 0);
+            groups.get(groupName).push({
+                key,
+                material: cleanLabel,
+                spec: cleanSpec || 'Standard',
+                quantity: Number.isFinite(quantity) ? quantity : 0,
+                value: itemValues?.[key] ?? '',
+            });
+        });
+    });
+
+    return Array.from(groups.entries()).map(([name, items]) => ({ name, items }));
+}
+
 function createBlankOrder(user) {
     return {
         id: null,
@@ -433,6 +485,16 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             return sum + Math.max(0, Number(value || 0));
         }, 0),
         [form.itemValues]
+    );
+
+    const materialGroups = useMemo(
+        () => getMaterialOrderGroups(form.itemValues),
+        [form.itemValues]
+    );
+
+    const selectedMaterials = useMemo(
+        () => materialGroups.flatMap(group => group.items).filter(item => item.quantity > 0),
+        [materialGroups]
     );
 
     const queueRows = useMemo(() => {
@@ -797,179 +859,257 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         }
     };
 
-    const renderPickingSheet = () => (
-        <>
-            {isArchivedView ? (
-                <div className="material-ordering-archive-banner">
-                    <div>
-                        <strong>Viewing archived transport request</strong>
-                        <span>
-                            Scheduled for {formatDateTime(selectedArchivedRequest?.scheduledAtIso || selectedArchivedRequest?.archivedAt || selectedArchivedRequest?.submittedAt)}
-                        </span>
-                    </div>
-                    {selectedArchivedRequest?.pdfPath ? (
-                        <button
-                            type="button"
-                            className="module-secondary-btn"
-                            onClick={(event) => openArchivedPdf(selectedArchivedRequest, event)}
-                            disabled={openingArchivedPdfId === selectedArchivedRequest.id}
-                        >
-                            {openingArchivedPdfId === selectedArchivedRequest.id ? 'Opening PDF...' : 'Open PDF'}
-                        </button>
-                    ) : null}
-                </div>
-            ) : null}
+    const renderPickingSheet = () => {
+        const visibleSelectedMaterials = selectedMaterials.slice(0, 6);
+        const remainingSelectedCount = Math.max(0, selectedMaterials.length - visibleSelectedMaterials.length);
 
-            <div className="picking-sheet-card">
-                <table className="picking-sheet-table">
-                    <colgroup>
-                        <col className="w-label" />
-                        <col className="w-spec" />
-                        <col className="w-qty" />
-                        <col className="w-label" />
-                        <col className="w-spec" />
-                        <col className="w-qty" />
-                        <col className="w-label" />
-                        <col className="w-spec" />
-                        <col className="w-qty" />
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th className="picking-title" colSpan={9}>PICKING CARD</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <MetadataRow
-                            label="BUILDER :"
-                            control={isArchivedView ? (
-                                <span className="picking-static-value">{form.builderName}</span>
+        return (
+            <>
+                {isArchivedView ? (
+                    <div className="material-ordering-archive-banner transport-order-archive-banner">
+                        <div>
+                            <strong>Viewing archived transport request</strong>
+                            <span>
+                                Scheduled for {formatDateTime(selectedArchivedRequest?.scheduledAtIso || selectedArchivedRequest?.archivedAt || selectedArchivedRequest?.submittedAt)}
+                            </span>
+                        </div>
+                        {selectedArchivedRequest?.pdfPath ? (
+                            <button
+                                type="button"
+                                className="transport-order-outline-btn"
+                                onClick={(event) => openArchivedPdf(selectedArchivedRequest, event)}
+                                disabled={openingArchivedPdfId === selectedArchivedRequest.id}
+                            >
+                                {openingArchivedPdfId === selectedArchivedRequest.id ? 'Opening PDF...' : 'Open PDF'}
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                <div className="transport-order-form-grid">
+                    <aside className="transport-order-panel transport-order-details-panel">
+                        <h2>Order Details</h2>
+
+                        <label className="transport-order-field">
+                            <span>Builder</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.builderName || 'Not selected'}</div>
                             ) : (
-                                <select value={form.builderId} onChange={(e) => handleBuilderChange(e.target.value)}>
+                                <select value={form.builderId} onChange={(event) => handleBuilderChange(event.target.value)}>
                                     <option value="">Select builder</option>
                                     {builders.map((builder) => (
                                         <option key={builder.id} value={builder.id}>{builder.name}</option>
                                     ))}
                                 </select>
                             )}
-                            sideLabel="DAY"
-                            sideValue={dayLabel}
-                        />
-                        <MetadataRow
-                            label="PROJECT :"
-                            control={isArchivedView ? (
-                                <span className="picking-static-value">{form.projectName}</span>
+                        </label>
+
+                        <label className="transport-order-field">
+                            <span>Project</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.projectName || 'Not selected'}</div>
                             ) : (
-                                <select value={form.projectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!selectedBuilder}>
+                                <select value={form.projectId} onChange={(event) => handleProjectChange(event.target.value)} disabled={!selectedBuilder}>
                                     <option value="">{selectedBuilder ? 'Select jobsite' : 'Select builder first'}</option>
                                     {availableProjects.map((project) => (
                                         <option key={project.id} value={project.id}>{project.name}</option>
                                     ))}
                                 </select>
                             )}
-                            sideLabel="TIME"
-                            sideValue={isArchivedView ? (
-                                <span className="picking-static-value">{form.itemValues.__time || ''}</span>
+                        </label>
+
+                        <label className="transport-order-field">
+                            <span>Requested by</span>
+                            <div className="transport-order-static-control with-icon">
+                                <User size={15} aria-hidden="true" />
+                                <strong>{form.requestedByName || user?.fullName || user?.email || 'Current user'}</strong>
+                            </div>
+                        </label>
+
+                        <label className="transport-order-field">
+                            <span>Order date</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.orderDate || 'Not dated'}</div>
+                            ) : (
+                                <div className="transport-order-input-icon">
+                                    <input
+                                        type="date"
+                                        value={form.orderDate}
+                                        onChange={(event) => setForm((prev) => ({ ...prev, orderDate: event.target.value }))}
+                                    />
+                                    <CalendarDays size={15} aria-hidden="true" />
+                                </div>
+                            )}
+                        </label>
+
+                        <label className="transport-order-field">
+                            <span>Preferred time</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.itemValues.__time || 'Any time'}</div>
                             ) : (
                                 <input
                                     value={form.itemValues.__time || ''}
-                                    onChange={(e) => handleQuantityChange('__time', e.target.value)}
-                                    placeholder="7am"
+                                    onChange={(event) => handleQuantityChange('__time', event.target.value)}
+                                    placeholder="7:00 AM"
                                 />
                             )}
-                        />
-                        <MetadataRow
-                            label="SCAFFOLD TYPE :"
-                            control={isArchivedView ? (
-                                <span className="picking-static-value">{form.itemValues.__scaffoldingSystem || ''}</span>
+                        </label>
+
+                        <label className="transport-order-field">
+                            <span>Scaffold system</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.itemValues.__scaffoldingSystem || 'Kwikstage'}</div>
                             ) : (
                                 <select
                                     value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
-                                    onChange={(e) => handleQuantityChange('__scaffoldingSystem', e.target.value)}
+                                    onChange={(event) => handleQuantityChange('__scaffoldingSystem', event.target.value)}
                                 >
                                     <option value="Kwikstage">Kwikstage</option>
                                     <option value="AT-PAC">AT-PAC</option>
                                     <option value="Layher">Layher</option>
+                                    <option value="Layher Allround">Layher Allround</option>
+                                    <option value="Ringlock">Ringlock</option>
+                                    <option value="Cuplock">Cuplock</option>
                                 </select>
                             )}
-                            sideLabel="ESS REP"
-                            sideValue={<span className="picking-static-value">{form.requestedByName}</span>}
-                        />
-                        <MetadataRow
-                            label="DETAILS"
-                            control={isArchivedView ? (
-                                <span className="picking-static-value">{form.itemValues.__details || ''}</span>
+                        </label>
+
+                        <label className="transport-order-field transport-order-details-field">
+                            <span>Delivery details</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control textarea-like">{form.itemValues.__details || 'No delivery details supplied.'}</div>
                             ) : (
-                                <input
+                                <textarea
                                     value={form.itemValues.__details || ''}
-                                    onChange={(e) => handleQuantityChange('__details', e.target.value)}
-                                    placeholder="Enter picking card details"
+                                    onChange={(event) => handleQuantityChange('__details', event.target.value)}
+                                    placeholder="Deliver to loading dock. Contact site manager on arrival."
                                 />
                             )}
-                            sideLabel="DATE"
-                            sideValue={isArchivedView ? (
-                                <span className="picking-static-value">{form.orderDate}</span>
+                        </label>
+                    </aside>
+
+                    <section className="transport-order-panel transport-order-material-panel">
+                        <div className="transport-order-panel-head">
+                            <h2>Material Schedule</h2>
+                            <div className="transport-order-panel-actions">
+                                <button type="button" className="transport-order-outline-btn" onClick={startNewOrder}>
+                                    <Plus size={15} aria-hidden="true" />
+                                    <span>New Order</span>
+                                </button>
+                                <button type="button" className="transport-order-icon-btn" aria-label="More order actions">
+                                    <MoreHorizontal size={18} aria-hidden="true" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="transport-order-material-table-shell">
+                            <table className="transport-order-material-table">
+                                <thead>
+                                    <tr>
+                                        <th>Material</th>
+                                        <th>Size / Specification</th>
+                                        <th>Qty</th>
+                                        <th aria-label="Actions" />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {materialGroups.map((group) => (
+                                        <React.Fragment key={group.name}>
+                                            <tr className="transport-order-material-group-row">
+                                                <td colSpan={4}>
+                                                    <span>
+                                                        <ChevronDown size={14} aria-hidden="true" />
+                                                        {group.name.toUpperCase()} ({group.items.length})
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {group.items.map((item) => (
+                                                <tr key={item.key} className={item.quantity > 0 ? 'has-quantity' : ''}>
+                                                    <td className="transport-order-material-name">{item.material}</td>
+                                                    <td>{item.spec}</td>
+                                                    <td className="transport-order-qty-cell">
+                                                        {isArchivedView ? (
+                                                            <span>{item.value || 0}</span>
+                                                        ) : (
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={item.value}
+                                                                onChange={(event) => handleQuantityChange(item.key, event.target.value)}
+                                                                aria-label={`${item.material} ${item.spec} quantity`}
+                                                            />
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <button type="button" className="transport-order-row-action" aria-label={`Actions for ${item.material}`}>
+                                                            <MoreHorizontal size={16} aria-hidden="true" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <aside className="transport-order-panel transport-order-summary-panel">
+                        <h2>Order Summary</h2>
+                        <div className="transport-order-summary-metrics">
+                            <div>
+                                <span>Total items</span>
+                                <strong>{selectedMaterials.length}</strong>
+                            </div>
+                            <div>
+                                <span>Total quantity</span>
+                                <strong>{totalQuantity}</strong>
+                            </div>
+                        </div>
+
+                        <div className="transport-order-selected-list">
+                            <h3>Selected materials</h3>
+                            {visibleSelectedMaterials.length ? (
+                                visibleSelectedMaterials.map((item) => (
+                                    <div key={item.key} className="transport-order-selected-item">
+                                        <span aria-hidden="true" />
+                                        <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
+                                        <b>{item.quantity}</b>
+                                    </div>
+                                ))
                             ) : (
-                                <input
-                                    type="date"
-                                    value={form.orderDate}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, orderDate: e.target.value }))}
-                                />
+                                <p>No materials selected yet.</p>
                             )}
-                        />
+                            {remainingSelectedCount ? (
+                                <button type="button" className="transport-order-more-selected">
+                                    +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
+                                </button>
+                            ) : null}
+                        </div>
 
-                        <tr className="picking-section-row">
-                            <th className="picking-section-title" colSpan={2}>MODULAR SCAFFOLD</th>
-                            <th className="picking-qty-head">QTY'S</th>
-                            <th className="picking-section-item" colSpan={2}>SOLE BOARDS</th>
-                            <th className="picking-qty-head">QTY'S</th>
-                            <th className="picking-section-item" colSpan={2}>SCAFFOLD LADDER</th>
-                            <th className="picking-qty-head">QTY'S</th>
-                        </tr>
+                        <label className="transport-order-field transport-order-notes-field">
+                            <span>Notes <em>(optional)</em></span>
+                            <textarea
+                                value={form.notes || ''}
+                                onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                                placeholder="Add notes about this order..."
+                                maxLength={250}
+                                readOnly={isArchivedView}
+                            />
+                            <small>{String(form.notes || '').length} / 250</small>
+                        </label>
 
-                        {PICKING_CARD_ROWS.map((row) => (
-                            <tr key={row.id}>
-                                <ItemCell
-                                    entry={row.left}
-                                    value={form.itemValues[quantityKey(row.id, 'left')]}
-                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'left'), value)}
-                                    readOnly={isArchivedView}
-                                />
-                                <ItemCell
-                                    entry={row.middle}
-                                    value={form.itemValues[quantityKey(row.id, 'middle')]}
-                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'middle'), value)}
-                                    readOnly={isArchivedView}
-                                />
-                                <ItemCell
-                                    entry={row.right}
-                                    value={form.itemValues[quantityKey(row.id, 'right')]}
-                                    onChange={(value) => handleQuantityChange(quantityKey(row.id, 'right'), value)}
-                                    readOnly={isArchivedView}
-                                />
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        {error ? <div className="module-error transport-order-inline-error">{error}</div> : null}
 
-            {error ? <div className="module-error">{error}</div> : null}
-
-            <div className="material-order-footer material-order-footer-ios">
-                <div className="material-order-summary">
-                    <span>Total Quantity</span>
-                    <strong>{totalQuantity}</strong>
+                        <button type="button" className="transport-order-submit-btn" onClick={submitOrder} disabled={saving || isArchivedView}>
+                            <Send size={17} aria-hidden="true" />
+                            <span>{saving ? 'Submitting...' : 'Submit Order'}</span>
+                        </button>
+                    </aside>
                 </div>
-                <div className="material-order-footer-actions">
-                    <button type="button" className="ts2-secondary-btn" onClick={startNewOrder}>
-                        + New
-                    </button>
-                    <button type="button" className="ts2-primary-btn solid" onClick={submitOrder} disabled={saving}>
-                        {saving ? 'Submitting...' : 'Submit to ESS Transport'}
-                    </button>
-                </div>
-            </div>
-        </>
-    );
+            </>
+        );
+    };
 
     const renderListTable = () => {
         const isActive = isActiveQueueView;
@@ -1471,23 +1611,24 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     }
 
     return (
-        <div className="ts2-page material-ordering-transport-page">
-            <div className="ts2-header material-ordering-transport-header">
-                <div className="ts2-header-left material-ordering-transport-header-copy material-ordering-transport-header-copy-row">
-                    <button type="button" className="ts2-header-icon-btn" onClick={() => onNavigate?.('truck-schedule')} aria-label="Back to Truck Schedule">‹</button>
-                    <div>
-                        <h1>Material Ordering</h1>
+        <div className="ts2-page material-ordering-transport-page transport-order-page">
+            <header className="transport-order-topbar">
+                <div className="transport-order-title-block">
+                    <h1>Material Order</h1>
+                    <div className="transport-order-breadcrumb">
+                        <span>ESS Transport</span>
+                        <span>/</span>
+                        <span>Orders</span>
                     </div>
                 </div>
-                <div className="ts2-header-actions">
-                    <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('transport-dashboard')}>Home</button>
-                    <button type="button" className="ts2-secondary-btn" onClick={() => onNavigate?.('material-ordering-active')}>Order Requests</button>
-                </div>
-            </div>
+                <button type="button" className="transport-order-outline-btn" onClick={() => onNavigate?.('material-ordering-active')}>
+                    Order Requests
+                </button>
+            </header>
 
-            <section className="material-ordering-transport-canvas material-ordering-transport-canvas-ios">
+            <main className="transport-order-main">
                 {renderPickingSheet()}
-            </section>
+            </main>
         </div>
     );
 }
