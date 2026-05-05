@@ -23,9 +23,9 @@ const SECTION_HEADER_LABELS = new Set([
 const PICKING_CARD_ROWS = [
     { id: 'r09', left: ['STANDARDS', '3.0M'], middle: ['HARDWOOD SOLE BOARDS', '0.5M'], right: ['SCAFFOLD LADDER', '6.0M / 5.4M'] },
     { id: 'r10', left: ['STANDARDS', '2.5M'], middle: ['HARDWOOD SOLE BOARDS', '1.5M'], right: ['SCAFFOLD LADDER', '4.8M / 4.2M'] },
-    { id: 'r11', left: ['STANDARDS', '2.0M'], middle: ['SCREWJACKS', ''], right: ['3.6m', ''] },
-    { id: 'r12', left: ['STANDARDS', '1.5M'], middle: ['U HEAD JACK', ''], right: ['3m', ''] },
-    { id: 'r13', left: ['STANDARDS', '1.0M'], middle: ['SWIVEL JACK', ''], right: ['2.4m', ''] },
+    { id: 'r11', left: ['STANDARDS', '2.0M'], middle: ['SCREWJACKS', ''], right: ['SCAFFOLD LADDER', '3.6M'] },
+    { id: 'r12', left: ['STANDARDS', '1.5M'], middle: ['U HEAD JACK', ''], right: ['SCAFFOLD LADDER', '3M'] },
+    { id: 'r13', left: ['STANDARDS', '1.0M'], middle: ['SWIVEL JACK', ''], right: ['SCAFFOLD LADDER', '2.4M'] },
     { id: 'r14', left: ['STANDARDS', '0.5M'], middle: ['TIMBER BOARDS', ''], right: ['LADDER HATCHES', ''] },
     { id: 'r15', left: ['STANDARD INTERMEDIATE', '2M LOCK'], middle: ['TIMBER BOARDS', '3.6M'], right: ['CORNER BRACKET', '1 X 2'] },
     { id: 'r16', left: ['OPEN END', '3.0M'], middle: ['TIMBER BOARDS', '3.0M'], right: ['CORNER BRACKET', '2 X 2'] },
@@ -278,7 +278,7 @@ function getMaterialGroupName(label) {
     const value = String(label || '').toUpperCase();
     if (value.includes('DIAGONAL BRACE')) return 'Diagonal Braces';
     if (value.includes('HARDWOOD SOLE BOARD') || value.includes('TIMBER BOARD')) return 'Timber Boards';
-    if (value.includes('LADDER') || /^\d+(?:\.\d+)?M$/i.test(String(label || '').trim())) return 'Ladder Components';
+    if (value.includes('LADDER')) return 'Ladders';
     if (value.includes('STAIR') || value.includes('STEP DOWN') || value === 'ALUMINIUM HANDRAIL' || value === 'ALUMINIUM TOP RAIL') return 'Stair Components';
     if (value.includes('STANDARD')) return 'Standards';
     if (value.includes('LEDGER')) return 'Ledgers';
