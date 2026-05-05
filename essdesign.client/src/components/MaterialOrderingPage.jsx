@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { Archive, ArrowRight, Box, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, Download, Eye, FileText, MoreVertical, Package, Plus, Search, Send, SlidersHorizontal, Trash2, User, X } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import {
     formatTimeChip,
@@ -386,6 +386,10 @@ function sortMaterialItemsBySize(items) {
     }).map(({ sortIndex, ...item }) => item);
 }
 
+function getMaterialGroupQuantity(group) {
+    return (group?.items || []).reduce((sum, item) => sum + Math.max(0, Number(item?.quantity || 0)), 0);
+}
+
 function getMaterialOrderGroups(itemValues = {}) {
     const groups = new Map();
 
@@ -546,7 +550,8 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
     const [materialSearch, setMaterialSearch] = useState('');
-    const [collapsedMaterialGroups, setCollapsedMaterialGroups] = useState(() => new Set());
+    const [selectedMaterialGroupName, setSelectedMaterialGroupName] = useState('');
+    const [orderReviewOpen, setOrderReviewOpen] = useState(false);
     const [requestSearch, setRequestSearch] = useState('');
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('oldest');
@@ -594,26 +599,22 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         [form.itemValues]
     );
 
-    const filteredMaterialGroups = useMemo(() => {
+    const selectedMaterialGroup = useMemo(
+        () => materialGroups.find((group) => group.name === selectedMaterialGroupName) || materialGroups[0] || null,
+        [materialGroups, selectedMaterialGroupName]
+    );
+
+    const filteredMaterialItems = useMemo(() => {
         const query = materialSearch.trim().toLowerCase();
-        if (!query) return materialGroups;
+        const items = selectedMaterialGroup?.items || [];
+        if (!query) return items;
 
-        return materialGroups
-            .map((group) => {
-                if (group.name.toLowerCase().includes(query)) {
-                    return group;
-                }
-
-                const items = group.items.filter((item) => [
-                    item.material,
-                    item.spec,
-                    group.name,
-                ].some(value => String(value || '').toLowerCase().includes(query)));
-
-                return { ...group, items };
-            })
-            .filter(group => group.items.length > 0);
-    }, [materialGroups, materialSearch]);
+        return items.filter((item) => [
+            item.material,
+            item.spec,
+            selectedMaterialGroup?.name,
+        ].some(value => String(value || '').toLowerCase().includes(query)));
+    }, [materialSearch, selectedMaterialGroup]);
 
     const selectedMaterials = useMemo(
         () => materialGroups.flatMap(group => group.items).filter(item => item.quantity > 0),
@@ -693,6 +694,19 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             color: appearance.text,
         };
     };
+
+    useEffect(() => {
+        if (materialGroups.length === 0) {
+            if (selectedMaterialGroupName) {
+                setSelectedMaterialGroupName('');
+            }
+            return;
+        }
+
+        if (!selectedMaterialGroupName || !materialGroups.some((group) => group.name === selectedMaterialGroupName)) {
+            setSelectedMaterialGroupName(materialGroups[0].name);
+        }
+    }, [materialGroups, selectedMaterialGroupName]);
 
     useEffect(() => {
         const refreshStatusColors = () => setTransportStatusColors(readTransportStatusColors(user));
@@ -872,6 +886,8 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     const startNewOrder = () => {
         setStartState();
+        setMaterialSearch('');
+        setOrderReviewOpen(false);
         setError('');
     };
 
@@ -906,32 +922,30 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         }));
     };
 
-    const toggleMaterialGroup = (groupName) => {
-        setCollapsedMaterialGroups((current) => {
-            const next = new Set(current);
-            if (next.has(groupName)) {
-                next.delete(groupName);
-            } else {
-                next.add(groupName);
-            }
-            return next;
-        });
-    };
-
     const submitOrder = async () => {
         if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
             setError('Builder, jobsite, requester, and date are required.');
-            return;
+            return false;
         }
         setSaving(true);
         setError('');
         try {
             await materialOrderRequestsAPI.submitRequest(form);
             setForm(createBlankOrder(user));
+            setMaterialSearch('');
+            return true;
         } catch (err) {
             setError(err.message || 'Failed to submit order request');
+            return false;
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleReviewSubmit = async () => {
+        const submitted = await submitOrder();
+        if (submitted) {
+            setOrderReviewOpen(false);
         }
     };
 
@@ -995,11 +1009,32 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     };
 
     const renderPickingSheet = () => {
-        const visibleSelectedMaterials = selectedMaterials.slice(0, 6);
+        const visibleSelectedMaterials = selectedMaterials.slice(0, 12);
         const remainingSelectedCount = Math.max(0, selectedMaterials.length - visibleSelectedMaterials.length);
+        const selectedCategoryName = selectedMaterialGroup?.name || 'Materials';
+        const selectedCategoryQuantity = getMaterialGroupQuantity(selectedMaterialGroup);
 
         return (
             <>
+                <header className="transport-order-workspace-head">
+                    <div className="transport-order-workspace-title">
+                        <span aria-hidden="true">
+                            <Box size={25} />
+                        </span>
+                        <h1>Scaffold Material Order</h1>
+                    </div>
+                    <div className="transport-order-workspace-actions">
+                        <button type="button" className="transport-order-outline-btn" onClick={startNewOrder}>
+                            <Plus size={15} aria-hidden="true" />
+                            <span>New Order</span>
+                        </button>
+                        <button type="button" className="transport-order-primary-nav-btn" onClick={() => onNavigate?.('material-ordering-active')}>
+                            <ClipboardList size={16} aria-hidden="true" />
+                            <span>Order Requests</span>
+                        </button>
+                    </div>
+                </header>
+
                 {isArchivedView ? (
                     <div className="material-ordering-archive-banner transport-order-archive-banner">
                         <div>
@@ -1110,8 +1145,57 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         </label>
                     </aside>
 
+                    <aside className="transport-order-panel transport-order-categories-panel">
+                        <div className="transport-order-panel-section-head">
+                            <ClipboardList size={18} aria-hidden="true" />
+                            <h2>Material Categories</h2>
+                        </div>
+
+                        <div className="transport-order-category-list">
+                            {materialGroups.map((group) => {
+                                const isSelected = group.name === selectedCategoryName;
+                                const groupQuantity = getMaterialGroupQuantity(group);
+                                return (
+                                    <button
+                                        key={group.name}
+                                        type="button"
+                                        className={`transport-order-category-card ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => {
+                                            setSelectedMaterialGroupName(group.name);
+                                            setMaterialSearch('');
+                                        }}
+                                    >
+                                        <span className="transport-order-category-icon" aria-hidden="true">
+                                            <Package size={18} />
+                                        </span>
+                                        <strong>{group.name.toUpperCase()}</strong>
+                                        <b>{group.items.length}</b>
+                                        <ChevronRight size={17} aria-hidden="true" />
+                                        {groupQuantity > 0 ? <em>{groupQuantity}</em> : null}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="transport-order-category-totals">
+                            <div>
+                                <Package size={18} aria-hidden="true" />
+                                <strong>{selectedMaterials.length}</strong>
+                                <span>Total items</span>
+                            </div>
+                            <div>
+                                <ClipboardList size={18} aria-hidden="true" />
+                                <strong>{totalQuantity}</strong>
+                                <span>Total quantity</span>
+                            </div>
+                        </div>
+                    </aside>
+
                     <section className="transport-order-panel transport-order-material-panel">
                         <div className="transport-order-panel-head transport-order-material-panel-head">
+                            <div className="transport-order-material-heading">
+                                <h2>{selectedCategoryName.toUpperCase()} <span>({selectedMaterialGroup?.items?.length || 0})</span></h2>
+                            </div>
                             <label className="transport-order-material-search">
                                 <Search size={16} aria-hidden="true" />
                                 <input
@@ -1122,15 +1206,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     aria-label="Search materials"
                                 />
                             </label>
-                            <div className="transport-order-panel-actions">
-                                <button type="button" className="transport-order-outline-btn" onClick={startNewOrder}>
-                                    <Plus size={15} aria-hidden="true" />
-                                    <span>New Order</span>
-                                </button>
-                                <button type="button" className="transport-order-outline-btn" onClick={() => onNavigate?.('material-ordering-active')}>
-                                    Order Requests
-                                </button>
-                            </div>
                         </div>
 
                         <div className="transport-order-material-table-shell">
@@ -1143,108 +1218,152 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredMaterialGroups.map((group) => {
-                                        const isCollapsed = collapsedMaterialGroups.has(group.name);
-                                        return (
-                                            <React.Fragment key={group.name}>
-                                                <tr className={`transport-order-material-group-row ${isCollapsed ? 'is-collapsed' : ''}`}>
-                                                    <td colSpan={3}>
-                                                        <button
-                                                            type="button"
-                                                            className="transport-order-material-group-toggle"
-                                                            onClick={() => toggleMaterialGroup(group.name)}
-                                                            aria-expanded={!isCollapsed}
-                                                        >
-                                                            <ChevronDown size={14} aria-hidden="true" />
-                                                            <span>{group.name.toUpperCase()} ({group.items.length})</span>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {isCollapsed ? null : group.items.map((item) => (
-                                                    <tr key={item.key} className={item.quantity > 0 ? 'has-quantity' : ''}>
-                                                        <td className="transport-order-material-name">{item.material}</td>
-                                                        <td>{item.spec}</td>
-                                                        <td className="transport-order-qty-cell">
-                                                            {isArchivedView ? (
-                                                                <span>{item.value || 0}</span>
-                                                            ) : (
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={item.value}
-                                                                    onChange={(event) => handleQuantityChange(item.key, event.target.value)}
-                                                                    aria-label={`${item.material} ${item.spec} quantity`}
-                                                                />
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                    {filteredMaterialGroups.length === 0 ? (
+                                    {filteredMaterialItems.map((item) => (
+                                        <tr key={item.key} className={item.quantity > 0 ? 'has-quantity' : ''}>
+                                            <td className="transport-order-material-name">{item.material}</td>
+                                            <td>{item.spec}</td>
+                                            <td className="transport-order-qty-cell">
+                                                {isArchivedView ? (
+                                                    <span>{item.value || 0}</span>
+                                                ) : (
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={item.value}
+                                                        onChange={(event) => handleQuantityChange(item.key, event.target.value)}
+                                                        aria-label={`${item.material} ${item.spec} quantity`}
+                                                    />
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredMaterialItems.length === 0 ? (
                                         <tr className="transport-order-material-empty-row">
-                                            <td colSpan={3}>No materials match "{materialSearch.trim()}".</td>
+                                            <td colSpan={3}>
+                                                {materialSearch.trim() ? `No materials match "${materialSearch.trim()}".` : 'No materials available in this category.'}
+                                            </td>
                                         </tr>
                                     ) : null}
                                 </tbody>
                             </table>
                         </div>
+
+                        <div className="transport-order-material-footer">
+                            <div>
+                                <span>{selectedCategoryQuantity}</span>
+                                <strong>selected in {selectedCategoryName}</strong>
+                            </div>
+                            <button type="button" className="transport-order-review-btn" onClick={() => setOrderReviewOpen(true)}>
+                                <span>{isArchivedView ? 'View Order' : 'Review Order'}</span>
+                                <ArrowRight size={18} aria-hidden="true" />
+                            </button>
+                        </div>
                     </section>
-
-                    <aside className="transport-order-panel transport-order-summary-panel">
-                        <h2>Order Summary</h2>
-                        <div className="transport-order-summary-metrics">
-                            <div>
-                                <span>Total items</span>
-                                <strong>{selectedMaterials.length}</strong>
-                            </div>
-                            <div>
-                                <span>Total quantity</span>
-                                <strong>{totalQuantity}</strong>
-                            </div>
-                        </div>
-
-                        <div className="transport-order-selected-list">
-                            <h3>Selected materials</h3>
-                            {visibleSelectedMaterials.length ? (
-                                visibleSelectedMaterials.map((item) => (
-                                    <div key={item.key} className="transport-order-selected-item">
-                                        <span aria-hidden="true" />
-                                        <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
-                                        <b>{item.quantity}</b>
-                                    </div>
-                                ))
-                            ) : (
-                                <p>No materials selected yet.</p>
-                            )}
-                            {remainingSelectedCount ? (
-                                <button type="button" className="transport-order-more-selected">
-                                    +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
-                                </button>
-                            ) : null}
-                        </div>
-
-                        <label className="transport-order-field transport-order-notes-field">
-                            <span>Notes <em>(optional)</em></span>
-                            <textarea
-                                value={form.notes || ''}
-                                onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                                placeholder="Add notes about this order..."
-                                maxLength={250}
-                                readOnly={isArchivedView}
-                            />
-                            <small>{String(form.notes || '').length} / 250</small>
-                        </label>
-
-                        {error ? <div className="module-error transport-order-inline-error">{error}</div> : null}
-
-                        <button type="button" className="transport-order-submit-btn" onClick={submitOrder} disabled={saving || isArchivedView}>
-                            <Send size={17} aria-hidden="true" />
-                            <span>{saving ? 'Submitting...' : 'Submit Order'}</span>
-                        </button>
-                    </aside>
                 </div>
+
+                {orderReviewOpen ? (
+                    <div className="transport-order-review-shell">
+                        <button
+                            type="button"
+                            className="transport-order-review-backdrop"
+                            aria-label="Close order review"
+                            onClick={() => setOrderReviewOpen(false)}
+                        />
+                        <aside className="transport-order-review-drawer" role="dialog" aria-modal="true" aria-labelledby="transport-order-review-title">
+                            <header>
+                                <div>
+                                    <span aria-hidden="true"><CheckCircle2 size={20} /></span>
+                                    <h2 id="transport-order-review-title">Review Order</h2>
+                                </div>
+                                <button type="button" aria-label="Close review" onClick={() => setOrderReviewOpen(false)}>
+                                    <X size={18} aria-hidden="true" />
+                                </button>
+                            </header>
+
+                            <div className="transport-order-review-body">
+                                <section className="transport-order-review-section">
+                                    <h3>Order Details</h3>
+                                    <dl className="transport-order-review-details">
+                                        <div>
+                                            <dt>Builder</dt>
+                                            <dd>{form.builderName || 'Not selected'}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Project</dt>
+                                            <dd>{form.projectName || 'Not selected'}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Scaffold system</dt>
+                                            <dd>{form.itemValues.__scaffoldingSystem || 'Kwikstage'}</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Order date</dt>
+                                            <dd>{form.orderDate || 'Not dated'}</dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                <section className="transport-order-review-section">
+                                    <h3>Order Summary</h3>
+                                    <div className="transport-order-summary-metrics">
+                                        <div>
+                                            <span>Total items</span>
+                                            <strong>{selectedMaterials.length}</strong>
+                                        </div>
+                                        <div>
+                                            <span>Total quantity</span>
+                                            <strong>{totalQuantity}</strong>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="transport-order-review-section transport-order-selected-list">
+                                    <h3>Selected materials</h3>
+                                    {visibleSelectedMaterials.length ? (
+                                        visibleSelectedMaterials.map((item) => (
+                                            <div key={item.key} className="transport-order-selected-item">
+                                                <span aria-hidden="true" />
+                                                <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
+                                                <b>{item.quantity}</b>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p>No materials selected yet.</p>
+                                    )}
+                                    {remainingSelectedCount ? (
+                                        <p className="transport-order-more-selected">
+                                            +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
+                                        </p>
+                                    ) : null}
+                                </section>
+
+                                <label className="transport-order-field transport-order-notes-field">
+                                    <span>Notes <em>(optional)</em></span>
+                                    <textarea
+                                        value={form.notes || ''}
+                                        onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                                        placeholder="Add notes about this order..."
+                                        maxLength={250}
+                                        readOnly={isArchivedView}
+                                    />
+                                    <small>{String(form.notes || '').length} / 250</small>
+                                </label>
+
+                                {error ? <div className="module-error transport-order-inline-error">{error}</div> : null}
+                            </div>
+
+                            <footer>
+                                <button type="button" className="transport-order-outline-btn" onClick={() => setOrderReviewOpen(false)}>
+                                    Back to Materials
+                                </button>
+                                <button type="button" className="transport-order-submit-btn" onClick={handleReviewSubmit} disabled={saving || isArchivedView}>
+                                    <Send size={17} aria-hidden="true" />
+                                    <span>{saving ? 'Submitting...' : 'Submit Order'}</span>
+                                </button>
+                            </footer>
+                        </aside>
+                    </div>
+                ) : null}
             </>
         );
     };
