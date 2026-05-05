@@ -4940,7 +4940,7 @@
 
 .transport-order-form-grid {
     display: grid !important;
-    grid-template-columns: minmax(248px, 300px) minmax(520px, 1fr) minmax(286px, 340px) !important;
+    grid-template-columns: minmax(248px, 310px) minmax(620px, 1fr) !important;
     gap: 24px !important;
     align-items: start !important;
 }
@@ -4970,6 +4970,24 @@
 .transport-order-details-panel {
     display: grid !important;
     gap: 18px !important;
+}
+
+.transport-order-review-open-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-height: 46px !important;
+    margin-top: 4px !important;
+    border: 0 !important;
+    border-radius: 5px !important;
+    background: #ff7a1a !important;
+    color: #ffffff !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+    cursor: pointer !important;
+    box-shadow: 0 10px 20px rgba(255, 122, 26, 0.18) !important;
 }
 
 .transport-order-field {
@@ -5398,18 +5416,132 @@
     box-shadow: none !important;
 }
 
+.transport-order-summary-drawer-shell {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 80 !important;
+    pointer-events: none !important;
+}
+
+.transport-order-summary-backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    border: 0 !important;
+    background: rgba(7, 19, 41, 0.34) !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.transport-order-summary-drawer {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    width: min(440px, 100vw) !important;
+    border-left: 1px solid #d8e0eb !important;
+    background: #ffffff !important;
+    box-shadow: -22px 0 50px rgba(7, 19, 41, 0.2) !important;
+    pointer-events: auto !important;
+}
+
+.transport-order-summary-drawer > header,
+.transport-order-summary-drawer > footer {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    padding: 20px 22px !important;
+    border-bottom: 1px solid #dbe3ee !important;
+}
+
+.transport-order-summary-drawer > footer {
+    border-top: 1px solid #dbe3ee !important;
+    border-bottom: 0 !important;
+}
+
+.transport-order-summary-drawer > header > div {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+.transport-order-summary-drawer > header svg {
+    color: #ff7a1a !important;
+}
+
+.transport-order-summary-drawer h2 {
+    margin: 0 !important;
+    color: #071329 !important;
+    font-size: 20px !important;
+    line-height: 1.1 !important;
+    font-weight: 900 !important;
+    letter-spacing: 0 !important;
+}
+
+.transport-order-summary-drawer > header button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    border: 1px solid #d4dce8 !important;
+    border-radius: 5px !important;
+    background: #ffffff !important;
+    color: #263b59 !important;
+    cursor: pointer !important;
+}
+
+.transport-order-summary-drawer-body {
+    display: grid !important;
+    gap: 20px !important;
+    align-content: start !important;
+    padding: 22px !important;
+    overflow: auto !important;
+}
+
+.transport-order-summary-details {
+    display: grid !important;
+    gap: 12px !important;
+    margin: 0 !important;
+    padding-bottom: 20px !important;
+    border-bottom: 1px solid #dbe3ee !important;
+}
+
+.transport-order-summary-details div {
+    display: grid !important;
+    grid-template-columns: minmax(108px, 0.7fr) minmax(0, 1fr) !important;
+    gap: 12px !important;
+}
+
+.transport-order-summary-details dt {
+    color: #64748b !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+.transport-order-summary-details dd {
+    margin: 0 !important;
+    color: #071329 !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    text-align: right !important;
+}
+
+.transport-order-summary-drawer > footer .transport-order-outline-btn,
+.transport-order-summary-drawer > footer .transport-order-submit-btn {
+    width: auto !important;
+    flex: 1 1 0 !important;
+}
+
 .transport-order-archive-banner {
     margin-bottom: 18px !important;
 }
 
 @media (max-width: 1280px) {
     .transport-order-form-grid {
-        grid-template-columns: minmax(240px, 300px) minmax(500px, 1fr) !important;
-    }
-
-    .transport-order-summary-panel {
-        grid-column: 1 / -1 !important;
-        position: static !important;
+        grid-template-columns: minmax(230px, 290px) minmax(500px, 1fr) !important;
     }
 }
 
@@ -5447,6 +5579,10 @@
 
     .transport-order-material-table-shell {
         max-height: none !important;
+    }
+
+    .transport-order-summary-drawer {
+        width: 100vw !important;
     }
 }
 

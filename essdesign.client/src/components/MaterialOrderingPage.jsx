@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User, X } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import {
     formatTimeChip,
@@ -547,6 +547,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [form, setForm] = useState(() => createBlankOrder(user));
     const [materialSearch, setMaterialSearch] = useState('');
     const [collapsedMaterialGroups, setCollapsedMaterialGroups] = useState(() => new Set());
+    const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
     const [requestSearch, setRequestSearch] = useState('');
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('oldest');
@@ -872,6 +873,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     const startNewOrder = () => {
         setStartState();
+        setOrderSummaryOpen(false);
         setError('');
     };
 
@@ -921,15 +923,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const submitOrder = async () => {
         if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
             setError('Builder, jobsite, requester, and date are required.');
-            return;
+            return false;
         }
         setSaving(true);
         setError('');
         try {
             await materialOrderRequestsAPI.submitRequest(form);
             setForm(createBlankOrder(user));
+            setOrderSummaryOpen(false);
+            return true;
         } catch (err) {
             setError(err.message || 'Failed to submit order request');
+            return false;
         } finally {
             setSaving(false);
         }
@@ -1108,6 +1113,15 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 </div>
                             )}
                         </label>
+
+                        <button
+                            type="button"
+                            className="transport-order-review-open-btn"
+                            onClick={() => setOrderSummaryOpen(true)}
+                        >
+                            <FileText size={16} aria-hidden="true" />
+                            <span>{isArchivedView ? 'View Order Summary' : 'Review Order'}</span>
+                        </button>
                     </aside>
 
                     <section className="transport-order-panel transport-order-material-panel">
@@ -1191,60 +1205,105 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             </table>
                         </div>
                     </section>
-
-                    <aside className="transport-order-panel transport-order-summary-panel">
-                        <h2>Order Summary</h2>
-                        <div className="transport-order-summary-metrics">
-                            <div>
-                                <span>Total items</span>
-                                <strong>{selectedMaterials.length}</strong>
-                            </div>
-                            <div>
-                                <span>Total quantity</span>
-                                <strong>{totalQuantity}</strong>
-                            </div>
-                        </div>
-
-                        <div className="transport-order-selected-list">
-                            <h3>Selected materials</h3>
-                            {visibleSelectedMaterials.length ? (
-                                visibleSelectedMaterials.map((item) => (
-                                    <div key={item.key} className="transport-order-selected-item">
-                                        <span aria-hidden="true" />
-                                        <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
-                                        <b>{item.quantity}</b>
-                                    </div>
-                                ))
-                            ) : (
-                                <p>No materials selected yet.</p>
-                            )}
-                            {remainingSelectedCount ? (
-                                <button type="button" className="transport-order-more-selected">
-                                    +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
-                                </button>
-                            ) : null}
-                        </div>
-
-                        <label className="transport-order-field transport-order-notes-field">
-                            <span>Notes <em>(optional)</em></span>
-                            <textarea
-                                value={form.notes || ''}
-                                onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
-                                placeholder="Add notes about this order..."
-                                maxLength={250}
-                                readOnly={isArchivedView}
-                            />
-                            <small>{String(form.notes || '').length} / 250</small>
-                        </label>
-
-                        {error ? <div className="module-error transport-order-inline-error">{error}</div> : null}
-
-                        <button type="button" className="transport-order-submit-btn" onClick={submitOrder} disabled={saving || isArchivedView}>
-                            <Send size={17} aria-hidden="true" />
-                            <span>{saving ? 'Submitting...' : 'Submit Order'}</span>
-                        </button>
-                    </aside>
                 </div>
+
+                {orderSummaryOpen ? (
+                    <div className="transport-order-summary-drawer-shell">
+                        <button
+                            type="button"
+                            className="transport-order-summary-backdrop"
+                            aria-label="Close order summary"
+                            onClick={() => setOrderSummaryOpen(false)}
+                        />
+                        <aside className="transport-order-summary-drawer" role="dialog" aria-modal="true" aria-labelledby="transport-order-summary-title">
+                            <header>
+                                <div>
+                                    <FileText size={19} aria-hidden="true" />
+                                    <h2 id="transport-order-summary-title">Order Summary</h2>
+                                </div>
+                                <button type="button" aria-label="Close order summary" onClick={() => setOrderSummaryOpen(false)}>
+                                    <X size={18} aria-hidden="true" />
+                                </button>
+                            </header>
+
+                            <div className="transport-order-summary-drawer-body">
+                                <dl className="transport-order-summary-details">
+                                    <div>
+                                        <dt>Builder</dt>
+                                        <dd>{form.builderName || 'Not selected'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Project</dt>
+                                        <dd>{form.projectName || 'Not selected'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Scaffold system</dt>
+                                        <dd>{form.itemValues.__scaffoldingSystem || 'Kwikstage'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Order date</dt>
+                                        <dd>{form.orderDate || 'Not dated'}</dd>
+                                    </div>
+                                </dl>
+
+                                <div className="transport-order-summary-metrics">
+                                    <div>
+                                        <span>Total items</span>
+                                        <strong>{selectedMaterials.length}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Total quantity</span>
+                                        <strong>{totalQuantity}</strong>
+                                    </div>
+                                </div>
+
+                                <div className="transport-order-selected-list">
+                                    <h3>Selected materials</h3>
+                                    {visibleSelectedMaterials.length ? (
+                                        visibleSelectedMaterials.map((item) => (
+                                            <div key={item.key} className="transport-order-selected-item">
+                                                <span aria-hidden="true" />
+                                                <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
+                                                <b>{item.quantity}</b>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p>No materials selected yet.</p>
+                                    )}
+                                    {remainingSelectedCount ? (
+                                        <p className="transport-order-more-selected">
+                                            +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
+                                        </p>
+                                    ) : null}
+                                </div>
+
+                                <label className="transport-order-field transport-order-notes-field">
+                                    <span>Notes <em>(optional)</em></span>
+                                    <textarea
+                                        value={form.notes || ''}
+                                        onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
+                                        placeholder="Add notes about this order..."
+                                        maxLength={250}
+                                        readOnly={isArchivedView}
+                                    />
+                                    <small>{String(form.notes || '').length} / 250</small>
+                                </label>
+
+                                {error ? <div className="module-error transport-order-inline-error">{error}</div> : null}
+                            </div>
+
+                            <footer>
+                                <button type="button" className="transport-order-outline-btn" onClick={() => setOrderSummaryOpen(false)}>
+                                    Back to Order
+                                </button>
+                                <button type="button" className="transport-order-submit-btn" onClick={submitOrder} disabled={saving || isArchivedView}>
+                                    <Send size={17} aria-hidden="true" />
+                                    <span>{saving ? 'Submitting...' : 'Submit Order'}</span>
+                                </button>
+                            </footer>
+                        </aside>
+                    </div>
+                ) : null}
             </>
         );
     };
