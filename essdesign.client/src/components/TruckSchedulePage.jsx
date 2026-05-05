@@ -1823,7 +1823,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     tileMenuRequest,
     tileMenu?.orderId ? eventCycleStateMap[tileMenu.orderId] : null,
   );
-  const tileMenuIsDeleteOnly = tileMenuIsDeleteOnlySecondaryRoute || tileMenuIsCompletedMaterialOrder;
+  const tileMenuIsDeleteOnly = tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode);
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -3642,7 +3642,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const completedMaterialOrder = sourceRequests.find(sourceRequest =>
       isCompletedMaterialOrderRequest(sourceRequest, eventCycleStateMap[sourceRequest.id] || null),
     );
-    if (completedMaterialOrder) {
+    if (completedMaterialOrder && !debugMode) {
       setTileMenu(null);
       setError('Completed material orders can only be removed from the schedule.');
       return;
@@ -3676,6 +3676,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
+            archivedAt: debugMode ? null : sourceRequest.archivedAt,
+            scheduleRemovedAt: null,
             secondaryRoute: shouldRestoreAsMaterialOrder ? null : sourceRequest.secondaryRoute,
           },
         ];
@@ -3698,7 +3700,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     (async () => {
       try {
         for (const requestId of ids) {
-          await materialOrderRequestsAPI.clearSchedule(requestId);
+          await materialOrderRequestsAPI.clearSchedule(requestId, { allowCompletedReset: debugMode });
         }
         setError('');
       } catch (err) {
@@ -3715,7 +3717,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setError(err?.message || 'Failed to unschedule order selection.');
       }
     })();
-  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
+  }, [allRequests, dayEvents, debugMode, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, selectedDate]);
 
   const handleDeleteScheduledOrder = useCallback((requestIds) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
@@ -4435,7 +4437,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </>
           ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
-            <span>{tileMenuIsCompletedMaterialOrder ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
+            <span>{tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
           </button>
         </div>
       ) : null}

@@ -1150,17 +1150,21 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
-    clearSchedule: async (requestId) => {
+    clearSchedule: async (requestId, options = {}) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`),
             readStorageJson(indexPath),
         ]);
         if (!record) throw new Error('Request not found');
+        const allowCompletedReset = Boolean(options.allowCompletedReset || options.allowCompleted);
         const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
         const shouldRestoreMaterialOrder = record.routeType === 'secondary_route'
             && secondaryRoute?.reason === 'material_pick_up'
             && Boolean(secondaryRoute?.linkedRequestId);
+        const shouldResetCompletedMaterialOrder = allowCompletedReset
+            && record.routeType !== 'secondary_route'
+            && Boolean(record.archivedAt || record.scheduleRemovedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit');
         const updated = {
             ...record,
             sourceOrderId: shouldRestoreMaterialOrder ? null : record.sourceOrderId,
@@ -1177,6 +1181,8 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
+            archivedAt: shouldResetCompletedMaterialOrder ? null : record.archivedAt || null,
+            scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : record.scheduleRemovedAt || null,
             secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
@@ -1198,6 +1204,8 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: null,
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
+                    archivedAt: shouldResetCompletedMaterialOrder ? null : item.archivedAt || null,
+                    scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : item.scheduleRemovedAt || null,
                     secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
