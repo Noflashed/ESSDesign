@@ -167,17 +167,103 @@ export function scheduleStatusLabel(status) {
   }
 }
 
-export function scheduleStatusAppearance(status) {
-  switch (status) {
-    case 'in_transit':
-      return { accent: '#2563EB', background: '#E8F0FF', text: '#1D4ED8', title: '#0F2A62' };
-    case 'unloading':
-      return { accent: '#F47C20', background: '#FFF0E3', text: '#C25B0E', title: '#0F2A62' };
-    case 'return_transit':
-      return { accent: '#6B7280', background: '#EEF2F7', text: '#667085', title: '#0F2A62' };
-    default:
-      return { accent: '#9333EA', background: '#F3E8FF', text: '#6B21A8', title: '#0F2A62' };
+export const TRANSPORT_STATUS_COLOR_PREF_EVENT = 'ess-transport-status-colors-updated';
+
+export const TRANSPORT_STATUS_COLOR_DEFAULTS = {
+  scheduled: { accent: '#9333EA', background: '#F3E8FF', text: '#6B21A8', title: '#0F2A62' },
+  in_transit: { accent: '#2563EB', background: '#E8F0FF', text: '#1D4ED8', title: '#0F2A62' },
+  unloading: { accent: '#F47C20', background: '#FFF0E3', text: '#C25B0E', title: '#0F2A62' },
+  return_transit: { accent: '#16A34A', background: '#ECFDF3', text: '#15803D', title: '#14532D' },
+};
+
+export function getTransportStatusColorStorageKey(user) {
+  return `ess_transport_status_colours_v1:${user?.id || user?.email || user?.role || 'anon'}`;
+}
+
+function clampColorChannel(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function hexToRgb(hexValue) {
+  const clean = String(hexValue || '').replace('#', '').trim();
+  if (!/^[0-9a-f]{6}$/i.test(clean)) {
+    return null;
   }
+  return {
+    r: parseInt(clean.slice(0, 2), 16),
+    g: parseInt(clean.slice(2, 4), 16),
+    b: parseInt(clean.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b].map(value => clampColorChannel(value).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+function mixRgb(left, right, amount) {
+  return {
+    r: left.r + (right.r - left.r) * amount,
+    g: left.g + (right.g - left.g) * amount,
+    b: left.b + (right.b - left.b) * amount,
+  };
+}
+
+export function createTransportStatusAppearance(accentHex, fallback = TRANSPORT_STATUS_COLOR_DEFAULTS.scheduled) {
+  const accentRgb = hexToRgb(accentHex);
+  if (!accentRgb) {
+    return fallback;
+  }
+  const white = { r: 255, g: 255, b: 255 };
+  const black = { r: 0, g: 0, b: 0 };
+  return {
+    accent: rgbToHex(accentRgb),
+    background: rgbToHex(mixRgb(accentRgb, white, 0.88)),
+    text: rgbToHex(mixRgb(accentRgb, black, 0.38)),
+    title: '#0F2A62',
+  };
+}
+
+export function normalizeTransportStatusColors(value = {}) {
+  return Object.fromEntries(
+    Object.entries(TRANSPORT_STATUS_COLOR_DEFAULTS).map(([key, fallback]) => {
+      const incoming = value?.[key] || {};
+      return [
+        key,
+        {
+          accent: /^#[0-9a-f]{6}$/i.test(incoming.accent || '') ? incoming.accent.toUpperCase() : fallback.accent,
+          background: /^#[0-9a-f]{6}$/i.test(incoming.background || '') ? incoming.background.toUpperCase() : fallback.background,
+          text: /^#[0-9a-f]{6}$/i.test(incoming.text || '') ? incoming.text.toUpperCase() : fallback.text,
+          title: /^#[0-9a-f]{6}$/i.test(incoming.title || '') ? incoming.title.toUpperCase() : fallback.title,
+        },
+      ];
+    }),
+  );
+}
+
+export function readTransportStatusColors(user) {
+  if (typeof window === 'undefined') {
+    return normalizeTransportStatusColors();
+  }
+  try {
+    const raw = window.localStorage.getItem(getTransportStatusColorStorageKey(user));
+    return normalizeTransportStatusColors(raw ? JSON.parse(raw) : {});
+  } catch {
+    return normalizeTransportStatusColors();
+  }
+}
+
+export function saveTransportStatusColors(user, colors) {
+  const normalized = normalizeTransportStatusColors(colors);
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(getTransportStatusColorStorageKey(user), JSON.stringify(normalized));
+    window.dispatchEvent(new CustomEvent(TRANSPORT_STATUS_COLOR_PREF_EVENT, { detail: { key: getTransportStatusColorStorageKey(user), colors: normalized } }));
+  }
+  return normalized;
+}
+
+export function scheduleStatusAppearance(status, statusColors = null) {
+  const colors = statusColors ? normalizeTransportStatusColors(statusColors) : TRANSPORT_STATUS_COLOR_DEFAULTS;
+  return colors[status] || colors.scheduled;
 }
 
 export function deliveredTileAppearance() {

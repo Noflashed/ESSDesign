@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import MaterialOrderingPage from './MaterialOrderingPage';
 import TruckSchedulePage from './TruckSchedulePage';
 import TruckDeliverySchedulePage from './TruckDeliverySchedulePage';
+import TransportSettingsPage from './TransportSettingsPage';
 import NativeTransportShell from './transport/NativeTransportShell';
 import { getTruckAssignment, isTruckDeviceRole } from './transport/transportUtils';
 import '../transportNativeParity.css';
@@ -66,7 +67,10 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
         />
       );
     }
-    if (['transport-trips', 'transport-fleet', 'transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts', 'transport-settings'].includes(currentPage)) {
+    if (currentPage === 'transport-settings') {
+      return <TransportSettingsPage user={user} />;
+    }
+    if (['transport-trips', 'transport-fleet', 'transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts'].includes(currentPage)) {
       const title = currentPage.replace('transport-', '').replace(/^\w/, value => value.toUpperCase());
       return (
         <TransportPlaceholderPage

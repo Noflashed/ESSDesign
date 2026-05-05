@@ -9,7 +9,6 @@ import {
   TRUCK_LANES,
   YARD_LOCATION,
   buildScheduleIso,
-  deliveredTileAppearance,
   eventTruckIndex,
   findProjectLocation,
   formatActionTimestamp,
@@ -32,10 +31,12 @@ import {
   isSameDay,
   isTruckDeviceRole,
   projectRequestWindow,
+  readTransportStatusColors,
   requestToCalendarEvent,
   scheduleStatusAppearance,
   scheduleStatusLabel,
   startOfDay,
+  TRANSPORT_STATUS_COLOR_PREF_EVENT,
   formatDateKey,
 } from './transport/transportUtils';
 
@@ -1118,17 +1119,26 @@ function InspectorIcon({ type }) {
   return <svg {...common}><circle cx="12" cy="12" r="9" /></svg>;
 }
 
-function ScheduleLegend() {
+function ScheduleLegend({ statusColors = null }) {
+  const scheduled = scheduleStatusAppearance('scheduled', statusColors);
+  const inTransit = scheduleStatusAppearance('in_transit', statusColors);
+  const unloading = scheduleStatusAppearance('unloading', statusColors);
+  const complete = scheduleStatusAppearance('return_transit', statusColors);
+  const pillStyle = appearance => ({
+    backgroundColor: appearance.background,
+    color: appearance.text,
+    borderColor: appearance.accent,
+  });
   return (
     <div className="transport-reference-legend">
       <span className="transport-reference-legend-label">Legend:</span>
       <span className="transport-reference-legend-icon-item"><InspectorIcon type="truck" />Travel</span>
       <span className="transport-reference-legend-icon-item"><InspectorIcon type="unload" />Unload</span>
       <span className="transport-reference-legend-icon-item"><InspectorIcon type="return" />Return</span>
-      <span className="transport-reference-legend-pill scheduled">Scheduled</span>
-      <span className="transport-reference-legend-pill in-transit">In Transit</span>
-      <span className="transport-reference-legend-pill unloading">Unloading</span>
-      <span className="transport-reference-legend-pill complete">Complete</span>
+      <span className="transport-reference-legend-pill scheduled" style={pillStyle(scheduled)}>Scheduled</span>
+      <span className="transport-reference-legend-pill in-transit" style={pillStyle(inTransit)}>In Transit</span>
+      <span className="transport-reference-legend-pill unloading" style={pillStyle(unloading)}>Unloading</span>
+      <span className="transport-reference-legend-pill complete" style={pillStyle(complete)}>Complete</span>
     </div>
   );
 }
@@ -1302,6 +1312,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const toolbarDateInputRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const selectedDateKey = formatDateKey(selectedDate);
+  const [transportStatusColors, setTransportStatusColors] = useState(() => readTransportStatusColors(user));
   const [allRequests, setAllRequests] = useState([]);
   const [dayEvents, setDayEvents] = useState([]);
   const [requestMetaMap, setRequestMetaMap] = useState({});
@@ -1396,6 +1407,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     debugNowRef.current = debugNow;
   }, [debugNow]);
+
+  useEffect(() => {
+    const refreshStatusColors = () => setTransportStatusColors(readTransportStatusColors(user));
+    refreshStatusColors();
+    window.addEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+    window.addEventListener('storage', refreshStatusColors);
+    return () => {
+      window.removeEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+      window.removeEventListener('storage', refreshStatusColors);
+    };
+  }, [user]);
 
   const setRouteLoading = useCallback((requestId, loading) => {
     if (!requestId) {
@@ -4125,9 +4147,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const offset = getEventOffset(eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute) * 100;
                       const width = getEventFlex(durationMinutes) * 100;
                       const isCompleteTile = status === 'return_transit';
-                      const palette = isCompleteTile
-                        ? deliveredTileAppearance()
-                        : scheduleStatusAppearance(status);
+                      const palette = scheduleStatusAppearance(isCompleteTile ? 'return_transit' : status, transportStatusColors);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeEstimate = getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null;
@@ -4310,7 +4330,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       </div>
       {!isTruckRole ? (
         <section className="transport-reference-pending">
-          <ScheduleLegend />
+          <ScheduleLegend statusColors={transportStatusColors} />
           <div className="transport-reference-pending-head">
             <strong>Pending Requests ({pendingRequests.length})</strong>
           </div>
@@ -4339,7 +4359,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </div>
         </section>
       ) : null}
-      {isTruckRole ? <ScheduleLegend /> : null}
+      {isTruckRole ? <ScheduleLegend statusColors={transportStatusColors} /> : null}
       </div>
       {scheduleInspectorOpen ? (
       <aside className="transport-schedule-inspector">
@@ -4348,7 +4368,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <span>{selectedScheduleIsSecondarySegment ? 'Selected Secondary Route' : 'Selected Delivery'}</span>
             <h2>{selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason) : selectedScheduleWindowLabel}</h2>
           </div>
-          {selectedScheduleRequest ? <span className={`transport-status-pill status-${selectedScheduleEffectiveStatus}`}>{scheduleStatusLabel(selectedScheduleEffectiveStatus)}</span> : null}
+          {selectedScheduleRequest ? (
+            <span
+              className={`transport-status-pill status-${selectedScheduleEffectiveStatus}`}
+              style={{
+                backgroundColor: scheduleStatusAppearance(selectedScheduleEffectiveStatus, transportStatusColors).background,
+                color: scheduleStatusAppearance(selectedScheduleEffectiveStatus, transportStatusColors).text,
+              }}
+            >
+              {scheduleStatusLabel(selectedScheduleEffectiveStatus)}
+            </span>
+          ) : null}
           <button type="button" className="transport-inspector-close" onClick={() => setScheduleInspectorOpen(false)} aria-label="Close selected delivery panel">×</button>
         </div>
         <label className={`transport-snap-toggle transport-inspector-toggle${enableTolls ? ' active' : ''}`}>

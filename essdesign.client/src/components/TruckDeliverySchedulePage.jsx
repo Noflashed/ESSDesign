@@ -19,9 +19,11 @@ import {
   getTruckAssignment,
   isTruckDeviceRole,
   minDistanceToRouteMeters,
+  readTransportStatusColors,
   requestToCalendarEvent,
   scheduleStatusAppearance,
   scheduleStatusLabel,
+  TRANSPORT_STATUS_COLOR_PREF_EVENT,
 } from './transport/transportUtils';
 
 const LIVE_REFRESH_MS = 3000;
@@ -51,6 +53,7 @@ function matchesTruck(request, assignedTruck) {
 export default function TruckDeliverySchedulePage({ user }) {
   const assignedTruck = getTruckAssignment(user?.role);
   const hasAccess = isTruckDeviceRole(user?.role) && assignedTruck;
+  const [transportStatusColors, setTransportStatusColors] = useState(() => readTransportStatusColors(user));
   const [events, setEvents] = useState([]);
   const [requestMetaMap, setRequestMetaMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,17 @@ export default function TruckDeliverySchedulePage({ user }) {
   const [locationOutOfRoute, setLocationOutOfRoute] = useState(false);
   const loadPromiseRef = useRef(null);
   const watchIdRef = useRef(null);
+
+  useEffect(() => {
+    const refreshStatusColors = () => setTransportStatusColors(readTransportStatusColors(user));
+    refreshStatusColors();
+    window.addEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+    window.addEventListener('storage', refreshStatusColors);
+    return () => {
+      window.removeEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+      window.removeEventListener('storage', refreshStatusColors);
+    };
+  }, [user]);
 
   const loadEvents = useCallback(async () => {
     if (!assignedTruck) {
@@ -238,7 +252,7 @@ export default function TruckDeliverySchedulePage({ user }) {
 
   const deliveryButtonState = useMemo(() => {
     const status = deliveryModal?.request?.deliveryStatus ?? 'scheduled';
-    const appearance = scheduleStatusAppearance(status);
+    const appearance = scheduleStatusAppearance(status, transportStatusColors);
     if (status === 'return_transit') {
       return { label: 'In return transit to yard', disabled: true, appearance, onPress: null };
     }
@@ -249,7 +263,7 @@ export default function TruckDeliverySchedulePage({ user }) {
       return { label: 'In transit to site', disabled: true, appearance, onPress: null };
     }
     return { label: 'Start Delivery', disabled: !routeData, appearance, onPress: startDelivery };
-  }, [confirmDelivery, deliveryModal, routeData, startDelivery]);
+  }, [confirmDelivery, deliveryModal, routeData, startDelivery, transportStatusColors]);
 
   const applyDebugState = useCallback(async status => {
     const targetId = deliveryModal?.request?.id ?? debugTargetOrderId;
@@ -331,7 +345,7 @@ export default function TruckDeliverySchedulePage({ user }) {
               <div className="delivery-day-list">
                 {dayEvents.map((event, index) => {
                   const request = requestMetaMap[event.orderId] ?? null;
-                  const appearance = scheduleStatusAppearance(request?.deliveryStatus ?? 'scheduled');
+                  const appearance = scheduleStatusAppearance(request?.deliveryStatus ?? 'scheduled', transportStatusColors);
                   const actionRows = getDeliveryActionRows(request);
                   const isCompleted = request?.deliveryStatus === 'return_transit';
                   return (
