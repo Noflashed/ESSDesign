@@ -6921,24 +6921,24 @@ button.stat-card {
 .ts2-actual-marker-line {
     position: absolute;
     left: -1px;
-    top: -24px;
+    top: -34px;
     bottom: -1px;
     width: 2px;
     border-radius: 999px;
     background: currentColor;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.74), 0 8px 16px rgba(15, 23, 42, 0.16);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.82), 0 8px 16px rgba(15, 23, 42, 0.16);
 }
 
 .ts2-actual-marker-label {
     position: absolute;
     left: 0;
-    top: var(--actual-marker-label-offset, -1px);
+    top: -34px;
     transform: translate(-50%, -100%);
     display: inline-flex;
     align-items: center;
     min-height: 18px;
-    padding: 2px 6px;
-    border-radius: 999px;
+    padding: 3px 7px;
+    border-radius: 6px;
     background: #ffffff;
     border: 1px solid rgba(234, 88, 12, 0.36);
     color: #9a3412;
@@ -6947,6 +6947,30 @@ button.stat-card {
     line-height: 1;
     white-space: nowrap;
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+}
+
+.ts2-actual-marker-label::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    width: 2px;
+    height: 7px;
+    transform: translateX(-50%);
+    background: currentColor;
+}
+
+.ts2-actual-marker-label::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -11px;
+    width: 7px;
+    height: 7px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 3px #ffffff, 0 5px 12px rgba(15, 23, 42, 0.18);
 }
 
 .ts2-actual-marker.arrived {

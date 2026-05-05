@@ -4226,14 +4226,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           ) : null}
                           {actualMarkers.length > 0 ? (
                             <div className="ts2-actual-marker-layer" aria-hidden="true">
-                              {actualMarkers.map((marker, markerIndex) => (
+                              {actualMarkers.map(marker => (
                                 <span
                                   key={`${event.orderId}-${marker.key}`}
                                   className={`ts2-actual-marker ${marker.key}`}
-                                  style={{
-                                    left: `${marker.left}%`,
-                                    '--actual-marker-label-offset': `${markerIndex % 2 === 0 ? -1 : -24}px`,
-                                  }}
+                                  style={{ left: `${marker.left}%` }}
                                 >
                                   <span className="ts2-actual-marker-line" />
                                   <span className="ts2-actual-marker-label">{marker.label} {marker.timeLabel}</span>
