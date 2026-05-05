@@ -1267,13 +1267,15 @@ export const materialOrderRequestsAPI = {
             readStorageJson(indexPath),
         ]);
         if (!record) throw new Error('Request not found');
+        const isSecondaryStatusRoute = record.routeType === 'secondary_route';
+        const shouldArchiveOnComplete = status === 'return_transit' && !isSecondaryStatusRoute;
         const updated = {
             ...record,
             deliveryStatus: status,
             deliveryStartedAt: startedAt,
             deliveryUnloadingAt: unloadingAt,
             deliveryConfirmedAt: confirmedAt,
-            archivedAt: status === 'return_transit' ? record.archivedAt || nowIso() : record.archivedAt || null,
+            archivedAt: isSecondaryStatusRoute ? null : shouldArchiveOnComplete ? record.archivedAt || nowIso() : record.archivedAt || null,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
@@ -1288,7 +1290,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: startedAt,
                     deliveryUnloadingAt: unloadingAt,
                     deliveryConfirmedAt: confirmedAt,
-                    archivedAt: status === 'return_transit' ? item.archivedAt || updated.archivedAt : item.archivedAt || null,
+                    archivedAt: isSecondaryStatusRoute ? null : shouldArchiveOnComplete ? item.archivedAt || updated.archivedAt : item.archivedAt || null,
                 }
                 : item),
             updatedAt: nowIso(),

@@ -2186,13 +2186,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ? selectedScheduleRequest.deliveryUnloadingAt || stamp
       : null;
     const confirmedAt = status === 'return_transit' ? stamp : null;
+    const isSecondaryStatusRoute = isSecondaryRouteRequest(selectedScheduleRequest);
+    const shouldArchiveOnComplete = status === 'return_transit' && !isSecondaryStatusRoute;
     const updatedRequest = {
       ...selectedScheduleRequest,
       deliveryStatus: status,
       deliveryStartedAt: startedAt,
       deliveryUnloadingAt: unloadingAt,
       deliveryConfirmedAt: confirmedAt,
-      archivedAt: status === 'return_transit' ? selectedScheduleRequest.archivedAt || stamp : selectedScheduleRequest.archivedAt,
+      archivedAt: isSecondaryStatusRoute ? null : shouldArchiveOnComplete ? selectedScheduleRequest.archivedAt || stamp : selectedScheduleRequest.archivedAt,
     };
     const nextRequests = previousRequests.map(item => item.id === requestId ? updatedRequest : item);
     setDebugStatusSavingId(requestId);
