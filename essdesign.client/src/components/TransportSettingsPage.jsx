@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
   Bell,
-  ChevronDown,
+  Code2,
   Edit3,
+  Monitor,
   Palette,
+  Search,
+  Shield,
   SlidersHorizontal,
+  Truck,
 } from 'lucide-react';
 import {
   createTransportStatusAppearance,
@@ -18,6 +22,16 @@ const STATUS_ROWS = [
   { key: 'in_transit', label: 'In Transit' },
   { key: 'unloading', label: 'Unloading' },
   { key: 'return_transit', label: 'Complete' },
+];
+
+const SETTINGS_SECTIONS = [
+  { key: 'status-colours', label: 'Status Colours', description: 'Schedule board colour preferences', icon: Palette },
+  { key: 'board', label: 'Board Behaviour', description: 'Timeline, snapping and display options', icon: SlidersHorizontal },
+  { key: 'notifications', label: 'Notifications', description: 'Delivery and schedule alerts', icon: Bell },
+  { key: 'driver-app', label: 'Driver App', description: 'Truck device workflow defaults', icon: Truck },
+  { key: 'appearance', label: 'Appearance', description: 'Display density and visual options', icon: Monitor },
+  { key: 'permissions', label: 'Permissions', description: 'Transport access controls', icon: Shield },
+  { key: 'api', label: 'API', description: 'Integrations and webhooks', icon: Code2 },
 ];
 
 function normalizeHex(value, fallback) {
@@ -34,6 +48,7 @@ function normalizeHex(value, fallback) {
 export default function TransportSettingsPage({ user }) {
   const [statusColors, setStatusColors] = useState(() => readTransportStatusColors(user));
   const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
+  const [activeSectionKey, setActiveSectionKey] = useState('status-colours');
   const activeStatus = STATUS_ROWS.find(item => item.key === activeStatusKey) || STATUS_ROWS[0];
   const activeAppearance = statusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
   const [draftHex, setDraftHex] = useState(activeAppearance.accent);
@@ -67,22 +82,56 @@ export default function TransportSettingsPage({ user }) {
     setDraftHex(activeAppearance.accent);
   };
 
+  const userName = user?.fullName || user?.name || user?.email || 'Transport User';
+  const userInitial = userName.trim()?.[0]?.toUpperCase() || 'U';
+
   return (
     <div className="transport-settings-page">
-      <header className="transport-settings-header">
-        <span>ESS Transport</span>
-        <h1>Transport Settings</h1>
+      <header className="transport-settings-topbar">
+        <h1>Settings</h1>
+        <div className="transport-settings-top-actions">
+          <button type="button" aria-label="Search settings"><Search size={18} aria-hidden="true" /></button>
+          <button type="button" aria-label="Notification settings"><Bell size={18} aria-hidden="true" /></button>
+          <div className="transport-settings-user-chip">
+            <span>{userInitial}</span>
+            <strong>{userName}</strong>
+          </div>
+        </div>
       </header>
 
-      <div className="transport-settings-stack">
-        <section className="transport-settings-card">
-          <div className="transport-settings-card-head">
-            <span className="transport-settings-card-icon"><Palette size={18} aria-hidden="true" /></span>
-            <h2>Schedule status colours</h2>
-          </div>
+      <main className="transport-settings-shell">
+        <nav className="transport-settings-section-list" aria-label="Transport settings sections">
+          {SETTINGS_SECTIONS.map(section => {
+            const Icon = section.icon;
+            const active = section.key === activeSectionKey;
+            return (
+              <button
+                key={section.key}
+                type="button"
+                className={active ? 'active' : ''}
+                onClick={() => setActiveSectionKey(section.key)}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>
+                  <strong>{section.label}</strong>
+                  <small>{section.description}</small>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
-          <div className="transport-status-colour-layout">
-            <div className="transport-status-colour-list">
+        <div className="transport-settings-main">
+          <section className="transport-settings-panel transport-settings-status-panel">
+            <div className="transport-settings-panel-head">
+              <div>
+                <h2>Schedule Status Colours</h2>
+                <p>Choose the colours used on the schedule board for your own account.</p>
+              </div>
+              <button type="button" className="transport-settings-outline-btn" onClick={cancelColourEdit}>Cancel Edit</button>
+            </div>
+
+            <div className="transport-status-table">
               {STATUS_ROWS.map(row => {
                 const appearance = statusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
                 const selected = row.key === activeStatus.key;
@@ -90,7 +139,7 @@ export default function TransportSettingsPage({ user }) {
                   <button
                     key={row.key}
                     type="button"
-                    className={`transport-status-colour-row${selected ? ' selected' : ''}`}
+                    className={`transport-status-table-row${selected ? ' selected' : ''}`}
                     onClick={() => selectStatus(row.key)}
                   >
                     <span className="transport-status-colour-dot" style={{ backgroundColor: appearance.accent }} />
@@ -148,25 +197,26 @@ export default function TransportSettingsPage({ user }) {
                 </div>
               </div>
             </aside>
-          </div>
-        </section>
+          </section>
 
-        <section className="transport-settings-card collapsed">
-          <div className="transport-settings-card-head">
-            <span className="transport-settings-card-icon"><SlidersHorizontal size={18} aria-hidden="true" /></span>
-            <h2>Schedule board behaviour</h2>
-          </div>
-          <ChevronDown size={18} aria-hidden="true" />
-        </section>
+          <section className="transport-settings-panel transport-settings-simple-panel">
+            <div>
+              <h2>Schedule Board Behaviour</h2>
+              <p>Timeline, snapping and display controls can be configured here later.</p>
+            </div>
+            <button type="button" className="transport-settings-outline-btn">Configure</button>
+          </section>
 
-        <section className="transport-settings-card collapsed">
-          <div className="transport-settings-card-head">
-            <span className="transport-settings-card-icon"><Bell size={18} aria-hidden="true" /></span>
-            <h2>Notifications</h2>
-          </div>
-          <ChevronDown size={18} aria-hidden="true" />
-        </section>
-      </div>
+          <section className="transport-settings-panel transport-settings-simple-panel">
+            <span className="transport-settings-shield"><Shield size={20} aria-hidden="true" /></span>
+            <div>
+              <h2>Notifications</h2>
+              <p>Delivery and schedule notification preferences will be managed here.</p>
+            </div>
+            <button type="button" className="transport-settings-outline-btn">Configure</button>
+          </section>
+        </div>
+      </main>
     </div>
   );
 }

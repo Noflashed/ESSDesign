@@ -10106,3 +10106,336 @@ button.stat-card {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+.transport-settings-page {
+    min-height: 100%;
+    padding: 0;
+    background: #f8fafc;
+}
+
+.transport-settings-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 72px;
+    padding: 0 30px;
+    border-bottom: 1px solid #dbe3ee;
+    background: #ffffff;
+}
+
+.transport-settings-topbar h1 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.transport-settings-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.transport-settings-top-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #334155;
+    cursor: pointer;
+}
+
+.transport-settings-top-actions > button:hover {
+    background: #f1f5f9;
+}
+
+.transport-settings-user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.transport-settings-user-chip span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: #e8eef8;
+    color: #102b5c;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.transport-settings-shell {
+    display: grid;
+    grid-template-columns: 302px minmax(0, 1fr);
+    gap: 28px;
+    width: min(1240px, calc(100% - 56px));
+    margin: 32px auto 56px;
+}
+
+.transport-settings-section-list {
+    overflow: hidden;
+    align-self: start;
+    border: 1px solid #dbe3ee;
+    border-radius: 7px;
+    background: #ffffff;
+    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.04);
+}
+
+.transport-settings-section-list button {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 14px;
+    width: 100%;
+    min-height: 72px;
+    padding: 15px 20px;
+    border: 0;
+    border-bottom: 1px solid #e5eaf2;
+    background: #ffffff;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+
+.transport-settings-section-list button:last-child {
+    border-bottom: 0;
+}
+
+.transport-settings-section-list button.active {
+    background: #f1f6ff;
+    color: #2563eb;
+}
+
+.transport-settings-section-list svg {
+    margin-top: 3px;
+}
+
+.transport-settings-section-list strong {
+    display: block;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 850;
+}
+
+.transport-settings-section-list button.active strong {
+    color: #2563eb;
+}
+
+.transport-settings-section-list small {
+    display: block;
+    margin-top: 6px;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.25;
+}
+
+.transport-settings-main {
+    display: grid;
+    gap: 22px;
+}
+
+.transport-settings-panel {
+    position: relative;
+    border: 1px solid #dbe3ee;
+    border-radius: 7px;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045);
+}
+
+.transport-settings-status-panel {
+    min-height: 448px;
+    padding: 26px 30px;
+}
+
+.transport-settings-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.transport-settings-panel h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
+.transport-settings-panel p {
+    margin: 8px 0 0;
+    color: #526173;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.transport-settings-outline-btn {
+    min-height: 38px;
+    padding: 0 16px;
+    border: 1px solid #d5dee9;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1f2937;
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.transport-status-table {
+    display: grid;
+    gap: 14px;
+    max-width: 534px;
+}
+
+.transport-status-table-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 110px 40px;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    min-height: 62px;
+    padding: 10px 14px 10px 20px;
+    border: 1px solid #dbe3ee;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #111827;
+    text-align: left;
+    cursor: pointer;
+}
+
+.transport-status-table-row.selected {
+    border-color: #8b5cf6;
+    background: #fbf8ff;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.13), 0 10px 22px rgba(139, 92, 246, 0.06);
+}
+
+.transport-status-table-row strong {
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.transport-status-table-row code {
+    color: #334155;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 750;
+}
+
+.transport-status-colour-dot {
+    width: 22px;
+    height: 22px;
+}
+
+.transport-status-colour-edit {
+    width: 36px;
+    height: 36px;
+}
+
+.transport-colour-popover {
+    position: absolute;
+    right: 30px;
+    top: 124px;
+    z-index: 4;
+    grid-template-columns: 150px 30px 132px;
+    min-height: 212px;
+    padding: 22px;
+    border-radius: 8px;
+}
+
+.transport-colour-popover::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 24px;
+    width: 18px;
+    height: 18px;
+    transform: rotate(45deg);
+    border-left: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    background: #ffffff;
+}
+
+.transport-colour-wheel-wrap,
+.transport-colour-wheel {
+    width: 150px;
+    height: 150px;
+}
+
+.transport-colour-wheel::before {
+    inset: 22px;
+}
+
+.transport-colour-triangle {
+    left: 45px;
+    top: 36px;
+    border-left-width: 64px;
+    border-top-width: 40px;
+    border-bottom-width: 40px;
+}
+
+.transport-colour-selection {
+    right: 35px;
+    top: 66px;
+}
+
+.transport-colour-slider {
+    width: 22px;
+    height: 150px;
+}
+
+.transport-colour-actions {
+    margin-top: 6px;
+}
+
+.transport-settings-simple-panel {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 134px;
+    padding: 24px 30px;
+}
+
+.transport-settings-simple-panel > div {
+    flex: 1;
+}
+
+.transport-settings-shield {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+@media (max-width: 1180px) {
+    .transport-settings-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .transport-colour-popover {
+        position: relative;
+        right: auto;
+        top: auto;
+        margin-top: 18px;
+        width: fit-content;
+    }
+
+    .transport-colour-popover::before {
+        display: none;
+    }
+}
