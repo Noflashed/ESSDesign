@@ -43,8 +43,6 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       { key: 'transport-inventory', label: 'Inventory', icon: 'inventory' },
       { key: 'transport-yard', label: 'Yard', icon: 'yard' },
       { key: 'transport-reports', label: 'Reports', icon: 'reports' },
-      { key: 'transport-alerts', label: 'Alerts', icon: 'alerts', badge: '3' },
-      { key: 'transport-settings', label: 'Settings', icon: 'settings' },
     ];
   }, [isTruckRole]);
 

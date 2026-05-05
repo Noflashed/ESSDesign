@@ -72,6 +72,7 @@ export default function NativeTransportShell({
   const [railCollapsed, setRailCollapsed] = useState(false);
   const goHome = onExit || (() => window.history.back());
   const showWorkspaceAccountMenu = currentPage !== 'transport-settings';
+  const showTransportSettingsShortcut = !isTruckRole;
 
   return (
     <div className={`transport-desktop-shell${railCollapsed ? ' rail-collapsed' : ''}`}>
@@ -112,6 +113,18 @@ export default function NativeTransportShell({
         </div>
 
         <div className="transport-desktop-rail-bottom">
+          {showTransportSettingsShortcut ? (
+            <button
+              type="button"
+              className={`transport-desktop-nav-item transport-desktop-settings-button${currentPage === 'transport-settings' ? ' active' : ''}`}
+              onClick={() => onNavigate('transport-settings')}
+              title="Transport settings"
+              aria-label="Transport settings"
+            >
+              <TransportIcon type="settings" />
+              <span>Settings</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className="transport-desktop-nav-item transport-desktop-home-button"
