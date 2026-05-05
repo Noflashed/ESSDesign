@@ -34,6 +34,8 @@ function RouteMapInstance({
   showUserPoint,
   userPoint,
   launchViewer,
+  originLabel = 'Yard',
+  destinationLabel = 'Site',
 }) {
   const routePoints = useMemo(
     () => (routeData?.pathPoints || [])
@@ -111,12 +113,12 @@ function RouteMapInstance({
         ) : null}
         {routeData?.yard ? (
           <CircleMarker center={[routeData.yard.lat, routeData.yard.lon]} radius={8} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#102B5C', fillOpacity: 1 }}>
-            <Tooltip permanent direction="top" offset={[0, -10]} className="transport-route-tooltip transport-route-tooltip-yard">Yard</Tooltip>
+            <Tooltip permanent direction="top" offset={[0, -10]} className="transport-route-tooltip transport-route-tooltip-yard">{originLabel}</Tooltip>
           </CircleMarker>
         ) : null}
         {routeData?.site ? (
           <CircleMarker center={[routeData.site.lat, routeData.site.lon]} radius={8} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#F47C20', fillOpacity: 1 }}>
-            <Tooltip permanent direction="top" offset={[0, -10]} className="transport-route-tooltip transport-route-tooltip-site">Site</Tooltip>
+            <Tooltip permanent direction="top" offset={[0, -10]} className="transport-route-tooltip transport-route-tooltip-site">{destinationLabel}</Tooltip>
           </CircleMarker>
         ) : null}
         {livePoint ? (
@@ -150,6 +152,8 @@ export default function RouteMapCanvas({
   interactive = false,
   expandable = false,
   viewerTitle = 'Route Preview',
+  originLabel = 'Yard',
+  destinationLabel = 'Site',
 }) {
   const [viewerOpen, setViewerOpen] = useState(false);
 
@@ -193,6 +197,8 @@ export default function RouteMapCanvas({
         showUserPoint={showUserPoint}
         userPoint={userPoint}
         launchViewer={expandable ? () => setViewerOpen(true) : null}
+        originLabel={originLabel}
+        destinationLabel={destinationLabel}
       />
       {viewerOpen ? (
         <div className="transport-route-viewer-root">
@@ -211,6 +217,8 @@ export default function RouteMapCanvas({
               interactive
               showUserPoint={showUserPoint}
               userPoint={userPoint}
+              originLabel={originLabel}
+              destinationLabel={destinationLabel}
             />
           </div>
         </div>

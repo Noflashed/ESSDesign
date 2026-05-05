@@ -440,10 +440,12 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
         const runHandoffMinutes = startMinutes + primaryDurationMinutesValue;
         const plannedRunEndMinutes = scheduledStart + timing.totalMinutes;
+        const routeFromRequestId = followsPreviousRun ? request.sourceOrderId || previousRunLink?.requestId || null : null;
         laneCursorMinutes = followsPreviousRun
           ? runHandoffMinutes
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         previousRunLink = {
+          requestId: request.id,
           includeReturnTransitToYard: hasEffectiveReturnBreak,
           completed: requestStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
@@ -460,6 +462,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           hasSecondaryContinuation,
           followsPreviousRun,
           presumedInTransitFromParent,
+          routeFromRequestId,
           runHandoffMinutes,
           runSourceOrderId: request.sourceOrderId || null,
           runLinkReason: hasExplicitRunLink ? 'explicit' : hasAdjacentRunLink ? 'adjacent' : 'none',
@@ -810,6 +813,28 @@ function getRequestSiteLocation(request, siteLocationMap = {}, builders = []) {
   return siteLocationMap[request.id] ?? findProjectLocation(builders, request);
 }
 
+function getRequestFromLookup(requestId, requestLookup = null) {
+  if (!requestId || !requestLookup) {
+    return null;
+  }
+  if (requestLookup instanceof Map) {
+    return requestLookup.get(requestId) || null;
+  }
+  if (Array.isArray(requestLookup)) {
+    return requestLookup.find(request => request?.id === requestId) || null;
+  }
+  return requestLookup[requestId] || null;
+}
+
+function getConnectedRouteOrigin(cycleState = null, siteLocationMap = {}, builders = [], requestLookup = null) {
+  const sourceRequestId = cycleState?.routeFromRequestId || cycleState?.runSourceOrderId || null;
+  if (!cycleState?.followsPreviousRun || !sourceRequestId) {
+    return '';
+  }
+  const sourceRequest = getRequestFromLookup(sourceRequestId, requestLookup);
+  return getRequestSiteLocation(sourceRequest, siteLocationMap, builders) || siteLocationMap[sourceRequestId] || '';
+}
+
 function applyRouteMode(schedule = {}, enableTolls = false) {
   return {
     ...schedule,
@@ -817,7 +842,7 @@ function applyRouteMode(schedule = {}, enableTolls = false) {
   };
 }
 
-function buildRequestRouteContext(request, event, siteLocationMap = {}, builders = [], enableTolls = false, segment = 'primary') {
+function buildRequestRouteContext(request, event, siteLocationMap = {}, builders = [], enableTolls = false, segment = 'primary', options = {}) {
   const schedule = applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls);
   if (!request || !event) {
     return {
@@ -856,6 +881,23 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
   }
 
   const toLocation = getRequestSiteLocation(request, siteLocationMap, builders);
+  const connectedFromLocation = getConnectedRouteOrigin(
+    options.cycleState,
+    siteLocationMap,
+    builders,
+    options.requestLookup,
+  );
+  if (connectedFromLocation && toLocation) {
+    return {
+      segment: 'secondary',
+      fromLocation: connectedFromLocation,
+      toLocation,
+      siteLocation: toLocation,
+      schedule,
+      title: 'Selected Connected Route',
+    };
+  }
+
   return {
     segment: 'primary',
     fromLocation: '',
@@ -1839,6 +1881,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       [],
       enableTolls,
       selectedScheduleIsSecondarySegment ? 'secondary' : 'primary',
+      {
+        cycleState: selectedScheduleCycleState,
+        requestLookup: requestMetaMap,
+      },
     );
     return selectedScheduleIsSecondarySegment
       ? { ...context, schedule: applyRouteMode(selectedScheduleSecondaryRouteSchedule, enableTolls) }
@@ -1847,11 +1893,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     enableTolls,
     requestSiteLocationMap,
     selectedScheduleEvent,
+    selectedScheduleCycleState,
     selectedScheduleIsSecondarySegment,
     selectedScheduleRequest,
     selectedScheduleRouteSchedule,
     selectedScheduleSecondaryRoute,
     selectedScheduleSecondaryRouteSchedule,
+    requestMetaMap,
   ]);
   const selectedScheduleRouteKey = useMemo(
     () => [
@@ -1867,13 +1915,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       selectedScheduleRouteContext,
     ],
   );
+  const selectedScheduleContextRouteEstimate = useMemo(
+    () => getCachedRouteEstimateForContext(selectedScheduleRouteContext)
+      || (selectedScheduleRouteDataKeyRef.current === selectedScheduleRouteKey ? buildEstimateFromRouteData(selectedScheduleRouteData) : null),
+    [selectedScheduleRouteContext, selectedScheduleRouteData, selectedScheduleRouteKey],
+  );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleTiming = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleReturnTransitEnabled)
       : selectedScheduleHasSecondaryContinuation || !selectedScheduleReturnTransitEnabled
-        ? removeReturnLegFromTiming(getTimingProfile(selectedSchedulePrimaryRouteEstimate, null))
-        : getTimingProfile(selectedSchedulePrimaryRouteEstimate, null)
+        ? removeReturnLegFromTiming(getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null))
+        : getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null)
     : null;
   const selectedScheduleActualTiming = useMemo(() => {
     if (!selectedScheduleRequest) {
@@ -2137,6 +2190,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       [],
       enableTolls,
       isSecondaryRouteRequest(requestModal.request) ? 'secondary' : 'primary',
+      {
+        cycleState: eventCycleStateMap[requestModal.request.id] || null,
+        requestLookup: requestMetaMap,
+      },
     );
     const routeContext = {
       ...baseContext,
@@ -2171,7 +2228,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [enableTolls, requestModal, requestSiteLocationMap, selectedDate, selectedHour, selectedMinute]);
+  }, [enableTolls, eventCycleStateMap, requestMetaMap, requestModal, requestSiteLocationMap, selectedDate, selectedHour, selectedMinute]);
   const setTimelineScaleWithAnchor = useCallback((nextMode) => {
     if (!SCALE_MODES[nextMode]) {
       return;
@@ -2248,10 +2305,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       builders,
       enableTolls,
       isSecondaryRouteRequest(request) ? 'secondary' : 'primary',
+      {
+        cycleState: eventCycleStateMap[request.id] || null,
+        requestLookup: requestMetaMap,
+      },
     );
     setRequestModal({ request, siteLocation: routeContext.siteLocation, routeContext });
     setRequestModalLoading(false);
-  }, [allRequests, dayEvents, enableTolls, eventDurationMinutesMap, eventStartMinutesMap, requestSiteLocationMap, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
+  }, [allRequests, dayEvents, enableTolls, eventCycleStateMap, eventDurationMinutesMap, eventStartMinutesMap, requestMetaMap, requestSiteLocationMap, selectedDate, selectedHour, selectedMinute, selectedTruckId]);
 
   const closeRequestModal = useCallback(() => {
     setRequestModal(null);
@@ -2279,6 +2340,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       builders,
       enableTolls,
       isSecondaryRouteRequest(request) ? 'secondary' : 'primary',
+      {
+        cycleState: eventCycleStateMap[event.orderId] || null,
+        requestLookup: requestMetaMap,
+      },
     );
     const siteLocation = routeContext.siteLocation;
     const routeEstimate = getCachedRouteEstimateForContext(routeContext);
@@ -3980,12 +4045,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <dl className="transport-schedule-detail-list">
               {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
                 <>
-                  <div><dt>Starting Location</dt><dd>{selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
+                  <div><dt>Starting Location</dt><dd>{selectedScheduleRouteContext.fromLocation || selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
                   <div><dt>Destination</dt><dd>{selectedScheduleSecondaryRoute.destination || 'Secondary destination pending'}</dd></div>
                   <div><dt>Reason</dt><dd>{getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason)}</dd></div>
                 </>
               ) : (
                 <>
+                  {selectedScheduleRouteContext.segment === 'secondary' ? (
+                    <div><dt>Starting Location</dt><dd>{selectedScheduleRouteContext.fromLocation || 'Previous site location pending'}</dd></div>
+                  ) : null}
                   <div><dt>Builder</dt><dd>{selectedScheduleEvent.builderName || 'Material Order'}</dd></div>
                   <div><dt>Project</dt><dd>{selectedScheduleEvent.projectName || 'Scheduled delivery'}</dd></div>
                   <div><dt>Destination</dt><dd>{selectedScheduleRouteContext.siteLocation || 'Site location pending'}</dd></div>
@@ -4040,7 +4108,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <span>Return transit to yard</span>
             </label>
             <h3 className="transport-panel-section-title">Route Preview</h3>
-            <RouteMapCanvas className="transport-schedule-inspector-map" routeData={selectedScheduleRouteData} loading={selectedScheduleRouteLoading} siteLocation={selectedScheduleRouteContext.siteLocation} expandable viewerTitle={selectedScheduleRouteContext.title} />
+            <RouteMapCanvas
+              className="transport-schedule-inspector-map"
+              routeData={selectedScheduleRouteData}
+              loading={selectedScheduleRouteLoading}
+              siteLocation={selectedScheduleRouteContext.siteLocation}
+              expandable
+              viewerTitle={selectedScheduleRouteContext.title}
+              originLabel={selectedScheduleRouteContext.segment === 'secondary' ? 'Previous site' : 'Yard'}
+              destinationLabel="Site"
+            />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
             <div className="transport-weather-grid">
               <div><span className="transport-weather-icon weather"><InspectorIcon type="sun" /></span><strong>18C</strong><span>Sunny</span></div>
@@ -4286,7 +4363,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   </div>
                   <button type="button" className="ts2-close-btn" onClick={closeRequestModal}>×</button>
                 </div>
-                <RouteMapCanvas className="ts2-compact-map" routeData={requestModalRouteData} loading={requestModalRouteLoading} siteLocation={requestModal.siteLocation} expandable viewerTitle="Request Route" />
+                <RouteMapCanvas
+                  className="ts2-compact-map"
+                  routeData={requestModalRouteData}
+                  loading={requestModalRouteLoading}
+                  siteLocation={requestModal.siteLocation}
+                  expandable
+                  viewerTitle="Request Route"
+                  originLabel={requestModal.routeContext?.segment === 'secondary' ? 'Previous site' : 'Yard'}
+                  destinationLabel="Site"
+                />
                 <div className="ts2-estimate-grid">
                   <div><span>{requestModal.routeContext?.segment === 'secondary' ? 'Transit from parent site' : 'Transit from yard'}</span><strong>{requestModalSummary.deliveryFromYard}</strong></div>
                   <div><span>Site loading</span><strong>{requestModalSummary.siteLoading}</strong></div>
@@ -4383,7 +4469,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <div className="ts2-modal-loading">Loading delivery overview…</div>
             ) : eventOverviewModal ? (
               <>
-                <RouteMapCanvas className="transport-route-modal-map" routeData={eventOverviewRouteData} loading={eventOverviewRouteLoading} siteLocation={eventOverviewModal.siteLocation} interactive />
+                <RouteMapCanvas
+                  className="transport-route-modal-map"
+                  routeData={eventOverviewRouteData}
+                  loading={eventOverviewRouteLoading}
+                  siteLocation={eventOverviewModal.siteLocation}
+                  interactive
+                  originLabel={eventOverviewModal.routeContext?.segment === 'secondary' ? 'Previous site' : 'Yard'}
+                  destinationLabel="Site"
+                />
                 <div className="transport-route-modal-top">
                   <div>
                     <h2>Delivery Route</h2>
