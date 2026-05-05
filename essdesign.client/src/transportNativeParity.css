@@ -721,7 +721,7 @@
 }
 
 .transport-page-frame .status-scheduled,
-.transport-desktop-workspace .status-scheduled { background: #F1F5F9 !important; color: #475569 !important; }
+.transport-desktop-workspace .status-scheduled { background: #F3E8FF !important; color: #6B21A8 !important; }
 .transport-page-frame .status-in_transit { background: #DBEAFE !important; color: #1D4ED8 !important; }
 .transport-page-frame .status-unloading { background: #FEF3C7 !important; color: #B45309 !important; }
 .transport-page-frame .status-return_transit { background: #F3E8FF !important; color: #7E22CE !important; }
@@ -3078,9 +3078,9 @@
 
 .transport-page-frame .transport-reference-legend-pill.scheduled,
 .transport-desktop-workspace .transport-reference-legend-pill.scheduled {
-    background: #f1f5f9 !important;
-    color: #475569 !important;
-    border-color: #cbd5e1 !important;
+    background: #f3e8ff !important;
+    color: #6b21a8 !important;
+    border-color: #d8b4fe !important;
 }
 
 .transport-page-frame .transport-reference-legend-pill.in-transit,
