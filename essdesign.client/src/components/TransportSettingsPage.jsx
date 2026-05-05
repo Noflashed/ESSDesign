@@ -7,7 +7,6 @@ import {
   Palette,
   Search,
   Shield,
-  SlidersHorizontal,
   Truck,
 } from 'lucide-react';
 import {
@@ -26,8 +25,6 @@ const STATUS_ROWS = [
 
 const SETTINGS_SECTIONS = [
   { key: 'status-colours', label: 'Status Colours', description: 'Schedule board colour preferences', icon: Palette },
-  { key: 'board', label: 'Board Behaviour', description: 'Timeline, snapping and display options', icon: SlidersHorizontal },
-  { key: 'notifications', label: 'Notifications', description: 'Delivery and schedule alerts', icon: Bell },
   { key: 'driver-app', label: 'Driver App', description: 'Truck device workflow defaults', icon: Truck },
   { key: 'appearance', label: 'Appearance', description: 'Display density and visual options', icon: Monitor },
   { key: 'permissions', label: 'Permissions', description: 'Transport access controls', icon: Shield },
@@ -45,6 +42,92 @@ function normalizeHex(value, fallback) {
   return fallback;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function hexToRgb(value, fallback) {
+  const hex = normalizeHex(value, fallback || '#F3E8FF').slice(1);
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  return `#${[r, g, b].map(channel => clamp(Math.round(channel), 0, 255).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+function rgbToHsv({ r, g, b }) {
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  let h = 0;
+
+  if (delta) {
+    if (max === red) {
+      h = 60 * (((green - blue) / delta) % 6);
+    } else if (max === green) {
+      h = 60 * ((blue - red) / delta + 2);
+    } else {
+      h = 60 * ((red - green) / delta + 4);
+    }
+  }
+
+  return {
+    h: (h + 360) % 360,
+    s: max === 0 ? 0 : delta / max,
+    v: max,
+  };
+}
+
+function hsvToRgb({ h, s, v }) {
+  const chroma = v * s;
+  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - chroma;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (h < 60) {
+    red = chroma;
+    green = x;
+  } else if (h < 120) {
+    red = x;
+    green = chroma;
+  } else if (h < 180) {
+    green = chroma;
+    blue = x;
+  } else if (h < 240) {
+    green = x;
+    blue = chroma;
+  } else if (h < 300) {
+    red = x;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = x;
+  }
+
+  return {
+    r: (red + m) * 255,
+    g: (green + m) * 255,
+    b: (blue + m) * 255,
+  };
+}
+
+function hexToHsv(value, fallback) {
+  return rgbToHsv(hexToRgb(value, fallback));
+}
+
+function hsvToHex(value) {
+  return rgbToHex(hsvToRgb(value));
+}
+
 export default function TransportSettingsPage({ user }) {
   const [statusColors, setStatusColors] = useState(() => readTransportStatusColors(user));
   const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
@@ -53,11 +136,30 @@ export default function TransportSettingsPage({ user }) {
   const activeAppearance = statusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
   const [draftHex, setDraftHex] = useState(activeAppearance.accent);
   const effectiveDraftHex = normalizeHex(draftHex, activeAppearance.accent);
-
+  const draftHsv = useMemo(
+    () => hexToHsv(effectiveDraftHex, activeAppearance.accent),
+    [activeAppearance.accent, effectiveDraftHex],
+  );
   const currentDraftAppearance = useMemo(
     () => createTransportStatusAppearance(effectiveDraftHex, activeAppearance),
     [activeAppearance, effectiveDraftHex],
   );
+  const currentDraftHex = currentDraftAppearance.accent;
+  const hueColour = `hsl(${Math.round(draftHsv.h)}, 100%, 50%)`;
+  const hueMarkerStyle = {
+    left: `${50 + Math.cos((draftHsv.h * Math.PI) / 180) * 43}%`,
+    top: `${50 + Math.sin((draftHsv.h * Math.PI) / 180) * 43}%`,
+    backgroundColor: hueColour,
+  };
+  const triangleMarkerStyle = {
+    left: `${clamp(draftHsv.s, 0.05, 0.94) * 100}%`,
+    top: `${clamp(1 - draftHsv.v, 0.06, 0.94) * 100}%`,
+    backgroundColor: currentDraftHex,
+  };
+  const sliderMarkerStyle = {
+    top: `${clamp(1 - draftHsv.v, 0.04, 0.96) * 100}%`,
+    backgroundColor: currentDraftHex,
+  };
 
   const selectStatus = (statusKey) => {
     const nextAppearance = statusColors[statusKey] || TRANSPORT_STATUS_COLOR_DEFAULTS[statusKey];
@@ -67,6 +169,68 @@ export default function TransportSettingsPage({ user }) {
 
   const updateDraftHex = (value) => {
     setDraftHex(normalizeHex(value, draftHex));
+  };
+
+  const updateHsv = (nextValues) => {
+    setDraftHex(hsvToHex({ ...draftHsv, ...nextValues }));
+  };
+
+  const updateHueFromPointer = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - (rect.left + rect.width / 2);
+    const y = event.clientY - (rect.top + rect.height / 2);
+    updateHsv({ h: ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360 });
+  };
+
+  const updateTriangleFromPointer = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    updateHsv({
+      s: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+      v: clamp(1 - (event.clientY - rect.top) / rect.height, 0, 1),
+    });
+  };
+
+  const updateValueFromPointer = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    updateHsv({ v: clamp(1 - (event.clientY - rect.top) / rect.height, 0, 1) });
+  };
+
+  const handleHuePointerDown = (event) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateHueFromPointer(event);
+  };
+
+  const handleHuePointerMove = (event) => {
+    if (event.buttons === 1) {
+      updateHueFromPointer(event);
+    }
+  };
+
+  const handleTrianglePointerDown = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateTriangleFromPointer(event);
+  };
+
+  const handleTrianglePointerMove = (event) => {
+    if (event.buttons === 1) {
+      event.stopPropagation();
+      updateTriangleFromPointer(event);
+    }
+  };
+
+  const handleValuePointerDown = (event) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateValueFromPointer(event);
+  };
+
+  const handleValuePointerMove = (event) => {
+    if (event.buttons === 1) {
+      updateValueFromPointer(event);
+    }
   };
 
   const applyColour = () => {
@@ -154,26 +318,48 @@ export default function TransportSettingsPage({ user }) {
 
               <aside className="transport-colour-popover" aria-label={`${activeStatus.label} colour picker`}>
                 <div className="transport-colour-wheel-wrap">
-                  <label
+                  <div
                     className="transport-colour-wheel"
-                    htmlFor="transport-status-colour-input"
-                    aria-label={`Choose ${activeStatus.label} colour`}
+                    role="slider"
+                    aria-label={`${activeStatus.label} hue`}
+                    aria-valuemin={0}
+                    aria-valuemax={359}
+                    aria-valuenow={Math.round(draftHsv.h)}
+                    tabIndex={0}
+                    onPointerDown={handleHuePointerDown}
+                    onPointerMove={handleHuePointerMove}
                   >
-                    <span className="transport-colour-triangle" style={{ borderLeftColor: currentDraftAppearance.accent }} />
-                    <span className="transport-colour-selection" style={{ backgroundColor: currentDraftAppearance.accent }} />
-                    <input
-                      id="transport-status-colour-input"
-                      className="transport-native-colour-input"
-                      type="color"
-                      value={effectiveDraftHex}
-                      onChange={(event) => updateDraftHex(event.target.value)}
-                      aria-label={`${activeStatus.label} colour value`}
-                    />
-                  </label>
+                    <span className="transport-colour-hue-marker" style={hueMarkerStyle} />
+                    <span
+                      className="transport-colour-triangle"
+                      role="slider"
+                      aria-label={`${activeStatus.label} saturation and brightness`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(draftHsv.s * 100)}
+                      tabIndex={0}
+                      style={{ '--transport-picker-hue': hueColour }}
+                      onPointerDown={handleTrianglePointerDown}
+                      onPointerMove={handleTrianglePointerMove}
+                    >
+                      <span className="transport-colour-selection" style={triangleMarkerStyle} />
+                    </span>
+                  </div>
                 </div>
 
-                <div className="transport-colour-slider" aria-hidden="true">
-                  <span style={{ backgroundColor: currentDraftAppearance.accent }} />
+                <div
+                  className="transport-colour-slider"
+                  role="slider"
+                  aria-label={`${activeStatus.label} brightness`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(draftHsv.v * 100)}
+                  tabIndex={0}
+                  style={{ '--transport-picker-hue': hueColour }}
+                  onPointerDown={handleValuePointerDown}
+                  onPointerMove={handleValuePointerMove}
+                >
+                  <span style={sliderMarkerStyle} />
                 </div>
 
                 <div className="transport-colour-fields">
@@ -198,23 +384,6 @@ export default function TransportSettingsPage({ user }) {
                 </div>
               </aside>
             </div>
-          </section>
-
-          <section className="transport-settings-panel transport-settings-simple-panel">
-            <div>
-              <h2>Schedule Board Behaviour</h2>
-              <p>Timeline, snapping and display controls can be configured here later.</p>
-            </div>
-            <button type="button" className="transport-settings-outline-btn">Configure</button>
-          </section>
-
-          <section className="transport-settings-panel transport-settings-simple-panel">
-            <span className="transport-settings-shield"><Shield size={20} aria-hidden="true" /></span>
-            <div>
-              <h2>Notifications</h2>
-              <p>Delivery and schedule notification preferences will be managed here.</p>
-            </div>
-            <button type="button" className="transport-settings-outline-btn">Configure</button>
           </section>
         </div>
       </main>
