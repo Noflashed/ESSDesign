@@ -338,7 +338,6 @@ function createBlankOrder(user) {
         orderDate: todayDate(),
         notes: '',
         itemValues: {
-            __time: '',
             __details: '',
             __scaffoldingSystem: 'Kwikstage'
         }
@@ -354,7 +353,6 @@ function normalizeOrder(order, user) {
         requestedByName: order?.requestedByName || fallback.requestedByName,
         orderDate: order?.orderDate || fallback.orderDate,
         itemValues: {
-            __time: order?.itemValues?.__time || '',
             __details: order?.itemValues?.__details || '',
             __scaffoldingSystem: order?.itemValues?.__scaffoldingSystem || 'Kwikstage',
             ...(order?.itemValues || {})
@@ -954,6 +952,38 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                         </label>
 
                         <label className="transport-order-field">
+                            <span>Scaffold system</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control">{form.itemValues.__scaffoldingSystem || 'Kwikstage'}</div>
+                            ) : (
+                                <select
+                                    value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
+                                    onChange={(event) => handleQuantityChange('__scaffoldingSystem', event.target.value)}
+                                >
+                                    <option value="Kwikstage">Kwikstage</option>
+                                    <option value="AT-PAC">AT-PAC</option>
+                                    <option value="Layher">Layher</option>
+                                    <option value="Layher Allround">Layher Allround</option>
+                                    <option value="Ringlock">Ringlock</option>
+                                    <option value="Cuplock">Cuplock</option>
+                                </select>
+                            )}
+                        </label>
+
+                        <label className="transport-order-field transport-order-details-field">
+                            <span>Scaffold details</span>
+                            {isArchivedView ? (
+                                <div className="transport-order-static-control textarea-like">{form.itemValues.__details || 'No scaffold details supplied.'}</div>
+                            ) : (
+                                <textarea
+                                    value={form.itemValues.__details || ''}
+                                    onChange={(event) => handleQuantityChange('__details', event.target.value)}
+                                    placeholder="External perimeter scaffold, loading bay, stair access..."
+                                />
+                            )}
+                        </label>
+
+                        <label className="transport-order-field">
                             <span>Requested by</span>
                             <div className="transport-order-static-control with-icon">
                                 <User size={15} aria-hidden="true" />
@@ -974,51 +1004,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     />
                                     <CalendarDays size={15} aria-hidden="true" />
                                 </div>
-                            )}
-                        </label>
-
-                        <label className="transport-order-field">
-                            <span>Preferred time</span>
-                            {isArchivedView ? (
-                                <div className="transport-order-static-control">{form.itemValues.__time || 'Any time'}</div>
-                            ) : (
-                                <input
-                                    value={form.itemValues.__time || ''}
-                                    onChange={(event) => handleQuantityChange('__time', event.target.value)}
-                                    placeholder="7:00 AM"
-                                />
-                            )}
-                        </label>
-
-                        <label className="transport-order-field">
-                            <span>Scaffold system</span>
-                            {isArchivedView ? (
-                                <div className="transport-order-static-control">{form.itemValues.__scaffoldingSystem || 'Kwikstage'}</div>
-                            ) : (
-                                <select
-                                    value={form.itemValues.__scaffoldingSystem || 'Kwikstage'}
-                                    onChange={(event) => handleQuantityChange('__scaffoldingSystem', event.target.value)}
-                                >
-                                    <option value="Kwikstage">Kwikstage</option>
-                                    <option value="AT-PAC">AT-PAC</option>
-                                    <option value="Layher">Layher</option>
-                                    <option value="Layher Allround">Layher Allround</option>
-                                    <option value="Ringlock">Ringlock</option>
-                                    <option value="Cuplock">Cuplock</option>
-                                </select>
-                            )}
-                        </label>
-
-                        <label className="transport-order-field transport-order-details-field">
-                            <span>Delivery details</span>
-                            {isArchivedView ? (
-                                <div className="transport-order-static-control textarea-like">{form.itemValues.__details || 'No delivery details supplied.'}</div>
-                            ) : (
-                                <textarea
-                                    value={form.itemValues.__details || ''}
-                                    onChange={(event) => handleQuantityChange('__details', event.target.value)}
-                                    placeholder="Deliver to loading dock. Contact site manager on arrival."
-                                />
                             )}
                         </label>
                     </aside>

@@ -963,6 +963,8 @@ export const materialOrderRequestsAPI = {
             notes: form?.notes || '',
             itemValues: form?.itemValues || {},
             pdfPath: '',
+            scaffoldingSystem,
+            details,
             scheduledDate: null,
             scheduledHour: null,
             scheduledMinute: null,
