@@ -6902,6 +6902,71 @@ button.stat-card {
     backface-visibility: hidden;
 }
 .ts2-event-card { left: 0; }
+.ts2-actual-marker-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.ts2-actual-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    color: #ea580c;
+}
+
+.ts2-actual-marker-line {
+    position: absolute;
+    left: -1px;
+    top: -24px;
+    bottom: -1px;
+    width: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.74), 0 8px 16px rgba(15, 23, 42, 0.16);
+}
+
+.ts2-actual-marker-label {
+    position: absolute;
+    left: 0;
+    top: var(--actual-marker-label-offset, -1px);
+    transform: translate(-50%, -100%);
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid rgba(234, 88, 12, 0.36);
+    color: #9a3412;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+}
+
+.ts2-actual-marker.arrived {
+    color: #2563eb;
+}
+
+.ts2-actual-marker.arrived .ts2-actual-marker-label {
+    border-color: rgba(37, 99, 235, 0.32);
+    color: #1d4ed8;
+}
+
+.ts2-actual-marker.completed {
+    color: #16a34a;
+}
+
+.ts2-actual-marker.completed .ts2-actual-marker-label {
+    border-color: rgba(22, 163, 74, 0.32);
+    color: #15803d;
+}
+
 .ts2-secondary-route-card {
     background: #FFF4E8;
     color: #C25B0E;

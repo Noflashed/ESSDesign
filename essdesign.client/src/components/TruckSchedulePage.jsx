@@ -1169,6 +1169,17 @@ function formatActualDuration(minutes) {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} m`;
 }
 
+function getActualMarkerMinutes(isoValue, dateKey) {
+  if (!isoValue) {
+    return null;
+  }
+  const parsed = new Date(isoValue);
+  if (Number.isNaN(parsed.getTime()) || formatDateKey(parsed) !== dateKey) {
+    return null;
+  }
+  return parsed.getHours() * 60 + parsed.getMinutes() + parsed.getSeconds() / 60 + parsed.getMilliseconds() / 60000;
+}
+
 function CurrentTimeMarker({ selectedDate, timelineWidth, laneOffset = 0, nowOverride = null, debugActive = false }) {
   const [now, setNow] = useState(new Date());
 
@@ -1290,6 +1301,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const assignedTruck = getTruckAssignment(user?.role);
   const toolbarDateInputRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
+  const selectedDateKey = formatDateKey(selectedDate);
   const [allRequests, setAllRequests] = useState([]);
   const [dayEvents, setDayEvents] = useState([]);
   const [requestMetaMap, setRequestMetaMap] = useState({});
@@ -4157,6 +4169,25 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const returnStartMinutes = startMinutes + nonReturnDurationMinutes;
                       const returnEndMinutes = startMinutes + durationMinutes;
                       const siteArrivalMinutes = startMinutes + timing.transitMinutes;
+                      const actualMarkers = [
+                        { key: 'started', label: 'Started', iso: request?.deliveryStartedAt },
+                        { key: 'arrived', label: 'Arrived', iso: request?.deliveryUnloadingAt },
+                        { key: 'completed', label: 'Completed', iso: request?.deliveryConfirmedAt },
+                      ]
+                        .map(marker => {
+                          const minutes = getActualMarkerMinutes(marker.iso, selectedDateKey);
+                          if (typeof minutes !== 'number') {
+                            return null;
+                          }
+                          const ratio = (minutes - startMinutes) / Math.max(1, durationMinutes);
+                          return {
+                            ...marker,
+                            minutes,
+                            left: Math.max(0, Math.min(100, ratio * 100)),
+                            timeLabel: formatTimeChip(Math.floor(minutes / 60), Math.floor(minutes % 60)),
+                          };
+                        })
+                        .filter(Boolean);
                       const siteArrivalLabel = siteLocation
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
                         : 'pending';
@@ -4192,6 +4223,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               className={`transport-snap-hover${dropPreview?.snapOrderId === event.orderId ? ` ${dropPreview.snapSide}` : ''}${dropPreview?.snapOrderId === event.orderId && dropPreview.blocked ? ' blocked' : ''}`}
                               aria-hidden="true"
                             />
+                          ) : null}
+                          {actualMarkers.length > 0 ? (
+                            <div className="ts2-actual-marker-layer" aria-hidden="true">
+                              {actualMarkers.map((marker, markerIndex) => (
+                                <span
+                                  key={`${event.orderId}-${marker.key}`}
+                                  className={`ts2-actual-marker ${marker.key}`}
+                                  style={{
+                                    left: `${marker.left}%`,
+                                    '--actual-marker-label-offset': `${markerIndex % 2 === 0 ? -1 : -24}px`,
+                                  }}
+                                >
+                                  <span className="ts2-actual-marker-line" />
+                                  <span className="ts2-actual-marker-label">{marker.label} {marker.timeLabel}</span>
+                                </span>
+                              ))}
+                            </div>
                           ) : null}
                           <button
                             type="button"

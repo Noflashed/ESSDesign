@@ -114,7 +114,7 @@ function formatSchedulePill(request) {
 function getDeliveryStatusLabel(status) {
     if (status === 'in_transit') return 'In Transit';
     if (status === 'unloading') return 'Unloading';
-    if (status === 'return_transit') return 'Return Transit';
+    if (status === 'return_transit') return 'Complete';
     if (status === 'scheduled') return 'Scheduled';
     return 'Pending';
 }
@@ -1130,7 +1130,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                                 <option value="scheduled">Scheduled</option>
                                                 <option value="in_transit">In transit</option>
                                                 <option value="unloading">Unloading</option>
-                                                <option value="return_transit">Return transit</option>
+                                                <option value="return_transit">Complete</option>
                                             </select>
                                         </label>
                                         <label>
