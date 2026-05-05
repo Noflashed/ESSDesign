@@ -19,7 +19,7 @@ function TransportPlaceholderPage({ eyebrow, title, description }) {
   );
 }
 
-export default function TransportSuitePage({ user, currentPage, onNavigate, onExit }) {
+export default function TransportSuitePage({ user, currentPage, onNavigate, onExit, onLogout }) {
   const isTruckRole = isTruckDeviceRole(user?.role);
   const assignedTruck = getTruckAssignment(user?.role);
 
@@ -68,7 +68,7 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       );
     }
     if (currentPage === 'transport-settings') {
-      return <TransportSettingsPage user={user} />;
+      return <TransportSettingsPage user={user} onLogout={onLogout} />;
     }
     if (['transport-trips', 'transport-fleet', 'transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts'].includes(currentPage)) {
       const title = currentPage.replace('transport-', '').replace(/^\w/, value => value.toUpperCase());
@@ -114,6 +114,7 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       assignedTruck={assignedTruck}
       onNavigate={onNavigate}
       onExit={onExit}
+      onLogout={onLogout}
     />
   );
 }

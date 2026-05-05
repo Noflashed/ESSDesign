@@ -1176,7 +1176,7 @@ function App() {
             );
         }
         if (TRANSPORT_PAGE_KEYS.has(currentPage)) {
-            return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onExit={() => applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
+            return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onExit={() => applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onLogout={handleLogout} />;
         }
         if (currentPage === 'rostering') {
             return <ESSRosteringPage user={user} onViewTree={(planDate) => applyPageState('rostering-tree', { builder: null, project: null }, { leadingHand: null }, { planDate })} />;

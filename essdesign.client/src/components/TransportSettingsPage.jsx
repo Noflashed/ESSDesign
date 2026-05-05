@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   Bell,
-  ChevronDown,
   CircleHelp,
   Edit3,
   Palette,
@@ -16,6 +15,7 @@ import {
   saveTransportStatusColors,
   TRANSPORT_STATUS_COLOR_DEFAULTS,
 } from './transport/transportUtils';
+import TransportUserMenu from './transport/TransportUserMenu';
 
 const STATUS_ROWS = [
   { key: 'scheduled', label: 'Scheduled' },
@@ -130,15 +130,7 @@ function hsvToHex(value) {
   return rgbToHex(hsvToRgb(value));
 }
 
-function getUserInitials(userName) {
-  const parts = String(userName || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-  return (parts[0]?.slice(0, 2) || 'AD').toUpperCase();
-}
-
-export default function TransportSettingsPage({ user }) {
+export default function TransportSettingsPage({ user, onLogout }) {
   const initialColors = useMemo(() => readTransportStatusColors(user), [user]);
   const [statusColors, setStatusColors] = useState(initialColors);
   const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
@@ -268,9 +260,6 @@ export default function TransportSettingsPage({ user }) {
     setDraftHex((saved[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key]).accent);
   };
 
-  const userName = user?.fullName || user?.name || user?.email || 'Admin User';
-  const userInitials = getUserInitials(userName);
-
   return (
     <div className="transport-settings-page">
       <header className="transport-settings-topbar">
@@ -285,10 +274,7 @@ export default function TransportSettingsPage({ user }) {
         <div className="transport-settings-top-actions">
           <button type="button" aria-label="Notification settings"><Bell size={19} aria-hidden="true" /></button>
           <button type="button" aria-label="Help"><CircleHelp size={20} aria-hidden="true" /></button>
-          <div className="transport-settings-user-chip">
-            <span>{userInitials}</span>
-            <ChevronDown size={17} aria-hidden="true" />
-          </div>
+          <TransportUserMenu user={user} onLogout={onLogout} variant="topbar" />
         </div>
       </header>
 

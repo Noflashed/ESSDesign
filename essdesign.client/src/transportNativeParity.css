@@ -3873,6 +3873,78 @@
     color: #ffffff;
 }
 
+.transport-account-menu {
+    position: relative;
+}
+
+.transport-account-menu-rail {
+    width: 100%;
+}
+
+.transport-desktop-profile-trigger {
+    width: 100%;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.transport-desktop-profile-trigger > svg {
+    justify-self: center;
+    color: inherit;
+    transition: transform 160ms ease;
+}
+
+.transport-desktop-profile-trigger[aria-expanded="true"] > svg {
+    transform: rotate(180deg);
+}
+
+.transport-account-avatar {
+    position: relative;
+    overflow: visible !important;
+}
+
+.transport-account-avatar img {
+    border-radius: 50%;
+}
+
+.transport-account-profile-glyph {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #17314F;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+}
+
+.transport-account-dropdown {
+    z-index: 70;
+}
+
+.transport-account-menu-rail .transport-account-dropdown {
+    top: auto;
+    right: auto;
+    bottom: calc(100% + 10px);
+    left: 0;
+    width: min(268px, calc(100vw - 28px));
+}
+
+.transport-account-menu-topbar .transport-account-dropdown {
+    top: calc(100% + 10px);
+}
+
+.transport-account-exit-action {
+    background: #17314F;
+    border-color: #17314F;
+}
+
 .transport-debug-status button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
