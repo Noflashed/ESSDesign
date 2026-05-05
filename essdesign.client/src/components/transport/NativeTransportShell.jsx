@@ -19,6 +19,9 @@ function TransportIcon({ type }) {
   if (type === 'dashboard') {
     return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>;
   }
+  if (type === 'home') {
+    return <svg {...common}><path d="m3 10 9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg>;
+  }
   if (type === 'dynamic') {
     return <svg {...common}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h3M8 18h6" /></svg>;
   }
@@ -67,6 +70,8 @@ export default function NativeTransportShell({
   onLogout,
 }) {
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const goHome = onExit || (() => window.history.back());
+  const showWorkspaceAccountMenu = currentPage !== 'transport-settings';
 
   return (
     <div className={`transport-desktop-shell${railCollapsed ? ' rail-collapsed' : ''}`}>
@@ -106,17 +111,32 @@ export default function NativeTransportShell({
           </nav>
         </div>
 
-        <TransportUserMenu
-          user={user}
-          isTruckRole={isTruckRole}
-          assignedTruck={assignedTruck}
-          onExit={onExit || (() => window.history.back())}
-          onLogout={onLogout}
-          variant="rail"
-        />
+        <div className="transport-desktop-rail-bottom">
+          <button
+            type="button"
+            className="transport-desktop-nav-item transport-desktop-home-button"
+            onClick={goHome}
+            title="Back to ESS app home"
+            aria-label="Back to ESS app home"
+          >
+            <TransportIcon type="home" />
+            <span>Home</span>
+          </button>
+        </div>
       </aside>
 
       <main className="transport-desktop-workspace" data-transport-role={isTruckRole ? assignedTruck?.rego || 'truck' : 'management'}>
+        {showWorkspaceAccountMenu ? (
+          <div className="transport-shell-account-anchor">
+            <TransportUserMenu
+              user={user}
+              isTruckRole={isTruckRole}
+              assignedTruck={assignedTruck}
+              onLogout={onLogout}
+              variant="topbar"
+            />
+          </div>
+        ) : null}
         {content}
       </main>
     </div>
