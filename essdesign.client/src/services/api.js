@@ -1258,6 +1258,15 @@ export const materialOrderRequestsAPI = {
             && item?.sourceOrderId === requestId
             && !item?.archivedAt
         );
+        const relinkedContinuation = schedule.relinkedContinuation && typeof schedule.relinkedContinuation === 'object'
+            ? schedule.relinkedContinuation
+            : null;
+        const relinkedContinuationId = relinkedContinuation?.id || null;
+        const shouldInsertBeforeExistingSecondary = Boolean(
+            relinkedContinuationId &&
+            existingSecondaryIndexItem?.id &&
+            relinkedContinuationId === existingSecondaryIndexItem.id
+        );
         const linkedRequestId = normalizedSecondaryRoute.linkedRequestId && normalizedSecondaryRoute.linkedRequestId !== requestId
             ? normalizedSecondaryRoute.linkedRequestId
             : null;
@@ -1274,8 +1283,11 @@ export const materialOrderRequestsAPI = {
             throw new Error('Selected material order is no longer available to add as a secondary route');
         }
         const linkedSourceRecord = linkedRecord || linkedIndexItem || null;
-        const secondaryRequestId = linkedSourceRecord?.id || existingSecondaryIndexItem?.id || `secondary-${requestId}-${makeId()}`;
+        const secondaryRequestId = linkedSourceRecord?.id
+            || (shouldInsertBeforeExistingSecondary ? null : existingSecondaryIndexItem?.id)
+            || `secondary-${requestId}-${makeId()}`;
         const existingSecondaryRecord = linkedSourceRecord || (existingSecondaryIndexItem?.id
+            && !shouldInsertBeforeExistingSecondary
             ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => null)
             : null);
         const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
@@ -1308,7 +1320,9 @@ export const materialOrderRequestsAPI = {
             : existingSecondaryRecord?.submittedAt || existingSecondaryIndexItem?.submittedAt || nowIso();
         const parentUpdated = {
             ...record,
-            secondaryRoute: null,
+            secondaryRoute: record.routeType === 'secondary_route'
+                ? normalizeSecondaryRoute(record.secondaryRoute)
+                : null,
         };
         const secondaryRecord = {
             ...(existingSecondaryRecord || {}),
@@ -1367,8 +1381,41 @@ export const materialOrderRequestsAPI = {
             ...secondaryRecord,
             secondaryRoute: normalizedSecondaryRoute,
         };
+        const normalizedRelinkedSecondaryRoute = relinkedContinuation?.secondaryRoute
+            ? normalizeSecondaryRoute(relinkedContinuation.secondaryRoute)
+            : null;
+        const relinkedScheduledDate = relinkedContinuation?.scheduledDate || scheduledDate;
+        const relinkedScheduledHour = typeof relinkedContinuation?.scheduledHour === 'number'
+            ? relinkedContinuation.scheduledHour
+            : null;
+        const relinkedScheduledMinute = typeof relinkedContinuation?.scheduledMinute === 'number'
+            ? relinkedContinuation.scheduledMinute
+            : null;
+        const relinkedScheduledAtIso = relinkedScheduledDate && typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
+            ? `${relinkedScheduledDate}T${String(relinkedScheduledHour).padStart(2, '0')}:${String(relinkedScheduledMinute).padStart(2, '0')}:00`
+            : null;
+        const relinkedContinuationRecord = shouldInsertBeforeExistingSecondary && normalizedRelinkedSecondaryRoute
+            ? {
+                ...(relinkedContinuation || {}),
+                id: relinkedContinuationId,
+                sourceOrderId: secondaryRequestId,
+                connectedParentStartMinutes: typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
+                    ? relinkedScheduledHour * 60 + relinkedScheduledMinute
+                    : relinkedContinuation.connectedParentStartMinutes ?? null,
+                routeType: 'secondary_route',
+                scheduledDate: relinkedScheduledDate,
+                scheduledHour: relinkedScheduledHour,
+                scheduledMinute: relinkedScheduledMinute,
+                scheduledAtIso: relinkedScheduledAtIso,
+                scheduledTruckId,
+                scheduledTruckLabel,
+                truckId: scheduledTruckId,
+                truckLabel: scheduledTruckLabel,
+                secondaryRoute: normalizedRelinkedSecondaryRoute,
+            }
+            : null;
         const replacedSecondaryIds = new Set([secondaryRequestId]);
-        if (existingSecondaryIndexItem?.id) {
+        if (existingSecondaryIndexItem?.id && !shouldInsertBeforeExistingSecondary) {
             replacedSecondaryIds.add(existingSecondaryIndexItem.id);
         }
         const nextIndex = {
@@ -1376,8 +1423,15 @@ export const materialOrderRequestsAPI = {
                 ...existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
-                    secondaryRoute: null,
+                    secondaryRoute: item.routeType === 'secondary_route'
+                        ? normalizeSecondaryRoute(item.secondaryRoute)
+                        : null,
                 }
+                : relinkedContinuationRecord && item.id === relinkedContinuationRecord.id
+                    ? {
+                        ...item,
+                        ...relinkedContinuationRecord,
+                    }
                 : item).filter(item => !replacedSecondaryIds.has(item.id)),
                 secondaryIndexItem,
             ],
@@ -1388,7 +1442,10 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(`material-order-requests/requests/${secondaryRequestId}.json`, JSON.stringify(secondaryRecord), 'application/json'),
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ];
-        if (existingSecondaryIndexItem?.id && existingSecondaryIndexItem.id !== secondaryRequestId) {
+        if (relinkedContinuationRecord) {
+            writes.push(uploadStorageObject(`material-order-requests/requests/${relinkedContinuationRecord.id}.json`, JSON.stringify(relinkedContinuationRecord), 'application/json'));
+        }
+        if (existingSecondaryIndexItem?.id && existingSecondaryIndexItem.id !== secondaryRequestId && !shouldInsertBeforeExistingSecondary) {
             writes.push(deleteStorageObject(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => {}));
         }
         await Promise.all(writes);
