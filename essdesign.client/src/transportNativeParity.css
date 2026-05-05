@@ -259,6 +259,23 @@
     min-height: 92px !important;
 }
 
+.transport-page-frame .material-ordering-page-loading,
+.transport-desktop-workspace .material-ordering-page-loading {
+    display: grid !important;
+    place-items: center !important;
+    min-height: 100vh !important;
+    background: #F8FAFC !important;
+}
+
+.transport-page-frame .material-ordering-page-loader,
+.transport-desktop-workspace .material-ordering-page-loader {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 164px !important;
+    height: 164px !important;
+}
+
 .transport-page-frame .material-ordering-queue-tools,
 .transport-page-frame .material-ordering-request-stack-ios {
     width: calc(100% - 48px) !important;

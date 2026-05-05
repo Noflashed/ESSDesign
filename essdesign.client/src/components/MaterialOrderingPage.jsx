@@ -9,6 +9,8 @@ import {
     TRANSPORT_STATUS_COLOR_PREF_EVENT,
 } from './transport/transportUtils';
 
+const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+
 const SECTION_HEADER_LABELS = new Set([
     'TIMBER BOARDS',
     'SCAFFOLD CLIPS',
@@ -1453,11 +1455,12 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     if (loading) {
         return (
-            <div className="ts2-page material-ordering-transport-page">
-                <div className="transport-placeholder-card material-ordering-transport-empty">
-                    <span className="transport-placeholder-eyebrow">ESS Transport</span>
-                    <h2>Loading material ordering…</h2>
-                    <p>The transport workspace is loading the current picking card data.</p>
+            <div className="ts2-page material-ordering-transport-page material-ordering-page-loading">
+                <div className="material-ordering-page-loader" role="status" aria-label="Loading schedule management">
+                    <div className="loading-brandmark" aria-hidden="true">
+                        <div className="loading-ring"></div>
+                        <img src={ESS_LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
+                    </div>
                 </div>
             </div>
         );
