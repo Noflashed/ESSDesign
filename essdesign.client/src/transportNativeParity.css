@@ -4934,7 +4934,7 @@
 }
 
 .transport-order-main {
-    padding: 24px 28px 32px !important;
+    padding: 22px 28px 32px !important;
     box-sizing: border-box !important;
 }
 
@@ -5062,12 +5062,16 @@
 
 .transport-order-panel-head {
     display: grid !important;
-    grid-template-columns: auto minmax(220px, 420px) auto !important;
+    grid-template-columns: minmax(320px, 1fr) auto !important;
     align-items: center !important;
     gap: 16px !important;
     min-height: 64px !important;
     padding: 0 18px !important;
     border-bottom: 1px solid #dbe3ee !important;
+}
+
+.transport-order-material-panel-head {
+    grid-template-columns: minmax(360px, 1fr) auto !important;
 }
 
 .transport-order-material-search {
@@ -5146,7 +5150,7 @@
 }
 
 .transport-order-material-table-shell {
-    max-height: calc(100vh - 212px) !important;
+    max-height: calc(100vh - 142px) !important;
     overflow: auto !important;
 }
 
@@ -5432,6 +5436,8 @@
     }
 
     .transport-order-panel-actions {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         justify-self: stretch !important;
     }
 

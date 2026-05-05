@@ -276,6 +276,10 @@ function summarizeItems(request) {
 
 function getMaterialGroupName(label) {
     const value = String(label || '').toUpperCase();
+    if (value.includes('DIAGONAL BRACE')) return 'Diagonal Braces';
+    if (value.includes('HARDWOOD SOLE BOARD') || value.includes('TIMBER BOARD')) return 'Timber Boards';
+    if (value.includes('LADDER') || /^\d+(?:\.\d+)?M$/i.test(String(label || '').trim())) return 'Ladder Components';
+    if (value.includes('STAIR') || value.includes('STEP DOWN') || value === 'ALUMINIUM HANDRAIL' || value === 'ALUMINIUM TOP RAIL') return 'Stair Components';
     if (value.includes('STANDARD')) return 'Standards';
     if (value.includes('LEDGER')) return 'Ledgers';
     if (value.includes('TRANSOM')) return 'Transoms';
@@ -288,6 +292,12 @@ function getMaterialGroupName(label) {
     return 'Accessories';
 }
 
+function getMaterialDisplayLabel(label) {
+    const value = String(label || '').trim();
+    if (value.toUpperCase() === 'OPEN END') return 'OPEN END STANDARDS';
+    return value;
+}
+
 function getMaterialOrderGroups(itemValues = {}) {
     const groups = new Map();
 
@@ -298,7 +308,7 @@ function getMaterialOrderGroups(itemValues = {}) {
             ['right', row.right],
         ].forEach(([side, entry]) => {
             const [label = '', spec = ''] = entry;
-            const cleanLabel = String(label || '').trim();
+            const cleanLabel = getMaterialDisplayLabel(label);
             const cleanSpec = String(spec || '').trim();
             const isSectionHeader = SECTION_HEADER_LABELS.has(cleanLabel.toUpperCase()) && !cleanSpec;
 
@@ -1009,8 +1019,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     </aside>
 
                     <section className="transport-order-panel transport-order-material-panel">
-                        <div className="transport-order-panel-head">
-                            <h2>Material Schedule</h2>
+                        <div className="transport-order-panel-head transport-order-material-panel-head">
                             <label className="transport-order-material-search">
                                 <Search size={16} aria-hidden="true" />
                                 <input
@@ -1025,6 +1034,9 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 <button type="button" className="transport-order-outline-btn" onClick={startNewOrder}>
                                     <Plus size={15} aria-hidden="true" />
                                     <span>New Order</span>
+                                </button>
+                                <button type="button" className="transport-order-outline-btn" onClick={() => onNavigate?.('material-ordering-active')}>
+                                    Order Requests
                                 </button>
                             </div>
                         </div>
@@ -1646,20 +1658,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
 
     return (
         <div className="ts2-page material-ordering-transport-page transport-order-page">
-            <header className="transport-order-topbar">
-                <div className="transport-order-title-block">
-                    <h1>Material Order</h1>
-                    <div className="transport-order-breadcrumb">
-                        <span>ESS Transport</span>
-                        <span>/</span>
-                        <span>Orders</span>
-                    </div>
-                </div>
-                <button type="button" className="transport-order-outline-btn" onClick={() => onNavigate?.('material-ordering-active')}>
-                    Order Requests
-                </button>
-            </header>
-
             <main className="transport-order-main">
                 {renderPickingSheet()}
             </main>
