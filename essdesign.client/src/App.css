@@ -6754,7 +6754,14 @@ button.stat-card {
 
 .ts2-axis { height: 54px; }
 
-.ts2-axis-tick,
+.ts2-axis-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: transparent;
+}
+
 .ts2-grid-line {
     position: absolute;
     top: 0;
@@ -6763,7 +6770,6 @@ button.stat-card {
     background: rgba(203,213,225,0.42);
 }
 
-.ts2-axis-tick.major,
 .ts2-grid-line.major { background: rgba(148,163,184,0.48); }
 .ts2-axis-tick span {
     position: absolute;
@@ -8773,12 +8779,10 @@ button.stat-card {
     overflow: visible;
 }
 
-.transport-page-frame .ts2-axis-tick:first-child,
 .transport-page-frame .ts2-grid-line:first-child {
     background: rgba(148, 163, 184, 0.58);
 }
 
-.transport-page-frame .ts2-axis-tick:last-child,
 .transport-page-frame .ts2-grid-line:last-child {
     background: rgba(148, 163, 184, 0.58);
 }
