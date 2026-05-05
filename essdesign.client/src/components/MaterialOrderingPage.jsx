@@ -284,6 +284,7 @@ function getMaterialGroupName(label) {
     const value = String(label || '').toUpperCase();
     if (value.includes('DIAGONAL BRACE')) return 'Diagonal Braces';
     if (value.includes('HOP-UP')) return 'Hop-Up Brackets';
+    if (['TECH SCREWS TIMBER', 'PLYWOOD 17MM / 12MM', '3/2 TIMBERS'].includes(value)) return 'Accessories';
     if (value === 'TIE BARS') return 'Tie Bars';
     if (value.includes('CORNER BRACKET')) return 'Corner Brackets';
     if (['DOUBLE SAFETY', 'SWIVEL', 'SWIVEL SAFETY', 'BEAM CLAMPS'].includes(value)) return 'Clips & Couplers';
@@ -305,11 +306,11 @@ function getMaterialGroupName(label) {
 function getMaterialDisplayLabel(label) {
     const value = String(label || '').trim();
     if (value.toUpperCase() === 'OPEN END') return 'OPEN END STANDARDS';
-    if (value.toUpperCase() === 'HOP-UP 3 SPIGOTS') return '3-Board Hop-Up Bracket with Spigot';
-    if (value.toUpperCase() === 'HOP-UP 2 SPIGOTS') return '2-Board Hop-Up Bracket with Spigot';
-    if (value.toUpperCase() === 'HOP-UP BRACKETS 3') return '3-Board Hop-Up Bracket';
-    if (value.toUpperCase() === 'HOP-UP BRACKETS 2') return '2-Board Hop-Up Bracket';
-    if (value.toUpperCase() === 'HOP-UP BRACKETS 1') return '1-Board Hop-Up Bracket';
+    if (value.toUpperCase() === 'HOP-UP 3 SPIGOTS') return '3-BOARD HOP-UP WITH SPIGOT';
+    if (value.toUpperCase() === 'HOP-UP 2 SPIGOTS') return '2-BOARD HOP-UP WITH SPIGOT';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 3') return '3-BOARD HOP-UP';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 2') return '2-BOARD HOP-UP';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 1') return '1-BOARD HOP-UP';
     return value;
 }
 
@@ -602,14 +603,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const isActiveQueueView = view === 'active';
     const isArchivedQueueView = view === 'archived';
     const isArchivedView = isArchivedQueueView && Boolean(selectedArchivedRequest);
-
-    const totalQuantity = useMemo(
-        () => Object.entries(form.itemValues || {}).reduce((sum, [key, value]) => {
-            if (String(key).startsWith('__')) return sum;
-            return sum + Math.max(0, Number(value || 0));
-        }, 0),
-        [form.itemValues]
-    );
 
     const materialGroups = useMemo(
         () => getMaterialOrderGroups(form.itemValues),
@@ -1021,9 +1014,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     };
 
     const renderPickingSheet = () => {
-        const visibleSelectedMaterials = selectedMaterials.slice(0, 6);
-        const remainingSelectedCount = Math.max(0, selectedMaterials.length - visibleSelectedMaterials.length);
-
         return (
             <>
                 {isArchivedView ? (
@@ -1267,35 +1257,30 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     </div>
                                 </dl>
 
-                                <div className="transport-order-summary-metrics">
-                                    <div>
-                                        <span>Total items</span>
-                                        <strong>{selectedMaterials.length}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Total quantity</span>
-                                        <strong>{totalQuantity}</strong>
-                                    </div>
-                                </div>
-
                                 <div className="transport-order-selected-list">
                                     <h3>Selected materials</h3>
-                                    {visibleSelectedMaterials.length ? (
-                                        visibleSelectedMaterials.map((item) => (
-                                            <div key={item.key} className="transport-order-selected-item">
-                                                <span aria-hidden="true" />
-                                                <strong>{item.material}{item.spec ? ` ${item.spec}` : ''}</strong>
-                                                <b>{item.quantity}</b>
-                                            </div>
-                                        ))
+                                    {selectedMaterials.length ? (
+                                        <div className="transport-order-selected-table-wrap">
+                                            <table className="transport-order-selected-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Material</th>
+                                                        <th scope="col">Qty</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedMaterials.map((item) => (
+                                                        <tr key={item.key}>
+                                                            <td>{item.material}{item.spec ? ` ${item.spec}` : ''}</td>
+                                                            <td>{item.quantity}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     ) : (
-                                        <p>No materials selected yet.</p>
+                                        <p className="transport-order-selected-empty">No materials selected yet.</p>
                                     )}
-                                    {remainingSelectedCount ? (
-                                        <p className="transport-order-more-selected">
-                                            +{remainingSelectedCount} more material{remainingSelectedCount === 1 ? '' : 's'}
-                                        </p>
-                                    ) : null}
                                 </div>
 
                                 <label className="transport-order-field transport-order-notes-field">

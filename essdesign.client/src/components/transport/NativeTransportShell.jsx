@@ -65,13 +65,14 @@ export default function NativeTransportShell({
   user,
   isTruckRole,
   assignedTruck,
+  hideWorkspaceAccountMenu = false,
   onNavigate,
   onExit,
   onLogout,
 }) {
   const [railCollapsed, setRailCollapsed] = useState(false);
   const goHome = onExit || (() => window.history.back());
-  const showWorkspaceAccountMenu = currentPage !== 'transport-settings';
+  const showWorkspaceAccountMenu = currentPage !== 'transport-settings' && !hideWorkspaceAccountMenu;
   const showTransportSettingsShortcut = !isTruckRole;
 
   return (
