@@ -169,6 +169,23 @@ function removeReturnLegFromTiming(timing) {
   };
 }
 
+function applyReturnEstimateToTiming(timing, returnRouteEstimate = null) {
+  if (!timing || !returnRouteEstimate?.durationMinutes) {
+    return timing;
+  }
+  const returnMinutes = Math.max(15, Math.round(returnRouteEstimate.durationMinutes));
+  return {
+    ...timing,
+    returnMinutes,
+    totalMinutes:
+      (timing.transitMinutes || 0) +
+      (timing.loadingMinutes || 0) +
+      (timing.secondaryTravelMinutes || 0) +
+      (timing.secondaryServiceMinutes || 0) +
+      returnMinutes,
+  };
+}
+
 function isBackToBackContinuation(parentRequest, continuationRequest, parentTiming, truckId) {
   if (!parentRequest || !continuationRequest || isSecondaryRouteRequest(parentRequest)) {
     return false;
@@ -725,14 +742,16 @@ function setScheduleDragImage(event, request, options = {}) {
   window.setTimeout(() => ghost.remove(), 0);
 }
 
-function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation, secondaryRoute = null, includeReturnTransitToYard = true) {
+function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation, secondaryRoute = null, includeReturnTransitToYard = true, returnRouteEstimate = null) {
   const transitMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const loadingMinutes = 30;
   const secondaryTravelMinutes = secondaryRoute?.travelDurationSeconds ? Math.round(secondaryRoute.travelDurationSeconds / 60) : 0;
   const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
   const returnMinutes = secondaryRoute?.returnDurationSeconds
     ? Math.round(secondaryRoute.returnDurationSeconds / 60)
-    : routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
+    : returnRouteEstimate?.durationMinutes
+      ? Math.round(returnRouteEstimate.durationMinutes)
+      : routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
   const includedReturnMinutes = includeReturnTransitToYard ? returnMinutes : 0;
   const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0, 0);
   const arrival = new Date(start.getTime() + transitMinutes * 60 * 1000);
@@ -1271,6 +1290,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [selectedHour, setSelectedHour] = useState(SCREEN_START_HOUR);
   const [selectedMinute, setSelectedMinute] = useState(0);
   const [selectedRouteEstimate, setSelectedRouteEstimate] = useState(null);
+  const [selectedReturnRouteEstimate, setSelectedReturnRouteEstimate] = useState(null);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [eventOverviewModal, setEventOverviewModal] = useState(null);
@@ -1925,8 +1945,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     ? isSecondaryRouteRequest(selectedScheduleRequest)
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleReturnTransitEnabled)
       : selectedScheduleHasSecondaryContinuation || !selectedScheduleReturnTransitEnabled
-        ? removeReturnLegFromTiming(getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null))
-        : getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null)
+        ? removeReturnLegFromTiming(applyReturnEstimateToTiming(
+          getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
+          selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
+        ))
+        : applyReturnEstimateToTiming(
+          getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
+          selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
+        )
     : null;
   const selectedScheduleActualTiming = useMemo(() => {
     if (!selectedScheduleRequest) {
@@ -2043,10 +2069,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (isSecondaryRouteRequest(requestModal?.request)) {
       return Math.max(30, getSecondaryRouteTiming(requestModal.request.secondaryRoute, requestModalReturnTransitEnabled).totalMinutes || 90);
     }
-    const timing = getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null);
+    const timing = applyReturnEstimateToTiming(
+      getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null),
+      requestModal?.routeContext?.segment === 'secondary' ? selectedReturnRouteEstimate : null,
+    );
     const preferredTiming = requestModalReturnTransitEnabled ? timing : removeReturnLegFromTiming(timing);
     return Math.max(30, preferredTiming.totalMinutes || 90);
-  }, [getReturnTransitEnabled, requestModal?.request, selectedRouteEstimate]);
+  }, [getReturnTransitEnabled, requestModal?.request, requestModal?.routeContext?.segment, selectedReturnRouteEstimate, selectedRouteEstimate]);
   const selectedScheduleTrafficCopy = useMemo(
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
@@ -2060,8 +2089,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       Boolean(requestModal?.siteLocation),
       requestModal?.request?.secondaryRoute || null,
       getReturnTransitEnabled(requestModal?.request?.id),
+      requestModal?.routeContext?.segment === 'secondary' ? selectedReturnRouteEstimate : null,
     ),
-    [getReturnTransitEnabled, requestModal?.request?.id, requestModal?.request?.secondaryRoute, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedRouteEstimate],
+    [getReturnTransitEnabled, requestModal?.request?.id, requestModal?.request?.secondaryRoute, requestModal?.routeContext?.segment, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedReturnRouteEstimate, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
 
@@ -2167,6 +2197,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     if (!requestModal?.request) {
       setSelectedRouteEstimate(null);
+      setSelectedReturnRouteEstimate(null);
       setRequestModalRouteData(null);
       setRequestModalRouteLoading(false);
       return undefined;
@@ -2202,21 +2233,27 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     if (!routeContext.toLocation || (routeContext.segment === 'secondary' && !routeContext.fromLocation)) {
       setSelectedRouteEstimate(null);
+      setSelectedReturnRouteEstimate(null);
       setRequestModalRouteData(null);
       setRequestModalRouteLoading(false);
       return undefined;
     }
 
     setRequestModalRouteLoading(true);
+    const returnEstimateRequest = routeContext.segment === 'secondary'
+      ? getCachedRouteEstimate(routeContext.toLocation, schedule)
+      : Promise.resolve(null);
     Promise.all([
       Promise.resolve(getCachedRouteEstimateForContext(routeContext)),
       fetchRouteDataForContext(routeContext),
+      returnEstimateRequest,
     ])
-      .then(([estimate, routeData]) => {
+      .then(([estimate, routeData, returnEstimate]) => {
         if (!active) {
           return;
         }
         setSelectedRouteEstimate(estimate || (routeData ? buildEstimateFromRouteData(routeData) : null));
+        setSelectedReturnRouteEstimate(returnEstimate || null);
         setRequestModalRouteData(routeData);
       })
       .finally(() => {
@@ -2253,6 +2290,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       Boolean(eventOverviewModal.siteLocation),
       eventOverviewModal.request.secondaryRoute || null,
       getReturnTransitEnabled(eventOverviewModal.event?.orderId),
+      eventOverviewModal.returnRouteEstimate || null,
     );
   }, [eventOverviewModal, getReturnTransitEnabled]);
   const manualTimeEvent = useMemo(
@@ -2266,6 +2304,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setRequestModalLoading(true);
     setRequestModal(null);
     setSelectedRouteEstimate(null);
+    setSelectedReturnRouteEstimate(null);
     setRequestModalRouteData(null);
     setRequestModalRouteLoading(false);
     const request = allRequests.find(item => item.id === requestId) ?? await materialOrderRequestsAPI.getRequest(requestId);
@@ -2318,6 +2357,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setRequestModal(null);
     setRequestModalLoading(false);
     setSelectedRouteEstimate(null);
+    setSelectedReturnRouteEstimate(null);
     setRequestModalRouteData(null);
     setRequestModalRouteLoading(false);
     setTimePickerVisible(false);
@@ -2347,17 +2387,27 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     );
     const siteLocation = routeContext.siteLocation;
     const routeEstimate = getCachedRouteEstimateForContext(routeContext);
+    const returnRouteEstimate = routeContext.segment === 'secondary'
+      ? getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule) ?? null
+      : null;
     const cycleState = eventCycleStateMap[event.orderId] ?? null;
-    const modalState = { event, request, siteLocation, routeEstimate, cycleState, routeContext };
+    const modalState = { event, request, siteLocation, routeEstimate, returnRouteEstimate, cycleState, routeContext };
     setEventOverviewModal(modalState);
     setEventOverviewLoading(false);
     if (routeContext.toLocation && (routeContext.segment !== 'secondary' || routeContext.fromLocation)) {
       setEventOverviewRouteLoading(true);
-      fetchRouteDataForContext(routeContext)
-        .then(data => {
+      const returnEstimateRequest = routeContext.segment === 'secondary'
+        ? getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule)
+        : Promise.resolve(null);
+      Promise.all([fetchRouteDataForContext(routeContext), returnEstimateRequest])
+        .then(([data, resolvedReturnEstimate]) => {
           setEventOverviewRouteData(data);
-          if (data) {
-            setEventOverviewModal(current => current ? { ...current, routeEstimate: current.routeEstimate || buildEstimateFromRouteData(data) } : current);
+          if (data || resolvedReturnEstimate) {
+            setEventOverviewModal(current => current ? {
+              ...current,
+              routeEstimate: current.routeEstimate || (data ? buildEstimateFromRouteData(data) : null),
+              returnRouteEstimate: current.returnRouteEstimate || resolvedReturnEstimate || null,
+            } : current);
           }
         })
         .finally(() => setEventOverviewRouteLoading(false));
