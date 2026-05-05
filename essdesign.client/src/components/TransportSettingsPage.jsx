@@ -131,72 +131,73 @@ export default function TransportSettingsPage({ user }) {
               <button type="button" className="transport-settings-outline-btn" onClick={cancelColourEdit}>Cancel Edit</button>
             </div>
 
-            <div className="transport-status-table">
-              {STATUS_ROWS.map(row => {
-                const appearance = statusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
-                const selected = row.key === activeStatus.key;
-                return (
-                  <button
-                    key={row.key}
-                    type="button"
-                    className={`transport-status-table-row${selected ? ' selected' : ''}`}
-                    onClick={() => selectStatus(row.key)}
+            <div className="transport-settings-status-body">
+              <div className="transport-status-table">
+                {STATUS_ROWS.map(row => {
+                  const appearance = statusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
+                  const selected = row.key === activeStatus.key;
+                  return (
+                    <button
+                      key={row.key}
+                      type="button"
+                      className={`transport-status-table-row${selected ? ' selected' : ''}`}
+                      onClick={() => selectStatus(row.key)}
+                    >
+                      <span className="transport-status-colour-dot" style={{ backgroundColor: appearance.accent }} />
+                      <strong>{row.label}</strong>
+                      <code>{appearance.accent}</code>
+                      <span className="transport-status-colour-edit"><Edit3 size={14} aria-hidden="true" /></span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <aside className="transport-colour-popover" aria-label={`${activeStatus.label} colour picker`}>
+                <div className="transport-colour-wheel-wrap">
+                  <label
+                    className="transport-colour-wheel"
+                    htmlFor="transport-status-colour-input"
+                    aria-label={`Choose ${activeStatus.label} colour`}
                   >
-                    <span className="transport-status-colour-dot" style={{ backgroundColor: appearance.accent }} />
-                    <strong>{row.label}</strong>
-                    <code>{appearance.accent}</code>
-                    <span className="transport-status-colour-edit"><Edit3 size={14} aria-hidden="true" /></span>
-                  </button>
-                );
-              })}
+                    <span className="transport-colour-triangle" style={{ borderLeftColor: currentDraftAppearance.accent }} />
+                    <span className="transport-colour-selection" style={{ backgroundColor: currentDraftAppearance.accent }} />
+                    <input
+                      id="transport-status-colour-input"
+                      className="transport-native-colour-input"
+                      type="color"
+                      value={effectiveDraftHex}
+                      onChange={(event) => updateDraftHex(event.target.value)}
+                      aria-label={`${activeStatus.label} colour value`}
+                    />
+                  </label>
+                </div>
+
+                <div className="transport-colour-slider" aria-hidden="true">
+                  <span style={{ backgroundColor: currentDraftAppearance.accent }} />
+                </div>
+
+                <div className="transport-colour-fields">
+                  <label>
+                    <span>HEX</span>
+                    <input
+                      type="text"
+                      value={draftHex}
+                      onChange={(event) => setDraftHex(event.target.value.toUpperCase())}
+                      onBlur={(event) => updateDraftHex(event.target.value)}
+                      maxLength={7}
+                    />
+                  </label>
+                  <div className="transport-colour-current-row">
+                    <span className="transport-status-colour-dot" style={{ backgroundColor: currentDraftAppearance.accent }} />
+                    <strong>{activeStatus.label}</strong>
+                  </div>
+                  <div className="transport-colour-actions">
+                    <button type="button" className="transport-settings-secondary-btn" onClick={cancelColourEdit}>Cancel</button>
+                    <button type="button" className="transport-settings-primary-btn" onClick={applyColour}>Apply</button>
+                  </div>
+                </div>
+              </aside>
             </div>
-
-            <aside className="transport-colour-popover" aria-label={`${activeStatus.label} colour picker`}>
-              <div className="transport-colour-wheel-wrap">
-                <button
-                  type="button"
-                  className="transport-colour-wheel"
-                  aria-label={`Choose ${activeStatus.label} colour`}
-                  onClick={() => document.getElementById('transport-status-colour-input')?.click()}
-                >
-                  <span className="transport-colour-triangle" style={{ borderLeftColor: currentDraftAppearance.accent }} />
-                  <span className="transport-colour-selection" style={{ backgroundColor: currentDraftAppearance.accent }} />
-                </button>
-                <input
-                  id="transport-status-colour-input"
-                  className="transport-native-colour-input"
-                  type="color"
-                  value={effectiveDraftHex}
-                  onChange={(event) => updateDraftHex(event.target.value)}
-                  aria-label={`${activeStatus.label} colour value`}
-                />
-              </div>
-
-              <div className="transport-colour-slider" aria-hidden="true">
-                <span style={{ backgroundColor: currentDraftAppearance.accent }} />
-              </div>
-
-              <div className="transport-colour-fields">
-                <label>
-                  <span>HEX</span>
-                  <input
-                    type="text"
-                    value={draftHex}
-                    onChange={(event) => setDraftHex(event.target.value.toUpperCase())}
-                    onBlur={(event) => updateDraftHex(event.target.value)}
-                    maxLength={7}
-                  />
-                </label>
-                <div className="transport-colour-current-row">
-                  <span className="transport-status-colour-dot" style={{ backgroundColor: currentDraftAppearance.accent }} />
-                  <strong>{activeStatus.label}</strong>
-                </div>
-                <div className="transport-colour-actions">
-                  <button type="button" className="transport-settings-secondary-btn" onClick={cancelColourEdit}>Cancel</button>
-                  <button type="button" className="transport-settings-primary-btn" onClick={applyColour}>Apply</button>
-                </div>
-              </div>
-            </aside>
           </section>
 
           <section className="transport-settings-panel transport-settings-simple-panel">

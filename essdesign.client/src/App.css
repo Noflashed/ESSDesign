@@ -10180,8 +10180,10 @@ button.stat-card {
     display: grid;
     grid-template-columns: 302px minmax(0, 1fr);
     gap: 28px;
-    width: min(1240px, calc(100% - 56px));
-    margin: 32px auto 56px;
+    width: 100%;
+    margin: 0;
+    padding: 32px 34px 56px;
+    box-sizing: border-box;
 }
 
 .transport-settings-section-list {
@@ -10243,6 +10245,7 @@ button.stat-card {
 .transport-settings-main {
     display: grid;
     gap: 22px;
+    min-width: 0;
 }
 
 .transport-settings-panel {
@@ -10254,8 +10257,7 @@ button.stat-card {
 }
 
 .transport-settings-status-panel {
-    min-height: 448px;
-    padding: 26px 30px;
+    padding: 26px 30px 30px;
 }
 
 .transport-settings-panel-head {
@@ -10293,10 +10295,17 @@ button.stat-card {
     cursor: pointer;
 }
 
+.transport-settings-status-body {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(344px, 430px);
+    gap: 28px;
+    align-items: start;
+}
+
 .transport-status-table {
     display: grid;
     gap: 14px;
-    max-width: 534px;
+    min-width: 0;
 }
 
 .transport-status-table-row {
@@ -10344,27 +10353,19 @@ button.stat-card {
 }
 
 .transport-colour-popover {
-    position: absolute;
-    right: 30px;
-    top: 124px;
-    z-index: 4;
-    grid-template-columns: 150px 30px 132px;
-    min-height: 212px;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 150px 30px minmax(126px, 1fr);
+    width: 100%;
+    min-height: 0;
     padding: 22px;
     border-radius: 8px;
+    box-sizing: border-box;
 }
 
 .transport-colour-popover::before {
-    content: "";
-    position: absolute;
-    left: -10px;
-    top: 24px;
-    width: 18px;
-    height: 18px;
-    transform: rotate(45deg);
-    border-left: 1px solid #cbd5e1;
-    border-bottom: 1px solid #cbd5e1;
-    background: #ffffff;
+    display: none;
 }
 
 .transport-colour-wheel-wrap,
@@ -10424,18 +10425,30 @@ button.stat-card {
 
 @media (max-width: 1180px) {
     .transport-settings-shell {
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 22px;
+        padding: 28px 24px 48px;
+    }
+
+    .transport-settings-status-body {
         grid-template-columns: minmax(0, 1fr);
     }
 
     .transport-colour-popover {
-        position: relative;
-        right: auto;
-        top: auto;
-        margin-top: 18px;
-        width: fit-content;
+        width: min(100%, 464px);
+    }
+}
+
+@media (max-width: 860px) {
+    .transport-settings-shell {
+        grid-template-columns: minmax(0, 1fr);
     }
 
-    .transport-colour-popover::before {
-        display: none;
+    .transport-settings-section-list button {
+        min-height: 64px;
+    }
+
+    .transport-colour-popover {
+        grid-template-columns: 150px 30px minmax(0, 1fr);
     }
 }
