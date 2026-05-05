@@ -5061,24 +5061,58 @@
 }
 
 .transport-order-panel-head {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(220px, 420px) auto !important;
     align-items: center !important;
-    justify-content: space-between !important;
     gap: 16px !important;
     min-height: 64px !important;
     padding: 0 18px !important;
     border-bottom: 1px solid #dbe3ee !important;
 }
 
+.transport-order-material-search {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+.transport-order-material-search svg {
+    position: absolute !important;
+    left: 12px !important;
+    color: #64748b !important;
+    pointer-events: none !important;
+}
+
+.transport-order-material-search input {
+    width: 100% !important;
+    min-height: 38px !important;
+    padding: 0 12px 0 38px !important;
+    border: 1px solid #d4dce8 !important;
+    border-radius: 5px !important;
+    background: #ffffff !important;
+    color: #14233b !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+}
+
+.transport-order-material-search input:focus {
+    border-color: #ff7a1a !important;
+    box-shadow: 0 0 0 3px rgba(255, 122, 26, 0.14) !important;
+}
+
 .transport-order-panel-actions {
     display: inline-flex !important;
     align-items: center !important;
+    justify-self: end !important;
     gap: 8px !important;
 }
 
 .transport-order-outline-btn,
-.transport-order-icon-btn,
-.transport-order-row-action {
+.transport-order-icon-btn {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -5098,22 +5132,14 @@
     font-weight: 750 !important;
 }
 
-.transport-order-icon-btn,
-.transport-order-row-action {
+.transport-order-icon-btn {
     width: 38px !important;
     height: 38px !important;
     padding: 0 !important;
 }
 
-.transport-order-row-action {
-    width: 30px !important;
-    height: 30px !important;
-    color: #64748b !important;
-}
-
 .transport-order-outline-btn:hover,
-.transport-order-icon-btn:hover,
-.transport-order-row-action:hover {
+.transport-order-icon-btn:hover {
     border-color: #ff7a1a !important;
     background: #fff7ed !important;
     color: #c35b00 !important;
@@ -5146,10 +5172,9 @@
     text-align: left !important;
 }
 
-.transport-order-material-table th:nth-child(1) { width: 44% !important; }
-.transport-order-material-table th:nth-child(2) { width: 30% !important; }
+.transport-order-material-table th:nth-child(1) { width: 50% !important; }
+.transport-order-material-table th:nth-child(2) { width: 34% !important; }
 .transport-order-material-table th:nth-child(3) { width: 118px !important; text-align: center !important; }
-.transport-order-material-table th:nth-child(4) { width: 46px !important; }
 
 .transport-order-material-table td {
     height: 39px !important;
@@ -5158,7 +5183,7 @@
     color: #33445f !important;
     font-size: 13px !important;
     line-height: 1.2 !important;
-    font-weight: 600 !important;
+    font-weight: 500 !important;
     vertical-align: middle !important;
     background: #ffffff !important;
 }
@@ -5170,6 +5195,7 @@
 .transport-order-material-name {
     padding-left: 42px !important;
     color: #263b59 !important;
+    font-weight: 500 !important;
 }
 
 .transport-order-material-group-row td {
@@ -5182,10 +5208,35 @@
     letter-spacing: 0 !important;
 }
 
-.transport-order-material-group-row span {
+.transport-order-material-group-toggle {
     display: inline-flex !important;
     align-items: center !important;
     gap: 10px !important;
+    width: 100% !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: inherit !important;
+    font: inherit !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+}
+
+.transport-order-material-group-toggle svg {
+    transition: transform 160ms ease !important;
+}
+
+.transport-order-material-group-row.is-collapsed .transport-order-material-group-toggle svg {
+    transform: rotate(-90deg) !important;
+}
+
+.transport-order-material-empty-row td {
+    height: 72px !important;
+    padding: 0 24px !important;
+    color: #64748b !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
 }
 
 .transport-order-qty-cell {
@@ -5373,6 +5424,19 @@
 
     .transport-order-form-grid {
         grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .transport-order-panel-head {
+        grid-template-columns: minmax(0, 1fr) !important;
+        padding: 14px 18px !important;
+    }
+
+    .transport-order-panel-actions {
+        justify-self: stretch !important;
+    }
+
+    .transport-order-panel-actions .transport-order-outline-btn {
+        width: 100% !important;
     }
 
     .transport-order-material-table-shell {

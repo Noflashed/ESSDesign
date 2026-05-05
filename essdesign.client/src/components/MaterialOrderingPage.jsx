@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreHorizontal, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
+import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import {
     formatTimeChip,
@@ -445,6 +445,8 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [selectedArchivedRequest, setSelectedArchivedRequest] = useState(null);
     const [openingArchivedPdfId, setOpeningArchivedPdfId] = useState(null);
     const [form, setForm] = useState(() => createBlankOrder(user));
+    const [materialSearch, setMaterialSearch] = useState('');
+    const [collapsedMaterialGroups, setCollapsedMaterialGroups] = useState(() => new Set());
     const [requestSearch, setRequestSearch] = useState('');
     const [requestStatusFilter, setRequestStatusFilter] = useState('all');
     const [requestSortOrder, setRequestSortOrder] = useState('oldest');
@@ -491,6 +493,27 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         () => getMaterialOrderGroups(form.itemValues),
         [form.itemValues]
     );
+
+    const filteredMaterialGroups = useMemo(() => {
+        const query = materialSearch.trim().toLowerCase();
+        if (!query) return materialGroups;
+
+        return materialGroups
+            .map((group) => {
+                if (group.name.toLowerCase().includes(query)) {
+                    return group;
+                }
+
+                const items = group.items.filter((item) => [
+                    item.material,
+                    item.spec,
+                    group.name,
+                ].some(value => String(value || '').toLowerCase().includes(query)));
+
+                return { ...group, items };
+            })
+            .filter(group => group.items.length > 0);
+    }, [materialGroups, materialSearch]);
 
     const selectedMaterials = useMemo(
         () => materialGroups.flatMap(group => group.items).filter(item => item.quantity > 0),
@@ -783,6 +806,18 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         }));
     };
 
+    const toggleMaterialGroup = (groupName) => {
+        setCollapsedMaterialGroups((current) => {
+            const next = new Set(current);
+            if (next.has(groupName)) {
+                next.delete(groupName);
+            } else {
+                next.add(groupName);
+            }
+            return next;
+        });
+    };
+
     const submitOrder = async () => {
         if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
             setError('Builder, jobsite, requester, and date are required.');
@@ -991,13 +1026,20 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                     <section className="transport-order-panel transport-order-material-panel">
                         <div className="transport-order-panel-head">
                             <h2>Material Schedule</h2>
+                            <label className="transport-order-material-search">
+                                <Search size={16} aria-hidden="true" />
+                                <input
+                                    type="search"
+                                    value={materialSearch}
+                                    onChange={(event) => setMaterialSearch(event.target.value)}
+                                    placeholder="Search materials..."
+                                    aria-label="Search materials"
+                                />
+                            </label>
                             <div className="transport-order-panel-actions">
                                 <button type="button" className="transport-order-outline-btn" onClick={startNewOrder}>
                                     <Plus size={15} aria-hidden="true" />
                                     <span>New Order</span>
-                                </button>
-                                <button type="button" className="transport-order-icon-btn" aria-label="More order actions">
-                                    <MoreHorizontal size={18} aria-hidden="true" />
                                 </button>
                             </div>
                         </div>
@@ -1009,46 +1051,53 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <th>Material</th>
                                         <th>Size / Specification</th>
                                         <th>Qty</th>
-                                        <th aria-label="Actions" />
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {materialGroups.map((group) => (
-                                        <React.Fragment key={group.name}>
-                                            <tr className="transport-order-material-group-row">
-                                                <td colSpan={4}>
-                                                    <span>
-                                                        <ChevronDown size={14} aria-hidden="true" />
-                                                        {group.name.toUpperCase()} ({group.items.length})
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                            {group.items.map((item) => (
-                                                <tr key={item.key} className={item.quantity > 0 ? 'has-quantity' : ''}>
-                                                    <td className="transport-order-material-name">{item.material}</td>
-                                                    <td>{item.spec}</td>
-                                                    <td className="transport-order-qty-cell">
-                                                        {isArchivedView ? (
-                                                            <span>{item.value || 0}</span>
-                                                        ) : (
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                value={item.value}
-                                                                onChange={(event) => handleQuantityChange(item.key, event.target.value)}
-                                                                aria-label={`${item.material} ${item.spec} quantity`}
-                                                            />
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <button type="button" className="transport-order-row-action" aria-label={`Actions for ${item.material}`}>
-                                                            <MoreHorizontal size={16} aria-hidden="true" />
+                                    {filteredMaterialGroups.map((group) => {
+                                        const isCollapsed = collapsedMaterialGroups.has(group.name);
+                                        return (
+                                            <React.Fragment key={group.name}>
+                                                <tr className={`transport-order-material-group-row ${isCollapsed ? 'is-collapsed' : ''}`}>
+                                                    <td colSpan={3}>
+                                                        <button
+                                                            type="button"
+                                                            className="transport-order-material-group-toggle"
+                                                            onClick={() => toggleMaterialGroup(group.name)}
+                                                            aria-expanded={!isCollapsed}
+                                                        >
+                                                            <ChevronDown size={14} aria-hidden="true" />
+                                                            <span>{group.name.toUpperCase()} ({group.items.length})</span>
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ))}
-                                        </React.Fragment>
-                                    ))}
+                                                {isCollapsed ? null : group.items.map((item) => (
+                                                    <tr key={item.key} className={item.quantity > 0 ? 'has-quantity' : ''}>
+                                                        <td className="transport-order-material-name">{item.material}</td>
+                                                        <td>{item.spec}</td>
+                                                        <td className="transport-order-qty-cell">
+                                                            {isArchivedView ? (
+                                                                <span>{item.value || 0}</span>
+                                                            ) : (
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={item.value}
+                                                                    onChange={(event) => handleQuantityChange(item.key, event.target.value)}
+                                                                    aria-label={`${item.material} ${item.spec} quantity`}
+                                                                />
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                    {filteredMaterialGroups.length === 0 ? (
+                                        <tr className="transport-order-material-empty-row">
+                                            <td colSpan={3}>No materials match "{materialSearch.trim()}".</td>
+                                        </tr>
+                                    ) : null}
                                 </tbody>
                             </table>
                         </div>
