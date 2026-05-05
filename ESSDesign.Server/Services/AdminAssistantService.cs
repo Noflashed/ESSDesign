@@ -342,7 +342,7 @@ Your goal is to always provide a thoughtful, useful answer:
 - Offer the closest matches, useful next steps, or alternative interpretations instead of ending with "I can't answer."
 - Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
 
-For design-file questions, use ranked designSearchMatches and links. If the user asks a broad question such as "find the latest design" without naming a jobsite, scaffold, builder, project, or other specific identifier, ask which jobsite and scaffold they want instead of listing recent designs. Treat "latest" as the newest or highest-confidence available match only after the user provides a specific target. If there is no exact match but related folders/documents exist, answer with "best match" or "closest match", explain why it appears relevant, and include any available links.
+For design-file questions, use ranked designSearchMatches and links as the answer source before the broader design catalogue. If the user asks a broad question such as "find the latest design" without naming a jobsite, scaffold, builder, project, or other specific identifier, ask which jobsite and scaffold they want instead of listing recent designs. Treat "latest" as a request for one document only: provide the single newest/highest-confidence match, mention its revision if available, and do not list older revisions. Only list multiple revisions when the user explicitly asks for all revisions, revision history, previous versions, or available versions. If there is no exact match but related folders/documents exist, answer with one "best match" or "closest match", explain why it appears relevant, and include any available link.
 The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
 
 For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
@@ -1254,6 +1254,7 @@ ESS context JSON:
                 return new DesignSearchData();
             }
             var wantsMultipleLinks = WantsMultipleDesignLinks(question);
+            var responseLimit = wantsMultipleLinks ? 8 : 1;
             var wantsFolderLink = NormalizeSearchText(question).Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("folder");
             var preferThirdPartyDesign = NormalizeSearchText(question).Contains("third party", StringComparison.OrdinalIgnoreCase);
             var foldersById = folders
@@ -1356,21 +1357,23 @@ ESS context JSON:
                 });
             }
 
-            var ranked = candidates
+            var rankedCandidates = candidates
                 .OrderByDescending(candidate => candidate.Score)
                 .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
                 .ThenByDescending(candidate => candidate.RevisionSort)
                 .ThenByDescending(candidate => candidate.UpdatedAt)
+                .ToList();
+            var ranked = rankedCandidates
                 .Take(12)
                 .ToList();
             var matches = new List<object>();
             var links = new List<AdminAssistantLink>();
-            var topPath = ranked.FirstOrDefault()?.Path;
+            var topPath = rankedCandidates.FirstOrDefault()?.Path;
             var responseCandidates = wantsMultipleLinks && !string.IsNullOrWhiteSpace(topPath)
-                ? ranked.Where(candidate => candidate.Path.Equals(topPath, StringComparison.OrdinalIgnoreCase)).Take(8).ToList()
+                ? rankedCandidates.Where(candidate => candidate.Path.Equals(topPath, StringComparison.OrdinalIgnoreCase)).Take(responseLimit).ToList()
                 : wantsMultipleLinks
-                    ? ranked.Take(8).ToList()
-                    : ranked.Take(1).ToList();
+                    ? rankedCandidates.Take(responseLimit).ToList()
+                    : rankedCandidates.Take(responseLimit).ToList();
 
             foreach (var candidate in responseCandidates)
             {
@@ -1388,7 +1391,7 @@ ESS context JSON:
                     candidate.HasThirdPartyDesign,
                 });
 
-                if (includeLinks && !wantsFolderLink && candidate.DocumentId is Guid documentId && links.Count < (wantsMultipleLinks ? 8 : 1))
+                if (includeLinks && !wantsFolderLink && candidate.DocumentId is Guid documentId && links.Count < responseLimit)
                 {
                     var preferredTypes = preferThirdPartyDesign
                         ? new[] { "third-party", "ess" }
@@ -1396,7 +1399,7 @@ ESS context JSON:
 
                     foreach (var type in preferredTypes)
                     {
-                        if (links.Count >= (wantsMultipleLinks ? 8 : 1))
+                        if (links.Count >= responseLimit)
                         {
                             break;
                         }
