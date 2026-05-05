@@ -847,6 +847,7 @@ function normalizeMaterialOrderRequestListItem(item) {
         sourceOrderId: item?.sourceOrderId || null,
         connectedParentStartMinutes: typeof item?.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
         routeType: item?.routeType || null,
+        scheduleRemovedAt: item?.scheduleRemovedAt || null,
         pdfPath: item?.pdfPath || '',
         scaffoldingSystem: item?.scaffoldingSystem || '',
         details: item?.details || '',
@@ -901,6 +902,7 @@ function normalizeMaterialOrderRequestRecord(record) {
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
         connectedParentStartMinutes: typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
+        scheduleRemovedAt: record.scheduleRemovedAt || null,
         scheduledAtIso,
         scheduledTruckId,
         scheduledTruckLabel,
@@ -1095,6 +1097,9 @@ export const materialOrderRequestsAPI = {
             readStorageJson(indexPath),
         ]);
         if (!record) throw new Error('Request not found');
+        if (record.archivedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit') {
+            throw new Error('Completed material orders cannot be rescheduled.');
+        }
         const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
         const updated = {
             ...record,
@@ -1205,6 +1210,48 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
+    removeCompletedFromSchedule: async (requestId) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        if (record.routeType === 'secondary_route') {
+            throw new Error('External routes should be deleted normally.');
+        }
+        const archivedAt = record.archivedAt || nowIso();
+        const scheduleRemovedAt = nowIso();
+        const updated = {
+            ...record,
+            archivedAt,
+            scheduleRemovedAt,
+            deliveryStatus: record.deliveryStatus || 'return_transit',
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    archivedAt,
+                    scheduleRemovedAt,
+                    deliveryStatus: item.deliveryStatus || updated.deliveryStatus,
+                    deliveryStartedAt: updated.deliveryStartedAt || item.deliveryStartedAt || null,
+                    deliveryUnloadingAt: updated.deliveryUnloadingAt || item.deliveryUnloadingAt || null,
+                    deliveryConfirmedAt: updated.deliveryConfirmedAt || item.deliveryConfirmedAt || null,
+                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
+                }
+                : item),
+            updatedAt: scheduleRemovedAt,
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
     updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
@@ -1218,6 +1265,7 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: startedAt,
             deliveryUnloadingAt: unloadingAt,
             deliveryConfirmedAt: confirmedAt,
+            archivedAt: status === 'return_transit' ? record.archivedAt || nowIso() : record.archivedAt || null,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
@@ -1232,6 +1280,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: startedAt,
                     deliveryUnloadingAt: unloadingAt,
                     deliveryConfirmedAt: confirmedAt,
+                    archivedAt: status === 'return_transit' ? item.archivedAt || updated.archivedAt : item.archivedAt || null,
                 }
                 : item),
             updatedAt: nowIso(),

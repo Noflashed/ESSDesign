@@ -142,6 +142,14 @@ function isLinkedSecondaryMaterialOrderRequest(request) {
     && Boolean(request.secondaryRoute?.linkedRequestId);
 }
 
+function isCompletedMaterialOrderRequest(request, cycleState = null) {
+  return Boolean(
+    request &&
+    !isSecondaryRouteRequest(request) &&
+    (request.deliveryStatus === 'return_transit' || request.deliveryConfirmedAt || cycleState?.groupedCompletedCycle),
+  );
+}
+
 function getSecondaryRouteTiming(secondaryRoute, includeReturnTransitToYard = true) {
   const transitMinutes = Math.max(1, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
   const loadingMinutes = Math.max(0, Number(secondaryRoute?.serviceMinutes) || 0);
@@ -595,6 +603,7 @@ function getRequestListSignature(requests) {
     request?.scheduledTruckId,
     request?.deliveryStatus,
     request?.archivedAt,
+    request?.scheduleRemovedAt,
     request?.routeType,
     request?.sourceOrderId,
     request?.builderName,
@@ -1444,7 +1453,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const projectRequestsToBoard = useCallback((requests, siteLocationMapOverride, fallbackDate = selectedDate, options = {}) => {
     const dateKey = typeof fallbackDate === 'string' ? fallbackDate : formatDateKey(fallbackDate || selectedDate);
     const siteLocationMap = siteLocationMapOverride || requestSiteLocationMapRef.current;
-    const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey);
+    const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
     const routeMap = buildCachedRouteMapForRequests(
       requestsForDay,
       siteLocationMap,
@@ -1480,7 +1489,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         optimisticRequestOverridesRef.current,
       );
       setAllRequests(current => getRequestListSignature(current) === getRequestListSignature(merged) ? current : merged);
-      const requestsForDay = merged.filter(request => request.scheduledDate === dateKey);
+      const requestsForDay = merged.filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
       const siteLocationMap = Object.fromEntries(
         requestsForDay.map(request => [
           request.id,
@@ -1810,6 +1819,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [selectedScheduleEventIdSet, selectedScheduleEventIds, tileMenu]);
   const tileMenuIsDeleteOnlySecondaryRoute = isSecondaryRouteRequest(tileMenuRequest)
     && !isLinkedSecondaryMaterialOrderRequest(tileMenuRequest);
+  const tileMenuIsCompletedMaterialOrder = isCompletedMaterialOrderRequest(
+    tileMenuRequest,
+    tileMenu?.orderId ? eventCycleStateMap[tileMenu.orderId] : null,
+  );
+  const tileMenuIsDeleteOnly = tileMenuIsDeleteOnlySecondaryRoute || tileMenuIsCompletedMaterialOrder;
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2178,6 +2192,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       deliveryStartedAt: startedAt,
       deliveryUnloadingAt: unloadingAt,
       deliveryConfirmedAt: confirmedAt,
+      archivedAt: status === 'return_transit' ? selectedScheduleRequest.archivedAt || stamp : selectedScheduleRequest.archivedAt,
     };
     const nextRequests = previousRequests.map(item => item.id === requestId ? updatedRequest : item);
     setDebugStatusSavingId(requestId);
@@ -3345,6 +3360,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!scheduleEvent?.orderId) {
       return;
     }
+    if (isCompletedMaterialOrderRequest(request, eventCycleStateMap[scheduleEvent.orderId] || null)) {
+      event.preventDefault();
+      return;
+    }
     const selectedIds = selectedScheduleEventIdSet.has(scheduleEvent.orderId) && selectedScheduleEventIds.length > 1
       ? selectedScheduleEventIds
       : [scheduleEvent.orderId];
@@ -3396,7 +3415,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       color: palette?.text,
       label: 'Move schedule',
     });
-  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, selectedScheduleEventIdSet, selectedScheduleEventIds]);
+  }, [dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventStartMinutesMap, selectedScheduleEventIdSet, selectedScheduleEventIds]);
 
   const handleScheduledDragEnd = useCallback(() => {
     setDraggedRequestId('');
@@ -3620,6 +3639,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const sourceRequests = ids
       .map(requestId => allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null)
       .filter(Boolean);
+    const completedMaterialOrder = sourceRequests.find(sourceRequest =>
+      isCompletedMaterialOrderRequest(sourceRequest, eventCycleStateMap[sourceRequest.id] || null),
+    );
+    if (completedMaterialOrder) {
+      setTileMenu(null);
+      setError('Completed material orders can only be removed from the schedule.');
+      return;
+    }
     const invalidSecondaryRoute = sourceRequests.find(sourceRequest =>
       isSecondaryRouteRequest(sourceRequest) && !isLinkedSecondaryMaterialOrderRequest(sourceRequest),
     );
@@ -3695,7 +3722,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!ids.length) {
       return;
     }
-    if (!window.confirm(ids.length > 1
+    const sourceRequests = ids
+      .map(requestId => allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null)
+      .filter(Boolean);
+    const completedMaterialIds = sourceRequests
+      .filter(sourceRequest => isCompletedMaterialOrderRequest(sourceRequest, eventCycleStateMap[sourceRequest.id] || null))
+      .map(sourceRequest => sourceRequest.id);
+    const removeOnlyCompleted = completedMaterialIds.length > 0 && completedMaterialIds.length === ids.length;
+    if (completedMaterialIds.length > 0 && !removeOnlyCompleted) {
+      setTileMenu(null);
+      setError('Completed material orders must be removed from the schedule separately.');
+      return;
+    }
+    if (!window.confirm(removeOnlyCompleted
+      ? ids.length > 1
+        ? `Remove ${ids.length} completed material orders from the schedule? They will remain in archives.`
+        : 'Remove this completed material order from the schedule? It will remain in archives.'
+      : ids.length > 1
       ? `Delete ${ids.length} transport orders? This removes them from the active schedule and request list.`
       : 'Delete this transport order? This removes it from the active schedule and request list.')) {
       return;
@@ -3709,22 +3752,40 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const previousCycleStateMap = eventCycleStateMap;
 
     setTileMenu(null);
-    const nextRequests = previousRequests.filter(item => !ids.includes(item.id));
+    const nextRequests = removeOnlyCompleted
+      ? previousRequests.map(item => completedMaterialIds.includes(item.id)
+        ? {
+            ...item,
+            archivedAt: item.archivedAt || new Date().toISOString(),
+            scheduleRemovedAt: new Date().toISOString(),
+          }
+        : item)
+      : previousRequests.filter(item => !ids.includes(item.id));
     setAllRequests(nextRequests);
     projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
     setSelectedScheduleEventId(current => ids.includes(current) ? '' : current);
     setSelectedScheduleEventIds(current => current.filter(id => !ids.includes(id)));
     ids.forEach(requestId => {
-      optimisticRequestOverridesRef.current.set(requestId, {
-        deleted: true,
-        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
-      });
+      const updatedCompletedRequest = nextRequests.find(item => item.id === requestId);
+      optimisticRequestOverridesRef.current.set(requestId, removeOnlyCompleted && updatedCompletedRequest
+        ? {
+            request: updatedCompletedRequest,
+            expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+          }
+        : {
+            deleted: true,
+            expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+          });
     });
 
     (async () => {
       try {
         for (const requestId of ids) {
-          await materialOrderRequestsAPI.deleteRequest(requestId);
+          if (removeOnlyCompleted) {
+            await materialOrderRequestsAPI.removeCompletedFromSchedule(requestId);
+          } else {
+            await materialOrderRequestsAPI.deleteRequest(requestId);
+          }
         }
         setError('');
       } catch (err) {
@@ -4041,6 +4102,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const request = requestMetaMap[event.orderId];
                       const cycleState = eventCycleStateMap[event.orderId] || null;
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
+                      const isCompletedMaterialTile = isCompletedMaterialOrderRequest(request, cycleState);
                       const status = getEffectiveDeliveryStatus(request, cycleState);
                       const durationMinutes = eventDurationMinutesMap[event.orderId] ?? 90;
                       const primaryDurationMinutes = eventPrimaryDurationMinutesMap[event.orderId] ?? durationMinutes;
@@ -4107,7 +4169,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           data-order-id={event.orderId}
                           className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
-                          draggable={!dragSchedulingId}
+                          draggable={!dragSchedulingId && !isCompletedMaterialTile}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
                           onDragEnd={handleScheduledDragEnd}
                           onDragOver={(dragEvent) => handleEventSnapDragOver(dragEvent, event)}
@@ -4359,7 +4421,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
-          {!tileMenuIsDeleteOnlySecondaryRoute ? (
+          {!tileMenuIsDeleteOnly ? (
             <>
               <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
                 <span>Set time manually</span>
@@ -4373,7 +4435,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </>
           ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
-            <span>{tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
+            <span>{tileMenuIsCompletedMaterialOrder ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
           </button>
         </div>
       ) : null}
