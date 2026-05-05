@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, Download, Eye, FileText, MoreVertical, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
-import { formatTimeChip } from './transport/transportUtils';
+import {
+    formatTimeChip,
+    readTransportStatusColors,
+    scheduleStatusAppearance,
+    scheduleStatusLabel,
+    TRANSPORT_STATUS_COLOR_PREF_EVENT,
+} from './transport/transportUtils';
 
 const SECTION_HEADER_LABELS = new Set([
     'TIMBER BOARDS',
@@ -112,10 +118,9 @@ function formatSchedulePill(request) {
 }
 
 function getDeliveryStatusLabel(status) {
-    if (status === 'in_transit') return 'In Transit';
-    if (status === 'unloading') return 'Unloading';
-    if (status === 'return_transit') return 'Complete';
-    if (status === 'scheduled') return 'Scheduled';
+    if (status === 'in_transit' || status === 'unloading' || status === 'return_transit' || status === 'scheduled') {
+        return scheduleStatusLabel(status);
+    }
     return 'Pending';
 }
 
@@ -396,6 +401,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     const [selectedRequestId, setSelectedRequestId] = useState('');
     const [selectedRequestDetail, setSelectedRequestDetail] = useState(null);
     const [openRequestMenuId, setOpenRequestMenuId] = useState('');
+    const [transportStatusColors, setTransportStatusColors] = useState(() => readTransportStatusColors(user));
 
     const selectedBuilder = useMemo(
         () => builders.find((builder) => builder.id === form.builderId) || null,
@@ -489,6 +495,28 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     );
 
     const selectedRequest = selectedRequestDetail || selectedRequestListItem;
+
+    const getStatusPillStyle = (status) => {
+        const normalizedStatus = status || 'pending';
+        if (normalizedStatus === 'pending') return undefined;
+        const appearance = scheduleStatusAppearance(normalizedStatus, transportStatusColors);
+        return {
+            border: `1px solid ${appearance.accent}`,
+            backgroundColor: appearance.background,
+            color: appearance.text,
+        };
+    };
+
+    useEffect(() => {
+        const refreshStatusColors = () => setTransportStatusColors(readTransportStatusColors(user));
+        refreshStatusColors();
+        window.addEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+        window.addEventListener('storage', refreshStatusColors);
+        return () => {
+            window.removeEventListener(TRANSPORT_STATUS_COLOR_PREF_EVENT, refreshStatusColors);
+            window.removeEventListener('storage', refreshStatusColors);
+        };
+    }, [user]);
 
     useEffect(() => {
         if (!isActiveQueueView && !isArchivedQueueView) return;
@@ -1020,7 +1048,14 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <td><strong>{requestedLabel}</strong></td>
                                         <td><strong>{requestDateLabel}</strong></td>
                                         <td><strong>{etaLabel}</strong></td>
-                                        <td><span className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}>{getDeliveryStatusLabel(request.deliveryStatus)}</span></td>
+                                        <td>
+                                            <span
+                                                className={`transport-status-pill status-${request.deliveryStatus || 'pending'}`}
+                                                style={getStatusPillStyle(request.deliveryStatus)}
+                                            >
+                                                {getDeliveryStatusLabel(request.deliveryStatus)}
+                                            </span>
+                                        </td>
                                         <td className="transport-management-pdf-cell">
                                             {canOpenPdf ? (
                                                 <button
@@ -1127,10 +1162,10 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                             <select value={requestStatusFilter} onChange={(event) => setRequestStatusFilter(event.target.value)}>
                                                 <option value="all">All statuses</option>
                                                 <option value="pending">Pending</option>
-                                                <option value="scheduled">Scheduled</option>
-                                                <option value="in_transit">In transit</option>
-                                                <option value="unloading">Unloading</option>
-                                                <option value="return_transit">Complete</option>
+                                                <option value="scheduled">{scheduleStatusLabel('scheduled')}</option>
+                                                <option value="in_transit">{scheduleStatusLabel('in_transit')}</option>
+                                                <option value="unloading">{scheduleStatusLabel('unloading')}</option>
+                                                <option value="return_transit">{scheduleStatusLabel('return_transit')}</option>
                                             </select>
                                         </label>
                                         <label>

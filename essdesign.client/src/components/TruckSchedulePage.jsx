@@ -4016,17 +4016,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <div className="transport-debug-status">
               <span>{selectedScheduleRequest ? `Tile status: ${selectedScheduleRequest.builderName || selectedScheduleEvent?.builderName || 'Material Order'}` : 'Select a tile to change its debug status'}</span>
               <div>
-                {DEBUG_STATUS_OPTIONS.map(option => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={selectedDebugStatus === option.value ? 'active' : ''}
-                    disabled={!selectedScheduleRequest || debugStatusSavingId === selectedScheduleRequest.id}
-                    onClick={() => updateDebugDeliveryStatus(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                {DEBUG_STATUS_OPTIONS.map(option => {
+                  const appearance = scheduleStatusAppearance(option.value, transportStatusColors);
+                  const active = selectedDebugStatus === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={active ? 'active' : ''}
+                      style={{
+                        borderColor: appearance.accent,
+                        backgroundColor: active ? appearance.accent : appearance.background,
+                        color: active ? '#ffffff' : appearance.text,
+                      }}
+                      disabled={!selectedScheduleRequest || debugStatusSavingId === selectedScheduleRequest.id}
+                      onClick={() => updateDebugDeliveryStatus(option.value)}
+                    >
+                      {scheduleStatusLabel(option.value)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             {selectedScheduleRequest ? (

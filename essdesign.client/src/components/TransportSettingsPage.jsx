@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import {
   Bell,
-  Code2,
+  ChevronDown,
+  CircleHelp,
   Edit3,
-  Monitor,
   Palette,
-  Search,
+  Save,
   Shield,
+  SlidersHorizontal,
+  Smartphone,
+  Trash2,
   Truck,
 } from 'lucide-react';
 import {
@@ -25,11 +28,11 @@ const STATUS_ROWS = [
 ];
 
 const SETTINGS_SECTIONS = [
-  { key: 'status-colours', label: 'Status Colours', description: 'Schedule board colour preferences', icon: Palette },
-  { key: 'driver-app', label: 'Driver App', description: 'Truck device workflow defaults', icon: Truck },
-  { key: 'appearance', label: 'Appearance', description: 'Display density and visual options', icon: Monitor },
-  { key: 'permissions', label: 'Permissions', description: 'Transport access controls', icon: Shield },
-  { key: 'api', label: 'API', description: 'Integrations and webhooks', icon: Code2 },
+  { key: 'schedule-appearance', label: 'Schedule Appearance', icon: Palette },
+  { key: 'board-defaults', label: 'Board Defaults', icon: SlidersHorizontal },
+  { key: 'notifications', label: 'Notifications', icon: Bell },
+  { key: 'driver-app', label: 'Driver App', icon: Smartphone },
+  { key: 'permissions', label: 'Permissions', icon: Shield },
 ];
 
 function normalizeHex(value, fallback) {
@@ -48,7 +51,7 @@ function clamp(value, min, max) {
 }
 
 function hexToRgb(value, fallback) {
-  const hex = normalizeHex(value, fallback || '#F3E8FF').slice(1);
+  const hex = normalizeHex(value, fallback || '#9333EA').slice(1);
   return {
     r: parseInt(hex.slice(0, 2), 16),
     g: parseInt(hex.slice(2, 4), 16),
@@ -87,26 +90,27 @@ function rgbToHsv({ r, g, b }) {
 }
 
 function hsvToRgb({ h, s, v }) {
+  const normalizedHue = ((h % 360) + 360) % 360;
   const chroma = v * s;
-  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+  const x = chroma * (1 - Math.abs(((normalizedHue / 60) % 2) - 1));
   const m = v - chroma;
   let red = 0;
   let green = 0;
   let blue = 0;
 
-  if (h < 60) {
+  if (normalizedHue < 60) {
     red = chroma;
     green = x;
-  } else if (h < 120) {
+  } else if (normalizedHue < 120) {
     red = x;
     green = chroma;
-  } else if (h < 180) {
+  } else if (normalizedHue < 180) {
     green = chroma;
     blue = x;
-  } else if (h < 240) {
+  } else if (normalizedHue < 240) {
     green = x;
     blue = chroma;
-  } else if (h < 300) {
+  } else if (normalizedHue < 300) {
     red = x;
     blue = chroma;
   } else {
@@ -133,16 +137,28 @@ function colorsSignature(colors) {
   return JSON.stringify(normalizeTransportStatusColors(colors));
 }
 
+function getUserInitials(userName) {
+  const parts = String(userName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) || 'AD').toUpperCase();
+}
+
 export default function TransportSettingsPage({ user }) {
-  const [savedStatusColors, setSavedStatusColors] = useState(() => readTransportStatusColors(user));
-  const [statusColors, setStatusColors] = useState(() => readTransportStatusColors(user));
-  const [activeStatusKey, setActiveStatusKey] = useState(null);
-  const [activeSectionKey, setActiveSectionKey] = useState('status-colours');
-  const activeStatus = STATUS_ROWS.find(item => item.key === activeStatusKey) || null;
-  const colourEditStatus = activeStatus || STATUS_ROWS[0];
-  const activeAppearance = statusColors[colourEditStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[colourEditStatus.key];
+  const initialColors = useMemo(() => readTransportStatusColors(user), [user]);
+  const [savedStatusColors, setSavedStatusColors] = useState(initialColors);
+  const [statusColors, setStatusColors] = useState(initialColors);
+  const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
+  const [activeSectionKey, setActiveSectionKey] = useState('schedule-appearance');
+  const activeStatus = STATUS_ROWS.find(item => item.key === activeStatusKey) || STATUS_ROWS[0];
+  const activeAppearance = statusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
   const [draftHex, setDraftHex] = useState(activeAppearance.accent);
   const effectiveDraftHex = normalizeHex(draftHex, activeAppearance.accent);
+  const draftRgb = useMemo(
+    () => hexToRgb(effectiveDraftHex, activeAppearance.accent),
+    [activeAppearance.accent, effectiveDraftHex],
+  );
   const draftHsv = useMemo(
     () => hexToHsv(effectiveDraftHex, activeAppearance.accent),
     [activeAppearance.accent, effectiveDraftHex],
@@ -151,29 +167,28 @@ export default function TransportSettingsPage({ user }) {
     () => createTransportStatusAppearance(effectiveDraftHex, activeAppearance),
     [activeAppearance, effectiveDraftHex],
   );
-  const currentDraftHex = currentDraftAppearance.accent;
   const pendingStatusColors = useMemo(
-    () => normalizeTransportStatusColors(activeStatus ? { ...statusColors, [activeStatus.key]: currentDraftAppearance } : statusColors),
-    [activeStatus, currentDraftAppearance, statusColors],
+    () => normalizeTransportStatusColors({ ...statusColors, [activeStatus.key]: currentDraftAppearance }),
+    [activeStatus.key, currentDraftAppearance, statusColors],
   );
   const hasUnsavedChanges = useMemo(
     () => colorsSignature(pendingStatusColors) !== colorsSignature(savedStatusColors),
     [pendingStatusColors, savedStatusColors],
   );
+  const displayStatusColors = pendingStatusColors;
   const hueColour = `hsl(${Math.round(draftHsv.h)}, 100%, 50%)`;
+  const squareMarkerStyle = {
+    left: `${clamp(draftHsv.s, 0.02, 0.98) * 100}%`,
+    top: `${clamp(1 - draftHsv.v, 0.02, 0.98) * 100}%`,
+    backgroundColor: effectiveDraftHex,
+  };
   const hueMarkerStyle = {
-    left: `${50 + Math.cos((draftHsv.h * Math.PI) / 180) * 43}%`,
-    top: `${50 + Math.sin((draftHsv.h * Math.PI) / 180) * 43}%`,
+    left: `${clamp(draftHsv.h / 360, 0.015, 0.985) * 100}%`,
     backgroundColor: hueColour,
   };
-  const triangleMarkerStyle = {
-    left: `${clamp(draftHsv.s, 0.05, 0.94) * 100}%`,
-    top: `${clamp(1 - draftHsv.v, 0.06, 0.94) * 100}%`,
-    backgroundColor: currentDraftHex,
-  };
-  const sliderMarkerStyle = {
-    top: `${clamp(1 - draftHsv.v, 0.04, 0.96) * 100}%`,
-    backgroundColor: currentDraftHex,
+  const brightnessMarkerStyle = {
+    top: `${clamp(1 - draftHsv.v, 0.03, 0.97) * 100}%`,
+    backgroundColor: effectiveDraftHex,
   };
 
   const selectStatus = (statusKey) => {
@@ -190,14 +205,12 @@ export default function TransportSettingsPage({ user }) {
     setDraftHex(hsvToHex({ ...draftHsv, ...nextValues }));
   };
 
-  const updateHueFromPointer = (event) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - (rect.left + rect.width / 2);
-    const y = event.clientY - (rect.top + rect.height / 2);
-    updateHsv({ h: ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360 });
+  const updateRgbChannel = (channel, value) => {
+    const nextValue = clamp(Number(value) || 0, 0, 255);
+    setDraftHex(rgbToHex({ ...draftRgb, [channel]: nextValue }));
   };
 
-  const updateTriangleFromPointer = (event) => {
+  const updateSquareFromPointer = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     updateHsv({
       s: clamp((event.clientX - rect.left) / rect.width, 0, 1),
@@ -205,9 +218,26 @@ export default function TransportSettingsPage({ user }) {
     });
   };
 
-  const updateValueFromPointer = (event) => {
+  const updateHueFromPointer = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    updateHsv({ h: clamp((event.clientX - rect.left) / rect.width, 0, 1) * 360 });
+  };
+
+  const updateBrightnessFromPointer = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     updateHsv({ v: clamp(1 - (event.clientY - rect.top) / rect.height, 0, 1) });
+  };
+
+  const handleSquarePointerDown = (event) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateSquareFromPointer(event);
+  };
+
+  const handleSquarePointerMove = (event) => {
+    if (event.buttons === 1) {
+      updateSquareFromPointer(event);
+    }
   };
 
   const handleHuePointerDown = (event) => {
@@ -222,76 +252,59 @@ export default function TransportSettingsPage({ user }) {
     }
   };
 
-  const handleTrianglePointerDown = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    updateTriangleFromPointer(event);
-  };
-
-  const handleTrianglePointerMove = (event) => {
-    if (event.buttons === 1) {
-      event.stopPropagation();
-      updateTriangleFromPointer(event);
-    }
-  };
-
-  const handleValuePointerDown = (event) => {
+  const handleBrightnessPointerDown = (event) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    updateValueFromPointer(event);
+    updateBrightnessFromPointer(event);
   };
 
-  const handleValuePointerMove = (event) => {
+  const handleBrightnessPointerMove = (event) => {
     if (event.buttons === 1) {
-      updateValueFromPointer(event);
+      updateBrightnessFromPointer(event);
     }
   };
 
   const applyColour = () => {
-    if (!activeStatus) {
-      return;
-    }
-    const next = {
-      ...statusColors,
-      [activeStatus.key]: currentDraftAppearance,
-    };
-    setStatusColors(normalizeTransportStatusColors(next));
-    setActiveStatusKey(null);
+    setStatusColors(pendingStatusColors);
   };
 
   const cancelColourEdit = () => {
     setDraftHex(activeAppearance.accent);
-    setActiveStatusKey(null);
   };
 
   const discardChanges = () => {
     setStatusColors(savedStatusColors);
-    setActiveStatusKey(null);
-    setDraftHex((savedStatusColors.scheduled || TRANSPORT_STATUS_COLOR_DEFAULTS.scheduled).accent);
+    const savedAppearance = savedStatusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
+    setDraftHex(savedAppearance.accent);
   };
 
   const saveChanges = () => {
     const saved = saveTransportStatusColors(user, pendingStatusColors);
     setSavedStatusColors(saved);
     setStatusColors(saved);
-    setActiveStatusKey(null);
-    setDraftHex((saved.scheduled || TRANSPORT_STATUS_COLOR_DEFAULTS.scheduled).accent);
+    setDraftHex((saved[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key]).accent);
   };
 
-  const userName = user?.fullName || user?.name || user?.email || 'Transport User';
-  const userInitial = userName.trim()?.[0]?.toUpperCase() || 'U';
+  const userName = user?.fullName || user?.name || user?.email || 'Admin User';
+  const userInitials = getUserInitials(userName);
 
   return (
     <div className="transport-settings-page">
       <header className="transport-settings-topbar">
-        <h1>Settings</h1>
+        <div className="transport-settings-title-block">
+          <h1>Transport Settings</h1>
+          <div className="transport-settings-breadcrumb">
+            <span>ESS Transport</span>
+            <span>/</span>
+            <span>Settings</span>
+          </div>
+        </div>
         <div className="transport-settings-top-actions">
-          <button type="button" aria-label="Search settings"><Search size={18} aria-hidden="true" /></button>
-          <button type="button" aria-label="Notification settings"><Bell size={18} aria-hidden="true" /></button>
+          <button type="button" aria-label="Notification settings"><Bell size={19} aria-hidden="true" /></button>
+          <button type="button" aria-label="Help"><CircleHelp size={20} aria-hidden="true" /></button>
           <div className="transport-settings-user-chip">
-            <span>{userInitial}</span>
-            <strong>{userName}</strong>
+            <span>{userInitials}</span>
+            <ChevronDown size={17} aria-hidden="true" />
           </div>
         </div>
       </header>
@@ -309,35 +322,45 @@ export default function TransportSettingsPage({ user }) {
                 onClick={() => setActiveSectionKey(section.key)}
               >
                 <Icon size={18} aria-hidden="true" />
-                <span>
-                  <strong>{section.label}</strong>
-                  <small>{section.description}</small>
-                </span>
+                <span>{section.label}</span>
               </button>
             );
           })}
         </nav>
 
         <div className="transport-settings-main">
-          <section className="transport-settings-panel transport-settings-status-panel">
-            <div className="transport-settings-panel-head">
-              <div>
-                <h2>Schedule Status Colours</h2>
-                <p>Choose the colours used on the schedule board for your own account.</p>
-              </div>
-              {hasUnsavedChanges && (
-                <div className="transport-settings-change-actions">
-                  <button type="button" className="transport-settings-danger-btn" onClick={discardChanges}>Discard Changes</button>
-                  <button type="button" className="transport-settings-success-btn" onClick={saveChanges}>Save Changes</button>
-                </div>
-              )}
+          <section className="transport-settings-summary-card">
+            <div>
+              <h2>Schedule Status Appearance</h2>
+              <p>Choose the colours used for delivery statuses on your schedule board.</p>
             </div>
+            {hasUnsavedChanges && (
+              <div className="transport-settings-change-actions">
+                <button type="button" className="transport-settings-danger-btn" onClick={discardChanges}>
+                  <Trash2 size={16} aria-hidden="true" />
+                  <span>Discard Changes</span>
+                </button>
+                <button type="button" className="transport-settings-success-btn" onClick={saveChanges}>
+                  <Save size={16} aria-hidden="true" />
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            )}
+          </section>
 
-            <div className={`transport-settings-status-body${activeStatus ? ' has-picker' : ''}`}>
+          <section className="transport-settings-content-grid">
+            <div className="transport-status-table-card">
+              <div className="transport-status-table-header">
+                <span>Status</span>
+                <span>Board Colour</span>
+                <span>Tile Preview</span>
+                <span>Last Saved</span>
+                <span>Action</span>
+              </div>
               <div className="transport-status-table">
                 {STATUS_ROWS.map(row => {
-                  const appearance = statusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
-                  const selected = row.key === activeStatus?.key;
+                  const appearance = displayStatusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
+                  const selected = row.key === activeStatus.key;
                   return (
                     <button
                       key={row.key}
@@ -345,49 +368,52 @@ export default function TransportSettingsPage({ user }) {
                       className={`transport-status-table-row${selected ? ' selected' : ''}`}
                       onClick={() => selectStatus(row.key)}
                     >
-                      <span className="transport-status-colour-dot" style={{ backgroundColor: appearance.accent }} />
-                      <strong>{row.label}</strong>
-                      <code>{appearance.accent}</code>
-                      <span className="transport-status-colour-edit"><Edit3 size={14} aria-hidden="true" /></span>
+                      <span className="transport-status-name-cell">
+                        <span className="transport-status-colour-dot" style={{ backgroundColor: appearance.accent }} />
+                        <strong>{row.label}</strong>
+                      </span>
+                      <span className="transport-status-colour-cell">
+                        <span className="transport-status-colour-swatch" style={{ backgroundColor: appearance.accent }} />
+                        <code>{appearance.accent}</code>
+                      </span>
+                      <span
+                        className="transport-status-preview-chip"
+                        style={{
+                          backgroundColor: appearance.background,
+                          borderColor: appearance.accent,
+                          color: appearance.text,
+                        }}
+                      >
+                        {row.label}
+                      </span>
+                      <span className="transport-status-saved-cell">2 mins ago</span>
+                      <span className="transport-status-colour-edit"><Edit3 size={15} aria-hidden="true" /></span>
                     </button>
                   );
                 })}
               </div>
+            </div>
 
-              {activeStatus && (
-              <aside className="transport-colour-popover" aria-label={`${activeStatus.label} colour picker`}>
-                <div className="transport-colour-wheel-wrap">
-                  <div
-                    className="transport-colour-wheel"
-                    role="slider"
-                    aria-label={`${activeStatus.label} hue`}
-                    aria-valuemin={0}
-                    aria-valuemax={359}
-                    aria-valuenow={Math.round(draftHsv.h)}
-                    tabIndex={0}
-                    onPointerDown={handleHuePointerDown}
-                    onPointerMove={handleHuePointerMove}
-                  >
-                    <span className="transport-colour-hue-marker" style={hueMarkerStyle} />
-                    <span
-                      className="transport-colour-triangle"
-                      role="slider"
-                      aria-label={`${activeStatus.label} saturation and brightness`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(draftHsv.s * 100)}
-                      tabIndex={0}
-                      style={{ '--transport-picker-hue': hueColour }}
-                      onPointerDown={handleTrianglePointerDown}
-                      onPointerMove={handleTrianglePointerMove}
-                    >
-                      <span className="transport-colour-selection" style={triangleMarkerStyle} />
-                    </span>
-                  </div>
-                </div>
-
+            <aside className="transport-colour-editor-card" aria-label={`${activeStatus.label} colour editor`}>
+              <h3>Edit {activeStatus.label}</h3>
+              <label className="transport-colour-label">Colour</label>
+              <div className="transport-colour-editor-controls">
                 <div
-                  className="transport-colour-slider"
+                  className="transport-colour-square"
+                  role="slider"
+                  aria-label={`${activeStatus.label} saturation and brightness`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(draftHsv.s * 100)}
+                  tabIndex={0}
+                  style={{ '--transport-picker-hue': hueColour }}
+                  onPointerDown={handleSquarePointerDown}
+                  onPointerMove={handleSquarePointerMove}
+                >
+                  <span className="transport-colour-square-marker" style={squareMarkerStyle} />
+                </div>
+                <div
+                  className="transport-colour-brightness"
                   role="slider"
                   aria-label={`${activeStatus.label} brightness`}
                   aria-valuemin={0}
@@ -395,35 +421,94 @@ export default function TransportSettingsPage({ user }) {
                   aria-valuenow={Math.round(draftHsv.v * 100)}
                   tabIndex={0}
                   style={{ '--transport-picker-hue': hueColour }}
-                  onPointerDown={handleValuePointerDown}
-                  onPointerMove={handleValuePointerMove}
+                  onPointerDown={handleBrightnessPointerDown}
+                  onPointerMove={handleBrightnessPointerMove}
                 >
-                  <span style={sliderMarkerStyle} />
+                  <span style={brightnessMarkerStyle} />
                 </div>
+              </div>
+              <div
+                className="transport-colour-hue"
+                role="slider"
+                aria-label={`${activeStatus.label} hue`}
+                aria-valuemin={0}
+                aria-valuemax={359}
+                aria-valuenow={Math.round(draftHsv.h)}
+                tabIndex={0}
+                onPointerDown={handleHuePointerDown}
+                onPointerMove={handleHuePointerMove}
+              >
+                <span style={hueMarkerStyle} />
+              </div>
 
-                <div className="transport-colour-fields">
-                  <label>
-                    <span>HEX</span>
-                    <input
-                      type="text"
-                      value={draftHex}
-                      onChange={(event) => setDraftHex(event.target.value.toUpperCase())}
-                      onBlur={(event) => updateDraftHex(event.target.value)}
-                      maxLength={7}
-                    />
-                  </label>
-                  <div className="transport-colour-current-row">
-                    <span className="transport-status-colour-dot" style={{ backgroundColor: currentDraftAppearance.accent }} />
-                    <strong>{activeStatus.label}</strong>
-                  </div>
-                  <div className="transport-colour-actions">
-                    <button type="button" className="transport-settings-secondary-btn" onClick={cancelColourEdit}>Cancel</button>
-                    <button type="button" className="transport-settings-primary-btn" onClick={applyColour}>Apply</button>
-                  </div>
+              <div className="transport-colour-form">
+                <label className="transport-colour-hex-field">
+                  <span>HEX</span>
+                  <input
+                    type="text"
+                    value={draftHex}
+                    onChange={(event) => setDraftHex(event.target.value.toUpperCase())}
+                    onBlur={(event) => updateDraftHex(event.target.value)}
+                    maxLength={7}
+                  />
+                </label>
+                <div className="transport-colour-rgb-grid">
+                  {[
+                    ['r', 'R'],
+                    ['g', 'G'],
+                    ['b', 'B'],
+                  ].map(([channel, label]) => (
+                    <label key={channel}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="255"
+                        value={draftRgb[channel]}
+                        onChange={(event) => updateRgbChannel(channel, event.target.value)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
                 </div>
-              </aside>
-              )}
-            </div>
+              </div>
+
+              <div className="transport-colour-actions">
+                <button type="button" className="transport-settings-secondary-btn" onClick={cancelColourEdit}>Cancel</button>
+                <button type="button" className="transport-settings-primary-btn" onClick={applyColour}>Apply</button>
+              </div>
+            </aside>
+
+            <aside className="transport-status-preview-card">
+              <h3>Schedule Tile Preview</h3>
+              <div
+                className="transport-status-preview-tile"
+                style={{
+                  '--transport-preview-accent': currentDraftAppearance.accent,
+                  backgroundColor: currentDraftAppearance.background,
+                  borderColor: currentDraftAppearance.accent,
+                  color: currentDraftAppearance.title,
+                }}
+              >
+                <span className="transport-status-preview-accent" />
+                <div className="transport-status-preview-left">
+                  <Truck size={20} aria-hidden="true" />
+                  <strong>BLT-MAR Delivery</strong>
+                  <span
+                    style={{
+                      backgroundColor: currentDraftAppearance.background,
+                      borderColor: currentDraftAppearance.accent,
+                      color: currentDraftAppearance.text,
+                    }}
+                  >
+                    {activeStatus.label}
+                  </span>
+                </div>
+                <div className="transport-status-preview-time">
+                  <small>ETA</small>
+                  <strong>8:30 AM</strong>
+                </div>
+              </div>
+            </aside>
           </section>
         </div>
       </main>
