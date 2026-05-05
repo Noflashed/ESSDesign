@@ -21,8 +21,10 @@ const SECTION_HEADER_LABELS = new Set([
 ]);
 
 const PICKING_CARD_ROWS = [
-    { id: 'r09', left: ['STANDARDS', '3.0M'], middle: ['HARDWOOD SOLE BOARDS', '0.5M'], right: ['SCAFFOLD LADDER', '6.0M / 5.4M'] },
-    { id: 'r10', left: ['STANDARDS', '2.5M'], middle: ['HARDWOOD SOLE BOARDS', '1.5M'], right: ['SCAFFOLD LADDER', '4.8M / 4.2M'] },
+    { id: 'r09', left: ['STANDARDS', '3.0M'], middle: ['HARDWOOD SOLE BOARDS', '0.5M'], right: ['SCAFFOLD LADDER', '6.0M'] },
+    { id: 'r09a', left: ['', ''], middle: ['', ''], right: ['SCAFFOLD LADDER', '5.4M'] },
+    { id: 'r10', left: ['STANDARDS', '2.5M'], middle: ['HARDWOOD SOLE BOARDS', '1.5M'], right: ['SCAFFOLD LADDER', '4.8M'] },
+    { id: 'r10a', left: ['', ''], middle: ['', ''], right: ['SCAFFOLD LADDER', '4.2M'] },
     { id: 'r11', left: ['STANDARDS', '2.0M'], middle: ['SCREWJACKS', ''], right: ['SCAFFOLD LADDER', '3.6M'] },
     { id: 'r12', left: ['STANDARDS', '1.5M'], middle: ['U HEAD JACK', ''], right: ['SCAFFOLD LADDER', '3M'] },
     { id: 'r13', left: ['STANDARDS', '1.0M'], middle: ['SWIVEL JACK', ''], right: ['SCAFFOLD LADDER', '2.4M'] },
@@ -242,7 +244,7 @@ function summarizeItems(request) {
             if (!quantity) return;
 
             const [label, spec] = entry;
-            const description = [label, spec].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+            const description = [getMaterialDisplayLabel(label), normalizeMaterialSpec(spec)].filter(Boolean).join(' ');
             appendSummaryItem(grouped, description, quantity, 'ea');
         });
     });
@@ -298,6 +300,39 @@ function getMaterialDisplayLabel(label) {
     return value;
 }
 
+function formatMetricNumber(value) {
+    const numericValue = Number.parseFloat(value);
+    if (!Number.isFinite(numericValue)) return value;
+    return Number.isInteger(numericValue) ? numericValue.toFixed(1) : String(numericValue);
+}
+
+function formatCompactNumber(value) {
+    const numericValue = Number.parseFloat(value);
+    return Number.isFinite(numericValue) ? String(numericValue) : value;
+}
+
+function normalizeMaterialSpec(spec) {
+    const value = String(spec || '').trim();
+    if (!value) return '';
+
+    const compact = value.replace(/\s+/g, ' ');
+    const metreMatch = compact.match(/^(\d+(?:\.\d+)?)\s*m$/i);
+    if (metreMatch) return `${formatMetricNumber(metreMatch[1])}m`;
+
+    const bareMetreMatch = compact.match(/^(\d+(?:\.\d+)?)$/);
+    if (bareMetreMatch) return `${formatMetricNumber(bareMetreMatch[1])}m`;
+
+    const metreWithSuffixMatch = compact.match(/^(\d+(?:\.\d+)?)\s*m\s+(.+)$/i);
+    if (metreWithSuffixMatch) {
+        return `${formatMetricNumber(metreWithSuffixMatch[1])}m ${metreWithSuffixMatch[2].toLowerCase()}`;
+    }
+
+    const millimetreMatch = compact.match(/^(\d+(?:\.\d+)?)\s*mm$/i);
+    if (millimetreMatch) return `${formatCompactNumber(millimetreMatch[1])}mm`;
+
+    return compact.replace(/\s*x\s*/gi, ' x ');
+}
+
 function getMaterialOrderGroups(itemValues = {}) {
     const groups = new Map();
 
@@ -309,7 +344,7 @@ function getMaterialOrderGroups(itemValues = {}) {
         ].forEach(([side, entry]) => {
             const [label = '', spec = ''] = entry;
             const cleanLabel = getMaterialDisplayLabel(label);
-            const cleanSpec = String(spec || '').trim();
+            const cleanSpec = normalizeMaterialSpec(spec);
             const isSectionHeader = SECTION_HEADER_LABELS.has(cleanLabel.toUpperCase()) && !cleanSpec;
 
             if ((!cleanLabel && !cleanSpec) || isSectionHeader) {
@@ -326,7 +361,7 @@ function getMaterialOrderGroups(itemValues = {}) {
             groups.get(groupName).push({
                 key,
                 material: cleanLabel,
-                spec: cleanSpec || 'Standard',
+                spec: cleanSpec,
                 quantity: Number.isFinite(quantity) ? quantity : 0,
                 value: itemValues?.[key] ?? '',
             });
