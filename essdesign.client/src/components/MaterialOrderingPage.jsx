@@ -359,7 +359,21 @@ function getMaterialSortMeasurement(item) {
 }
 
 function sortMaterialItemsBySize(items) {
+    const materialOrder = new Map();
+    items.forEach((item) => {
+        const key = String(item?.material || '').toUpperCase();
+        if (!materialOrder.has(key)) {
+            materialOrder.set(key, materialOrder.size);
+        }
+    });
+
     return [...items].sort((left, right) => {
+        const leftMaterialOrder = materialOrder.get(String(left?.material || '').toUpperCase()) ?? left.sortIndex;
+        const rightMaterialOrder = materialOrder.get(String(right?.material || '').toUpperCase()) ?? right.sortIndex;
+        if (leftMaterialOrder !== rightMaterialOrder) {
+            return leftMaterialOrder - rightMaterialOrder;
+        }
+
         const leftMeasurement = getMaterialSortMeasurement(left);
         const rightMeasurement = getMaterialSortMeasurement(right);
 
