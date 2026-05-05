@@ -333,6 +333,45 @@ function normalizeMaterialSpec(spec) {
     return compact.replace(/\s*x\s*/gi, ' x ');
 }
 
+function readMeasurementForSort(value, { allowBare = false } = {}) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+
+    const millimetreMatch = text.match(/(\d+(?:\.\d+)?)\s*mm\b/i);
+    if (millimetreMatch) return Number.parseFloat(millimetreMatch[1]) / 1000;
+
+    const metreMatch = text.match(/(\d+(?:\.\d+)?)\s*m(?!m)\b/i);
+    if (metreMatch) return Number.parseFloat(metreMatch[1]);
+
+    if (allowBare && /^\d+(?:\.\d+)?$/.test(text)) {
+        return Number.parseFloat(text);
+    }
+
+    return null;
+}
+
+function getMaterialSortMeasurement(item) {
+    return (
+        readMeasurementForSort(item?.spec, { allowBare: true }) ??
+        readMeasurementForSort(item?.material) ??
+        null
+    );
+}
+
+function sortMaterialItemsBySize(items) {
+    return [...items].sort((left, right) => {
+        const leftMeasurement = getMaterialSortMeasurement(left);
+        const rightMeasurement = getMaterialSortMeasurement(right);
+
+        if (leftMeasurement !== null && rightMeasurement !== null && leftMeasurement !== rightMeasurement) {
+            return rightMeasurement - leftMeasurement;
+        }
+        if (leftMeasurement !== null && rightMeasurement === null) return -1;
+        if (leftMeasurement === null && rightMeasurement !== null) return 1;
+        return left.sortIndex - right.sortIndex;
+    }).map(({ sortIndex, ...item }) => item);
+}
+
 function getMaterialOrderGroups(itemValues = {}) {
     const groups = new Map();
 
@@ -364,11 +403,15 @@ function getMaterialOrderGroups(itemValues = {}) {
                 spec: cleanSpec,
                 quantity: Number.isFinite(quantity) ? quantity : 0,
                 value: itemValues?.[key] ?? '',
+                sortIndex: groups.get(groupName).length,
             });
         });
     });
 
-    return Array.from(groups.entries()).map(([name, items]) => ({ name, items }));
+    return Array.from(groups.entries()).map(([name, items]) => ({
+        name,
+        items: sortMaterialItemsBySize(items),
+    }));
 }
 
 function createBlankOrder(user) {
