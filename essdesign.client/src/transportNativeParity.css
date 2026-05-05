@@ -3111,6 +3111,13 @@
     border-color: #b8f0cb !important;
 }
 
+.transport-page-frame .transport-reference-legend .transport-reference-legend-pill,
+.transport-desktop-workspace .transport-reference-legend .transport-reference-legend-pill {
+    background: var(--transport-legend-bg) !important;
+    color: var(--transport-legend-text) !important;
+    border-color: var(--transport-legend-border) !important;
+}
+
 .transport-page-frame .transport-reference-pending,
 .transport-desktop-workspace .transport-reference-pending {
     padding-top: 12px !important;

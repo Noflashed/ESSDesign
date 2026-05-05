@@ -1125,9 +1125,9 @@ function ScheduleLegend({ statusColors = null }) {
   const unloading = scheduleStatusAppearance('unloading', statusColors);
   const complete = scheduleStatusAppearance('return_transit', statusColors);
   const pillStyle = appearance => ({
-    backgroundColor: appearance.background,
-    color: appearance.text,
-    borderColor: appearance.accent,
+    '--transport-legend-bg': appearance.background,
+    '--transport-legend-text': appearance.text,
+    '--transport-legend-border': appearance.accent,
   });
   return (
     <div className="transport-reference-legend">

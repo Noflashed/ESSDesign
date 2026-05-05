@@ -5,12 +5,9 @@ import {
   CircleHelp,
   Edit3,
   Palette,
-  Save,
   Shield,
   SlidersHorizontal,
   Smartphone,
-  Trash2,
-  Truck,
 } from 'lucide-react';
 import {
   createTransportStatusAppearance,
@@ -133,10 +130,6 @@ function hsvToHex(value) {
   return rgbToHex(hsvToRgb(value));
 }
 
-function colorsSignature(colors) {
-  return JSON.stringify(normalizeTransportStatusColors(colors));
-}
-
 function getUserInitials(userName) {
   const parts = String(userName || '').trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
@@ -147,7 +140,6 @@ function getUserInitials(userName) {
 
 export default function TransportSettingsPage({ user }) {
   const initialColors = useMemo(() => readTransportStatusColors(user), [user]);
-  const [savedStatusColors, setSavedStatusColors] = useState(initialColors);
   const [statusColors, setStatusColors] = useState(initialColors);
   const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
   const [activeSectionKey, setActiveSectionKey] = useState('schedule-appearance');
@@ -170,10 +162,6 @@ export default function TransportSettingsPage({ user }) {
   const pendingStatusColors = useMemo(
     () => normalizeTransportStatusColors({ ...statusColors, [activeStatus.key]: currentDraftAppearance }),
     [activeStatus.key, currentDraftAppearance, statusColors],
-  );
-  const hasUnsavedChanges = useMemo(
-    () => colorsSignature(pendingStatusColors) !== colorsSignature(savedStatusColors),
-    [pendingStatusColors, savedStatusColors],
   );
   const displayStatusColors = pendingStatusColors;
   const hueColour = `hsl(${Math.round(draftHsv.h)}, 100%, 50%)`;
@@ -265,22 +253,17 @@ export default function TransportSettingsPage({ user }) {
   };
 
   const applyColour = () => {
-    setStatusColors(pendingStatusColors);
+    const saved = saveTransportStatusColors(user, pendingStatusColors);
+    setStatusColors(saved);
+    setDraftHex((saved[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key]).accent);
   };
 
   const cancelColourEdit = () => {
     setDraftHex(activeAppearance.accent);
   };
 
-  const discardChanges = () => {
-    setStatusColors(savedStatusColors);
-    const savedAppearance = savedStatusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
-    setDraftHex(savedAppearance.accent);
-  };
-
-  const saveChanges = () => {
-    const saved = saveTransportStatusColors(user, pendingStatusColors);
-    setSavedStatusColors(saved);
+  const resetDefaultSettings = () => {
+    const saved = saveTransportStatusColors(user, normalizeTransportStatusColors());
     setStatusColors(saved);
     setDraftHex((saved[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key]).accent);
   };
@@ -329,25 +312,6 @@ export default function TransportSettingsPage({ user }) {
         </nav>
 
         <div className="transport-settings-main">
-          <section className="transport-settings-summary-card">
-            <div>
-              <h2>Schedule Status Appearance</h2>
-              <p>Choose the colours used for delivery statuses on your schedule board.</p>
-            </div>
-            {hasUnsavedChanges && (
-              <div className="transport-settings-change-actions">
-                <button type="button" className="transport-settings-danger-btn" onClick={discardChanges}>
-                  <Trash2 size={16} aria-hidden="true" />
-                  <span>Discard Changes</span>
-                </button>
-                <button type="button" className="transport-settings-success-btn" onClick={saveChanges}>
-                  <Save size={16} aria-hidden="true" />
-                  <span>Save Changes</span>
-                </button>
-              </div>
-            )}
-          </section>
-
           <section className="transport-settings-content-grid">
             <div className="transport-status-table-card">
               <div className="transport-status-table-header">
@@ -395,7 +359,12 @@ export default function TransportSettingsPage({ user }) {
             </div>
 
             <aside className="transport-colour-editor-card" aria-label={`${activeStatus.label} colour editor`}>
-              <h3>Edit {activeStatus.label}</h3>
+              <div className="transport-colour-editor-head">
+                <h3>Edit {activeStatus.label}</h3>
+                <button type="button" className="transport-settings-default-btn" onClick={resetDefaultSettings}>
+                  Default settings
+                </button>
+              </div>
               <label className="transport-colour-label">Colour</label>
               <div className="transport-colour-editor-controls">
                 <div
@@ -475,38 +444,6 @@ export default function TransportSettingsPage({ user }) {
               <div className="transport-colour-actions">
                 <button type="button" className="transport-settings-secondary-btn" onClick={cancelColourEdit}>Cancel</button>
                 <button type="button" className="transport-settings-primary-btn" onClick={applyColour}>Apply</button>
-              </div>
-            </aside>
-
-            <aside className="transport-status-preview-card">
-              <h3>Schedule Tile Preview</h3>
-              <div
-                className="transport-status-preview-tile"
-                style={{
-                  '--transport-preview-accent': currentDraftAppearance.accent,
-                  backgroundColor: currentDraftAppearance.background,
-                  borderColor: currentDraftAppearance.accent,
-                  color: currentDraftAppearance.title,
-                }}
-              >
-                <span className="transport-status-preview-accent" />
-                <div className="transport-status-preview-left">
-                  <Truck size={20} aria-hidden="true" />
-                  <strong>BLT-MAR Delivery</strong>
-                  <span
-                    style={{
-                      backgroundColor: currentDraftAppearance.background,
-                      borderColor: currentDraftAppearance.accent,
-                      color: currentDraftAppearance.text,
-                    }}
-                  >
-                    {activeStatus.label}
-                  </span>
-                </div>
-                <div className="transport-status-preview-time">
-                  <small>ETA</small>
-                  <strong>8:30 AM</strong>
-                </div>
               </div>
             </aside>
           </section>
