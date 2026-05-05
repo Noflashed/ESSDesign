@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import {
   createTransportStatusAppearance,
+  normalizeTransportStatusColors,
   readTransportStatusColors,
   saveTransportStatusColors,
   TRANSPORT_STATUS_COLOR_DEFAULTS,
@@ -128,12 +129,18 @@ function hsvToHex(value) {
   return rgbToHex(hsvToRgb(value));
 }
 
+function colorsSignature(colors) {
+  return JSON.stringify(normalizeTransportStatusColors(colors));
+}
+
 export default function TransportSettingsPage({ user }) {
+  const [savedStatusColors, setSavedStatusColors] = useState(() => readTransportStatusColors(user));
   const [statusColors, setStatusColors] = useState(() => readTransportStatusColors(user));
-  const [activeStatusKey, setActiveStatusKey] = useState('scheduled');
+  const [activeStatusKey, setActiveStatusKey] = useState(null);
   const [activeSectionKey, setActiveSectionKey] = useState('status-colours');
-  const activeStatus = STATUS_ROWS.find(item => item.key === activeStatusKey) || STATUS_ROWS[0];
-  const activeAppearance = statusColors[activeStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[activeStatus.key];
+  const activeStatus = STATUS_ROWS.find(item => item.key === activeStatusKey) || null;
+  const colourEditStatus = activeStatus || STATUS_ROWS[0];
+  const activeAppearance = statusColors[colourEditStatus.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[colourEditStatus.key];
   const [draftHex, setDraftHex] = useState(activeAppearance.accent);
   const effectiveDraftHex = normalizeHex(draftHex, activeAppearance.accent);
   const draftHsv = useMemo(
@@ -145,6 +152,14 @@ export default function TransportSettingsPage({ user }) {
     [activeAppearance, effectiveDraftHex],
   );
   const currentDraftHex = currentDraftAppearance.accent;
+  const pendingStatusColors = useMemo(
+    () => normalizeTransportStatusColors(activeStatus ? { ...statusColors, [activeStatus.key]: currentDraftAppearance } : statusColors),
+    [activeStatus, currentDraftAppearance, statusColors],
+  );
+  const hasUnsavedChanges = useMemo(
+    () => colorsSignature(pendingStatusColors) !== colorsSignature(savedStatusColors),
+    [pendingStatusColors, savedStatusColors],
+  );
   const hueColour = `hsl(${Math.round(draftHsv.h)}, 100%, 50%)`;
   const hueMarkerStyle = {
     left: `${50 + Math.cos((draftHsv.h * Math.PI) / 180) * 43}%`,
@@ -234,16 +249,34 @@ export default function TransportSettingsPage({ user }) {
   };
 
   const applyColour = () => {
+    if (!activeStatus) {
+      return;
+    }
     const next = {
       ...statusColors,
       [activeStatus.key]: currentDraftAppearance,
     };
-    const saved = saveTransportStatusColors(user, next);
-    setStatusColors(saved);
+    setStatusColors(normalizeTransportStatusColors(next));
+    setActiveStatusKey(null);
   };
 
   const cancelColourEdit = () => {
     setDraftHex(activeAppearance.accent);
+    setActiveStatusKey(null);
+  };
+
+  const discardChanges = () => {
+    setStatusColors(savedStatusColors);
+    setActiveStatusKey(null);
+    setDraftHex((savedStatusColors.scheduled || TRANSPORT_STATUS_COLOR_DEFAULTS.scheduled).accent);
+  };
+
+  const saveChanges = () => {
+    const saved = saveTransportStatusColors(user, pendingStatusColors);
+    setSavedStatusColors(saved);
+    setStatusColors(saved);
+    setActiveStatusKey(null);
+    setDraftHex((saved.scheduled || TRANSPORT_STATUS_COLOR_DEFAULTS.scheduled).accent);
   };
 
   const userName = user?.fullName || user?.name || user?.email || 'Transport User';
@@ -292,14 +325,19 @@ export default function TransportSettingsPage({ user }) {
                 <h2>Schedule Status Colours</h2>
                 <p>Choose the colours used on the schedule board for your own account.</p>
               </div>
-              <button type="button" className="transport-settings-outline-btn" onClick={cancelColourEdit}>Cancel Edit</button>
+              {hasUnsavedChanges && (
+                <div className="transport-settings-change-actions">
+                  <button type="button" className="transport-settings-danger-btn" onClick={discardChanges}>Discard Changes</button>
+                  <button type="button" className="transport-settings-success-btn" onClick={saveChanges}>Save Changes</button>
+                </div>
+              )}
             </div>
 
-            <div className="transport-settings-status-body">
+            <div className={`transport-settings-status-body${activeStatus ? ' has-picker' : ''}`}>
               <div className="transport-status-table">
                 {STATUS_ROWS.map(row => {
                   const appearance = statusColors[row.key] || TRANSPORT_STATUS_COLOR_DEFAULTS[row.key];
-                  const selected = row.key === activeStatus.key;
+                  const selected = row.key === activeStatus?.key;
                   return (
                     <button
                       key={row.key}
@@ -316,6 +354,7 @@ export default function TransportSettingsPage({ user }) {
                 })}
               </div>
 
+              {activeStatus && (
               <aside className="transport-colour-popover" aria-label={`${activeStatus.label} colour picker`}>
                 <div className="transport-colour-wheel-wrap">
                   <div
@@ -383,6 +422,7 @@ export default function TransportSettingsPage({ user }) {
                   </div>
                 </div>
               </aside>
+              )}
             </div>
           </section>
         </div>
