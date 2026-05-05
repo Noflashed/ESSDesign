@@ -244,7 +244,11 @@ function summarizeItems(request) {
             if (!quantity) return;
 
             const [label, spec] = entry;
-            const description = [getMaterialDisplayLabel(label), normalizeMaterialSpec(spec)].filter(Boolean).join(' ');
+            if (shouldSkipMaterialEntry(label, spec)) return;
+
+            const displayLabel = getMaterialDisplayLabel(label);
+            const displaySpec = displayLabel.toUpperCase().includes('HOP-UP') ? '' : normalizeMaterialSpec(spec);
+            const description = [displayLabel, displaySpec].filter(Boolean).join(' ');
             appendSummaryItem(grouped, description, quantity, 'ea');
         });
     });
@@ -279,6 +283,10 @@ function summarizeItems(request) {
 function getMaterialGroupName(label) {
     const value = String(label || '').toUpperCase();
     if (value.includes('DIAGONAL BRACE')) return 'Diagonal Braces';
+    if (value.includes('HOP-UP')) return 'Hop-Up Brackets';
+    if (value === 'TIE BARS') return 'Tie Bars';
+    if (value.includes('CORNER BRACKET')) return 'Corner Brackets';
+    if (['DOUBLE SAFETY', 'SWIVEL', 'SWIVEL SAFETY', 'BEAM CLAMPS'].includes(value)) return 'Clips & Couplers';
     if (value.includes('HARDWOOD SOLE BOARD') || value.includes('TIMBER BOARD')) return 'Timber Boards';
     if (value.includes('LADDER')) return 'Ladders';
     if (value.includes('STAIR') || value.includes('STEP DOWN') || value === 'ALUMINIUM HANDRAIL' || value === 'ALUMINIUM TOP RAIL') return 'Stair Components';
@@ -297,7 +305,16 @@ function getMaterialGroupName(label) {
 function getMaterialDisplayLabel(label) {
     const value = String(label || '').trim();
     if (value.toUpperCase() === 'OPEN END') return 'OPEN END STANDARDS';
+    if (value.toUpperCase() === 'HOP-UP 3 SPIGOTS') return '3-Board Hop-Up Bracket with Spigot';
+    if (value.toUpperCase() === 'HOP-UP 2 SPIGOTS') return '2-Board Hop-Up Bracket with Spigot';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 3') return '3-Board Hop-Up Bracket';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 2') return '2-Board Hop-Up Bracket';
+    if (value.toUpperCase() === 'HOP-UP BRACKETS 1') return '1-Board Hop-Up Bracket';
     return value;
+}
+
+function shouldSkipMaterialEntry(label, spec) {
+    return /^\d+(?:\.\d+)?$/.test(String(label || '').trim()) && ['M', 'MM'].includes(String(spec || '').trim().toUpperCase());
 }
 
 function formatMetricNumber(value) {
@@ -396,8 +413,12 @@ function getMaterialOrderGroups(itemValues = {}) {
             ['right', row.right],
         ].forEach(([side, entry]) => {
             const [label = '', spec = ''] = entry;
+            if (shouldSkipMaterialEntry(label, spec)) {
+                return;
+            }
+
             const cleanLabel = getMaterialDisplayLabel(label);
-            const cleanSpec = normalizeMaterialSpec(spec);
+            const cleanSpec = cleanLabel.toUpperCase().includes('HOP-UP') ? '' : normalizeMaterialSpec(spec);
             const isSectionHeader = SECTION_HEADER_LABELS.has(cleanLabel.toUpperCase()) && !cleanSpec;
 
             if ((!cleanLabel && !cleanSpec) || isSectionHeader) {
