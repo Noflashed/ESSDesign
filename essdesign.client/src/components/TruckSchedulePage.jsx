@@ -215,6 +215,33 @@ function getRequestDeliveryHandoffMinutes(request, routeEstimate = null) {
   return getPrimaryPhaseMinutes(routeEstimate, request?.secondaryRoute || null);
 }
 
+function findFollowOnRequestForInsertion(requestId, scheduleEvent, dayEvents = [], requestLookup = {}, cycleStateMap = {}, allRequests = []) {
+  if (!requestId || !scheduleEvent) {
+    return null;
+  }
+
+  const sameTruckEvents = dayEvents
+    .filter(event => event.truckId === scheduleEvent.truckId && event.orderId !== requestId)
+    .sort((left, right) => (left.hour * 60 + left.minute) - (right.hour * 60 + right.minute));
+  const currentStart = scheduleEvent.hour * 60 + scheduleEvent.minute;
+  const followOnEvent = sameTruckEvents.find(event => {
+    const eventStart = event.hour * 60 + event.minute;
+    if (eventStart < currentStart) {
+      return false;
+    }
+    const cycleState = cycleStateMap[event.orderId] || null;
+    const request = requestLookup[event.orderId] || allRequests.find(item => item.id === event.orderId) || null;
+    return (
+      cycleState?.followsPreviousRun &&
+      (cycleState.routeFromRequestId === requestId || cycleState.runSourceOrderId === requestId || request?.sourceOrderId === requestId)
+    );
+  });
+
+  return followOnEvent
+    ? requestLookup[followOnEvent.orderId] || allRequests.find(item => item.id === followOnEvent.orderId) || null
+    : null;
+}
+
 function getRequestScheduledStartMinutes(request, fallbackMinutes = SCREEN_START_HOUR * 60) {
   if (typeof request?.scheduledHour === 'number' && typeof request?.scheduledMinute === 'number') {
     return request.scheduledHour * 60 + request.scheduledMinute;
@@ -2935,7 +2962,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       item.sourceOrderId === requestId &&
       !item.archivedAt &&
       item.scheduledDate === scheduleEvent.date
-    ) || null;
+    ) || findFollowOnRequestForInsertion(
+      requestId,
+      scheduleEvent,
+      dayEvents,
+      requestMetaMap,
+      eventCycleStateMap,
+      allRequests,
+    );
     const projectAddressOptions = (builders || [])
       .flatMap(builder => (builder.projects || []).map(project => ({
         id: `${builder.id || builder.name}:${project.id || project.name}`,
@@ -3121,7 +3155,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ? secondaryRouteModal.insertBeforeRequest
         : null;
       let relinkedContinuation = null;
-      if (continuationToRelink?.id && isSecondaryRouteRequest(continuationToRelink)) {
+      if (continuationToRelink?.id) {
         const relinkDestination = getRequestSiteLocation(continuationToRelink, requestSiteLocationMapRef.current, []);
         if (relinkDestination) {
           const relinkDeparture = new Date(
@@ -3138,19 +3172,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           if (!relinkOutbound) {
             throw new Error('Follow-on route could not be recalculated from the external route destination.');
           }
-          const relinkReturnDeparture = new Date(
-            relinkDeparture.getTime()
-            + Math.round(relinkOutbound.durationSeconds / 60) * 60 * 1000
-            + Math.max(0, Number(continuationToRelink.secondaryRoute?.serviceMinutes) || 0) * 60 * 1000,
-          );
-          const relinkReturnSchedule = {
-            scheduledDate: formatDateKey(relinkReturnDeparture),
-            scheduledHour: relinkReturnDeparture.getHours(),
-            scheduledMinute: relinkReturnDeparture.getMinutes(),
-          };
-          const relinkReturn = await getCachedRouteDataBetween(relinkDestination, YARD_LOCATION, { ...relinkReturnSchedule, enableTolls });
-          if (!relinkReturn) {
-            throw new Error('Follow-on return-to-yard timing could not be recalculated.');
+          let relinkReturn = null;
+          if (isSecondaryRouteRequest(continuationToRelink)) {
+            const relinkReturnDeparture = new Date(
+              relinkDeparture.getTime()
+              + Math.round(relinkOutbound.durationSeconds / 60) * 60 * 1000
+              + Math.max(0, Number(continuationToRelink.secondaryRoute?.serviceMinutes) || 0) * 60 * 1000,
+            );
+            const relinkReturnSchedule = {
+              scheduledDate: formatDateKey(relinkReturnDeparture),
+              scheduledHour: relinkReturnDeparture.getHours(),
+              scheduledMinute: relinkReturnDeparture.getMinutes(),
+            };
+            relinkReturn = await getCachedRouteDataBetween(relinkDestination, YARD_LOCATION, { ...relinkReturnSchedule, enableTolls });
+            if (!relinkReturn) {
+              throw new Error('Follow-on return-to-yard timing could not be recalculated.');
+            }
           }
           relinkedContinuation = {
             ...continuationToRelink,
@@ -3163,7 +3200,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             scheduledTruckLabel: scheduleEvent.truckLabel,
             truckId: scheduleEvent.truckId,
             truckLabel: scheduleEvent.truckLabel,
-            secondaryRoute: {
+            sourceOrderId: '__pending_external_route__',
+            ...(isSecondaryRouteRequest(continuationToRelink) ? { secondaryRoute: {
               ...continuationToRelink.secondaryRoute,
               startingLocation: destination,
               destination: relinkDestination,
@@ -3173,13 +3211,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               travelTrafficDelaySeconds: relinkOutbound.trafficDelaySeconds,
               travelTrafficProvider: relinkOutbound.trafficProvider,
               travelTrafficNote: relinkOutbound.trafficNote,
-              returnDistanceMeters: relinkReturn.distanceMeters,
-              returnDurationSeconds: relinkReturn.durationSeconds,
-              returnBaseDurationSeconds: relinkReturn.baseDurationSeconds,
-              returnTrafficDelaySeconds: relinkReturn.trafficDelaySeconds,
-              returnTrafficProvider: relinkReturn.trafficProvider,
-              returnTrafficNote: relinkReturn.trafficNote,
-            },
+              returnDistanceMeters: relinkReturn?.distanceMeters || 0,
+              returnDurationSeconds: relinkReturn?.durationSeconds || 0,
+              returnBaseDurationSeconds: relinkReturn?.baseDurationSeconds || 0,
+              returnTrafficDelaySeconds: relinkReturn?.trafficDelaySeconds || 0,
+              returnTrafficProvider: relinkReturn?.trafficProvider || '',
+              returnTrafficNote: relinkReturn?.trafficNote || '',
+            } } : {}),
           };
         }
       }
@@ -3219,7 +3257,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ...requestSiteLocationMapRef.current,
         [parentRequest.id]: secondaryRouteModal.primarySiteLocation,
         [chainedUpdatedRequest.id]: secondaryRoute.startingLocation,
-        ...(relinkedUpdatedContinuation ? { [relinkedUpdatedContinuation.id]: relinkedUpdatedContinuation.secondaryRoute.startingLocation } : {}),
+        ...(relinkedUpdatedContinuation && isSecondaryRouteRequest(relinkedUpdatedContinuation)
+          ? { [relinkedUpdatedContinuation.id]: relinkedUpdatedContinuation.secondaryRoute.startingLocation }
+          : {}),
       };
       const dateKey = scheduleEvent.date || formatDateKey(selectedDate);
       mergeRequestSiteLocationMap(nextSiteLocationMap);

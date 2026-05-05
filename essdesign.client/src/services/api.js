@@ -1394,7 +1394,7 @@ export const materialOrderRequestsAPI = {
         const relinkedScheduledAtIso = relinkedScheduledDate && typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
             ? `${relinkedScheduledDate}T${String(relinkedScheduledHour).padStart(2, '0')}:${String(relinkedScheduledMinute).padStart(2, '0')}:00`
             : null;
-        const relinkedContinuationRecord = shouldInsertBeforeExistingSecondary && normalizedRelinkedSecondaryRoute
+        const relinkedContinuationRecord = relinkedContinuationId
             ? {
                 ...(relinkedContinuation || {}),
                 id: relinkedContinuationId,
@@ -1402,7 +1402,7 @@ export const materialOrderRequestsAPI = {
                 connectedParentStartMinutes: typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
                     ? relinkedScheduledHour * 60 + relinkedScheduledMinute
                     : relinkedContinuation.connectedParentStartMinutes ?? null,
-                routeType: 'secondary_route',
+                routeType: relinkedContinuation.routeType || null,
                 scheduledDate: relinkedScheduledDate,
                 scheduledHour: relinkedScheduledHour,
                 scheduledMinute: relinkedScheduledMinute,
