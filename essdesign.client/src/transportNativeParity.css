@@ -225,7 +225,8 @@
 
 .transport-page-frame .ts2-axis-tick span {
     top: 14px !important;
-    left: 12px !important;
+    left: 0 !important;
+    transform: translateX(-50%) !important;
     color: #102B5C !important;
     font-size: 12px !important;
     font-weight: 800 !important;

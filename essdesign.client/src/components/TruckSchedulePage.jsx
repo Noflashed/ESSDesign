@@ -4036,7 +4036,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <div className="ts2-axis-shell">
               <div className="ts2-axis" style={{ width: timelineWidth }}>
                 {timelineMarkers.map(marker => (
-                  <div key={`${timelineScaleMode}-${marker.minutes}`} className={`ts2-axis-tick${marker.isHour ? ' major' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }}>
+                  <div key={`${timelineScaleMode}-${marker.minutes}`} className={`ts2-axis-tick${marker.isHour ? ' major' : ''}${marker.showLabel ? ' labeled' : ''}`} style={{ left: `${((marker.minutes - SCREEN_START_HOUR * 60) / ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60)) * 100}%` }}>
                     {marker.showLabel ? <span>{marker.label}</span> : null}
                   </div>
                 ))}

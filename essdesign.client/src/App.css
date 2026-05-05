@@ -6762,6 +6762,21 @@ button.stat-card {
     background: transparent;
 }
 
+.ts2-axis-tick.labeled::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 32px;
+    bottom: 0;
+    width: 1px;
+    transform: translateX(-50%);
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(100, 116, 139, 0.55) 0 4px,
+        transparent 4px 8px
+    );
+}
+
 .ts2-grid-line {
     position: absolute;
     top: 0;
@@ -6774,11 +6789,13 @@ button.stat-card {
 .ts2-axis-tick span {
     position: absolute;
     top: 18px;
-    left: 8px;
+    left: 0;
+    transform: translateX(-50%);
     color: #64748b;
     font-size: 11px;
     font-weight: 800;
     white-space: nowrap;
+    text-align: center;
 }
 
 .ts2-board-body { position: relative; }
@@ -8019,7 +8036,8 @@ button.stat-card {
 
 .transport-page-frame .ts2-axis-tick span {
     top: 10px;
-    left: 6px;
+    left: 0;
+    transform: translateX(-50%);
     color: #102B5C;
     font-size: 12px;
     font-weight: 700;
@@ -8316,7 +8334,8 @@ button.stat-card {
 }
 
 .transport-page-frame .ts2-axis-tick span {
-    left: 10px;
+    left: 0;
+    transform: translateX(-50%);
 }
 
 .transport-page-frame .ts2-truck-pill {
@@ -8540,7 +8559,8 @@ button.stat-card {
 
 .transport-page-frame .ts2-axis-tick span {
     top: 14px;
-    left: 12px;
+    left: 0;
+    transform: translateX(-50%);
     font-size: 12px;
     font-weight: 800;
     color: #102B5C;
