@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, CalendarDays, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User, X } from 'lucide-react';
+import { Archive, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
 import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
 import {
     formatTimeChip,
@@ -935,14 +935,17 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
     };
 
     const submitOrder = async () => {
-        if (!form.builderName || !form.projectName || !form.requestedByName || !form.orderDate) {
-            setError('Builder, jobsite, requester, and date are required.');
+        if (!form.builderName || !form.projectName || !form.requestedByName) {
+            setError('Builder, jobsite, and requester are required.');
             return false;
         }
         setSaving(true);
         setError('');
         try {
-            await materialOrderRequestsAPI.submitRequest(form);
+            await materialOrderRequestsAPI.submitRequest({
+                ...form,
+                orderDate: form.orderDate || todayDate(),
+            });
             setForm(createBlankOrder(user));
             setOrderSummaryOpen(false);
             return true;
@@ -1109,22 +1112,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                             </div>
                         </label>
 
-                        <label className="transport-order-field">
-                            <span>Order date</span>
-                            {isArchivedView ? (
-                                <div className="transport-order-static-control">{form.orderDate || 'Not dated'}</div>
-                            ) : (
-                                <div className="transport-order-input-icon">
-                                    <input
-                                        type="date"
-                                        value={form.orderDate}
-                                        onChange={(event) => setForm((prev) => ({ ...prev, orderDate: event.target.value }))}
-                                    />
-                                    <CalendarDays size={15} aria-hidden="true" />
-                                </div>
-                            )}
-                        </label>
-
                         <button
                             type="button"
                             className="transport-order-review-open-btn"
@@ -1232,9 +1219,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     <FileText size={19} aria-hidden="true" />
                                     <h2 id="transport-order-summary-title">Order Summary</h2>
                                 </div>
-                                <button type="button" aria-label="Close order summary" onClick={() => setOrderSummaryOpen(false)}>
-                                    <X size={18} aria-hidden="true" />
-                                </button>
                             </header>
 
                             <div className="transport-order-summary-drawer-body">
