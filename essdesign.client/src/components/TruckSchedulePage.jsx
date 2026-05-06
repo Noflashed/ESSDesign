@@ -4481,8 +4481,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeContext = getBoardRouteContextForRequest(request, requestMetaMap, requestSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
-                      const routeEstimate = getCachedBoardRouteEstimate(routeContext) ?? null;
                       const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation;
+                      const cachedRouteEstimate = getCachedBoardRouteEstimate(routeContext);
+                      const stableRouteEstimate = stableRouteEstimateMapRef.current[event.orderId] ?? null;
+                      let routeEstimate = cachedRouteEstimate === undefined
+                        ? stableRouteEstimate
+                        : cachedRouteEstimate ?? stableRouteEstimate;
+                      if (!isSecondaryRequest && eventReturnTransitEnabled && routeEstimate && stableRouteEstimate && routeEstimate !== stableRouteEstimate) {
+                        const candidateTiming = getTimingProfile(routeEstimate, request?.secondaryRoute || null);
+                        const stableTiming = getTimingProfile(stableRouteEstimate, request?.secondaryRoute || null);
+                        if (Math.abs(stableTiming.totalMinutes - durationMinutes) < Math.abs(candidateTiming.totalMinutes - durationMinutes)) {
+                          routeEstimate = stableRouteEstimate;
+                        }
+                      }
                       const timing = isSecondaryRequest
                         ? getSecondaryRouteTiming(request.secondaryRoute, eventReturnTransitEnabled)
                         : eventReturnTransitEnabled
