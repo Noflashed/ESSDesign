@@ -1627,13 +1627,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       getTollsEnabled,
       returnTransitByRequestId,
     );
-    const flowRouteMap = buildCachedRouteMapForRequests(
-      requestsForDay,
-      siteLocationMap,
-      fallbackDate || selectedDate,
-      false,
-      returnTransitByRequestId,
-    );
+    const flowRouteMap = routeMap;
     const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap });
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
@@ -1674,23 +1668,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       );
       const nextSiteLocationMap = mergeRequestSiteLocationMap(siteLocationMap);
       const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
-      const cachedFlowRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, false, returnTransitByRequestId);
-      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: cachedFlowRouteMap });
+      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: cachedRouteMap });
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
           const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
-          const flowRouteContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, false, returnTransitByRequestId);
           if (!routeContext) {
-            return [request.id, null, null];
+            return [request.id, null];
           }
           const cachedEstimate = getCachedBoardRouteEstimate(routeContext);
-          const cachedFlowEstimate = getTollsEnabled(request.id)
-            ? getCachedBoardRouteEstimate(flowRouteContext)
-            : cachedEstimate;
-          const shouldShowLoading = cachedEstimate === undefined || cachedFlowEstimate === undefined;
+          const shouldShowLoading = cachedEstimate === undefined;
           if (shouldShowLoading) {
             setRouteLoading(request.id, true);
           }
@@ -1698,15 +1687,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             const resolvedEstimate = cachedEstimate !== undefined
               ? cachedEstimate
               : await resolveBoardRouteEstimate(routeContext);
-            const resolvedFlowEstimate = getTollsEnabled(request.id)
-              ? cachedFlowEstimate !== undefined
-                ? cachedFlowEstimate
-                : await resolveBoardRouteEstimate(flowRouteContext)
-              : resolvedEstimate;
             return [
               request.id,
               resolvedEstimate,
-              resolvedFlowEstimate,
             ];
           } finally {
             if (shouldShowLoading) {
@@ -1716,8 +1699,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries.map(([id, estimate]) => [id, estimate]));
-      const resolvedFlowRouteMap = Object.fromEntries(resolvedRouteEntries.map(([id, , estimate]) => [id, estimate]));
-      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: resolvedFlowRouteMap });
+      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
     })().catch(err => {
