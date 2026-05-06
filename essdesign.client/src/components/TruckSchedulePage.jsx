@@ -19,6 +19,7 @@ import {
   getCachedRouteData,
   getCachedRouteDataBetween,
   getCachedRouteEstimate,
+  getCachedRouteEstimateBetween,
   getCachedRouteEstimateBetweenValue,
   getCachedRouteEstimateValue,
   getDeliveryActionRows,
@@ -560,23 +561,65 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   };
 }
 
+function getBoardRouteContextForRequest(request, requestLookup = null, siteLocationMap = {}, fallbackDate, enableTolls = false) {
+  if (!request || isSecondaryRouteRequest(request)) {
+    return null;
+  }
+
+  const toLocation = siteLocationMap[request.id] || '';
+  if (!toLocation) {
+    return null;
+  }
+
+  const sourceRequest = request.sourceOrderId
+    ? getRequestFromLookup(request.sourceOrderId, requestLookup)
+    : null;
+  const scheduledStart = getRequestScheduledStartMinutes(request);
+  const connectedStart = request.connectedParentStartMinutes;
+  const shouldUseConnectedOrigin = Boolean(
+    sourceRequest &&
+    (
+      typeof connectedStart !== 'number' ||
+      Math.abs(scheduledStart - connectedStart) <= SNAP_EDGE_THRESHOLD_MINUTES
+    ),
+  );
+  const fromLocation = sourceRequest
+    && shouldUseConnectedOrigin
+    ? getRequestSiteLocation(sourceRequest, siteLocationMap, []) || siteLocationMap[sourceRequest.id] || ''
+    : '';
+
+  return {
+    fromLocation: fromLocation && toLocation ? fromLocation : '',
+    toLocation,
+    schedule: applyRouteMode(buildRouteScheduleFromRequest(request, fallbackDate), enableTolls),
+  };
+}
+
+function getCachedBoardRouteEstimate(routeContext) {
+  if (!routeContext?.toLocation) {
+    return null;
+  }
+  if (routeContext.fromLocation) {
+    return getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+  }
+  return getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
+}
+
+async function resolveBoardRouteEstimate(routeContext) {
+  if (!routeContext?.toLocation) {
+    return null;
+  }
+  return routeContext.fromLocation
+    ? getCachedRouteEstimateBetween(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
+    : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule);
+}
+
 function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate, enableTolls = false) {
+  const requestLookup = new Map((requestsForDay || []).map(request => [request.id, request]));
   return Object.fromEntries(
     requestsForDay.map(request => {
-      if (isSecondaryRouteRequest(request)) {
-        return [request.id, null];
-      }
-
-      const siteLocation = siteLocationMap[request.id] || '';
-      return [
-        request.id,
-        siteLocation
-          ? getCachedRouteEstimateValue(
-            siteLocation,
-            applyRouteMode(buildRouteScheduleFromRequest(request, fallbackDate), enableTolls),
-          ) ?? null
-          : null,
-      ];
+      const routeContext = getBoardRouteContextForRequest(request, requestLookup, siteLocationMap, fallbackDate, enableTolls);
+      return [request.id, getCachedBoardRouteEstimate(routeContext)];
     }),
   );
 }
@@ -1543,17 +1586,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId);
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
+      const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
-          if (isSecondaryRouteRequest(request)) {
+          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, enableTolls);
+          if (!routeContext) {
             return [request.id, null];
           }
-          const siteLocation = siteLocationMap[request.id];
-          if (!siteLocation) {
-            return [request.id, null];
-          }
-          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(request, selectedDate), enableTolls);
-          const cachedEstimate = getCachedRouteEstimateValue(siteLocation, routeSchedule);
+          const cachedEstimate = getCachedBoardRouteEstimate(routeContext);
           const shouldShowLoading = cachedEstimate === undefined;
           if (shouldShowLoading) {
             setRouteLoading(request.id, true);
@@ -1563,7 +1603,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               request.id,
               cachedEstimate !== undefined
                 ? cachedEstimate
-                : await getCachedRouteEstimate(siteLocation, routeSchedule),
+                : await resolveBoardRouteEstimate(routeContext),
             ];
           } finally {
             if (shouldShowLoading) {
@@ -2685,22 +2725,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       if (!isSecondaryRouteRequest(updatedRequest)) {
         setRouteLoading(requestId, true);
         (async () => {
-          let siteLocation = requestSiteLocationMapRef.current[requestId] || '';
+          let nextSiteLocationMap = requestSiteLocationMapRef.current;
+          let siteLocation = nextSiteLocationMap[requestId] || '';
           if (!siteLocation) {
             const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
             siteLocation = findProjectLocation(builders, updatedRequest);
             if (siteLocation) {
-              mergeRequestSiteLocationMap({ [requestId]: siteLocation });
+              nextSiteLocationMap = mergeRequestSiteLocationMap({ [requestId]: siteLocation });
             }
           }
           if (!siteLocation) {
             return;
           }
-          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(updatedRequest, selectedDate), enableTolls);
-          if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
-            await getCachedRouteEstimate(siteLocation, routeSchedule);
+          const requestLookup = new Map(nextRequests.map(request => [request.id, request]));
+          const routeContext = getBoardRouteContextForRequest(updatedRequest, requestLookup, nextSiteLocationMap, selectedDate, enableTolls);
+          if (getCachedBoardRouteEstimate(routeContext) === undefined) {
+            await resolveBoardRouteEstimate(routeContext);
           }
-          projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+          projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, { force: true });
         })()
           .catch(() => {})
           .finally(() => {
@@ -2927,29 +2969,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     (async () => {
       const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+      let nextSiteLocationMap = requestSiteLocationMapRef.current;
+      const requestLookup = new Map(nextRequests.map(request => [request.id, request]));
       await Promise.all(
         updates.map(async update => {
           const request = nextRequests.find(item => item.id === update.requestId);
           if (!request || isSecondaryRouteRequest(request)) {
             return;
           }
-          let siteLocation = requestSiteLocationMapRef.current[update.requestId] || '';
+          let siteLocation = nextSiteLocationMap[update.requestId] || '';
           if (!siteLocation) {
             siteLocation = findProjectLocation(builders, request);
             if (siteLocation) {
-              mergeRequestSiteLocationMap({ [update.requestId]: siteLocation });
+              nextSiteLocationMap = mergeRequestSiteLocationMap({ [update.requestId]: siteLocation });
             }
           }
           if (!siteLocation) {
             return;
           }
-          const routeSchedule = applyRouteMode(buildRouteScheduleFromRequest(request, selectedDate), enableTolls);
-          if (getCachedRouteEstimateValue(siteLocation, routeSchedule) === undefined) {
-            await getCachedRouteEstimate(siteLocation, routeSchedule);
+          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, enableTolls);
+          if (getCachedBoardRouteEstimate(routeContext) === undefined) {
+            await resolveBoardRouteEstimate(routeContext);
           }
         }),
       );
-      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+      projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, { force: true });
     })().catch(() => {});
 
     Promise.all(
@@ -4226,7 +4270,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const palette = scheduleStatusAppearance(isCompleteTile ? 'return_transit' : status, transportStatusColors);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
-                      const routeEstimate = getCachedRouteEstimateValue(siteLocation, applyRouteMode(buildRouteScheduleFromEvent(event), enableTolls)) ?? null;
+                      const routeContext = getBoardRouteContextForRequest(request, requestMetaMap, requestSiteLocationMap, selectedDate, enableTolls);
+                      const routeEstimate = getCachedBoardRouteEstimate(routeContext) ?? null;
                       const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation;
                       const timing = isSecondaryRequest
                         ? getSecondaryRouteTiming(request.secondaryRoute, eventReturnTransitEnabled)
