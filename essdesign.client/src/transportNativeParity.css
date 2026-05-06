@@ -6077,3 +6077,62 @@
 .transport-desktop-nav-item.disabled:hover > svg {
     color: #7d8188 !important;
 }
+
+/* ESS Transport typography: align page content with the lighter sidebar style. */
+.transport-desktop-workspace,
+.transport-desktop-workspace button,
+.transport-desktop-workspace input,
+.transport-desktop-workspace select,
+.transport-desktop-workspace textarea,
+.transport-desktop-workspace table {
+    font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif !important;
+    letter-spacing: 0 !important;
+}
+
+.transport-desktop-workspace h1,
+.transport-desktop-workspace .transport-reference-header h1,
+.transport-desktop-workspace .transport-management-redesign h1,
+.transport-desktop-workspace .transport-order-topbar h1,
+.transport-desktop-workspace .transport-settings-title-block h1 {
+    font-weight: 650 !important;
+    letter-spacing: 0 !important;
+}
+
+.transport-desktop-workspace h2,
+.transport-desktop-workspace h3,
+.transport-desktop-workspace .ts2-board-card-title,
+.transport-desktop-workspace .transport-management-panel-title h2,
+.transport-desktop-workspace .transport-order-panel h2,
+.transport-desktop-workspace .transport-settings-panel h2,
+.transport-desktop-workspace .transport-placeholder-card h2 {
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+}
+
+.transport-desktop-workspace p,
+.transport-desktop-workspace label,
+.transport-desktop-workspace td,
+.transport-desktop-workspace input,
+.transport-desktop-workspace select,
+.transport-desktop-workspace textarea,
+.transport-desktop-workspace .transport-order-field span,
+.transport-desktop-workspace .transport-settings-breadcrumb,
+.transport-desktop-workspace .transport-management-table td {
+    font-weight: 500 !important;
+}
+
+.transport-desktop-workspace th,
+.transport-desktop-workspace button,
+.transport-desktop-workspace .transport-status-pill,
+.transport-desktop-workspace .transport-management-type-pill,
+.transport-desktop-workspace .transport-order-material-group-toggle span,
+.transport-desktop-workspace .transport-settings-section-list button span {
+    font-weight: 560 !important;
+}
+
+.transport-desktop-workspace strong,
+.transport-desktop-workspace .transport-management-table td strong,
+.transport-desktop-workspace .transport-order-material-name,
+.transport-desktop-workspace .transport-settings-section-list strong {
+    font-weight: 600 !important;
+}
