@@ -1359,7 +1359,7 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
-    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false }) => {
+    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null }) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`),
@@ -1369,11 +1369,23 @@ export const materialOrderRequestsAPI = {
         if (record.archivedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit') {
             throw new Error('Completed material orders cannot be rescheduled.');
         }
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = Boolean(
+            clearRunLink &&
+            record.routeType === 'secondary_route' &&
+            normalizedSecondaryRoute?.reason === 'material_pick_up' &&
+            normalizedSecondaryRoute?.linkedRequestId
+        );
         const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+        const nextSourceOrderId = clearRunLink ? sourceOrderId || null : record.sourceOrderId || null;
+        const nextConnectedParentStartMinutes = clearRunLink
+            ? typeof connectedParentStartMinutes === 'number' ? connectedParentStartMinutes : null
+            : typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null;
         const updated = {
             ...record,
-            sourceOrderId: clearRunLink ? null : record.sourceOrderId || null,
-            connectedParentStartMinutes: clearRunLink ? null : typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
+            sourceOrderId: nextSourceOrderId,
+            connectedParentStartMinutes: nextConnectedParentStartMinutes,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
             scheduledDate: date,
             scheduledHour: hour,
             scheduledMinute: minute,
@@ -1386,15 +1398,16 @@ export const materialOrderRequestsAPI = {
             deliveryStartedAt: null,
             deliveryUnloadingAt: null,
             deliveryConfirmedAt: null,
-            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+            secondaryRoute: shouldRestoreMaterialOrder ? null : normalizedSecondaryRoute,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
-                    sourceOrderId: clearRunLink ? null : item.sourceOrderId || null,
-                    connectedParentStartMinutes: clearRunLink ? null : typeof item.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
+                    sourceOrderId: nextSourceOrderId,
+                    connectedParentStartMinutes: nextConnectedParentStartMinutes,
+                    routeType: shouldRestoreMaterialOrder ? null : item.routeType || null,
                     notes: updated.notes || item.notes || '',
                     itemValues: updated.itemValues || item.itemValues || {},
                     scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
@@ -1411,7 +1424,7 @@ export const materialOrderRequestsAPI = {
                     deliveryStartedAt: null,
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
-                    secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
+                    secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
             updatedAt: nowIso(),
@@ -1430,10 +1443,18 @@ export const materialOrderRequestsAPI = {
             readStorageJson(indexPath),
         ]);
         if (!record) throw new Error('Request not found');
+        const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = Boolean(
+            record.routeType === 'secondary_route' &&
+            secondaryRoute?.reason === 'material_pick_up' &&
+            secondaryRoute?.linkedRequestId
+        );
         const updated = {
             ...record,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
+            secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
         };
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
@@ -1442,6 +1463,8 @@ export const materialOrderRequestsAPI = {
                     ...item,
                     sourceOrderId: null,
                     connectedParentStartMinutes: null,
+                    routeType: shouldRestoreMaterialOrder ? null : item.routeType || null,
+                    secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
                 }
                 : item),
             updatedAt: nowIso(),
