@@ -493,11 +493,16 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         );
         const followsPreviousRun = Boolean(
           previousRunLink &&
-          !previousRunLink.includeReturnTransitToYard &&
+          (!previousRunLink.includeReturnTransitToYard || hasAdjacentRunLink) &&
           (hasExplicitRunLink || hasAdjacentRunLink),
         );
         const requestStatus = request.deliveryStatus || 'scheduled';
-        const presumedInTransitFromParent = Boolean(followsPreviousRun && previousRunLink?.completed && requestStatus === 'scheduled');
+        const presumedInTransitFromParent = Boolean(
+          followsPreviousRun &&
+          !previousRunLink?.includeReturnTransitToYard &&
+          previousRunLink?.completed &&
+          requestStatus === 'scheduled',
+        );
         const shiftedScheduledStart = followsPreviousRun
           ? Math.max(SCREEN_START_HOUR * 60, previousRunLink.projectedEndMinutes)
           : Math.max(
@@ -542,17 +547,20 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
         const runHandoffMinutes = startMinutes + primaryDurationMinutesValue;
         const flowRunHandoffMinutes = flowProjected.startMinutes + flowProjected.primaryDurationMinutes;
+        const flowLinkEndMinutes = hasEffectiveReturnBreak
+          ? flowProjected.projectedEndMinutes
+          : flowRunHandoffMinutes;
         const plannedRunEndMinutes = scheduledStart + flowTiming.totalMinutes;
         const routeFromRequestId = followsPreviousRun ? request.sourceOrderId || previousRunLink?.requestId || null : null;
         laneCursorMinutes = followsPreviousRun
-          ? flowRunHandoffMinutes
+          ? flowLinkEndMinutes
           : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
         previousRunLink = {
           requestId: request.id,
           includeReturnTransitToYard: hasEffectiveReturnBreak,
           completed: requestStatus === 'return_transit',
           plannedEndMinutes: plannedRunEndMinutes,
-          projectedEndMinutes: flowRunHandoffMinutes,
+          projectedEndMinutes: flowLinkEndMinutes,
         };
         startMap[request.id] = startMinutes;
         durationMap[request.id] = durationMinutes;
@@ -566,7 +574,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           followsPreviousRun,
           presumedInTransitFromParent,
           routeFromRequestId,
-          runHandoffMinutes: flowRunHandoffMinutes,
+          runHandoffMinutes: flowLinkEndMinutes,
           runSourceOrderId: request.sourceOrderId || null,
           runLinkReason: hasExplicitRunLink ? 'explicit' : hasAdjacentRunLink ? 'adjacent' : 'none',
           effectiveReturnBreak: hasEffectiveReturnBreak,
