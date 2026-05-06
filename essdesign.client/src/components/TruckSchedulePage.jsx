@@ -493,7 +493,6 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         );
         const followsPreviousRun = Boolean(
           previousRunLink &&
-          (!previousRunLink.includeReturnTransitToYard || hasAdjacentRunLink) &&
           (hasExplicitRunLink || hasAdjacentRunLink),
         );
         const requestStatus = request.deliveryStatus || 'scheduled';
@@ -2854,7 +2853,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const requestedSourceRequest = requestedSourceOrderId
       ? allRequests.find(item => item.id === requestedSourceOrderId) || requestMetaMap[requestedSourceOrderId] || null
       : null;
-    const nextSourceOrderId = requestedSourceRequest && !getReturnTransitEnabled(requestedSourceRequest.id)
+    const nextSourceOrderId = requestedSourceRequest
       ? requestedSourceOrderId
       : null;
     const shouldUpdateRunLink = shouldBreakRunLinks || Boolean(nextSourceOrderId);
