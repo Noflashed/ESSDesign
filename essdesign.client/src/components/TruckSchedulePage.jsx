@@ -225,7 +225,7 @@ function applyReturnEstimateToTiming(timing, returnRouteEstimate = null) {
   };
 }
 
-function isBackToBackContinuation(parentRequest, continuationRequest, parentTiming, truckId) {
+function isBackToBackContinuation(parentRequest, continuationRequest, truckId) {
   if (!parentRequest || !continuationRequest) {
     return false;
   }
@@ -236,15 +236,7 @@ function isBackToBackContinuation(parentRequest, continuationRequest, parentTimi
   if (continuationTruckId !== truckId) {
     return false;
   }
-
-  const parentStart = getRequestScheduledStartMinutes(parentRequest);
-  const continuationStart = getRequestScheduledStartMinutes(continuationRequest);
-  const parentDeliveryEnd = parentStart + (removeReturnLegFromTiming(parentTiming).totalMinutes || 0);
-  const connectedStart = continuationRequest.connectedParentStartMinutes;
-  if (typeof connectedStart === 'number' && Math.abs(continuationStart - connectedStart) <= SNAP_EDGE_THRESHOLD_MINUTES) {
-    return true;
-  }
-  return Math.abs(continuationStart - parentDeliveryEnd) <= SNAP_EDGE_THRESHOLD_MINUTES;
+  return true;
 }
 
 function getRequestDeliveryHandoffMinutes(request, routeEstimate = null) {
@@ -400,7 +392,7 @@ function getEffectiveDeliveryStatus(request, cycleState = null) {
     : status;
 }
 
-function orderTruckRequestsWithContinuations(truckRequests, truckId, routeMap, returnTransitByRequestId = {}) {
+function orderTruckRequestsWithContinuations(truckRequests, truckId) {
   const sorted = [...truckRequests].sort((left, right) => {
     const leftStart = (left.scheduledHour ?? SCREEN_START_HOUR) * 60 + (left.scheduledMinute ?? 0);
     const rightStart = (right.scheduledHour ?? SCREEN_START_HOUR) * 60 + (right.scheduledMinute ?? 0);
@@ -434,11 +426,7 @@ function orderTruckRequestsWithContinuations(truckRequests, truckId, routeMap, r
       return;
     }
 
-    const includeReturnTransitToYard = Boolean(returnTransitByRequestId?.[request.id]);
-    const parentTiming = isSecondaryRouteRequest(request)
-      ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
-      : getTimingProfile(routeMap[request.id] ?? null, null);
-    if (isBackToBackContinuation(request, continuation, parentTiming, truckId)) {
+    if (isBackToBackContinuation(request, continuation, truckId)) {
       ordered.push(continuation);
       usedIds.add(continuation.id);
     }
@@ -479,7 +467,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   groupedByTruck.forEach((truckRequests, truckId) => {
     let laneCursorMinutes = SCREEN_START_HOUR * 60;
     let previousRunLink = null;
-    orderTruckRequestsWithContinuations(truckRequests, truckId, flowRouteMap, returnTransitByRequestId)
+    orderTruckRequestsWithContinuations(truckRequests, truckId)
       .forEach((request, index, ordered) => {
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
         const continuation = runContinuationBySourceId.get(request.id);
@@ -490,7 +478,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const flowBaseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
           : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null);
-        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, flowBaseTiming, truckId);
+        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, truckId);
         const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
@@ -498,7 +486,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const flowTiming = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(flowBaseTiming)
           : flowBaseTiming;
-        const hasExplicitRunLink = Boolean(request.sourceOrderId && typeof request.connectedParentStartMinutes === 'number');
+        const hasExplicitRunLink = Boolean(request.sourceOrderId);
         const hasAdjacentRunLink = Boolean(
           !request.sourceOrderId &&
           Math.abs(scheduledStart - previousRunLink?.plannedEndMinutes) <= SNAP_EDGE_THRESHOLD_MINUTES,
@@ -2823,13 +2811,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ? allRequests.filter(item => item.id !== requestId && item.sourceOrderId === requestId && !item.archivedAt)
       : [];
     const directContinuationIds = new Set(directContinuationRequests.map(item => item.id));
-    const requestedSourceOrderId = shouldBreakRunLinks && options.linkToRequestId ? options.linkToRequestId : null;
+    const requestedSourceOrderId = options.linkToRequestId || null;
     const requestedSourceRequest = requestedSourceOrderId
       ? allRequests.find(item => item.id === requestedSourceOrderId) || requestMetaMap[requestedSourceOrderId] || null
       : null;
     const nextSourceOrderId = requestedSourceRequest && !getReturnTransitEnabled(requestedSourceRequest.id)
       ? requestedSourceOrderId
       : null;
+    const shouldUpdateRunLink = shouldBreakRunLinks || Boolean(nextSourceOrderId);
     const sourceAfterRunBreak = shouldBreakRunLinks ? breakRequestRunLink(sourceRequest) : sourceRequest;
     const runBreakSiteLocationPatch = {};
     if (shouldBreakRunLinks) {
@@ -2849,7 +2838,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       : requestSiteLocationMapRef.current;
     const updatedRequest = sourceRequest ? {
       ...sourceAfterRunBreak,
-      ...(shouldBreakRunLinks ? {
+      ...(shouldUpdateRunLink ? {
         sourceOrderId: nextSourceOrderId,
         connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
       } : {}),
@@ -2958,7 +2947,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         minute,
         truckId: truck?.id ?? truckId,
         truckLabel: truck?.rego ?? null,
-        clearRunLink: shouldBreakRunLinks,
+        clearRunLink: shouldUpdateRunLink,
         sourceOrderId: nextSourceOrderId,
         connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
       })
