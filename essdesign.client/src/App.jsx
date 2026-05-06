@@ -1285,6 +1285,7 @@ function App() {
             return (
                 <Login
                     onLoginSuccess={handleLoginSuccess}
+                    onSwitchToSignUp={handleSwitchToSignUp}
                     theme={theme}
                     onThemeChange={(value) => applyTheme(value, false)}
                 />
