@@ -22,7 +22,6 @@ function TransportPlaceholderPage({ eyebrow, title, description }) {
 export default function TransportSuitePage({ user, currentPage, onNavigate, onExit, onLogout }) {
   const isTruckRole = isTruckDeviceRole(user?.role);
   const assignedTruck = getTruckAssignment(user?.role);
-  const hideWorkspaceAccountMenu = currentPage === 'material-ordering-new' || currentPage === 'material-ordering';
 
   const navItems = useMemo(() => {
     if (isTruckRole) {
@@ -111,7 +110,6 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       user={user}
       isTruckRole={isTruckRole}
       assignedTruck={assignedTruck}
-      hideWorkspaceAccountMenu={hideWorkspaceAccountMenu}
       onNavigate={onNavigate}
       onExit={onExit}
       onLogout={onLogout}

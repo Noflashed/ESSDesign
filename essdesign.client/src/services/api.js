@@ -1,4 +1,13 @@
 import axios from 'axios';
+import {
+    PICKING_CARD_ROWS,
+    formatDayLabel,
+    getMaterialDisplayLabel,
+    isSectionHeaderEntry,
+    normalizeMaterialSpec,
+    quantityKey,
+    shouldSkipMaterialEntry,
+} from './materialOrderSchema';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
 const API_ORIGIN_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
@@ -791,6 +800,257 @@ function buildMaterialOrderRequestScheduleIso(item) {
     return `${item.scheduledDate}T${String(item.scheduledHour).padStart(2, '0')}:${String(item.scheduledMinute).padStart(2, '0')}:00`;
 }
 
+const materialOrderRequestPdfPath = (requestId) => `material-order-requests/pdf/${requestId}.pdf`;
+
+function pdfEsc(value) {
+    return String(value || '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function truncatePdfText(value, max) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function drawPdfText(x, y, size, value, font = 'F1') {
+    return `BT /${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${pdfEsc(String(value || ''))}) Tj ET`;
+}
+
+function buildMaterialOrderRequestPdfBlob(request) {
+    const pageW = 595;
+    const pageH = 842;
+    const margin = 24;
+    const bottomMargin = 28;
+    const headerBlue = '0.043 0.369 0.557 rg';
+    const lineGrey = '0.82 0.85 0.89 RG';
+    const textDark = '0.11 0.15 0.20 rg';
+    const textMuted = '0.29 0.38 0.46 rg';
+    const white = '1 1 1 rg';
+    const sectionBlue = '0.102 0.431 0.627 rg';
+    const paleYellow = '1 0.972 0.918 rg';
+    const itemValues = request?.itemValues && typeof request.itemValues === 'object' ? request.itemValues : {};
+
+    const rect = (x, y, w, h) => `${x} ${y} ${w} ${h} re`;
+    const fillRect = (x, y, w, h) => `${rect(x, y, w, h)} f`;
+    const strokeRect = (x, y, w, h) => `${rect(x, y, w, h)} S`;
+
+    const sections = [
+        { side: 'left', title: 'MODULAR SCAFFOLD' },
+        { side: 'middle', title: 'SOLE BOARDS' },
+        { side: 'right', title: 'SCAFFOLD LADDER' },
+    ];
+    const tableWidth = pageW - margin * 2;
+    const qtyWidth = 58;
+    const specWidth = 100;
+    const labelWidth = tableWidth - specWidth - qtyWidth;
+    const rowHeight = 17;
+    const sectionHeight = 18;
+
+    const pageStreams = [];
+    let content = [];
+    let currentY = 0;
+
+    const startPage = () => {
+        content = ['1 w'];
+    };
+
+    const finishPage = () => {
+        pageStreams.push(content.join('\n'));
+    };
+
+    const drawHeader = (withMeta) => {
+        content.push(headerBlue);
+        content.push(fillRect(margin, pageH - margin - 34, pageW - margin * 2, 34));
+        content.push(white);
+        content.push(drawPdfText(margin + 12, pageH - margin - 22, 18, 'PICKING CARD', 'F2'));
+        content.push(
+            drawPdfText(
+                pageW - margin - 152,
+                pageH - margin - 21,
+                8,
+                `Submitted ${truncatePdfText(String(request?.submittedAt || '').replace('T', ' ').slice(0, 16), 24)}`,
+                'F2'
+            )
+        );
+
+        if (!withMeta) {
+            return pageH - margin - 54;
+        }
+
+        const metaRows = [
+            ['BUILDER', truncatePdfText(request?.builderName || '', 38), 'DAY', truncatePdfText(formatDayLabel(request?.orderDate), 16)],
+            ['PROJECT', truncatePdfText(request?.projectName || '', 38), 'TIME', truncatePdfText(itemValues.__time || '', 16)],
+            [
+                'SCAFFOLD TYPE',
+                truncatePdfText(request?.scaffoldingSystem || itemValues.__scaffoldingSystem || '', 24),
+                'REQUESTED BY',
+                truncatePdfText(request?.requestedByName || '', 22),
+            ],
+            ['DETAILS', truncatePdfText(request?.details || itemValues.__details || request?.notes || '', 84), '', ''],
+        ];
+
+        let y = pageH - margin - 52;
+        for (const row of metaRows) {
+            const [leftLabel, leftValue, rightLabel, rightValue] = row;
+            const fullWidth = !rightLabel;
+            const rowH = fullWidth ? 28 : 24;
+            const leftBlockWidth = fullWidth ? pageW - margin * 2 : 322;
+            content.push(lineGrey);
+            content.push(strokeRect(margin, y - rowH, leftBlockWidth, rowH));
+            content.push('0.914 0.933 0.961 rg');
+            content.push(fillRect(margin, y - rowH, 96, rowH));
+            content.push(textMuted);
+            content.push(drawPdfText(margin + 8, y - 16, 8, leftLabel, 'F2'));
+            content.push(textDark);
+            content.push(drawPdfText(margin + 102, y - 16, 9, leftValue, 'F2'));
+
+            if (!fullWidth) {
+                const secondX = margin + leftBlockWidth;
+                content.push(lineGrey);
+                content.push(strokeRect(secondX, y - rowH, pageW - margin - secondX, rowH));
+                content.push('0.914 0.933 0.961 rg');
+                content.push(fillRect(secondX, y - rowH, 96, rowH));
+                content.push(textMuted);
+                content.push(drawPdfText(secondX + 8, y - 16, 8, rightLabel, 'F2'));
+                content.push(textDark);
+                content.push(drawPdfText(secondX + 102, y - 16, 9, rightValue, 'F2'));
+            }
+            y -= rowH;
+        }
+
+        return y - 12;
+    };
+
+    const ensureSpace = (neededHeight) => {
+        if (currentY - neededHeight >= bottomMargin) {
+            return;
+        }
+        finishPage();
+        startPage();
+        currentY = drawHeader(false);
+    };
+
+    const drawSectionHeader = (title) => {
+        ensureSpace(20);
+        content.push(sectionBlue);
+        content.push(fillRect(margin, currentY - 20, tableWidth, 20));
+        content.push(white);
+        content.push(drawPdfText(margin + 7, currentY - 13, 8, title, 'F2'));
+        content.push(drawPdfText(pageW - margin - qtyWidth + 16, currentY - 13, 8, 'QTY', 'F2'));
+        currentY -= 20;
+    };
+
+    const drawGroupedHeader = (label) => {
+        ensureSpace(sectionHeight);
+        content.push(sectionBlue);
+        content.push(fillRect(margin, currentY - sectionHeight, tableWidth, sectionHeight));
+        content.push(white);
+        content.push(drawPdfText(margin + 6, currentY - 12, 7, truncatePdfText(label, 40), 'F2'));
+        content.push(drawPdfText(pageW - margin - qtyWidth + 16, currentY - 12, 7, "QTY'S", 'F2'));
+        currentY -= sectionHeight;
+    };
+
+    const drawItem = (label, spec, qty) => {
+        ensureSpace(rowHeight);
+        content.push(lineGrey);
+        content.push(strokeRect(margin, currentY - rowHeight, labelWidth, rowHeight));
+        content.push(strokeRect(margin + labelWidth, currentY - rowHeight, specWidth, rowHeight));
+        content.push(strokeRect(margin + labelWidth + specWidth, currentY - rowHeight, qtyWidth, rowHeight));
+        content.push(textDark);
+        content.push(drawPdfText(margin + 6, currentY - 12, 6.5, truncatePdfText(label, 42), 'F2'));
+        if (spec) {
+            content.push(textMuted);
+            content.push(drawPdfText(margin + labelWidth + 6, currentY - 12, 6.5, truncatePdfText(spec, 16), 'F1'));
+        }
+        if (qty) {
+            content.push(paleYellow);
+            content.push(fillRect(margin + labelWidth + specWidth + 2, currentY - rowHeight + 2, qtyWidth - 4, rowHeight - 4));
+            content.push(textDark);
+            content.push(drawPdfText(margin + labelWidth + specWidth + 20, currentY - 12, 7, qty, 'F2'));
+        }
+        currentY -= rowHeight;
+    };
+
+    startPage();
+    currentY = drawHeader(true);
+
+    for (const section of sections) {
+        drawSectionHeader(section.title);
+        const entries = PICKING_CARD_ROWS
+            .filter(row => row[section.side][0] || row[section.side][1])
+            .map(row => ({
+                row,
+                entry: row[section.side],
+            }));
+
+        for (const { entry, row } of entries) {
+            const [label, spec] = entry;
+            if (isSectionHeaderEntry(entry)) {
+                drawGroupedHeader(getMaterialDisplayLabel(label));
+                continue;
+            }
+            if (shouldSkipMaterialEntry(label, spec)) {
+                continue;
+            }
+
+            const displayLabel = getMaterialDisplayLabel(label);
+            const displaySpec = displayLabel.toUpperCase().includes('HOP-UP') ? '' : normalizeMaterialSpec(spec);
+            const qty = truncatePdfText(itemValues[quantityKey(row.id, section.side)] || '', 5);
+            drawItem(displayLabel, displaySpec, qty);
+        }
+
+        currentY -= 10;
+    }
+
+    finishPage();
+
+    const objects = [];
+    objects.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+    objects.push('');
+
+    const pageObjectNumbers = [];
+    const streamObjectNumbers = [];
+    let nextObjectNumber = 3;
+
+    for (const stream of pageStreams) {
+        const pageObjectNumber = nextObjectNumber;
+        const streamObjectNumber = nextObjectNumber + 1;
+        pageObjectNumbers.push(pageObjectNumber);
+        streamObjectNumbers.push(streamObjectNumber);
+        objects.push('');
+        const streamLength = new TextEncoder().encode(stream).length;
+        objects.push(`${streamObjectNumber} 0 obj\n<< /Length ${streamLength} >>\nstream\n${stream}\nendstream\nendobj\n`);
+        nextObjectNumber += 2;
+    }
+
+    const font1ObjectNumber = nextObjectNumber;
+    const font2ObjectNumber = nextObjectNumber + 1;
+
+    objects[1] = `2 0 obj\n<< /Type /Pages /Kids [${pageObjectNumbers.map(num => `${num} 0 R`).join(' ')}] /Count ${pageObjectNumbers.length} >>\nendobj\n`;
+
+    for (let index = 0; index < pageObjectNumbers.length; index += 1) {
+        const pageObjectNumber = pageObjectNumbers[index];
+        const streamObjectNumber = streamObjectNumbers[index];
+        objects[2 + index * 2] = `${pageObjectNumber} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Contents ${streamObjectNumber} 0 R /Resources << /Font << /F1 ${font1ObjectNumber} 0 R /F2 ${font2ObjectNumber} 0 R >> >> >>\nendobj\n`;
+    }
+
+    objects.push(`${font1ObjectNumber} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`);
+    objects.push(`${font2ObjectNumber} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n`);
+
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    for (const obj of objects) {
+        offsets.push(new TextEncoder().encode(pdf).length);
+        pdf += obj;
+    }
+    const xrefOffset = new TextEncoder().encode(pdf).length;
+    pdf += `xref\n0 ${objects.length + 1}\n`;
+    pdf += '0000000000 65535 f \n';
+    for (let index = 1; index <= objects.length; index += 1) {
+        pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+    return new Blob([pdf], { type: 'application/pdf' });
+}
+
 function normalizeSecondaryRoute(raw) {
     if (!raw || typeof raw !== 'object') {
         return null;
@@ -946,6 +1206,7 @@ export const materialOrderRequestsAPI = {
     submitRequest: async (form) => {
         const requestId = makeId();
         const submittedAt = nowIso();
+        const pdfPath = materialOrderRequestPdfPath(requestId);
         const scaffoldingSystem = form?.itemValues?.__scaffoldingSystem || '';
         const details = form?.itemValues?.__details || '';
         const record = {
@@ -962,7 +1223,7 @@ export const materialOrderRequestsAPI = {
             submittedAt,
             notes: form?.notes || '',
             itemValues: form?.itemValues || {},
-            pdfPath: '',
+            pdfPath,
             scaffoldingSystem,
             details,
             scheduledDate: null,
@@ -980,6 +1241,12 @@ export const materialOrderRequestsAPI = {
             archivedAt: null,
             secondaryRoute: null,
         };
+
+        await uploadStorageObject(
+            pdfPath,
+            buildMaterialOrderRequestPdfBlob(record),
+            'application/pdf'
+        );
 
         await uploadStorageObject(
             `material-order-requests/requests/${requestId}.json`,
@@ -1002,7 +1269,7 @@ export const materialOrderRequestsAPI = {
                     orderDate: record.orderDate,
                     sourceOrderId: record.sourceOrderId,
                     routeType: null,
-                    pdfPath: '',
+                    pdfPath: record.pdfPath,
                     scaffoldingSystem,
                     details,
                     notes: record.notes || '',
@@ -1526,10 +1793,13 @@ export const materialOrderRequestsAPI = {
             requests: existingIndex.filter(item => item.id !== requestId),
             updatedAt: nowIso(),
         };
+        const pdfPath = record.pdfPath || materialOrderRequestPdfPath(requestId);
+        const pdfStillReferenced = Boolean(pdfPath && existingIndex.some(item => item.id !== requestId && item.pdfPath === pdfPath));
 
         await Promise.all([
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
             deleteStorageObject(`material-order-requests/requests/${requestId}.json`).catch(() => {}),
+            ...(pdfPath && !pdfStillReferenced ? [deleteStorageObject(pdfPath).catch(() => {})] : []),
         ]);
     },
 };

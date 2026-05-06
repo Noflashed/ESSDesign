@@ -1,7 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import TransportUserMenu from './TransportUserMenu';
-
-const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function TransportIcon({ type }) {
   const common = {
@@ -65,92 +63,120 @@ export default function NativeTransportShell({
   user,
   isTruckRole,
   assignedTruck,
-  hideWorkspaceAccountMenu = false,
   onNavigate,
   onExit,
   onLogout,
 }) {
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
   const goHome = onExit || (() => window.history.back());
-  const showWorkspaceAccountMenu = currentPage !== 'transport-settings' && !hideWorkspaceAccountMenu;
   const showTransportSettingsShortcut = !isTruckRole;
+  const normalizedSearch = navSearch.trim().toLowerCase();
+  const groupedNavItems = useMemo(() => {
+    const primaryKeys = ['transport-dashboard'];
+    const operationsKeys = ['truck-schedule', 'truck-delivery-schedule', 'material-ordering-active', 'material-ordering-new'];
+    const matchesSearch = (item) => !normalizedSearch || item.label.toLowerCase().includes(normalizedSearch);
+    const take = (keys) => navItems.filter(item => keys.includes(item.key) && matchesSearch(item));
+    const usedKeys = new Set([...primaryKeys, ...operationsKeys]);
+    const groups = [
+      { title: '', items: take(primaryKeys) },
+      { title: 'Operations', items: take(operationsKeys) },
+      { title: 'Resources', items: navItems.filter(item => !usedKeys.has(item.key) && matchesSearch(item)) },
+    ];
+    return groups.filter(group => group.items.length > 0);
+  }, [navItems, normalizedSearch]);
 
   return (
-    <div className={`transport-desktop-shell${railCollapsed ? ' rail-collapsed' : ''}`}>
+    <div className="transport-desktop-shell">
       <aside className="transport-desktop-rail">
         <div className="transport-desktop-rail-top">
           <div className="transport-desktop-brand">
-            <img src={ESS_LOGO_URL} alt="ESS Transport" className="transport-desktop-brand-logo" />
-            <button
-              type="button"
-              className="transport-desktop-collapse"
-              onClick={() => setRailCollapsed(current => !current)}
-              aria-label={railCollapsed ? 'Expand transport sidebar' : 'Collapse transport sidebar'}
-              aria-expanded={!railCollapsed}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-          <nav className="transport-desktop-nav" aria-label="ESS Transport">
-            {navItems.map(item => {
-              const active = currentPage === item.key || item.match?.includes(currentPage);
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`transport-desktop-nav-item${active ? ' active' : ''}`}
-                  onClick={() => onNavigate(item.key)}
-                  title={item.label}
-                >
-                  <TransportIcon type={item.icon} />
-                  <span>{item.label}</span>
-                  {item.badge ? <b>{item.badge}</b> : null}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="transport-desktop-rail-bottom">
-          {showTransportSettingsShortcut ? (
-            <button
-              type="button"
-              className={`transport-desktop-nav-item transport-desktop-settings-button${currentPage === 'transport-settings' ? ' active' : ''}`}
-              onClick={() => onNavigate('transport-settings')}
-              title="Transport settings"
-              aria-label="Transport settings"
-            >
-              <TransportIcon type="settings" />
-              <span>Settings</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="transport-desktop-nav-item transport-desktop-home-button"
-            onClick={goHome}
-            title="Back to ESS app home"
-            aria-label="Back to ESS app home"
-          >
-            <TransportIcon type="home" />
-            <span>Home</span>
-          </button>
-        </div>
-      </aside>
-
-      <main className="transport-desktop-workspace" data-transport-role={isTruckRole ? assignedTruck?.rego || 'truck' : 'management'}>
-        {showWorkspaceAccountMenu ? (
-          <div className="transport-shell-account-anchor">
             <TransportUserMenu
               user={user}
               isTruckRole={isTruckRole}
               assignedTruck={assignedTruck}
               onLogout={onLogout}
-              variant="topbar"
+              onExit={goHome}
+              variant="rail"
             />
           </div>
-        ) : null}
+          <label className="transport-desktop-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+              <path d="m16 16 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              type="search"
+              value={navSearch}
+              onChange={(event) => setNavSearch(event.target.value)}
+              placeholder="Search"
+              aria-label="Search transport pages"
+            />
+            {navSearch ? (
+              <button type="button" onClick={() => setNavSearch('')} aria-label="Clear transport page search">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                  <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : null}
+          </label>
+          <nav className="transport-desktop-nav" aria-label="ESS Transport">
+            {groupedNavItems.map(group => (
+              <div className="transport-desktop-nav-group" key={group.title || 'primary'}>
+                {group.title ? <div className="transport-desktop-nav-heading">{group.title}</div> : null}
+                {group.items.map(item => {
+                  const active = currentPage === item.key || item.match?.includes(currentPage);
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={`transport-desktop-nav-item${active ? ' active' : ''}`}
+                      onClick={() => onNavigate(item.key)}
+                      title={item.label}
+                    >
+                      <TransportIcon type={item.icon} />
+                      <span>{item.label}</span>
+                      {item.badge ? <b>{item.badge}</b> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            {groupedNavItems.length === 0 ? (
+              <div className="transport-desktop-nav-empty">No pages found</div>
+            ) : null}
+          </nav>
+        </div>
+
+        <div className="transport-desktop-rail-bottom">
+          <div className="transport-desktop-nav-group">
+            <div className="transport-desktop-nav-heading">Workspace</div>
+            {showTransportSettingsShortcut ? (
+              <button
+                type="button"
+                className={`transport-desktop-nav-item transport-desktop-settings-button${currentPage === 'transport-settings' ? ' active' : ''}`}
+                onClick={() => onNavigate('transport-settings')}
+                title="Transport settings"
+                aria-label="Transport settings"
+              >
+                <TransportIcon type="settings" />
+                <span>Settings</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="transport-desktop-nav-item transport-desktop-home-button"
+              onClick={goHome}
+              title="Back to ESS app home"
+              aria-label="Back to ESS app home"
+            >
+              <TransportIcon type="home" />
+              <span>Home</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main className="transport-desktop-workspace" data-transport-role={isTruckRole ? assignedTruck?.rego || 'truck' : 'management'}>
         {content}
       </main>
     </div>
