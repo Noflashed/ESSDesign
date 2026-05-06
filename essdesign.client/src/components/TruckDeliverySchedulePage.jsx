@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import {
+  MATERIAL_ORDER_REQUESTS_CHANGED_EVENT,
+  getJitteredPollingDelay,
+  materialOrderRequestsAPI,
+  recordForegroundPollingCycle,
+  safetyProjectsAPI,
+} from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   ESS_NAVY,
@@ -26,7 +32,7 @@ import {
   TRANSPORT_STATUS_COLOR_PREF_EVENT,
 } from './transport/transportUtils';
 
-const LIVE_REFRESH_MS = 3000;
+const LIVE_REFRESH_MS = 15000;
 
 function dedupeRequests(items) {
   const map = new Map();
@@ -124,10 +130,44 @@ export default function TruckDeliverySchedulePage({ user }) {
       setLoading(false);
       setRefreshing(false);
     });
-    const interval = window.setInterval(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
       loadEvents().catch(() => {});
-    }, LIVE_REFRESH_MS);
-    return () => window.clearInterval(interval);
+    };
+    const refreshFromPolling = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      recordForegroundPollingCycle('truck-delivery-schedule');
+      loadEvents().catch(() => {});
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadEvents().catch(() => {});
+      }
+    };
+    let pollingTimeout = null;
+    let disposed = false;
+    const queueNextPoll = () => {
+      pollingTimeout = window.setTimeout(() => {
+        if (disposed) {
+          return;
+        }
+        refreshFromPolling();
+        queueNextPoll();
+      }, getJitteredPollingDelay(LIVE_REFRESH_MS));
+    };
+    queueNextPoll();
+    window.addEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      disposed = true;
+      window.clearTimeout(pollingTimeout);
+      window.removeEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [hasAccess, loadEvents]);
 
   useEffect(() => {

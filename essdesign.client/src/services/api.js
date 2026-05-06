@@ -303,7 +303,329 @@ const safetyProjectsObjectUrl = () => `${SUPABASE_URL}/storage/v1/object/${SAFET
 const safetyProjectsObjectUpsertUrl = () => `${safetyProjectsObjectUrl()}?upsert=true`;
 const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFETY_BUCKET}`;
 
+export const MATERIAL_ORDER_REQUESTS_CHANGED_EVENT = 'ess-material-order-requests-changed';
+export const SAFETY_PROJECTS_CHANGED_EVENT = 'ess-safety-projects-changed';
+export const WEB_APP_STORAGE_METRICS_EVENT = 'ess-web-app-storage-metrics-updated';
+
 let verifiedSafetyBucket = false;
+const storageJsonCache = new Map();
+const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
+const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
+const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
+const STORAGE_JSON_REQUEST_TIMEOUT_MS = 15 * 1000;
+const STORAGE_JSON_CACHE_SYNC_CHANNEL = 'ess-storage-json-cache-sync';
+const STORAGE_JSON_CACHE_SYNC_KEY = 'ess-storage-json-cache-sync-message';
+const WEB_APP_STORAGE_METRICS_KEY = 'ess-web-app-storage-metrics';
+const storageJsonCacheTabId = makeId();
+const seenStorageJsonSyncMessages = new Set();
+let storageJsonBroadcastChannel = null;
+
+function getStorageJsonCacheTtl(path) {
+    if (path === MATERIAL_REQUEST_INDEX_PATH) {
+        return MATERIAL_REQUEST_CACHE_TTL_MS;
+    }
+    if (path === SAFETY_PROJECTS_PATH) {
+        return SAFETY_PROJECTS_CACHE_TTL_MS;
+    }
+    if (String(path || '').startsWith('material-order-requests/requests/')) {
+        return MATERIAL_REQUEST_CACHE_TTL_MS;
+    }
+    return DEFAULT_STORAGE_JSON_CACHE_TTL_MS;
+}
+
+function cloneJsonValue(value) {
+    if (value == null) {
+        return value;
+    }
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(value);
+        } catch {
+            // Fall back to JSON cloning below.
+        }
+    }
+    return JSON.parse(JSON.stringify(value));
+}
+
+function setStorageJsonCache(path, value, ttlMs = getStorageJsonCacheTtl(path)) {
+    if (!path || ttlMs <= 0) {
+        return;
+    }
+    storageJsonCache.set(path, {
+        value: cloneJsonValue(value),
+        expiresAt: Date.now() + ttlMs,
+        promise: null
+    });
+}
+
+function invalidateStorageJsonCache(path) {
+    if (path) {
+        storageJsonCache.delete(path);
+    }
+}
+
+function dispatchBrowserEvent(name, detail = {}) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function createEmptyStorageMetrics() {
+    const timestamp = nowIso();
+    return {
+        startedAt: timestamp,
+        updatedAt: timestamp,
+        totals: {
+            networkRequests: 0,
+            cacheHits: 0,
+            bytesDownloaded: 0,
+            foregroundPollingCycles: 0
+        },
+        paths: {},
+        polling: {}
+    };
+}
+
+function readStorageMetrics() {
+    if (typeof window === 'undefined') {
+        return createEmptyStorageMetrics();
+    }
+    try {
+        const raw = window.localStorage.getItem(WEB_APP_STORAGE_METRICS_KEY);
+        if (!raw) {
+            return createEmptyStorageMetrics();
+        }
+        const parsed = JSON.parse(raw);
+        return {
+            ...createEmptyStorageMetrics(),
+            ...parsed,
+            totals: {
+                ...createEmptyStorageMetrics().totals,
+                ...(parsed.totals || {})
+            },
+            paths: parsed.paths || {},
+            polling: parsed.polling || {}
+        };
+    } catch {
+        return createEmptyStorageMetrics();
+    }
+}
+
+function writeStorageMetrics(metrics) {
+    const nextMetrics = {
+        ...metrics,
+        updatedAt: nowIso()
+    };
+    if (typeof window !== 'undefined') {
+        try {
+            window.localStorage.setItem(WEB_APP_STORAGE_METRICS_KEY, JSON.stringify(nextMetrics));
+        } catch {
+            // Metrics are best-effort only.
+        }
+    }
+    dispatchBrowserEvent(WEB_APP_STORAGE_METRICS_EVENT, { metrics: nextMetrics });
+    return nextMetrics;
+}
+
+function updateStorageMetrics(mutator) {
+    const metrics = readStorageMetrics();
+    mutator(metrics);
+    return writeStorageMetrics(metrics);
+}
+
+function ensurePathStorageMetrics(metrics, path) {
+    const key = path || 'unknown';
+    if (!metrics.paths[key]) {
+        metrics.paths[key] = {
+            networkRequests: 0,
+            cacheHits: 0,
+            bytesDownloaded: 0,
+            lastAccessedAt: null
+        };
+    }
+    return metrics.paths[key];
+}
+
+function getTextByteLength(value) {
+    const text = String(value || '');
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(text).length;
+    }
+    return text.length;
+}
+
+function recordStorageJsonCacheHit(path) {
+    updateStorageMetrics((metrics) => {
+        const pathMetrics = ensurePathStorageMetrics(metrics, path);
+        pathMetrics.cacheHits += 1;
+        pathMetrics.lastAccessedAt = nowIso();
+        metrics.totals.cacheHits += 1;
+    });
+}
+
+function recordStorageJsonNetwork(path, bytesDownloaded = 0) {
+    const safeBytes = Math.max(0, Number(bytesDownloaded) || 0);
+    updateStorageMetrics((metrics) => {
+        const pathMetrics = ensurePathStorageMetrics(metrics, path);
+        pathMetrics.networkRequests += 1;
+        pathMetrics.bytesDownloaded += safeBytes;
+        pathMetrics.lastAccessedAt = nowIso();
+        metrics.totals.networkRequests += 1;
+        metrics.totals.bytesDownloaded += safeBytes;
+    });
+}
+
+export function getWebAppStorageMetrics() {
+    return readStorageMetrics();
+}
+
+export function resetWebAppStorageMetrics() {
+    return writeStorageMetrics(createEmptyStorageMetrics());
+}
+
+export function recordForegroundPollingCycle(source = 'unknown') {
+    updateStorageMetrics((metrics) => {
+        const key = source || 'unknown';
+        if (!metrics.polling[key]) {
+            metrics.polling[key] = {
+                cycles: 0,
+                lastPolledAt: null
+            };
+        }
+        metrics.polling[key].cycles += 1;
+        metrics.polling[key].lastPolledAt = nowIso();
+        metrics.totals.foregroundPollingCycles += 1;
+    });
+}
+
+export function getJitteredPollingDelay(baseMs, jitterMinMs = 1000, jitterMaxMs = 3000) {
+    const min = Math.max(0, jitterMinMs);
+    const max = Math.max(min, jitterMaxMs);
+    const offset = min + Math.random() * (max - min);
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    return Math.max(1000, Math.round(baseMs + (direction * offset)));
+}
+
+function isMaterialOrderStoragePath(path) {
+    return String(path || '').startsWith('material-order-requests/');
+}
+
+function emitStorageJsonLocalChange(path) {
+    if (path === MATERIAL_REQUEST_INDEX_PATH || isMaterialOrderStoragePath(path)) {
+        dispatchBrowserEvent(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, { path });
+    }
+    if (path === SAFETY_PROJECTS_PATH) {
+        dispatchBrowserEvent(SAFETY_PROJECTS_CHANGED_EVENT, { path });
+    }
+}
+
+function noteStorageJsonSyncMessage(messageId) {
+    if (!messageId) {
+        return false;
+    }
+    if (seenStorageJsonSyncMessages.has(messageId)) {
+        return true;
+    }
+    seenStorageJsonSyncMessages.add(messageId);
+    if (seenStorageJsonSyncMessages.size > 100) {
+        const [oldest] = seenStorageJsonSyncMessages;
+        seenStorageJsonSyncMessages.delete(oldest);
+    }
+    return false;
+}
+
+function getStorageJsonBroadcastChannel() {
+    if (typeof window === 'undefined' || typeof window.BroadcastChannel === 'undefined') {
+        return null;
+    }
+    if (!storageJsonBroadcastChannel) {
+        storageJsonBroadcastChannel = new window.BroadcastChannel(STORAGE_JSON_CACHE_SYNC_CHANNEL);
+        storageJsonBroadcastChannel.addEventListener('message', (event) => {
+            handleExternalStorageJsonSyncMessage(event.data);
+        });
+    }
+    return storageJsonBroadcastChannel;
+}
+
+function handleExternalStorageJsonSyncMessage(message) {
+    if (!message || message.type !== 'storage-json-changed' || message.tabId === storageJsonCacheTabId) {
+        return;
+    }
+    if (noteStorageJsonSyncMessage(message.id)) {
+        return;
+    }
+    invalidateStorageJsonCache(message.path);
+    emitStorageJsonLocalChange(message.path);
+}
+
+function broadcastStorageJsonChanged(path) {
+    if (typeof window === 'undefined' || !path) {
+        return;
+    }
+    const message = {
+        type: 'storage-json-changed',
+        id: makeId(),
+        tabId: storageJsonCacheTabId,
+        path,
+        at: Date.now()
+    };
+    noteStorageJsonSyncMessage(message.id);
+    try {
+        getStorageJsonBroadcastChannel()?.postMessage(message);
+    } catch {
+        // BroadcastChannel is optional; localStorage is the fallback below.
+    }
+    try {
+        window.localStorage.setItem(STORAGE_JSON_CACHE_SYNC_KEY, JSON.stringify(message));
+    } catch {
+        // Best-effort cross-tab notification.
+    }
+}
+
+function emitStorageJsonChanged(path, { broadcast = true } = {}) {
+    emitStorageJsonLocalChange(path);
+    if (broadcast) {
+        broadcastStorageJsonChanged(path);
+    }
+}
+
+function setupStorageJsonCrossTabSync() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    getStorageJsonBroadcastChannel();
+    window.addEventListener('storage', (event) => {
+        if (event.key !== STORAGE_JSON_CACHE_SYNC_KEY || !event.newValue) {
+            return;
+        }
+        try {
+            handleExternalStorageJsonSyncMessage(JSON.parse(event.newValue));
+        } catch {
+            // Ignore malformed cache sync messages.
+        }
+    });
+}
+
+setupStorageJsonCrossTabSync();
+
+function cacheUploadedStorageJson(path, body, contentType) {
+    if (!String(contentType || '').includes('application/json')) {
+        return;
+    }
+    if (typeof body !== 'string') {
+        invalidateStorageJsonCache(path);
+        emitStorageJsonChanged(path);
+        return;
+    }
+    try {
+        setStorageJsonCache(path, JSON.parse(body));
+    } catch {
+        invalidateStorageJsonCache(path);
+    }
+    emitStorageJsonChanged(path);
+}
 
 async function ensureSafetyBucketAccess() {
     if (verifiedSafetyBucket) {
@@ -400,6 +722,8 @@ async function saveSafetyProjectsDocument(doc) {
         });
 
         if (response.ok) {
+            setStorageJsonCache(SAFETY_PROJECTS_PATH, doc, SAFETY_PROJECTS_CACHE_TTL_MS);
+            emitStorageJsonChanged(SAFETY_PROJECTS_PATH);
             return;
         }
 
@@ -480,26 +804,10 @@ function mapEmployeeRow(row) {
 }
 
 export const safetyProjectsAPI = {
-    getBuilders: async ({ includeArchived = false } = {}) => {
+    getBuilders: async ({ includeArchived = false, force = false } = {}) => {
         await ensureSafetyBucketAccess();
-        const response = await fetch(`${safetyProjectsObjectUrl()}?t=${Date.now()}`, {
-            method: 'GET',
-            headers: storageHeaders()
-        });
-
-        if (response.status === 404) {
-            return [];
-        }
-
-        if (!response.ok) {
-            const details = await response.text();
-            if ((details || '').toLowerCase().includes('object not found')) {
-                return [];
-            }
-            throw new Error(details || 'Failed to load projects');
-        }
-
-        const json = await response.json();
+        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        if (!json) return [];
         return cloneSafetyBuilders(parseSafetyProjects(json).builders, { includeArchived });
     },
 
@@ -510,7 +818,7 @@ export const safetyProjectsAPI = {
             throw new Error('Builder and project names are required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const existingBuilder = builders.find(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
         const timestamp = nowIso();
 
@@ -557,7 +865,7 @@ export const safetyProjectsAPI = {
             throw new Error('Builder name is required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
         if (duplicate) {
             throw new Error('A builder with that name already exists');
@@ -586,7 +894,7 @@ export const safetyProjectsAPI = {
             throw new Error('Project site name is required');
         }
 
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -618,7 +926,7 @@ export const safetyProjectsAPI = {
         if (!clean) {
             throw new Error('Builder name is required');
         }
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
@@ -640,7 +948,7 @@ export const safetyProjectsAPI = {
         if (!clean) {
             throw new Error('Project name is required');
         }
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -663,7 +971,7 @@ export const safetyProjectsAPI = {
     },
 
     deleteBuilder: async (builderId) => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
@@ -677,7 +985,7 @@ export const safetyProjectsAPI = {
     },
 
     deleteProject: async (builderId, projectId) => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
@@ -689,7 +997,7 @@ export const safetyProjectsAPI = {
     },
 
     archiveProject: async (builderId, projectId) => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -707,7 +1015,7 @@ export const safetyProjectsAPI = {
     },
 
     unarchiveProject: async (builderId, projectId) => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
             throw new Error('Builder not found');
@@ -1195,7 +1503,7 @@ async function listStorageObjects(prefix) {
 
 export const materialOrderRequestsAPI = {
     listActiveRequests: async ({ includeArchived = false } = {}) => {
-        const raw = await readStorageJson('material-order-requests/index.json');
+        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         return items
             .map(normalizeMaterialOrderRequestListItem)
@@ -1254,8 +1562,8 @@ export const materialOrderRequestsAPI = {
             'application/json'
         );
 
-        const indexPath = 'material-order-requests/index.json';
-        const rawIndex = await readStorageJson(indexPath);
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const rawIndex = await readStorageJson(indexPath, { force: true });
         const existingItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: [
@@ -1298,7 +1606,7 @@ export const materialOrderRequestsAPI = {
     },
 
     listArchivedRequests: async () => {
-        const raw = await readStorageJson('material-order-requests/index.json');
+        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         const fromIndex = items
             .map(normalizeMaterialOrderRequestListItem)
@@ -1329,10 +1637,10 @@ export const materialOrderRequestsAPI = {
     getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
 
     archiveRequest: async (requestId) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         const archivedAt = nowIso();
@@ -1360,10 +1668,10 @@ export const materialOrderRequestsAPI = {
     },
 
     setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null }) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         if (record.archivedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit') {
@@ -1437,10 +1745,10 @@ export const materialOrderRequestsAPI = {
     },
 
     clearRunLink: async (requestId) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
@@ -1477,10 +1785,10 @@ export const materialOrderRequestsAPI = {
     },
 
     clearSchedule: async (requestId, options = {}) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         const allowCompletedReset = Boolean(options.allowCompletedReset || options.allowCompleted);
@@ -1545,10 +1853,10 @@ export const materialOrderRequestsAPI = {
     },
 
     removeCompletedFromSchedule: async (requestId) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         if (record.routeType === 'secondary_route') {
@@ -1587,10 +1895,10 @@ export const materialOrderRequestsAPI = {
     },
 
     updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         const isSecondaryStatusRoute = record.routeType === 'secondary_route';
@@ -1629,10 +1937,10 @@ export const materialOrderRequestsAPI = {
     },
 
     setSecondaryRoute: async (requestId, secondaryRoute, schedule = {}) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
         const normalizedSecondaryRoute = normalizeSecondaryRoute(secondaryRoute);
@@ -1662,7 +1970,7 @@ export const materialOrderRequestsAPI = {
             throw new Error('Selected material order is no longer available to add as a secondary route');
         }
         const linkedRecord = linkedIndexItem?.id
-            ? await readStorageJson(`material-order-requests/requests/${linkedIndexItem.id}.json`).catch(() => null)
+            ? await readStorageJson(`material-order-requests/requests/${linkedIndexItem.id}.json`, { force: true }).catch(() => null)
             : null;
         if (linkedRequestId && (linkedRecord?.scheduledDate || linkedRecord?.scheduledAtIso)) {
             throw new Error('Selected material order is no longer available to add as a secondary route');
@@ -1673,7 +1981,7 @@ export const materialOrderRequestsAPI = {
             || `secondary-${requestId}-${makeId()}`;
         const existingSecondaryRecord = linkedSourceRecord || (existingSecondaryIndexItem?.id
             && !shouldInsertBeforeExistingSecondary
-            ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`).catch(() => null)
+            ? await readStorageJson(`material-order-requests/requests/${existingSecondaryIndexItem.id}.json`, { force: true }).catch(() => null)
             : null);
         const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
         const scheduledHour = typeof schedule.hour === 'number'
@@ -1838,10 +2146,10 @@ export const materialOrderRequestsAPI = {
     },
 
     deleteRequest: async (requestId) => {
-        const indexPath = 'material-order-requests/index.json';
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
-            readStorageJson(`material-order-requests/requests/${requestId}.json`),
-            readStorageJson(indexPath),
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
         ]);
         if (!record) throw new Error('Request not found');
 
@@ -2012,6 +2320,7 @@ async function uploadStorageObject(path, body, contentType) {
             body
         });
         if (response.ok) {
+            cacheUploadedStorageJson(path, body, contentType);
             return;
         }
         lastError = await response.text();
@@ -2036,25 +2345,127 @@ async function signedStorageUrl(path, expiresIn = 3600) {
     return `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
 }
 
-async function readStorageJson(path) {
-    const response = await fetch(`${safetyModuleObjectUrl(path)}?t=${Date.now()}`, {
-        method: 'GET',
-        headers: storageHeaders()
+function createStorageJsonAbortSignal(path) {
+    if (typeof AbortController === 'undefined') {
+        return {
+            signal: undefined,
+            cancel: () => {}
+        };
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort(new Error(`Timed out loading ${path}`));
+    }, STORAGE_JSON_REQUEST_TIMEOUT_MS);
+    return {
+        signal: controller.signal,
+        cancel: () => clearTimeout(timeoutId)
+    };
+}
+
+function withStorageJsonLockTimeout(promise, path) {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`Timed out waiting for ${path}`));
+        }, STORAGE_JSON_REQUEST_TIMEOUT_MS);
+        promise.then(
+            (value) => {
+                clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error) => {
+                clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
     });
+}
 
-    if (response.status === 404) {
-        return null;
-    }
+async function readStorageJson(path, options = {}) {
+    const { force = false, ttlMs = getStorageJsonCacheTtl(path) } = options;
+    const now = Date.now();
+    const cached = storageJsonCache.get(path);
 
-    if (!response.ok) {
-        const details = await response.text();
-        if ((details || '').toLowerCase().includes('object not found')) {
-            return null;
+    if (!force && cached) {
+        if (cached.promise) {
+            recordStorageJsonCacheHit(path);
+            try {
+                return cloneJsonValue(await withStorageJsonLockTimeout(cached.promise, path));
+            } catch (error) {
+                const latest = storageJsonCache.get(path);
+                if (latest?.promise === cached.promise) {
+                    storageJsonCache.delete(path);
+                }
+                throw error;
+            }
         }
-        throw new Error(details || `Failed to load ${path}`);
+        if (cached.expiresAt > now) {
+            recordStorageJsonCacheHit(path);
+            return cloneJsonValue(cached.value);
+        }
     }
 
-    return response.json();
+    let fetchPromise;
+    fetchPromise = (async () => {
+        const timeout = createStorageJsonAbortSignal(path);
+        let networkRecorded = false;
+        let responseText = '';
+        try {
+            const response = await fetch(safetyModuleObjectUrl(path), {
+                method: 'GET',
+                headers: storageHeaders(),
+                signal: timeout.signal
+            });
+            responseText = await response.text();
+            recordStorageJsonNetwork(path, getTextByteLength(responseText));
+            networkRecorded = true;
+
+            if (response.status === 404) {
+                setStorageJsonCache(path, null, ttlMs);
+                return null;
+            }
+
+            if (!response.ok) {
+                const details = responseText;
+                if ((details || '').toLowerCase().includes('object not found')) {
+                    setStorageJsonCache(path, null, ttlMs);
+                    return null;
+                }
+                throw new Error(details || `Failed to load ${path}`);
+            }
+
+            const json = responseText ? JSON.parse(responseText) : null;
+            setStorageJsonCache(path, json, ttlMs);
+            return json;
+        } catch (error) {
+            if (!networkRecorded) {
+                recordStorageJsonNetwork(path, getTextByteLength(responseText));
+            }
+            if (error?.name === 'AbortError') {
+                throw new Error(`Timed out loading ${path}`);
+            }
+            throw error;
+        } finally {
+            timeout.cancel();
+        }
+    })();
+
+    if (ttlMs > 0) {
+        storageJsonCache.set(path, {
+            value: cached?.value,
+            expiresAt: now + ttlMs,
+            promise: fetchPromise
+        });
+    }
+
+    try {
+        return cloneJsonValue(await fetchPromise);
+    } catch (error) {
+        const latest = storageJsonCache.get(path);
+        if (latest?.promise === fetchPromise) {
+            storageJsonCache.delete(path);
+        }
+        throw error;
+    }
 }
 
 async function deleteStorageObject(path) {
@@ -2064,6 +2475,8 @@ async function deleteStorageObject(path) {
     });
 
     if (response.status === 404) {
+        invalidateStorageJsonCache(path);
+        emitStorageJsonChanged(path);
         return;
     }
 
@@ -2071,6 +2484,8 @@ async function deleteStorageObject(path) {
         const details = await response.text();
         throw new Error(details || `Failed to delete ${path}`);
     }
+    invalidateStorageJsonCache(path);
+    emitStorageJsonChanged(path);
 }
 
 export const safetyFilesAPI = {

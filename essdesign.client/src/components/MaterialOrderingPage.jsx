@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, Download, Eye, FileText, MoreVertical, Plus, Search, Send, SlidersHorizontal, Trash2, User } from 'lucide-react';
-import { materialOrdersAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import {
+    MATERIAL_ORDER_REQUESTS_CHANGED_EVENT,
+    getJitteredPollingDelay,
+    materialOrdersAPI,
+    materialOrderRequestsAPI,
+    recordForegroundPollingCycle,
+    safetyProjectsAPI,
+} from '../services/api';
 import {
     PICKING_CARD_ROWS,
     SECTION_HEADER_LABELS,
@@ -19,6 +26,7 @@ import {
 } from './transport/transportUtils';
 
 const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const MATERIAL_ORDER_REFRESH_MS = 30000;
 
 function todayDate() {
     return new Date().toISOString().slice(0, 10);
@@ -721,8 +729,32 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         setLoading(true);
         const dispose = loadPageData();
 
-        const intervalId = window.setInterval(() => loadPageData(), 30000);
-        const handleFocus = () => loadPageData();
+        const refreshWhenVisible = () => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+            loadPageData();
+        };
+        const refreshFromPolling = () => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+            recordForegroundPollingCycle('material-ordering-page');
+            loadPageData();
+        };
+        let pollingTimeout = null;
+        let disposed = false;
+        const queueNextPoll = () => {
+            pollingTimeout = window.setTimeout(() => {
+                if (disposed) {
+                    return;
+                }
+                refreshFromPolling();
+                queueNextPoll();
+            }, getJitteredPollingDelay(MATERIAL_ORDER_REFRESH_MS));
+        };
+        queueNextPoll();
+        const handleFocus = refreshWhenVisible;
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
                 loadPageData();
@@ -730,12 +762,15 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         };
 
         window.addEventListener('focus', handleFocus);
+        window.addEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
         document.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
             dispose?.();
-            window.clearInterval(intervalId);
+            disposed = true;
+            window.clearTimeout(pollingTimeout);
             window.removeEventListener('focus', handleFocus);
+            window.removeEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
             document.removeEventListener('visibilitychange', handleVisibility);
         };
     }, [loadPageData]);

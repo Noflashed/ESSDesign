@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import {
+  MATERIAL_ORDER_REQUESTS_CHANGED_EVENT,
+  analysisAPI,
+  getJitteredPollingDelay,
+  materialOrderRequestsAPI,
+  recordForegroundPollingCycle,
+  safetyProjectsAPI,
+} from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   ESS_NAVY,
@@ -48,7 +55,7 @@ const SCALE_MODES = {
   ultraFine: { label: '1 min', pxPerHour: 720, tickMinutes: 1, labelEveryMinutes: 30 },
 };
 const SCALE_ORDER = ['standard', 'detailed', 'fine', 'ultraFine'];
-const LIVE_REFRESH_MS = 3000;
+const LIVE_REFRESH_MS = 15000;
 const LANE_META_WIDTH = 154;
 const TRACK_GUTTER = 14;
 const TRACK_OFFSET = LANE_META_WIDTH + TRACK_GUTTER;
@@ -1666,10 +1673,44 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [loadBoard]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
       loadBoard().catch(() => {});
-    }, LIVE_REFRESH_MS);
-    return () => window.clearInterval(interval);
+    };
+    const refreshFromPolling = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      recordForegroundPollingCycle('transport-schedule-board');
+      loadBoard().catch(() => {});
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadBoard().catch(() => {});
+      }
+    };
+    let pollingTimeout = null;
+    let disposed = false;
+    const queueNextPoll = () => {
+      pollingTimeout = window.setTimeout(() => {
+        if (disposed) {
+          return;
+        }
+        refreshFromPolling();
+        queueNextPoll();
+      }, getJitteredPollingDelay(LIVE_REFRESH_MS));
+    };
+    queueNextPoll();
+    window.addEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      disposed = true;
+      window.clearTimeout(pollingTimeout);
+      window.removeEventListener(MATERIAL_ORDER_REQUESTS_CHANGED_EVENT, refreshWhenVisible);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [loadBoard]);
 
   useEffect(() => {
