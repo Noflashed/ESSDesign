@@ -6141,12 +6141,14 @@
 .transport-management-detail,
 .transport-order-summary-drawer,
 .transport-management-row-menu-popover,
+.transport-tile-menu,
 .transport-colour-popover,
 .transport-account-dropdown,
 .transport-schedule-inspector :where(button, input, select, textarea, table),
 .transport-management-detail :where(button, input, select, textarea, table),
 .transport-order-summary-drawer :where(button, input, select, textarea, table),
 .transport-management-row-menu-popover :where(button, input, select, textarea, table),
+.transport-tile-menu :where(button, input, select, textarea, table),
 .transport-colour-popover :where(button, input, select, textarea, table),
 .transport-account-dropdown :where(button, input, select, textarea, table) {
     font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif !important;
@@ -6157,6 +6159,7 @@
 .transport-management-detail :where(h1, h2, h3, h4),
 .transport-order-summary-drawer :where(h1, h2, h3, h4),
 .transport-management-row-menu-popover :where(h1, h2, h3, h4),
+.transport-tile-menu :where(h1, h2, h3, h4),
 .transport-colour-popover :where(h1, h2, h3, h4),
 .transport-account-dropdown :where(h1, h2, h3, h4) {
     font-weight: 600 !important;
@@ -6167,6 +6170,7 @@
 .transport-management-detail :where(p, label, td, dt, dd, input, select, textarea, span),
 .transport-order-summary-drawer :where(p, label, td, dt, dd, input, select, textarea, span),
 .transport-management-row-menu-popover :where(p, label, td, dt, dd, input, select, textarea, span),
+.transport-tile-menu :where(p, label, td, dt, dd, input, select, textarea, span, small),
 .transport-colour-popover :where(p, label, td, dt, dd, input, select, textarea, span),
 .transport-account-dropdown :where(p, label, td, dt, dd, input, select, textarea, span) {
     font-weight: 500 !important;
@@ -6176,6 +6180,7 @@
 .transport-management-detail :where(th, button, strong, .transport-status-pill, .transport-management-type-pill),
 .transport-order-summary-drawer :where(th, button, strong, .transport-status-pill, .transport-management-type-pill),
 .transport-management-row-menu-popover :where(th, button, strong, .transport-status-pill, .transport-management-type-pill),
+.transport-tile-menu :where(th, button, strong, .transport-status-pill, .transport-management-type-pill),
 .transport-colour-popover :where(th, button, strong, .transport-status-pill, .transport-management-type-pill),
 .transport-account-dropdown :where(th, button, strong, .transport-status-pill, .transport-management-type-pill) {
     font-weight: 560 !important;
