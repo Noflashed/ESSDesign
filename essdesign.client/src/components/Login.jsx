@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { authAPI } from '../services/api';
 import './Auth.css';
 
+const LOGO_URL = '/logo.png';
 const LOGIN_IMAGE_URL = '/login-scaffold.png';
 
-function Login({ onLoginSuccess, onSwitchToSignUp }) {
+function Login({ onLoginSuccess }) {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -35,21 +36,15 @@ function Login({ onLoginSuccess, onSwitchToSignUp }) {
         }
     };
 
-    const handleSignUpClick = () => {
-        onSwitchToSignUp?.(formData.email);
-    };
-
     return (
         <div className="auth-container login-auth-container">
             <div className="auth-card login-auth-shell">
                 <section className="login-auth-left">
-                    <div className="login-auth-brand" aria-label="Brand">
-                        <span className="login-auth-brand-mark" aria-hidden="true" />
-                        <span>Brand</span>
-                    </div>
-
                     <div className="login-auth-panel">
                         <div className="auth-header login-auth-header">
+                            <div className="login-auth-logo">
+                                <img src={LOGO_URL} alt="ErectSafe Scaffolding" />
+                            </div>
                             <h2>Login to your account</h2>
                             <p>Enter your email below to login to your account</p>
                         </div>
@@ -69,12 +64,7 @@ function Login({ onLoginSuccess, onSwitchToSignUp }) {
                             </div>
 
                             <div className="form-field login-auth-field">
-                                <div className="login-auth-label-row">
-                                    <label>Password</label>
-                                    <button type="button" className="login-auth-text-link">
-                                        Forgot your password?
-                                    </button>
-                                </div>
+                                <label>Password</label>
                                 <input
                                     type="password"
                                     name="password"
@@ -90,13 +80,6 @@ function Login({ onLoginSuccess, onSwitchToSignUp }) {
                                 {loading ? 'Signing in...' : 'Login'}
                             </button>
                         </form>
-
-                        <div className="login-auth-footer">
-                            <span>Don&apos;t have an account?</span>
-                            <button type="button" className="login-auth-text-link" onClick={handleSignUpClick}>
-                                Sign up
-                            </button>
-                        </div>
                     </div>
                 </section>
 

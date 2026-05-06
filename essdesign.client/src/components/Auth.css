@@ -295,39 +295,6 @@
     box-sizing: border-box;
 }
 
-.login-auth-brand {
-    position: absolute;
-    top: 15px;
-    left: 17px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: #111827;
-    font-size: 13px;
-    line-height: 1;
-    font-weight: 700;
-}
-
-.login-auth-brand-mark {
-    position: relative;
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: #050505;
-}
-
-.login-auth-brand-mark::after {
-    content: "";
-    position: absolute;
-    right: -2px;
-    top: 2px;
-    width: 5px;
-    height: 5px;
-    border: 1px solid #ffffff;
-    border-radius: 2px;
-    background: #050505;
-}
-
 .login-auth-panel {
     width: min(100%, 292px);
     margin-top: 6px;
@@ -336,6 +303,21 @@
 .login-auth-header {
     margin-bottom: 28px;
     text-align: center;
+}
+
+.login-auth-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 0 22px;
+}
+
+.login-auth-logo img {
+    display: block;
+    width: auto;
+    height: 112px;
+    max-width: 260px;
+    object-fit: contain;
 }
 
 .login-auth-header h2 {
@@ -376,20 +358,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-}
-
-.login-auth-text-link {
-    display: inline;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #242a33;
-    font: inherit;
-    font-size: 11px;
-    line-height: 1;
-    text-decoration: underline;
-    cursor: pointer;
 }
 
 .login-auth-field input {
@@ -442,18 +410,6 @@
     text-align: left;
 }
 
-.login-auth-footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    margin-top: 25px;
-    color: #242a33;
-    font-size: 11px;
-    line-height: 1;
-    font-weight: 500;
-}
-
 .login-auth-visual {
     min-width: 0;
     height: 100vh;
@@ -485,6 +441,11 @@
 
     .login-auth-panel {
         width: min(100%, 320px);
+    }
+
+    .login-auth-logo img {
+        height: 92px;
+        max-width: 230px;
     }
 
     .login-auth-visual {
