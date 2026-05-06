@@ -1359,7 +1359,7 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
-    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel }) => {
+    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false }) => {
         const indexPath = 'material-order-requests/index.json';
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`),
@@ -1372,6 +1372,8 @@ export const materialOrderRequestsAPI = {
         const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
         const updated = {
             ...record,
+            sourceOrderId: clearRunLink ? null : record.sourceOrderId || null,
+            connectedParentStartMinutes: clearRunLink ? null : typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
             scheduledDate: date,
             scheduledHour: hour,
             scheduledMinute: minute,
@@ -1391,6 +1393,8 @@ export const materialOrderRequestsAPI = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
+                    sourceOrderId: clearRunLink ? null : item.sourceOrderId || null,
+                    connectedParentStartMinutes: clearRunLink ? null : typeof item.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
                     notes: updated.notes || item.notes || '',
                     itemValues: updated.itemValues || item.itemValues || {},
                     scaffoldingSystem: updated.scaffoldingSystem || updated?.itemValues?.__scaffoldingSystem || item.scaffoldingSystem || '',
@@ -1408,6 +1412,36 @@ export const materialOrderRequestsAPI = {
                     deliveryUnloadingAt: null,
                     deliveryConfirmedAt: null,
                     secondaryRoute: normalizeSecondaryRoute(item.secondaryRoute),
+                }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
+    clearRunLink: async (requestId) => {
+        const indexPath = 'material-order-requests/index.json';
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`),
+            readStorageJson(indexPath),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const updated = {
+            ...record,
+            sourceOrderId: null,
+            connectedParentStartMinutes: null,
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    sourceOrderId: null,
+                    connectedParentStartMinutes: null,
                 }
                 : item),
             updatedAt: nowIso(),
