@@ -1801,7 +1801,8 @@ export const materialOrderRequestsAPI = {
             && Boolean(record.archivedAt || record.scheduleRemovedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit');
         const updated = {
             ...record,
-            sourceOrderId: shouldRestoreMaterialOrder ? null : record.sourceOrderId,
+            sourceOrderId: null,
+            connectedParentStartMinutes: null,
             routeType: shouldRestoreMaterialOrder ? null : record.routeType,
             scheduledDate: null,
             scheduledHour: null,
@@ -1824,7 +1825,8 @@ export const materialOrderRequestsAPI = {
             requests: existingIndex.map(item => item.id === requestId
                 ? {
                     ...item,
-                    sourceOrderId: shouldRestoreMaterialOrder ? null : item.sourceOrderId,
+                    sourceOrderId: null,
+                    connectedParentStartMinutes: null,
                     routeType: shouldRestoreMaterialOrder ? null : item.routeType,
                     scheduledDate: null,
                     scheduledHour: null,
