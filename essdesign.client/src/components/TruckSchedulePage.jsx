@@ -87,6 +87,32 @@ const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'other', label: 'Other route task' },
 ];
 const SECONDARY_ROUTE_SERVICE_MINUTES = 30;
+const RETURN_TRANSIT_ORDER_SUFFIX = '::return-transit';
+
+function getReturnTransitOrderId(requestId) {
+  return requestId ? `${requestId}${RETURN_TRANSIT_ORDER_SUFFIX}` : '';
+}
+
+function isReturnTransitOrderId(orderId) {
+  return typeof orderId === 'string' && orderId.endsWith(RETURN_TRANSIT_ORDER_SUFFIX);
+}
+
+function getReturnTransitSourceOrderId(orderId) {
+  return isReturnTransitOrderId(orderId)
+    ? orderId.slice(0, -RETURN_TRANSIT_ORDER_SUFFIX.length)
+    : '';
+}
+
+function isReturnTransitRequest(request) {
+  return request?.routeType === 'return_to_yard';
+}
+
+function getReturnTransitParentId(request) {
+  if (!isReturnTransitRequest(request)) {
+    return '';
+  }
+  return request.returnTransitParentId || getReturnTransitSourceOrderId(request.id);
+}
 
 function getSecondaryRouteReasonLabel(reason) {
   return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
@@ -109,6 +135,10 @@ function getLinkedSecondaryRequestFields(option) {
 }
 
 function getDeliveryTypePill(request, segment = 'primary') {
+  if (isReturnTransitRequest(request)) {
+    return { label: 'Return', tone: 'return' };
+  }
+
   const secondaryRoute = request?.secondaryRoute || null;
   const isSecondarySegment = segment === 'secondary' || isSecondaryRouteRequest(request);
 
@@ -176,6 +206,7 @@ function breakRequestRunLink(request) {
 function isCompletedMaterialOrderRequest(request, cycleState = null) {
   return Boolean(
     request &&
+    !isReturnTransitRequest(request) &&
     !isSecondaryRouteRequest(request) &&
     (request.deliveryStatus === 'return_transit' || request.deliveryConfirmedAt || cycleState?.groupedCompletedCycle),
   );
@@ -445,6 +476,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   const startMap = {};
   const primaryDurationMap = {};
   const cycleStateMap = {};
+  const requestMetaExtras = {};
   const runContinuationBySourceId = new Map();
 
   requestsForDay.forEach(request => {
@@ -480,10 +512,11 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null);
         const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, truckId);
         const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
-        const timing = hasSecondaryContinuation || !includeReturnTransitToYard
+        const hasReturnTransitTile = includeReturnTransitToYard && !hasSecondaryContinuation;
+        const timing = hasSecondaryContinuation || hasReturnTransitTile || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
-        const flowTiming = hasSecondaryContinuation || !includeReturnTransitToYard
+        const flowTiming = hasSecondaryContinuation || hasReturnTransitTile || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(flowBaseTiming)
           : flowBaseTiming;
         const hasExplicitRunLink = Boolean(request.sourceOrderId);
@@ -540,13 +573,18 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const startMinutes = projected.startMinutes;
         const durationMinutes = projected.durationMinutes;
         const primaryDurationMinutesValue = projected.primaryDurationMinutes;
+        const returnTransitDurationMinutes = hasReturnTransitTile
+          ? Math.max(1, Math.round(baseTiming.returnMinutes || flowBaseTiming.returnMinutes || 0))
+          : 0;
+        const returnTransitStartMinutes = startMinutes + durationMinutes;
+        const returnTransitEndMinutes = returnTransitStartMinutes + returnTransitDurationMinutes;
         const runHandoffMinutes = startMinutes + primaryDurationMinutesValue;
         const flowRunHandoffMinutes = flowProjected.startMinutes + flowProjected.primaryDurationMinutes;
         const plannedRunEndMinutes = scheduledStart + flowTiming.totalMinutes;
         const routeFromRequestId = followsPreviousRun ? request.sourceOrderId || previousRunLink?.requestId || null : null;
         laneCursorMinutes = followsPreviousRun
           ? flowRunHandoffMinutes
-          : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes);
+          : Math.max(laneCursorMinutes, projected.projectedEndMinutes, projected.plannedEndMinutes, hasReturnTransitTile ? returnTransitEndMinutes : 0);
         previousRunLink = {
           requestId: request.id,
           includeReturnTransitToYard: hasEffectiveReturnBreak,
@@ -583,6 +621,50 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           truckId,
           truckLabel: request.scheduledTruckLabel ?? request.truckLabel ?? TRUCK_LANES.find(lane => lane.id === truckId)?.rego ?? null,
         });
+        if (hasReturnTransitTile && returnTransitDurationMinutes > 0) {
+          const returnOrderId = getReturnTransitOrderId(request.id);
+          requestMetaExtras[returnOrderId] = {
+            ...request,
+            id: returnOrderId,
+            routeType: 'return_to_yard',
+            returnTransitParentId: request.id,
+            sourceOrderId: null,
+            connectedParentStartMinutes: null,
+            secondaryRoute: null,
+            builderName: 'Return to yard',
+            projectName: 'Yard transit',
+            scaffoldingSystem: 'Return to yard',
+            deliveryStatus: 'scheduled',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            archivedAt: null,
+            scheduleRemovedAt: null,
+            pdfPath: null,
+          };
+          startMap[returnOrderId] = returnTransitStartMinutes;
+          durationMap[returnOrderId] = returnTransitDurationMinutes;
+          primaryDurationMap[returnOrderId] = returnTransitDurationMinutes;
+          cycleStateMap[returnOrderId] = {
+            isReturnTransitTile: true,
+            returnTransitParentId: request.id,
+            isLastScheduledForDay: index === ordered.length - 1,
+            followsPreviousRun: false,
+            runLinkReason: 'none',
+          };
+          dayEvents.push({
+            id: `return-${request.id}`,
+            date: dateKey,
+            hour: Math.floor(returnTransitStartMinutes / 60),
+            minute: Math.floor(returnTransitStartMinutes % 60),
+            builderName: 'Return to yard',
+            projectName: 'Yard transit',
+            scaffoldingSystem: 'Return to yard',
+            orderId: returnOrderId,
+            truckId,
+            truckLabel: request.scheduledTruckLabel ?? request.truckLabel ?? TRUCK_LANES.find(lane => lane.id === truckId)?.rego ?? null,
+          });
+        }
       });
   });
 
@@ -594,6 +676,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
     startMap,
     primaryDurationMap,
     cycleStateMap,
+    requestMetaExtras,
   };
 }
 
@@ -611,7 +694,7 @@ function getRouteTollsEnabledForRequest(request, tollsMode = false) {
 }
 
 function getBoardRouteContextForRequest(request, requestLookup = null, siteLocationMap = {}, fallbackDate, tollsMode = false, returnTransitByRequestId = {}) {
-  if (!request || isSecondaryRouteRequest(request)) {
+  if (!request || isSecondaryRouteRequest(request) || isReturnTransitRequest(request)) {
     return null;
   }
 
@@ -1033,6 +1116,20 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
     };
   }
 
+  if (isReturnTransitRequest(request)) {
+    const parentId = getReturnTransitParentId(request);
+    const parentRequest = getRequestFromLookup(parentId, options.requestLookup);
+    const fromLocation = getRequestSiteLocation(parentRequest, siteLocationMap, builders) || siteLocationMap[parentId] || '';
+    return {
+      segment: 'return_to_yard',
+      fromLocation,
+      toLocation: YARD_LOCATION,
+      siteLocation: YARD_LOCATION,
+      schedule,
+      title: 'Selected Return Route',
+    };
+  }
+
   if (isSecondaryRouteRequest(request)) {
     const route = request.secondaryRoute || {};
     const toLocation = route.destination || route.linkedRequestSiteLocation || getRequestSiteLocation(request, siteLocationMap, builders);
@@ -1090,10 +1187,11 @@ function getCachedRouteEstimateForContext(context) {
   if (!context?.toLocation) {
     return null;
   }
-  if (context.segment === 'secondary') {
-    return context.fromLocation
-      ? getCachedRouteEstimateBetweenValue(context.fromLocation, context.toLocation, context.schedule) ?? null
-      : null;
+  if (context.fromLocation) {
+    return getCachedRouteEstimateBetweenValue(context.fromLocation, context.toLocation, context.schedule) ?? null;
+  }
+  if (context.segment === 'secondary' || context.segment === 'return_to_yard') {
+    return null;
   }
   return getCachedRouteEstimateValue(context.toLocation, context.schedule) ?? null;
 }
@@ -1102,12 +1200,28 @@ function fetchRouteDataForContext(context) {
   if (!context?.toLocation) {
     return Promise.resolve(null);
   }
-  if (context.segment === 'secondary') {
-    return context.fromLocation
-      ? getCachedRouteDataBetween(context.fromLocation, context.toLocation, context.schedule)
-      : Promise.resolve(null);
+  if (context.fromLocation) {
+    return getCachedRouteDataBetween(context.fromLocation, context.toLocation, context.schedule);
+  }
+  if (context.segment === 'secondary' || context.segment === 'return_to_yard') {
+    return Promise.resolve(null);
   }
   return getCachedRouteData(context.toLocation, context.schedule);
+}
+
+function routeContextRequiresOrigin(context) {
+  return context?.segment === 'secondary' || context?.segment === 'return_to_yard';
+}
+
+function getRouteOriginLabel(context) {
+  if (context?.segment === 'return_to_yard') {
+    return 'Site';
+  }
+  return context?.segment === 'secondary' ? 'Previous site' : 'Yard';
+}
+
+function getRouteDestinationLabel(context) {
+  return context?.segment === 'return_to_yard' ? 'Yard' : 'Site';
 }
 
 function buildEstimateFromRouteData(routeData) {
@@ -1609,7 +1723,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const applyBoardProjection = useCallback((requestsForDay, board, options = {}) => {
     const signature = getBoardProjectionSignature(board);
-    if (options.force || signature !== boardProjectionSignatureRef.current) {
+    const projectionChanged = options.force || signature !== boardProjectionSignatureRef.current;
+    if (projectionChanged) {
       boardProjectionSignatureRef.current = signature;
       setDayEvents(board.dayEvents);
       setEventDurationMinutesMap(board.durationMap);
@@ -1618,9 +1733,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setEventCycleStateMap(board.cycleStateMap);
     }
     const metaSignature = getRequestListSignature(requestsForDay);
-    if (options.force || metaSignature !== requestMetaSignatureRef.current) {
+    if (projectionChanged || metaSignature !== requestMetaSignatureRef.current) {
       requestMetaSignatureRef.current = metaSignature;
-      setRequestMetaMap(Object.fromEntries(requestsForDay.map(request => [request.id, request])));
+      setRequestMetaMap({
+        ...Object.fromEntries(requestsForDay.map(request => [request.id, request])),
+        ...(board.requestMetaExtras || {}),
+      });
     }
   }, []);
 
@@ -1818,7 +1936,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, [returnTransitReprojectingId, returnTransitByRequestId]);
 
   const handleReturnTransitToggle = useCallback((event) => {
-    const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
+    const selectedId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
+    const requestId = isReturnTransitOrderId(selectedId) ? getReturnTransitSourceOrderId(selectedId) : selectedId;
     if (!requestId) {
       return;
     }
@@ -2044,6 +2163,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const tileMenuRequest = tileMenu
     ? requestMetaMap[tileMenu.orderId] || allRequests.find(request => request.id === tileMenu.orderId) || null
     : null;
+  const tileMenuIsReturnTransit = isReturnTransitRequest(tileMenuRequest);
   const tileMenuSelectionIds = useMemo(() => {
     if (!tileMenu?.orderId) {
       return [];
@@ -2059,7 +2179,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     tileMenuRequest,
     tileMenu?.orderId ? eventCycleStateMap[tileMenu.orderId] : null,
   );
-  const tileMenuIsDeleteOnly = tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode);
+  const tileMenuIsDeleteOnly = tileMenuIsReturnTransit || tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode);
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2133,7 +2253,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [dayEvents, selectedScheduleEventId],
   );
   const selectedScheduleRequest = selectedScheduleEvent ? requestMetaMap[selectedScheduleEvent.orderId] : null;
-  const selectedScheduleTollsEnabled = selectedScheduleRequest ? getTollsEnabled(selectedScheduleRequest.id) : false;
+  const selectedScheduleIsReturnTransit = isReturnTransitRequest(selectedScheduleRequest);
+  const selectedScheduleReturnTransitParentId = selectedScheduleIsReturnTransit
+    ? getReturnTransitParentId(selectedScheduleRequest)
+    : '';
+  const selectedScheduleTollsRequestId = selectedScheduleReturnTransitParentId || selectedScheduleRequest?.id || '';
+  const selectedScheduleTollsEnabled = selectedScheduleTollsRequestId ? getTollsEnabled(selectedScheduleTollsRequestId) : false;
   const selectedScheduleCycleState = selectedScheduleEvent ? eventCycleStateMap[selectedScheduleEvent.orderId] : null;
   const selectedScheduleEffectiveStatus = getEffectiveDeliveryStatus(selectedScheduleRequest, selectedScheduleCycleState);
   const selectedDebugStatus = selectedScheduleRequest?.deliveryStatus || 'scheduled';
@@ -2143,7 +2268,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [selectedScheduleEvent?.date, selectedScheduleEvent?.hour, selectedScheduleEvent?.minute, selectedScheduleTollsEnabled],
   );
   const selectedSchedulePrimaryRouteEstimate = selectedScheduleRequest
-    ? isSecondaryRouteRequest(selectedScheduleRequest)
+    ? selectedScheduleIsReturnTransit || isSecondaryRouteRequest(selectedScheduleRequest)
       ? null
       : getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null
     : null;
@@ -2225,10 +2350,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       || (selectedScheduleRouteDataKeyRef.current === selectedScheduleRouteKey ? buildEstimateFromRouteData(selectedScheduleRouteData) : null),
     [selectedScheduleRouteContext, selectedScheduleRouteData, selectedScheduleRouteKey],
   );
-  const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
-  const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled && !selectedScheduleHasSecondaryContinuation;
+  const selectedScheduleReturnTransitId = selectedScheduleReturnTransitParentId || selectedScheduleEventId;
+  const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleReturnTransitId);
+  const selectedScheduleEffectiveReturnTransit = !selectedScheduleIsReturnTransit && selectedScheduleReturnTransitEnabled && !selectedScheduleHasSecondaryContinuation;
   const selectedScheduleTiming = selectedScheduleRequest
-    ? isSecondaryRouteRequest(selectedScheduleRequest)
+    ? selectedScheduleIsReturnTransit
+      ? {
+        transitMinutes: eventDurationMinutesMap[selectedScheduleEvent?.orderId] ?? 0,
+        loadingMinutes: 0,
+        secondaryTravelMinutes: 0,
+        secondaryServiceMinutes: 0,
+        returnMinutes: 0,
+        totalMinutes: eventDurationMinutesMap[selectedScheduleEvent?.orderId] ?? 0,
+      }
+      : isSecondaryRouteRequest(selectedScheduleRequest)
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleEffectiveReturnTransit)
       : !selectedScheduleEffectiveReturnTransit
         ? removeReturnLegFromTiming(applyReturnEstimateToTiming(
@@ -2306,7 +2441,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       !scheduleInspectorOpen ||
       !selectedScheduleEventId ||
       !selectedScheduleRouteContext.toLocation ||
-      (selectedScheduleRouteContext.segment === 'secondary' && !selectedScheduleRouteContext.fromLocation)
+      (routeContextRequiresOrigin(selectedScheduleRouteContext) && !selectedScheduleRouteContext.fromLocation)
     ) {
       selectedScheduleRouteRequestKeyRef.current = '';
       selectedScheduleRouteDataKeyRef.current = '';
@@ -2521,7 +2656,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       schedule,
     };
 
-    if (!routeContext.toLocation || (routeContext.segment === 'secondary' && !routeContext.fromLocation)) {
+    if (!routeContext.toLocation || (routeContextRequiresOrigin(routeContext) && !routeContext.fromLocation)) {
       setSelectedRouteEstimate(null);
       setSelectedReturnRouteEstimate(null);
       setRequestModalRouteData(null);
@@ -2684,7 +2819,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const modalState = { event, request, siteLocation, routeEstimate, returnRouteEstimate, cycleState, routeContext };
     setEventOverviewModal(modalState);
     setEventOverviewLoading(false);
-    if (routeContext.toLocation && (routeContext.segment !== 'secondary' || routeContext.fromLocation)) {
+    if (routeContext.toLocation && (!routeContextRequiresOrigin(routeContext) || routeContext.fromLocation)) {
       setEventOverviewRouteLoading(true);
       const returnEstimateRequest = routeContext.segment === 'secondary'
         ? getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule)
@@ -4070,6 +4205,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!ids.length) {
       return;
     }
+    const returnTransitIds = ids.filter(isReturnTransitOrderId);
+    if (returnTransitIds.length > 0) {
+      if (returnTransitIds.length !== ids.length) {
+        setTileMenu(null);
+        setError('Return-to-yard tiles must be removed separately.');
+        return;
+      }
+      if (!window.confirm(returnTransitIds.length > 1
+        ? `Remove ${returnTransitIds.length} return-to-yard tiles?`
+        : 'Remove this return-to-yard tile?')) {
+        return;
+      }
+      const parentIds = returnTransitIds.map(getReturnTransitSourceOrderId).filter(Boolean);
+      setTileMenu(null);
+      setReturnTransitByRequestId(current => {
+        const next = { ...(current || {}) };
+        parentIds.forEach(parentId => delete next[parentId]);
+        delete next.__legacy;
+        return next;
+      });
+      setSelectedScheduleEventId(current => returnTransitIds.includes(current) ? '' : current);
+      setSelectedScheduleEventIds(current => current.filter(id => !returnTransitIds.includes(id)));
+      setError('');
+      return;
+    }
     const sourceRequests = ids
       .map(requestId => allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null)
       .filter(Boolean);
@@ -4339,7 +4499,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         backgroundColor: active ? appearance.accent : appearance.background,
                         color: active ? '#ffffff' : appearance.text,
                       }}
-                      disabled={!selectedScheduleRequest || debugStatusSavingId === selectedScheduleRequest.id}
+                      disabled={!selectedScheduleRequest || selectedScheduleIsReturnTransit || debugStatusSavingId === selectedScheduleRequest.id}
                       onClick={() => updateDebugDeliveryStatus(option.value)}
                     >
                       {scheduleStatusLabel(option.value)}
@@ -4457,7 +4617,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ))}
                       {laneEvents.map(event => {
                       const request = requestMetaMap[event.orderId];
+                      if (!request) {
+                        return null;
+                      }
                       const cycleState = eventCycleStateMap[event.orderId] || null;
+                      const isReturnTransitTile = isReturnTransitRequest(request);
                       const isSecondaryRequest = isSecondaryRouteRequest(request);
                       const isCompletedMaterialTile = isCompletedMaterialOrderRequest(request, cycleState);
                       const status = getEffectiveDeliveryStatus(request, cycleState);
@@ -4466,13 +4630,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const offset = getEventOffset(eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute) * 100;
                       const width = getEventFlex(durationMinutes) * 100;
                       const isCompleteTile = status === 'return_transit';
-                      const palette = scheduleStatusAppearance(isCompleteTile ? 'return_transit' : status, transportStatusColors);
+                      const palette = isReturnTransitTile
+                        ? { background: '#eef2f7', text: '#667085', accent: '#667085' }
+                        : scheduleStatusAppearance(isCompleteTile ? 'return_transit' : status, transportStatusColors);
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeContext = getBoardRouteContextForRequest(request, requestMetaMap, requestSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
                       const routeEstimate = getCachedBoardRouteEstimate(routeContext) ?? null;
-                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation;
-                      const timing = isSecondaryRequest
+                      const eventReturnTransitEnabled = false;
+                      const timing = isReturnTransitTile
+                        ? {
+                          transitMinutes: durationMinutes,
+                          loadingMinutes: 0,
+                          secondaryTravelMinutes: 0,
+                          secondaryServiceMinutes: 0,
+                          returnMinutes: 0,
+                          totalMinutes: durationMinutes,
+                        }
+                        : isSecondaryRequest
                         ? getSecondaryRouteTiming(request.secondaryRoute, eventReturnTransitEnabled)
                         : eventReturnTransitEnabled
                           ? getTimingProfile(routeEstimate, request?.secondaryRoute || null)
@@ -4532,9 +4707,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ? formatTimeChip(Math.floor(siteArrivalMinutes / 60), Math.floor(siteArrivalMinutes % 60))
                         : 'pending';
                       const scaffoldDetailText = getScaffoldDetailText(request, event);
-                      const eventTitle = isSecondaryRequest ? request.secondaryRoute.destination : event.builderName || 'Material Order';
-                      const eventSubtitle = isSecondaryRequest ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : scaffoldDetailText;
-                      const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
+                      const eventTitle = isReturnTransitTile ? 'Return to yard' : isSecondaryRequest ? request.secondaryRoute.destination : event.builderName || 'Material Order';
+                      const eventSubtitle = isReturnTransitTile ? 'Yard transit' : isSecondaryRequest ? getSecondaryRouteReasonLabel(request.secondaryRoute.reason) : scaffoldDetailText;
+                      const eventArrival = isReturnTransitTile
+                        ? `ETA yard ${formatTimeChip(Math.floor((startMinutes + durationMinutes) / 60), Math.floor((startMinutes + durationMinutes) % 60))}`
+                        : isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       const primaryDeliveryType = getDeliveryTypePill(request);
                       const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
                       const isRouteLoading = routeLoadingRequestIds.has(event.orderId) || returnTransitReprojectingId === event.orderId;
@@ -4544,7 +4721,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           data-order-id={event.orderId}
                           className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
-                          draggable={!dragSchedulingId && !isCompletedMaterialTile}
+                          draggable={!dragSchedulingId && !isCompletedMaterialTile && !isReturnTransitTile}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
                           onDragEnd={handleScheduledDragEnd}
                           onDragOver={(dragEvent) => handleEventSnapDragOver(dragEvent, event)}
@@ -4580,7 +4757,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           ) : null}
                           <button
                             type="button"
-                            className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
+                            className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}${isReturnTransitTile ? ' ts2-return-card' : ''}`}
                             style={{ backgroundColor: palette.background, color: palette.text, width: hasSecondaryRouteTile || hasReturnTransitSegment ? `${displayPrimaryWidth}%` : '100%' }}
                             onClick={(clickEvent) => {
                               handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
@@ -4593,7 +4770,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <span className="ts2-event-arrival">{eventArrival}</span>
                             <div className="ts2-event-status-row">
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
-                              <span>{isSecondaryRequest && status !== 'in_transit' ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
+                              <span>{isReturnTransitTile ? 'Returning' : isSecondaryRequest && status !== 'in_transit' ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
                             </div>
                             {isRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                           </button>
@@ -4685,7 +4862,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       <aside className="transport-schedule-inspector">
         <div className="transport-schedule-inspector-head">
           <div>
-            <span>{selectedScheduleIsSecondarySegment ? 'Selected Secondary Route' : 'Selected Delivery'}</span>
+            <span>{selectedScheduleIsReturnTransit ? 'Selected Return' : selectedScheduleIsSecondarySegment ? 'Selected Secondary Route' : 'Selected Delivery'}</span>
             <h2>{selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? getSecondaryRouteReasonLabel(selectedScheduleSecondaryRoute.reason) : selectedScheduleWindowLabel}</h2>
           </div>
           {selectedScheduleRequest ? (
@@ -4701,6 +4878,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           ) : null}
           <button type="button" className="transport-inspector-close" onClick={() => setScheduleInspectorOpen(false)} aria-label="Close selected delivery panel">×</button>
         </div>
+        {!selectedScheduleIsReturnTransit ? (
         <label className={`transport-snap-toggle transport-inspector-toggle${selectedScheduleTollsEnabled ? ' active' : ''}`}>
           <input
             type="checkbox"
@@ -4709,10 +4887,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           />
           <span>Enable tolls</span>
         </label>
+        ) : null}
         {selectedScheduleEvent ? (
           <>
             <dl className="transport-schedule-detail-list">
-              {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
+              {selectedScheduleIsReturnTransit ? (
+                <>
+                  <div><dt>Starting Location</dt><dd>{selectedScheduleRouteContext.fromLocation || 'Site location pending'}</dd></div>
+                  <div><dt>Destination</dt><dd>{YARD_LOCATION}</dd></div>
+                  <div><dt>Tile</dt><dd>Return to yard</dd></div>
+                </>
+              ) : selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
                 <>
                   <div><dt>Starting Location</dt><dd>{selectedScheduleRouteContext.fromLocation || selectedScheduleSecondaryRoute.startingLocation || selectedScheduleSiteLocation || 'Site location pending'}</dd></div>
                   <div><dt>Destination</dt><dd>{selectedScheduleSecondaryRoute.destination || 'Secondary destination pending'}</dd></div>
@@ -4731,7 +4916,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               )}
             </dl>
             <div className="transport-schedule-estimate-card">
-              {selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
+              {selectedScheduleIsReturnTransit ? (
+                <>
+                  <div><span><InspectorIcon type="return" /> Return to yard</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
+                  <div><span><InspectorIcon type="clock" /> Total Duration</span><strong>{selectedScheduleTiming ? `${Math.floor(selectedScheduleTiming.totalMinutes / 60)} h ${selectedScheduleTiming.totalMinutes % 60} m` : 'Calculating'}</strong></div>
+                </>
+              ) : selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
                 <>
                   <div><span><InspectorIcon type="truck" /> Travel to stop</span><strong>{Math.round((selectedScheduleSecondaryRoute.travelDurationSeconds || 0) / 60)} min</strong></div>
                   <div><span><InspectorIcon type="map" /> Stop service</span><strong>{Math.max(0, Number(selectedScheduleSecondaryRoute.serviceMinutes) || 0)} min</strong></div>
@@ -4770,6 +4960,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </div>
               </div>
             ) : null}
+            {!selectedScheduleIsReturnTransit ? (
             <label className={`transport-snap-toggle transport-inspector-toggle${selectedScheduleEffectiveReturnTransit ? ' active' : ''}`}>
               <input
                 type="checkbox"
@@ -4779,6 +4970,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               />
               <span>Return transit to yard</span>
             </label>
+            ) : null}
             <h3 className="transport-panel-section-title">Route Preview</h3>
             <RouteMapCanvas
               className="transport-schedule-inspector-map"
@@ -4787,8 +4979,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               siteLocation={selectedScheduleRouteContext.siteLocation}
               expandable
               viewerTitle={selectedScheduleRouteContext.title}
-              originLabel={selectedScheduleRouteContext.segment === 'secondary' ? 'Previous site' : 'Yard'}
-              destinationLabel="Site"
+              originLabel={getRouteOriginLabel(selectedScheduleRouteContext)}
+              destinationLabel={getRouteDestinationLabel(selectedScheduleRouteContext)}
             />
             <h3 className="transport-panel-section-title">Weather & Traffic</h3>
             <div className="transport-weather-grid">
@@ -4803,7 +4995,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               </div>
               <InspectorIcon type="spark" />
             </div>
-            <button type="button" className="transport-management-save transport-inspector-action transport-inspector-pdf-action" disabled={!selectedScheduleRequest?.pdfPath} onClick={() => handleOpenPdf(selectedScheduleRequest)}><InspectorIcon type="file" /> PDF Picking Card</button>
+            <button type="button" className="transport-management-save transport-inspector-action transport-inspector-pdf-action" disabled={selectedScheduleIsReturnTransit || !selectedScheduleRequest?.pdfPath} onClick={() => handleOpenPdf(selectedScheduleRequest)}><InspectorIcon type="file" /> PDF Picking Card</button>
             <div className="transport-schedule-timeline">
               <strong>Driver Status Timeline</strong>
               {selectedScheduleActionRows.length > 0 ? selectedScheduleActionRows.map(row => <div key={row.key} className="transport-timeline-row"><i /><span>{row.label}</span><b>{row.value}</b></div>) : <p>No driver status updates yet.</p>}
@@ -4837,7 +5029,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             </>
           ) : null}
           <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
-            <span>{tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
+            <span>{tileMenuIsReturnTransit ? (tileMenuSelectionIds.length > 1 ? `Remove ${tileMenuSelectionIds.length} return-to-yard tiles` : 'Remove return-to-yard tile') : tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
           </button>
         </div>
       ) : null}
@@ -5042,8 +5234,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   siteLocation={requestModal.siteLocation}
                   expandable
                   viewerTitle="Request Route"
-                  originLabel={requestModal.routeContext?.segment === 'secondary' ? 'Previous site' : 'Yard'}
-                  destinationLabel="Site"
+                  originLabel={getRouteOriginLabel(requestModal.routeContext)}
+                  destinationLabel={getRouteDestinationLabel(requestModal.routeContext)}
                 />
                 <div className="ts2-estimate-grid">
                   <div><span>{requestModal.routeContext?.segment === 'secondary' ? 'Transit from parent site' : 'Transit from yard'}</span><strong>{requestModalSummary.deliveryFromYard}</strong></div>
@@ -5147,8 +5339,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   loading={eventOverviewRouteLoading}
                   siteLocation={eventOverviewModal.siteLocation}
                   interactive
-                  originLabel={eventOverviewModal.routeContext?.segment === 'secondary' ? 'Previous site' : 'Yard'}
-                  destinationLabel="Site"
+                  originLabel={getRouteOriginLabel(eventOverviewModal.routeContext)}
+                  destinationLabel={getRouteDestinationLabel(eventOverviewModal.routeContext)}
                 />
                 <div className="transport-route-modal-top">
                   <div>
