@@ -673,12 +673,19 @@ async function resolveBoardRouteEstimate(routeContext) {
     : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule);
 }
 
-function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate, tollsMode = false, returnTransitByRequestId = {}) {
+function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate, tollsMode = false, returnTransitByRequestId = {}, fallbackRouteMap = {}) {
   const requestLookup = new Map((requestsForDay || []).map(request => [request.id, request]));
   return Object.fromEntries(
     requestsForDay.map(request => {
       const routeContext = getBoardRouteContextForRequest(request, requestLookup, siteLocationMap, fallbackDate, tollsMode, returnTransitByRequestId);
-      return [request.id, getCachedBoardRouteEstimate(routeContext)];
+      const cachedEstimate = getCachedBoardRouteEstimate(routeContext);
+      const hasFallbackEstimate = Object.prototype.hasOwnProperty.call(fallbackRouteMap || {}, request.id);
+      return [
+        request.id,
+        cachedEstimate === undefined && hasFallbackEstimate
+          ? fallbackRouteMap[request.id]
+          : cachedEstimate,
+      ];
     }),
   );
 }
@@ -1511,6 +1518,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const loadPromiseRef = useRef(null);
   const optimisticRequestOverridesRef = useRef(new Map());
   const requestSiteLocationMapRef = useRef({});
+  const stableRouteEstimateMapRef = useRef({});
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
   const dragPointerOffsetMinutesRef = useRef(0);
@@ -1587,6 +1595,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return requestSiteLocationMapRef.current;
   }, []);
 
+  const rememberStableRouteEstimates = useCallback((routeMap = {}) => {
+    const entries = Object.entries(routeMap || {});
+    if (entries.length === 0) {
+      return;
+    }
+
+    stableRouteEstimateMapRef.current = {
+      ...stableRouteEstimateMapRef.current,
+      ...Object.fromEntries(entries.filter(([, estimate]) => estimate !== undefined)),
+    };
+  }, []);
+
   const applyBoardProjection = useCallback((requestsForDay, board, options = {}) => {
     const signature = getBoardProjectionSignature(board);
     if (options.force || signature !== boardProjectionSignatureRef.current) {
@@ -1614,12 +1634,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       fallbackDate || selectedDate,
       getTollsEnabled,
       returnTransitByRequestId,
+      stableRouteEstimateMapRef.current,
     );
+    rememberStableRouteEstimates(routeMap);
     const flowRouteMap = routeMap;
     const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap });
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
-  }, [applyBoardProjection, debugMode, getTollsEnabled, returnTransitByRequestId, selectedDate]);
+  }, [applyBoardProjection, debugMode, getTollsEnabled, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate]);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -1655,7 +1677,15 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ]),
       );
       const nextSiteLocationMap = mergeRequestSiteLocationMap(siteLocationMap);
-      const cachedRouteMap = buildCachedRouteMapForRequests(requestsForDay, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
+      const cachedRouteMap = buildCachedRouteMapForRequests(
+        requestsForDay,
+        nextSiteLocationMap,
+        selectedDate,
+        getTollsEnabled,
+        returnTransitByRequestId,
+        stableRouteEstimateMapRef.current,
+      );
+      rememberStableRouteEstimates(cachedRouteMap);
       const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: cachedRouteMap });
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
@@ -1687,6 +1717,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }),
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries.map(([id, estimate]) => [id, estimate]));
+      rememberStableRouteEstimates(resolvedRouteMap);
       const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
@@ -1700,7 +1731,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { loadKey, promise: task };
     return task;
-  }, [applyBoardProjection, debugMode, getTollsEnabled, mergeRequestSiteLocationMap, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
+  }, [applyBoardProjection, debugMode, getTollsEnabled, mergeRequestSiteLocationMap, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
