@@ -35,7 +35,7 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard', disabled: true },
       { key: 'truck-schedule', label: 'Dynamic Schedule', icon: 'dynamic' },
       { key: 'material-ordering-active', label: 'Schedule Management', icon: 'schedule', match: ['material-ordering-active', 'material-ordering-archived'] },
-      { key: 'material-ordering-new', label: 'Orders', icon: 'orders', match: ['material-ordering-new', 'material-ordering'] },
+      { key: 'material-ordering-new', label: 'Material Orders', icon: 'orders', match: ['material-ordering-new', 'material-ordering'] },
       { key: 'transport-trips', label: 'Trips', icon: 'trips', disabled: true },
       { key: 'transport-fleet', label: 'Fleet', icon: 'fleet', disabled: true },
       { key: 'transport-drivers', label: 'Drivers', icon: 'drivers', disabled: true },
