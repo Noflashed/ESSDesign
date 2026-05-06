@@ -26,23 +26,23 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
   const navItems = useMemo(() => {
     if (isTruckRole) {
       return [
-        { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard', disabled: true },
         { key: 'truck-schedule', label: 'Dynamic Schedule', icon: 'dynamic' },
         { key: 'truck-delivery-schedule', label: 'Delivery Schedule', icon: 'schedule' },
       ];
     }
     return [
-      { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard' },
+      { key: 'transport-dashboard', label: 'Dashboard', icon: 'dashboard', disabled: true },
       { key: 'truck-schedule', label: 'Dynamic Schedule', icon: 'dynamic' },
       { key: 'material-ordering-active', label: 'Schedule Management', icon: 'schedule', match: ['material-ordering-active', 'material-ordering-archived'] },
       { key: 'material-ordering-new', label: 'Orders', icon: 'orders', match: ['material-ordering-new', 'material-ordering'] },
-      { key: 'transport-trips', label: 'Trips', icon: 'trips' },
-      { key: 'transport-fleet', label: 'Fleet', icon: 'fleet' },
-      { key: 'transport-drivers', label: 'Drivers', icon: 'drivers' },
-      { key: 'transport-clients', label: 'Clients', icon: 'clients' },
-      { key: 'transport-inventory', label: 'Inventory', icon: 'inventory' },
-      { key: 'transport-yard', label: 'Yard', icon: 'yard' },
-      { key: 'transport-reports', label: 'Reports', icon: 'reports' },
+      { key: 'transport-trips', label: 'Trips', icon: 'trips', disabled: true },
+      { key: 'transport-fleet', label: 'Fleet', icon: 'fleet', disabled: true },
+      { key: 'transport-drivers', label: 'Drivers', icon: 'drivers', disabled: true },
+      { key: 'transport-clients', label: 'Clients', icon: 'clients', disabled: true },
+      { key: 'transport-inventory', label: 'Inventory', icon: 'inventory', disabled: true },
+      { key: 'transport-yard', label: 'Yard', icon: 'yard', disabled: true },
+      { key: 'transport-reports', label: 'Reports', icon: 'reports', disabled: true },
     ];
   }, [isTruckRole]);
 

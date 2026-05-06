@@ -125,13 +125,19 @@ export default function NativeTransportShell({
                 {group.title ? <div className="transport-desktop-nav-heading">{group.title}</div> : null}
                 {group.items.map(item => {
                   const active = currentPage === item.key || item.match?.includes(currentPage);
+                  const disabled = Boolean(item.disabled);
                   return (
                     <button
                       key={item.key}
                       type="button"
-                      className={`transport-desktop-nav-item${active ? ' active' : ''}`}
-                      onClick={() => onNavigate(item.key)}
+                      className={`transport-desktop-nav-item${active ? ' active' : ''}${disabled ? ' disabled' : ''}`}
+                      onClick={() => {
+                        if (!disabled) {
+                          onNavigate(item.key);
+                        }
+                      }}
                       title={item.label}
+                      aria-disabled={disabled}
                     >
                       <TransportIcon type={item.icon} />
                       <span>{item.label}</span>

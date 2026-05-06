@@ -5986,3 +5986,94 @@
         max-width: 92vw !important;
     }
 }
+
+/* ESS Transport sidebar breathing-room pass. */
+.transport-desktop-shell,
+.transport-desktop-shell.rail-collapsed {
+    grid-template-columns: 242px minmax(0, 1fr) !important;
+}
+
+.transport-desktop-brand {
+    min-height: 48px !important;
+    padding: 9px 10px 8px !important;
+}
+
+.transport-desktop-brand .transport-desktop-user {
+    min-height: 32px !important;
+    grid-template-columns: 26px minmax(0, 1fr) 16px !important;
+    padding: 4px 6px !important;
+}
+
+.transport-desktop-brand .transport-desktop-avatar {
+    width: 24px !important;
+    height: 24px !important;
+    flex-basis: 24px !important;
+}
+
+.transport-desktop-brand .transport-desktop-user strong {
+    font-size: 12px !important;
+    line-height: 15px !important;
+}
+
+.transport-desktop-search {
+    min-height: 34px !important;
+    margin: 10px !important;
+    padding: 0 7px 0 9px !important;
+}
+
+.transport-desktop-nav {
+    padding: 0 10px 14px !important;
+}
+
+.transport-desktop-nav-group {
+    gap: 4px !important;
+    padding: 12px 0 !important;
+}
+
+.transport-desktop-nav-heading {
+    padding: 4px 6px 7px !important;
+    font-size: 10.5px !important;
+}
+
+.transport-desktop-nav-item,
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item {
+    grid-template-columns: 20px minmax(0, 1fr) auto !important;
+    min-height: 36px !important;
+    gap: 10px !important;
+    padding: 0 10px !important;
+    border-radius: 6px !important;
+}
+
+.transport-desktop-nav-item > svg,
+.transport-desktop-nav-item:hover > svg,
+.transport-desktop-nav-item.active > svg {
+    width: 16px !important;
+    height: 16px !important;
+}
+
+.transport-desktop-nav-item span,
+.transport-desktop-shell.rail-collapsed .transport-desktop-nav-item span {
+    font-size: 12px !important;
+    line-height: 16px !important;
+}
+
+.transport-desktop-rail-bottom {
+    padding: 0 10px 12px !important;
+}
+
+.transport-page-frame .transport-desktop-workspace .transport-management-detail,
+.transport-desktop-workspace .transport-management-detail {
+    max-width: calc(100vw - 242px) !important;
+}
+
+.transport-desktop-nav-item.disabled,
+.transport-desktop-nav-item.disabled:hover {
+    background: transparent !important;
+    color: #6f7379 !important;
+    cursor: default !important;
+}
+
+.transport-desktop-nav-item.disabled > svg,
+.transport-desktop-nav-item.disabled:hover > svg {
+    color: #7d8188 !important;
+}
