@@ -318,6 +318,7 @@
     height: 112px;
     max-width: 260px;
     object-fit: contain;
+    filter: brightness(0);
 }
 
 .login-auth-header h2 {
