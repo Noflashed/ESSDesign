@@ -5821,6 +5821,18 @@ button.stat-card {
   background: #f3f5f8;
 }
 
+.site-registry-address-autocomplete {
+  width: 100%;
+}
+
+.site-registry-address-hint {
+  margin: 8px 0 0;
+  color: #c25b0e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 /* ── ESS Transport Suite (Web parity with iOS transport flow) ───────────────── */
 .transport-suite-shell {
     display: grid;

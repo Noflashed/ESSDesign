@@ -167,25 +167,50 @@ namespace ESSDesign.Server.Services
                 request.Headers.Add("User-Agent", "ESSDesignApp/1.0 (nathanb@erectsafe.com.au)");
 
                 var response = await client.SendAsync(request);
-                if (!response.IsSuccessStatusCode) return null;
+                if (!response.IsSuccessStatusCode)
+                {
+                    return await GeocodeWithTomTomAsync(address, client);
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
                 var results = JsonSerializer.Deserialize<JsonElement[]>(json);
-                if (results == null || results.Length == 0) return null;
+                if (results == null || results.Length == 0)
+                {
+                    return await GeocodeWithTomTomAsync(address, client);
+                }
 
                 var first = results[0];
-                if (!first.TryGetProperty("lat", out var latEl) || !first.TryGetProperty("lon", out var lonEl)) return null;
+                if (!first.TryGetProperty("lat", out var latEl) || !first.TryGetProperty("lon", out var lonEl))
+                {
+                    return await GeocodeWithTomTomAsync(address, client);
+                }
 
-                if (!double.TryParse(latEl.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var lat)) return null;
-                if (!double.TryParse(lonEl.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var lon)) return null;
+                if (!double.TryParse(latEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var lat))
+                {
+                    return await GeocodeWithTomTomAsync(address, client);
+                }
+                if (!double.TryParse(lonEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var lon))
+                {
+                    return await GeocodeWithTomTomAsync(address, client);
+                }
 
                 return (lat, lon);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Geocoding failed for: {Address}", address);
-                return null;
+                return await GeocodeWithTomTomAsync(address, client);
             }
+        }
+
+        private async Task<(double Lat, double Lon)?> GeocodeWithTomTomAsync(string address, HttpClient client)
+        {
+            var match = (await SearchTomTomAddressesAsync(address, 1, client))
+                .FirstOrDefault(result => result.Lat.HasValue && result.Lon.HasValue);
+
+            return match?.Lat.HasValue == true && match.Lon.HasValue
+                ? (match.Lat.Value, match.Lon.Value)
+                : null;
         }
 
         private async Task<List<AddressSuggestionResult>> SearchTomTomAddressesAsync(string query, int limit, HttpClient client)

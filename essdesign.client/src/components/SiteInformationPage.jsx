@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { safetyProjectsAPI } from '../services/api';
+import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
     return {
         builderId: initialBuilderId,
         projectName: '',
         siteLocation: '',
+        siteLocationSourceId: '',
         editingProjectId: null
     };
 }
@@ -25,6 +26,8 @@ export default function SiteInformationPage() {
     const [showArchived, setShowArchived] = useState(false);
     const [projectForm, setProjectForm] = useState(emptyProjectForm());
     const [builderForm, setBuilderForm] = useState({ id: null, name: '' });
+    const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
+    const [siteAddressLoading, setSiteAddressLoading] = useState(false);
     const [error, setError] = useState('');
 
     const loadBuilders = async () => {
@@ -67,6 +70,8 @@ export default function SiteInformationPage() {
 
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
+        setSiteAddressSuggestions([]);
+        setSiteAddressLoading(false);
         setShowProjectModal(true);
     };
 
@@ -75,9 +80,18 @@ export default function SiteInformationPage() {
             builderId,
             projectName: project.name,
             siteLocation: project.siteLocation || '',
+            siteLocationSourceId: project.siteLocation ? 'existing' : '',
             editingProjectId: project.id
         });
+        setSiteAddressSuggestions([]);
+        setSiteAddressLoading(false);
         setShowProjectModal(true);
+    };
+
+    const closeProjectModal = () => {
+        setShowProjectModal(false);
+        setSiteAddressSuggestions([]);
+        setSiteAddressLoading(false);
     };
 
     const openCreateBuilder = () => {
@@ -95,18 +109,63 @@ export default function SiteInformationPage() {
         setSaving(true);
         setError('');
         try {
+            if (projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId) {
+                throw new Error('Select a valid suggested site address before saving.');
+            }
             const nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation)
                 : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation);
             setBuilders(nextBuilders);
             setSelectedBuilderId(projectForm.builderId);
-            setShowProjectModal(false);
+            closeProjectModal();
         } catch (err) {
             setError(err.message || 'Could not save project');
         } finally {
             setSaving(false);
         }
     };
+
+    useEffect(() => {
+        const query = projectForm.siteLocation.trim();
+        if (!showProjectModal || projectForm.siteLocationSourceId || query.length < 3) {
+            setSiteAddressSuggestions([]);
+            setSiteAddressLoading(false);
+            return undefined;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            setSiteAddressLoading(true);
+            analysisAPI.addressSuggestions(query, { signal: controller.signal })
+                .then(remoteResults => {
+                    const suggestions = (Array.isArray(remoteResults) ? remoteResults : [])
+                        .map((item, index) => ({
+                            id: `tomtom-${item.address || item.label || index}`,
+                            label: item.label || item.address,
+                            address: item.address || item.label,
+                            source: 'TomTom',
+                        }))
+                        .filter(item => item.address);
+                    setSiteAddressSuggestions(suggestions.slice(0, 6));
+                })
+                .catch(addressError => {
+                    if (addressError?.name !== 'CanceledError' && addressError?.code !== 'ERR_CANCELED') {
+                        setSiteAddressSuggestions([]);
+                    }
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted) {
+                        setSiteAddressLoading(false);
+                    }
+                });
+        }, 250);
+
+        setSiteAddressLoading(true);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [projectForm.siteLocation, projectForm.siteLocationSourceId, showProjectModal]);
 
     const saveBuilder = async (event) => {
         event.preventDefault();
@@ -281,11 +340,11 @@ export default function SiteInformationPage() {
             </div>
 
             {showProjectModal && (
-                <div className="module-modal-backdrop" onClick={() => setShowProjectModal(false)}>
+                <div className="module-modal-backdrop" onClick={closeProjectModal}>
                     <div className="module-modal compact" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
                             <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowProjectModal(false)}>×</button>
+                            <button className="nav-drawer-close" onClick={closeProjectModal}>×</button>
                         </div>
                         <form className="module-form" onSubmit={saveProject}>
                             <div className="module-field">
@@ -301,9 +360,48 @@ export default function SiteInformationPage() {
                             </div>
                             <div className="module-field">
                                 <label>Site Geographic Location</label>
-                                <input value={projectForm.siteLocation} onChange={e => setProjectForm(prev => ({ ...prev, siteLocation: e.target.value }))} placeholder="1 Barangaroo Ave, Barangaroo NSW 2000" />
+                                <div className="site-registry-address-autocomplete transport-address-autocomplete">
+                                    <input
+                                        value={projectForm.siteLocation}
+                                        onChange={e => setProjectForm(prev => ({
+                                            ...prev,
+                                            siteLocation: e.target.value,
+                                            siteLocationSourceId: '',
+                                        }))}
+                                        placeholder="1 Barangaroo Ave, Barangaroo NSW 2000"
+                                        autoComplete="off"
+                                    />
+                                    {(siteAddressLoading || siteAddressSuggestions.length > 0) ? (
+                                        <div className="site-registry-address-suggestions transport-address-suggestions" role="listbox">
+                                            {siteAddressSuggestions.map(suggestion => (
+                                                <button
+                                                    key={suggestion.id}
+                                                    type="button"
+                                                    className="site-registry-address-suggestion transport-address-suggestion"
+                                                    onClick={() => {
+                                                        setProjectForm(prev => ({
+                                                            ...prev,
+                                                            siteLocation: suggestion.address,
+                                                            siteLocationSourceId: suggestion.id,
+                                                        }));
+                                                        setSiteAddressSuggestions([]);
+                                                        setSiteAddressLoading(false);
+                                                    }}
+                                                    role="option"
+                                                >
+                                                    <strong>{suggestion.address}</strong>
+                                                    <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                                                </button>
+                                            ))}
+                                            {siteAddressLoading ? <div className="site-registry-address-suggestion transport-address-suggestion loading">Searching addresses...</div> : null}
+                                        </div>
+                                    ) : null}
+                                </div>
+                                {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
+                                    <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
+                                ) : null}
                             </div>
-                            {projectForm.siteLocation.trim() ? (
+                            {projectForm.siteLocation.trim() && projectForm.siteLocationSourceId ? (
                                 <div className="site-registry-map-preview">
                                     <div className="site-registry-map-preview-label">Map Preview</div>
                                     <iframe
@@ -314,7 +412,7 @@ export default function SiteInformationPage() {
                                     />
                                 </div>
                             ) : null}
-                            <button type="submit" className="module-primary-btn" disabled={saving}>
+                            <button type="submit" className="module-primary-btn" disabled={saving || Boolean(projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId)}>
                                 {saving ? 'Saving...' : 'Save Project'}
                             </button>
                         </form>
