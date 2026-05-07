@@ -627,13 +627,14 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           flowBaseTiming,
         );
         const hasSecondaryContinuation = isBackToBackContinuation(request, primaryContinuation, truckId);
-        const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation && !hasReturnTransitContinuation;
-        const timing = hasSecondaryContinuation || hasReturnTransitContinuation || !includeReturnTransitToYard
-          ? removeReturnLegFromTiming(baseTiming)
-          : baseTiming;
-        const flowTiming = hasSecondaryContinuation || hasReturnTransitContinuation || !includeReturnTransitToYard
-          ? removeReturnLegFromTiming(flowBaseTiming)
-          : flowBaseTiming;
+        const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
+        const embedsReturnTransitInTile = hasEffectiveReturnBreak && !hasReturnTransitContinuation;
+        const timing = embedsReturnTransitInTile
+          ? baseTiming
+          : removeReturnLegFromTiming(baseTiming);
+        const flowTiming = embedsReturnTransitInTile
+          ? flowBaseTiming
+          : removeReturnLegFromTiming(flowBaseTiming);
         const hasExplicitRunLink = Boolean(request.sourceOrderId);
         const hasAdjacentRunLink = Boolean(
           !request.sourceOrderId &&
@@ -726,6 +727,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           runSourceOrderId: request.sourceOrderId || null,
           runLinkReason: hasExplicitRunLink ? 'explicit' : hasAdjacentRunLink ? 'adjacent' : 'none',
           effectiveReturnBreak: hasEffectiveReturnBreak,
+          embedsReturnTransitInTile,
         };
         dayEvents.push({
           id: `remote-${request.id}`,
