@@ -1640,6 +1640,11 @@ function getTrafficDelayMinutes(routeEstimate) {
   return Number.isFinite(delay) ? Math.max(0, Math.round(delay)) : 0;
 }
 
+function getTrafficDelayMinutesFromRouteData(routeData) {
+  const delaySeconds = Number(routeData?.trafficDelaySeconds);
+  return Number.isFinite(delaySeconds) ? Math.max(0, Math.round(delaySeconds / 60)) : 0;
+}
+
 function TrafficDelayBadge({ minutes }) {
   const delay = Math.max(0, Math.round(Number(minutes) || 0));
   return delay > 0 ? <em className="transport-traffic-delay-badge">+{delay} min</em> : null;
@@ -3103,7 +3108,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const secondaryEnd = secondaryStart + secondaryDuration;
       return `${formatTimeChip(Math.floor(secondaryStart / 60), Math.floor(secondaryStart % 60))} - ${formatTimeChip(Math.floor(secondaryEnd / 60), Math.floor(secondaryEnd % 60))}`;
     }
-    const durationMinutes = eventPrimaryDurationMinutesMap[selectedScheduleEvent.orderId] ?? eventDurationMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleTiming?.totalMinutes ?? 90;
+    const durationMinutes = selectedScheduleTiming?.totalMinutes
+      ?? eventPrimaryDurationMinutesMap[selectedScheduleEvent.orderId]
+      ?? eventDurationMinutesMap[selectedScheduleEvent.orderId]
+      ?? 90;
     const endMinutes = startMinutes + durationMinutes;
     return `${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}`;
   }, [
@@ -3214,7 +3222,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
   );
-  const selectedScheduleTravelTrafficDelayMinutes = getTrafficDelayMinutes(selectedScheduleContextRouteEstimate);
+  const selectedScheduleTravelTrafficDelayMinutes = selectedScheduleRouteData
+    ? getTrafficDelayMinutesFromRouteData(selectedScheduleRouteData)
+    : getTrafficDelayMinutes(selectedScheduleContextRouteEstimate);
   const requestModalSummary = useMemo(
     () => buildEstimateSummary(
       selectedDate,
