@@ -628,13 +628,13 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         );
         const hasSecondaryContinuation = isBackToBackContinuation(request, primaryContinuation, truckId);
         const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
-        const embedsReturnTransitInTile = hasEffectiveReturnBreak && !hasReturnTransitContinuation;
-        const timing = embedsReturnTransitInTile
-          ? baseTiming
-          : removeReturnLegFromTiming(baseTiming);
-        const flowTiming = embedsReturnTransitInTile
-          ? flowBaseTiming
-          : removeReturnLegFromTiming(flowBaseTiming);
+        const embedsReturnTransitInTile = hasEffectiveReturnBreak;
+        const timing = hasSecondaryContinuation || !includeReturnTransitToYard
+          ? removeReturnLegFromTiming(baseTiming)
+          : baseTiming;
+        const flowTiming = hasSecondaryContinuation || !includeReturnTransitToYard
+          ? removeReturnLegFromTiming(flowBaseTiming)
+          : flowBaseTiming;
         const hasExplicitRunLink = Boolean(request.sourceOrderId);
         const hasAdjacentRunLink = Boolean(
           !request.sourceOrderId &&
@@ -1118,7 +1118,19 @@ function getCollisionMessage(event, startMap, durationMap) {
   return `That slot overlaps ${event.builderName || 'another delivery'} (${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(endMinutes / 60), Math.floor(endMinutes % 60))}).`;
 }
 
-function getEdgeSnapCandidate({ requestId, truckId, startMinutes, durationMinutes, dayEvents, startMap, durationMap, thresholdMinutes = SNAP_EDGE_THRESHOLD_MINUTES }) {
+function getEdgeSnapCandidate({
+  requestId,
+  truckId,
+  startMinutes,
+  durationMinutes,
+  dayEvents,
+  startMap,
+  durationMap,
+  primaryDurationMap = {},
+  returnTransitByRequestId = {},
+  cycleStateMap = {},
+  thresholdMinutes = SNAP_EDGE_THRESHOLD_MINUTES,
+}) {
   const endMinutes = startMinutes + durationMinutes;
   let best = null;
   dayEvents.forEach(event => {
@@ -1126,7 +1138,14 @@ function getEdgeSnapCandidate({ requestId, truckId, startMinutes, durationMinute
       return;
     }
     const existingStart = startMap[event.orderId] ?? event.hour * 60 + event.minute;
-    const existingEnd = existingStart + (durationMap[event.orderId] ?? 90);
+    const existingDuration = durationMap[event.orderId] ?? 90;
+    const existingEnd = existingStart + existingDuration;
+    const existingPrimaryDuration = primaryDurationMap[event.orderId] ?? existingDuration;
+    const hasReturnSnapSegment = Boolean(
+      returnTransitByRequestId?.[event.orderId]
+      && !cycleStateMap?.[event.orderId]?.hasSecondaryContinuation
+      && existingDuration - existingPrimaryDuration > 0.5
+    );
     const beforeDistance = Math.abs(endMinutes - existingStart);
     const afterDistance = Math.abs(startMinutes - existingEnd);
     if (beforeDistance <= thresholdMinutes && (!best || beforeDistance < best.distance)) {
@@ -1141,6 +1160,7 @@ function getEdgeSnapCandidate({ requestId, truckId, startMinutes, durationMinute
       best = {
         event,
         side: 'after',
+        linkSegment: hasReturnSnapSegment ? 'return' : undefined,
         minutes: clampScheduleMinutes(existingEnd, durationMinutes),
         distance: afterDistance,
       };
@@ -1179,6 +1199,7 @@ function getReturnSegmentSnapState({
   const targetOrderId = eventTarget?.closest?.('[data-order-id]')?.dataset?.orderId || null;
   const returnEnabled = Boolean(requestId && returnTransitByRequestId?.[requestId]);
   const hasSecondaryContinuation = Boolean(requestId && cycleStateMap?.[requestId]?.hasSecondaryContinuation);
+  const hasReturnTransitContinuation = Boolean(requestId && cycleStateMap?.[requestId]?.hasReturnTransitContinuation);
   const directlyOnReturnCard = Boolean(eventTarget?.closest?.('.ts2-return-card'))
     && (!targetOrderId || targetOrderId === requestId);
   const baseState = {
@@ -1186,6 +1207,7 @@ function getReturnSegmentSnapState({
     requestId,
     returnEnabled,
     hasSecondaryContinuation,
+    hasReturnTransitContinuation,
     existingStart: null,
     existingEnd: null,
     returnStart: null,
@@ -2973,7 +2995,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled
-    && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
+    && (selectedScheduleIsReturnSegment || !selectedScheduleHasSecondaryContinuation);
   const selectedScheduleCanToggleReturnTransit = Boolean(selectedScheduleRequest)
     && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
   const selectedSchedulePrimaryTimingSource = selectedSchedulePrimaryTimingEstimate || selectedScheduleOutboundEstimate || selectedSchedulePrimaryRouteEstimate;
@@ -3030,10 +3052,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       `pointer=${formatDebugMinutes(snapDebugInfo.probeMinutes)}`,
       `returnEnabled=${snapDebugInfo.returnEnabled ? 'yes' : 'no'}`,
       `hasSecondary=${snapDebugInfo.hasSecondaryContinuation ? 'yes' : 'no'}`,
+      `hasReturnLink=${snapDebugInfo.hasReturnTransitContinuation ? 'yes' : 'no'}`,
       `onReturnCard=${snapDebugInfo.directlyOnReturnCard ? 'yes' : 'no'}`,
       `overReturnTime=${snapDebugInfo.pointerOverReturnTime ? 'yes' : 'no'}`,
       `returnWindow=${formatDebugMinutes(snapDebugInfo.returnStart)}-${formatDebugMinutes(snapDebugInfo.existingEnd)}`,
-      `generic=${snapDebugInfo.genericSide || 'none'}@${formatDebugMinutes(snapDebugInfo.genericMinutes)}`,
+      `generic=${snapDebugInfo.genericSide || 'none'}:${snapDebugInfo.genericSegment || 'none'}@${formatDebugMinutes(snapDebugInfo.genericMinutes)}`,
       `chosen=${snapDebugInfo.chosenSource || 'none'}:${snapDebugInfo.chosenSide || 'none'}@${formatDebugMinutes(snapDebugInfo.chosenMinutes)}`,
       `linkTo=${snapDebugInfo.linkToRequestId || 'none'}`,
       `segment=${snapDebugInfo.linkSegment || 'none'}`,
@@ -3564,6 +3587,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
     });
     if (collision) {
       const message = getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap);
@@ -3659,6 +3685,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
     });
     if (collision) {
       setError(getCollisionMessage(collision, eventStartMinutesMap, eventDurationMinutesMap));
@@ -3855,8 +3884,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     const cycleState = eventCycleStateMap[request.id] || null;
     const includeReturnTransitToYard = getReturnTransitEnabled(request.id)
-      && !cycleState?.hasSecondaryContinuation
-      && !cycleState?.hasReturnTransitContinuation;
+      && !cycleState?.hasSecondaryContinuation;
     if (isSecondaryRouteRequest(request)) {
       const secondaryRoute = request.secondaryRoute || {};
       const schedule = {
@@ -4831,6 +4859,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
     });
     const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
     const previewMinutes = snapCandidate?.minutes ?? minutes;
@@ -4907,6 +4938,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
     });
     const linkedSnapSide = returnSnapState.candidate?.side || previewSnapCandidate?.snapSide || snapCandidate?.side || null;
     const linkedSnapOrderId = returnSnapState.candidate?.event?.orderId || previewSnapCandidate?.snapOrderId || snapCandidate?.event?.orderId || '';
@@ -4964,6 +4998,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
       thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
     });
     const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
@@ -4975,6 +5012,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           dragRequestId: requestId,
           targetOrderId: scheduleEvent.orderId,
           genericSide: null,
+          genericSegment: null,
           genericMinutes: null,
           chosenSource: 'none',
           chosenSide: null,
@@ -5003,6 +5041,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         dragRequestId: requestId,
         targetOrderId: scheduleEvent.orderId,
         genericSide: genericSnapCandidate?.side || null,
+        genericSegment: genericSnapCandidate?.linkSegment || null,
         genericMinutes: genericSnapCandidate?.minutes ?? null,
         chosenSource: returnSnapState.candidate ? 'return-segment' : 'generic',
         chosenSide: snapCandidate.side,
@@ -5122,6 +5161,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
       thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
     });
     const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
@@ -5133,6 +5175,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           dragRequestId: requestId,
           targetOrderId: scheduleEvent.orderId,
           genericSide: null,
+          genericSegment: null,
           genericMinutes: null,
           chosenSource: 'none',
           chosenSide: null,
@@ -5161,6 +5204,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         dragRequestId: requestId,
         targetOrderId: scheduleEvent.orderId,
         genericSide: genericSnapCandidate?.side || null,
+        genericSegment: genericSnapCandidate?.linkSegment || null,
         genericMinutes: genericSnapCandidate?.minutes ?? null,
         chosenSource: returnSnapState.candidate ? 'return-segment' : 'generic',
         chosenSide: snapCandidate.side,
@@ -5727,7 +5771,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeContext = getBoardRouteContextForRequest(request, requestMetaMap, requestSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
-                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation && !cycleState?.hasReturnTransitContinuation;
+                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation;
                       const cachedRouteEstimate = getCachedBoardRouteEstimate(routeContext);
                       const stableRouteEstimate = stableRouteEstimateMapRef.current[event.orderId] ?? null;
                       let routeEstimate = cachedRouteEstimate === undefined
