@@ -478,13 +478,16 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
   const startMap = {};
   const primaryDurationMap = {};
   const cycleStateMap = {};
-  const runContinuationBySourceId = new Map();
+  const primaryContinuationBySourceId = new Map();
+  const returnContinuationBySourceId = new Map();
 
   requestsForDay.forEach(request => {
     if (request.sourceOrderId && request.scheduledDate === dateKey && !request.archivedAt) {
-      const existing = runContinuationBySourceId.get(request.sourceOrderId);
+      const segment = getConnectedParentSegment(request) === 'return' ? 'return' : 'primary';
+      const targetMap = segment === 'return' ? returnContinuationBySourceId : primaryContinuationBySourceId;
+      const existing = targetMap.get(request.sourceOrderId);
       if (!existing || getRequestScheduledStartMinutes(request) < getRequestScheduledStartMinutes(existing)) {
-        runContinuationBySourceId.set(request.sourceOrderId, request);
+        targetMap.set(request.sourceOrderId, request);
       }
     }
   });
@@ -503,7 +506,8 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
     orderTruckRequestsWithContinuations(truckRequests, truckId)
       .forEach((request, index, ordered) => {
         const scheduledStart = (request.scheduledHour ?? SCREEN_START_HOUR) * 60 + (request.scheduledMinute ?? 0);
-        const continuation = runContinuationBySourceId.get(request.id);
+        const primaryContinuation = primaryContinuationBySourceId.get(request.id) || null;
+        const returnContinuation = returnContinuationBySourceId.get(request.id) || null;
         const includeReturnTransitToYard = Boolean(returnTransitByRequestId?.[request.id]);
         const baseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
@@ -513,12 +517,12 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null);
         const hasReturnTransitContinuation = isReturnTransitContinuation(
           request,
-          continuation,
+          returnContinuation,
           truckId,
           includeReturnTransitToYard,
           flowBaseTiming,
         );
-        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, truckId) && !hasReturnTransitContinuation;
+        const hasSecondaryContinuation = isBackToBackContinuation(request, primaryContinuation, truckId);
         const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
@@ -976,7 +980,8 @@ function sameDropPreview(left, right) {
     && left.durationMinutes === right.durationMinutes
     && Boolean(left.blocked) === Boolean(right.blocked)
     && left.snapOrderId === right.snapOrderId
-    && left.snapSide === right.snapSide;
+    && left.snapSide === right.snapSide
+    && (left.snapSegment || '') === (right.snapSegment || '');
 }
 
 function intersectRects(a, b) {
@@ -3994,6 +3999,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       blocked: Boolean(collision),
       snapOrderId: snapCandidate?.event?.orderId,
       snapSide: snapCandidate?.side,
+      snapSegment: snapCandidate?.linkSegment || null,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
     setDropPreviewGroup([]);
@@ -4023,7 +4029,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduleRequestGroupAt(selectionContext, truckId, minutes);
       return;
     }
-    const snapCandidate = getEdgeSnapCandidate({
+    const previewSnapCandidate = dropPreview?.truckId === truckId && dropPreview.snapOrderId && !dropPreview.blocked
+      ? dropPreview
+      : null;
+    const snapCandidate = previewSnapCandidate ? null : getEdgeSnapCandidate({
       requestId,
       truckId,
       startMinutes: minutes,
@@ -4032,15 +4041,20 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
-    scheduleRequestAt(requestId, truckId, snapCandidate?.minutes ?? minutes, dragPreviewDurationMinutes, snapCandidate ? {
+    const linkedSnapSide = previewSnapCandidate?.snapSide || snapCandidate?.side || null;
+    const linkedSnapOrderId = previewSnapCandidate?.snapOrderId || snapCandidate?.event?.orderId || '';
+    const linkedSnapSegment = previewSnapCandidate?.snapSegment || snapCandidate?.linkSegment || null;
+    const snapMinutes = previewSnapCandidate?.minutes ?? snapCandidate?.minutes ?? minutes;
+    scheduleRequestAt(requestId, truckId, snapMinutes, dragPreviewDurationMinutes, linkedSnapOrderId ? {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
-      linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+      linkToRequestId: linkedSnapSide === 'after' ? linkedSnapOrderId : '',
+      linkToSegment: linkedSnapSide === 'after' ? linkedSnapSegment || 'primary' : null,
     } : {
       step: timelineSnapStep,
       breakRunLinks: Boolean(draggedScheduledOrderId),
     });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, scheduleRequestGroupAt, timelineSnapStep]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, dropPreview, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, scheduleRequestGroupAt, timelineSnapStep]);
 
   const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
@@ -4137,6 +4151,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       blocked: Boolean(collision),
       snapOrderId: snapCandidate.event.orderId,
       snapSide: snapCandidate.side,
+      snapSegment: snapCandidate.linkSegment || null,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
   }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, timelineSnapStep]);
