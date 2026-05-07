@@ -787,6 +787,12 @@ function getDropMinutesFromPointer(clientX, trackElement, { durationMinutes = 90
   return clampScheduleMinutes(roundScheduleMinutes(pointerMinutes - pointerOffsetMinutes, step), durationMinutes);
 }
 
+function getPointerMinutesFromTrack(clientX, trackElement) {
+  const rect = trackElement.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+  return SCREEN_START_HOUR * 60 + ratio * ((SCREEN_END_HOUR - SCREEN_START_HOUR) * 60);
+}
+
 function getScheduleCollision({ requestId, truckId, startMinutes, durationMinutes, dayEvents, startMap, durationMap }) {
   const endMinutes = startMinutes + durationMinutes;
   return dayEvents.find(event => {
@@ -845,6 +851,44 @@ function getAfterSnapCandidateForEvent(scheduleEvent, startMap, durationMap, dur
   }
   const existingStart = startMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
   const existingEnd = existingStart + (durationMap[scheduleEvent.orderId] ?? 90);
+  return {
+    event: scheduleEvent,
+    side: 'after',
+    minutes: clampScheduleMinutes(existingEnd, durationMinutes),
+    distance: 0,
+  };
+}
+
+function getReturnSegmentSnapCandidate({
+  scheduleEvent,
+  eventTarget,
+  probeMinutes,
+  startMap,
+  durationMap,
+  primaryDurationMap,
+  returnTransitByRequestId,
+  cycleStateMap,
+  durationMinutes,
+}) {
+  const requestId = scheduleEvent?.orderId;
+  if (!requestId || !returnTransitByRequestId?.[requestId] || cycleStateMap?.[requestId]?.hasSecondaryContinuation) {
+    return null;
+  }
+
+  const existingStart = startMap[requestId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+  const existingDuration = durationMap[requestId] ?? 90;
+  const existingEnd = existingStart + existingDuration;
+  const primaryDuration = Math.max(1, Math.min(existingDuration - 1, primaryDurationMap[requestId] ?? existingDuration));
+  const returnStart = existingStart + primaryDuration;
+  const directlyOnReturnCard = Boolean(eventTarget?.closest?.('.ts2-return-card'));
+  const pointerOverReturnTime = typeof probeMinutes === 'number'
+    && probeMinutes >= returnStart
+    && probeMinutes <= existingEnd + SNAP_EDGE_THRESHOLD_MINUTES;
+
+  if (!directlyOnReturnCard && !pointerOverReturnTime) {
+    return null;
+  }
+
   return {
     event: scheduleEvent,
     side: 'after',
@@ -3852,7 +3896,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
     setDropPreviewGroup([]);
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, timelineSnapStep]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, timelineSnapStep]);
 
   const handleLaneDragLeave = useCallback((event, truckId) => {
     if (event.currentTarget.contains(event.relatedTarget)) {
@@ -3912,14 +3956,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!laneTrack) {
       return;
     }
+    const probeMinutes = getPointerMinutesFromTrack(event.clientX, laneTrack);
     const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const returnCardSnapCandidate = event.target.closest('.ts2-return-card')
-      ? getAfterSnapCandidateForEvent(scheduleEvent, eventStartMinutesMap, eventDurationMinutesMap, dragPreviewDurationMinutes)
-      : null;
+    const returnCardSnapCandidate = getReturnSegmentSnapCandidate({
+      scheduleEvent,
+      eventTarget: event.target,
+      probeMinutes,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
+      durationMinutes: dragPreviewDurationMinutes,
+    });
     const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
@@ -3968,14 +4021,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!laneTrack) {
       return;
     }
+    const probeMinutes = getPointerMinutesFromTrack(event.clientX, laneTrack);
     const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const returnCardSnapCandidate = event.target.closest('.ts2-return-card')
-      ? getAfterSnapCandidateForEvent(scheduleEvent, eventStartMinutesMap, eventDurationMinutesMap, dragPreviewDurationMinutes)
-      : null;
+    const returnCardSnapCandidate = getReturnSegmentSnapCandidate({
+      scheduleEvent,
+      eventTarget: event.target,
+      probeMinutes,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
+      durationMinutes: dragPreviewDurationMinutes,
+    });
     const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
@@ -3994,7 +4056,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       breakRunLinks: Boolean(draggedScheduledOrderId),
       linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
     });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, timelineSnapStep]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
 
   const handleUnscheduleOrder = useCallback((requestIds) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
