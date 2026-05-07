@@ -1375,6 +1375,18 @@
     padding: 8px 9px !important;
 }
 
+.transport-page-frame .ts2-event-card.selected,
+.transport-desktop-workspace .ts2-event-card.selected,
+.transport-page-frame .ts2-secondary-route-card.selected,
+.transport-desktop-workspace .ts2-secondary-route-card.selected,
+.transport-page-frame .ts2-return-card.selected,
+.transport-desktop-workspace .ts2-return-card.selected {
+    z-index: 18 !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.38), 0 8px 18px rgba(15, 23, 42, 0.14) !important;
+    outline: 2px solid rgba(37, 99, 235, 0.78) !important;
+    outline-offset: 2px !important;
+}
+
 .transport-page-frame .ts2-event-time,
 .transport-desktop-workspace .ts2-event-time {
     font-size: 10px !important;

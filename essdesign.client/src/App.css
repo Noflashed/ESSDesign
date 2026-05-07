@@ -7016,7 +7016,8 @@ button.stat-card {
     will-change: left, width;
     transform: translateZ(0);
 }
-.ts2-event-wrap.selected {
+.ts2-event-wrap.selected,
+.ts2-event-wrap.segment-selected {
     z-index: 9;
 }
 .ts2-event-wrap.selected::after {
@@ -7036,6 +7037,14 @@ button.stat-card {
 .ts2-event-wrap.selected .ts2-secondary-route-card,
 .ts2-event-wrap.selected .ts2-return-card {
     box-shadow: 0 0 0 3px rgba(42, 102, 217, 0.28), 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+.ts2-event-card.selected,
+.ts2-secondary-route-card.selected,
+.ts2-return-card.selected {
+    z-index: 8;
+    box-shadow: 0 0 0 3px rgba(42, 102, 217, 0.28), 0 12px 22px rgba(15, 23, 42, 0.12);
+    outline: 2px solid rgba(42, 102, 217, 0.72);
+    outline-offset: 2px;
 }
 @keyframes ts2-selection-dash {
     from {

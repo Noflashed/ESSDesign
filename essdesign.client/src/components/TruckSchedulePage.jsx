@@ -63,6 +63,7 @@ const TIME_PICKER_MINUTE_STEP = 15;
 const DRAG_SCHEDULE_MINUTE_STEP = 1;
 const SNAP_EDGE_THRESHOLD_MINUTES = 10;
 const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
+const ROUTE_LOADING_MIN_MS = 180;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
@@ -99,6 +100,10 @@ function getReturnSegmentKey(requestId) {
 
 function getTollStorageKey(requestId, segment = 'primary') {
   return segment === 'return' ? getReturnSegmentKey(requestId) : requestId;
+}
+
+function getRouteLoadingKey(requestId, segment = 'primary') {
+  return requestId ? `${requestId}:${segment || 'primary'}` : '';
 }
 
 function getLinkedSecondaryRequestFields(option) {
@@ -853,6 +858,41 @@ function getCachedBoardRouteEstimate(routeContext) {
     return undefined;
   }
   return buildPrimaryRouteTimingEstimate(outboundEstimate, returnEstimate);
+}
+
+function getBoardRouteLoadingSegment(routeContext) {
+  if (!routeContext?.toLocation) {
+    return null;
+  }
+  if (routeContext.segment === 'standalone-secondary') {
+    const outboundEstimate = getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+    if (outboundEstimate === undefined) {
+      return 'primary';
+    }
+    if (!routeContext.includeReturnTransitToYard || !outboundEstimate) {
+      return null;
+    }
+    const returnSchedule = applyRouteMode(
+      buildSecondaryRouteReturnSchedule(routeContext, outboundEstimate),
+      routeContext.returnTollsEnabled,
+    );
+    return getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule) === undefined ? 'return' : null;
+  }
+
+  const outboundEstimate = routeContext.fromLocation
+    ? getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
+    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
+  if (outboundEstimate === undefined) {
+    return 'primary';
+  }
+  if (!routeContext.includeReturnTransitToYard || routeContext.request?.secondaryRoute || !outboundEstimate) {
+    return null;
+  }
+  const returnSchedule = applyRouteMode(
+    buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate),
+    routeContext.returnTollsEnabled,
+  );
+  return getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule) === undefined ? 'return' : null;
 }
 
 async function resolveBoardRouteEstimate(routeContext) {
@@ -1877,7 +1917,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [dropPreview, setDropPreview] = useState(null);
   const [dropPreviewGroup, setDropPreviewGroup] = useState([]);
   const [dragSchedulingId, setDragSchedulingId] = useState('');
-  const [routeLoadingRequestIds, setRouteLoadingRequestIds] = useState(() => new Set());
+  const [routeLoadingKeys, setRouteLoadingKeys] = useState(() => new Set());
   const [tileMenu, setTileMenu] = useState(null);
   const [manualTimeModal, setManualTimeModal] = useState(null);
   const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
@@ -1921,20 +1961,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
   }, [user]);
 
-  const setRouteLoading = useCallback((requestId, loading) => {
+  const setRouteLoading = useCallback((requestId, loading, segment = 'primary') => {
     if (!requestId) {
       return;
     }
-    setRouteLoadingRequestIds(current => {
-      const hasRequest = current.has(requestId);
+    const loadingKey = getRouteLoadingKey(requestId, segment);
+    setRouteLoadingKeys(current => {
+      const hasRequest = current.has(loadingKey);
       if (loading === hasRequest) {
         return current;
       }
       const next = new Set(current);
       if (loading) {
-        next.add(requestId);
+        next.add(loadingKey);
       } else {
-        next.delete(requestId);
+        next.delete(loadingKey);
       }
       return next;
     });
@@ -2079,9 +2120,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             return [request.id, null];
           }
           const cachedEstimate = getCachedBoardRouteEstimate(routeContext);
-          const shouldShowLoading = cachedEstimate === undefined;
-          if (shouldShowLoading) {
-            setRouteLoading(request.id, true);
+          const loadingSegment = cachedEstimate === undefined
+            ? getBoardRouteLoadingSegment(routeContext) || 'primary'
+            : null;
+          if (loadingSegment) {
+            setRouteLoading(request.id, true, loadingSegment);
           }
           try {
             const resolvedEstimate = cachedEstimate !== undefined
@@ -2092,8 +2135,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               resolvedEstimate,
             ];
           } finally {
-            if (shouldShowLoading) {
-              setRouteLoading(request.id, false);
+            if (loadingSegment) {
+              setRouteLoading(request.id, false, loadingSegment);
             }
           }
         }),
@@ -2195,9 +2238,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!returnTransitReprojectingId) {
       return undefined;
     }
-    const timeout = window.setTimeout(() => setReturnTransitReprojectingId(''), 650);
-    return () => window.clearTimeout(timeout);
-  }, [returnTransitReprojectingId, returnTransitByRequestId]);
+    setRouteLoading(returnTransitReprojectingId, true, 'return');
+    const timeout = window.setTimeout(() => {
+      setReturnTransitReprojectingId('');
+      setRouteLoading(returnTransitReprojectingId, false, 'return');
+    }, ROUTE_LOADING_MIN_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      setRouteLoading(returnTransitReprojectingId, false, 'return');
+    };
+  }, [returnTransitReprojectingId, setRouteLoading]);
 
   const handleReturnTransitToggle = useCallback((event) => {
     const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
@@ -2543,6 +2593,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedScheduleHasSecondaryContinuation = Boolean(
     selectedScheduleCycleState?.hasSecondaryContinuation,
   );
+  const selectedScheduleHasReturnTransitContinuation = Boolean(
+    selectedScheduleCycleState?.hasReturnTransitContinuation,
+  );
   const selectedScheduleReturnRouteSchedule = useMemo(() => {
     if (!selectedScheduleEvent || !selectedScheduleRequest) {
       return {};
@@ -2670,7 +2723,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [selectedScheduleIsStandaloneSecondary, selectedScheduleOutboundEstimate, selectedSchedulePrimaryRouteEstimate, selectedScheduleReturnEstimate],
   );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
-  const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled && !selectedScheduleHasSecondaryContinuation;
+  const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled
+    && !selectedScheduleHasSecondaryContinuation
+    && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
+  const selectedScheduleCanToggleReturnTransit = !selectedScheduleHasSecondaryContinuation
+    && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
   const selectedSchedulePrimaryTimingSource = selectedSchedulePrimaryTimingEstimate || selectedScheduleOutboundEstimate || selectedSchedulePrimaryRouteEstimate;
   const selectedScheduleTiming = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
@@ -3442,10 +3499,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         const routeRequest = nextRequests.find(item => item.id === id);
         return Boolean(routeRequest);
       });
-      routeRefreshIds.forEach(id => setRouteLoading(id, true));
       setAllRequests(nextRequests);
       projectRequestsToBoard(nextRequests, moveSiteLocationMap, selectedDate, { force: true });
       if (routeRefreshIds.length > 0) {
+        const activeRouteLoadingSegments = new Map();
         (async () => {
           const loadingStartedAt = Date.now();
           let nextSiteLocationMap = moveSiteLocationMap;
@@ -3468,18 +3525,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             }
             const routeContext = getBoardRouteContextForRequest(routeRequest, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
             if (getCachedBoardRouteEstimate(routeContext) === undefined) {
+              const loadingSegment = getBoardRouteLoadingSegment(routeContext) || 'primary';
+              activeRouteLoadingSegments.set(routeRequestId, loadingSegment);
+              setRouteLoading(routeRequestId, true, loadingSegment);
               await resolveBoardRouteEstimate(routeContext);
             }
           }));
           projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, { force: true });
-          const remainingLoadingMs = 450 - (Date.now() - loadingStartedAt);
+          const remainingLoadingMs = ROUTE_LOADING_MIN_MS - (Date.now() - loadingStartedAt);
           if (remainingLoadingMs > 0) {
             await new Promise(resolve => window.setTimeout(resolve, remainingLoadingMs));
           }
         })()
           .catch(() => {})
           .finally(() => {
-            routeRefreshIds.forEach(id => setRouteLoading(id, false));
+            activeRouteLoadingSegments.forEach((segment, id) => setRouteLoading(id, false, segment));
           });
       }
     }
@@ -5393,12 +5453,27 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const eventArrival = isSecondaryRequest ? `ETA stop ${siteArrivalLabel}` : `ETA site ${siteArrivalLabel}`;
                       const primaryDeliveryType = getDeliveryTypePill(request);
                       const secondaryDeliveryType = getDeliveryTypePill(request, 'secondary');
-                      const isRouteLoading = routeLoadingRequestIds.has(event.orderId) || returnTransitReprojectingId === event.orderId;
+                      const isEventSelected = selectedScheduleEventIdSet.has(event.orderId);
+                      const isMultiSelectedEvent = selectedScheduleEventIds.length > 1 && isEventSelected;
+                      const isActiveSelectedEvent = selectedScheduleEventId === event.orderId && isEventSelected;
+                      const selectedSegmentForEvent = isActiveSelectedEvent ? selectedScheduleSegment : '';
+                      const isPrimarySegmentSelected = isMultiSelectedEvent || (
+                        isActiveSelectedEvent
+                        && (selectedSegmentForEvent === 'primary' || (isSecondaryRequest && selectedSegmentForEvent === 'secondary'))
+                      );
+                      const isSecondarySegmentSelected = isMultiSelectedEvent || (
+                        isActiveSelectedEvent && selectedSegmentForEvent === 'secondary'
+                      );
+                      const isReturnSegmentSelected = isMultiSelectedEvent || (
+                        isActiveSelectedEvent && selectedSegmentForEvent === 'return'
+                      );
+                      const isPrimaryRouteLoading = routeLoadingKeys.has(getRouteLoadingKey(event.orderId, 'primary'));
+                      const isReturnRouteLoading = routeLoadingKeys.has(getRouteLoadingKey(event.orderId, 'return')) || returnTransitReprojectingId === event.orderId;
                       return (
                         <div
                           key={event.id}
                           data-order-id={event.orderId}
-                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${selectedScheduleEventIdSet.has(event.orderId) ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
+                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${isEventSelected ? ' segment-selected' : ''}${isMultiSelectedEvent ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
                           draggable={!dragSchedulingId && !isCompletedMaterialTile}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
@@ -5436,8 +5511,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           ) : null}
                           <button
                             type="button"
-                            className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}`}
+                            className={`ts2-event-card${isSecondaryRequest ? ' ts2-secondary-route-card' : ''}${isPrimarySegmentSelected ? ' selected' : ''}`}
                             style={{ backgroundColor: palette.background, color: palette.text, width: hasSecondaryRouteTile || hasReturnTransitSegment ? `${displayPrimaryWidth}%` : '100%' }}
+                            aria-pressed={isPrimarySegmentSelected}
                             onClick={(clickEvent) => {
                               handleSelectScheduleEvent(event.orderId, 'primary', { additive: clickEvent.shiftKey });
                             }}
@@ -5451,13 +5527,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               <span className="ts2-event-status-dot" style={{ backgroundColor: palette.accent }} />
                               <span>{isSecondaryRequest && status !== 'in_transit' ? 'Secondary transit' : isCompleteTile ? 'Complete' : scheduleStatusLabel(status)}</span>
                             </div>
-                            {isRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
+                            {isPrimaryRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                           </button>
                           {hasSecondaryRouteTile ? (
                             <button
                               type="button"
-                              className="ts2-secondary-route-card"
+                              className={`ts2-secondary-route-card${isSecondarySegmentSelected ? ' selected' : ''}`}
                               style={{ left: `${displayPrimaryWidth}%`, width: `${displaySecondaryWidth}%` }}
+                              aria-pressed={isSecondarySegmentSelected}
                               onClick={(clickEvent) => {
                                 handleSelectScheduleEvent(event.orderId, 'secondary', { additive: clickEvent.shiftKey });
                               }}
@@ -5476,8 +5553,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           {hasReturnTransitSegment ? (
                             <button
                               type="button"
-                              className="ts2-return-card"
+                              className={`ts2-return-card${isReturnSegmentSelected ? ' selected' : ''}`}
                               style={{ left: `${nonReturnWidth}%`, width: `${returnSegmentWidth}%` }}
+                              aria-pressed={isReturnSegmentSelected}
                               onClick={(clickEvent) => {
                                 handleSelectScheduleEvent(event.orderId, 'return', { additive: clickEvent.shiftKey });
                               }}
@@ -5490,6 +5568,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                                 <span className="ts2-event-status-dot" />
                                 <span>Returning</span>
                               </div>
+                              {isReturnRouteLoading ? <i className="transport-route-loading-bar" aria-hidden="true" /> : null}
                             </button>
                           ) : null}
                         </div>
@@ -5641,7 +5720,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <input
                 type="checkbox"
                 checked={selectedScheduleEffectiveReturnTransit}
-                disabled={selectedScheduleHasSecondaryContinuation}
+                disabled={!selectedScheduleCanToggleReturnTransit}
                 onChange={handleReturnTransitToggle}
               />
               <span>Return transit to yard</span>
