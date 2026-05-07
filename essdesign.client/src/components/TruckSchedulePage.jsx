@@ -4239,8 +4239,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (selectionDragContextRef.current?.items?.length > 1) {
       return;
     }
-    if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
-      console.log('[event-snap-drop] early exit - missing ids or self-drop');
+    if (!requestId || !scheduleEvent?.truckId) {
+      console.log('[event-snap-drop] early exit - missing ids');
       return;
     }
     event.preventDefault();
@@ -4250,6 +4250,56 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     const probeMinutes = getPointerMinutesFromTrack(event.clientX, laneTrack);
+    // Self-drop: tile was positioned right after a return segment so the pointer
+    // lands on its own wrapper. Scan adjacent tiles for a return segment snap
+    // instead of bailing out entirely.
+    if (requestId === scheduleEvent.orderId) {
+      console.log('[event-snap-drop] self-drop - scanning for adjacent return segment');
+      const returnSnapState = getReturnSegmentSnapStateForLane({
+        requestId,
+        truckId: scheduleEvent.truckId,
+        eventTarget: event.target,
+        probeMinutes,
+        dayEvents,
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+        primaryDurationMap: eventPrimaryDurationMinutesMap,
+        returnTransitByRequestId,
+        cycleStateMap: eventCycleStateMap,
+        durationMinutes: dragPreviewDurationMinutes,
+      });
+      const snapCandidate = returnSnapState.candidate || dropPreview?.snapOrderId && dropPreview.snapOrderId !== requestId && !dropPreview.blocked ? {
+        event: { orderId: dropPreview.snapOrderId },
+        side: dropPreview.snapSide,
+        linkSegment: dropPreview.snapSegment,
+        minutes: dropPreview.minutes,
+      } : null;
+      console.log('[event-snap-drop] self-drop scan result', { hasCandidate: Boolean(snapCandidate), snapCandidate });
+      if (!snapCandidate) {
+        return;
+      }
+      const collision = getScheduleCollision({
+        requestId,
+        truckId: scheduleEvent.truckId,
+        startMinutes: snapCandidate.minutes,
+        durationMinutes: dragPreviewDurationMinutes,
+        dayEvents,
+        startMap: eventStartMinutesMap,
+        durationMap: eventDurationMinutesMap,
+      });
+      if (collision) {
+        return;
+      }
+      const linkedSnapSegment = returnSnapState.candidate?.linkSegment || dropPreview?.snapSegment || null;
+      console.log('[event-snap-drop] self-drop scheduling', { linkedSnapSegment, snapCandidate });
+      scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, {
+        exact: true,
+        breakRunLinks: Boolean(draggedScheduledOrderId),
+        linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+        linkToSegment: snapCandidate.side === 'after' ? linkedSnapSegment || 'primary' : null,
+      });
+      return;
+    }
     const freeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
       durationMinutes: dragPreviewDurationMinutes,
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
