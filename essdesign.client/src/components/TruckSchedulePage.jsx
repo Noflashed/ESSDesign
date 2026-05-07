@@ -4077,6 +4077,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const handleLaneDrop = useCallback((event, truckId) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    console.log('[lane-drop]', { requestId, truckId, target: event.target?.className });
     if (!requestId) {
       return;
     }
@@ -4234,10 +4235,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
   const handleEventSnapDrop = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
+    console.log('[event-snap-drop] entry', { requestId, scheduleEventId: scheduleEvent?.orderId, target: event.target?.className });
     if (selectionDragContextRef.current?.items?.length > 1) {
       return;
     }
     if (!requestId || !scheduleEvent?.truckId || requestId === scheduleEvent.orderId) {
+      console.log('[event-snap-drop] early exit - missing ids or self-drop');
       return;
     }
     event.preventDefault();
