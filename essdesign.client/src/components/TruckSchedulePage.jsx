@@ -4318,13 +4318,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         blocked: Boolean(collision),
       });
     }
+    const linkedSnapSegment = returnSnapState.candidate?.linkSegment || dropPreview?.snapSegment || snapCandidate?.linkSegment || null;
     scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
       linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
-      linkToSegment: snapCandidate.side === 'after' ? snapCandidate.linkSegment || 'primary' : null,
+      linkToSegment: snapCandidate.side === 'after' ? linkedSnapSegment || 'primary' : null,
     });
-  }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
+  }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, dropPreview, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
 
   const handleUnscheduleOrder = useCallback((requestIds) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
