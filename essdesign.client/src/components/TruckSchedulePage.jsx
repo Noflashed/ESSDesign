@@ -4199,8 +4199,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const parentRouteEstimate = getCachedRouteEstimateForContext(parentRouteContext)
         || buildEstimateFromRouteData(await fetchRouteDataForContext(parentRouteContext));
       const primaryPhaseMinutes = getRequestDeliveryHandoffMinutes(request, parentRouteEstimate);
-      const parentCycleState = eventCycleStateMap[request.id] || null;
-      const startsAfterReturnTransit = getReturnTransitEnabled(request.id) && !parentCycleState?.hasSecondaryContinuation;
+      const startsAfterReturnTransit = secondaryRouteModal.startsAfterReturnTransit === true
+        || secondaryRouteModal.segment === 'return';
       let parentTimingEstimate = parentRouteEstimate;
       if (startsAfterReturnTransit && parentRouteEstimate && parentRouteContext.toLocation) {
         const parentReturnSchedule = applyRouteMode(isSecondaryRouteRequest(request)
