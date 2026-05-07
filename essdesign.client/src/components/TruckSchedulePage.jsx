@@ -627,11 +627,11 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           flowBaseTiming,
         );
         const hasSecondaryContinuation = isBackToBackContinuation(request, primaryContinuation, truckId);
-        const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
-        const timing = hasSecondaryContinuation || !includeReturnTransitToYard
+        const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation && !hasReturnTransitContinuation;
+        const timing = hasSecondaryContinuation || hasReturnTransitContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
           : baseTiming;
-        const flowTiming = hasSecondaryContinuation || !includeReturnTransitToYard
+        const flowTiming = hasSecondaryContinuation || hasReturnTransitContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(flowBaseTiming)
           : flowBaseTiming;
         const hasExplicitRunLink = Boolean(request.sourceOrderId);
@@ -3851,6 +3851,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!request) {
       return fallbackDurationMinutes;
     }
+    const cycleState = eventCycleStateMap[request.id] || null;
+    const includeReturnTransitToYard = getReturnTransitEnabled(request.id)
+      && !cycleState?.hasSecondaryContinuation
+      && !cycleState?.hasReturnTransitContinuation;
     if (isSecondaryRouteRequest(request)) {
       const secondaryRoute = request.secondaryRoute || {};
       const schedule = {
@@ -3870,7 +3874,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         buildSecondaryRouteReturnSchedule({ schedule, secondaryRoute }, outboundEstimate),
         getTollsEnabled(request.id, 'return'),
       );
-      const returnEstimate = getReturnTransitEnabled(request.id) && outboundEstimate
+      const returnEstimate = includeReturnTransitToYard && outboundEstimate
         ? getCachedRouteEstimateBetweenValue(secondaryRoute.destination, YARD_LOCATION, returnSchedule)
         : null;
       if (returnEstimate === undefined) {
@@ -3878,7 +3882,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
       return getSecondaryRouteTiming(
         secondaryRoute,
-        getReturnTransitEnabled(request.id),
+        includeReturnTransitToYard,
         buildSecondaryRouteTimingEstimate(outboundEstimate, returnEstimate),
       ).totalMinutes;
     }
@@ -3895,7 +3899,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
     }
     let routeEstimate = estimate;
-    if (getReturnTransitEnabled(request.id) && estimate && !request.secondaryRoute) {
+    if (includeReturnTransitToYard && estimate && !request.secondaryRoute) {
       const returnSchedule = applyRouteMode(
         buildPrimaryRouteReturnSchedule({ schedule, request }, estimate),
         getTollsEnabled(request.id, 'return'),
@@ -3907,8 +3911,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       routeEstimate = buildPrimaryRouteTimingEstimate(estimate, returnEstimate);
     }
     const timing = getTimingProfile(routeEstimate, null);
-    return (getReturnTransitEnabled(request.id) ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
-  }, [eventDurationMinutesMap, getReturnTransitEnabled, getTollsEnabled]);
+    return (includeReturnTransitToYard ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
+  }, [eventCycleStateMap, eventDurationMinutesMap, getReturnTransitEnabled, getTollsEnabled]);
 
   const createScheduleSelectionContext = useCallback((anchorOrderId, selectionIds = []) => {
     const ids = Array.from(new Set([anchorOrderId, ...(selectionIds || [])].filter(Boolean)));
@@ -5721,7 +5725,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const startMinutes = eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute;
                       const siteLocation = requestSiteLocationMap[event.orderId] || '';
                       const routeContext = getBoardRouteContextForRequest(request, requestMetaMap, requestSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
-                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation;
+                      const eventReturnTransitEnabled = getReturnTransitEnabled(event.orderId) && !cycleState?.hasSecondaryContinuation && !cycleState?.hasReturnTransitContinuation;
                       const cachedRouteEstimate = getCachedBoardRouteEstimate(routeContext);
                       const stableRouteEstimate = stableRouteEstimateMapRef.current[event.orderId] ?? null;
                       let routeEstimate = cachedRouteEstimate === undefined
