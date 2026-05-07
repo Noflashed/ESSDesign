@@ -2022,6 +2022,7 @@ export const materialOrderRequestsAPI = {
         const connectedParentStartMinutes = typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
             ? scheduledHour * 60 + scheduledMinute
             : null;
+        const connectedParentSegment = schedule.connectedParentSegment === 'return' ? 'return' : 'primary';
         const scheduledTruckId = schedule.truckId || schedule.scheduledTruckId || record.scheduledTruckId || record.truckId || null;
         const scheduledTruckLabel = schedule.truckLabel || schedule.scheduledTruckLabel || record.scheduledTruckLabel || record.truckLabel || null;
         const isLinkedMaterialOrder = Boolean(linkedSourceRecord);
@@ -2044,7 +2045,7 @@ export const materialOrderRequestsAPI = {
             id: secondaryRequestId,
             sourceOrderId: requestId,
             connectedParentStartMinutes,
-            connectedParentSegment: 'primary',
+            connectedParentSegment,
             routeType: 'secondary_route',
             builderId: isLinkedMaterialOrder ? linkedSourceRecord.builderId || '' : '',
             builderName: isLinkedMaterialOrder

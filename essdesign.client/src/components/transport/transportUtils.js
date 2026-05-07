@@ -547,9 +547,12 @@ export function getTimingProfile(routeEstimate, secondaryRoute = null) {
   const loadingMinutes = BLOCK_LOADING_MINUTES;
   const secondaryTravelMinutes = Math.max(0, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
   const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
+  const routeReturnMinutes = routeEstimate?.returnDurationMinutes ?? routeEstimate?.returnEstimate?.durationMinutes;
   const returnMinutes = secondaryRoute
     ? Math.max(15, Math.round((secondaryRoute.returnDurationSeconds || 0) / 60))
-    : transitMinutes;
+    : routeReturnMinutes
+      ? Math.max(15, Math.round(routeReturnMinutes))
+      : transitMinutes;
   return {
     transitMinutes,
     loadingMinutes,

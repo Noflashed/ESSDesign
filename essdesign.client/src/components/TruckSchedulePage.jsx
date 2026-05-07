@@ -209,6 +209,20 @@ function buildSecondaryRouteTimingEstimate(outboundEstimate = null, returnEstima
   };
 }
 
+function buildPrimaryRouteTimingEstimate(outboundEstimate = null, returnEstimate = null) {
+  if (!outboundEstimate) {
+    return null;
+  }
+  return {
+    ...outboundEstimate,
+    returnEstimate: returnEstimate || null,
+    returnDurationMinutes: returnEstimate?.durationMinutes,
+    returnBaseDurationMinutes: returnEstimate?.baseDurationMinutes,
+    returnTrafficDelayMinutes: returnEstimate?.trafficDelayMinutes,
+    returnDistanceMeters: returnEstimate?.distanceMeters,
+  };
+}
+
 function getSecondaryRouteTiming(secondaryRoute, includeReturnTransitToYard = true, routeEstimate = null) {
   const transitMinutes = getRouteEstimateMinutes(routeEstimate?.durationMinutes, secondaryRoute?.travelDurationSeconds, 1);
   const loadingMinutes = Math.max(0, Number(secondaryRoute?.serviceMinutes) || 0);
@@ -712,6 +726,16 @@ function buildSecondaryRouteReturnSchedule(routeContext, outboundEstimate = null
   return buildRouteScheduleWithOffset(routeContext?.schedule || {}, transitMinutes + serviceMinutes);
 }
 
+function buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate = null) {
+  const phaseTiming = getTimingProfile(outboundEstimate, routeContext?.request?.secondaryRoute || null);
+  const departureOffsetMinutes =
+    (phaseTiming.transitMinutes || 0) +
+    (phaseTiming.loadingMinutes || 0) +
+    (phaseTiming.secondaryTravelMinutes || 0) +
+    (phaseTiming.secondaryServiceMinutes || 0);
+  return buildRouteScheduleWithOffset(routeContext?.schedule || {}, departureOffsetMinutes);
+}
+
 function getBoardRouteContextForRequest(request, requestLookup = null, siteLocationMap = {}, fallbackDate, tollsMode = false, returnTransitByRequestId = {}) {
   if (!request) {
     return null;
@@ -770,6 +794,8 @@ function getBoardRouteContextForRequest(request, requestLookup = null, siteLocat
   return {
     fromLocation: fromLocation && toLocation ? fromLocation : '',
     toLocation,
+    request,
+    includeReturnTransitToYard: Boolean(returnTransitByRequestId?.[request.id]),
     schedule: applyRouteMode(buildRouteScheduleFromRequest(request, fallbackDate), getRouteTollsEnabledForRequest(request, tollsMode)),
   };
 }
@@ -793,10 +819,21 @@ function getCachedBoardRouteEstimate(routeContext) {
     }
     return buildSecondaryRouteTimingEstimate(outboundEstimate, returnEstimate);
   }
-  if (routeContext.fromLocation) {
-    return getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+  const outboundEstimate = routeContext.fromLocation
+    ? getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
+    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
+  if (outboundEstimate === undefined) {
+    return undefined;
   }
-  return getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
+  if (!routeContext.includeReturnTransitToYard || routeContext.request?.secondaryRoute || !outboundEstimate) {
+    return outboundEstimate;
+  }
+  const returnSchedule = buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate);
+  const returnEstimate = getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  if (returnEstimate === undefined) {
+    return undefined;
+  }
+  return buildPrimaryRouteTimingEstimate(outboundEstimate, returnEstimate);
 }
 
 async function resolveBoardRouteEstimate(routeContext) {
@@ -815,9 +852,15 @@ async function resolveBoardRouteEstimate(routeContext) {
     const returnEstimate = await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule);
     return buildSecondaryRouteTimingEstimate(outboundEstimate, returnEstimate);
   }
-  return routeContext.fromLocation
+  const outboundEstimate = await (routeContext.fromLocation
     ? getCachedRouteEstimateBetween(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
-    : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule);
+    : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule));
+  if (!routeContext.includeReturnTransitToYard || routeContext.request?.secondaryRoute || !outboundEstimate) {
+    return outboundEstimate;
+  }
+  const returnSchedule = buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate);
+  const returnEstimate = await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  return buildPrimaryRouteTimingEstimate(outboundEstimate, returnEstimate);
 }
 
 function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbackDate, tollsMode = false, returnTransitByRequestId = {}, fallbackRouteMap = {}) {
@@ -1294,7 +1337,10 @@ function getRequestFromLookup(requestId, requestLookup = null) {
   return requestLookup[requestId] || null;
 }
 
-function getConnectedRouteOrigin(cycleState = null, siteLocationMap = {}, builders = [], requestLookup = null) {
+function getConnectedRouteOrigin(cycleState = null, siteLocationMap = {}, builders = [], requestLookup = null, request = null) {
+  if (getConnectedParentSegment(request) === 'return') {
+    return '';
+  }
   const sourceRequestId = cycleState?.routeFromRequestId || cycleState?.runSourceOrderId || null;
   if (!cycleState?.followsPreviousRun || !sourceRequestId) {
     return '';
@@ -1354,6 +1400,7 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
     siteLocationMap,
     builders,
     options.requestLookup,
+    request,
   );
   if (connectedFromLocation && toLocation) {
     return {
@@ -2523,6 +2570,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       : null,
     [selectedScheduleContextRouteEstimate, selectedScheduleIsStandaloneSecondary, selectedScheduleReturnRouteEstimate],
   );
+  const selectedSchedulePrimaryTimingEstimate = useMemo(
+    () => !selectedScheduleIsStandaloneSecondary
+      ? buildPrimaryRouteTimingEstimate(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, selectedScheduleReturnRouteEstimate)
+      : null,
+    [selectedScheduleContextRouteEstimate, selectedScheduleIsStandaloneSecondary, selectedSchedulePrimaryRouteEstimate, selectedScheduleReturnRouteEstimate],
+  );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled && !selectedScheduleHasSecondaryContinuation;
   const selectedScheduleTiming = selectedScheduleRequest
@@ -2530,11 +2583,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleEffectiveReturnTransit, selectedScheduleSecondaryTimingEstimate)
       : !selectedScheduleEffectiveReturnTransit
         ? removeReturnLegFromTiming(applyReturnEstimateToTiming(
-          getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
+          getTimingProfile(selectedSchedulePrimaryTimingEstimate || selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
           selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
         ))
         : applyReturnEstimateToTiming(
-          getTimingProfile(selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
+          getTimingProfile(selectedSchedulePrimaryTimingEstimate || selectedScheduleContextRouteEstimate || selectedSchedulePrimaryRouteEstimate, null),
           selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
         )
     : null;
@@ -2637,7 +2690,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     let active = true;
     const routeKey = selectedScheduleRouteKey;
-    if (selectedScheduleRouteDataKeyRef.current === routeKey) {
+    const shouldResolveSelectedReturn = selectedScheduleEffectiveReturnTransit && (
+      selectedScheduleIsStandaloneSecondary || !selectedScheduleRequest?.secondaryRoute
+    );
+    if (selectedScheduleRouteDataKeyRef.current === routeKey && (!shouldResolveSelectedReturn || selectedScheduleReturnRouteEstimate)) {
       setSelectedScheduleRouteLoading(false);
       return undefined;
     }
@@ -2647,19 +2703,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleReturnRouteEstimate(null);
 
     const routeRequest = fetchRouteDataForContext(selectedScheduleRouteContext);
-    const shouldResolveSecondaryReturn = selectedScheduleIsStandaloneSecondary && selectedScheduleEffectiveReturnTransit;
 
     routeRequest
       .then(async data => {
         let returnEstimate = null;
-        if (shouldResolveSecondaryReturn) {
+        if (shouldResolveSelectedReturn) {
           const outboundEstimate = getCachedRouteEstimateForContext(selectedScheduleRouteContext)
             || (data ? buildEstimateFromRouteData(data) : null);
           if (outboundEstimate) {
-            const returnSchedule = buildSecondaryRouteReturnSchedule({
-              schedule: selectedScheduleRouteContext.schedule,
-              secondaryRoute: selectedScheduleSecondaryRoute,
-            }, outboundEstimate);
+            const returnSchedule = selectedScheduleIsStandaloneSecondary
+              ? buildSecondaryRouteReturnSchedule({
+                schedule: selectedScheduleRouteContext.schedule,
+                secondaryRoute: selectedScheduleSecondaryRoute,
+              }, outboundEstimate)
+              : buildPrimaryRouteReturnSchedule({
+                schedule: selectedScheduleRouteContext.schedule,
+                request: selectedScheduleRequest,
+              }, outboundEstimate);
             returnEstimate = await getCachedRouteEstimateBetween(selectedScheduleRouteContext.toLocation, YARD_LOCATION, returnSchedule);
           }
         }
@@ -2685,7 +2745,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return () => {
       active = false;
     };
-  }, [scheduleInspectorOpen, selectedScheduleEffectiveReturnTransit, selectedScheduleEventId, selectedScheduleIsStandaloneSecondary, selectedScheduleRouteContext, selectedScheduleRouteKey, selectedScheduleSecondaryRoute]);
+  }, [scheduleInspectorOpen, selectedScheduleEffectiveReturnTransit, selectedScheduleEventId, selectedScheduleIsStandaloneSecondary, selectedScheduleRequest, selectedScheduleReturnRouteEstimate, selectedScheduleRouteContext, selectedScheduleRouteKey, selectedScheduleSecondaryRoute]);
   const selectedRouteDurationMinutes = useMemo(() => {
     const requestModalReturnTransitEnabled = getReturnTransitEnabled(requestModal?.request?.id);
     if (isSecondaryRouteRequest(requestModal?.request)) {
@@ -3418,7 +3478,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (estimate === undefined) {
       return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
     }
-    const timing = getTimingProfile(estimate, null);
+    let routeEstimate = estimate;
+    if (getReturnTransitEnabled(request.id) && estimate && !request.secondaryRoute) {
+      const returnSchedule = buildPrimaryRouteReturnSchedule({ schedule, request }, estimate);
+      const returnEstimate = getCachedRouteEstimateBetweenValue(siteLocation, YARD_LOCATION, returnSchedule);
+      if (returnEstimate === undefined) {
+        return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
+      }
+      routeEstimate = buildPrimaryRouteTimingEstimate(estimate, returnEstimate);
+    }
+    const timing = getTimingProfile(routeEstimate, null);
     return (getReturnTransitEnabled(request.id) ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
   }, [eventDurationMinutesMap, getReturnTransitEnabled, getTollsEnabled]);
 
@@ -3687,7 +3756,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const cycleState = eventCycleStateMap[requestId] || null;
-    const primarySiteLocation = getRequestSiteLocation(request, requestSiteLocationMap, builders);
+    const startsAfterReturnTransit = getReturnTransitEnabled(requestId) && !cycleState?.hasSecondaryContinuation;
+    const primarySiteLocation = startsAfterReturnTransit
+      ? YARD_LOCATION
+      : getRequestSiteLocation(request, requestSiteLocationMap, builders);
     const insertBeforeRequest = allRequests.find(item =>
       isSecondaryRouteRequest(item) &&
       item.sourceOrderId === requestId &&
@@ -3714,7 +3786,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         const siteLocation = requestSiteLocationMap[item.id] ?? findProjectLocation(builders, item);
         return {
           id: item.id,
-          label: `${item.builderName || 'Material Order'} · ${item.projectName || 'Pending request'}`,
+          label: `${item.builderName || 'Material Order'} - ${item.projectName || 'Pending request'}`,
           displayLabel: `${item.builderName || 'Material Order'} - ${item.projectName || 'Pending request'}`,
           siteLocation: siteLocation || '',
         };
@@ -3726,6 +3798,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSecondaryRouteModal({
       requestId,
       primarySiteLocation: primarySiteLocation || '',
+      startsAfterReturnTransit,
       insertBeforeRequest,
       parentRouteContext: buildRequestRouteContext(
         request,
@@ -3810,12 +3883,45 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const parentRouteEstimate = getCachedRouteEstimateForContext(parentRouteContext)
         || buildEstimateFromRouteData(await fetchRouteDataForContext(parentRouteContext));
       const primaryPhaseMinutes = getRequestDeliveryHandoffMinutes(request, parentRouteEstimate);
+      const parentCycleState = eventCycleStateMap[request.id] || null;
+      const startsAfterReturnTransit = getReturnTransitEnabled(request.id) && !parentCycleState?.hasSecondaryContinuation;
+      let parentTimingEstimate = parentRouteEstimate;
+      if (startsAfterReturnTransit && parentRouteEstimate && parentRouteContext.toLocation) {
+        const parentReturnSchedule = isSecondaryRouteRequest(request)
+          ? buildSecondaryRouteReturnSchedule({
+            schedule: parentRouteContext.schedule,
+            secondaryRoute: request.secondaryRoute,
+          }, parentRouteEstimate)
+          : buildPrimaryRouteReturnSchedule({
+            schedule: parentRouteContext.schedule,
+            request,
+          }, parentRouteEstimate);
+        const parentReturnEstimate = await getCachedRouteEstimateBetween(parentRouteContext.toLocation, YARD_LOCATION, parentReturnSchedule);
+        parentTimingEstimate = isSecondaryRouteRequest(request)
+          ? buildSecondaryRouteTimingEstimate(parentRouteEstimate, parentReturnEstimate)
+          : buildPrimaryRouteTimingEstimate(parentRouteEstimate, parentReturnEstimate);
+      }
+      const parentTiming = isSecondaryRouteRequest(request)
+        ? getSecondaryRouteTiming(request.secondaryRoute, getReturnTransitEnabled(request.id), parentTimingEstimate)
+        : getTimingProfile(parentTimingEstimate, null);
+      const parentTotalMinutes = Math.max(primaryPhaseMinutes, Math.round(parentTiming.totalMinutes || primaryPhaseMinutes || 0));
+      const visibleParentDurationMinutes = eventDurationMinutesMap[request.id] ?? parentTotalMinutes;
+      const secondaryDepartureOffsetMinutes = startsAfterReturnTransit
+        ? Math.max(primaryPhaseMinutes, Math.round(visibleParentDurationMinutes || parentTotalMinutes))
+        : primaryPhaseMinutes;
+      const persistedDepartureOffsetMinutes = startsAfterReturnTransit
+        ? parentTotalMinutes
+        : primaryPhaseMinutes;
+      const secondaryRouteStartLocation = startsAfterReturnTransit
+        ? YARD_LOCATION
+        : secondaryRouteModal.primarySiteLocation;
+      const secondaryConnectedParentSegment = startsAfterReturnTransit ? 'return' : 'primary';
       const visibleParentStartMinutes = eventStartMinutesMap[request.id] ?? (scheduleEvent.hour * 60 + scheduleEvent.minute);
       const plannedParentStartMinutes = getRequestScheduledStartMinutes(request, scheduleEvent.hour * 60 + scheduleEvent.minute);
       const visibleBaseStart = getDateAtScheduleMinutes(scheduleEvent.date, visibleParentStartMinutes);
       const plannedBaseStart = getDateAtScheduleMinutes(request.scheduledDate || scheduleEvent.date, plannedParentStartMinutes);
-      const outboundDeparture = new Date(visibleBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
-      const persistedSecondaryDeparture = new Date(plannedBaseStart.getTime() + primaryPhaseMinutes * 60 * 1000);
+      const outboundDeparture = new Date(visibleBaseStart.getTime() + secondaryDepartureOffsetMinutes * 60 * 1000);
+      const persistedSecondaryDeparture = new Date(plannedBaseStart.getTime() + persistedDepartureOffsetMinutes * 60 * 1000);
       const outboundRouteSchedule = {
         scheduledDate: formatDateKey(outboundDeparture),
         scheduledHour: outboundDeparture.getHours(),
@@ -3827,7 +3933,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         scheduledMinute: persistedSecondaryDeparture.getMinutes(),
       };
       const outbound = await getCachedRouteDataBetween(
-        secondaryRouteModal.primarySiteLocation,
+        secondaryRouteStartLocation,
         destination,
         { ...outboundRouteSchedule, enableTolls: requestTollsEnabled },
       );
@@ -3863,7 +3969,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         : '';
       const secondaryRoute = {
         reason: secondaryRouteModal.reason,
-        startingLocation: secondaryRouteModal.primarySiteLocation,
+        startingLocation: secondaryRouteStartLocation,
         destination,
         label: getSecondaryRouteReasonLabel(secondaryRouteModal.reason),
         linkedRequestId: linkedRequestId || null,
@@ -3959,12 +4065,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         ...persistedSecondarySchedule,
         truckId: scheduleEvent.truckId,
         truckLabel: scheduleEvent.truckLabel,
+        connectedParentSegment: secondaryConnectedParentSegment,
         relinkedContinuation,
       });
       const chainedUpdatedRequest = {
         ...updatedRequest,
         connectedParentStartMinutes: persistedSecondarySchedule.scheduledHour * 60 + persistedSecondarySchedule.scheduledMinute,
-        connectedParentSegment: 'primary',
+        connectedParentSegment: secondaryConnectedParentSegment,
       };
       const relinkedUpdatedContinuation = relinkedContinuation
         ? {
@@ -5268,7 +5375,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               }}
                             >
                               <span className="ts2-delivery-type-pill return">Return</span>
-                              <span className="ts2-event-time">{formatTimeChip(Math.floor(returnStartMinutes / 60), Math.floor(returnStartMinutes % 60))} â€“ {formatTimeChip(Math.floor(returnEndMinutes / 60), Math.floor(returnEndMinutes % 60))}</span>
+                              <span className="ts2-event-time">{formatTimeChip(Math.floor(returnStartMinutes / 60), Math.floor(returnStartMinutes % 60))} - {formatTimeChip(Math.floor(returnEndMinutes / 60), Math.floor(returnEndMinutes % 60))}</span>
                               <strong className="ts2-event-title">Return to yard</strong>
                               <span className="ts2-event-subtitle">Yard transit</span>
                               <div className="ts2-event-status-row">
