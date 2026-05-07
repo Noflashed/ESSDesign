@@ -917,8 +917,11 @@ function getReturnSegmentSnapState({
   durationMinutes,
 }) {
   const requestId = scheduleEvent?.orderId;
+  const targetOrderId = eventTarget?.closest?.('[data-order-id]')?.dataset?.orderId || null;
   const returnEnabled = Boolean(requestId && returnTransitByRequestId?.[requestId]);
   const hasSecondaryContinuation = Boolean(requestId && cycleStateMap?.[requestId]?.hasSecondaryContinuation);
+  const directlyOnReturnCard = Boolean(eventTarget?.closest?.('.ts2-return-card'))
+    && (!targetOrderId || targetOrderId === requestId);
   const baseState = {
     candidate: null,
     requestId,
@@ -927,7 +930,7 @@ function getReturnSegmentSnapState({
     existingStart: null,
     existingEnd: null,
     returnStart: null,
-    directlyOnReturnCard: Boolean(eventTarget?.closest?.('.ts2-return-card')),
+    directlyOnReturnCard,
     pointerOverReturnTime: false,
     probeMinutes,
   };
@@ -940,7 +943,6 @@ function getReturnSegmentSnapState({
   const existingEnd = existingStart + existingDuration;
   const primaryDuration = Math.max(1, Math.min(existingDuration - 1, primaryDurationMap[requestId] ?? existingDuration));
   const returnStart = existingStart + primaryDuration;
-  const directlyOnReturnCard = Boolean(eventTarget?.closest?.('.ts2-return-card'));
   const pointerOverReturnTime = typeof probeMinutes === 'number'
     && probeMinutes >= returnStart
     && probeMinutes <= existingEnd + SNAP_EDGE_THRESHOLD_MINUTES;
@@ -971,6 +973,51 @@ function getReturnSegmentSnapState({
       distance: 0,
     },
   };
+}
+
+function getReturnSegmentSnapStateForLane({
+  requestId,
+  truckId,
+  eventTarget,
+  probeMinutes,
+  dayEvents,
+  startMap,
+  durationMap,
+  primaryDurationMap,
+  returnTransitByRequestId,
+  cycleStateMap,
+  durationMinutes,
+}) {
+  let bestState = null;
+  (dayEvents || []).forEach(scheduleEvent => {
+    if (scheduleEvent.truckId !== truckId || scheduleEvent.orderId === requestId) {
+      return;
+    }
+    const state = getReturnSegmentSnapState({
+      scheduleEvent,
+      eventTarget,
+      probeMinutes,
+      startMap,
+      durationMap,
+      primaryDurationMap,
+      returnTransitByRequestId,
+      cycleStateMap,
+      durationMinutes,
+    });
+    if (!state.candidate) {
+      return;
+    }
+    const distance = typeof probeMinutes === 'number'
+      ? Math.min(
+        Math.abs(probeMinutes - state.returnStart),
+        Math.abs(probeMinutes - state.existingEnd),
+      )
+      : 0;
+    if (!bestState || distance < bestState.distance) {
+      bestState = { ...state, distance };
+    }
+  });
+  return bestState || { candidate: null };
 }
 
 function sameDropPreview(left, right) {
@@ -3973,7 +4020,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setDropPreviewGroup(current => sameDropPreviewGroup(current, nextGroup) ? current : nextGroup);
       return;
     }
-    const snapCandidate = getEdgeSnapCandidate({
+    const probeMinutes = getPointerMinutesFromTrack(event.clientX, event.currentTarget);
+    const returnSnapState = getReturnSegmentSnapStateForLane({
+      requestId: draggedRequestId,
+      truckId,
+      eventTarget: event.target,
+      probeMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
+      durationMinutes: dragPreviewDurationMinutes,
+    });
+    const genericSnapCandidate = getEdgeSnapCandidate({
       requestId: draggedRequestId,
       truckId,
       startMinutes: minutes,
@@ -3982,6 +4043,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
+    const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
     const previewMinutes = snapCandidate?.minutes ?? minutes;
     const collision = getScheduleCollision({
       requestId: draggedRequestId,
@@ -4029,7 +4091,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduleRequestGroupAt(selectionContext, truckId, minutes);
       return;
     }
-    const previewSnapCandidate = dropPreview?.truckId === truckId && dropPreview.snapOrderId && !dropPreview.blocked
+    const probeMinutes = getPointerMinutesFromTrack(event.clientX, event.currentTarget);
+    const returnSnapState = getReturnSegmentSnapStateForLane({
+      requestId,
+      truckId,
+      eventTarget: event.target,
+      probeMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+      primaryDurationMap: eventPrimaryDurationMinutesMap,
+      returnTransitByRequestId,
+      cycleStateMap: eventCycleStateMap,
+      durationMinutes: dragPreviewDurationMinutes,
+    });
+    const previewSnapCandidate = !returnSnapState.candidate && dropPreview?.truckId === truckId && dropPreview.snapOrderId && !dropPreview.blocked
       ? dropPreview
       : null;
     const snapCandidate = previewSnapCandidate ? null : getEdgeSnapCandidate({
@@ -4041,10 +4117,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
-    const linkedSnapSide = previewSnapCandidate?.snapSide || snapCandidate?.side || null;
-    const linkedSnapOrderId = previewSnapCandidate?.snapOrderId || snapCandidate?.event?.orderId || '';
-    const linkedSnapSegment = previewSnapCandidate?.snapSegment || snapCandidate?.linkSegment || null;
-    const snapMinutes = previewSnapCandidate?.minutes ?? snapCandidate?.minutes ?? minutes;
+    const linkedSnapSide = returnSnapState.candidate?.side || previewSnapCandidate?.snapSide || snapCandidate?.side || null;
+    const linkedSnapOrderId = returnSnapState.candidate?.event?.orderId || previewSnapCandidate?.snapOrderId || snapCandidate?.event?.orderId || '';
+    const linkedSnapSegment = returnSnapState.candidate?.linkSegment || previewSnapCandidate?.snapSegment || snapCandidate?.linkSegment || null;
+    const snapMinutes = returnSnapState.candidate?.minutes ?? previewSnapCandidate?.minutes ?? snapCandidate?.minutes ?? minutes;
     scheduleRequestAt(requestId, truckId, snapMinutes, dragPreviewDurationMinutes, linkedSnapOrderId ? {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
@@ -4054,7 +4130,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       step: timelineSnapStep,
       breakRunLinks: Boolean(draggedScheduledOrderId),
     });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, dropPreview, eventDurationMinutesMap, eventStartMinutesMap, scheduleRequestAt, scheduleRequestGroupAt, timelineSnapStep]);
+  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, dropPreview, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, scheduleRequestGroupAt, timelineSnapStep]);
 
   const handleEventSnapDragOver = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
