@@ -4302,6 +4302,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
+    const linkedSnapSegment = returnSnapState.candidate?.linkSegment || dropPreview?.snapSegment || snapCandidate?.linkSegment || null;
     if (debugMode) {
       setSnapDebugInfo({
         ...returnSnapState,
@@ -4314,11 +4315,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         chosenSide: snapCandidate.side,
         chosenMinutes: snapCandidate.minutes,
         linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
-        linkSegment: snapCandidate.side === 'after' ? snapCandidate.linkSegment || 'primary' : null,
+        linkSegment: snapCandidate.side === 'after' ? linkedSnapSegment || 'primary' : null,
         blocked: Boolean(collision),
       });
     }
-    const linkedSnapSegment = returnSnapState.candidate?.linkSegment || dropPreview?.snapSegment || snapCandidate?.linkSegment || null;
+    console.log('[snap-drop]', {
+      hasReturnCandidate: Boolean(returnSnapState.candidate),
+      returnCandidateLinkSegment: returnSnapState.candidate?.linkSegment ?? null,
+      dropPreviewSnapSegment: dropPreview?.snapSegment ?? null,
+      genericCandidateLinkSegment: snapCandidate?.linkSegment ?? null,
+      linkedSnapSegment,
+      linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+      linkToSegment: snapCandidate.side === 'after' ? linkedSnapSegment || 'primary' : null,
+      snapMinutes: snapCandidate.minutes,
+      probeMinutes,
+      directlyOnReturnCard: returnSnapState.directlyOnReturnCard,
+      pointerOverReturnTime: returnSnapState.pointerOverReturnTime,
+    });
     scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
