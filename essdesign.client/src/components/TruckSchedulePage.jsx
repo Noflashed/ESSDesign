@@ -839,6 +839,20 @@ function getEdgeSnapCandidate({ requestId, truckId, startMinutes, durationMinute
   return best;
 }
 
+function getAfterSnapCandidateForEvent(scheduleEvent, startMap, durationMap, durationMinutes) {
+  if (!scheduleEvent) {
+    return null;
+  }
+  const existingStart = startMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+  const existingEnd = existingStart + (durationMap[scheduleEvent.orderId] ?? 90);
+  return {
+    event: scheduleEvent,
+    side: 'after',
+    minutes: clampScheduleMinutes(existingEnd, durationMinutes),
+    distance: 0,
+  };
+}
+
 function sameDropPreview(left, right) {
   return Boolean(left)
     && left.truckId === right.truckId
@@ -3903,7 +3917,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const snapCandidate = getEdgeSnapCandidate({
+    const returnCardSnapCandidate = event.target.closest('.ts2-return-card')
+      ? getAfterSnapCandidateForEvent(scheduleEvent, eventStartMinutesMap, eventDurationMinutesMap, dragPreviewDurationMinutes)
+      : null;
+    const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
       startMinutes: freeStart,
@@ -3956,7 +3973,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const snapCandidate = getEdgeSnapCandidate({
+    const returnCardSnapCandidate = event.target.closest('.ts2-return-card')
+      ? getAfterSnapCandidateForEvent(scheduleEvent, eventStartMinutesMap, eventDurationMinutesMap, dragPreviewDurationMinutes)
+      : null;
+    const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
       startMinutes: freeStart,
