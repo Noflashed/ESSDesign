@@ -909,6 +909,7 @@ function getReturnSegmentSnapState({
   scheduleEvent,
   eventTarget,
   probeMinutes,
+  tileStartMinutes,
   startMap,
   durationMap,
   primaryDurationMap,
@@ -946,8 +947,12 @@ function getReturnSegmentSnapState({
   const pointerOverReturnTime = typeof probeMinutes === 'number'
     && probeMinutes >= returnStart
     && probeMinutes <= existingEnd + SNAP_EDGE_THRESHOLD_MINUTES;
+  // Also snap when the tile's calculated left-edge position is near the return end,
+  // even if the pointer is past it (right-to-left drag with large pointer offset).
+  const tileNearReturnEnd = typeof tileStartMinutes === 'number'
+    && Math.abs(tileStartMinutes - existingEnd) <= SNAP_EDGE_THRESHOLD_MINUTES;
 
-  if (!directlyOnReturnCard && !pointerOverReturnTime) {
+  if (!directlyOnReturnCard && !pointerOverReturnTime && !tileNearReturnEnd) {
     return {
       ...baseState,
       existingStart,
@@ -980,6 +985,7 @@ function getReturnSegmentSnapStateForLane({
   truckId,
   eventTarget,
   probeMinutes,
+  tileStartMinutes,
   dayEvents,
   startMap,
   durationMap,
@@ -997,6 +1003,7 @@ function getReturnSegmentSnapStateForLane({
       scheduleEvent,
       eventTarget,
       probeMinutes,
+      tileStartMinutes,
       startMap,
       durationMap,
       primaryDurationMap,
@@ -4026,6 +4033,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       truckId,
       eventTarget: event.target,
       probeMinutes,
+      tileStartMinutes: minutes,
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
@@ -4098,6 +4106,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       truckId,
       eventTarget: event.target,
       probeMinutes,
+      tileStartMinutes: minutes,
       dayEvents,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
@@ -4158,6 +4167,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduleEvent,
       eventTarget: event.target,
       probeMinutes,
+      tileStartMinutes: freeStart,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
       primaryDurationMap: eventPrimaryDurationMinutesMap,
@@ -4255,11 +4265,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     // instead of bailing out entirely.
     if (requestId === scheduleEvent.orderId) {
       console.log('[event-snap-drop] self-drop - scanning for adjacent return segment');
+      const selfDropFreeStart = getDropMinutesFromPointer(event.clientX, laneTrack, {
+        durationMinutes: dragPreviewDurationMinutes,
+        pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
+        step: timelineSnapStep,
+      });
       const returnSnapState = getReturnSegmentSnapStateForLane({
         requestId,
         truckId: scheduleEvent.truckId,
         eventTarget: event.target,
         probeMinutes,
+        tileStartMinutes: selfDropFreeStart,
         dayEvents,
         startMap: eventStartMinutesMap,
         durationMap: eventDurationMinutesMap,
@@ -4309,6 +4325,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduleEvent,
       eventTarget: event.target,
       probeMinutes,
+      tileStartMinutes: freeStart,
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
       primaryDurationMap: eventPrimaryDurationMinutesMap,
