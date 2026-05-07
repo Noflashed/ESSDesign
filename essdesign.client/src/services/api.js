@@ -310,6 +310,7 @@ export const WEB_APP_STORAGE_METRICS_EVENT = 'ess-web-app-storage-metrics-update
 let verifiedSafetyBucket = false;
 const storageJsonCache = new Map();
 const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
+const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
@@ -317,9 +318,13 @@ const STORAGE_JSON_REQUEST_TIMEOUT_MS = 15 * 1000;
 const STORAGE_JSON_CACHE_SYNC_CHANNEL = 'ess-storage-json-cache-sync';
 const STORAGE_JSON_CACHE_SYNC_KEY = 'ess-storage-json-cache-sync-message';
 const WEB_APP_STORAGE_METRICS_KEY = 'ess-web-app-storage-metrics';
+const MATERIAL_REQUEST_INDEX_WRITE_LOCK_NAME = 'ess-material-request-index-write';
 const storageJsonCacheTabId = makeId();
 const seenStorageJsonSyncMessages = new Set();
 let storageJsonBroadcastChannel = null;
+let materialRequestIndexWriteQueue = Promise.resolve();
+let materialOrderRequestsTableAvailable = null;
+let materialOrderRequestsTableSeedPromise = null;
 
 function getStorageJsonCacheTtl(path) {
     if (path === MATERIAL_REQUEST_INDEX_PATH) {
@@ -609,6 +614,23 @@ function setupStorageJsonCrossTabSync() {
 }
 
 setupStorageJsonCrossTabSync();
+
+async function withMaterialRequestIndexWriteLock(callback) {
+    const runLocked = async () => {
+        if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+            return navigator.locks.request(
+                MATERIAL_REQUEST_INDEX_WRITE_LOCK_NAME,
+                { mode: 'exclusive' },
+                callback
+            );
+        }
+        return callback();
+    };
+
+    const queued = materialRequestIndexWriteQueue.then(runLocked, runLocked);
+    materialRequestIndexWriteQueue = queued.catch(() => {});
+    return queued;
+}
 
 function cacheUploadedStorageJson(path, body, contentType) {
     if (!String(contentType || '').includes('application/json')) {
@@ -1494,6 +1516,579 @@ function normalizeMaterialOrderRequestRecord(record) {
     };
 }
 
+function isMissingMaterialOrderRequestsTableError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes(MATERIAL_ORDER_REQUESTS_TABLE)
+        && (
+            message.includes('does not exist')
+            || message.includes('could not find')
+            || message.includes('not found')
+            || message.includes('schema cache')
+        );
+}
+
+async function tryMaterialOrderRequestsTable(operation) {
+    if (materialOrderRequestsTableAvailable === false) {
+        return null;
+    }
+    try {
+        const result = await operation();
+        materialOrderRequestsTableAvailable = true;
+        return result;
+    } catch (error) {
+        if (isMissingMaterialOrderRequestsTableError(error)) {
+            materialOrderRequestsTableAvailable = false;
+            return null;
+        }
+        throw error;
+    }
+}
+
+function mapMaterialOrderRequestRow(row) {
+    if (!row) {
+        return null;
+    }
+    return normalizeMaterialOrderRequestRecord({
+        id: row.id,
+        sourceOrderId: row.source_order_id || null,
+        connectedParentStartMinutes: typeof row.connected_parent_start_minutes === 'number'
+            ? row.connected_parent_start_minutes
+            : null,
+        connectedParentSegment: row.connected_parent_segment || null,
+        routeType: row.route_type || null,
+        builderId: row.builder_id || '',
+        builderName: row.builder_name || '',
+        projectId: row.project_id || '',
+        projectName: row.project_name || '',
+        requestedByUserId: row.requested_by_user_id || null,
+        requestedByName: row.requested_by_name || '',
+        orderDate: row.order_date || new Date().toISOString().slice(0, 10),
+        submittedAt: row.submitted_at || nowIso(),
+        notes: row.notes || '',
+        itemValues: row.item_values && typeof row.item_values === 'object' ? row.item_values : {},
+        pdfPath: row.pdf_path || '',
+        scaffoldingSystem: row.scaffolding_system || '',
+        details: row.details || '',
+        scheduledDate: row.scheduled_date || null,
+        scheduledHour: typeof row.scheduled_hour === 'number' ? row.scheduled_hour : null,
+        scheduledMinute: typeof row.scheduled_minute === 'number' ? row.scheduled_minute : null,
+        scheduledAtIso: row.scheduled_at_iso || null,
+        scheduledTruckId: row.scheduled_truck_id || row.truck_id || null,
+        scheduledTruckLabel: row.scheduled_truck_label || row.truck_label || null,
+        truckId: row.truck_id || row.scheduled_truck_id || null,
+        truckLabel: row.truck_label || row.scheduled_truck_label || null,
+        deliveryStatus: row.delivery_status || null,
+        deliveryStartedAt: row.delivery_started_at || null,
+        deliveryUnloadingAt: row.delivery_unloading_at || null,
+        deliveryConfirmedAt: row.delivery_confirmed_at || null,
+        archivedAt: row.archived_at || null,
+        scheduleRemovedAt: row.schedule_removed_at || null,
+        secondaryRoute: row.secondary_route || null,
+    });
+}
+
+function mapMaterialOrderRequestRecordToRow(record) {
+    const normalized = normalizeMaterialOrderRequestRecord(record);
+    return {
+        id: normalized.id,
+        source_order_id: normalized.sourceOrderId || null,
+        connected_parent_start_minutes: typeof normalized.connectedParentStartMinutes === 'number'
+            ? normalized.connectedParentStartMinutes
+            : null,
+        connected_parent_segment: normalized.sourceOrderId
+            ? normalizeConnectedParentSegment(normalized.connectedParentSegment)
+            : null,
+        route_type: normalized.routeType || null,
+        builder_id: normalized.builderId || null,
+        builder_name: normalized.builderName || '',
+        project_id: normalized.projectId || null,
+        project_name: normalized.projectName || '',
+        requested_by_user_id: normalized.requestedByUserId || null,
+        requested_by_name: normalized.requestedByName || '',
+        order_date: normalized.orderDate || null,
+        submitted_at: normalized.submittedAt || nowIso(),
+        notes: normalized.notes || '',
+        item_values: normalized.itemValues || {},
+        pdf_path: normalized.pdfPath || '',
+        scaffolding_system: normalized.scaffoldingSystem || '',
+        details: normalized.details || '',
+        scheduled_date: normalized.scheduledDate || null,
+        scheduled_hour: typeof normalized.scheduledHour === 'number' ? normalized.scheduledHour : null,
+        scheduled_minute: typeof normalized.scheduledMinute === 'number' ? normalized.scheduledMinute : null,
+        scheduled_at_iso: normalized.scheduledAtIso || null,
+        scheduled_truck_id: normalized.scheduledTruckId || null,
+        scheduled_truck_label: normalized.scheduledTruckLabel || null,
+        truck_id: normalized.truckId || normalized.scheduledTruckId || null,
+        truck_label: normalized.truckLabel || normalized.scheduledTruckLabel || null,
+        delivery_status: normalized.deliveryStatus || null,
+        delivery_started_at: normalized.deliveryStartedAt || null,
+        delivery_unloading_at: normalized.deliveryUnloadingAt || null,
+        delivery_confirmed_at: normalized.deliveryConfirmedAt || null,
+        archived_at: normalized.archivedAt || null,
+        schedule_removed_at: normalized.scheduleRemovedAt || null,
+        secondary_route: normalizeSecondaryRoute(normalized.secondaryRoute),
+        updated_at: nowIso(),
+    };
+}
+
+async function seedMaterialOrderRequestsTableFromStorage() {
+    if (materialOrderRequestsTableSeedPromise) {
+        return materialOrderRequestsTableSeedPromise;
+    }
+
+    materialOrderRequestsTableSeedPromise = (async () => {
+        const rawIndex = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH, { force: true }).catch(() => null);
+        const storageItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const records = storageItems
+            .map(normalizeMaterialOrderRequestRecord)
+            .filter(item => item?.id);
+        if (records.length === 0) {
+            return [];
+        }
+        const rows = await postRestRows(
+            MATERIAL_ORDER_REQUESTS_TABLE,
+            records.map(mapMaterialOrderRequestRecordToRow),
+            'id'
+        );
+        return (Array.isArray(rows) ? rows : []).map(mapMaterialOrderRequestRow).filter(Boolean);
+    })().finally(() => {
+        materialOrderRequestsTableSeedPromise = null;
+    });
+
+    return materialOrderRequestsTableSeedPromise;
+}
+
+async function readMaterialOrderRequestTableRecords({ seed = true } = {}) {
+    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc');
+    if (seed && rows.length === 0) {
+        const seeded = await seedMaterialOrderRequestsTableFromStorage();
+        if (seeded.length > 0) {
+            rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc');
+        }
+    }
+    return rows.map(mapMaterialOrderRequestRow).filter(Boolean);
+}
+
+async function readMaterialOrderRequestTableRecord(requestId, { seed = true } = {}) {
+    const query = `?select=*&id=eq.${encodeURIComponent(requestId)}&limit=1`;
+    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, query);
+    if (seed && rows.length === 0) {
+        await seedMaterialOrderRequestsTableFromStorage();
+        rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, query);
+    }
+    return mapMaterialOrderRequestRow(rows[0]) || null;
+}
+
+async function upsertMaterialOrderRequestTableRecords(records) {
+    const normalizedRecords = (Array.isArray(records) ? records : [records])
+        .map(normalizeMaterialOrderRequestRecord)
+        .filter(item => item?.id);
+    if (normalizedRecords.length === 0) {
+        return [];
+    }
+    const rows = await postRestRows(
+        MATERIAL_ORDER_REQUESTS_TABLE,
+        normalizedRecords.map(mapMaterialOrderRequestRecordToRow),
+        'id'
+    );
+    emitStorageJsonChanged(MATERIAL_REQUEST_INDEX_PATH);
+    return (Array.isArray(rows) ? rows : []).map(mapMaterialOrderRequestRow).filter(Boolean);
+}
+
+async function deleteMaterialOrderRequestTableRecord(requestId) {
+    await deleteRestRows(MATERIAL_ORDER_REQUESTS_TABLE, `?id=eq.${encodeURIComponent(requestId)}`);
+    emitStorageJsonChanged(MATERIAL_REQUEST_INDEX_PATH);
+}
+
+async function archiveMaterialOrderRequestInTable(requestId) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const archivedAt = nowIso();
+        const updated = {
+            ...record,
+            archivedAt,
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function setMaterialOrderRequestScheduleInTable(requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null }) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        if (record.archivedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit') {
+            throw new Error('Completed material orders cannot be rescheduled.');
+        }
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = Boolean(
+            clearRunLink &&
+            record.routeType === 'secondary_route' &&
+            normalizedSecondaryRoute?.reason === 'material_pick_up' &&
+            normalizedSecondaryRoute?.linkedRequestId
+        );
+        const scheduledAtIso = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+        const nextSourceOrderId = clearRunLink ? sourceOrderId || null : record.sourceOrderId || null;
+        const nextConnectedParentStartMinutes = clearRunLink
+            ? typeof connectedParentStartMinutes === 'number' ? connectedParentStartMinutes : null
+            : typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null;
+        const nextConnectedParentSegment = nextSourceOrderId
+            ? clearRunLink
+                ? normalizeConnectedParentSegment(connectedParentSegment) || 'primary'
+                : normalizeConnectedParentSegment(record.connectedParentSegment)
+            : null;
+        const updated = {
+            ...record,
+            sourceOrderId: nextSourceOrderId,
+            connectedParentStartMinutes: nextConnectedParentStartMinutes,
+            connectedParentSegment: nextConnectedParentSegment,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
+            scheduledDate: date,
+            scheduledHour: hour,
+            scheduledMinute: minute,
+            scheduledAtIso,
+            scheduledTruckId: truckId,
+            scheduledTruckLabel: truckLabel,
+            truckId,
+            truckLabel,
+            deliveryStatus: 'scheduled',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            secondaryRoute: shouldRestoreMaterialOrder ? null : normalizedSecondaryRoute,
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function clearMaterialOrderRequestRunLinkInTable(requestId) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = Boolean(
+            record.routeType === 'secondary_route' &&
+            secondaryRoute?.reason === 'material_pick_up' &&
+            secondaryRoute?.linkedRequestId
+        );
+        const updated = {
+            ...record,
+            sourceOrderId: null,
+            connectedParentStartMinutes: null,
+            connectedParentSegment: null,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
+            secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function setMaterialOrderRequestRunLinkInTable(requestId, { sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null, secondaryRoute = undefined } = {}) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const nextSourceOrderId = sourceOrderId || null;
+        const nextConnectedParentStartMinutes = nextSourceOrderId && typeof connectedParentStartMinutes === 'number'
+            ? connectedParentStartMinutes
+            : null;
+        const nextConnectedParentSegment = nextSourceOrderId
+            ? normalizeConnectedParentSegment(connectedParentSegment) || 'primary'
+            : null;
+        const nextSecondaryRoute = secondaryRoute === undefined
+            ? normalizeSecondaryRoute(record.secondaryRoute)
+            : normalizeSecondaryRoute(secondaryRoute);
+        const updated = {
+            ...record,
+            sourceOrderId: nextSourceOrderId,
+            connectedParentStartMinutes: nextConnectedParentStartMinutes,
+            connectedParentSegment: nextConnectedParentSegment,
+            secondaryRoute: nextSecondaryRoute,
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function clearMaterialOrderRequestScheduleInTable(requestId, options = {}) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const allowCompletedReset = Boolean(options.allowCompletedReset || options.allowCompleted);
+        const secondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        const shouldRestoreMaterialOrder = record.routeType === 'secondary_route'
+            && secondaryRoute?.reason === 'material_pick_up'
+            && Boolean(secondaryRoute?.linkedRequestId);
+        const shouldResetCompletedMaterialOrder = allowCompletedReset
+            && record.routeType !== 'secondary_route'
+            && Boolean(record.archivedAt || record.scheduleRemovedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit');
+        const updated = {
+            ...record,
+            sourceOrderId: null,
+            connectedParentStartMinutes: null,
+            connectedParentSegment: null,
+            routeType: shouldRestoreMaterialOrder ? null : record.routeType,
+            scheduledDate: null,
+            scheduledHour: null,
+            scheduledMinute: null,
+            scheduledAtIso: null,
+            scheduledTruckId: null,
+            scheduledTruckLabel: null,
+            truckId: null,
+            truckLabel: null,
+            deliveryStatus: 'pending',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            archivedAt: shouldResetCompletedMaterialOrder ? null : record.archivedAt || null,
+            scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : record.scheduleRemovedAt || null,
+            secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function removeCompletedMaterialOrderRequestFromScheduleInTable(requestId) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        if (record.routeType === 'secondary_route') {
+            throw new Error('External routes should be deleted normally.');
+        }
+        const archivedAt = record.archivedAt || nowIso();
+        const scheduleRemovedAt = nowIso();
+        const updated = {
+            ...record,
+            archivedAt,
+            scheduleRemovedAt,
+            deliveryStatus: record.deliveryStatus || 'return_transit',
+            secondaryRoute: normalizeSecondaryRoute(record.secondaryRoute),
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function updateMaterialOrderRequestDeliveryStatusInTable(requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const isSecondaryStatusRoute = record.routeType === 'secondary_route';
+        const shouldArchiveOnComplete = status === 'return_transit' && !isSecondaryStatusRoute;
+        const updated = {
+            ...record,
+            deliveryStatus: status,
+            deliveryStartedAt: startedAt,
+            deliveryUnloadingAt: unloadingAt,
+            deliveryConfirmedAt: confirmedAt,
+            archivedAt: isSecondaryStatusRoute ? null : shouldArchiveOnComplete ? record.archivedAt || nowIso() : record.archivedAt || null,
+        };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function deleteMaterialOrderRequestInTable(requestId) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const existingRecords = await readMaterialOrderRequestTableRecords({ seed: false });
+        const pdfPath = record.pdfPath || materialOrderRequestPdfPath(requestId);
+        const pdfStillReferenced = Boolean(pdfPath && existingRecords.some(item => item.id !== requestId && item.pdfPath === pdfPath));
+        await deleteMaterialOrderRequestTableRecord(requestId);
+        if (pdfPath && !pdfStillReferenced) {
+            await deleteStorageObject(pdfPath).catch(() => {});
+        }
+        return true;
+    });
+}
+
+async function setSecondaryMaterialOrderRouteInTable(requestId, secondaryRoute, schedule = {}) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(secondaryRoute);
+        if (!normalizedSecondaryRoute) throw new Error('Secondary route details are invalid');
+
+        const existingRequests = await readMaterialOrderRequestTableRecords();
+        const existingSecondaryIndexItem = existingRequests.find(item =>
+            item?.routeType === 'secondary_route'
+            && item?.sourceOrderId === requestId
+            && !item?.archivedAt
+        );
+        const relinkedContinuation = schedule.relinkedContinuation && typeof schedule.relinkedContinuation === 'object'
+            ? schedule.relinkedContinuation
+            : null;
+        const relinkedContinuationId = relinkedContinuation?.id || null;
+        const shouldInsertBeforeExistingSecondary = Boolean(
+            relinkedContinuationId &&
+            existingSecondaryIndexItem?.id &&
+            relinkedContinuationId === existingSecondaryIndexItem.id
+        );
+        const linkedRequestId = normalizedSecondaryRoute.linkedRequestId && normalizedSecondaryRoute.linkedRequestId !== requestId
+            ? normalizedSecondaryRoute.linkedRequestId
+            : null;
+        const linkedIndexItem = linkedRequestId
+            ? existingRequests.find(item => item?.id === linkedRequestId && !item?.archivedAt && item?.routeType !== 'secondary_route')
+            : null;
+        if (linkedRequestId && (!linkedIndexItem || linkedIndexItem.scheduledDate || linkedIndexItem.scheduledAtIso)) {
+            throw new Error('Selected material order is no longer available to add as a secondary route');
+        }
+        const linkedRecord = linkedIndexItem?.id
+            ? await readMaterialOrderRequestTableRecord(linkedIndexItem.id, { seed: false }).catch(() => null)
+            : null;
+        if (linkedRequestId && (linkedRecord?.scheduledDate || linkedRecord?.scheduledAtIso)) {
+            throw new Error('Selected material order is no longer available to add as a secondary route');
+        }
+        const linkedSourceRecord = linkedRecord || linkedIndexItem || null;
+        const secondaryRequestId = linkedSourceRecord?.id
+            || (shouldInsertBeforeExistingSecondary ? null : existingSecondaryIndexItem?.id)
+            || `secondary-${requestId}-${makeId()}`;
+        const existingSecondaryRecord = linkedSourceRecord || (existingSecondaryIndexItem?.id
+            && !shouldInsertBeforeExistingSecondary
+            ? await readMaterialOrderRequestTableRecord(existingSecondaryIndexItem.id, { seed: false }).catch(() => null)
+            : null);
+        const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
+        const scheduledHour = typeof schedule.hour === 'number'
+            ? schedule.hour
+            : typeof schedule.scheduledHour === 'number'
+                ? schedule.scheduledHour
+                : record.scheduledHour;
+        const scheduledMinute = typeof schedule.minute === 'number'
+            ? schedule.minute
+            : typeof schedule.scheduledMinute === 'number'
+                ? schedule.scheduledMinute
+                : record.scheduledMinute;
+        const scheduledAtIso = scheduledDate && typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
+            ? `${scheduledDate}T${String(scheduledHour).padStart(2, '0')}:${String(scheduledMinute).padStart(2, '0')}:00`
+            : null;
+        const connectedParentStartMinutes = typeof scheduledHour === 'number' && typeof scheduledMinute === 'number'
+            ? scheduledHour * 60 + scheduledMinute
+            : null;
+        const connectedParentSegment = schedule.connectedParentSegment === 'return' ? 'return' : 'primary';
+        const scheduledTruckId = schedule.truckId || schedule.scheduledTruckId || record.scheduledTruckId || record.truckId || null;
+        const scheduledTruckLabel = schedule.truckLabel || schedule.scheduledTruckLabel || record.scheduledTruckLabel || record.truckLabel || null;
+        const isLinkedMaterialOrder = Boolean(linkedSourceRecord);
+        const linkedItemValues = linkedSourceRecord?.itemValues && typeof linkedSourceRecord.itemValues === 'object'
+            ? linkedSourceRecord.itemValues
+            : linkedSourceRecord?.item_values && typeof linkedSourceRecord.item_values === 'object'
+                ? linkedSourceRecord.item_values
+                : {};
+        const submittedAt = isLinkedMaterialOrder
+            ? linkedSourceRecord.submittedAt || nowIso()
+            : existingSecondaryRecord?.submittedAt || existingSecondaryIndexItem?.submittedAt || nowIso();
+        const parentUpdated = {
+            ...record,
+            secondaryRoute: record.routeType === 'secondary_route'
+                ? normalizeSecondaryRoute(record.secondaryRoute)
+                : null,
+        };
+        const secondaryRecord = {
+            ...(existingSecondaryRecord || {}),
+            id: secondaryRequestId,
+            sourceOrderId: requestId,
+            connectedParentStartMinutes,
+            connectedParentSegment,
+            routeType: 'secondary_route',
+            builderId: isLinkedMaterialOrder ? linkedSourceRecord.builderId || '' : '',
+            builderName: isLinkedMaterialOrder
+                ? linkedSourceRecord.builderName || normalizedSecondaryRoute.destination || 'Material order'
+                : normalizedSecondaryRoute.destination || 'Secondary route',
+            projectId: isLinkedMaterialOrder ? linkedSourceRecord.projectId || '' : '',
+            projectName: isLinkedMaterialOrder
+                ? linkedSourceRecord.projectName || normalizedSecondaryRoute.label || 'Material order'
+                : normalizedSecondaryRoute.label || 'Secondary route',
+            requestedByUserId: isLinkedMaterialOrder
+                ? linkedSourceRecord.requestedByUserId || record.requestedByUserId || null
+                : record.requestedByUserId || null,
+            requestedByName: isLinkedMaterialOrder
+                ? linkedSourceRecord.requestedByName || record.requestedByName || ''
+                : record.requestedByName || '',
+            orderDate: isLinkedMaterialOrder
+                ? linkedSourceRecord.orderDate || record.orderDate || new Date().toISOString().slice(0, 10)
+                : record.orderDate || new Date().toISOString().slice(0, 10),
+            submittedAt,
+            notes: isLinkedMaterialOrder
+                ? linkedSourceRecord.notes || `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`
+                : `Secondary route from ${normalizedSecondaryRoute.startingLocation || 'starting location'} to ${normalizedSecondaryRoute.destination}`,
+            itemValues: isLinkedMaterialOrder ? linkedItemValues : {
+                __scaffoldingSystem: normalizedSecondaryRoute.label || 'Secondary route',
+                __details: normalizedSecondaryRoute.destination || '',
+            },
+            scaffoldingSystem: isLinkedMaterialOrder
+                ? linkedSourceRecord.scaffoldingSystem || linkedItemValues.__scaffoldingSystem || normalizedSecondaryRoute.label || 'Material order'
+                : normalizedSecondaryRoute.label || 'Secondary route',
+            details: isLinkedMaterialOrder
+                ? linkedSourceRecord.details || linkedItemValues.__details || normalizedSecondaryRoute.destination || ''
+                : normalizedSecondaryRoute.destination || '',
+            pdfPath: isLinkedMaterialOrder ? linkedSourceRecord.pdfPath || '' : '',
+            scheduledDate,
+            scheduledHour,
+            scheduledMinute,
+            scheduledAtIso,
+            scheduledTruckId,
+            scheduledTruckLabel,
+            truckId: scheduledTruckId,
+            truckLabel: scheduledTruckLabel,
+            deliveryStatus: scheduledAtIso ? 'scheduled' : 'pending',
+            deliveryStartedAt: null,
+            deliveryUnloadingAt: null,
+            deliveryConfirmedAt: null,
+            archivedAt: null,
+            secondaryRoute: normalizedSecondaryRoute,
+        };
+        const normalizedRelinkedSecondaryRoute = relinkedContinuation?.secondaryRoute
+            ? normalizeSecondaryRoute(relinkedContinuation.secondaryRoute)
+            : null;
+        const relinkedScheduledDate = relinkedContinuation?.scheduledDate || scheduledDate;
+        const relinkedScheduledHour = typeof relinkedContinuation?.scheduledHour === 'number'
+            ? relinkedContinuation.scheduledHour
+            : null;
+        const relinkedScheduledMinute = typeof relinkedContinuation?.scheduledMinute === 'number'
+            ? relinkedContinuation.scheduledMinute
+            : null;
+        const relinkedScheduledAtIso = relinkedScheduledDate && typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
+            ? `${relinkedScheduledDate}T${String(relinkedScheduledHour).padStart(2, '0')}:${String(relinkedScheduledMinute).padStart(2, '0')}:00`
+            : null;
+        const relinkedConnectedParentSegment = normalizeConnectedParentSegment(relinkedContinuation?.connectedParentSegment) || 'primary';
+        const relinkedContinuationRecord = relinkedContinuationId
+            ? {
+                ...(relinkedContinuation || {}),
+                id: relinkedContinuationId,
+                sourceOrderId: secondaryRequestId,
+                connectedParentStartMinutes: typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
+                    ? relinkedScheduledHour * 60 + relinkedScheduledMinute
+                    : relinkedContinuation.connectedParentStartMinutes ?? null,
+                connectedParentSegment: relinkedConnectedParentSegment,
+                routeType: relinkedContinuation.routeType || null,
+                scheduledDate: relinkedScheduledDate,
+                scheduledHour: relinkedScheduledHour,
+                scheduledMinute: relinkedScheduledMinute,
+                scheduledAtIso: relinkedScheduledAtIso,
+                scheduledTruckId,
+                scheduledTruckLabel,
+                truckId: scheduledTruckId,
+                truckLabel: scheduledTruckLabel,
+                secondaryRoute: normalizedRelinkedSecondaryRoute,
+            }
+            : null;
+        const recordsToSave = [parentUpdated, secondaryRecord];
+        if (relinkedContinuationRecord) {
+            recordsToSave.push(relinkedContinuationRecord);
+        }
+        const savedRecords = await upsertMaterialOrderRequestTableRecords(recordsToSave);
+        if (existingSecondaryIndexItem?.id && existingSecondaryIndexItem.id !== secondaryRequestId && !shouldInsertBeforeExistingSecondary) {
+            await deleteMaterialOrderRequestTableRecord(existingSecondaryIndexItem.id).catch(() => {});
+        }
+        return savedRecords.find(item => item.id === secondaryRequestId)
+            || normalizeMaterialOrderRequestRecord(secondaryRecord);
+    });
+}
+
 async function listStorageObjects(prefix) {
     const response = await fetch(safetyBucketListUrl(), {
         method: 'POST',
@@ -1512,6 +2107,14 @@ async function listStorageObjects(prefix) {
 
 export const materialOrderRequestsAPI = {
     listActiveRequests: async ({ includeArchived = false } = {}) => {
+        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords());
+        if (tableRecords) {
+            return tableRecords
+                .map(normalizeMaterialOrderRequestListItem)
+                .filter(item => item.id && (includeArchived || !item.archivedAt))
+                .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+        }
+
         const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         return items
@@ -1520,7 +2123,7 @@ export const materialOrderRequestsAPI = {
             .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
     },
 
-    submitRequest: async (form) => {
+    submitRequest: async (form) => withMaterialRequestIndexWriteLock(async () => {
         const requestId = makeId();
         const submittedAt = nowIso();
         const pdfPath = materialOrderRequestPdfPath(requestId);
@@ -1564,6 +2167,14 @@ export const materialOrderRequestsAPI = {
             buildMaterialOrderRequestPdfBlob(record),
             'application/pdf'
         );
+
+        const tableRecord = await tryMaterialOrderRequestsTable(async () => {
+            const [saved] = await upsertMaterialOrderRequestTableRecords(record);
+            return saved || normalizeMaterialOrderRequestRecord(record);
+        });
+        if (tableRecord) {
+            return tableRecord;
+        }
 
         await uploadStorageObject(
             `material-order-requests/requests/${requestId}.json`,
@@ -1612,9 +2223,17 @@ export const materialOrderRequestsAPI = {
         };
         await uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json');
         return record;
-    },
+    }),
 
     listArchivedRequests: async () => {
+        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords());
+        if (tableRecords) {
+            return tableRecords
+                .map(normalizeMaterialOrderRequestListItem)
+                .filter(item => item.id && item.archivedAt)
+                .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
+        }
+
         const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         const fromIndex = items
@@ -1639,13 +2258,23 @@ export const materialOrderRequestsAPI = {
     },
 
     getRequest: async (requestId) => {
+        const tableRecord = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecord(requestId));
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const request = await readStorageJson(`material-order-requests/requests/${requestId}.json`);
         return normalizeMaterialOrderRequestRecord(request);
     },
 
     getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
 
-    archiveRequest: async (requestId) => {
+    archiveRequest: async (requestId) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await archiveMaterialOrderRequestInTable(requestId);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1674,9 +2303,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null }) => {
+    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null }) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await setMaterialOrderRequestScheduleInTable(requestId, { date, hour, minute, truckId, truckLabel, clearRunLink, sourceOrderId, connectedParentStartMinutes, connectedParentSegment });
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1758,9 +2392,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    clearRunLink: async (requestId) => {
+    clearRunLink: async (requestId) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await clearMaterialOrderRequestRunLinkInTable(requestId);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1800,9 +2439,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    setRunLink: async (requestId, { sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null, secondaryRoute = undefined } = {}) => {
+    setRunLink: async (requestId, { sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null, secondaryRoute = undefined } = {}) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await setMaterialOrderRequestRunLinkInTable(requestId, { sourceOrderId, connectedParentStartMinutes, connectedParentSegment, secondaryRoute });
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1846,9 +2490,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    clearSchedule: async (requestId, options = {}) => {
+    clearSchedule: async (requestId, options = {}) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await clearMaterialOrderRequestScheduleInTable(requestId, options);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1918,9 +2567,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    removeCompletedFromSchedule: async (requestId) => {
+    removeCompletedFromSchedule: async (requestId) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await removeCompletedMaterialOrderRequestFromScheduleInTable(requestId);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1960,9 +2614,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => {
+    updateDeliveryStatus: async (requestId, { status, startedAt = null, unloadingAt = null, confirmedAt = null }) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await updateMaterialOrderRequestDeliveryStatusInTable(requestId, { status, startedAt, unloadingAt, confirmedAt });
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -2002,9 +2661,14 @@ export const materialOrderRequestsAPI = {
             uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
         ]);
         return normalizeMaterialOrderRequestRecord(updated);
-    },
+    }),
 
-    setSecondaryRoute: async (requestId, secondaryRoute, schedule = {}) => {
+    setSecondaryRoute: async (requestId, secondaryRoute, schedule = {}) => withMaterialRequestIndexWriteLock(async () => {
+        const tableRecord = await setSecondaryMaterialOrderRouteInTable(requestId, secondaryRoute, schedule);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -2215,9 +2879,14 @@ export const materialOrderRequestsAPI = {
         }
         await Promise.all(writes);
         return normalizeMaterialOrderRequestRecord(secondaryRecord);
-    },
+    }),
 
-    deleteRequest: async (requestId) => {
+    deleteRequest: async (requestId) => withMaterialRequestIndexWriteLock(async () => {
+        const tableDeleted = await deleteMaterialOrderRequestInTable(requestId);
+        if (tableDeleted) {
+            return;
+        }
+
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -2238,7 +2907,7 @@ export const materialOrderRequestsAPI = {
             deleteStorageObject(`material-order-requests/requests/${requestId}.json`).catch(() => {}),
             ...(pdfPath && !pdfStillReferenced ? [deleteStorageObject(pdfPath).catch(() => {})] : []),
         ]);
-    },
+    }),
 };
 
 export const rosteringAPI = {
@@ -2375,6 +3044,12 @@ const safetyModuleObjectUrl = (path) => `${SUPABASE_URL}/storage/v1/object/${SAF
 const safetyModuleSignUrl = (path) => `${SUPABASE_URL}/storage/v1/object/sign/${SAFETY_BUCKET}/${path}`;
 
 async function uploadStorageObject(path, body, contentType) {
+    const isJsonUpload = String(contentType || '').includes('application/json');
+    const shouldRevalidateJsonUpload = isJsonUpload
+        && (path === MATERIAL_REQUEST_INDEX_PATH || isMaterialOrderStoragePath(path));
+    const cacheControlHeaders = shouldRevalidateJsonUpload
+        ? { 'cache-control': 'no-cache, max-age=0, must-revalidate' }
+        : {};
     const attempts = [
         { method: 'POST', url: safetyModuleObjectUrl(path), headers: { ...storageHeaders(true), 'x-upsert': 'true' } },
         { method: 'POST', url: `${safetyModuleObjectUrl(path)}?upsert=true`, headers: storageHeaders(true) },
@@ -2387,6 +3062,7 @@ async function uploadStorageObject(path, body, contentType) {
             method: attempt.method,
             headers: {
                 ...attempt.headers,
+                ...cacheControlHeaders,
                 'Content-Type': contentType
             },
             body
@@ -2485,7 +3161,8 @@ async function readStorageJson(path, options = {}) {
             const response = await fetch(safetyModuleObjectUrl(path), {
                 method: 'GET',
                 headers: storageHeaders(),
-                signal: timeout.signal
+                signal: timeout.signal,
+                cache: force ? 'no-store' : 'default'
             });
             responseText = await response.text();
             recordStorageJsonNetwork(path, getTextByteLength(responseText));
