@@ -1635,6 +1635,16 @@ function getTrafficPanelCopy(routeData, loading) {
   };
 }
 
+function getTrafficDelayMinutes(routeEstimate) {
+  const delay = Number(routeEstimate?.trafficDelayMinutes);
+  return Number.isFinite(delay) ? Math.max(0, Math.round(delay)) : 0;
+}
+
+function TrafficDelayBadge({ minutes }) {
+  const delay = Math.max(0, Math.round(Number(minutes) || 0));
+  return delay > 0 ? <em className="transport-traffic-delay-badge">+{delay} min</em> : null;
+}
+
 function TruckLaneIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#102B5C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3204,6 +3214,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     () => getTrafficPanelCopy(selectedScheduleRouteData, selectedScheduleRouteLoading),
     [selectedScheduleRouteData, selectedScheduleRouteLoading],
   );
+  const selectedScheduleTravelTrafficDelayMinutes = getTrafficDelayMinutes(selectedScheduleContextRouteEstimate);
   const requestModalSummary = useMemo(
     () => buildEstimateSummary(
       selectedDate,
@@ -6088,12 +6099,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             <div className="transport-schedule-estimate-card">
               {selectedScheduleIsReturnSegment ? (
                 <>
-                  <div><span><InspectorIcon type="return" /> Return travel</span><strong>{selectedScheduleContextRouteEstimate ? `${Math.max(1, Math.round(selectedScheduleContextRouteEstimate.durationMinutes || 0))} min` : selectedScheduleTiming?.returnMinutes ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
+                  <div><span><InspectorIcon type="return" /> Return travel <TrafficDelayBadge minutes={selectedScheduleTravelTrafficDelayMinutes} /></span><strong>{selectedScheduleContextRouteEstimate ? `${Math.max(1, Math.round(selectedScheduleContextRouteEstimate.durationMinutes || 0))} min` : selectedScheduleTiming?.returnMinutes ? `${selectedScheduleTiming.returnMinutes} min` : 'Pending'}</strong></div>
                   <div><span><InspectorIcon type="clock" /> Return Total</span><strong>{selectedScheduleContextRouteEstimate ? `${Math.max(1, Math.round(selectedScheduleContextRouteEstimate.durationMinutes || 0))} min` : selectedScheduleTiming?.returnMinutes ? `${selectedScheduleTiming.returnMinutes} min` : 'Calculating'}</strong></div>
                 </>
               ) : selectedScheduleIsSecondarySegment && selectedScheduleSecondaryRoute ? (
                 <>
-                  <div><span><InspectorIcon type="truck" /> Travel to stop</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : `${Math.round((selectedScheduleSecondaryRoute.travelDurationSeconds || 0) / 60)} min`}</strong></div>
+                  <div><span><InspectorIcon type="truck" /> Travel to stop <TrafficDelayBadge minutes={selectedScheduleTravelTrafficDelayMinutes} /></span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : `${Math.round((selectedScheduleSecondaryRoute.travelDurationSeconds || 0) / 60)} min`}</strong></div>
                   <div><span><InspectorIcon type="map" /> Stop service</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : `${Math.max(0, Number(selectedScheduleSecondaryRoute.serviceMinutes) || 0)} min`}</strong></div>
                   {selectedScheduleEffectiveReturnTransit ? (
                     <div><span><InspectorIcon type="return" /> Return to yard</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.returnMinutes} min` : `${Math.round((selectedScheduleSecondaryRoute.returnDurationSeconds || 0) / 60)} min`}</strong></div>
@@ -6102,7 +6113,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </>
               ) : (
                 <>
-                  <div><span><InspectorIcon type="truck" /> Travel</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
+                  <div><span><InspectorIcon type="truck" /> Travel <TrafficDelayBadge minutes={selectedScheduleTravelTrafficDelayMinutes} /></span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.transitMinutes} min` : 'Pending'}</strong></div>
                   <div><span><InspectorIcon type="unload" /> Unload</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.loadingMinutes} min` : '30 min'}</strong></div>
                   {selectedScheduleRequest?.secondaryRoute ? (
                 <div><span><InspectorIcon type="map" /> {getSecondaryRouteReasonLabel(selectedScheduleRequest.secondaryRoute.reason)}</span><strong>{selectedScheduleTiming ? `${selectedScheduleTiming.secondaryTravelMinutes + selectedScheduleTiming.secondaryServiceMinutes} min` : 'Pending'}</strong></div>

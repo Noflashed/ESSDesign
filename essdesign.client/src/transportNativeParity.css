@@ -2161,6 +2161,18 @@
     font-weight: 900 !important;
 }
 
+.transport-page-frame .transport-schedule-estimate-card .transport-traffic-delay-badge,
+.transport-desktop-workspace .transport-schedule-estimate-card .transport-traffic-delay-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    color: #f47c20 !important;
+    font-size: 10px !important;
+    line-height: 12px !important;
+    font-style: normal !important;
+    font-weight: 900 !important;
+    white-space: nowrap !important;
+}
+
 .transport-page-frame .transport-panel-section-title,
 .transport-desktop-workspace .transport-panel-section-title {
     margin: 12px 0 7px !important;
