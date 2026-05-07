@@ -485,6 +485,25 @@ function formatManualTimeInput(minutes) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+function formatManualTimeText(minutes) {
+  const hour24 = Math.floor(minutes / 60);
+  const minute = Math.floor(minutes % 60);
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, '0')}`;
+}
+
+function getManualTimeMeridiem(minutes) {
+  return Math.floor(minutes / 60) >= 12 ? 'PM' : 'AM';
+}
+
+function parseManualScheduleEditorTime(value, meridiem) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return null;
+  }
+  return parseManualScheduleTime(/\b(?:am|pm)\b/i.test(raw) ? raw : `${raw} ${meridiem || 'AM'}`);
+}
+
 function formatDebugMinutes(value) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'n/a';
@@ -2420,7 +2439,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!tileMenu) {
       return undefined;
     }
-    const close = () => setTileMenu(null);
+    const close = () => {
+      setTileMenu(null);
+      setManualTimeModal(null);
+    };
     window.addEventListener('click', close);
     window.addEventListener('scroll', close, true);
     return () => {
@@ -2659,6 +2681,96 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleSegment(segment);
     setScheduleInspectorOpen(true);
   }, [selectedScheduleEventIds]);
+  const getScheduleChainOrderIds = useCallback((orderId) => {
+    const visibleIds = new Set(dayEvents.map(event => event.orderId));
+    if (!orderId || !visibleIds.has(orderId)) {
+      return orderId ? [orderId] : [];
+    }
+    const requestLookup = new Map(allRequests.map(request => [request.id, request]));
+    Object.entries(requestMetaMap).forEach(([requestId, request]) => {
+      if (request) {
+        requestLookup.set(requestId, request);
+      }
+    });
+    const adjacency = new Map(Array.from(visibleIds).map(id => [id, new Set()]));
+    const link = (leftId, rightId) => {
+      if (!leftId || !rightId || leftId === rightId || !adjacency.has(leftId) || !adjacency.has(rightId)) {
+        return;
+      }
+      adjacency.get(leftId).add(rightId);
+      adjacency.get(rightId).add(leftId);
+    };
+
+    visibleIds.forEach(visibleId => {
+      const request = requestLookup.get(visibleId);
+      if (request?.sourceOrderId) {
+        link(visibleId, request.sourceOrderId);
+      }
+      const cycleState = eventCycleStateMap[visibleId];
+      if (cycleState?.followsPreviousRun) {
+        link(visibleId, cycleState.routeFromRequestId || cycleState.runSourceOrderId);
+      }
+    });
+
+    const visited = new Set([orderId]);
+    const stack = [orderId];
+    while (stack.length) {
+      const currentId = stack.pop();
+      adjacency.get(currentId)?.forEach(nextId => {
+        if (!visited.has(nextId)) {
+          visited.add(nextId);
+          stack.push(nextId);
+        }
+      });
+    }
+
+    return dayEvents
+      .filter(event => visited.has(event.orderId))
+      .sort((left, right) => {
+        const leftStart = eventStartMinutesMap[left.orderId] ?? left.hour * 60 + left.minute;
+        const rightStart = eventStartMinutesMap[right.orderId] ?? right.hour * 60 + right.minute;
+        if (left.truckId !== right.truckId) {
+          return left.truckId.localeCompare(right.truckId);
+        }
+        return leftStart - rightStart;
+      })
+      .map(event => event.orderId);
+  }, [allRequests, dayEvents, eventCycleStateMap, eventStartMinutesMap, requestMetaMap]);
+  const handleSelectScheduleChain = useCallback((orderId, segment = 'primary') => {
+    const chainIds = getScheduleChainOrderIds(orderId);
+    if (!chainIds.length) {
+      return;
+    }
+    setTileMenu(null);
+    setManualTimeModal(null);
+    setSelectedScheduleEventId(chainIds.includes(orderId) ? orderId : chainIds[0]);
+    setSelectedScheduleEventIds(chainIds);
+    setSelectedScheduleSegment(segment);
+    setScheduleInspectorOpen(true);
+  }, [getScheduleChainOrderIds]);
+  const selectedScheduleChainOutlines = useMemo(() => {
+    if (selectedScheduleEventIds.length <= 1) {
+      return [];
+    }
+    const selectedIds = new Set(selectedScheduleEventIds);
+    return visibleTruckLanes
+      .map(lane => {
+        const selectedLaneEvents = dayEvents.filter(event => event.truckId === lane.id && selectedIds.has(event.orderId));
+        if (!selectedLaneEvents.length) {
+          return null;
+        }
+        const starts = selectedLaneEvents.map(event => eventStartMinutesMap[event.orderId] ?? event.hour * 60 + event.minute);
+        const ends = selectedLaneEvents.map((event, index) => starts[index] + (eventDurationMinutesMap[event.orderId] ?? 90));
+        const startMinutes = Math.min(...starts);
+        const endMinutes = Math.max(...ends);
+        return {
+          truckId: lane.id,
+          startMinutes,
+          durationMinutes: Math.max(1, endMinutes - startMinutes),
+        };
+      })
+      .filter(Boolean);
+  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, selectedScheduleEventIds, visibleTruckLanes]);
   useEffect(() => {
     if (!selectedScheduleEventIds.length) {
       return undefined;
@@ -3295,7 +3407,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [dayEvents, manualTimeModal],
   );
   const manualTimeRequest = manualTimeEvent ? requestMetaMap[manualTimeEvent.orderId] : null;
-  const manualTimeDurationMinutes = manualTimeModal ? eventDurationMinutesMap[manualTimeModal.requestId] ?? 90 : 90;
 
   const openRequestModal = useCallback(async requestId => {
     setRequestModalLoading(true);
@@ -3799,6 +3910,45 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return (getReturnTransitEnabled(request.id) ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
   }, [eventDurationMinutesMap, getReturnTransitEnabled, getTollsEnabled]);
 
+  const createScheduleSelectionContext = useCallback((anchorOrderId, selectionIds = []) => {
+    const ids = Array.from(new Set([anchorOrderId, ...(selectionIds || [])].filter(Boolean)));
+    const anchorEvent = dayEvents.find(event => event.orderId === anchorOrderId)
+      || dayEvents.find(event => ids.includes(event.orderId));
+    if (!anchorEvent) {
+      return null;
+    }
+    const anchorTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === anchorEvent.truckId);
+    if (anchorTruckIndex < 0) {
+      return null;
+    }
+    const anchorStartMinutes = eventStartMinutesMap[anchorEvent.orderId] ?? anchorEvent.hour * 60 + anchorEvent.minute;
+    return {
+      anchorOrderId: anchorEvent.orderId,
+      anchorTruckId: anchorEvent.truckId,
+      anchorTruckIndex,
+      anchorStartMinutes,
+      items: ids
+        .map(orderId => {
+          const sourceEvent = dayEvents.find(item => item.orderId === orderId);
+          if (!sourceEvent) {
+            return null;
+          }
+          const sourceTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === sourceEvent.truckId);
+          const sourceStartMinutes = eventStartMinutesMap[orderId] ?? sourceEvent.hour * 60 + sourceEvent.minute;
+          return {
+            orderId,
+            truckId: sourceEvent.truckId,
+            durationMinutes: eventDurationMinutesMap[orderId] ?? 90,
+            minuteOffset: sourceStartMinutes - anchorStartMinutes,
+            laneOffset: sourceTruckIndex - anchorTruckIndex,
+            sourceStartMinutes,
+            sourceEndMinutes: sourceStartMinutes + (eventDurationMinutesMap[orderId] ?? 90),
+          };
+        })
+        .filter(Boolean),
+    };
+  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap]);
+
   const scheduleRequestGroupAt = useCallback((selectionContext, targetTruckId, anchorMinutes) => {
     if (!selectionContext?.items?.length || !targetTruckId) {
       return;
@@ -3989,17 +4139,31 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       });
   }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, getTollsEnabled, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate]);
 
-  const openManualScheduleTime = useCallback((requestId) => {
-    const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
+  const openManualScheduleTime = useCallback((requestId, selectionIds = []) => {
+    const requestedIds = Array.from(new Set((selectionIds?.length ? selectionIds : [requestId]).filter(Boolean)));
+    const selectedEvents = requestedIds
+      .map(id => dayEvents.find(event => event.orderId === id))
+      .filter(Boolean)
+      .sort((left, right) => {
+        const leftStart = eventStartMinutesMap[left.orderId] ?? left.hour * 60 + left.minute;
+        const rightStart = eventStartMinutesMap[right.orderId] ?? right.hour * 60 + right.minute;
+        if (left.truckId !== right.truckId) {
+          return left.truckId.localeCompare(right.truckId);
+        }
+        return leftStart - rightStart;
+      });
+    const scheduleEvent = selectedEvents[0] || dayEvents.find(event => event.orderId === requestId);
     if (!scheduleEvent) {
       setTileMenu(null);
       return;
     }
-    const currentStart = eventStartMinutesMap[requestId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
-    setTileMenu(null);
+    const anchorId = scheduleEvent.orderId;
+    const currentStart = eventStartMinutesMap[anchorId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
     setManualTimeModal({
-      requestId,
-      value: formatManualTimeInput(currentStart),
+      requestId: anchorId,
+      requestIds: selectedEvents.length ? selectedEvents.map(event => event.orderId) : [anchorId],
+      value: formatManualTimeText(currentStart),
+      meridiem: getManualTimeMeridiem(currentStart),
       error: '',
     });
   }, [dayEvents, eventStartMinutesMap]);
@@ -4019,19 +4183,33 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setManualTimeModal(null);
       return;
     }
+    const selectionIds = manualTimeModal.requestIds?.length ? manualTimeModal.requestIds : [requestId];
+    const selectionContext = selectionIds.length > 1
+      ? createScheduleSelectionContext(requestId, selectionIds)
+      : null;
+    const selectionSpanMinutes = selectionContext?.items?.length
+      ? selectionContext.items.reduce((max, item) => Math.max(max, item.minuteOffset + (item.durationMinutes || 90)), 0)
+      : 0;
     const durationMinutes = eventDurationMinutesMap[requestId] ?? 90;
-    const parsedMinutes = parseManualScheduleTime(manualTimeModal.value);
+    const durationForBounds = Math.max(durationMinutes, selectionSpanMinutes || durationMinutes);
+    const parsedMinutes = parseManualScheduleEditorTime(manualTimeModal.value, manualTimeModal.meridiem);
     if (parsedMinutes === null) {
-      setManualTimeModal(current => current ? { ...current, error: 'Enter a valid time, for example 09:30 or 2:15 PM.' } : current);
+      setManualTimeModal(current => current ? { ...current, error: 'Enter a valid time, for example 8:30 or 2:15.' } : current);
       return;
     }
     const earliest = SCREEN_START_HOUR * 60;
-    const latest = SCREEN_END_HOUR * 60 - durationMinutes;
+    const latest = SCREEN_END_HOUR * 60 - durationForBounds;
     if (parsedMinutes < earliest || parsedMinutes > latest) {
       setManualTimeModal(current => current ? {
         ...current,
         error: `Choose a time between ${formatTimeChip(SCREEN_START_HOUR, 0)} and ${formatTimeChip(Math.floor(latest / 60), latest % 60)}.`,
       } : current);
+      return;
+    }
+    if (selectionContext?.items?.length > 1) {
+      setManualTimeModal(null);
+      setTileMenu(null);
+      scheduleRequestGroupAt(selectionContext, scheduleEvent.truckId, parsedMinutes);
       return;
     }
     const collision = getScheduleCollision({
@@ -4051,8 +4229,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       return;
     }
     setManualTimeModal(null);
+    setTileMenu(null);
     scheduleRequestAt(requestId, scheduleEvent.truckId, parsedMinutes, durationMinutes, { exact: true });
-  }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, manualTimeModal, scheduleRequestAt]);
+  }, [createScheduleSelectionContext, dayEvents, eventDurationMinutesMap, eventStartMinutesMap, manualTimeModal, scheduleRequestAt, scheduleRequestGroupAt]);
 
   const openSecondaryRouteModal = useCallback(async (requestId, segment = 'primary') => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
@@ -4548,33 +4727,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const selectedIds = selectedScheduleEventIdSet.has(scheduleEvent.orderId) && selectedScheduleEventIds.length > 1
       ? selectedScheduleEventIds
       : [scheduleEvent.orderId];
-    const anchorTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === scheduleEvent.truckId);
-    const anchorStartMinutes = eventStartMinutesMap[scheduleEvent.orderId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
-    selectionDragContextRef.current = {
-      anchorOrderId: scheduleEvent.orderId,
-      anchorTruckId: scheduleEvent.truckId,
-      anchorTruckIndex,
-      anchorStartMinutes,
-      items: selectedIds
-        .map(orderId => {
-          const sourceEvent = dayEvents.find(item => item.orderId === orderId);
-          if (!sourceEvent) {
-            return null;
-          }
-          const sourceTruckIndex = TRUCK_LANES.findIndex(lane => lane.id === sourceEvent.truckId);
-          const sourceStartMinutes = eventStartMinutesMap[orderId] ?? sourceEvent.hour * 60 + sourceEvent.minute;
-          return {
-            orderId,
-            truckId: sourceEvent.truckId,
-            durationMinutes: eventDurationMinutesMap[orderId] ?? 90,
-            minuteOffset: sourceStartMinutes - anchorStartMinutes,
-            laneOffset: sourceTruckIndex - anchorTruckIndex,
-            sourceStartMinutes,
-            sourceEndMinutes: sourceStartMinutes + (eventDurationMinutesMap[orderId] ?? 90),
-          };
-        })
-        .filter(Boolean),
-    };
+    selectionDragContextRef.current = createScheduleSelectionContext(scheduleEvent.orderId, selectedIds);
     const rect = event.currentTarget.getBoundingClientRect();
     const pointerRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
     setDraggedRequestId(scheduleEvent.orderId);
@@ -4596,7 +4749,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       color: palette?.text,
       label: 'Move schedule',
     });
-  }, [dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventStartMinutesMap, selectedScheduleEventIdSet, selectedScheduleEventIds]);
+  }, [createScheduleSelectionContext, eventCycleStateMap, selectedScheduleEventIdSet, selectedScheduleEventIds]);
 
   const handleScheduledDragEnd = useCallback(() => {
     setDraggedRequestId('');
@@ -5540,6 +5693,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             <strong>{item.blocked ? 'Slot unavailable' : 'Move selection'}</strong>
                           </div>
                         ))}
+                      {selectedScheduleChainOutlines
+                        .filter(item => item.truckId === lane.id)
+                        .map(item => (
+                          <div
+                            key={`chain-outline-${lane.id}-${item.startMinutes}-${item.durationMinutes}`}
+                            className="transport-chain-selection-outline"
+                            style={{
+                              left: `${getEventOffset(item.startMinutes) * 100}%`,
+                              width: `${getEventFlex(item.durationMinutes) * 100}%`,
+                            }}
+                            aria-hidden="true"
+                          />
+                        ))}
                       {laneEvents.map(event => {
                       const request = requestMetaMap[event.orderId];
                       const cycleState = eventCycleStateMap[event.orderId] || null;
@@ -5646,13 +5812,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         <div
                           key={event.id}
                           data-order-id={event.orderId}
-                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${isEventSelected ? ' segment-selected' : ''}${isMultiSelectedEvent ? ' selected' : ''}${isCompleteTile ? ' complete' : ''}`}
+                          className={`ts2-event-wrap${draggedRequestId ? ' drag-active' : ''}${draggedScheduledOrderId === event.orderId ? ' dragging' : ''}${isEventSelected ? ' segment-selected' : ''}${isMultiSelectedEvent ? ' chain-member' : ''}${isCompleteTile ? ' complete' : ''}`}
                           style={{ left: `${offset}%`, width: `${width}%` }}
                           draggable={!dragSchedulingId && !isCompletedMaterialTile}
                           onDragStart={(dragEvent) => handleScheduledDragStart(dragEvent, event, request, durationMinutes, palette)}
                           onDragEnd={handleScheduledDragEnd}
                           onDragOver={(dragEvent) => handleEventSnapDragOver(dragEvent, event)}
                           onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event)}
+                          onDoubleClick={(doubleClickEvent) => {
+                            doubleClickEvent.preventDefault();
+                            doubleClickEvent.stopPropagation();
+                            const clickedSegment = doubleClickEvent.target.closest('.ts2-return-card')
+                              ? 'return'
+                              : doubleClickEvent.target.closest('.ts2-secondary-route-card') && !doubleClickEvent.target.closest('.ts2-event-card')
+                                ? 'secondary'
+                                : 'primary';
+                            handleSelectScheduleChain(event.orderId, clickedSegment);
+                          }}
                           onContextMenu={(menuEvent) => {
                             menuEvent.preventDefault();
                             const menuSegment = menuEvent.target.closest('.ts2-return-card')
@@ -5666,7 +5842,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             setTileMenu({
                               orderId: event.orderId,
                               segment: menuSegment,
-                              x: Math.max(8, Math.min(menuEvent.clientX, window.innerWidth - 224)),
+                              mode: '',
+                              x: Math.max(8, Math.min(menuEvent.clientX, window.innerWidth - 296)),
                               y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 144)),
                             });
                           }}
@@ -5946,7 +6123,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
       {tileMenu ? (
         <div
-          className="transport-tile-menu"
+          className={`transport-tile-menu${manualTimeModal ? ' set-time-open' : ''}`}
           style={{ left: tileMenu.x, top: tileMenu.y }}
           onClick={(event) => event.stopPropagation()}
           role="menu"
@@ -5954,9 +6131,44 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           {!tileMenuIsDeleteOnly ? (
             <>
               {!tileMenuIsReturnSegment ? (
-                <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-                  <span>Set time manually</span>
+                <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId, tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
+                  <span>Set start time</span>
                 </button>
+              ) : null}
+              {manualTimeModal && !tileMenuIsReturnSegment ? (
+                <form className="transport-tile-time-editor" onSubmit={handleManualScheduleTime}>
+                  <div className="transport-tile-time-editor-head">
+                    <span>Start time</span>
+                    <strong>{manualTimeModal.requestIds?.length > 1 ? `${manualTimeModal.requestIds.length} selected tiles` : manualTimeRequest?.builderName || manualTimeEvent?.builderName || 'Selected tile'}</strong>
+                  </div>
+                  <div className="transport-tile-time-row">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={manualTimeModal.value}
+                      placeholder="8:30"
+                      onChange={(inputEvent) => setManualTimeModal(current => current ? { ...current, value: inputEvent.target.value, error: '' } : current)}
+                      autoFocus
+                    />
+                    <div className="transport-tile-ampm-toggle" aria-label="Start time period">
+                      {['AM', 'PM'].map(period => (
+                        <button
+                          key={period}
+                          type="button"
+                          className={manualTimeModal.meridiem === period ? 'active' : ''}
+                          onClick={() => setManualTimeModal(current => current ? { ...current, meridiem: period, error: '' } : current)}
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {manualTimeModal.error ? <p className="transport-tile-time-error">{manualTimeModal.error}</p> : null}
+                  <div className="transport-tile-time-actions">
+                    <button type="button" onClick={closeManualScheduleTime}>Cancel</button>
+                    <button type="submit">Apply</button>
+                  </div>
+                </form>
               ) : null}
               <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId, tileMenu.segment || 'primary')} disabled={Boolean(dragSchedulingId)}>
                 <span>Add external route</span>
@@ -5971,43 +6183,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               <span>{tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
             </button>
           ) : null}
-        </div>
-      ) : null}
-
-      {manualTimeModal ? (
-        <div className="ts2-modal-root transport-manual-time-root">
-          <div className="ts2-modal-backdrop" onClick={closeManualScheduleTime} />
-          <form className="transport-manual-time-card" onSubmit={handleManualScheduleTime}>
-            <div className="transport-manual-time-head">
-              <div>
-                <span>Manual Schedule Time</span>
-                <h2>{manualTimeRequest?.builderName || manualTimeEvent?.builderName || 'Material Order'}</h2>
-                <p>{getScaffoldDetailText(manualTimeRequest, manualTimeEvent)}</p>
-              </div>
-              <button type="button" className="transport-manual-time-close" onClick={closeManualScheduleTime} aria-label="Close manual time panel">x</button>
-            </div>
-            <div className="transport-manual-time-summary">
-              <div><span>Truck</span><strong>{manualTimeEvent?.truckLabel || TRUCK_LANES.find(lane => lane.id === manualTimeEvent?.truckId)?.rego || 'ESS Transport'}</strong></div>
-              <div><span>Duration</span><strong>{manualTimeDurationMinutes} min</strong></div>
-            </div>
-            <label className="transport-manual-time-field">
-              <span>Start time</span>
-              <input
-                type="time"
-                value={manualTimeModal.value}
-                min={formatManualTimeInput(SCREEN_START_HOUR * 60)}
-                max={formatManualTimeInput(SCREEN_END_HOUR * 60 - manualTimeDurationMinutes)}
-                step="60"
-                onChange={(inputEvent) => setManualTimeModal(current => current ? { ...current, value: inputEvent.target.value, error: '' } : current)}
-                autoFocus
-              />
-            </label>
-            {manualTimeModal.error ? <p className="transport-manual-time-error">{manualTimeModal.error}</p> : null}
-            <div className="transport-manual-time-actions">
-              <button type="button" className="transport-manual-time-secondary" onClick={closeManualScheduleTime}>Cancel</button>
-              <button type="submit" className="transport-manual-time-primary">Move Tile</button>
-            </div>
-          </form>
         </div>
       ) : null}
 

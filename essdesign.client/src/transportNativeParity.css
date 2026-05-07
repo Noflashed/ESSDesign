@@ -3560,6 +3560,134 @@
     cursor: wait;
 }
 
+.transport-tile-menu.set-time-open {
+    width: 284px;
+}
+
+.transport-tile-time-editor {
+    display: grid;
+    gap: 9px;
+    margin: 4px 0 6px;
+    padding: 10px;
+    border: 1px solid #d7e0eb;
+    border-radius: 7px;
+    background: #f8fafc;
+}
+
+.transport-tile-time-editor-head {
+    display: grid;
+    gap: 2px;
+}
+
+.transport-tile-time-editor-head span {
+    color: #64748b;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 760;
+}
+
+.transport-tile-time-editor-head strong {
+    overflow: hidden;
+    color: #102b5c;
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 720;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-tile-time-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.transport-tile-time-row input {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #102b5c;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 680;
+}
+
+.transport-tile-time-row input:focus {
+    border-color: #2563eb;
+    outline: 3px solid rgba(37, 99, 235, 0.14);
+}
+
+.transport-tile-ampm-toggle {
+    display: grid;
+    grid-template-columns: repeat(2, 42px);
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+.transport-tile-menu .transport-tile-ampm-toggle button,
+.transport-tile-menu .transport-tile-time-actions button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #334155;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 760;
+    text-align: center;
+    cursor: pointer;
+}
+
+.transport-tile-menu .transport-tile-ampm-toggle button + button {
+    border-left: 1px solid #e2e8f0;
+}
+
+.transport-tile-menu .transport-tile-ampm-toggle button.active {
+    background: #102b5c;
+    color: #ffffff;
+}
+
+.transport-tile-time-error {
+    margin: 0;
+    padding: 7px 8px;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    background: #fff7ed;
+    color: #c2410c;
+    font-size: 10px;
+    line-height: 13px;
+    font-weight: 650;
+}
+
+.transport-tile-time-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.transport-tile-menu .transport-tile-time-actions button {
+    border: 1px solid #d7e0eb;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #102b5c;
+}
+
+.transport-tile-menu .transport-tile-time-actions button[type="submit"] {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
 .transport-manual-time-card {
     position: absolute;
     left: 50%;
