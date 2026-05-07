@@ -1802,6 +1802,52 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
+    setRunLink: async (requestId, { sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null, secondaryRoute = undefined } = {}) => {
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
+        ]);
+        if (!record) throw new Error('Request not found');
+        const nextSourceOrderId = sourceOrderId || null;
+        const nextConnectedParentStartMinutes = nextSourceOrderId && typeof connectedParentStartMinutes === 'number'
+            ? connectedParentStartMinutes
+            : null;
+        const nextConnectedParentSegment = nextSourceOrderId
+            ? normalizeConnectedParentSegment(connectedParentSegment) || 'primary'
+            : null;
+        const nextSecondaryRoute = secondaryRoute === undefined
+            ? normalizeSecondaryRoute(record.secondaryRoute)
+            : normalizeSecondaryRoute(secondaryRoute);
+        const updated = {
+            ...record,
+            sourceOrderId: nextSourceOrderId,
+            connectedParentStartMinutes: nextConnectedParentStartMinutes,
+            connectedParentSegment: nextConnectedParentSegment,
+            secondaryRoute: nextSecondaryRoute,
+        };
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? {
+                    ...item,
+                    sourceOrderId: nextSourceOrderId,
+                    connectedParentStartMinutes: nextConnectedParentStartMinutes,
+                    connectedParentSegment: nextConnectedParentSegment,
+                    secondaryRoute: secondaryRoute === undefined
+                        ? normalizeSecondaryRoute(item.secondaryRoute)
+                        : nextSecondaryRoute,
+                }
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    },
+
     clearSchedule: async (requestId, options = {}) => {
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
@@ -2111,6 +2157,7 @@ export const materialOrderRequestsAPI = {
         const relinkedScheduledAtIso = relinkedScheduledDate && typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
             ? `${relinkedScheduledDate}T${String(relinkedScheduledHour).padStart(2, '0')}:${String(relinkedScheduledMinute).padStart(2, '0')}:00`
             : null;
+        const relinkedConnectedParentSegment = normalizeConnectedParentSegment(relinkedContinuation?.connectedParentSegment) || 'primary';
         const relinkedContinuationRecord = relinkedContinuationId
             ? {
                 ...(relinkedContinuation || {}),
@@ -2119,7 +2166,7 @@ export const materialOrderRequestsAPI = {
                 connectedParentStartMinutes: typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
                     ? relinkedScheduledHour * 60 + relinkedScheduledMinute
                     : relinkedContinuation.connectedParentStartMinutes ?? null,
-                connectedParentSegment: 'primary',
+                connectedParentSegment: relinkedConnectedParentSegment,
                 routeType: relinkedContinuation.routeType || null,
                 scheduledDate: relinkedScheduledDate,
                 scheduledHour: relinkedScheduledHour,

@@ -23,7 +23,6 @@ import {
   formatDistance,
   formatDuration,
   formatTimeChip,
-  getCachedRouteData,
   getCachedRouteDataBetween,
   getCachedRouteEstimate,
   getCachedRouteEstimateBetween,
@@ -361,6 +360,42 @@ function getDateAtScheduleMinutes(dateKey, minutes) {
   const date = new Date(`${dateKey}T00:00:00`);
   date.setMinutes(Math.max(0, Math.round(minutes)));
   return date;
+}
+
+function getFirstLinkedContinuation(requestId, requests = [], segment = 'primary') {
+  if (!requestId) {
+    return null;
+  }
+  return (requests || [])
+    .filter(item =>
+      item?.sourceOrderId === requestId
+      && !item.archivedAt
+      && ((getConnectedParentSegment(item) || 'primary') === segment)
+    )
+    .sort((left, right) => getRequestScheduledStartMinutes(left) - getRequestScheduledStartMinutes(right))[0] || null;
+}
+
+function buildContinuationSegmentUpdate(continuationRequest, parentRequest, segment, connectedParentStartMinutes, parentSiteLocation = '') {
+  if (!continuationRequest || !parentRequest) {
+    return null;
+  }
+  const nextSecondaryRoute = isSecondaryRouteRequest(continuationRequest)
+    ? {
+        ...continuationRequest.secondaryRoute,
+        startingLocation: segment === 'return'
+          ? YARD_LOCATION
+          : parentSiteLocation || continuationRequest.secondaryRoute?.startingLocation || '',
+      }
+    : continuationRequest.secondaryRoute;
+  return {
+    ...continuationRequest,
+    sourceOrderId: parentRequest.id,
+    connectedParentStartMinutes: typeof connectedParentStartMinutes === 'number'
+      ? Math.round(connectedParentStartMinutes)
+      : null,
+    connectedParentSegment: segment,
+    secondaryRoute: nextSecondaryRoute,
+  };
 }
 
 function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) {
@@ -759,7 +794,7 @@ function getBoardRouteContextForRequest(request, requestLookup = null, siteLocat
     const secondaryRoute = request.secondaryRoute || {};
     const fromLocation = getConnectedParentSegment(request) === 'return'
       ? YARD_LOCATION
-      : secondaryRoute.startingLocation || siteLocationMap[request.id] || '';
+      : secondaryRoute.startingLocation || siteLocationMap[request.id] || YARD_LOCATION;
     const toLocation = secondaryRoute.destination || secondaryRoute.linkedRequestSiteLocation || '';
     if (!fromLocation || !toLocation) {
       return null;
@@ -803,10 +838,10 @@ function getBoardRouteContextForRequest(request, requestLookup = null, siteLocat
       Math.abs(scheduledStart - connectedStart) <= SNAP_EDGE_THRESHOLD_MINUTES
     ),
   );
-  const fromLocation = sourceRequest
-    && shouldUseConnectedOrigin
+  const connectedOrigin = sourceRequest && shouldUseConnectedOrigin
     ? getRequestSiteLocation(sourceRequest, siteLocationMap, []) || siteLocationMap[sourceRequest.id] || ''
     : '';
+  const fromLocation = connectedOrigin || YARD_LOCATION;
 
   return {
     fromLocation: fromLocation && toLocation ? fromLocation : '',
@@ -1453,7 +1488,7 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
     const toLocation = route.destination || route.linkedRequestSiteLocation || getRequestSiteLocation(request, siteLocationMap, builders);
     return {
       segment: 'secondary',
-      fromLocation: getConnectedParentSegment(request) === 'return' ? YARD_LOCATION : route.startingLocation || '',
+      fromLocation: getConnectedParentSegment(request) === 'return' ? YARD_LOCATION : route.startingLocation || YARD_LOCATION,
       toLocation,
       siteLocation: toLocation,
       schedule,
@@ -1465,7 +1500,7 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
     const route = request.secondaryRoute || {};
     return {
       segment: 'secondary',
-      fromLocation: route.startingLocation || getRequestSiteLocation(request, siteLocationMap, builders),
+      fromLocation: route.startingLocation || getRequestSiteLocation(request, siteLocationMap, builders) || YARD_LOCATION,
       toLocation: route.destination || '',
       siteLocation: route.destination || '',
       schedule,
@@ -1494,7 +1529,7 @@ function buildRequestRouteContext(request, event, siteLocationMap = {}, builders
 
   return {
     segment: 'primary',
-    fromLocation: '',
+    fromLocation: YARD_LOCATION,
     toLocation,
     siteLocation: toLocation,
     schedule,
@@ -1506,24 +1541,20 @@ function getCachedRouteEstimateForContext(context) {
   if (!context?.toLocation) {
     return null;
   }
-  if (context.segment === 'secondary' || context.segment === 'return') {
-    return context.fromLocation
-      ? getCachedRouteEstimateBetweenValue(context.fromLocation, context.toLocation, context.schedule) ?? null
-      : null;
-  }
-  return getCachedRouteEstimateValue(context.toLocation, context.schedule) ?? null;
+  const fromLocation = context.fromLocation || (context.segment === 'primary' ? YARD_LOCATION : '');
+  return fromLocation
+    ? getCachedRouteEstimateBetweenValue(fromLocation, context.toLocation, context.schedule) ?? null
+    : null;
 }
 
 function fetchRouteDataForContext(context) {
   if (!context?.toLocation) {
     return Promise.resolve(null);
   }
-  if (context.segment === 'secondary' || context.segment === 'return') {
-    return context.fromLocation
-      ? getCachedRouteDataBetween(context.fromLocation, context.toLocation, context.schedule)
-      : Promise.resolve(null);
-  }
-  return getCachedRouteData(context.toLocation, context.schedule);
+  const fromLocation = context.fromLocation || (context.segment === 'primary' ? YARD_LOCATION : '');
+  return fromLocation
+    ? getCachedRouteDataBetween(fromLocation, context.toLocation, context.schedule)
+    : Promise.resolve(null);
 }
 
 function buildEstimateFromRouteData(routeData) {
@@ -2249,13 +2280,47 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     };
   }, [returnTransitReprojectingId, setRouteLoading]);
 
-  const handleReturnTransitToggle = useCallback((event) => {
-    const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
+  const setReturnTransitForRequest = useCallback((requestId, checked) => {
     if (!requestId) {
       return;
     }
+    const parentRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    if (!parentRequest) {
+      return;
+    }
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const previousCycleStateMap = eventCycleStateMap;
+    const previousReturnTransitByRequestId = returnTransitByRequestId;
+    const parentEvent = dayEvents.find(item => item.orderId === requestId) || null;
+    const parentStartMinutes = eventStartMinutesMap[requestId] ?? (parentEvent ? parentEvent.hour * 60 + parentEvent.minute : getRequestScheduledStartMinutes(parentRequest));
+    const primaryEndMinutes = parentStartMinutes + Math.max(1, eventPrimaryDurationMinutesMap[requestId] ?? getRequestDeliveryHandoffMinutes(parentRequest));
+    const returnEndMinutes = parentStartMinutes + Math.max(
+      eventPrimaryDurationMinutesMap[requestId] ?? getRequestDeliveryHandoffMinutes(parentRequest),
+      eventDurationMinutesMap[requestId] ?? getRequestDeliveryHandoffMinutes(parentRequest),
+    );
+    const sourceSegment = checked ? 'primary' : 'return';
+    const targetSegment = checked ? 'return' : 'primary';
+    const continuation = getFirstLinkedContinuation(requestId, allRequests, sourceSegment);
+    const parentSiteLocation = requestSiteLocationMapRef.current[requestId] || getRequestSiteLocation(parentRequest, requestSiteLocationMapRef.current, []);
+    const updatedContinuation = continuation
+      ? buildContinuationSegmentUpdate(
+          continuation,
+          parentRequest,
+          targetSegment,
+          checked ? returnEndMinutes : primaryEndMinutes,
+          parentSiteLocation,
+        )
+      : null;
+    const nextRequests = updatedContinuation
+      ? previousRequests.map(item => item.id === updatedContinuation.id ? updatedContinuation : item)
+      : previousRequests;
+
     setReturnTransitReprojectingId(requestId);
-    const checked = event.target.checked;
     setReturnTransitByRequestId(current => {
       const next = { ...(current || {}) };
       if (checked) {
@@ -2266,7 +2331,59 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       delete next.__legacy;
       return next;
     });
-  }, [selectedScheduleEventId, selectedScheduleEventIds]);
+    setTileMenu(null);
+    setSelectedScheduleEventId(requestId);
+    setSelectedScheduleEventIds([requestId]);
+    setSelectedScheduleSegment(checked ? 'return' : 'primary');
+    setScheduleInspectorOpen(true);
+
+    if (updatedContinuation) {
+      setAllRequests(nextRequests);
+      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+      optimisticRequestOverridesRef.current.set(updatedContinuation.id, {
+        request: updatedContinuation,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
+      setRouteLoading(updatedContinuation.id, true, 'primary');
+      materialOrderRequestsAPI.setRunLink(updatedContinuation.id, {
+        sourceOrderId: requestId,
+        connectedParentStartMinutes: updatedContinuation.connectedParentStartMinutes,
+        connectedParentSegment: targetSegment,
+        secondaryRoute: updatedContinuation.secondaryRoute,
+      })
+        .then((savedContinuation) => {
+          if (savedContinuation) {
+            optimisticRequestOverridesRef.current.set(savedContinuation.id, {
+              request: savedContinuation,
+              expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+            });
+          }
+          setError('');
+        })
+        .catch(err => {
+          optimisticRequestOverridesRef.current.delete(updatedContinuation.id);
+          boardProjectionSignatureRef.current = '';
+          requestMetaSignatureRef.current = '';
+          setAllRequests(previousRequests);
+          setDayEvents(previousEvents);
+          setRequestMetaMap(previousMetaMap);
+          setEventStartMinutesMap(previousStartMap);
+          setEventDurationMinutesMap(previousDurationMap);
+          setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+          setEventCycleStateMap(previousCycleStateMap);
+          setReturnTransitByRequestId(previousReturnTransitByRequestId);
+          setError(err?.message || 'Failed to update return-to-yard link.');
+        })
+        .finally(() => {
+          setRouteLoading(updatedContinuation.id, false, 'primary');
+        });
+    }
+  }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
+
+  const handleReturnTransitToggle = useCallback((event) => {
+    const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
+    setReturnTransitForRequest(requestId, event.target.checked);
+  }, [selectedScheduleEventId, selectedScheduleEventIds, setReturnTransitForRequest]);
 
   const handleTollsToggle = useCallback((event) => {
     const requestId = selectedScheduleEventId || selectedScheduleEventIds[0] || '';
@@ -2481,18 +2598,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!tileMenu?.orderId) {
       return [];
     }
+    if (tileMenu.segment === 'return') {
+      return [tileMenu.orderId];
+    }
     if (selectedScheduleEventIdSet.has(tileMenu.orderId) && selectedScheduleEventIds.length > 1) {
       return selectedScheduleEventIds;
     }
     return [tileMenu.orderId];
   }, [selectedScheduleEventIdSet, selectedScheduleEventIds, tileMenu]);
+  const tileMenuIsReturnSegment = tileMenu?.segment === 'return';
   const tileMenuIsDeleteOnlySecondaryRoute = isSecondaryRouteRequest(tileMenuRequest)
     && !isLinkedSecondaryMaterialOrderRequest(tileMenuRequest);
   const tileMenuIsCompletedMaterialOrder = isCompletedMaterialOrderRequest(
     tileMenuRequest,
     tileMenu?.orderId ? eventCycleStateMap[tileMenu.orderId] : null,
   );
-  const tileMenuIsDeleteOnly = tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode);
+  const tileMenuIsDeleteOnly = !tileMenuIsReturnSegment && (
+    tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode)
+  );
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2583,7 +2706,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const selectedSchedulePrimaryRouteEstimate = selectedScheduleRequest
     ? isSecondaryRouteRequest(selectedScheduleRequest)
       ? null
-      : getCachedRouteEstimateValue(selectedScheduleSiteLocation, selectedScheduleRouteSchedule) ?? null
+      : getCachedRouteEstimateBetweenValue(
+          getConnectedParentSegment(selectedScheduleRequest) === 'return'
+            ? YARD_LOCATION
+            : getConnectedRouteOrigin(
+                selectedScheduleCycleState,
+                requestSiteLocationMap,
+                [],
+                requestMetaMap,
+                selectedScheduleRequest,
+              ) || YARD_LOCATION,
+          selectedScheduleSiteLocation,
+          selectedScheduleRouteSchedule,
+        ) ?? null
     : null;
   const selectedScheduleSecondaryRoute = selectedScheduleRequest?.secondaryRoute || null;
   const selectedScheduleIsStandaloneSecondary = isSecondaryRouteRequest(selectedScheduleRequest);
@@ -2724,9 +2859,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled
-    && !selectedScheduleHasSecondaryContinuation
     && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
-  const selectedScheduleCanToggleReturnTransit = !selectedScheduleHasSecondaryContinuation
+  const selectedScheduleCanToggleReturnTransit = Boolean(selectedScheduleRequest)
     && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
   const selectedSchedulePrimaryTimingSource = selectedSchedulePrimaryTimingEstimate || selectedScheduleOutboundEstimate || selectedSchedulePrimaryRouteEstimate;
   const selectedScheduleTiming = selectedScheduleRequest
@@ -3645,7 +3779,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       scheduledMinute: Math.round(startMinutes % 60),
       enableTolls: getTollsEnabled(request.id, 'primary'),
     };
-    const estimate = siteLocation ? getCachedRouteEstimateValue(siteLocation, schedule) : null;
+    const estimate = siteLocation ? getCachedRouteEstimateBetweenValue(YARD_LOCATION, siteLocation, schedule) : null;
     if (estimate === undefined) {
       return Math.max(30, Math.round(fallbackDurationMinutes || eventDurationMinutesMap[request.id] || 90));
     }
@@ -3920,7 +4054,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     scheduleRequestAt(requestId, scheduleEvent.truckId, parsedMinutes, durationMinutes, { exact: true });
   }, [dayEvents, eventDurationMinutesMap, eventStartMinutesMap, manualTimeModal, scheduleRequestAt]);
 
-  const openSecondaryRouteModal = useCallback(async (requestId) => {
+  const openSecondaryRouteModal = useCallback(async (requestId, segment = 'primary') => {
     const scheduleEvent = dayEvents.find(event => event.orderId === requestId);
     const request = requestMetaMap[requestId] || allRequests.find(item => item.id === requestId) || null;
     if (!scheduleEvent || !request) {
@@ -3930,16 +4064,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
     const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
     const cycleState = eventCycleStateMap[requestId] || null;
-    const startsAfterReturnTransit = getReturnTransitEnabled(requestId) && !cycleState?.hasSecondaryContinuation;
+    const addAfterReturnSegment = segment === 'return';
+    const startsAfterReturnTransit = addAfterReturnSegment && getReturnTransitEnabled(requestId);
     const primarySiteLocation = startsAfterReturnTransit
       ? YARD_LOCATION
       : getRequestSiteLocation(request, requestSiteLocationMap, builders);
-    const insertBeforeRequest = allRequests.find(item =>
+    const existingSecondaryContinuation = allRequests.find(item =>
       isSecondaryRouteRequest(item) &&
       item.sourceOrderId === requestId &&
       !item.archivedAt &&
+      ((getConnectedParentSegment(item) || 'primary') === (startsAfterReturnTransit ? 'return' : 'primary')) &&
       item.scheduledDate === scheduleEvent.date
-    ) || findFollowOnRequestForInsertion(
+    );
+    const existingReturnContinuation = !startsAfterReturnTransit
+      ? getFirstLinkedContinuation(requestId, allRequests, 'return')
+      : null;
+    const insertBeforeRequest = existingSecondaryContinuation || existingReturnContinuation || findFollowOnRequestForInsertion(
       requestId,
       scheduleEvent,
       dayEvents,
@@ -3971,6 +4111,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setTileMenu(null);
     setSecondaryRouteModal({
       requestId,
+      segment: startsAfterReturnTransit ? 'return' : 'primary',
       primarySiteLocation: primarySiteLocation || '',
       startsAfterReturnTransit,
       insertBeforeRequest,
@@ -4000,7 +4141,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ],
       error: '',
     });
-  }, [allRequests, dayEvents, eventCycleStateMap, getTollsEnabled, pendingRequests, requestMetaMap, requestSiteLocationMap]);
+  }, [allRequests, dayEvents, eventCycleStateMap, getReturnTransitEnabled, getTollsEnabled, pendingRequests, requestMetaMap, requestSiteLocationMap]);
 
   const closeSecondaryRouteModal = useCallback(() => {
     if (secondaryRouteSaving) {
@@ -4126,7 +4267,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         scheduledHour: returnDeparture.getHours(),
         scheduledMinute: returnDeparture.getMinutes(),
       };
-      const returnRoute = await getCachedRouteDataBetween(destination, YARD_LOCATION, { ...returnSchedule, enableTolls: requestTollsEnabled });
+      const returnRoute = await getCachedRouteDataBetween(destination, YARD_LOCATION, { ...returnSchedule, enableTolls: requestReturnTollsEnabled });
       if (!returnRoute) {
         throw new Error('Return-to-yard timing could not be calculated for that secondary route.');
       }
@@ -4167,21 +4308,29 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const continuationToRelink = !linkedRequestId && secondaryRouteModal.insertBeforeRequest
         ? secondaryRouteModal.insertBeforeRequest
         : null;
+      const shouldMoveReturnBreakToSecondary = Boolean(
+        !startsAfterReturnTransit
+        && getReturnTransitEnabled(request.id)
+      );
       let relinkedContinuation = null;
       if (continuationToRelink?.id) {
         const relinkDestination = getRequestSiteLocation(continuationToRelink, requestSiteLocationMapRef.current, []);
         if (relinkDestination) {
-          const relinkDeparture = new Date(
-            outboundDeparture.getTime()
-            + Math.round(outbound.durationSeconds / 60) * 60 * 1000
-            + secondaryServiceMinutes * 60 * 1000,
-          );
+          const relinkParentSegment = shouldMoveReturnBreakToSecondary ? 'return' : 'primary';
+          const relinkOrigin = shouldMoveReturnBreakToSecondary ? YARD_LOCATION : destination;
+          const relinkDeparture = shouldMoveReturnBreakToSecondary
+            ? new Date(returnDeparture.getTime() + Math.round(returnRoute.durationSeconds / 60) * 60 * 1000)
+            : new Date(
+                outboundDeparture.getTime()
+                + Math.round(outbound.durationSeconds / 60) * 60 * 1000
+                + secondaryServiceMinutes * 60 * 1000,
+              );
           const relinkSchedule = {
             scheduledDate: formatDateKey(relinkDeparture),
             scheduledHour: relinkDeparture.getHours(),
             scheduledMinute: relinkDeparture.getMinutes(),
           };
-          const relinkOutbound = await getCachedRouteDataBetween(destination, relinkDestination, { ...relinkSchedule, enableTolls: getTollsEnabled(continuationToRelink.id) });
+          const relinkOutbound = await getCachedRouteDataBetween(relinkOrigin, relinkDestination, { ...relinkSchedule, enableTolls: getTollsEnabled(continuationToRelink.id) });
           if (!relinkOutbound) {
             throw new Error('Follow-on route could not be recalculated from the external route destination.');
           }
@@ -4209,7 +4358,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             scheduledMinute: relinkSchedule.scheduledMinute,
             scheduledAtIso: `${relinkSchedule.scheduledDate}T${String(relinkSchedule.scheduledHour).padStart(2, '0')}:${String(relinkSchedule.scheduledMinute).padStart(2, '0')}:00`,
             connectedParentStartMinutes: relinkSchedule.scheduledHour * 60 + relinkSchedule.scheduledMinute,
-            connectedParentSegment: 'primary',
+            connectedParentSegment: relinkParentSegment,
             scheduledTruckId: scheduleEvent.truckId,
             scheduledTruckLabel: scheduleEvent.truckLabel,
             truckId: scheduleEvent.truckId,
@@ -4217,7 +4366,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             sourceOrderId: '__pending_external_route__',
             ...(isSecondaryRouteRequest(continuationToRelink) ? { secondaryRoute: {
               ...continuationToRelink.secondaryRoute,
-              startingLocation: destination,
+              startingLocation: relinkOrigin,
               destination: relinkDestination,
               travelDistanceMeters: relinkOutbound.distanceMeters,
               travelDurationSeconds: relinkOutbound.durationSeconds,
@@ -4280,16 +4429,36 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const dateKey = scheduleEvent.date || formatDateKey(selectedDate);
       mergeRequestSiteLocationMap(nextSiteLocationMap);
       setAllRequests(nextRequests);
-      if (relinkedUpdatedContinuation) {
+      if (shouldMoveReturnBreakToSecondary || relinkedUpdatedContinuation) {
         setReturnTransitByRequestId(current => {
-          if (!current?.[chainedUpdatedRequest.id] && !current?.__legacy) {
+          if (
+            !shouldMoveReturnBreakToSecondary
+            && !current?.[chainedUpdatedRequest.id]
+            && !current?.__legacy
+          ) {
             return current;
           }
           const next = { ...(current || {}) };
-          delete next[chainedUpdatedRequest.id];
+          if (shouldMoveReturnBreakToSecondary) {
+            delete next[parentRequest.id];
+            next[chainedUpdatedRequest.id] = true;
+          } else {
+            delete next[chainedUpdatedRequest.id];
+          }
           delete next.__legacy;
           return next;
         });
+        if (shouldMoveReturnBreakToSecondary) {
+          setTollsByRequestId(current => {
+            if (!current?.[getTollStorageKey(parentRequest.id, 'return')]) {
+              return current;
+            }
+            const next = { ...(current || {}) };
+            delete next[getTollStorageKey(parentRequest.id, 'return')];
+            next[getTollStorageKey(chainedUpdatedRequest.id, 'return')] = true;
+            return next;
+          });
+        }
       }
       optimisticRequestOverridesRef.current.set(parentRequest.id, {
         request: parentRequest,
@@ -4316,7 +4485,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     } finally {
       setSecondaryRouteSaving(false);
     }
-  }, [allRequests, dayEvents, eventCycleStateMap, eventStartMinutesMap, getTollsEnabled, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, secondaryRouteModal, selectedDate]);
+  }, [allRequests, dayEvents, eventCycleStateMap, eventStartMinutesMap, getReturnTransitEnabled, getTollsEnabled, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, secondaryRouteModal, selectedDate]);
 
   const handlePendingDragStart = useCallback((event, request) => {
     const requestId = request?.id;
@@ -4863,9 +5032,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
   }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, dropPreview, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
 
-  const handleUnscheduleOrder = useCallback((requestIds) => {
+  const handleUnscheduleOrder = useCallback((requestIds, options = {}) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
     if (!ids.length) {
+      return;
+    }
+    if ((options.segment || selectedScheduleSegment) === 'return' && ids.length === 1) {
+      setReturnTransitForRequest(ids[0], false);
       return;
     }
     const previousRequests = allRequests;
@@ -4969,7 +5142,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setError(err?.message || 'Failed to unschedule order selection.');
       }
     })();
-  }, [allRequests, dayEvents, debugMode, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate]);
+  }, [allRequests, dayEvents, debugMode, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, selectedScheduleSegment, setReturnTransitForRequest]);
 
   const handleDeleteScheduledOrder = useCallback((requestIds) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
@@ -5482,8 +5655,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                           onDrop={(dragEvent) => handleEventSnapDrop(dragEvent, event)}
                           onContextMenu={(menuEvent) => {
                             menuEvent.preventDefault();
+                            const menuSegment = menuEvent.target.closest('.ts2-return-card')
+                              ? 'return'
+                              : menuEvent.target.closest('.ts2-secondary-route-card') && !menuEvent.target.closest('.ts2-event-card')
+                                ? 'secondary'
+                                : 'primary';
+                            if (!selectedScheduleEventIdSet.has(event.orderId) || selectedScheduleEventIds.length <= 1) {
+                              handleSelectScheduleEvent(event.orderId, menuSegment);
+                            }
                             setTileMenu({
                               orderId: event.orderId,
+                              segment: menuSegment,
                               x: Math.max(8, Math.min(menuEvent.clientX, window.innerWidth - 224)),
                               y: Math.max(8, Math.min(menuEvent.clientY, window.innerHeight - 144)),
                             });
@@ -5771,20 +5953,24 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         >
           {!tileMenuIsDeleteOnly ? (
             <>
-              <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
-                <span>Set time manually</span>
-              </button>
-              <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+              {!tileMenuIsReturnSegment ? (
+                <button type="button" role="menuitem" onClick={() => openManualScheduleTime(tileMenu.orderId)} disabled={Boolean(dragSchedulingId)}>
+                  <span>Set time manually</span>
+                </button>
+              ) : null}
+              <button type="button" role="menuitem" onClick={() => openSecondaryRouteModal(tileMenu.orderId, tileMenu.segment || 'primary')} disabled={Boolean(dragSchedulingId)}>
                 <span>Add external route</span>
               </button>
-              <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
-                <span>{tileMenuSelectionIds.length > 1 ? `Unschedule ${tileMenuSelectionIds.length} orders` : 'Unschedule order'}</span>
+              <button type="button" role="menuitem" onClick={() => handleUnscheduleOrder(tileMenuSelectionIds, { segment: tileMenu.segment })} disabled={Boolean(dragSchedulingId)}>
+                <span>{tileMenuIsReturnSegment ? 'Remove return to yard' : tileMenuSelectionIds.length > 1 ? `Unschedule ${tileMenuSelectionIds.length} orders` : 'Unschedule order'}</span>
               </button>
             </>
           ) : null}
-          <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
-            <span>{tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
-          </button>
+          {!tileMenuIsReturnSegment ? (
+            <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteScheduledOrder(tileMenuSelectionIds)} disabled={Boolean(dragSchedulingId)}>
+              <span>{tileMenuIsCompletedMaterialOrder && !debugMode ? 'Remove from schedule' : tileMenuSelectionIds.length > 1 ? `Delete ${tileMenuSelectionIds.length} orders` : 'Delete order'}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
