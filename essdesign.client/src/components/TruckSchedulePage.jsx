@@ -166,11 +166,18 @@ function breakRequestRunLink(request) {
     ...request,
     sourceOrderId: null,
     connectedParentStartMinutes: null,
+    connectedParentSegment: null,
     ...(shouldRestoreMaterialOrder ? {
       routeType: null,
       secondaryRoute: null,
     } : {}),
   };
+}
+
+function getConnectedParentSegment(request) {
+  return request?.connectedParentSegment === 'return' || request?.connectedParentSegment === 'primary'
+    ? request.connectedParentSegment
+    : null;
 }
 
 function isCompletedMaterialOrderRequest(request, cycleState = null) {
@@ -237,6 +244,25 @@ function isBackToBackContinuation(parentRequest, continuationRequest, truckId) {
     return false;
   }
   return true;
+}
+
+function isReturnTransitContinuation(parentRequest, continuationRequest, truckId, includeReturnTransitToYard, timing) {
+  if (!isBackToBackContinuation(parentRequest, continuationRequest, truckId) || !includeReturnTransitToYard) {
+    return false;
+  }
+  const segment = getConnectedParentSegment(continuationRequest);
+  if (segment === 'return') {
+    return true;
+  }
+  if (segment === 'primary') {
+    return false;
+  }
+  if (typeof continuationRequest.connectedParentStartMinutes !== 'number' || !timing?.returnMinutes) {
+    return false;
+  }
+  const parentStart = getRequestScheduledStartMinutes(parentRequest);
+  const fullReturnEnd = parentStart + Math.max(1, timing.totalMinutes || 0);
+  return Math.abs(continuationRequest.connectedParentStartMinutes - fullReturnEnd) <= SNAP_EDGE_THRESHOLD_MINUTES;
 }
 
 function getRequestDeliveryHandoffMinutes(request, routeEstimate = null) {
@@ -485,7 +511,14 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const flowBaseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard)
           : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null);
-        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, truckId);
+        const hasReturnTransitContinuation = isReturnTransitContinuation(
+          request,
+          continuation,
+          truckId,
+          includeReturnTransitToYard,
+          flowBaseTiming,
+        );
+        const hasSecondaryContinuation = isBackToBackContinuation(request, continuation, truckId) && !hasReturnTransitContinuation;
         const hasEffectiveReturnBreak = includeReturnTransitToYard && !hasSecondaryContinuation;
         const timing = hasSecondaryContinuation || !includeReturnTransitToYard
           ? removeReturnLegFromTiming(baseTiming)
@@ -577,6 +610,7 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
           returnTransitEndMinutes: projected.returnTransitEndMinutes,
           isLastScheduledForDay: index === ordered.length - 1,
           hasSecondaryContinuation,
+          hasReturnTransitContinuation,
           followsPreviousRun,
           presumedInTransitFromParent,
           routeFromRequestId,
@@ -639,6 +673,7 @@ function getBoardRouteContextForRequest(request, requestLookup = null, siteLocat
     : null;
   const scheduledStart = getRequestScheduledStartMinutes(request);
   const connectedStart = request.connectedParentStartMinutes;
+  const connectedSegment = getConnectedParentSegment(request);
   const requestTruckId = request.scheduledTruckId ?? request.truckId ?? null;
   const sourceTruckId = sourceRequest?.scheduledTruckId ?? sourceRequest?.truckId ?? null;
   const hasCompatibleSource = Boolean(
@@ -647,7 +682,7 @@ function getBoardRouteContextForRequest(request, requestLookup = null, siteLocat
     sourceTruckId &&
     requestTruckId === sourceTruckId &&
     sourceRequest.scheduledDate === request.scheduledDate &&
-    !returnTransitByRequestId?.[sourceRequest.id],
+    connectedSegment !== 'return',
   );
   const shouldUseConnectedOrigin = Boolean(
     hasCompatibleSource &&
@@ -927,6 +962,7 @@ function getReturnSegmentSnapState({
     candidate: {
       event: scheduleEvent,
       side: 'after',
+      linkSegment: 'return',
       minutes: clampScheduleMinutes(existingEnd, durationMinutes),
       distance: 0,
     },
@@ -2388,6 +2424,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       `generic=${snapDebugInfo.genericSide || 'none'}@${formatDebugMinutes(snapDebugInfo.genericMinutes)}`,
       `chosen=${snapDebugInfo.chosenSource || 'none'}:${snapDebugInfo.chosenSide || 'none'}@${formatDebugMinutes(snapDebugInfo.chosenMinutes)}`,
       `linkTo=${snapDebugInfo.linkToRequestId || 'none'}`,
+      `segment=${snapDebugInfo.linkSegment || 'none'}`,
       `blocked=${snapDebugInfo.blocked ? 'yes' : 'no'}`,
     ];
   }, [snapDebugInfo]);
@@ -2971,6 +3008,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const nextSourceOrderId = requestedSourceRequest
       ? requestedSourceOrderId
       : null;
+    const nextConnectedParentSegment = nextSourceOrderId
+      ? options.linkToSegment === 'return' ? 'return' : 'primary'
+      : null;
     const shouldUpdateRunLink = shouldBreakRunLinks || Boolean(nextSourceOrderId);
     const sourceAfterRunBreak = shouldBreakRunLinks ? breakRequestRunLink(sourceRequest) : sourceRequest;
     const runBreakSiteLocationPatch = {};
@@ -2994,6 +3034,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ...(shouldUpdateRunLink ? {
         sourceOrderId: nextSourceOrderId,
         connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
+        connectedParentSegment: nextConnectedParentSegment,
       } : {}),
       scheduledDate: dateKey,
       scheduledHour: hour,
@@ -3103,6 +3144,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         clearRunLink: shouldUpdateRunLink,
         sourceOrderId: nextSourceOrderId,
         connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
+        connectedParentSegment: nextConnectedParentSegment,
       })
       .then(() => Array.from(directContinuationIds).reduce(
         (promise, continuationId) => promise.then(() => materialOrderRequestsAPI.clearRunLink(continuationId)),
@@ -3656,6 +3698,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             scheduledMinute: relinkSchedule.scheduledMinute,
             scheduledAtIso: `${relinkSchedule.scheduledDate}T${String(relinkSchedule.scheduledHour).padStart(2, '0')}:${String(relinkSchedule.scheduledMinute).padStart(2, '0')}:00`,
             connectedParentStartMinutes: relinkSchedule.scheduledHour * 60 + relinkSchedule.scheduledMinute,
+            connectedParentSegment: 'primary',
             scheduledTruckId: scheduleEvent.truckId,
             scheduledTruckLabel: scheduleEvent.truckLabel,
             truckId: scheduleEvent.truckId,
@@ -3691,6 +3734,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const chainedUpdatedRequest = {
         ...updatedRequest,
         connectedParentStartMinutes: persistedSecondarySchedule.scheduledHour * 60 + persistedSecondarySchedule.scheduledMinute,
+        connectedParentSegment: 'primary',
       };
       const relinkedUpdatedContinuation = relinkedContinuation
         ? {
@@ -4054,6 +4098,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           chosenSide: null,
           chosenMinutes: null,
           linkToRequestId: '',
+          linkSegment: null,
           blocked: false,
         });
       }
@@ -4081,6 +4126,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         chosenSide: snapCandidate.side,
         chosenMinutes: snapCandidate.minutes,
         linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+        linkSegment: snapCandidate.side === 'after' ? snapCandidate.linkSegment || 'primary' : null,
         blocked: Boolean(collision),
       });
     }
@@ -4150,6 +4196,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           chosenSide: null,
           chosenMinutes: null,
           linkToRequestId: '',
+          linkSegment: null,
           blocked: false,
         });
       }
@@ -4176,6 +4223,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         chosenSide: snapCandidate.side,
         chosenMinutes: snapCandidate.minutes,
         linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+        linkSegment: snapCandidate.side === 'after' ? snapCandidate.linkSegment || 'primary' : null,
         blocked: Boolean(collision),
       });
     }
@@ -4183,6 +4231,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
       linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+      linkToSegment: snapCandidate.side === 'after' ? snapCandidate.linkSegment || 'primary' : null,
     });
   }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
 
@@ -4227,6 +4276,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             ...sourceRequest,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
+            connectedParentSegment: null,
             routeType: shouldRestoreAsMaterialOrder ? null : sourceRequest.routeType,
             scheduledDate: null,
             scheduledHour: null,
@@ -4587,8 +4637,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                     `effective=${selectedScheduleEffectiveStatus}`,
                     `follows=${selectedScheduleCycleState?.followsPreviousRun ? 'yes' : 'no'}`,
                     `reason=${selectedScheduleCycleState?.runLinkReason || 'none'}`,
+                    `segment=${getConnectedParentSegment(selectedScheduleRequest) || 'none'}`,
                     `presumeTransit=${selectedScheduleCycleState?.presumedInTransitFromParent ? 'yes' : 'no'}`,
                     `returnBreak=${selectedScheduleCycleState?.effectiveReturnBreak ? 'yes' : 'no'}`,
+                    `returnLink=${selectedScheduleCycleState?.hasReturnTransitContinuation ? 'yes' : 'no'}`,
                     `handoff=${typeof selectedScheduleCycleState?.runHandoffMinutes === 'number' ? formatTimeChip(Math.floor(selectedScheduleCycleState.runHandoffMinutes / 60), Math.floor(selectedScheduleCycleState.runHandoffMinutes % 60)) : 'n/a'}`,
                     `connectedStart=${typeof selectedScheduleRequest.connectedParentStartMinutes === 'number' ? formatTimeChip(Math.floor(selectedScheduleRequest.connectedParentStartMinutes / 60), Math.floor(selectedScheduleRequest.connectedParentStartMinutes % 60)) : 'n/a'}`,
                   ].join(' | ')}

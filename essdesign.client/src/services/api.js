@@ -1395,9 +1395,14 @@ function normalizeSecondaryRoute(raw) {
     return normalized;
 }
 
+function normalizeConnectedParentSegment(value) {
+    return value === 'return' || value === 'primary' ? value : null;
+}
+
 function normalizeMaterialOrderRequestListItem(item) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
     const archivedAt = item?.archivedAt || null;
+    const sourceOrderId = item?.sourceOrderId || null;
     const scheduledDate = item?.scheduledDate || null;
     const scheduledTruckId = item?.scheduledTruckId || item?.truckId || null;
     const scheduledTruckLabel = item?.scheduledTruckLabel || item?.truckLabel || null;
@@ -1412,8 +1417,9 @@ function normalizeMaterialOrderRequestListItem(item) {
         requestedByName: item?.requestedByName || '',
         submittedAt: item?.submittedAt || nowIso(),
         orderDate: item?.orderDate || new Date().toISOString().slice(0, 10),
-        sourceOrderId: item?.sourceOrderId || null,
-        connectedParentStartMinutes: typeof item?.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
+        sourceOrderId,
+        connectedParentStartMinutes: sourceOrderId && typeof item?.connectedParentStartMinutes === 'number' ? item.connectedParentStartMinutes : null,
+        connectedParentSegment: sourceOrderId ? normalizeConnectedParentSegment(item?.connectedParentSegment) : null,
         routeType: item?.routeType || null,
         scheduleRemovedAt: item?.scheduleRemovedAt || null,
         pdfPath: item?.pdfPath || '',
@@ -1449,6 +1455,7 @@ function normalizeMaterialOrderRequestRecord(record) {
 
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(record);
     const archivedAt = record.archivedAt || null;
+    const sourceOrderId = record.sourceOrderId || null;
     const scheduledDate = record.scheduledDate || null;
     const scheduledTruckId = record.scheduledTruckId || record.truckId || null;
     const scheduledTruckLabel = record.scheduledTruckLabel || record.truckLabel || null;
@@ -1457,6 +1464,7 @@ function normalizeMaterialOrderRequestRecord(record) {
 
     return {
         ...record,
+        sourceOrderId,
         requestedByUserId: record.requestedByUserId || null,
         notes: record.notes || '',
         details: record.details || record?.itemValues?.__details || record?.item_values?.__details || '',
@@ -1469,7 +1477,8 @@ function normalizeMaterialOrderRequestRecord(record) {
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
-        connectedParentStartMinutes: typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
+        connectedParentStartMinutes: sourceOrderId && typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null,
+        connectedParentSegment: sourceOrderId ? normalizeConnectedParentSegment(record.connectedParentSegment) : null,
         scheduleRemovedAt: record.scheduleRemovedAt || null,
         scheduledAtIso,
         scheduledTruckId,
@@ -1667,7 +1676,7 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     },
 
-    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null }) => {
+    setSchedule: async (requestId, { date, hour, minute, truckId, truckLabel, clearRunLink = false, sourceOrderId = null, connectedParentStartMinutes = null, connectedParentSegment = null }) => {
         const indexPath = MATERIAL_REQUEST_INDEX_PATH;
         const [record, rawIndex] = await Promise.all([
             readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
@@ -1689,10 +1698,16 @@ export const materialOrderRequestsAPI = {
         const nextConnectedParentStartMinutes = clearRunLink
             ? typeof connectedParentStartMinutes === 'number' ? connectedParentStartMinutes : null
             : typeof record.connectedParentStartMinutes === 'number' ? record.connectedParentStartMinutes : null;
+        const nextConnectedParentSegment = nextSourceOrderId
+            ? clearRunLink
+                ? normalizeConnectedParentSegment(connectedParentSegment) || 'primary'
+                : normalizeConnectedParentSegment(record.connectedParentSegment)
+            : null;
         const updated = {
             ...record,
             sourceOrderId: nextSourceOrderId,
             connectedParentStartMinutes: nextConnectedParentStartMinutes,
+            connectedParentSegment: nextConnectedParentSegment,
             routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
             scheduledDate: date,
             scheduledHour: hour,
@@ -1715,6 +1730,7 @@ export const materialOrderRequestsAPI = {
                     ...item,
                     sourceOrderId: nextSourceOrderId,
                     connectedParentStartMinutes: nextConnectedParentStartMinutes,
+                    connectedParentSegment: nextConnectedParentSegment,
                     routeType: shouldRestoreMaterialOrder ? null : item.routeType || null,
                     notes: updated.notes || item.notes || '',
                     itemValues: updated.itemValues || item.itemValues || {},
@@ -1761,6 +1777,7 @@ export const materialOrderRequestsAPI = {
             ...record,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
+            connectedParentSegment: null,
             routeType: shouldRestoreMaterialOrder ? null : record.routeType || null,
             secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
         };
@@ -1771,6 +1788,7 @@ export const materialOrderRequestsAPI = {
                     ...item,
                     sourceOrderId: null,
                     connectedParentStartMinutes: null,
+                    connectedParentSegment: null,
                     routeType: shouldRestoreMaterialOrder ? null : item.routeType || null,
                     secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
                 }
@@ -1803,6 +1821,7 @@ export const materialOrderRequestsAPI = {
             ...record,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
+            connectedParentSegment: null,
             routeType: shouldRestoreMaterialOrder ? null : record.routeType,
             scheduledDate: null,
             scheduledHour: null,
@@ -1827,6 +1846,7 @@ export const materialOrderRequestsAPI = {
                     ...item,
                     sourceOrderId: null,
                     connectedParentStartMinutes: null,
+                    connectedParentSegment: null,
                     routeType: shouldRestoreMaterialOrder ? null : item.routeType,
                     scheduledDate: null,
                     scheduledHour: null,
@@ -2024,6 +2044,7 @@ export const materialOrderRequestsAPI = {
             id: secondaryRequestId,
             sourceOrderId: requestId,
             connectedParentStartMinutes,
+            connectedParentSegment: 'primary',
             routeType: 'secondary_route',
             builderId: isLinkedMaterialOrder ? linkedSourceRecord.builderId || '' : '',
             builderName: isLinkedMaterialOrder
@@ -2097,6 +2118,7 @@ export const materialOrderRequestsAPI = {
                 connectedParentStartMinutes: typeof relinkedScheduledHour === 'number' && typeof relinkedScheduledMinute === 'number'
                     ? relinkedScheduledHour * 60 + relinkedScheduledMinute
                     : relinkedContinuation.connectedParentStartMinutes ?? null,
+                connectedParentSegment: 'primary',
                 routeType: relinkedContinuation.routeType || null,
                 scheduledDate: relinkedScheduledDate,
                 scheduledHour: relinkedScheduledHour,
