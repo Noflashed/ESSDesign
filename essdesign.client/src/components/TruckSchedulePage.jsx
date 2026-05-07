@@ -2995,7 +2995,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   );
   const selectedScheduleReturnTransitEnabled = getReturnTransitEnabled(selectedScheduleEventId);
   const selectedScheduleEffectiveReturnTransit = selectedScheduleReturnTransitEnabled
-    && (selectedScheduleIsReturnSegment || !selectedScheduleHasSecondaryContinuation);
+    && (
+      selectedScheduleIsReturnSegment
+      || (!selectedScheduleHasSecondaryContinuation && !selectedScheduleHasReturnTransitContinuation)
+    );
+  const selectedScheduleReturnTransitToggleActive = selectedScheduleReturnTransitEnabled
+    && !selectedScheduleHasSecondaryContinuation;
   const selectedScheduleCanToggleReturnTransit = Boolean(selectedScheduleRequest)
     && (selectedScheduleIsReturnSegment || !selectedScheduleHasReturnTransitContinuation);
   const selectedSchedulePrimaryTimingSource = selectedSchedulePrimaryTimingEstimate || selectedScheduleOutboundEstimate || selectedSchedulePrimaryRouteEstimate;
@@ -6125,10 +6130,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </div>
               </div>
             ) : null}
-            <label className={`transport-snap-toggle transport-inspector-toggle${selectedScheduleEffectiveReturnTransit ? ' active' : ''}`}>
+            <label className={`transport-snap-toggle transport-inspector-toggle${selectedScheduleReturnTransitToggleActive ? ' active' : ''}`}>
               <input
                 type="checkbox"
-                checked={selectedScheduleEffectiveReturnTransit}
+                checked={selectedScheduleReturnTransitToggleActive}
                 disabled={!selectedScheduleCanToggleReturnTransit}
                 onChange={handleReturnTransitToggle}
               />

@@ -607,9 +607,13 @@ export function projectRequestWindow(
     SCREEN_START_HOUR * 60,
     !preferShiftedStart && typeof actualStart === 'number' ? actualStart : shiftedScheduledStartMinutes,
   );
+  const plannedPrimaryDurationMinutes = Math.max(
+    LIVE_TIMELINE_MINUTES,
+    timing.totalMinutes - (timing.returnMinutes || 0),
+  );
 
   let projectedEnd = startMinutes + timing.totalMinutes;
-  let deliveryCompleteAt = projectedEnd;
+  let deliveryCompleteAt = startMinutes + plannedPrimaryDurationMinutes;
   let groupedCompletedCycle = false;
   let showReturnTransitTile = false;
   let returnTransitEndMinutes = null;
