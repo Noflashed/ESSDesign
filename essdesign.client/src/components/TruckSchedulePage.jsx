@@ -374,6 +374,13 @@ function formatManualTimeInput(minutes) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+function formatDebugMinutes(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 'n/a';
+  }
+  return formatTimeChip(Math.floor(value / 60), Math.floor(value % 60));
+}
+
 function getScaffoldDetailText(request, event) {
   return (
     request?.details ||
@@ -859,7 +866,7 @@ function getAfterSnapCandidateForEvent(scheduleEvent, startMap, durationMap, dur
   };
 }
 
-function getReturnSegmentSnapCandidate({
+function getReturnSegmentSnapState({
   scheduleEvent,
   eventTarget,
   probeMinutes,
@@ -871,8 +878,22 @@ function getReturnSegmentSnapCandidate({
   durationMinutes,
 }) {
   const requestId = scheduleEvent?.orderId;
-  if (!requestId || !returnTransitByRequestId?.[requestId] || cycleStateMap?.[requestId]?.hasSecondaryContinuation) {
-    return null;
+  const returnEnabled = Boolean(requestId && returnTransitByRequestId?.[requestId]);
+  const hasSecondaryContinuation = Boolean(requestId && cycleStateMap?.[requestId]?.hasSecondaryContinuation);
+  const baseState = {
+    candidate: null,
+    requestId,
+    returnEnabled,
+    hasSecondaryContinuation,
+    existingStart: null,
+    existingEnd: null,
+    returnStart: null,
+    directlyOnReturnCard: Boolean(eventTarget?.closest?.('.ts2-return-card')),
+    pointerOverReturnTime: false,
+    probeMinutes,
+  };
+  if (!requestId || !returnEnabled || hasSecondaryContinuation) {
+    return baseState;
   }
 
   const existingStart = startMap[requestId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
@@ -886,14 +907,29 @@ function getReturnSegmentSnapCandidate({
     && probeMinutes <= existingEnd + SNAP_EDGE_THRESHOLD_MINUTES;
 
   if (!directlyOnReturnCard && !pointerOverReturnTime) {
-    return null;
+    return {
+      ...baseState,
+      existingStart,
+      existingEnd,
+      returnStart,
+      directlyOnReturnCard,
+      pointerOverReturnTime,
+    };
   }
 
   return {
-    event: scheduleEvent,
-    side: 'after',
-    minutes: clampScheduleMinutes(existingEnd, durationMinutes),
-    distance: 0,
+    ...baseState,
+    existingStart,
+    existingEnd,
+    returnStart,
+    directlyOnReturnCard,
+    pointerOverReturnTime,
+    candidate: {
+      event: scheduleEvent,
+      side: 'after',
+      minutes: clampScheduleMinutes(existingEnd, durationMinutes),
+      distance: 0,
+    },
   };
 }
 
@@ -1576,6 +1612,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [debugNowMs, setDebugNowMs] = useState(() => Date.now());
   const [debugSpeed, setDebugSpeed] = useState(1);
   const [debugStatusSavingId, setDebugStatusSavingId] = useState('');
+  const [snapDebugInfo, setSnapDebugInfo] = useState(null);
   const [returnTransitReprojectingId, setReturnTransitReprojectingId] = useState('');
   const boardScrollRef = useRef(null);
   const boardBodyRef = useRef(null);
@@ -2334,6 +2371,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       confirmedAt: formatActionTimestamp(selectedScheduleRequest.deliveryConfirmedAt),
     };
   }, [selectedScheduleRequest]);
+  const snapDebugLines = useMemo(() => {
+    if (!snapDebugInfo) {
+      return ['No snap activity yet. Drag a tile over a return-to-yard segment.'];
+    }
+    return [
+      `source=${snapDebugInfo.source}`,
+      `drag=${snapDebugInfo.dragRequestId || 'none'}`,
+      `target=${snapDebugInfo.targetOrderId || 'none'}`,
+      `pointer=${formatDebugMinutes(snapDebugInfo.probeMinutes)}`,
+      `returnEnabled=${snapDebugInfo.returnEnabled ? 'yes' : 'no'}`,
+      `hasSecondary=${snapDebugInfo.hasSecondaryContinuation ? 'yes' : 'no'}`,
+      `onReturnCard=${snapDebugInfo.directlyOnReturnCard ? 'yes' : 'no'}`,
+      `overReturnTime=${snapDebugInfo.pointerOverReturnTime ? 'yes' : 'no'}`,
+      `returnWindow=${formatDebugMinutes(snapDebugInfo.returnStart)}-${formatDebugMinutes(snapDebugInfo.existingEnd)}`,
+      `generic=${snapDebugInfo.genericSide || 'none'}@${formatDebugMinutes(snapDebugInfo.genericMinutes)}`,
+      `chosen=${snapDebugInfo.chosenSource || 'none'}:${snapDebugInfo.chosenSide || 'none'}@${formatDebugMinutes(snapDebugInfo.chosenMinutes)}`,
+      `linkTo=${snapDebugInfo.linkToRequestId || 'none'}`,
+      `blocked=${snapDebugInfo.blocked ? 'yes' : 'no'}`,
+    ];
+  }, [snapDebugInfo]);
   const selectedScheduleActionRows = getDeliveryActionRows(selectedScheduleRequest);
   const selectedScheduleWindowLabel = useMemo(() => {
     if (!selectedScheduleEvent) return 'No delivery selected';
@@ -3962,7 +4019,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const returnCardSnapCandidate = getReturnSegmentSnapCandidate({
+    const returnSnapState = getReturnSegmentSnapState({
       scheduleEvent,
       eventTarget: event.target,
       probeMinutes,
@@ -3973,7 +4030,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       cycleStateMap: eventCycleStateMap,
       durationMinutes: dragPreviewDurationMinutes,
     });
-    const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
+    const genericSnapCandidate = getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
       startMinutes: freeStart,
@@ -3983,7 +4040,23 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       durationMap: eventDurationMinutesMap,
       thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
     });
+    const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
     if (!snapCandidate) {
+      if (debugMode) {
+        setSnapDebugInfo({
+          ...returnSnapState,
+          source: 'drag-over',
+          dragRequestId: requestId,
+          targetOrderId: scheduleEvent.orderId,
+          genericSide: null,
+          genericMinutes: null,
+          chosenSource: 'none',
+          chosenSide: null,
+          chosenMinutes: null,
+          linkToRequestId: '',
+          blocked: false,
+        });
+      }
       setDropPreview(current => current?.snapOrderId === scheduleEvent.orderId ? null : current);
       return;
     }
@@ -3996,6 +4069,21 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       startMap: eventStartMinutesMap,
       durationMap: eventDurationMinutesMap,
     });
+    if (debugMode) {
+      setSnapDebugInfo({
+        ...returnSnapState,
+        source: 'drag-over',
+        dragRequestId: requestId,
+        targetOrderId: scheduleEvent.orderId,
+        genericSide: genericSnapCandidate?.side || null,
+        genericMinutes: genericSnapCandidate?.minutes ?? null,
+        chosenSource: returnSnapState.candidate ? 'return-segment' : 'generic',
+        chosenSide: snapCandidate.side,
+        chosenMinutes: snapCandidate.minutes,
+        linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+        blocked: Boolean(collision),
+      });
+    }
     const nextPreview = {
       truckId: scheduleEvent.truckId,
       minutes: snapCandidate.minutes,
@@ -4005,7 +4093,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       snapSide: snapCandidate.side,
     };
     setDropPreview(current => sameDropPreview(current, nextPreview) ? current : nextPreview);
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, eventDurationMinutesMap, eventStartMinutesMap, timelineSnapStep]);
+  }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, timelineSnapStep]);
 
   const handleEventSnapDrop = useCallback((event, scheduleEvent) => {
     const requestId = event.dataTransfer.getData('text/plain') || draggedRequestId;
@@ -4027,7 +4115,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       pointerOffsetMinutes: dragPointerOffsetMinutesRef.current,
       step: timelineSnapStep,
     });
-    const returnCardSnapCandidate = getReturnSegmentSnapCandidate({
+    const returnSnapState = getReturnSegmentSnapState({
       scheduleEvent,
       eventTarget: event.target,
       probeMinutes,
@@ -4038,7 +4126,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       cycleStateMap: eventCycleStateMap,
       durationMinutes: dragPreviewDurationMinutes,
     });
-    const snapCandidate = returnCardSnapCandidate || getEdgeSnapCandidate({
+    const genericSnapCandidate = getEdgeSnapCandidate({
       requestId,
       truckId: scheduleEvent.truckId,
       startMinutes: freeStart,
@@ -4048,15 +4136,55 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       durationMap: eventDurationMinutesMap,
       thresholdMinutes: SNAP_EDGE_THRESHOLD_MINUTES * 2,
     });
+    const snapCandidate = returnSnapState.candidate || genericSnapCandidate;
     if (!snapCandidate) {
+      if (debugMode) {
+        setSnapDebugInfo({
+          ...returnSnapState,
+          source: 'drop',
+          dragRequestId: requestId,
+          targetOrderId: scheduleEvent.orderId,
+          genericSide: null,
+          genericMinutes: null,
+          chosenSource: 'none',
+          chosenSide: null,
+          chosenMinutes: null,
+          linkToRequestId: '',
+          blocked: false,
+        });
+      }
       return;
+    }
+    const collision = getScheduleCollision({
+      requestId,
+      truckId: scheduleEvent.truckId,
+      startMinutes: snapCandidate.minutes,
+      durationMinutes: dragPreviewDurationMinutes,
+      dayEvents,
+      startMap: eventStartMinutesMap,
+      durationMap: eventDurationMinutesMap,
+    });
+    if (debugMode) {
+      setSnapDebugInfo({
+        ...returnSnapState,
+        source: 'drop',
+        dragRequestId: requestId,
+        targetOrderId: scheduleEvent.orderId,
+        genericSide: genericSnapCandidate?.side || null,
+        genericMinutes: genericSnapCandidate?.minutes ?? null,
+        chosenSource: returnSnapState.candidate ? 'return-segment' : 'generic',
+        chosenSide: snapCandidate.side,
+        chosenMinutes: snapCandidate.minutes,
+        linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
+        blocked: Boolean(collision),
+      });
     }
     scheduleRequestAt(requestId, scheduleEvent.truckId, snapCandidate.minutes, dragPreviewDurationMinutes, {
       exact: true,
       breakRunLinks: Boolean(draggedScheduledOrderId),
       linkToRequestId: snapCandidate.side === 'after' ? snapCandidate.event.orderId : '',
     });
-  }, [dayEvents, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
+  }, [dayEvents, debugMode, dragPreviewDurationMinutes, draggedRequestId, draggedScheduledOrderId, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, returnTransitByRequestId, scheduleRequestAt, timelineSnapStep]);
 
   const handleUnscheduleOrder = useCallback((requestIds) => {
     const ids = Array.isArray(requestIds) ? requestIds.filter(Boolean) : [requestIds].filter(Boolean);
@@ -4467,6 +4595,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 </code>
               </div>
             ) : null}
+            <div className="transport-debug-chain">
+              <span>Snap debug</span>
+              <code>{snapDebugLines.join(' | ')}</code>
+            </div>
           </div>
         ) : null}
 
