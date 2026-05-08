@@ -443,27 +443,49 @@ ESS context JSON:
         {
             result = new ChatResult();
             var normalized = NormalizeSearchText(question);
-            var isTransportQuestion =
+            var hasTransportWords =
                 normalized.Contains("truck", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("delivery", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("deliveries", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("transport", StringComparison.OrdinalIgnoreCase);
-            var isScheduleQuestion =
+                normalized.Contains("transport", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("material order", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("material orders", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("order", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("orders", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("schedule board", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("dynamic schedule", StringComparison.OrdinalIgnoreCase);
+            var hasScheduleWords =
                 normalized.Contains("schedule", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("scheduled", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("schedules", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("now", StringComparison.OrdinalIgnoreCase);
+            var hasWorkforceWords =
+                normalized.Contains("men", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("manpower", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("worker", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("workers", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("employee", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("employees", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("roster", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("rostering", StringComparison.OrdinalIgnoreCase);
+            var isTransportQuestion = hasTransportWords ||
+                (hasScheduleWords && !hasWorkforceWords && (
+                    normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("board", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("run", StringComparison.OrdinalIgnoreCase)
+                ));
+            var isScheduleQuestion = hasScheduleWords;
 
             if (!isTransportQuestion || !isScheduleQuestion)
             {
                 return false;
             }
 
-            var todayRows = GetObjectListProperty(context.TransportSummary, "currentScheduleToday")
-                .Where(row => string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var todayRows = GetScheduledRowsForDate(context.TransportSummary, context.Today);
             var currentSchedule = GetObjectListProperty(context.TransportSummary, "currentSchedule")
                 .Where(row => string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -511,7 +533,7 @@ ESS context JSON:
 
                 result = new ChatResult
                 {
-                    Reply = reply.ToString().Trim(),
+                    Reply = $"{reply.ToString().Trim()}\n\nSource: live transport schedule.",
                     Links = context.Links,
                     Sources = context.Sources,
                 };
@@ -545,11 +567,35 @@ ESS context JSON:
 
             result = new ChatResult
             {
-                Reply = reply.ToString().Trim(),
+                Reply = $"{reply.ToString().Trim()}\n\nSource: live transport schedule.",
                 Links = context.Links,
                 Sources = context.Sources,
             };
             return true;
+        }
+
+        private static List<object> GetScheduledRowsForDate(object transportSummary, string date)
+        {
+            var rowsById = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var collectionName in new[] { "currentScheduleToday", "scheduledToday", "currentSchedule", "activeRequests" })
+            {
+                foreach (var row in GetObjectListProperty(transportSummary, collectionName))
+                {
+                    var isOnSchedule = string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase);
+                    var scheduledDate = TryGetObjectProperty(row, "scheduledDate") ?? TryGetObjectProperty(row, "rawScheduledDate");
+                    if (!isOnSchedule || !string.Equals(scheduledDate, date, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var id = TryGetObjectProperty(row, "id");
+                    rowsById[string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N") : id] = row;
+                }
+            }
+
+            return rowsById.Values
+                .OrderBy(row => TryGetObjectProperty(row, "scheduledTime") ?? TryGetObjectProperty(row, "rawScheduledTime"))
+                .ToList();
         }
 
         private static List<object> GetObjectListProperty(object source, string propertyName)
