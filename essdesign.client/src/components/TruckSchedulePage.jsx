@@ -67,7 +67,6 @@ const SNAP_EDGE_THRESHOLD_MINUTES = 10;
 const UNLINK_PARENT_RESNAP_THRESHOLD_MINUTES = 2;
 const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const ROUTE_LOADING_MIN_MS = 180;
-const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 const TIMESTAMP_PREF_KEY = 'transport_web_schedule_timestamps_v1';
 const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
@@ -2461,10 +2460,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [lastRefreshLabel, setLastRefreshLabel] = useState(() => formatLastRefreshTime());
   const [error, setError] = useState('');
   const [showPendingPanel, setShowPendingPanel] = useState(true);
-  const [timelineScaleMode, setTimelineScaleMode] = useState(() => {
-    const saved = localStorage.getItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
-    return saved && SCALE_MODES[saved] ? saved : 'standard';
-  });
+  const [timelineScaleMode, setTimelineScaleMode] = useState('standard');
   const [snapToTimeMarks, setSnapToTimeMarks] = useState(() => {
     const saved = localStorage.getItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === 'true';
@@ -3046,10 +3042,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     projectRequestsToBoard(allRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
   }, [allRequests, debugMode, debugNowMs, projectRequestsToBoard, returnTransitByRequestId, selectedDate]);
-
-  useEffect(() => {
-    localStorage.setItem(`${SCALE_PREF_KEY}:${user?.id || user?.role || 'anon'}`, timelineScaleMode);
-  }, [timelineScaleMode, user?.id, user?.role]);
 
   useEffect(() => {
     localStorage.setItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(snapToTimeMarks));
