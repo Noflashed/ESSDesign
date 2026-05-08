@@ -107,8 +107,10 @@ function routeCacheKey(siteLocation, schedule = {}) {
     return '';
   }
   const date = schedule.scheduledDate || schedule.date || '';
-  const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
-  const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
+  const scheduledHour = Number(schedule.scheduledHour);
+  const scheduledMinute = Number(schedule.scheduledMinute);
+  const hour = Number.isFinite(scheduledHour) ? scheduledHour : '';
+  const minute = Number.isFinite(scheduledMinute) ? scheduledMinute : '';
   const enableTolls = schedule.enableTolls ? 'tolls' : 'no-tolls';
   return `${location}|${date}|${hour}|${minute}|${enableTolls}`;
 }
@@ -120,10 +122,26 @@ function routeBetweenCacheKey(fromLocation, toLocation, schedule = {}) {
     return '';
   }
   const date = schedule.scheduledDate || schedule.date || '';
-  const hour = Number.isFinite(schedule.scheduledHour) ? schedule.scheduledHour : '';
-  const minute = Number.isFinite(schedule.scheduledMinute) ? schedule.scheduledMinute : '';
+  const scheduledHour = Number(schedule.scheduledHour);
+  const scheduledMinute = Number(schedule.scheduledMinute);
+  const hour = Number.isFinite(scheduledHour) ? scheduledHour : '';
+  const minute = Number.isFinite(scheduledMinute) ? scheduledMinute : '';
   const enableTolls = schedule.enableTolls ? 'tolls' : 'no-tolls';
   return `${from}|${to}|${date}|${hour}|${minute}|${enableTolls}`;
+}
+
+function buildRouteEstimateFromData(routeData) {
+  return routeData
+    ? {
+        durationMinutes: Math.max(1, routeData.durationSeconds / 60),
+        baseDurationMinutes: Math.max(1, (routeData.baseDurationSeconds || routeData.durationSeconds) / 60),
+        trafficDelayMinutes: Math.max(0, (routeData.trafficDelaySeconds || 0) / 60),
+        distanceMeters: routeData.distanceMeters,
+        hasLiveTraffic: routeData.hasLiveTraffic,
+        trafficProvider: routeData.trafficProvider,
+        trafficNote: routeData.trafficNote,
+      }
+    : null;
 }
 
 export function formatActionTimestamp(isoValue) {
@@ -406,17 +424,7 @@ export async function getCachedRouteEstimate(siteLocation, schedule = {}) {
     routeEstimatePromiseCache.set(
       key,
       getCachedRouteData(siteLocation, schedule).then(routeData => {
-        const estimate = routeData
-          ? {
-              durationMinutes: Math.max(1, routeData.durationSeconds / 60),
-              baseDurationMinutes: Math.max(1, (routeData.baseDurationSeconds || routeData.durationSeconds) / 60),
-              trafficDelayMinutes: Math.max(0, (routeData.trafficDelaySeconds || 0) / 60),
-              distanceMeters: routeData.distanceMeters,
-              hasLiveTraffic: routeData.hasLiveTraffic,
-              trafficProvider: routeData.trafficProvider,
-              trafficNote: routeData.trafficNote,
-            }
-          : null;
+        const estimate = buildRouteEstimateFromData(routeData);
         routeEstimateValueCache.set(key, estimate);
         if (!estimate) {
           routeEstimatePromiseCache.delete(key);
@@ -503,17 +511,7 @@ export async function getCachedRouteEstimateBetween(fromLocation, toLocation, sc
     routeBetweenEstimatePromiseCache.set(
       key,
       getCachedRouteDataBetween(fromLocation, toLocation, schedule).then(routeData => {
-        const estimate = routeData
-          ? {
-              durationMinutes: Math.max(1, routeData.durationSeconds / 60),
-              baseDurationMinutes: Math.max(1, (routeData.baseDurationSeconds || routeData.durationSeconds) / 60),
-              trafficDelayMinutes: Math.max(0, (routeData.trafficDelaySeconds || 0) / 60),
-              distanceMeters: routeData.distanceMeters,
-              hasLiveTraffic: routeData.hasLiveTraffic,
-              trafficProvider: routeData.trafficProvider,
-              trafficNote: routeData.trafficNote,
-            }
-          : null;
+        const estimate = buildRouteEstimateFromData(routeData);
         routeBetweenEstimateValueCache.set(key, estimate);
         if (!estimate) {
           routeBetweenEstimatePromiseCache.delete(key);
@@ -531,6 +529,29 @@ export function getCachedRouteEstimateBetweenValue(fromLocation, toLocation, sch
     return null;
   }
   return routeBetweenEstimateValueCache.has(key) ? routeBetweenEstimateValueCache.get(key) : undefined;
+}
+
+export function getCachedRouteDataBetweenValue(fromLocation, toLocation, schedule = {}) {
+  const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
+  if (!key) {
+    return null;
+  }
+  const cached = routeBetweenDataCache.get(key);
+  if (!cached || typeof cached.then === 'function') {
+    return undefined;
+  }
+  return cached;
+}
+
+export function seedCachedRouteDataBetween(fromLocation, toLocation, schedule = {}, routeData = null) {
+  const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
+  if (!key || !routeData) {
+    return;
+  }
+  const estimate = buildRouteEstimateFromData(routeData);
+  routeBetweenDataCache.set(key, routeData);
+  routeBetweenEstimateValueCache.set(key, estimate);
+  routeBetweenEstimatePromiseCache.set(key, Promise.resolve(estimate));
 }
 
 export function getPlannedDurationMinutes(routeEstimate) {

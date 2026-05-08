@@ -24,6 +24,7 @@ import {
   formatDuration,
   formatTimeChip,
   getCachedRouteDataBetween,
+  getCachedRouteDataBetweenValue,
   getCachedRouteEstimate,
   getCachedRouteEstimateBetween,
   getCachedRouteEstimateBetweenValue,
@@ -42,6 +43,7 @@ import {
   requestToCalendarEvent,
   scheduleStatusAppearance,
   scheduleStatusLabel,
+  seedCachedRouteDataBetween,
   startOfDay,
   TRANSPORT_STATUS_COLOR_PREF_EVENT,
   formatDateKey,
@@ -636,7 +638,14 @@ function applyOptimisticRequestOverrides(requests, overrides, now = Date.now()) 
       return;
     }
     if (entry.request) {
-      map.set(requestId, { ...(map.get(requestId) || {}), ...entry.request });
+      const serverRequest = map.get(requestId) || null;
+      const serverUpdatedAt = Date.parse(serverRequest?.updatedAt || '');
+      const overrideUpdatedAt = Date.parse(entry.request?.updatedAt || '');
+      if (Number.isFinite(serverUpdatedAt) && Number.isFinite(overrideUpdatedAt) && serverUpdatedAt > overrideUpdatedAt) {
+        overrides.delete(requestId);
+        return;
+      }
+      map.set(requestId, { ...(serverRequest || {}), ...entry.request });
     }
   });
   return Array.from(map.values());
@@ -1229,6 +1238,140 @@ function buildCachedRouteMapForRequests(requestsForDay, siteLocationMap, fallbac
       ];
     }),
   );
+}
+
+function getSharedRouteSnapshotKey(context, fromLocationOverride = '') {
+  if (!context?.toLocation) {
+    return '';
+  }
+  const fromLocation = fromLocationOverride || context.fromLocation || (context.segment === 'primary' ? YARD_LOCATION : '');
+  if (!fromLocation) {
+    return '';
+  }
+  return [
+    context.segment || 'primary',
+    String(fromLocation || '').trim().toLowerCase(),
+    String(context.toLocation || '').trim().toLowerCase(),
+    context.schedule?.scheduledDate || context.schedule?.date || '',
+    normalizeSharedRouteScheduleNumber(context.schedule?.scheduledHour) ?? '',
+    normalizeSharedRouteScheduleNumber(context.schedule?.scheduledMinute) ?? '',
+    context.schedule?.enableTolls ? 'tolls' : 'no-tolls',
+  ].join('|');
+}
+
+function normalizeSharedRoutePoint(point) {
+  if (!point) {
+    return null;
+  }
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function normalizeSharedRouteScheduleNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeSharedRouteData(routeData) {
+  if (!routeData) {
+    return null;
+  }
+  const yard = normalizeSharedRoutePoint(routeData.yard);
+  const site = normalizeSharedRoutePoint(routeData.site);
+  const pathPoints = Array.isArray(routeData.pathPoints)
+    ? routeData.pathPoints.map(normalizeSharedRoutePoint).filter(Boolean)
+    : [];
+  if (!yard || !site) {
+    return null;
+  }
+  return {
+    yard,
+    site,
+    distanceMeters: Number(routeData.distanceMeters) || 0,
+    baseDurationSeconds: Number(routeData.baseDurationSeconds) || Number(routeData.durationSeconds) || 0,
+    durationSeconds: Number(routeData.durationSeconds) || 0,
+    trafficDelaySeconds: Number(routeData.trafficDelaySeconds) || 0,
+    hasLiveTraffic: Boolean(routeData.hasLiveTraffic),
+    trafficProvider: routeData.trafficProvider || '',
+    trafficNote: routeData.trafficNote || '',
+    pathPoints,
+  };
+}
+
+function buildSharedRouteSnapshot(context, routeData, fromLocationOverride = '') {
+  const fromLocation = fromLocationOverride || context?.fromLocation || (context?.segment === 'primary' ? YARD_LOCATION : '');
+  const routeSnapshotData = normalizeSharedRouteData(routeData);
+  const key = getSharedRouteSnapshotKey(context, fromLocation);
+  if (!key || !routeSnapshotData) {
+    return null;
+  }
+  return {
+    key,
+    segment: context.segment || 'primary',
+    fromLocation,
+    toLocation: context.toLocation,
+    schedule: {
+      scheduledDate: context.schedule?.scheduledDate || context.schedule?.date || '',
+      scheduledHour: normalizeSharedRouteScheduleNumber(context.schedule?.scheduledHour),
+      scheduledMinute: normalizeSharedRouteScheduleNumber(context.schedule?.scheduledMinute),
+      enableTolls: Boolean(context.schedule?.enableTolls),
+    },
+    routeData: routeSnapshotData,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function hydrateSharedRouteSnapshots(requests = []) {
+  requests.forEach(request => {
+    const snapshots = request?.itemValues?.__transportRouteSnapshots;
+    if (!snapshots || typeof snapshots !== 'object') {
+      return;
+    }
+    Object.values(snapshots).forEach(snapshot => {
+      if (!snapshot?.fromLocation || !snapshot?.toLocation || !snapshot.routeData) {
+        return;
+      }
+      seedCachedRouteDataBetween(snapshot.fromLocation, snapshot.toLocation, snapshot.schedule || {}, normalizeSharedRouteData(snapshot.routeData));
+    });
+  });
+}
+
+function collectSharedRouteSnapshots(routeContext) {
+  if (!routeContext?.toLocation) {
+    return [];
+  }
+  const snapshots = [];
+  const fromLocation = routeContext.fromLocation || (routeContext.segment === 'primary' ? YARD_LOCATION : '');
+  const outboundData = fromLocation
+    ? getCachedRouteDataBetweenValue(fromLocation, routeContext.toLocation, routeContext.schedule)
+    : null;
+  const outboundSnapshot = buildSharedRouteSnapshot(routeContext, outboundData, fromLocation);
+  if (outboundSnapshot) {
+    snapshots.push(outboundSnapshot);
+  }
+  const outboundEstimate = buildEstimateFromRouteData(outboundData);
+  if (!outboundEstimate || !routeContext.includeReturnTransitToYard || routeContext.request?.secondaryRoute) {
+    return snapshots;
+  }
+  const returnSchedule = applyRouteMode(
+    routeContext.segment === 'standalone-secondary'
+      ? buildSecondaryRouteReturnSchedule(routeContext, outboundEstimate)
+      : buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate),
+    routeContext.returnTollsEnabled,
+  );
+  const returnContext = {
+    segment: 'return',
+    fromLocation: routeContext.toLocation,
+    toLocation: YARD_LOCATION,
+    schedule: returnSchedule,
+  };
+  const returnData = getCachedRouteDataBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  const returnSnapshot = buildSharedRouteSnapshot(returnContext, returnData, routeContext.toLocation);
+  if (returnSnapshot) {
+    snapshots.push(returnSnapshot);
+  }
+  return snapshots;
 }
 
 function getBoardProjectionSignature(board) {
@@ -2298,6 +2441,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const boardProjectionRunRef = useRef(0);
   const loadBoardRunRef = useRef(0);
   const refreshFeedbackTimerRef = useRef(null);
+  const refreshRetryTimerRef = useRef(null);
   const dragPointerOffsetMinutesRef = useRef(0);
   const selectionDragContextRef = useRef(null);
   const selectionStateRef = useRef(null);
@@ -2337,6 +2481,46 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         next.delete(loadingKey);
       }
       return next;
+    });
+  }, []);
+
+  const persistSharedRouteSnapshots = useCallback((entries = []) => {
+    const snapshotsByRequest = new Map();
+    entries.forEach(entry => {
+      if (!entry?.requestId || !Array.isArray(entry.snapshots) || entry.snapshots.length === 0) {
+        return;
+      }
+      const existing = snapshotsByRequest.get(entry.requestId) || new Map();
+      entry.snapshots.forEach(snapshot => {
+        if (snapshot?.key && snapshot.routeData) {
+          existing.set(snapshot.key, snapshot);
+        }
+      });
+      if (existing.size > 0) {
+        snapshotsByRequest.set(entry.requestId, existing);
+      }
+    });
+    if (snapshotsByRequest.size === 0) {
+      return;
+    }
+    Promise.all(
+      Array.from(snapshotsByRequest.entries()).map(([requestId, snapshots]) =>
+        materialOrderRequestsAPI.mergeRouteSnapshots(requestId, Array.from(snapshots.values())).catch(() => null),
+      ),
+    ).then(savedRequests => {
+      const updates = savedRequests.filter(Boolean);
+      if (updates.length === 0) {
+        return;
+      }
+      updates.forEach(savedRequest => {
+        optimisticRequestOverridesRef.current.set(savedRequest.id, {
+          request: savedRequest,
+          expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+        });
+      });
+      setAllRequests(currentRequests => currentRequests.map(request =>
+        updates.find(savedRequest => savedRequest.id === request.id) || request,
+      ));
     });
   }, []);
 
@@ -2427,6 +2611,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
     const effectiveReturnTransitByRequestId = buildReturnTransitMapForRequests(requestsForDay, returnTransitByRequestId);
     const effectiveTollsByRequestId = buildTollsMapForRequests(requestsForDay, tollsByRequestId);
+    hydrateSharedRouteSnapshots(requestsForDay);
     const routeMap = buildCachedRouteMapForRequests(
       requestsForDay,
       siteLocationMap,
@@ -2553,6 +2738,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
       setAllRequests(current => getRequestListSignature(current) === getRequestListSignature(merged) ? current : merged);
       const requestsForDay = merged.filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
+      hydrateSharedRouteSnapshots(requestsForDay);
       const siteLocationMap = Object.fromEntries(
         requestsForDay.map(request => [
           request.id,
@@ -2580,6 +2766,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
+      const sharedRouteSnapshotEntries = [];
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
           if (!isCurrentLoad()) {
@@ -2600,6 +2787,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             const resolvedEstimate = cachedEstimate !== undefined
               ? cachedEstimate
               : await resolveBoardRouteEstimate(routeContext);
+            if (cachedEstimate === undefined) {
+              const snapshots = collectSharedRouteSnapshots(routeContext);
+              if (snapshots.length > 0) {
+                sharedRouteSnapshotEntries.push({ requestId: request.id, snapshots });
+              }
+            }
             return [
               request.id,
               resolvedEstimate,
@@ -2618,6 +2811,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       rememberStableRouteEstimates(resolvedRouteMap);
       const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
+      persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
       setError('');
       setLastRefreshLabel(formatLastRefreshTime());
       return true;
@@ -2634,7 +2828,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { loadKey, promise: task };
     return task;
-  }, [applyBoardProjection, debugMode, mergeRequestSiteLocationMap, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
+  }, [applyBoardProjection, debugMode, mergeRequestSiteLocationMap, persistSharedRouteSnapshots, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -2648,8 +2842,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       window.clearTimeout(refreshFeedbackTimerRef.current);
       refreshFeedbackTimerRef.current = null;
     }
+    if (refreshRetryTimerRef.current) {
+      window.clearTimeout(refreshRetryTimerRef.current);
+      refreshRetryTimerRef.current = null;
+    }
     setManualRefreshStatus('syncing');
+    selectedScheduleRouteRequestKeyRef.current = '';
+    selectedScheduleRouteDataKeyRef.current = '';
+    setSelectedScheduleRouteData(null);
+    setSelectedScheduleReturnRouteEstimate(null);
     const refreshed = await loadBoard({ force: true }).catch(() => false);
+    if (refreshed) {
+      refreshRetryTimerRef.current = window.setTimeout(() => {
+        loadBoard({ force: true }).catch(() => {});
+        refreshRetryTimerRef.current = null;
+      }, 650);
+    }
     setManualRefreshStatus(refreshed ? 'done' : 'error');
     refreshFeedbackTimerRef.current = window.setTimeout(() => {
       setManualRefreshStatus('idle');
@@ -2660,6 +2868,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => () => {
     if (refreshFeedbackTimerRef.current) {
       window.clearTimeout(refreshFeedbackTimerRef.current);
+    }
+    if (refreshRetryTimerRef.current) {
+      window.clearTimeout(refreshRetryTimerRef.current);
     }
   }, []);
 
@@ -4348,6 +4559,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           let nextSiteLocationMap = moveSiteLocationMap;
           const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
           const requestLookup = new Map(nextRequests.map(request => [request.id, request]));
+          const sharedRouteSnapshotEntries = [];
           await Promise.all(routeRefreshIds.map(async routeRequestId => {
             const routeRequest = requestLookup.get(routeRequestId);
             if (!routeRequest) {
@@ -4369,8 +4581,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               activeRouteLoadingSegments.set(routeRequestId, loadingSegment);
               setRouteLoading(routeRequestId, true, loadingSegment);
               await resolveBoardRouteEstimate(routeContext);
+              const snapshots = collectSharedRouteSnapshots(routeContext);
+              if (snapshots.length > 0) {
+                sharedRouteSnapshotEntries.push({ requestId: routeRequestId, snapshots });
+              }
             }
           }));
+          persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
           projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
             force: true,
             expectedProjectionRunId: projectionRunId,
@@ -4443,7 +4660,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to schedule request.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getReturnTransitEnabled, getTollsEnabled, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getReturnTransitEnabled, getTollsEnabled, mergeRequestSiteLocationMap, persistSharedRouteSnapshots, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
 
   const getProjectedDurationForGroupMove = useCallback((request, startMinutes, dateKey, fallbackDurationMinutes = 90) => {
     if (!request) {
@@ -4689,6 +4906,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
       let nextSiteLocationMap = requestSiteLocationMapRef.current;
       const requestLookup = new Map(nextRequests.map(request => [request.id, request]));
+      const sharedRouteSnapshotEntries = [];
       await Promise.all(
         updates.map(async update => {
           const request = nextRequests.find(item => item.id === update.requestId);
@@ -4708,9 +4926,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
           if (getCachedBoardRouteEstimate(routeContext) === undefined) {
             await resolveBoardRouteEstimate(routeContext);
+            const snapshots = collectSharedRouteSnapshots(routeContext);
+            if (snapshots.length > 0) {
+              sharedRouteSnapshotEntries.push({ requestId: update.requestId, snapshots });
+            }
           }
         }),
       );
+      persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
       projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
         force: true,
         expectedProjectionRunId: projectionRunId,
@@ -4742,7 +4965,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         setEventCycleStateMap(previousCycleStateMap);
         setError(err?.message || 'Failed to move selected deliveries.');
       });
-  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, getTollsEnabled, mergeRequestSiteLocationMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate]);
+  }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, getTollsEnabled, mergeRequestSiteLocationMap, persistSharedRouteSnapshots, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId, selectionIds = []) => {
     const requestedIds = Array.from(new Set((selectionIds?.length ? selectionIds : [requestId]).filter(Boolean)));

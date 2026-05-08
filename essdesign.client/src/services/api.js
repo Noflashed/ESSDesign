@@ -1810,6 +1810,52 @@ function mapMaterialOrderRequestRecordToRow(record) {
     };
 }
 
+function normalizeTransportRouteSnapshots(raw) {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(raw)
+            .filter(([key, snapshot]) => key && snapshot && typeof snapshot === 'object' && snapshot.routeData)
+            .map(([key, snapshot]) => [key, snapshot])
+    );
+}
+
+function mergeTransportRouteSnapshots(record, snapshots) {
+    const normalized = normalizeMaterialOrderRequestRecord(record);
+    if (!normalized) {
+        return null;
+    }
+    const existingItemValues = normalized.itemValues && typeof normalized.itemValues === 'object'
+        ? normalized.itemValues
+        : {};
+    const existingSnapshots = normalizeTransportRouteSnapshots(existingItemValues.__transportRouteSnapshots);
+    const incomingSnapshots = Array.isArray(snapshots)
+        ? snapshots
+        : Object.values(snapshots || {});
+    const mergedSnapshots = { ...existingSnapshots };
+    incomingSnapshots
+        .filter(snapshot => snapshot?.key && snapshot?.routeData)
+        .forEach(snapshot => {
+            mergedSnapshots[snapshot.key] = {
+                ...snapshot,
+                updatedAt: snapshot.updatedAt || nowIso()
+            };
+        });
+    const prunedSnapshots = Object.fromEntries(
+        Object.entries(mergedSnapshots)
+            .sort(([, left], [, right]) => String(right?.updatedAt || '').localeCompare(String(left?.updatedAt || '')))
+            .slice(0, 24)
+    );
+    return {
+        ...normalized,
+        itemValues: {
+            ...existingItemValues,
+            __transportRouteSnapshots: prunedSnapshots,
+        },
+    };
+}
+
 async function seedMaterialOrderRequestsTableFromStorage() {
     if (materialOrderRequestsTableSeedPromise) {
         return materialOrderRequestsTableSeedPromise;
@@ -2031,6 +2077,16 @@ async function setMaterialOrderRequestTollsEnabledInTable(requestId, { segment =
         const record = await readMaterialOrderRequestTableRecord(requestId);
         if (!record) throw new Error('Request not found');
         const updated = withStoredTollsEnabled(record, segment, enabled);
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function mergeMaterialOrderRequestRouteSnapshotsInTable(requestId, snapshots = []) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const updated = mergeTransportRouteSnapshots(record, snapshots);
         const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
         return saved || normalizeMaterialOrderRequestRecord(updated);
     });
@@ -2839,6 +2895,39 @@ export const materialOrderRequestsAPI = {
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
                 ? withStoredTollsEnabled(item, normalizedSegment, tollsEnabled)
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    }),
+
+    mergeRouteSnapshots: async (requestId, snapshots = []) => withMaterialRequestIndexWriteLock(async () => {
+        const safeSnapshots = Array.isArray(snapshots) ? snapshots.filter(snapshot => snapshot?.key && snapshot?.routeData) : [];
+        if (!requestId || safeSnapshots.length === 0) {
+            return null;
+        }
+
+        const tableRecord = await mergeMaterialOrderRequestRouteSnapshotsInTable(requestId, safeSnapshots);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
+        ]);
+        if (!record) throw new Error('Request not found');
+
+        const updated = mergeTransportRouteSnapshots(record, safeSnapshots);
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? mergeTransportRouteSnapshots(item, safeSnapshots)
                 : item),
             updatedAt: nowIso(),
         };
