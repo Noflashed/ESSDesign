@@ -1940,6 +1940,9 @@ function ToolbarIcon({ type }) {
   if (type === 'refresh') {
     return <svg {...common}><path d="M20 11a8 8 0 1 0 2.3 5.7" /><path d="M20 4v7h-7" /></svg>;
   }
+  if (type === 'check') {
+    return <svg {...common}><path d="M20 6 9 17l-5-5" /></svg>;
+  }
   if (type === 'analysis') {
     return <svg {...common}><path d="M4 19h16" /><path d="M7 15V9" /><path d="M12 15V5" /><path d="M17 15v-3" /></svg>;
   }
@@ -2197,6 +2200,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [eventStartMinutesMap, setEventStartMinutesMap] = useState({});
   const [eventCycleStateMap, setEventCycleStateMap] = useState({});
   const [loadingBoard, setLoadingBoard] = useState(true);
+  const [manualRefreshStatus, setManualRefreshStatus] = useState('idle');
+  const [lastRefreshLabel, setLastRefreshLabel] = useState(() => formatLastRefreshTime());
   const [error, setError] = useState('');
   const [showPendingPanel, setShowPendingPanel] = useState(true);
   const [timelineScaleMode, setTimelineScaleMode] = useState(() => {
@@ -2290,6 +2295,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const tollsSharedMigrationRef = useRef(new Set());
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
+  const refreshFeedbackTimerRef = useRef(null);
   const dragPointerOffsetMinutesRef = useRef(0);
   const selectionDragContextRef = useRef(null);
   const selectionStateRef = useRef(null);
@@ -2584,9 +2590,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
+      setLastRefreshLabel(formatLastRefreshTime());
+      return true;
     })().catch(err => {
       setError(err?.message || 'Failed to load truck schedule.');
       setLoadingBoard(false);
+      return false;
     }).finally(() => {
       if (loadPromiseRef.current?.promise === task) {
         loadPromiseRef.current = null;
@@ -2599,6 +2608,29 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     loadBoard().catch(() => {});
   }, [loadBoard]);
+
+  const handleManualRefresh = useCallback(async () => {
+    if (manualRefreshStatus === 'syncing') {
+      return;
+    }
+    if (refreshFeedbackTimerRef.current) {
+      window.clearTimeout(refreshFeedbackTimerRef.current);
+      refreshFeedbackTimerRef.current = null;
+    }
+    setManualRefreshStatus('syncing');
+    const refreshed = await loadBoard().catch(() => false);
+    setManualRefreshStatus(refreshed ? 'done' : 'error');
+    refreshFeedbackTimerRef.current = window.setTimeout(() => {
+      setManualRefreshStatus('idle');
+      refreshFeedbackTimerRef.current = null;
+    }, refreshed ? 1400 : 2200);
+  }, [loadBoard, manualRefreshStatus]);
+
+  useEffect(() => () => {
+    if (refreshFeedbackTimerRef.current) {
+      window.clearTimeout(refreshFeedbackTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const refreshWhenVisible = () => {
@@ -6131,6 +6163,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     input.click();
   }, []);
 
+  const refreshButtonLabel = manualRefreshStatus === 'syncing'
+    ? 'Syncing'
+    : manualRefreshStatus === 'done'
+      ? 'Updated'
+      : manualRefreshStatus === 'error'
+        ? 'Retry'
+        : 'Refresh';
+  const refreshButtonIcon = manualRefreshStatus === 'done' ? 'check' : 'refresh';
+  const refreshButtonClass = `transport-toolbar-button transport-refresh-button ${manualRefreshStatus}`;
+
   return (
     <div className="ts2-page transport-dynamic-reference">
       <div className="transport-reference-toolbar">
@@ -6150,8 +6192,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           </label>
           <button type="button" className="transport-toolbar-icon" onClick={() => setSelectedDate(date => new Date(date.getTime() + 86400000))} aria-label="Next day"><ToolbarIcon type="chevron-right" /></button>
         </div>
-        <span className="transport-live-refresh"><i /> Last refreshed: {formatLastRefreshTime()} <b>Live</b></span>
-        <button type="button" className="transport-toolbar-button" onClick={() => loadBoard().catch(() => {})}><ToolbarIcon type="refresh" />Refresh</button>
+        <span className={`transport-live-refresh ${manualRefreshStatus === 'done' ? 'confirmed' : ''}`}><i /> Last refreshed: {lastRefreshLabel} <b>Live</b></span>
+        <button
+          type="button"
+          className={refreshButtonClass}
+          onClick={handleManualRefresh}
+          disabled={manualRefreshStatus === 'syncing'}
+          aria-live="polite"
+        >
+          <span className="transport-refresh-icon"><ToolbarIcon type={refreshButtonIcon} /></span>
+          <span>{refreshButtonLabel}</span>
+        </button>
       </div>
 
       {error ? <div className="ts2-error">{error}</div> : null}

@@ -3082,6 +3082,125 @@
     justify-content: space-between !important;
 }
 
+.transport-refresh-button,
+.transport-page-frame .transport-refresh-button,
+.transport-desktop-workspace .transport-refresh-button {
+    position: relative !important;
+    min-width: 118px !important;
+    padding: 0 16px !important;
+    border-color: #fed7aa !important;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+    color: #9a3412 !important;
+    font-weight: 800 !important;
+    overflow: hidden !important;
+    box-shadow: 0 8px 18px rgba(249, 115, 22, 0.12) !important;
+    transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease !important;
+}
+
+.transport-refresh-button::after,
+.transport-page-frame .transport-refresh-button::after,
+.transport-desktop-workspace .transport-refresh-button::after {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent) !important;
+    transform: translateX(-120%) !important;
+    pointer-events: none !important;
+}
+
+.transport-refresh-button:hover,
+.transport-page-frame .transport-refresh-button:hover,
+.transport-desktop-workspace .transport-refresh-button:hover {
+    border-color: #fb923c !important;
+    box-shadow: 0 10px 22px rgba(249, 115, 22, 0.18) !important;
+    transform: translateY(-1px) !important;
+}
+
+.transport-refresh-button:disabled,
+.transport-page-frame .transport-refresh-button:disabled,
+.transport-desktop-workspace .transport-refresh-button:disabled {
+    opacity: 1 !important;
+    cursor: wait !important;
+}
+
+.transport-refresh-button.syncing::after,
+.transport-page-frame .transport-refresh-button.syncing::after,
+.transport-desktop-workspace .transport-refresh-button.syncing::after {
+    animation: transport-refresh-sheen 900ms ease-in-out infinite !important;
+}
+
+.transport-refresh-button.done,
+.transport-page-frame .transport-refresh-button.done,
+.transport-desktop-workspace .transport-refresh-button.done {
+    border-color: #86efac !important;
+    background: linear-gradient(180deg, #ecfdf5 0%, #dcfce7 100%) !important;
+    color: #166534 !important;
+    box-shadow: 0 10px 22px rgba(22, 163, 74, 0.16) !important;
+    animation: transport-refresh-pop 420ms ease-out !important;
+}
+
+.transport-refresh-button.error,
+.transport-page-frame .transport-refresh-button.error,
+.transport-desktop-workspace .transport-refresh-button.error {
+    border-color: #fecaca !important;
+    background: #fff1f2 !important;
+    color: #b91c1c !important;
+}
+
+.transport-refresh-icon,
+.transport-page-frame .transport-refresh-icon,
+.transport-desktop-workspace .transport-refresh-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 999px !important;
+    background: rgba(249, 115, 22, 0.14) !important;
+    color: currentColor !important;
+    transition: background 160ms ease, color 160ms ease !important;
+}
+
+.transport-refresh-button.syncing .transport-refresh-icon svg,
+.transport-page-frame .transport-refresh-button.syncing .transport-refresh-icon svg,
+.transport-desktop-workspace .transport-refresh-button.syncing .transport-refresh-icon svg {
+    animation: transport-refresh-spin 720ms linear infinite !important;
+}
+
+.transport-refresh-button.done .transport-refresh-icon,
+.transport-page-frame .transport-refresh-button.done .transport-refresh-icon,
+.transport-desktop-workspace .transport-refresh-button.done .transport-refresh-icon {
+    background: #16a34a !important;
+    color: #ffffff !important;
+}
+
+.transport-live-refresh.confirmed i,
+.transport-page-frame .transport-live-refresh.confirmed i,
+.transport-desktop-workspace .transport-live-refresh.confirmed i {
+    animation: transport-refresh-ping 900ms ease-out !important;
+}
+
+@keyframes transport-refresh-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes transport-refresh-sheen {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(120%); }
+}
+
+@keyframes transport-refresh-pop {
+    0% { transform: scale(0.98); }
+    55% { transform: scale(1.04); }
+    100% { transform: scale(1); }
+}
+
+@keyframes transport-refresh-ping {
+    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.42); }
+    100% { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
+}
+
 .transport-page-frame .transport-reference-legend,
 .transport-desktop-workspace .transport-reference-legend {
     display: flex !important;
