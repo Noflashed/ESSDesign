@@ -9,6 +9,19 @@ const STARTER_PROMPTS = [
     'Find the latest design for a job-site or scaffold.',
 ];
 
+const LOADING_MESSAGES = [
+    'Checking ESS data...',
+    'Looking that up...',
+    'On it...',
+    'Pulling up the latest...',
+    'Let me check...',
+    'Checking the schedule...',
+];
+
+function randomLoadingMessage() {
+    return LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)];
+}
+
 function AssistantAvatar({ role = 'assistant' }) {
     const isUser = role === 'user';
     const Icon = isUser ? User : Bot;
@@ -183,26 +196,29 @@ function buildTruckScheduleReply(question, requests) {
     const requestedDateKey = getRequestedScheduleDateKey(question);
     const requestedDateLabel = formatRelativeDateLabel(requestedDateKey);
     const requestedHour = getRequestedScheduleHour(question);
-    const scheduledRows = dedupeRequests(requests)
+    const allRows = dedupeRequests(requests)
+        .filter(request => request?.isOnSchedule)
+        .filter(request => !request?.isArchived)
         .filter(request => request?.scheduledDate === requestedDateKey)
-        .filter(request => !request?.scheduleRemovedAt)
         .filter(request => Number.isFinite(getScheduleMinutes(request)))
         .filter(request => requestedHour === null || request.scheduledHour === requestedHour)
         .sort((a, b) => getScheduleMinutes(a) - getScheduleMinutes(b));
 
-    if (!scheduledRows.length) {
-        const hourLabel = requestedHour === null ? '' : ` for ${formatScheduleTime(requestedHour * 60)}`;
-        return `I cannot see any truck deliveries scheduled${hourLabel} for ${requestedDateLabel}.\n\nSource: live transport schedule.`;
+    if (!allRows.length) {
+        const hourLabel = requestedHour === null ? '' : ` at ${formatScheduleTime(requestedHour * 60)}`;
+        return `There are no active truck deliveries scheduled${hourLabel} for ${requestedDateLabel}.\n\nSource: live transport schedule.`;
     }
 
-    const truckCount = new Set(scheduledRows.map(request => request.scheduledTruckLabel || request.truckLabel || 'Unassigned truck')).size;
+    const truckCount = new Set(allRows.map(request => request.scheduledTruckLabel || request.truckLabel || 'Unassigned truck')).size;
+    const deliveryNoun = allRows.length === 1 ? 'delivery' : 'deliveries';
+    const truckNoun = truckCount === 1 ? 'truck' : 'trucks';
     const heading = requestedHour === null
-        ? `For ${requestedDateLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`
-        : `For ${formatScheduleTime(requestedHour * 60)} on ${requestedDateLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`;
+        ? `There ${allRows.length === 1 ? 'is' : 'are'} ${allRows.length} active ${deliveryNoun} on the schedule for ${requestedDateLabel}, across ${truckCount} ${truckNoun}.`
+        : `For ${formatScheduleTime(requestedHour * 60)} on ${requestedDateLabel}, there ${allRows.length === 1 ? 'is' : 'are'} ${allRows.length} ${deliveryNoun} scheduled across ${truckCount} ${truckNoun}.`;
 
-    const lines = scheduledRows.map(request => {
+    const lines = allRows.map(request => {
         const truck = request.scheduledTruckLabel || request.truckLabel || 'Unassigned truck';
-        return `${formatScheduleTime(getScheduleMinutes(request))} - ${truck} - ${getScheduleDescription(request)} (${formatStatusLabel(request)})`;
+        return `${formatScheduleTime(getScheduleMinutes(request))} — ${truck} — ${getScheduleDescription(request)} (${formatStatusLabel(request)})`;
     });
 
     return `${heading}\n\n${lines.join('\n')}\n\nSource: live transport schedule.`;
@@ -225,10 +241,11 @@ export default function AdminAssistantChat({ sidebarOpen }) {
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
-            content: "Ask me natural questions about today's roster, transport schedule, active job-sites, users, or design files.",
+            content: "Hey! I'm your ESS Intelligence assistant. Ask me anything — today's truck schedule, roster, active job-sites, design files, or whatever you need to know about operations right now.",
             links: [],
         },
     ]);
+    const [currentLoadingMessage, setCurrentLoadingMessage] = useState(randomLoadingMessage);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
@@ -247,6 +264,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
         setMessages(nextMessages);
         setInput('');
         setOpen(true);
+        setCurrentLoadingMessage(randomLoadingMessage());
         setLoading(true);
 
         try {
@@ -272,7 +290,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
                 ...current,
                 {
                     role: 'assistant',
-                    content: response.reply || 'I could not answer that from the current ESS data.',
+                    content: response.reply || "I couldn't find a useful answer in the ESS data — try rephrasing or asking something more specific.",
                     links: response.links || [],
                 },
             ]);
@@ -281,7 +299,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
                 ...current,
                 {
                     role: 'assistant',
-                    content: error.response?.data?.error || error.message || 'The admin assistant is unavailable right now.',
+                    content: error.response?.data?.error || error.message || 'Something went wrong on my end — give it another go.',
                     links: [],
                     error: true,
                 },
@@ -333,7 +351,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
                                 <AssistantAvatar />
                                 <div className="admin-assistant-message assistant loading">
                                     <div className="admin-assistant-loading-line">
-                                        <span>Checking ESS data</span>
+                                        <span>{currentLoadingMessage}</span>
                                         <span className="admin-assistant-typing" aria-hidden="true">
                                             <i />
                                             <i />
@@ -365,7 +383,7 @@ export default function AdminAssistantChat({ sidebarOpen }) {
                         <input
                             value={input}
                             onChange={(event) => setInput(event.target.value)}
-                            placeholder="Ask about ESS operations..."
+                            placeholder="Ask me anything about ESS operations..."
                             disabled={loading}
                         />
                         <button type="submit" disabled={loading || !input.trim()}>

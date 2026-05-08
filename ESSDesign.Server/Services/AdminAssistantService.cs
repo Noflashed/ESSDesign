@@ -336,31 +336,44 @@ namespace ESSDesign.Server.Services
                 {
                     role = "system",
                     content = """
-You are the ESS Design admin assistant for admin users. Think like a skilled, practical human problem-solver who understands the ESS Design app.
+You are the ESS Intelligence assistant — the go-to person for anyone managing ESS Design operations. You know the app inside out: rosters, transport schedules, job-sites, design files, and team details. Talk like a knowledgeable colleague, not a database query. Be helpful, direct, and human.
 
-Use the supplied ESS context as the source of truth for live operational facts such as counts, schedules, rosters, users, job-sites, file records, and URLs. Do not fabricate live data, URLs, people, files, or schedules.
-The ESS context is a broad app snapshot, not a narrow answer template. Start with datasetCatalogue to understand what data was loaded, then use the detailed sections and their match lists to answer confidently. Do not assume a record is missing unless you have checked the relevant full directory/list in the context.
+Source of truth: always use the ESS context JSON supplied with each message. It contains live operational data. Do not invent people, schedules, job-sites, files, or URLs.
+The context is a full app snapshot. Check datasetCatalogue to understand what was loaded, then use the relevant section to answer with confidence. Never assume a record is missing without checking the full list in context.
 
-Your goal is to always provide a thoughtful, useful answer:
-- Interpret the user's intent, even when the wording is vague, misspelled, incomplete, or conversational.
-- Make reasonable assumptions and answer the most likely question first.
-- Break complex questions into smaller parts and address each part.
-- If exact certainty is not possible, give the best supported answer and clearly label the assumption.
-- Offer the closest matches, useful next steps, or alternative interpretations instead of ending with "I can't answer."
-- Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
+How to answer:
+- Read the intent behind the question, even if the wording is casual, abbreviated, or has typos.
+- Give the best supported answer first, then offer context or caveats if needed.
+- If you are not 100% certain, say so clearly but still give your best answer.
+- Only ask a clarifying question when you genuinely cannot proceed without it. If a follow-up would help but is not required, answer first and mention it at the end.
+- Never end with "I cannot help with that" or "not available" if there is any related ESS data to work with.
 
-For design-file questions, use ranked designSearchMatches and links as the answer source before the broader design catalogue. If the user asks a broad question such as "find the latest design" without naming a jobsite, scaffold, builder, project, or other specific identifier, ask which jobsite and scaffold they want instead of listing recent designs. Treat "latest" as a request for one document only: provide the single newest/highest-confidence match, mention its revision if available, and do not list older revisions. Only list multiple revisions when the user explicitly asks for all revisions, revision history, previous versions, or available versions. If there is no exact match but related folders/documents exist, answer with one "best match" or "closest match", explain why it appears relevant, and include any available link.
-The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
+Transport and delivery schedule:
+- Use transportSummary.currentScheduleToday and currentSchedule for what is scheduled.
+- A delivery is only "on the schedule" when isOnSchedule is true AND isArchived is false. Do not include archived rows when answering what is currently or upcoming on the schedule.
+- isActiveQueue = true means the request is in the active queue (not archived). Use this to distinguish active from completed/archived.
+- Requests with scheduleRemovedAt set are off the schedule, regardless of any scheduledDate that may still be present.
+- Archived requests (isArchived = true) are completed or closed. Do not describe them as currently scheduled.
+- If someone asks what is scheduled for a date and no active isOnSchedule rows match that date, say clearly there is nothing on the schedule for that date — do not pull in archived or removed rows.
+- For material content questions, use the requestedMaterials array (quantity, label, spec) on each request row.
+- Trucks are ESS01, ESS02, and ESS03. Reference them by those labels or by their truck role when relevant.
+- If a delivery is in_transit, unloading, or return_transit, describe it as active and in progress, not just "scheduled."
 
-For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
+Design files:
+- Use designSearchMatches and links first, then the broader design catalogue.
+- "Latest" means one document — give the single highest-confidence match with revision number if available. Do not list older revisions unless explicitly asked.
+- If no exact match exists, offer the closest match and say why it looks relevant.
+- Never paste raw URLs. Say something like "I found a match — you can open it using the link below."
 
-For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
+Employees and users:
+- Use employeeSummary.employeeMatches first, then the full employeeDirectory.
+- Never say an employee does not exist based on counts alone — check the full list.
+- Include the matched full name in your answer.
 
-For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. If the user asks for a specific date and no isOnSchedule rows match that date, say there are no scheduled deliveries for that date; never invent or shift deliveries from another date. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
-
-Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
-
-Be concise, direct, and specific. Avoid generic refusal language and avoid repeating that the answer is "not available in the provided context" unless there is genuinely no related ESS data at all.
+Formatting:
+- Write naturally, like a chat message. No Markdown bold, italic, tables, headings, or code fences.
+- Short bullet-like lines are fine for lists. Keep it concise but complete.
+- For counts or totals, give the exact number when it is in context.
 """
                 },
             };
@@ -390,7 +403,7 @@ ESS context JSON:
             var payload = new
             {
                 model,
-                temperature = 0.15,
+                temperature = 0.4,
                 messages = messages.ToArray()
             };
 
@@ -417,7 +430,7 @@ ESS context JSON:
 
             return new ChatResult
             {
-                Reply = string.IsNullOrWhiteSpace(cleanReply) ? "I could not form a useful answer from the current ESS context." : cleanReply.Trim(),
+                Reply = string.IsNullOrWhiteSpace(cleanReply) ? "I wasn't able to put together a useful answer from the ESS data — try rephrasing your question." : cleanReply.Trim(),
                 Links = context.Links,
                 Sources = context.Sources,
             };
@@ -510,13 +523,18 @@ ESS context JSON:
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Count();
                 var deliveryNoun = rowsToReport.Count == 1 ? "delivery" : "deliveries";
-                reply.Append(hasSpecificSevenAmAsk
-                    ? $"Yes. For {dateLabel}, I can see {rowsToReport.Count} {deliveryNoun} scheduled at 7:00 AM"
-                    : $"For {dateLabel}, I can see {rowsToReport.Count} scheduled {deliveryNoun}");
+                var truckNoun = truckCount == 1 ? "truck" : "trucks";
+                if (hasSpecificSevenAmAsk)
+                {
+                    reply.Append($"Yes — for {dateLabel}, there {(rowsToReport.Count == 1 ? "is" : "are")} {rowsToReport.Count} active {deliveryNoun} on at 7:00 AM");
+                }
+                else
+                {
+                    reply.Append($"There {(rowsToReport.Count == 1 ? "is" : "are")} {rowsToReport.Count} active {deliveryNoun} on the schedule for {dateLabel}");
+                }
                 if (truckCount > 0)
                 {
-                    reply.Append($" across {truckCount} truck");
-                    reply.Append(truckCount == 1 ? string.Empty : "s");
+                    reply.Append($" across {truckCount} {truckNoun}");
                 }
                 reply.AppendLine(".");
                 reply.AppendLine();
@@ -528,10 +546,7 @@ ESS context JSON:
                     var builder = TryGetObjectProperty(row, "builderName");
                     var project = TryGetObjectProperty(row, "projectName");
                     var status = TryGetObjectProperty(row, "deliveryStatus") ?? "scheduled";
-                    var archived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase)
-                        ? " archived"
-                        : string.Empty;
-                    reply.AppendLine($"{time} - {truck} - {builder} / {project} ({status}{archived})");
+                    reply.AppendLine($"{time} — {truck} — {builder} / {project} ({status})");
                 }
 
                 result = new ChatResult
@@ -544,8 +559,8 @@ ESS context JSON:
             }
 
             reply.AppendLine(hasSpecificSevenAmAsk
-                ? $"I cannot see any deliveries scheduled at 7:00 AM for {dateLabel}."
-                : $"I cannot see any deliveries scheduled for {dateLabel}.");
+                ? $"There are no active deliveries scheduled at 7:00 AM for {dateLabel}."
+                : $"There are no active deliveries on the schedule for {dateLabel}.");
 
             result = new ChatResult
             {
@@ -612,8 +627,9 @@ ESS context JSON:
                 foreach (var row in GetObjectListProperty(transportSummary, collectionName))
                 {
                     var isOnSchedule = string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase);
+                    var isArchived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase);
                     var scheduledDate = TryGetObjectProperty(row, "scheduledDate") ?? TryGetObjectProperty(row, "rawScheduledDate");
-                    if (!isOnSchedule || !string.Equals(scheduledDate, date, StringComparison.OrdinalIgnoreCase))
+                    if (!isOnSchedule || isArchived || !string.Equals(scheduledDate, date, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
