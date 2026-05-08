@@ -1505,6 +1505,69 @@ function withStoredReturnTransitToYard(record, enabled) {
     };
 }
 
+function getStoredTollsEnabled(item, segment = 'primary') {
+    const directKey = segment === 'return' ? 'returnTollsEnabled' : 'tollsEnabled';
+    const direct = item?.[directKey];
+    if (typeof direct === 'boolean') {
+        return direct;
+    }
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    const stored = segment === 'return' ? itemValues.__returnTollsEnabled : itemValues.__tollsEnabled;
+    if (typeof stored === 'boolean') {
+        return stored;
+    }
+    if (typeof stored === 'string') {
+        return stored.toLowerCase() === 'true';
+    }
+    return stored === 1;
+}
+
+function hasStoredTollsSetting(item, segment = 'primary') {
+    const directFlag = segment === 'return' ? 'hasReturnTollsSetting' : 'hasTollsSetting';
+    const directKey = segment === 'return' ? 'returnTollsEnabled' : 'tollsEnabled';
+    if (item?.[directFlag] === true) {
+        return true;
+    }
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    const storageKey = segment === 'return' ? '__returnTollsEnabled' : '__tollsEnabled';
+    if (Object.prototype.hasOwnProperty.call(itemValues, storageKey)) {
+        return true;
+    }
+    if (item?.[directFlag] === false) {
+        return false;
+    }
+    return typeof item?.[directKey] === 'boolean';
+}
+
+function withStoredTollsEnabled(record, segment = 'primary', enabled = false) {
+    const tollsEnabled = Boolean(enabled);
+    const itemValues = { ...(record?.itemValues || {}) };
+    if (segment === 'return') {
+        itemValues.__returnTollsEnabled = tollsEnabled;
+        return {
+            ...record,
+            returnTollsEnabled: tollsEnabled,
+            hasReturnTollsSetting: true,
+            itemValues,
+        };
+    }
+    itemValues.__tollsEnabled = tollsEnabled;
+    return {
+        ...record,
+        tollsEnabled,
+        hasTollsSetting: true,
+        itemValues,
+    };
+}
+
 function normalizeConnectedParentSegment(value) {
     return value === 'return' || value === 'primary' ? value : null;
 }
@@ -1544,6 +1607,10 @@ function normalizeMaterialOrderRequestListItem(item) {
         serviceMinutes: getStoredServiceMinutes(item),
         returnTransitToYard: getStoredReturnTransitToYard(item),
         hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(item),
+        tollsEnabled: getStoredTollsEnabled(item, 'primary'),
+        returnTollsEnabled: getStoredTollsEnabled(item, 'return'),
+        hasTollsSetting: hasStoredTollsSetting(item, 'primary'),
+        hasReturnTollsSetting: hasStoredTollsSetting(item, 'return'),
         scheduledDate,
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
@@ -1590,6 +1657,10 @@ function normalizeMaterialOrderRequestRecord(record) {
         serviceMinutes: getStoredServiceMinutes(record),
         returnTransitToYard: getStoredReturnTransitToYard(record),
         hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(record),
+        tollsEnabled: getStoredTollsEnabled(record, 'primary'),
+        returnTollsEnabled: getStoredTollsEnabled(record, 'return'),
+        hasTollsSetting: hasStoredTollsSetting(record, 'primary'),
+        hasReturnTollsSetting: hasStoredTollsSetting(record, 'return'),
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
@@ -1689,6 +1760,12 @@ function mapMaterialOrderRequestRecordToRow(record) {
         __serviceMinutes: getStoredServiceMinutes(normalized),
         __returnTransitToYard: getStoredReturnTransitToYard(normalized),
     };
+    if (hasStoredTollsSetting(normalized, 'primary') || getStoredTollsEnabled(normalized, 'primary')) {
+        normalizedItemValues.__tollsEnabled = getStoredTollsEnabled(normalized, 'primary');
+    }
+    if (hasStoredTollsSetting(normalized, 'return') || getStoredTollsEnabled(normalized, 'return')) {
+        normalizedItemValues.__returnTollsEnabled = getStoredTollsEnabled(normalized, 'return');
+    }
     return {
         id: normalized.id,
         source_order_id: normalized.sourceOrderId || null,
@@ -1942,6 +2019,16 @@ async function setMaterialOrderRequestReturnTransitToYardInTable(requestId, enab
         const record = await readMaterialOrderRequestTableRecord(requestId);
         if (!record) throw new Error('Request not found');
         const updated = withStoredReturnTransitToYard(record, enabled);
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function setMaterialOrderRequestTollsEnabledInTable(requestId, { segment = 'primary', enabled = false } = {}) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const updated = withStoredTollsEnabled(record, segment, enabled);
         const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
         return saved || normalizeMaterialOrderRequestRecord(updated);
     });
@@ -2717,6 +2804,39 @@ export const materialOrderRequestsAPI = {
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
                 ? withStoredReturnTransitToYard(item, returnTransitToYard)
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    }),
+
+    setTollsEnabled: async (requestId, { segment = 'primary', enabled = false } = {}) => withMaterialRequestIndexWriteLock(async () => {
+        const normalizedSegment = segment === 'return' ? 'return' : 'primary';
+        const tollsEnabled = Boolean(enabled);
+        const tableRecord = await setMaterialOrderRequestTollsEnabledInTable(requestId, {
+            segment: normalizedSegment,
+            enabled: tollsEnabled,
+        });
+        if (tableRecord) {
+            return tableRecord;
+        }
+
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
+        ]);
+        if (!record) throw new Error('Request not found');
+
+        const updated = withStoredTollsEnabled(record, normalizedSegment, tollsEnabled);
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? withStoredTollsEnabled(item, normalizedSegment, tollsEnabled)
                 : item),
             updatedAt: nowIso(),
         };

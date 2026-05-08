@@ -225,6 +225,96 @@ function areReturnTransitMapsEqual(left = {}, right = {}) {
   return leftKeys.every(key => Boolean(right?.[key]));
 }
 
+function hasRequestTollsSetting(request, segment = 'primary') {
+  if (!request) {
+    return false;
+  }
+  const flagKey = segment === 'return' ? 'hasReturnTollsSetting' : 'hasTollsSetting';
+  if (request[flagKey] === true) {
+    return true;
+  }
+  const storageKey = segment === 'return' ? '__returnTollsEnabled' : '__tollsEnabled';
+  return Boolean(
+    request.itemValues
+      && typeof request.itemValues === 'object'
+      && Object.prototype.hasOwnProperty.call(request.itemValues, storageKey),
+  );
+}
+
+function getRequestTollsEnabled(request, segment = 'primary') {
+  if (!request) {
+    return false;
+  }
+  const directKey = segment === 'return' ? 'returnTollsEnabled' : 'tollsEnabled';
+  if (typeof request[directKey] === 'boolean') {
+    return request[directKey];
+  }
+  const stored = request.itemValues?.[segment === 'return' ? '__returnTollsEnabled' : '__tollsEnabled'];
+  if (typeof stored === 'boolean') {
+    return stored;
+  }
+  if (typeof stored === 'string') {
+    return stored.toLowerCase() === 'true';
+  }
+  return stored === 1;
+}
+
+function applyTollsToRequest(request, segment = 'primary', enabled = false) {
+  if (!request) {
+    return request;
+  }
+  const tollsEnabled = Boolean(enabled);
+  const itemValues = { ...(request.itemValues || {}) };
+  if (segment === 'return') {
+    itemValues.__returnTollsEnabled = tollsEnabled;
+    return {
+      ...request,
+      returnTollsEnabled: tollsEnabled,
+      hasReturnTollsSetting: true,
+      itemValues,
+    };
+  }
+  itemValues.__tollsEnabled = tollsEnabled;
+  return {
+    ...request,
+    tollsEnabled,
+    hasTollsSetting: true,
+    itemValues,
+  };
+}
+
+function buildTollsMapForRequests(requests = [], fallbackMap = {}) {
+  const next = {};
+  Object.entries(fallbackMap || {}).forEach(([key, enabled]) => {
+    if (key && enabled) {
+      next[key] = true;
+    }
+  });
+  (requests || []).forEach(request => {
+    if (!request?.id) {
+      return;
+    }
+    ['primary', 'return'].forEach(segment => {
+      const key = getTollStorageKey(request.id, segment);
+      if (getRequestTollsEnabled(request, segment)) {
+        next[key] = true;
+      } else if (hasRequestTollsSetting(request, segment)) {
+        delete next[key];
+      }
+    });
+  });
+  return next;
+}
+
+function areTollsMapsEqual(left = {}, right = {}) {
+  const leftKeys = Object.keys(left || {}).filter(key => left[key]);
+  const rightKeys = Object.keys(right || {}).filter(key => right[key]);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+  return leftKeys.every(key => Boolean(right?.[key]));
+}
+
 function getSecondaryRouteReasonLabel(reason) {
   return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
 }
@@ -1181,6 +1271,12 @@ function getRequestListSignature(requests) {
     request?.returnTransitToYard,
     request?.itemValues?.__returnTransitToYard,
     request?.hasReturnTransitToYardSetting,
+    request?.tollsEnabled,
+    request?.returnTollsEnabled,
+    request?.itemValues?.__tollsEnabled,
+    request?.itemValues?.__returnTollsEnabled,
+    request?.hasTollsSetting,
+    request?.hasReturnTollsSetting,
     request?.secondaryRoute ? [
       request.secondaryRoute.reason,
       request.secondaryRoute.startingLocation,
@@ -2191,6 +2287,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const requestSiteLocationMapRef = useRef({});
   const stableRouteEstimateMapRef = useRef({});
   const returnTransitSharedMigrationRef = useRef(new Set());
+  const tollsSharedMigrationRef = useRef(new Set());
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
   const dragPointerOffsetMinutesRef = useRef(0);
@@ -2311,11 +2408,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const siteLocationMap = siteLocationMapOverride || requestSiteLocationMapRef.current;
     const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
     const effectiveReturnTransitByRequestId = buildReturnTransitMapForRequests(requestsForDay, returnTransitByRequestId);
+    const effectiveTollsByRequestId = buildTollsMapForRequests(requestsForDay, tollsByRequestId);
     const routeMap = buildCachedRouteMapForRequests(
       requestsForDay,
       siteLocationMap,
       fallbackDate || selectedDate,
-      getTollsEnabled,
+      effectiveTollsByRequestId,
       effectiveReturnTransitByRequestId,
       stableRouteEstimateMapRef.current,
     );
@@ -2324,7 +2422,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap });
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
-  }, [applyBoardProjection, debugMode, getTollsEnabled, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate]);
+  }, [applyBoardProjection, debugMode, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, tollsByRequestId]);
 
   const visibleTruckLanes = useMemo(() => {
     if (isTruckRole && assignedTruck) {
@@ -2350,10 +2448,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         optimisticRequestOverridesRef.current,
       );
       const effectiveReturnTransitByRequestId = buildReturnTransitMapForRequests(merged, returnTransitByRequestId);
+      const effectiveTollsByRequestId = buildTollsMapForRequests(merged, tollsByRequestId);
       setReturnTransitByRequestId(current => (
         areReturnTransitMapsEqual(current, effectiveReturnTransitByRequestId)
           ? current
           : effectiveReturnTransitByRequestId
+      ));
+      setTollsByRequestId(current => (
+        areTollsMapsEqual(current, effectiveTollsByRequestId)
+          ? current
+          : effectiveTollsByRequestId
       ));
       const returnTransitMigrations = merged.filter(request =>
         request?.id
@@ -2365,6 +2469,46 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         returnTransitMigrations.forEach(request => returnTransitSharedMigrationRef.current.add(request.id));
         Promise.all(returnTransitMigrations.map(request =>
           materialOrderRequestsAPI.setReturnTransitToYard(request.id, true).catch(() => null),
+        )).then(savedRequests => {
+          const updates = savedRequests.filter(Boolean);
+          if (updates.length === 0) {
+            return;
+          }
+          updates.forEach(savedRequest => {
+            optimisticRequestOverridesRef.current.set(savedRequest.id, {
+              request: savedRequest,
+              expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+            });
+          });
+          setAllRequests(currentRequests => currentRequests.map(request =>
+            updates.find(savedRequest => savedRequest.id === request.id) || request,
+          ));
+        });
+      }
+      const tollsMigrations = [];
+      merged.forEach(request => {
+        if (!request?.id) {
+          return;
+        }
+        ['primary', 'return'].forEach(segment => {
+          const key = getTollStorageKey(request.id, segment);
+          const migrationKey = `${request.id}:${segment}`;
+          if (
+            tollsByRequestId?.[key]
+            && !hasRequestTollsSetting(request, segment)
+            && !tollsSharedMigrationRef.current.has(migrationKey)
+          ) {
+            tollsSharedMigrationRef.current.add(migrationKey);
+            tollsMigrations.push({ requestId: request.id, segment });
+          }
+        });
+      });
+      if (tollsMigrations.length > 0) {
+        Promise.all(tollsMigrations.map(item =>
+          materialOrderRequestsAPI.setTollsEnabled(item.requestId, {
+            segment: item.segment,
+            enabled: true,
+          }).catch(() => null),
         )).then(savedRequests => {
           const updates = savedRequests.filter(Boolean);
           if (updates.length === 0) {
@@ -2398,7 +2542,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         requestsForDay,
         nextSiteLocationMap,
         selectedDate,
-        getTollsEnabled,
+        effectiveTollsByRequestId,
         effectiveReturnTransitByRequestId,
         stableRouteEstimateMapRef.current,
       );
@@ -2409,7 +2553,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
-          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, effectiveReturnTransitByRequestId);
+          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, effectiveTollsByRequestId, effectiveReturnTransitByRequestId);
           if (!routeContext) {
             return [request.id, null];
           }
@@ -2450,7 +2594,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
     loadPromiseRef.current = { loadKey, promise: task };
     return task;
-  }, [applyBoardProjection, debugMode, getTollsEnabled, mergeRequestSiteLocationMap, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
+  }, [applyBoardProjection, debugMode, mergeRequestSiteLocationMap, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, setRouteLoading, tollsByRequestId]);
 
   useEffect(() => {
     loadBoard().catch(() => {});
@@ -2681,8 +2825,22 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     if (!requestId) {
       return;
     }
-    const storageKey = getTollStorageKey(requestId, selectedScheduleSegment === 'return' ? 'return' : 'primary');
+    const tollSegment = selectedScheduleSegment === 'return' ? 'return' : 'primary';
+    const storageKey = getTollStorageKey(requestId, tollSegment);
     const checked = event.target.checked;
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const previousCycleStateMap = eventCycleStateMap;
+    const previousTollsByRequestId = tollsByRequestId;
+    const targetRequest = allRequests.find(item => item.id === requestId) || requestMetaMap[requestId] || null;
+    const updatedRequest = applyTollsToRequest(targetRequest, tollSegment, checked);
+    const nextRequests = targetRequest
+      ? allRequests.map(request => request.id === requestId ? updatedRequest : request)
+      : allRequests;
     setTollsByRequestId(current => {
       const next = { ...(current || {}) };
       if (checked) {
@@ -2692,7 +2850,62 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
       return next;
     });
-  }, [selectedScheduleEventId, selectedScheduleEventIds, selectedScheduleSegment]);
+    if (targetRequest) {
+      setAllRequests(nextRequests);
+      optimisticRequestOverridesRef.current.set(requestId, {
+        request: updatedRequest,
+        expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+      });
+      setRouteLoading(requestId, true, tollSegment);
+      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    }
+
+    materialOrderRequestsAPI.setTollsEnabled(requestId, {
+      segment: tollSegment,
+      enabled: checked,
+    })
+      .then(savedRequest => {
+        if (savedRequest) {
+          optimisticRequestOverridesRef.current.set(savedRequest.id, {
+            request: savedRequest,
+            expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+          });
+        }
+        setError('');
+      })
+      .catch(err => {
+        optimisticRequestOverridesRef.current.delete(requestId);
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setTollsByRequestId(previousTollsByRequestId);
+        setError(err?.message || 'Failed to update toll setting.');
+      })
+      .finally(() => {
+        setRouteLoading(requestId, false, tollSegment);
+      });
+  }, [
+    allRequests,
+    dayEvents,
+    eventCycleStateMap,
+    eventDurationMinutesMap,
+    eventPrimaryDurationMinutesMap,
+    eventStartMinutesMap,
+    projectRequestsToBoard,
+    requestMetaMap,
+    selectedDate,
+    selectedScheduleEventId,
+    selectedScheduleEventIds,
+    selectedScheduleSegment,
+    setRouteLoading,
+    tollsByRequestId,
+  ]);
 
   useEffect(() => {
     if (scaleAnchorRef.current == null || !boardScrollRef.current) {
@@ -5002,9 +5215,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         connectedParentStartMinutes: persistedSecondarySchedule.scheduledHour * 60 + persistedSecondarySchedule.scheduledMinute,
         connectedParentSegment: secondaryConnectedParentSegment,
       };
-      const chainedUpdatedRequest = shouldMoveReturnBreakToSecondary
+      const shouldMoveReturnTolls = shouldMoveReturnBreakToSecondary && getTollsEnabled(request.id, 'return');
+      const chainedReturnRequest = shouldMoveReturnBreakToSecondary
         ? applyReturnTransitToRequest(chainedUpdatedRequestBase, true)
         : chainedUpdatedRequestBase;
+      const chainedUpdatedRequest = shouldMoveReturnTolls
+        ? applyTollsToRequest(chainedReturnRequest, 'return', true)
+        : chainedReturnRequest;
       const relinkedUpdatedContinuation = relinkedContinuation
         ? {
             ...relinkedContinuation,
@@ -5014,9 +5231,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const parentRequestBase = isSecondaryRouteRequest(request)
         ? request
         : { ...request, secondaryRoute: null };
-      const parentRequest = shouldMoveReturnBreakToSecondary
+      const parentReturnRequest = shouldMoveReturnBreakToSecondary
         ? applyReturnTransitToRequest(parentRequestBase, false)
         : parentRequestBase;
+      const parentRequest = shouldMoveReturnTolls
+        ? applyTollsToRequest(parentReturnRequest, 'return', false)
+        : parentReturnRequest;
       const nextRequests = dedupeRequests([
         ...allRequests
           .map(item => item.id === parentRequest.id ? parentRequest : item)
@@ -5059,7 +5279,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           delete next.__legacy;
           return next;
         });
-        if (shouldMoveReturnBreakToSecondary) {
+        if (shouldMoveReturnTolls) {
           setTollsByRequestId(current => {
             if (!current?.[getTollStorageKey(parentRequest.id, 'return')]) {
               return current;
@@ -5072,10 +5292,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }
       }
       if (shouldMoveReturnBreakToSecondary) {
-        await Promise.all([
+        const sharedUpdates = [
           materialOrderRequestsAPI.setReturnTransitToYard(parentRequest.id, false),
           materialOrderRequestsAPI.setReturnTransitToYard(chainedUpdatedRequest.id, true),
-        ]);
+        ];
+        if (shouldMoveReturnTolls) {
+          sharedUpdates.push(
+            materialOrderRequestsAPI.setTollsEnabled(parentRequest.id, { segment: 'return', enabled: false }),
+            materialOrderRequestsAPI.setTollsEnabled(chainedUpdatedRequest.id, { segment: 'return', enabled: true }),
+          );
+        }
+        await Promise.all(sharedUpdates);
       } else if (relinkedUpdatedContinuation) {
         await materialOrderRequestsAPI.setReturnTransitToYard(chainedUpdatedRequest.id, false);
       }
