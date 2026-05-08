@@ -57,6 +57,7 @@ const SCALE_MODES = {
 };
 const SCALE_ORDER = ['standard', 'detailed', 'fine', 'ultraFine'];
 const LIVE_REFRESH_MS = 15000;
+const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const LANE_META_WIDTH = 154;
 const TRACK_GUTTER = 14;
 const TRACK_OFFSET = LANE_META_WIDTH + TRACK_GUTTER;
@@ -2764,7 +2765,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         return false;
       }
       applyBoardProjection(requestsForDay, initialBoard);
-      setLoadingBoard(false);
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const sharedRouteSnapshotEntries = [];
       const resolvedRouteEntries = await Promise.all(
@@ -2812,6 +2812,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
       persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
+      setLoadingBoard(false);
       setError('');
       setLastRefreshLabel(formatLastRefreshTime());
       return true;
@@ -6434,6 +6435,19 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         : 'Refresh';
   const refreshButtonIcon = manualRefreshStatus === 'done' ? 'check' : 'refresh';
   const refreshButtonClass = `transport-toolbar-button transport-refresh-button ${manualRefreshStatus}`;
+
+  if (loadingBoard) {
+    return (
+      <div className="ts2-page transport-dynamic-reference transport-schedule-page-loading">
+        <div className="material-ordering-page-loader" role="status" aria-label="Loading dynamic schedule">
+          <div className="loading-brandmark" aria-hidden="true">
+            <div className="loading-ring"></div>
+            <img src={ESS_LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ts2-page transport-dynamic-reference">

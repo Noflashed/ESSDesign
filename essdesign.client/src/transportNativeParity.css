@@ -260,7 +260,9 @@
 }
 
 .transport-page-frame .material-ordering-page-loading,
-.transport-desktop-workspace .material-ordering-page-loading {
+.transport-page-frame .transport-schedule-page-loading,
+.transport-desktop-workspace .material-ordering-page-loading,
+.transport-desktop-workspace .transport-schedule-page-loading {
     display: grid !important;
     place-items: center !important;
     min-height: 100vh !important;
