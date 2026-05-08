@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -355,7 +356,7 @@ For employee questions, use employeeSummary.employeeMatches first, then employee
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
-For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
+For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. If the user asks for a specific date and no isOnSchedule rows match that date, say there are no scheduled deliveries for that date; never invent or shift deliveries from another date. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
 
 Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
 
@@ -459,6 +460,8 @@ ESS context JSON:
                 normalized.Contains("schedule", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("scheduled", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("schedules", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("tomorrow", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("yesterday", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("now", StringComparison.OrdinalIgnoreCase);
@@ -474,6 +477,8 @@ ESS context JSON:
             var isTransportQuestion = hasTransportWords ||
                 (hasScheduleWords && !hasWorkforceWords && (
                     normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("tomorrow", StringComparison.OrdinalIgnoreCase) ||
+                    normalized.Contains("yesterday", StringComparison.OrdinalIgnoreCase) ||
                     normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
                     normalized.Contains("board", StringComparison.OrdinalIgnoreCase) ||
                     normalized.Contains("run", StringComparison.OrdinalIgnoreCase)
@@ -485,18 +490,16 @@ ESS context JSON:
                 return false;
             }
 
-            var todayRows = GetScheduledRowsForDate(context.TransportSummary, context.Today);
-            var currentSchedule = GetObjectListProperty(context.TransportSummary, "currentSchedule")
-                .Where(row => string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var requestedDate = ResolveRequestedScheduleDate(normalized, context.Today);
+            var scheduleRows = GetScheduledRowsForDate(context.TransportSummary, requestedDate);
             var hasSpecificSevenAmAsk =
                 normalized.Contains("7am", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("7 am", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("7 00", StringComparison.OrdinalIgnoreCase);
             var rowsToReport = hasSpecificSevenAmAsk
-                ? todayRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), "07:00", StringComparison.OrdinalIgnoreCase)).ToList()
-                : todayRows;
-            var todayLabel = FormatChatDate(context.Today);
+                ? scheduleRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), "07:00", StringComparison.OrdinalIgnoreCase)).ToList()
+                : scheduleRows;
+            var dateLabel = FormatRelativeChatDate(requestedDate, context.Today);
 
             var reply = new StringBuilder();
             if (rowsToReport.Count > 0)
@@ -508,8 +511,8 @@ ESS context JSON:
                     .Count();
                 var deliveryNoun = rowsToReport.Count == 1 ? "delivery" : "deliveries";
                 reply.Append(hasSpecificSevenAmAsk
-                    ? $"Yes. For today, {todayLabel}, I can see {rowsToReport.Count} {deliveryNoun} scheduled at 7:00 AM"
-                    : $"For today, {todayLabel}, I can see {rowsToReport.Count} scheduled {deliveryNoun}");
+                    ? $"Yes. For {dateLabel}, I can see {rowsToReport.Count} {deliveryNoun} scheduled at 7:00 AM"
+                    : $"For {dateLabel}, I can see {rowsToReport.Count} scheduled {deliveryNoun}");
                 if (truckCount > 0)
                 {
                     reply.Append($" across {truckCount} truck");
@@ -541,29 +544,8 @@ ESS context JSON:
             }
 
             reply.AppendLine(hasSpecificSevenAmAsk
-                ? $"I cannot see any deliveries scheduled at 7:00 AM today, {todayLabel}."
-                : $"I cannot see any deliveries scheduled for today, {todayLabel}.");
-
-            var futureOrOtherRows = currentSchedule
-                .Where(row => !string.Equals(TryGetObjectProperty(row, "scheduledDate"), context.Today, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(row => TryGetObjectProperty(row, "scheduledDate"))
-                .ThenBy(row => TryGetObjectProperty(row, "scheduledTime"))
-                .Take(8)
-                .ToList();
-            if (futureOrOtherRows.Count > 0)
-            {
-                reply.AppendLine();
-                reply.AppendLine("The nearest scheduled deliveries I can see are:");
-                foreach (var row in futureOrOtherRows)
-                {
-                    var date = FormatChatDate(TryGetObjectProperty(row, "scheduledDate"));
-                    var time = FormatChatTime(TryGetObjectProperty(row, "scheduledTime"));
-                    var truck = TryGetObjectProperty(row, "truck") ?? "Unassigned truck";
-                    var builder = TryGetObjectProperty(row, "builderName");
-                    var project = TryGetObjectProperty(row, "projectName");
-                    reply.AppendLine($"{date} {time} - {truck} - {builder} / {project}");
-                }
-            }
+                ? $"I cannot see any deliveries scheduled at 7:00 AM for {dateLabel}."
+                : $"I cannot see any deliveries scheduled for {dateLabel}.");
 
             result = new ChatResult
             {
@@ -572,6 +554,54 @@ ESS context JSON:
                 Sources = context.Sources,
             };
             return true;
+        }
+
+        private static string ResolveRequestedScheduleDate(string normalizedQuestion, string today)
+        {
+            if (normalizedQuestion.Contains("tomorrow", StringComparison.OrdinalIgnoreCase))
+            {
+                return AddDaysToDateString(today, 1);
+            }
+
+            if (normalizedQuestion.Contains("yesterday", StringComparison.OrdinalIgnoreCase))
+            {
+                return AddDaysToDateString(today, -1);
+            }
+
+            return today;
+        }
+
+        private static string AddDaysToDateString(string date, int days)
+        {
+            return DateOnly.TryParse(date, out var parsed)
+                ? parsed.AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                : date;
+        }
+
+        private static string FormatRelativeChatDate(string date, string today)
+        {
+            var formattedDate = FormatChatDate(date);
+            if (!DateOnly.TryParse(date, out var requested) || !DateOnly.TryParse(today, out var current))
+            {
+                return formattedDate;
+            }
+
+            if (requested == current)
+            {
+                return $"today, {formattedDate}";
+            }
+
+            if (requested == current.AddDays(1))
+            {
+                return $"tomorrow, {formattedDate}";
+            }
+
+            if (requested == current.AddDays(-1))
+            {
+                return $"yesterday, {formattedDate}";
+            }
+
+            return formattedDate;
         }
 
         private static List<object> GetScheduledRowsForDate(object transportSummary, string date)

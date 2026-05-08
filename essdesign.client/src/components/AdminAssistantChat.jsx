@@ -31,7 +31,7 @@ function normalizeQuestion(value) {
 function isTruckScheduleQuestion(question) {
     const normalized = normalizeQuestion(question);
     const hasTransportIntent = /\b(truck|trucks|delivery|deliveries|transport|material order|material orders|schedule board|dynamic schedule)\b/.test(normalized);
-    const hasScheduleIntent = /\b(schedule|scheduled|schedules|today|current|now|run|runs|booked)\b/.test(normalized);
+    const hasScheduleIntent = /\b(schedule|scheduled|schedules|today|tomorrow|yesterday|current|now|run|runs|booked)\b/.test(normalized);
     const isWorkforceQuestion = /\b(roster|men|workers|staff|crew|scaffolders|labour|labor)\b/.test(normalized);
 
     if (isWorkforceQuestion && !/\b(truck|trucks|delivery|deliveries|transport|material order|material orders)\b/.test(normalized)) {
@@ -70,6 +70,28 @@ function getSydneyDateKey(date = new Date()) {
     return `${lookup.year}-${lookup.month}-${lookup.day}`;
 }
 
+function addDaysToDateKey(dateKey, days) {
+    const [year, month, day] = String(dateKey || '').split('-').map(Number);
+    if (!year || !month || !day) {
+        return dateKey;
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day + days, 12));
+    return date.toISOString().slice(0, 10);
+}
+
+function getRequestedScheduleDateKey(question) {
+    const normalized = normalizeQuestion(question);
+    const todayKey = getSydneyDateKey();
+    if (/\btomorrow\b/.test(normalized)) {
+        return addDaysToDateKey(todayKey, 1);
+    }
+    if (/\byesterday\b/.test(normalized)) {
+        return addDaysToDateKey(todayKey, -1);
+    }
+    return todayKey;
+}
+
 function formatDateLabel(dateKey) {
     const [year, month, day] = String(dateKey || '').split('-').map(Number);
     if (!year || !month || !day) {
@@ -81,6 +103,21 @@ function formatDateLabel(dateKey) {
         month: 'long',
         year: 'numeric',
     }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function formatRelativeDateLabel(dateKey) {
+    const todayKey = getSydneyDateKey();
+    const dateLabel = formatDateLabel(dateKey);
+    if (dateKey === todayKey) {
+        return `today, ${dateLabel}`;
+    }
+    if (dateKey === addDaysToDateKey(todayKey, 1)) {
+        return `tomorrow, ${dateLabel}`;
+    }
+    if (dateKey === addDaysToDateKey(todayKey, -1)) {
+        return `yesterday, ${dateLabel}`;
+    }
+    return dateLabel;
 }
 
 function getScheduleMinutes(request) {
@@ -143,11 +180,11 @@ function dedupeRequests(requests) {
 }
 
 function buildTruckScheduleReply(question, requests) {
-    const todayKey = getSydneyDateKey();
-    const todayLabel = formatDateLabel(todayKey);
+    const requestedDateKey = getRequestedScheduleDateKey(question);
+    const requestedDateLabel = formatRelativeDateLabel(requestedDateKey);
     const requestedHour = getRequestedScheduleHour(question);
     const scheduledRows = dedupeRequests(requests)
-        .filter(request => request?.scheduledDate === todayKey)
+        .filter(request => request?.scheduledDate === requestedDateKey)
         .filter(request => !request?.scheduleRemovedAt)
         .filter(request => Number.isFinite(getScheduleMinutes(request)))
         .filter(request => requestedHour === null || request.scheduledHour === requestedHour)
@@ -155,13 +192,13 @@ function buildTruckScheduleReply(question, requests) {
 
     if (!scheduledRows.length) {
         const hourLabel = requestedHour === null ? '' : ` for ${formatScheduleTime(requestedHour * 60)}`;
-        return `I cannot see any truck deliveries scheduled${hourLabel} today, ${todayLabel}.\n\nSource: live transport schedule.`;
+        return `I cannot see any truck deliveries scheduled${hourLabel} for ${requestedDateLabel}.\n\nSource: live transport schedule.`;
     }
 
     const truckCount = new Set(scheduledRows.map(request => request.scheduledTruckLabel || request.truckLabel || 'Unassigned truck')).size;
     const heading = requestedHour === null
-        ? `For today, ${todayLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`
-        : `For ${formatScheduleTime(requestedHour * 60)} today, ${todayLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`;
+        ? `For ${requestedDateLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`
+        : `For ${formatScheduleTime(requestedHour * 60)} on ${requestedDateLabel}, I can see ${scheduledRows.length} scheduled ${scheduledRows.length === 1 ? 'delivery' : 'deliveries'} across ${truckCount} ${truckCount === 1 ? 'truck' : 'trucks'}.`;
 
     const lines = scheduledRows.map(request => {
         const truck = request.scheduledTruckLabel || request.truckLabel || 'Unassigned truck';
