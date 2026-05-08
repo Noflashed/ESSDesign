@@ -5812,7 +5812,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ? Math.max(0, durationMinutes - primaryDurationMinutes)
                         : 0;
                       const plannedReturnSegmentMinutes = !isCompleteTile && eventReturnTransitEnabled
-                        ? Math.min(Math.max(0, timing.returnMinutes || 0), Math.max(0, durationMinutes - 1))
+                        ? Math.max(0, durationMinutes - primaryDurationMinutes)
                         : 0;
                       const returnSegmentDurationMinutes = completedReturnSegmentMinutes || plannedReturnSegmentMinutes;
                       const returnSegmentRatio = Math.max(0, Math.min(1, returnSegmentDurationMinutes / Math.max(1, durationMinutes)));
