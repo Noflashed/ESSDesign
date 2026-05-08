@@ -313,6 +313,11 @@ namespace ESSDesign.Server.Services
             }
 
             var context = await BuildContextAsync(cleanQuestion, cancellationToken);
+            if (TryBuildDirectTransportScheduleResult(cleanQuestion, context, out var directTransportResult))
+            {
+                return directTransportResult;
+            }
+
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
             {
@@ -429,6 +434,147 @@ ESS context JSON:
             var withoutEmphasis = Regex.Replace(withoutBareUrls, @"(?<!\*)\*{1,3}([^*\r\n][^*\r\n]*?)\*{1,3}(?!\*)", "$1");
             withoutEmphasis = Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1");
             return withoutEmphasis;
+        }
+
+        private static bool TryBuildDirectTransportScheduleResult(
+            string question,
+            AdminAssistantContext context,
+            out ChatResult result)
+        {
+            result = new ChatResult();
+            var normalized = NormalizeSearchText(question);
+            var isTransportQuestion =
+                normalized.Contains("truck", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("delivery", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("deliveries", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("transport", StringComparison.OrdinalIgnoreCase);
+            var isScheduleQuestion =
+                normalized.Contains("schedule", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("scheduled", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("now", StringComparison.OrdinalIgnoreCase);
+
+            if (!isTransportQuestion || !isScheduleQuestion)
+            {
+                return false;
+            }
+
+            var todayRows = GetObjectListProperty(context.TransportSummary, "currentScheduleToday")
+                .Where(row => string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var currentSchedule = GetObjectListProperty(context.TransportSummary, "currentSchedule")
+                .Where(row => string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var hasSpecificSevenAmAsk =
+                normalized.Contains("7am", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("7 am", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("7 00", StringComparison.OrdinalIgnoreCase);
+            var rowsToReport = hasSpecificSevenAmAsk
+                ? todayRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), "07:00", StringComparison.OrdinalIgnoreCase)).ToList()
+                : todayRows;
+            var todayLabel = FormatChatDate(context.Today);
+
+            var reply = new StringBuilder();
+            if (rowsToReport.Count > 0)
+            {
+                var truckCount = rowsToReport
+                    .Select(row => TryGetObjectProperty(row, "truck"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+                var deliveryNoun = rowsToReport.Count == 1 ? "delivery" : "deliveries";
+                reply.Append(hasSpecificSevenAmAsk
+                    ? $"Yes. For today, {todayLabel}, I can see {rowsToReport.Count} {deliveryNoun} scheduled at 7:00 AM"
+                    : $"For today, {todayLabel}, I can see {rowsToReport.Count} scheduled {deliveryNoun}");
+                if (truckCount > 0)
+                {
+                    reply.Append($" across {truckCount} truck");
+                    reply.Append(truckCount == 1 ? string.Empty : "s");
+                }
+                reply.AppendLine(".");
+                reply.AppendLine();
+
+                foreach (var row in rowsToReport.OrderBy(row => TryGetObjectProperty(row, "scheduledTime")))
+                {
+                    var time = FormatChatTime(TryGetObjectProperty(row, "scheduledTime"));
+                    var truck = TryGetObjectProperty(row, "truck") ?? "Unassigned truck";
+                    var builder = TryGetObjectProperty(row, "builderName");
+                    var project = TryGetObjectProperty(row, "projectName");
+                    var status = TryGetObjectProperty(row, "deliveryStatus") ?? "scheduled";
+                    var archived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase)
+                        ? " archived"
+                        : string.Empty;
+                    reply.AppendLine($"{time} - {truck} - {builder} / {project} ({status}{archived})");
+                }
+
+                result = new ChatResult
+                {
+                    Reply = reply.ToString().Trim(),
+                    Links = context.Links,
+                    Sources = context.Sources,
+                };
+                return true;
+            }
+
+            reply.AppendLine(hasSpecificSevenAmAsk
+                ? $"I cannot see any deliveries scheduled at 7:00 AM today, {todayLabel}."
+                : $"I cannot see any deliveries scheduled for today, {todayLabel}.");
+
+            var futureOrOtherRows = currentSchedule
+                .Where(row => !string.Equals(TryGetObjectProperty(row, "scheduledDate"), context.Today, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(row => TryGetObjectProperty(row, "scheduledDate"))
+                .ThenBy(row => TryGetObjectProperty(row, "scheduledTime"))
+                .Take(8)
+                .ToList();
+            if (futureOrOtherRows.Count > 0)
+            {
+                reply.AppendLine();
+                reply.AppendLine("The nearest scheduled deliveries I can see are:");
+                foreach (var row in futureOrOtherRows)
+                {
+                    var date = FormatChatDate(TryGetObjectProperty(row, "scheduledDate"));
+                    var time = FormatChatTime(TryGetObjectProperty(row, "scheduledTime"));
+                    var truck = TryGetObjectProperty(row, "truck") ?? "Unassigned truck";
+                    var builder = TryGetObjectProperty(row, "builderName");
+                    var project = TryGetObjectProperty(row, "projectName");
+                    reply.AppendLine($"{date} {time} - {truck} - {builder} / {project}");
+                }
+            }
+
+            result = new ChatResult
+            {
+                Reply = reply.ToString().Trim(),
+                Links = context.Links,
+                Sources = context.Sources,
+            };
+            return true;
+        }
+
+        private static List<object> GetObjectListProperty(object source, string propertyName)
+        {
+            var value = source.GetType().GetProperty(propertyName)?.GetValue(source);
+            return value is IEnumerable<object> rows ? rows.ToList() : new List<object>();
+        }
+
+        private static string FormatChatDate(string? value)
+        {
+            return DateTime.TryParse(value, out var parsed)
+                ? parsed.ToString("MMMM d, yyyy")
+                : value ?? string.Empty;
+        }
+
+        private static string FormatChatTime(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "Unscheduled";
+            }
+
+            return TimeSpan.TryParse(value, out var parsed)
+                ? DateTime.Today.Add(parsed).ToString("h:mm tt")
+                : value;
         }
 
         private object BuildModelContext(AdminAssistantContext context)
