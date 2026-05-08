@@ -37,6 +37,7 @@ namespace ESSDesign.Server.Services
         private const string SafetyBucket = "project-information";
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
+        private const string MaterialRequestsTable = "ess_material_order_requests";
         private static readonly HashSet<string> VagueDesignLookupWords = new(StringComparer.OrdinalIgnoreCase)
         {
             "a",
@@ -349,7 +350,7 @@ For employee questions, use employeeSummary.employeeMatches first, then employee
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
-For material order questions, use transportSummary.requestMatches, activeRequests, scheduledToday, and archivedRequests. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
+For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
 
 Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
 
@@ -480,6 +481,9 @@ ESS context JSON:
             var documentsTask = GetRestRowsAsync<JsonElement>(
                 "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=5000",
                 cancellationToken);
+            var materialRequestRowsTask = GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000",
+                cancellationToken);
             var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, cancellationToken);
             var materialRequestsTask = ReadStorageJsonAsync(SafetyBucket, MaterialRequestsPath, cancellationToken);
 
@@ -491,6 +495,7 @@ ESS context JSON:
                 notificationsTask,
                 foldersTask,
                 documentsTask,
+                materialRequestRowsTask,
                 projectsTask,
                 materialRequestsTask);
 
@@ -500,7 +505,9 @@ ESS context JSON:
             sources.Add("user_roles");
             sources.Add("user_notifications");
             sources.Add("project-information/projects.json");
-            sources.Add("project-information/material-order-requests/index.json");
+            sources.Add(materialRequestRowsTask.Result.Count > 0
+                ? "ess_material_order_requests"
+                : "project-information/material-order-requests/index.json");
             sources.Add("folders");
             sources.Add("design_documents");
 
@@ -512,12 +519,13 @@ ESS context JSON:
             var folders = foldersTask.Result;
             var documents = documentsTask.Result;
             var projectsDoc = projectsTask.Result;
+            var materialRequestRows = materialRequestRowsTask.Result;
             var materialRequestsDoc = materialRequestsTask.Result;
             var search = await SearchDesignMatchesAsync(question, folders, documents, shouldSearchDesigns, cancellationToken);
 
             var roster = BuildRosterSummary(planRows, today);
             var jobsites = BuildJobsitesSummary(projectsDoc, question);
-            var transport = BuildTransportSummary(materialRequestsDoc, today, question);
+            var transport = BuildTransportSummary(materialRequestsDoc, materialRequestRows, today, question);
             var employeeSummary = BuildEmployeeSummary(employees, question);
             var userSummary = BuildUserSummary(userNames, userRoles, question);
             var designCatalogue = BuildDesignCatalogue(folders, documents, question);
@@ -530,6 +538,7 @@ ESS context JSON:
                 notifications,
                 projectsDoc,
                 materialRequestsDoc,
+                materialRequestRows,
                 folders,
                 documents);
 
@@ -970,14 +979,20 @@ ESS context JSON:
             IReadOnlyList<JsonElement> notifications,
             JsonDocument? projectsDoc,
             JsonDocument? materialRequestsDoc,
+            IReadOnlyList<JsonElement> materialRequestRows,
             IReadOnlyList<JsonElement> folders,
             IReadOnlyList<JsonElement> documents)
         {
             var projectCount = CountProjects(projectsDoc, archived: null);
             var activeProjectCount = CountProjects(projectsDoc, archived: false);
             var archivedProjectCount = CountProjects(projectsDoc, archived: true);
-            var materialRequestCount = CountStorageRows(materialRequestsDoc, "requests", includeArchived: true);
-            var activeMaterialRequestCount = CountStorageRows(materialRequestsDoc, "requests", includeArchived: false);
+            var hasMaterialRequestRows = materialRequestRows.Count > 0;
+            var materialRequestCount = hasMaterialRequestRows
+                ? materialRequestRows.Count
+                : CountStorageRows(materialRequestsDoc, "requests", includeArchived: true);
+            var activeMaterialRequestCount = hasMaterialRequestRows
+                ? CountMaterialRequestRows(materialRequestRows, includeArchived: false)
+                : CountStorageRows(materialRequestsDoc, "requests", includeArchived: false);
 
             return new
             {
@@ -990,7 +1005,7 @@ ESS context JSON:
                     new { name = "user_roles", rows = userRoles.Count, coverage = "web-app user roles and permissions" },
                     new { name = "user_notifications", rows = notifications.Count, coverage = "recent app notifications" },
                     new { name = "project-information/projects.json", rows = projectCount, coverage = $"{activeProjectCount} active projects, {archivedProjectCount} archived projects" },
-                    new { name = "project-information/material-order-requests/index.json", rows = materialRequestCount, coverage = $"{activeMaterialRequestCount} active material/transport requests" },
+                    new { name = hasMaterialRequestRows ? "ess_material_order_requests" : "project-information/material-order-requests/index.json", rows = materialRequestCount, coverage = $"{activeMaterialRequestCount} active material/transport requests" },
                     new { name = "folders", rows = folders.Count, coverage = "design folder hierarchy" },
                     new { name = "design_documents", rows = documents.Count, coverage = "design document revisions and file metadata" },
                 },
@@ -1129,114 +1144,195 @@ ESS context JSON:
             };
         }
 
-        private object BuildTransportSummary(JsonDocument? requestsDoc, DateOnly today, string question)
+        private object BuildTransportSummary(JsonDocument? requestsDoc, IReadOnlyList<JsonElement> requestRows, DateOnly today, string question)
         {
             var todayKey = today.ToString("yyyy-MM-dd");
             var todayRequests = new List<object>();
+            var activeTodayRequests = new List<object>();
+            var archivedTodayRequests = new List<object>();
+            var currentSchedule = new List<object>();
             var sevenAmRequests = new List<object>();
             var allActiveRequests = new List<object>();
             var allArchivedRequests = new List<object>();
+            var unscheduledActiveRequests = new List<object>();
             var searchableRequests = new List<object>();
             var activeRequests = 0;
             var archivedRequests = 0;
+            var requestItems = requestRows.Count > 0
+                ? requestRows
+                : requestsDoc?.RootElement.TryGetProperty("requests", out var requests) == true && requests.ValueKind == JsonValueKind.Array
+                    ? requests.EnumerateArray().ToList()
+                    : new List<JsonElement>();
 
-            if (requestsDoc?.RootElement.TryGetProperty("requests", out var requests) == true &&
-                requests.ValueKind == JsonValueKind.Array)
+            foreach (var item in requestItems)
             {
-                foreach (var item in requests.EnumerateArray())
+                var scheduledAtIso = TryGetStringAny(item, "scheduledAtIso", "scheduled_at_iso");
+                var hour = TryGetIntAny(item, "scheduledHour", "scheduled_hour");
+                var minute = TryGetIntAny(item, "scheduledMinute", "scheduled_minute");
+                var scheduledDate = TryGetStringAny(item, "scheduledDate", "scheduled_date");
+                if ((string.IsNullOrWhiteSpace(scheduledDate) || hour == null || minute == null) &&
+                    DateTime.TryParse(scheduledAtIso, out var parsedScheduledAt))
                 {
-                    var hour = TryGetInt(item, "scheduledHour");
-                    var minute = TryGetInt(item, "scheduledMinute");
-                    var scheduledDate = TryGetString(item, "scheduledDate");
-                    var truck = TryGetString(item, "scheduledTruckLabel") ?? TryGetString(item, "truckLabel") ?? TryGetString(item, "scheduledTruckId") ?? TryGetString(item, "truckId");
-                    var requestedMaterials = BuildRequestedMaterials(item);
-                    var materialSummary = string.Join(
-                        " ",
-                        requestedMaterials.Select(material => string.Join(" ", new[]
-                        {
-                            TryGetObjectProperty(material, "quantity"),
-                            TryGetObjectProperty(material, "label"),
-                            TryGetObjectProperty(material, "spec"),
-                        }.Where(value => !string.IsNullOrWhiteSpace(value)))));
-                    var row = new
-                    {
-                        id = TryGetString(item, "id"),
-                        builderName = TryGetString(item, "builderName"),
-                        projectName = TryGetString(item, "projectName"),
-                        requestedByName = TryGetString(item, "requestedByName"),
-                        requestedByEmail = TryGetString(item, "requestedByEmail"),
-                        orderDate = TryGetString(item, "orderDate"),
-                        submittedAt = TryGetString(item, "submittedAt"),
-                        scheduledDate,
-                        scheduledTime = hour == null ? null : $"{hour:00}:{minute ?? 0:00}",
-                        truck,
-                        deliveryStatus = TryGetString(item, "deliveryStatus") ?? "pending",
-                        archivedAt = TryGetString(item, "archivedAt"),
-                        scaffoldingSystem = TryGetMaterialMeta(item, "__scaffoldingSystem") ?? TryGetString(item, "scaffoldingSystem"),
-                        details = TryGetMaterialMeta(item, "__details") ?? TryGetString(item, "details"),
-                        notes = TryGetString(item, "notes"),
-                        requestedMaterials,
-                    };
-                    searchableRequests.Add(new
-                    {
-                        source = "material-request",
-                        title = $"{row.builderName} / {row.projectName}",
-                        summary = string.Join(" ", new[]
-                        {
-                            row.builderName,
-                            row.projectName,
-                            row.requestedByName,
-                            row.requestedByEmail,
-                            row.orderDate,
-                            row.submittedAt,
-                            row.scheduledDate,
-                            row.scheduledTime,
-                            row.truck,
-                            row.deliveryStatus,
-                            row.scaffoldingSystem,
-                            row.details,
-                            row.notes,
-                            materialSummary,
-                        }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                        data = row,
-                    });
+                    scheduledDate = string.IsNullOrWhiteSpace(scheduledDate) ? parsedScheduledAt.ToString("yyyy-MM-dd") : scheduledDate;
+                    hour ??= parsedScheduledAt.Hour;
+                    minute ??= parsedScheduledAt.Minute;
+                }
 
-                    if (!string.IsNullOrWhiteSpace(TryGetString(item, "archivedAt")))
+                scheduledDate = NormalizeDateOnlyString(scheduledDate);
+                var archivedAt = TryGetStringAny(item, "archivedAt", "archived_at");
+                var scheduleRemovedAt = TryGetStringAny(item, "scheduleRemovedAt", "schedule_removed_at");
+                var deliveryStatus = TryGetStringAny(item, "deliveryStatus", "delivery_status");
+                var isArchived = !string.IsNullOrWhiteSpace(archivedAt);
+                var isOnSchedule = !string.IsNullOrWhiteSpace(scheduledDate)
+                    && hour != null
+                    && minute != null
+                    && string.IsNullOrWhiteSpace(scheduleRemovedAt);
+                var isActiveQueue = !isArchived;
+                var lifecycleStatus = isArchived
+                    ? string.IsNullOrWhiteSpace(scheduleRemovedAt) ? "archived_completed_on_schedule" : "archived_removed_from_schedule"
+                    : "active";
+                var scheduleStatus = isOnSchedule ? "scheduled" : "not_scheduled";
+                var truck = TryGetStringAny(item, "scheduledTruckLabel", "scheduled_truck_label", "truckLabel", "truck_label", "scheduledTruckId", "scheduled_truck_id", "truckId", "truck_id");
+                var requestedMaterials = BuildRequestedMaterials(item);
+                var materialSummary = string.Join(
+                    " ",
+                    requestedMaterials.Select(material => string.Join(" ", new[]
                     {
-                        archivedRequests += 1;
-                        allArchivedRequests.Add(row);
-                        continue;
-                    }
+                        TryGetObjectProperty(material, "quantity"),
+                        TryGetObjectProperty(material, "label"),
+                        TryGetObjectProperty(material, "spec"),
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)))));
+                var row = new
+                {
+                    id = TryGetString(item, "id"),
+                    sourceOrderId = TryGetStringAny(item, "sourceOrderId", "source_order_id"),
+                    routeType = TryGetStringAny(item, "routeType", "route_type"),
+                    builderName = TryGetStringAny(item, "builderName", "builder_name"),
+                    projectName = TryGetStringAny(item, "projectName", "project_name"),
+                    requestedByName = TryGetStringAny(item, "requestedByName", "requested_by_name"),
+                    requestedByEmail = TryGetStringAny(item, "requestedByEmail", "requested_by_email"),
+                    orderDate = NormalizeDateOnlyString(TryGetStringAny(item, "orderDate", "order_date")),
+                    submittedAt = TryGetStringAny(item, "submittedAt", "submitted_at"),
+                    scheduledDate = isOnSchedule ? scheduledDate : null,
+                    scheduledTime = isOnSchedule ? $"{hour:00}:{minute ?? 0:00}" : null,
+                    rawScheduledDate = scheduledDate,
+                    rawScheduledTime = hour == null ? null : $"{hour:00}:{minute ?? 0:00}",
+                    scheduledAtIso,
+                    scheduleRemovedAt,
+                    truck = isOnSchedule ? truck : null,
+                    rawTruck = truck,
+                    deliveryStatus = deliveryStatus ?? (isOnSchedule ? "scheduled" : "pending"),
+                    archivedAt,
+                    isOnSchedule,
+                    isActiveQueue,
+                    isArchived,
+                    lifecycleStatus,
+                    scheduleStatus,
+                    scaffoldingSystem = TryGetMaterialMeta(item, "__scaffoldingSystem") ?? TryGetStringAny(item, "scaffoldingSystem", "scaffolding_system"),
+                    details = TryGetMaterialMeta(item, "__details") ?? TryGetString(item, "details"),
+                    notes = TryGetString(item, "notes"),
+                    requestedMaterials,
+                };
+                searchableRequests.Add(new
+                {
+                    source = "material-request",
+                    title = $"{row.builderName} / {row.projectName}",
+                    summary = string.Join(" ", new[]
+                    {
+                        row.builderName,
+                        row.projectName,
+                        row.requestedByName,
+                        row.requestedByEmail,
+                        row.orderDate,
+                        row.submittedAt,
+                        row.scheduleStatus,
+                        row.lifecycleStatus,
+                        row.isOnSchedule ? "currently on schedule" : "not on schedule",
+                        row.isArchived ? "archived" : "active queue",
+                        row.scheduleRemovedAt != null ? "removed from schedule" : null,
+                        row.scheduledDate,
+                        row.scheduledTime,
+                        row.truck,
+                        row.deliveryStatus,
+                        row.scaffoldingSystem,
+                        row.details,
+                        row.notes,
+                        materialSummary,
+                    }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                    data = row,
+                });
 
+                if (isArchived)
+                {
+                    archivedRequests += 1;
+                    allArchivedRequests.Add(row);
+                }
+                else
+                {
                     activeRequests += 1;
                     allActiveRequests.Add(row);
-                    if (scheduledDate != todayKey)
+                    if (!isOnSchedule)
                     {
-                        continue;
+                        unscheduledActiveRequests.Add(row);
                     }
+                }
 
-                    todayRequests.Add(row);
-                    if (hour == 7 && (minute ?? 0) == 0)
-                    {
-                        sevenAmRequests.Add(row);
-                    }
+                if (!isOnSchedule)
+                {
+                    continue;
+                }
+
+                currentSchedule.Add(row);
+                if (scheduledDate != todayKey)
+                {
+                    continue;
+                }
+
+                todayRequests.Add(row);
+                if (isArchived)
+                {
+                    archivedTodayRequests.Add(row);
+                }
+                else
+                {
+                    activeTodayRequests.Add(row);
+                }
+                if (hour == 7 && (minute ?? 0) == 0)
+                {
+                    sevenAmRequests.Add(row);
                 }
             }
 
             return new
             {
+                dataSource = requestRows.Count > 0 ? "ess_material_order_requests" : "project-information/material-order-requests/index.json",
                 activeMaterialRequests = activeRequests,
                 archivedMaterialRequests = archivedRequests,
                 scheduledTodayCount = todayRequests.Count,
+                activeScheduledTodayCount = activeTodayRequests.Count,
+                archivedScheduledTodayCount = archivedTodayRequests.Count,
                 sevenAmTodayCount = sevenAmRequests.Count,
                 sevenAmToday = sevenAmRequests,
-                scheduledToday = todayRequests.Take(30).ToList(),
-                activeRequests = allActiveRequests
+                scheduledToday = todayRequests
+                    .OrderBy(row => TryGetObjectProperty(row, "scheduledTime"))
+                    .Take(80)
+                    .ToList(),
+                currentScheduleToday = todayRequests
+                    .OrderBy(row => TryGetObjectProperty(row, "scheduledTime"))
+                    .Take(80)
+                    .ToList(),
+                currentSchedule = currentSchedule
                     .OrderBy(row => TryGetObjectProperty(row, "scheduledDate"))
                     .ThenBy(row => TryGetObjectProperty(row, "scheduledTime"))
                     .Take(500)
                     .ToList(),
-                archivedRequests = allArchivedRequests.Take(100).ToList(),
+                activeRequests = allActiveRequests
+                    .OrderBy(row => TryGetObjectProperty(row, "rawScheduledDate") ?? "9999-12-31")
+                    .ThenBy(row => TryGetObjectProperty(row, "rawScheduledTime") ?? "99:99")
+                    .Take(500)
+                    .ToList(),
+                archivedRequests = allArchivedRequests.Take(250).ToList(),
+                unscheduledActiveRequests = unscheduledActiveRequests.Take(250).ToList(),
                 requestMatches = BuildQuestionMatches(question, searchableRequests, 12),
             };
         }
@@ -1823,6 +1919,29 @@ ESS context JSON:
                 .Count(row => includeArchived || string.IsNullOrWhiteSpace(TryGetString(row, "archivedAt")));
         }
 
+        private static int CountMaterialRequestRows(IReadOnlyList<JsonElement> rows, bool includeArchived)
+        {
+            return rows.Count(row => includeArchived || string.IsNullOrWhiteSpace(TryGetStringAny(row, "archivedAt", "archived_at")));
+        }
+
+        private static string? NormalizeDateOnlyString(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.Length >= 10 && Regex.IsMatch(trimmed[..10], @"^\d{4}-\d{2}-\d{2}$"))
+            {
+                return trimmed[..10];
+            }
+
+            return DateTime.TryParse(trimmed, out var parsed)
+                ? parsed.ToString("yyyy-MM-dd")
+                : trimmed;
+        }
+
         private static List<object> BuildRequestedMaterials(JsonElement request)
         {
             var values = TryGetObject(request, "itemValues");
@@ -1920,6 +2039,20 @@ ESS context JSON:
                 : null;
         }
 
+        private static string? TryGetStringAny(JsonElement element, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                var value = TryGetString(element, propertyName);
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
         private static int? TryGetInt(JsonElement element, string propertyName)
         {
             if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
@@ -1933,6 +2066,20 @@ ESS context JSON:
             }
 
             return int.TryParse(value.ToString(), out parsed) ? parsed : null;
+        }
+
+        private static int? TryGetIntAny(JsonElement element, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                var value = TryGetInt(element, propertyName);
+                if (value != null)
+                {
+                    return value;
+                }
+            }
+
+            return null;
         }
 
         private static bool TryGetBool(JsonElement element, string propertyName)
