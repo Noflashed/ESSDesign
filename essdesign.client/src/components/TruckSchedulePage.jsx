@@ -66,6 +66,7 @@ const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const ROUTE_LOADING_MIN_MS = 180;
 const SCALE_PREF_KEY = 'transport_web_schedule_scale_v1';
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
+const TIMESTAMP_PREF_KEY = 'transport_web_schedule_timestamps_v1';
 const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
 const RETURN_TOLL_KEY_SUFFIX = '__return';
 const RETURN_TRANSIT_PREF_KEY = 'transport_web_schedule_return_transit_v1';
@@ -146,6 +147,82 @@ function applyServiceMinutesToRequest(request, serviceMinutes, segment = 'primar
       __serviceMinutes: normalizedMinutes,
     },
   };
+}
+
+function hasRequestReturnTransitToYardSetting(request) {
+  if (!request) {
+    return false;
+  }
+  if (request.hasReturnTransitToYardSetting === true) {
+    return true;
+  }
+  return Boolean(
+    request.itemValues
+      && typeof request.itemValues === 'object'
+      && Object.prototype.hasOwnProperty.call(request.itemValues, '__returnTransitToYard'),
+  );
+}
+
+function getRequestReturnTransitToYard(request) {
+  if (!request) {
+    return false;
+  }
+  if (typeof request.returnTransitToYard === 'boolean') {
+    return request.returnTransitToYard;
+  }
+  const stored = request.itemValues?.__returnTransitToYard;
+  if (typeof stored === 'boolean') {
+    return stored;
+  }
+  if (typeof stored === 'string') {
+    return stored.toLowerCase() === 'true';
+  }
+  return stored === 1;
+}
+
+function applyReturnTransitToRequest(request, enabled) {
+  if (!request) {
+    return request;
+  }
+  const returnTransitToYard = Boolean(enabled);
+  return {
+    ...request,
+    returnTransitToYard,
+    hasReturnTransitToYardSetting: true,
+    itemValues: {
+      ...(request.itemValues || {}),
+      __returnTransitToYard: returnTransitToYard,
+    },
+  };
+}
+
+function buildReturnTransitMapForRequests(requests = [], fallbackMap = {}) {
+  const next = {};
+  Object.entries(fallbackMap || {}).forEach(([requestId, enabled]) => {
+    if (requestId && requestId !== '__legacy' && enabled) {
+      next[requestId] = true;
+    }
+  });
+  (requests || []).forEach(request => {
+    if (!request?.id) {
+      return;
+    }
+    if (getRequestReturnTransitToYard(request)) {
+      next[request.id] = true;
+    } else if (hasRequestReturnTransitToYardSetting(request)) {
+      delete next[request.id];
+    }
+  });
+  return next;
+}
+
+function areReturnTransitMapsEqual(left = {}, right = {}) {
+  const leftKeys = Object.keys(left || {}).filter(key => key !== '__legacy' && left[key]);
+  const rightKeys = Object.keys(right || {}).filter(key => key !== '__legacy' && right[key]);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+  return leftKeys.every(key => Boolean(right?.[key]));
 }
 
 function getSecondaryRouteReasonLabel(reason) {
@@ -1101,6 +1178,9 @@ function getRequestListSignature(requests) {
     request?.scaffoldingSystem,
     request?.serviceMinutes,
     request?.itemValues?.__serviceMinutes,
+    request?.returnTransitToYard,
+    request?.itemValues?.__returnTransitToYard,
+    request?.hasReturnTransitToYardSetting,
     request?.secondaryRoute ? [
       request.secondaryRoute.reason,
       request.secondaryRoute.startingLocation,
@@ -2031,6 +2111,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const saved = localStorage.getItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === 'true';
   });
+  const [showScheduleTimestamps, setShowScheduleTimestamps] = useState(() => {
+    const saved = localStorage.getItem(`${TIMESTAMP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
+    return saved === null ? true : saved === 'true';
+  });
   const [tollsByRequestId, setTollsByRequestId] = useState(() => {
     const saved = localStorage.getItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     if (!saved) {
@@ -2106,6 +2190,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const optimisticRequestOverridesRef = useRef(new Map());
   const requestSiteLocationMapRef = useRef({});
   const stableRouteEstimateMapRef = useRef({});
+  const returnTransitSharedMigrationRef = useRef(new Set());
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
   const dragPointerOffsetMinutesRef = useRef(0);
@@ -2225,17 +2310,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const dateKey = typeof fallbackDate === 'string' ? fallbackDate : formatDateKey(fallbackDate || selectedDate);
     const siteLocationMap = siteLocationMapOverride || requestSiteLocationMapRef.current;
     const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
+    const effectiveReturnTransitByRequestId = buildReturnTransitMapForRequests(requestsForDay, returnTransitByRequestId);
     const routeMap = buildCachedRouteMapForRequests(
       requestsForDay,
       siteLocationMap,
       fallbackDate || selectedDate,
       getTollsEnabled,
-      returnTransitByRequestId,
+      effectiveReturnTransitByRequestId,
       stableRouteEstimateMapRef.current,
     );
     rememberStableRouteEstimates(routeMap);
     const flowRouteMap = routeMap;
-    const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap });
+    const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap });
     applyBoardProjection(requestsForDay, board, options);
     return { requestsForDay, board };
   }, [applyBoardProjection, debugMode, getTollsEnabled, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate]);
@@ -2263,6 +2349,38 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         dedupeRequests([...active, ...archived]),
         optimisticRequestOverridesRef.current,
       );
+      const effectiveReturnTransitByRequestId = buildReturnTransitMapForRequests(merged, returnTransitByRequestId);
+      setReturnTransitByRequestId(current => (
+        areReturnTransitMapsEqual(current, effectiveReturnTransitByRequestId)
+          ? current
+          : effectiveReturnTransitByRequestId
+      ));
+      const returnTransitMigrations = merged.filter(request =>
+        request?.id
+        && returnTransitByRequestId?.[request.id]
+        && !hasRequestReturnTransitToYardSetting(request)
+        && !returnTransitSharedMigrationRef.current.has(request.id)
+      );
+      if (returnTransitMigrations.length > 0) {
+        returnTransitMigrations.forEach(request => returnTransitSharedMigrationRef.current.add(request.id));
+        Promise.all(returnTransitMigrations.map(request =>
+          materialOrderRequestsAPI.setReturnTransitToYard(request.id, true).catch(() => null),
+        )).then(savedRequests => {
+          const updates = savedRequests.filter(Boolean);
+          if (updates.length === 0) {
+            return;
+          }
+          updates.forEach(savedRequest => {
+            optimisticRequestOverridesRef.current.set(savedRequest.id, {
+              request: savedRequest,
+              expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+            });
+          });
+          setAllRequests(currentRequests => currentRequests.map(request =>
+            updates.find(savedRequest => savedRequest.id === request.id) || request,
+          ));
+        });
+      }
       setAllRequests(current => getRequestListSignature(current) === getRequestListSignature(merged) ? current : merged);
       const requestsForDay = merged.filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
       const siteLocationMap = Object.fromEntries(
@@ -2281,17 +2399,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         nextSiteLocationMap,
         selectedDate,
         getTollsEnabled,
-        returnTransitByRequestId,
+        effectiveReturnTransitByRequestId,
         stableRouteEstimateMapRef.current,
       );
       rememberStableRouteEstimates(cachedRouteMap);
-      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: cachedRouteMap });
+      const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: cachedRouteMap });
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
-          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, returnTransitByRequestId);
+          const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, getTollsEnabled, effectiveReturnTransitByRequestId);
           if (!routeContext) {
             return [request.id, null];
           }
@@ -2319,7 +2437,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       );
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries.map(([id, estimate]) => [id, estimate]));
       rememberStableRouteEstimates(resolvedRouteMap);
-      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, returnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
+      const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
       applyBoardProjection(requestsForDay, nextBoard);
       setError('');
     })().catch(err => {
@@ -2403,6 +2521,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     localStorage.setItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(snapToTimeMarks));
   }, [snapToTimeMarks, user?.id, user?.role]);
+
+  useEffect(() => {
+    localStorage.setItem(`${TIMESTAMP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(showScheduleTimestamps));
+  }, [showScheduleTimestamps, user?.id, user?.role]);
   useEffect(() => {
     localStorage.setItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`, JSON.stringify(tollsByRequestId || {}));
   }, [tollsByRequestId, user?.id, user?.role]);
@@ -2461,9 +2583,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           parentSiteLocation,
         )
       : null;
-    const nextRequests = updatedContinuation
-      ? previousRequests.map(item => item.id === updatedContinuation.id ? updatedContinuation : item)
-      : previousRequests;
+    const updatedParentRequest = applyReturnTransitToRequest(parentRequest, checked);
+    const nextRequests = previousRequests.map(item => {
+      if (item.id === requestId) {
+        return updatedParentRequest;
+      }
+      if (updatedContinuation && item.id === updatedContinuation.id) {
+        return updatedContinuation;
+      }
+      return item;
+    });
 
     setReturnTransitReprojectingId(requestId);
     setReturnTransitByRequestId(current => {
@@ -2481,48 +2610,65 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     setSelectedScheduleEventIds([requestId]);
     setSelectedScheduleSegment(checked ? 'return' : 'primary');
     setScheduleInspectorOpen(true);
-
+    setAllRequests(nextRequests);
+    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    optimisticRequestOverridesRef.current.set(requestId, {
+      request: updatedParentRequest,
+      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    });
     if (updatedContinuation) {
-      setAllRequests(nextRequests);
-      projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
       optimisticRequestOverridesRef.current.set(updatedContinuation.id, {
         request: updatedContinuation,
         expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
       });
       setRouteLoading(updatedContinuation.id, true, 'primary');
-      materialOrderRequestsAPI.setRunLink(updatedContinuation.id, {
+    }
+    Promise.all([
+      materialOrderRequestsAPI.setReturnTransitToYard(requestId, checked),
+      updatedContinuation ? materialOrderRequestsAPI.setRunLink(updatedContinuation.id, {
         sourceOrderId: requestId,
         connectedParentStartMinutes: updatedContinuation.connectedParentStartMinutes,
         connectedParentSegment: targetSegment,
         secondaryRoute: updatedContinuation.secondaryRoute,
+      }) : Promise.resolve(null),
+    ])
+      .then(([savedParent, savedContinuation]) => {
+        if (savedParent) {
+          optimisticRequestOverridesRef.current.set(savedParent.id, {
+            request: savedParent,
+            expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+          });
+        }
+        if (savedContinuation) {
+          optimisticRequestOverridesRef.current.set(savedContinuation.id, {
+            request: savedContinuation,
+            expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+          });
+        }
+        setError('');
       })
-        .then((savedContinuation) => {
-          if (savedContinuation) {
-            optimisticRequestOverridesRef.current.set(savedContinuation.id, {
-              request: savedContinuation,
-              expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
-            });
-          }
-          setError('');
-        })
-        .catch(err => {
+      .catch(err => {
+        optimisticRequestOverridesRef.current.delete(requestId);
+        if (updatedContinuation) {
           optimisticRequestOverridesRef.current.delete(updatedContinuation.id);
-          boardProjectionSignatureRef.current = '';
-          requestMetaSignatureRef.current = '';
-          setAllRequests(previousRequests);
-          setDayEvents(previousEvents);
-          setRequestMetaMap(previousMetaMap);
-          setEventStartMinutesMap(previousStartMap);
-          setEventDurationMinutesMap(previousDurationMap);
-          setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
-          setEventCycleStateMap(previousCycleStateMap);
-          setReturnTransitByRequestId(previousReturnTransitByRequestId);
-          setError(err?.message || 'Failed to update return-to-yard link.');
-        })
-        .finally(() => {
+        }
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setReturnTransitByRequestId(previousReturnTransitByRequestId);
+        setError(err?.message || 'Failed to update return-to-yard link.');
+      })
+      .finally(() => {
+        if (updatedContinuation) {
           setRouteLoading(updatedContinuation.id, false, 'primary');
-        });
-    }
+        }
+      });
   }, [allRequests, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
 
   const handleReturnTransitToggle = useCallback((event) => {
@@ -4851,20 +4997,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         connectedParentSegment: secondaryConnectedParentSegment,
         relinkedContinuation,
       });
-      const chainedUpdatedRequest = {
+      const chainedUpdatedRequestBase = {
         ...updatedRequest,
         connectedParentStartMinutes: persistedSecondarySchedule.scheduledHour * 60 + persistedSecondarySchedule.scheduledMinute,
         connectedParentSegment: secondaryConnectedParentSegment,
       };
+      const chainedUpdatedRequest = shouldMoveReturnBreakToSecondary
+        ? applyReturnTransitToRequest(chainedUpdatedRequestBase, true)
+        : chainedUpdatedRequestBase;
       const relinkedUpdatedContinuation = relinkedContinuation
         ? {
             ...relinkedContinuation,
             sourceOrderId: chainedUpdatedRequest.id,
           }
         : null;
-      const parentRequest = isSecondaryRouteRequest(request)
+      const parentRequestBase = isSecondaryRouteRequest(request)
         ? request
         : { ...request, secondaryRoute: null };
+      const parentRequest = shouldMoveReturnBreakToSecondary
+        ? applyReturnTransitToRequest(parentRequestBase, false)
+        : parentRequestBase;
       const nextRequests = dedupeRequests([
         ...allRequests
           .map(item => item.id === parentRequest.id ? parentRequest : item)
@@ -4918,6 +5070,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             return next;
           });
         }
+      }
+      if (shouldMoveReturnBreakToSecondary) {
+        await Promise.all([
+          materialOrderRequestsAPI.setReturnTransitToYard(parentRequest.id, false),
+          materialOrderRequestsAPI.setReturnTransitToYard(chainedUpdatedRequest.id, true),
+        ]);
+      } else if (relinkedUpdatedContinuation) {
+        await materialOrderRequestsAPI.setReturnTransitToYard(chainedUpdatedRequest.id, false);
       }
       optimisticRequestOverridesRef.current.set(parentRequest.id, {
         request: parentRequest,
@@ -5535,7 +5695,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         const shouldRestoreAsMaterialOrder = isLinkedSecondaryMaterialOrderRequest(sourceRequest);
         return [
           sourceRequest.id,
-          {
+          applyReturnTransitToRequest({
             ...sourceRequest,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
@@ -5556,7 +5716,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
             archivedAt: debugMode ? null : sourceRequest.archivedAt,
             scheduleRemovedAt: null,
             secondaryRoute: shouldRestoreAsMaterialOrder ? null : sourceRequest.secondaryRoute,
-          },
+          }, false),
         ];
       }),
     );
@@ -5824,6 +5984,14 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                 onChange={(event) => setSnapToTimeMarks(event.target.checked)}
               />
               <span>Snap</span>
+            </label>
+            <label className={`transport-snap-toggle${showScheduleTimestamps ? ' active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={showScheduleTimestamps}
+                onChange={(event) => setShowScheduleTimestamps(event.target.checked)}
+              />
+              <span>Time stamps</span>
             </label>
             <div className="transport-scale-control">
               <span>Scale</span>
@@ -6166,7 +6334,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                               aria-hidden="true"
                             />
                           ) : null}
-                          {actualMarkers.length > 0 ? (
+                          {showScheduleTimestamps && actualMarkers.length > 0 ? (
                             <div className="ts2-actual-marker-layer" aria-hidden="true">
                               {actualMarkers.map(marker => (
                                 <span

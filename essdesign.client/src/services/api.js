@@ -1454,6 +1454,57 @@ function withStoredServiceMinutes(record, serviceMinutes) {
     };
 }
 
+function getStoredReturnTransitToYard(item) {
+    const direct = item?.returnTransitToYard;
+    if (typeof direct === 'boolean') {
+        return direct;
+    }
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    const stored = itemValues.__returnTransitToYard;
+    if (typeof stored === 'boolean') {
+        return stored;
+    }
+    if (typeof stored === 'string') {
+        return stored.toLowerCase() === 'true';
+    }
+    return stored === 1;
+}
+
+function hasStoredReturnTransitToYard(item) {
+    if (item?.hasReturnTransitToYardSetting === true) {
+        return true;
+    }
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    if (Object.prototype.hasOwnProperty.call(itemValues, '__returnTransitToYard')) {
+        return true;
+    }
+    if (item?.hasReturnTransitToYardSetting === false) {
+        return false;
+    }
+    return typeof item?.returnTransitToYard === 'boolean';
+}
+
+function withStoredReturnTransitToYard(record, enabled) {
+    const returnTransitToYard = Boolean(enabled);
+    return {
+        ...record,
+        returnTransitToYard,
+        hasReturnTransitToYardSetting: true,
+        itemValues: {
+            ...(record?.itemValues || {}),
+            __returnTransitToYard: returnTransitToYard,
+        },
+    };
+}
+
 function normalizeConnectedParentSegment(value) {
     return value === 'return' || value === 'primary' ? value : null;
 }
@@ -1491,6 +1542,8 @@ function normalizeMaterialOrderRequestListItem(item) {
                 ? item.item_values
                 : {},
         serviceMinutes: getStoredServiceMinutes(item),
+        returnTransitToYard: getStoredReturnTransitToYard(item),
+        hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(item),
         scheduledDate,
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
@@ -1535,6 +1588,8 @@ function normalizeMaterialOrderRequestRecord(record) {
                 ? record.item_values
                 : {},
         serviceMinutes: getStoredServiceMinutes(record),
+        returnTransitToYard: getStoredReturnTransitToYard(record),
+        hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(record),
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
@@ -1603,6 +1658,7 @@ function mapMaterialOrderRequestRow(row) {
         requestedByName: row.requested_by_name || '',
         orderDate: row.order_date || new Date().toISOString().slice(0, 10),
         submittedAt: row.submitted_at || nowIso(),
+        updatedAt: row.updated_at || null,
         notes: row.notes || '',
         itemValues: row.item_values && typeof row.item_values === 'object' ? row.item_values : {},
         pdfPath: row.pdf_path || '',
@@ -1631,6 +1687,7 @@ function mapMaterialOrderRequestRecordToRow(record) {
     const normalizedItemValues = {
         ...(normalized.itemValues || {}),
         __serviceMinutes: getStoredServiceMinutes(normalized),
+        __returnTransitToYard: getStoredReturnTransitToYard(normalized),
     };
     return {
         id: normalized.id,
@@ -1880,6 +1937,16 @@ async function setMaterialOrderRequestServiceMinutesInTable(requestId, { service
     });
 }
 
+async function setMaterialOrderRequestReturnTransitToYardInTable(requestId, enabled) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const updated = withStoredReturnTransitToYard(record, enabled);
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
 async function clearMaterialOrderRequestScheduleInTable(requestId, options = {}) {
     return tryMaterialOrderRequestsTable(async () => {
         const record = await readMaterialOrderRequestTableRecord(requestId);
@@ -1892,7 +1959,7 @@ async function clearMaterialOrderRequestScheduleInTable(requestId, options = {})
         const shouldResetCompletedMaterialOrder = allowCompletedReset
             && record.routeType !== 'secondary_route'
             && Boolean(record.archivedAt || record.scheduleRemovedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit');
-        const updated = {
+        const updated = withStoredReturnTransitToYard({
             ...record,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
@@ -1913,7 +1980,7 @@ async function clearMaterialOrderRequestScheduleInTable(requestId, options = {})
             archivedAt: shouldResetCompletedMaterialOrder ? null : record.archivedAt || null,
             scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : record.scheduleRemovedAt || null,
             secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
-        };
+        }, false);
         const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
         return saved || normalizeMaterialOrderRequestRecord(updated);
     });
@@ -2212,8 +2279,11 @@ export const materialOrderRequestsAPI = {
             itemValues: {
                 ...(form?.itemValues || {}),
                 __serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
+                __returnTransitToYard: Boolean(form?.returnTransitToYard),
             },
             serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
+            returnTransitToYard: Boolean(form?.returnTransitToYard),
+            hasReturnTransitToYardSetting: true,
             pdfPath,
             scaffoldingSystem,
             details,
@@ -2274,6 +2344,8 @@ export const materialOrderRequestsAPI = {
                     notes: record.notes || '',
                     itemValues: record.itemValues || {},
                     serviceMinutes: record.serviceMinutes,
+                    returnTransitToYard: record.returnTransitToYard,
+                    hasReturnTransitToYardSetting: true,
                     scheduledDate: null,
                     scheduledHour: null,
                     scheduledMinute: null,
@@ -2626,6 +2698,35 @@ export const materialOrderRequestsAPI = {
         return normalizeMaterialOrderRequestRecord(updated);
     }),
 
+    setReturnTransitToYard: async (requestId, enabled) => withMaterialRequestIndexWriteLock(async () => {
+        const returnTransitToYard = Boolean(enabled);
+        const tableRecord = await setMaterialOrderRequestReturnTransitToYardInTable(requestId, returnTransitToYard);
+        if (tableRecord) {
+            return tableRecord;
+        }
+
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
+        ]);
+        if (!record) throw new Error('Request not found');
+
+        const updated = withStoredReturnTransitToYard(record, returnTransitToYard);
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => item.id === requestId
+                ? withStoredReturnTransitToYard(item, returnTransitToYard)
+                : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    }),
+
     clearSchedule: async (requestId, options = {}) => withMaterialRequestIndexWriteLock(async () => {
         const tableRecord = await clearMaterialOrderRequestScheduleInTable(requestId, options);
         if (tableRecord) {
@@ -2646,7 +2747,7 @@ export const materialOrderRequestsAPI = {
         const shouldResetCompletedMaterialOrder = allowCompletedReset
             && record.routeType !== 'secondary_route'
             && Boolean(record.archivedAt || record.scheduleRemovedAt || record.deliveryConfirmedAt || record.deliveryStatus === 'return_transit');
-        const updated = {
+        const updated = withStoredReturnTransitToYard({
             ...record,
             sourceOrderId: null,
             connectedParentStartMinutes: null,
@@ -2667,11 +2768,11 @@ export const materialOrderRequestsAPI = {
             archivedAt: shouldResetCompletedMaterialOrder ? null : record.archivedAt || null,
             scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : record.scheduleRemovedAt || null,
             secondaryRoute: shouldRestoreMaterialOrder ? null : secondaryRoute,
-        };
+        }, false);
         const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
         const nextIndex = {
             requests: existingIndex.map(item => item.id === requestId
-                ? {
+                ? withStoredReturnTransitToYard({
                     ...item,
                     sourceOrderId: null,
                     connectedParentStartMinutes: null,
@@ -2692,7 +2793,7 @@ export const materialOrderRequestsAPI = {
                     archivedAt: shouldResetCompletedMaterialOrder ? null : item.archivedAt || null,
                     scheduleRemovedAt: shouldResetCompletedMaterialOrder ? null : item.scheduleRemovedAt || null,
                     secondaryRoute: shouldRestoreMaterialOrder ? null : normalizeSecondaryRoute(item.secondaryRoute),
-                }
+                }, false)
                 : item),
             updatedAt: nowIso(),
         };
