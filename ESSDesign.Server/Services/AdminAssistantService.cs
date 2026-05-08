@@ -460,6 +460,10 @@ ESS context JSON:
                 normalized.Contains("schedule", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("scheduled", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("schedules", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("booked", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("booking", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("run", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("runs", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("tomorrow", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("yesterday", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
@@ -491,13 +495,19 @@ ESS context JSON:
             }
 
             var requestedDate = ResolveRequestedScheduleDate(normalized, context.Today);
-            var scheduleRows = GetScheduledRowsForDate(context.TransportSummary, requestedDate);
-            var hasSpecificSevenAmAsk =
-                normalized.Contains("7am", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("7 am", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("7 00", StringComparison.OrdinalIgnoreCase);
-            var rowsToReport = hasSpecificSevenAmAsk
-                ? scheduleRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), "07:00", StringComparison.OrdinalIgnoreCase)).ToList()
+            var includeArchivedScheduleRows = WantsHistoricalTransportRows(normalized);
+            var scheduleRows = GetScheduledRowsForDate(context.TransportSummary, requestedDate, includeArchivedScheduleRows);
+            var archivedRowsForDate = includeArchivedScheduleRows
+                ? new List<object>()
+                : GetScheduledRowsForDate(context.TransportSummary, requestedDate, includeArchived: true)
+                    .Where(row => string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            var requestedScheduleMinutes = TryResolveRequestedScheduleMinutes(normalized);
+            var requestedScheduleTime = requestedScheduleMinutes == null
+                ? null
+                : $"{requestedScheduleMinutes.Value / 60:00}:{requestedScheduleMinutes.Value % 60:00}";
+            var rowsToReport = requestedScheduleTime != null
+                ? scheduleRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), requestedScheduleTime, StringComparison.OrdinalIgnoreCase)).ToList()
                 : scheduleRows;
             var dateLabel = FormatRelativeChatDate(requestedDate, context.Today);
 
@@ -510,9 +520,10 @@ ESS context JSON:
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Count();
                 var deliveryNoun = rowsToReport.Count == 1 ? "delivery" : "deliveries";
-                reply.Append(hasSpecificSevenAmAsk
-                    ? $"Yes. For {dateLabel}, I can see {rowsToReport.Count} {deliveryNoun} scheduled at 7:00 AM"
-                    : $"For {dateLabel}, I can see {rowsToReport.Count} scheduled {deliveryNoun}");
+                var requestedScheduleLabel = requestedScheduleTime == null ? null : FormatChatTime(requestedScheduleTime);
+                reply.Append(requestedScheduleLabel != null
+                    ? $"Yes. I checked the live schedule board and can see {rowsToReport.Count} {deliveryNoun} scheduled at {requestedScheduleLabel} for {dateLabel}"
+                    : $"I checked the live schedule board. For {dateLabel}, there {(rowsToReport.Count == 1 ? "is" : "are")} {rowsToReport.Count} scheduled {deliveryNoun}");
                 if (truckCount > 0)
                 {
                     reply.Append($" across {truckCount} truck");
@@ -543,9 +554,16 @@ ESS context JSON:
                 return true;
             }
 
-            reply.AppendLine(hasSpecificSevenAmAsk
-                ? $"I cannot see any deliveries scheduled at 7:00 AM for {dateLabel}."
-                : $"I cannot see any deliveries scheduled for {dateLabel}.");
+            var requestedNoRowsLabel = requestedScheduleTime == null ? null : FormatChatTime(requestedScheduleTime);
+            reply.AppendLine(requestedNoRowsLabel != null
+                ? $"I checked the live schedule board and cannot see any active deliveries scheduled at {requestedNoRowsLabel} for {dateLabel}."
+                : $"I checked the live schedule board and cannot see any active deliveries scheduled for {dateLabel}.");
+
+            if (archivedRowsForDate.Count > 0)
+            {
+                reply.AppendLine();
+                reply.AppendLine($"There {(archivedRowsForDate.Count == 1 ? "is" : "are")} {archivedRowsForDate.Count} archived/completed transport record{(archivedRowsForDate.Count == 1 ? string.Empty : "s")} on that date, but I am not counting archived records as currently scheduled.");
+            }
 
             result = new ChatResult
             {
@@ -556,8 +574,52 @@ ESS context JSON:
             return true;
         }
 
+        private static bool WantsHistoricalTransportRows(string normalizedQuestion)
+        {
+            return normalizedQuestion.Contains("archived", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("archive", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("completed", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("complete", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("delivered", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("history", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("historical", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int? TryResolveRequestedScheduleMinutes(string normalizedQuestion)
+        {
+            var amPmMatch = Regex.Match(normalizedQuestion, @"\b(?<hour>1[0-2]|0?[1-9])(?:\s+(?<minute>[0-5]\d))?\s*(?<period>am|pm)\b", RegexOptions.IgnoreCase);
+            if (amPmMatch.Success && int.TryParse(amPmMatch.Groups["hour"].Value, out var rawHour))
+            {
+                var minute = 0;
+                if (amPmMatch.Groups["minute"].Success)
+                {
+                    int.TryParse(amPmMatch.Groups["minute"].Value, out minute);
+                }
+
+                var hour = string.Equals(amPmMatch.Groups["period"].Value, "am", StringComparison.OrdinalIgnoreCase)
+                    ? rawHour == 12 ? 0 : rawHour
+                    : rawHour == 12 ? 12 : rawHour + 12;
+                return (hour * 60) + minute;
+            }
+
+            var twentyFourHourMatch = Regex.Match(normalizedQuestion, @"\b(?<hour>[01]?\d|2[0-3])\s+(?<minute>[0-5]\d)\b", RegexOptions.IgnoreCase);
+            if (twentyFourHourMatch.Success &&
+                int.TryParse(twentyFourHourMatch.Groups["hour"].Value, out var hour24) &&
+                int.TryParse(twentyFourHourMatch.Groups["minute"].Value, out var minute24))
+            {
+                return (hour24 * 60) + minute24;
+            }
+
+            return null;
+        }
+
         private static string ResolveRequestedScheduleDate(string normalizedQuestion, string today)
         {
+            if (!DateOnly.TryParse(today, out var todayDate))
+            {
+                todayDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            }
+
             if (normalizedQuestion.Contains("tomorrow", StringComparison.OrdinalIgnoreCase))
             {
                 return AddDaysToDateString(today, 1);
@@ -568,7 +630,150 @@ ESS context JSON:
                 return AddDaysToDateString(today, -1);
             }
 
+            var explicitDate = TryResolveExplicitDate(normalizedQuestion, todayDate);
+            if (explicitDate != null)
+            {
+                return explicitDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+
+            var weekdayDate = TryResolveWeekdayDate(normalizedQuestion, todayDate);
+            if (weekdayDate != null)
+            {
+                return weekdayDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+
             return today;
+        }
+
+        private static DateOnly? TryResolveExplicitDate(string normalizedQuestion, DateOnly today)
+        {
+            var monthNumbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["jan"] = 1, ["january"] = 1,
+                ["feb"] = 2, ["february"] = 2,
+                ["mar"] = 3, ["march"] = 3,
+                ["apr"] = 4, ["april"] = 4,
+                ["may"] = 5,
+                ["jun"] = 6, ["june"] = 6,
+                ["jul"] = 7, ["july"] = 7,
+                ["aug"] = 8, ["august"] = 8,
+                ["sep"] = 9, ["sept"] = 9, ["september"] = 9,
+                ["oct"] = 10, ["october"] = 10,
+                ["nov"] = 11, ["november"] = 11,
+                ["dec"] = 12, ["december"] = 12,
+            };
+
+            var numericMatch = Regex.Match(normalizedQuestion, @"\b(?<day>[0-3]?\d)\s+(?<month>[0-1]?\d)(?:\s+(?<year>\d{2,4}))?\b");
+            if (numericMatch.Success &&
+                int.TryParse(numericMatch.Groups["day"].Value, out var numericDay) &&
+                int.TryParse(numericMatch.Groups["month"].Value, out var numericMonth))
+            {
+                var year = ResolveExplicitYear(numericMatch.Groups["year"].Value, today.Year);
+                if (TryCreateDate(year, numericMonth, numericDay, out var numericDate))
+                {
+                    return numericDate;
+                }
+            }
+
+            var words = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (var index = 0; index < words.Length; index++)
+            {
+                if (!int.TryParse(words[index], out var day) || index + 1 >= words.Length || !monthNumbers.TryGetValue(words[index + 1], out var month))
+                {
+                    continue;
+                }
+
+                var year = index + 2 < words.Length ? ResolveExplicitYear(words[index + 2], today.Year) : today.Year;
+                if (TryCreateDate(year, month, day, out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            for (var index = 0; index < words.Length; index++)
+            {
+                if (!monthNumbers.TryGetValue(words[index], out var month) || index + 1 >= words.Length || !int.TryParse(words[index + 1], out var day))
+                {
+                    continue;
+                }
+
+                var year = index + 2 < words.Length ? ResolveExplicitYear(words[index + 2], today.Year) : today.Year;
+                if (TryCreateDate(year, month, day, out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        private static int ResolveExplicitYear(string value, int fallbackYear)
+        {
+            if (!int.TryParse(value, out var year))
+            {
+                return fallbackYear;
+            }
+
+            return year < 100 ? 2000 + year : year;
+        }
+
+        private static bool TryCreateDate(int year, int month, int day, out DateOnly date)
+        {
+            try
+            {
+                date = new DateOnly(year, month, day);
+                return true;
+            }
+            catch
+            {
+                date = default;
+                return false;
+            }
+        }
+
+        private static DateOnly? TryResolveWeekdayDate(string normalizedQuestion, DateOnly today)
+        {
+            var weekdays = new Dictionary<string, DayOfWeek>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["monday"] = DayOfWeek.Monday,
+                ["mon"] = DayOfWeek.Monday,
+                ["tuesday"] = DayOfWeek.Tuesday,
+                ["tue"] = DayOfWeek.Tuesday,
+                ["wednesday"] = DayOfWeek.Wednesday,
+                ["wed"] = DayOfWeek.Wednesday,
+                ["thursday"] = DayOfWeek.Thursday,
+                ["thu"] = DayOfWeek.Thursday,
+                ["friday"] = DayOfWeek.Friday,
+                ["fri"] = DayOfWeek.Friday,
+                ["saturday"] = DayOfWeek.Saturday,
+                ["sat"] = DayOfWeek.Saturday,
+                ["sunday"] = DayOfWeek.Sunday,
+                ["sun"] = DayOfWeek.Sunday,
+            };
+
+            var words = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (var index = 0; index < words.Length; index++)
+            {
+                if (!weekdays.TryGetValue(words[index], out var targetDay))
+                {
+                    continue;
+                }
+
+                var delta = ((int)targetDay - (int)today.DayOfWeek + 7) % 7;
+                var previousWord = index > 0 ? words[index - 1] : string.Empty;
+                if (string.Equals(previousWord, "last", StringComparison.OrdinalIgnoreCase))
+                {
+                    delta = delta == 0 ? -7 : delta - 7;
+                }
+                else if (delta == 0 && string.Equals(previousWord, "next", StringComparison.OrdinalIgnoreCase))
+                {
+                    delta = 7;
+                }
+
+                return today.AddDays(delta);
+            }
+
+            return null;
         }
 
         private static string AddDaysToDateString(string date, int days)
@@ -604,7 +809,7 @@ ESS context JSON:
             return formattedDate;
         }
 
-        private static List<object> GetScheduledRowsForDate(object transportSummary, string date)
+        private static List<object> GetScheduledRowsForDate(object transportSummary, string date, bool includeArchived)
         {
             var rowsById = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             foreach (var collectionName in new[] { "currentScheduleToday", "scheduledToday", "currentSchedule", "activeRequests" })
@@ -614,6 +819,12 @@ ESS context JSON:
                     var isOnSchedule = string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase);
                     var scheduledDate = TryGetObjectProperty(row, "scheduledDate") ?? TryGetObjectProperty(row, "rawScheduledDate");
                     if (!isOnSchedule || !string.Equals(scheduledDate, date, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var isArchived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase);
+                    if (isArchived && !includeArchived)
                     {
                         continue;
                     }
