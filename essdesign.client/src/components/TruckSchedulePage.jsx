@@ -69,9 +69,7 @@ const OPTIMISTIC_OVERRIDE_TTL_MS = 60000;
 const ROUTE_LOADING_MIN_MS = 180;
 const SNAP_PREF_KEY = 'transport_web_schedule_snap_v1';
 const TIMESTAMP_PREF_KEY = 'transport_web_schedule_timestamps_v1';
-const TOLLS_PREF_KEY = 'transport_web_schedule_tolls_v1';
 const RETURN_TOLL_KEY_SUFFIX = '__return';
-const RETURN_TRANSIT_PREF_KEY = 'transport_web_schedule_return_transit_v1';
 const DEBUG_SPEED_OPTIONS = [
   { value: 0, label: 'Paused' },
   { value: 1, label: '1x' },
@@ -2469,30 +2467,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const saved = localStorage.getItem(`${TIMESTAMP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === null ? true : saved === 'true';
   });
-  const [tollsByRequestId, setTollsByRequestId] = useState(() => {
-    const saved = localStorage.getItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
-    if (!saved) {
-      return {};
-    }
-    try {
-      const parsed = JSON.parse(saved);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
-  });
-  const [returnTransitByRequestId, setReturnTransitByRequestId] = useState(() => {
-    const saved = localStorage.getItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
-    if (!saved) {
-      return {};
-    }
-    try {
-      const parsed = JSON.parse(saved);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-      return saved === 'true' ? { __legacy: true } : {};
-    }
-  });
+  const [tollsByRequestId, setTollsByRequestId] = useState({});
+  const [returnTransitByRequestId, setReturnTransitByRequestId] = useState({});
   const [requestModal, setRequestModal] = useState(null);
   const [requestModalLoading, setRequestModalLoading] = useState(false);
   const [requestModalRouteData, setRequestModalRouteData] = useState(null);
@@ -3050,12 +3026,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   useEffect(() => {
     localStorage.setItem(`${TIMESTAMP_PREF_KEY}:${user?.id || user?.role || 'anon'}`, String(showScheduleTimestamps));
   }, [showScheduleTimestamps, user?.id, user?.role]);
-  useEffect(() => {
-    localStorage.setItem(`${TOLLS_PREF_KEY}:${user?.id || user?.role || 'anon'}`, JSON.stringify(tollsByRequestId || {}));
-  }, [tollsByRequestId, user?.id, user?.role]);
-  useEffect(() => {
-    localStorage.setItem(`${RETURN_TRANSIT_PREF_KEY}:${user?.id || user?.role || 'anon'}`, JSON.stringify(returnTransitByRequestId || {}));
-  }, [returnTransitByRequestId, user?.id, user?.role]);
 
   useEffect(() => {
     if (!returnTransitReprojectingId) {
