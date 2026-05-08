@@ -539,12 +539,15 @@ export function getPlannedDurationMinutes(routeEstimate) {
   return Math.max(30, routeEstimate.durationMinutes + BLOCK_LOADING_MINUTES + routeEstimate.durationMinutes);
 }
 
-export function getTimingProfile(routeEstimate, secondaryRoute = null) {
+export function getTimingProfile(routeEstimate, secondaryRoute = null, serviceMinutes = BLOCK_LOADING_MINUTES) {
   const transitMinutes = Math.max(
     15,
     routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : Math.round((SCHEDULE_BLOCK_MINUTES - BLOCK_LOADING_MINUTES) / 2),
   );
-  const loadingMinutes = BLOCK_LOADING_MINUTES;
+  const normalizedServiceMinutes = Number(serviceMinutes);
+  const loadingMinutes = Number.isFinite(normalizedServiceMinutes) && normalizedServiceMinutes >= 0
+    ? Math.round(normalizedServiceMinutes)
+    : BLOCK_LOADING_MINUTES;
   const secondaryTravelMinutes = Math.max(0, Math.round((secondaryRoute?.travelDurationSeconds || 0) / 60));
   const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
   const routeReturnMinutes = routeEstimate?.returnDurationMinutes ?? routeEstimate?.returnEstimate?.durationMinutes;
@@ -563,8 +566,8 @@ export function getTimingProfile(routeEstimate, secondaryRoute = null) {
   };
 }
 
-export function getPrimaryPhaseMinutes(routeEstimate, secondaryRoute = null) {
-  const timing = getTimingProfile(routeEstimate, secondaryRoute);
+export function getPrimaryPhaseMinutes(routeEstimate, secondaryRoute = null, serviceMinutes = BLOCK_LOADING_MINUTES) {
+  const timing = getTimingProfile(routeEstimate, secondaryRoute, serviceMinutes);
   return timing.transitMinutes + timing.loadingMinutes;
 }
 

@@ -1417,6 +1417,43 @@ function normalizeSecondaryRoute(raw) {
     return normalized;
 }
 
+function normalizeServiceMinutes(value, fallback = 30) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes)) {
+        return fallback;
+    }
+    return Math.max(0, Math.min(240, Math.round(minutes)));
+}
+
+function getStoredServiceMinutes(item) {
+    const direct = Number(item?.serviceMinutes);
+    if (Number.isFinite(direct) && direct >= 0) {
+        return normalizeServiceMinutes(direct);
+    }
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    const stored = Number(itemValues.__serviceMinutes);
+    if (Number.isFinite(stored) && stored >= 0) {
+        return normalizeServiceMinutes(stored);
+    }
+    return 30;
+}
+
+function withStoredServiceMinutes(record, serviceMinutes) {
+    const normalizedMinutes = normalizeServiceMinutes(serviceMinutes);
+    return {
+        ...record,
+        serviceMinutes: normalizedMinutes,
+        itemValues: {
+            ...(record?.itemValues || {}),
+            __serviceMinutes: normalizedMinutes,
+        },
+    };
+}
+
 function normalizeConnectedParentSegment(value) {
     return value === 'return' || value === 'primary' ? value : null;
 }
@@ -1453,6 +1490,7 @@ function normalizeMaterialOrderRequestListItem(item) {
             : item?.item_values && typeof item.item_values === 'object'
                 ? item.item_values
                 : {},
+        serviceMinutes: getStoredServiceMinutes(item),
         scheduledDate,
         scheduledHour: typeof item?.scheduledHour === 'number' ? item.scheduledHour : null,
         scheduledMinute: typeof item?.scheduledMinute === 'number' ? item.scheduledMinute : null,
@@ -1496,6 +1534,7 @@ function normalizeMaterialOrderRequestRecord(record) {
             : record.item_values && typeof record.item_values === 'object'
                 ? record.item_values
                 : {},
+        serviceMinutes: getStoredServiceMinutes(record),
         scheduledDate,
         scheduledHour: typeof record.scheduledHour === 'number' ? record.scheduledHour : null,
         scheduledMinute: typeof record.scheduledMinute === 'number' ? record.scheduledMinute : null,
@@ -1589,6 +1628,10 @@ function mapMaterialOrderRequestRow(row) {
 
 function mapMaterialOrderRequestRecordToRow(record) {
     const normalized = normalizeMaterialOrderRequestRecord(record);
+    const normalizedItemValues = {
+        ...(normalized.itemValues || {}),
+        __serviceMinutes: getStoredServiceMinutes(normalized),
+    };
     return {
         id: normalized.id,
         source_order_id: normalized.sourceOrderId || null,
@@ -1608,7 +1651,7 @@ function mapMaterialOrderRequestRecordToRow(record) {
         order_date: normalized.orderDate || null,
         submitted_at: normalized.submittedAt || nowIso(),
         notes: normalized.notes || '',
-        item_values: normalized.itemValues || {},
+        item_values: normalizedItemValues,
         pdf_path: normalized.pdfPath || '',
         scaffolding_system: normalized.scaffoldingSystem || '',
         details: normalized.details || '',
@@ -1808,6 +1851,30 @@ async function setMaterialOrderRequestRunLinkInTable(requestId, { sourceOrderId 
             connectedParentSegment: nextConnectedParentSegment,
             secondaryRoute: nextSecondaryRoute,
         };
+        const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
+        return saved || normalizeMaterialOrderRequestRecord(updated);
+    });
+}
+
+async function setMaterialOrderRequestServiceMinutesInTable(requestId, { serviceMinutes, segment = 'primary' } = {}) {
+    return tryMaterialOrderRequestsTable(async () => {
+        const record = await readMaterialOrderRequestTableRecord(requestId);
+        if (!record) throw new Error('Request not found');
+        const normalizedMinutes = normalizeServiceMinutes(serviceMinutes);
+        const shouldUpdateSecondary = segment === 'secondary' || record.routeType === 'secondary_route';
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        if (shouldUpdateSecondary && !normalizedSecondaryRoute) {
+            throw new Error('Secondary route not found');
+        }
+        const updated = shouldUpdateSecondary
+            ? {
+                ...record,
+                secondaryRoute: {
+                    ...normalizedSecondaryRoute,
+                    serviceMinutes: normalizedMinutes,
+                },
+            }
+            : withStoredServiceMinutes(record, normalizedMinutes);
         const [saved] = await upsertMaterialOrderRequestTableRecords(updated);
         return saved || normalizeMaterialOrderRequestRecord(updated);
     });
@@ -2142,7 +2209,11 @@ export const materialOrderRequestsAPI = {
             orderDate: form?.orderDate || new Date().toISOString().slice(0, 10),
             submittedAt,
             notes: form?.notes || '',
-            itemValues: form?.itemValues || {},
+            itemValues: {
+                ...(form?.itemValues || {}),
+                __serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
+            },
+            serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
             pdfPath,
             scaffoldingSystem,
             details,
@@ -2202,6 +2273,7 @@ export const materialOrderRequestsAPI = {
                     details,
                     notes: record.notes || '',
                     itemValues: record.itemValues || {},
+                    serviceMinutes: record.serviceMinutes,
                     scheduledDate: null,
                     scheduledHour: null,
                     scheduledMinute: null,
@@ -2483,6 +2555,68 @@ export const materialOrderRequestsAPI = {
                         : nextSecondaryRoute,
                 }
                 : item),
+            updatedAt: nowIso(),
+        };
+        await Promise.all([
+            uploadStorageObject(`material-order-requests/requests/${requestId}.json`, JSON.stringify(updated), 'application/json'),
+            uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json'),
+        ]);
+        return normalizeMaterialOrderRequestRecord(updated);
+    }),
+
+    setServiceMinutes: async (requestId, { serviceMinutes, segment = 'primary' } = {}) => withMaterialRequestIndexWriteLock(async () => {
+        const normalizedMinutes = normalizeServiceMinutes(serviceMinutes);
+        const tableRecord = await setMaterialOrderRequestServiceMinutesInTable(requestId, { serviceMinutes: normalizedMinutes, segment });
+        if (tableRecord) {
+            return tableRecord;
+        }
+
+        const indexPath = MATERIAL_REQUEST_INDEX_PATH;
+        const [record, rawIndex] = await Promise.all([
+            readStorageJson(`material-order-requests/requests/${requestId}.json`, { force: true }),
+            readStorageJson(indexPath, { force: true }),
+        ]);
+        if (!record) throw new Error('Request not found');
+
+        const shouldUpdateSecondary = segment === 'secondary' || record.routeType === 'secondary_route';
+        const normalizedSecondaryRoute = normalizeSecondaryRoute(record.secondaryRoute);
+        if (shouldUpdateSecondary && !normalizedSecondaryRoute) {
+            throw new Error('Secondary route not found');
+        }
+        const nextSecondaryRoute = shouldUpdateSecondary
+            ? {
+                ...normalizedSecondaryRoute,
+                serviceMinutes: normalizedMinutes,
+            }
+            : normalizedSecondaryRoute;
+        const updated = shouldUpdateSecondary
+            ? {
+                ...record,
+                secondaryRoute: nextSecondaryRoute,
+            }
+            : withStoredServiceMinutes(record, normalizedMinutes);
+        const existingIndex = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
+        const nextIndex = {
+            requests: existingIndex.map(item => {
+                if (item.id !== requestId) {
+                    return item;
+                }
+                if (shouldUpdateSecondary) {
+                    return {
+                        ...item,
+                        secondaryRoute: nextSecondaryRoute,
+                    };
+                }
+                const itemValues = {
+                    ...(item.itemValues || {}),
+                    __serviceMinutes: normalizedMinutes,
+                };
+                return {
+                    ...item,
+                    serviceMinutes: normalizedMinutes,
+                    itemValues,
+                };
+            }),
             updatedAt: nowIso(),
         };
         await Promise.all([

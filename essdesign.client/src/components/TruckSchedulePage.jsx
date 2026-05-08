@@ -89,6 +89,64 @@ const SECONDARY_ROUTE_REASON_OPTIONS = [
   { value: 'other', label: 'Other route task' },
 ];
 const SECONDARY_ROUTE_SERVICE_MINUTES = 30;
+const DEFAULT_SERVICE_MINUTES = 30;
+
+function normalizeServiceMinutes(value, fallback = DEFAULT_SERVICE_MINUTES) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(240, Math.round(minutes)));
+}
+
+function getRequestServiceMinutes(request) {
+  const direct = Number(request?.serviceMinutes);
+  if (Number.isFinite(direct) && direct >= 0) {
+    return normalizeServiceMinutes(direct);
+  }
+  const stored = Number(request?.itemValues?.__serviceMinutes);
+  if (Number.isFinite(stored) && stored >= 0) {
+    return normalizeServiceMinutes(stored);
+  }
+  return DEFAULT_SERVICE_MINUTES;
+}
+
+function getSecondaryRouteServiceMinutes(secondaryRoute) {
+  return normalizeServiceMinutes(secondaryRoute?.serviceMinutes, SECONDARY_ROUTE_SERVICE_MINUTES);
+}
+
+function getRequestSegmentServiceMinutes(request, segment = 'primary') {
+  if (segment === 'secondary' || isSecondaryRouteRequest(request)) {
+    return getSecondaryRouteServiceMinutes(request?.secondaryRoute);
+  }
+  return getRequestServiceMinutes(request);
+}
+
+function applyServiceMinutesToRequest(request, serviceMinutes, segment = 'primary') {
+  if (!request) {
+    return request;
+  }
+  const normalizedMinutes = normalizeServiceMinutes(serviceMinutes);
+  if (segment === 'secondary' || isSecondaryRouteRequest(request)) {
+    return {
+      ...request,
+      secondaryRoute: request.secondaryRoute
+        ? {
+            ...request.secondaryRoute,
+            serviceMinutes: normalizedMinutes,
+          }
+        : request.secondaryRoute,
+    };
+  }
+  return {
+    ...request,
+    serviceMinutes: normalizedMinutes,
+    itemValues: {
+      ...(request.itemValues || {}),
+      __serviceMinutes: normalizedMinutes,
+    },
+  };
+}
 
 function getSecondaryRouteReasonLabel(reason) {
   return SECONDARY_ROUTE_REASON_OPTIONS.find(option => option.value === reason)?.label || 'Secondary route';
@@ -319,7 +377,7 @@ function getRequestDeliveryHandoffMinutes(request, routeEstimate = null) {
   if (isSecondaryRouteRequest(request)) {
     return removeReturnLegFromTiming(getSecondaryRouteTiming(request.secondaryRoute, true, routeEstimate)).totalMinutes || 0;
   }
-  return getPrimaryPhaseMinutes(routeEstimate, request?.secondaryRoute || null);
+  return getPrimaryPhaseMinutes(routeEstimate, request?.secondaryRoute || null, getRequestServiceMinutes(request));
 }
 
 function findFollowOnRequestForInsertion(requestId, scheduleEvent, dayEvents = [], requestLookup = {}, cycleStateMap = {}, allRequests = []) {
@@ -616,10 +674,10 @@ function buildBoardState(requestsForDay, routeMap, nowOverride = null, returnTra
         const includeReturnTransitToYard = Boolean(returnTransitByRequestId?.[request.id]);
         const baseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard, routeMap[request.id] ?? null)
-          : getTimingProfile(routeMap[request.id] ?? null, null);
+          : getTimingProfile(routeMap[request.id] ?? null, null, getRequestServiceMinutes(request));
         const flowBaseTiming = isSecondaryRouteRequest(request)
           ? getSecondaryRouteTiming(request.secondaryRoute, includeReturnTransitToYard, flowRouteMap[request.id] ?? routeMap[request.id] ?? null)
-          : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null);
+          : getTimingProfile(flowRouteMap[request.id] ?? routeMap[request.id] ?? null, null, getRequestServiceMinutes(request));
         const hasReturnTransitContinuation = isReturnTransitContinuation(
           request,
           returnContinuation,
@@ -798,7 +856,11 @@ function buildSecondaryRouteReturnSchedule(routeContext, outboundEstimate = null
 }
 
 function buildPrimaryRouteReturnSchedule(routeContext, outboundEstimate = null) {
-  const phaseTiming = getTimingProfile(outboundEstimate, routeContext?.request?.secondaryRoute || null);
+  const phaseTiming = getTimingProfile(
+    outboundEstimate,
+    routeContext?.request?.secondaryRoute || null,
+    getRequestServiceMinutes(routeContext?.request),
+  );
   const departureOffsetMinutes =
     (phaseTiming.transitMinutes || 0) +
     (phaseTiming.loadingMinutes || 0) +
@@ -1037,6 +1099,8 @@ function getRequestListSignature(requests) {
     request?.builderName,
     request?.projectName,
     request?.scaffoldingSystem,
+    request?.serviceMinutes,
+    request?.itemValues?.__serviceMinutes,
     request?.secondaryRoute ? [
       request.secondaryRoute.reason,
       request.secondaryRoute.startingLocation,
@@ -1392,9 +1456,9 @@ function setScheduleDragImage(event, request, options = {}) {
   window.setTimeout(() => ghost.remove(), 0);
 }
 
-function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation, secondaryRoute = null, includeReturnTransitToYard = true, returnRouteEstimate = null) {
+function buildEstimateSummary(selectedDate, hour, minute, routeEstimate, hasSiteLocation, secondaryRoute = null, includeReturnTransitToYard = true, returnRouteEstimate = null, serviceMinutes = DEFAULT_SERVICE_MINUTES) {
   const transitMinutes = routeEstimate?.durationMinutes ? Math.round(routeEstimate.durationMinutes) : 0;
-  const loadingMinutes = 30;
+  const loadingMinutes = normalizeServiceMinutes(serviceMinutes);
   const secondaryTravelMinutes = secondaryRoute?.travelDurationSeconds ? Math.round(secondaryRoute.travelDurationSeconds / 60) : 0;
   const secondaryServiceMinutes = secondaryRoute ? Math.max(0, Number(secondaryRoute.serviceMinutes) || 0) : 0;
   const returnMinutes = secondaryRoute?.returnDurationSeconds
@@ -2024,6 +2088,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [routeLoadingKeys, setRouteLoadingKeys] = useState(() => new Set());
   const [tileMenu, setTileMenu] = useState(null);
   const [manualTimeModal, setManualTimeModal] = useState(null);
+  const [serviceTimeModal, setServiceTimeModal] = useState(null);
   const [secondaryRouteModal, setSecondaryRouteModal] = useState(null);
   const [secondaryRouteSaving, setSecondaryRouteSaving] = useState(false);
   const [secondaryAddressSuggestions, setSecondaryAddressSuggestions] = useState([]);
@@ -2503,6 +2568,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const close = () => {
       setTileMenu(null);
       setManualTimeModal(null);
+      setServiceTimeModal(null);
     };
     window.addEventListener('click', close);
     window.addEventListener('scroll', close, true);
@@ -2699,6 +2765,12 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const tileMenuIsDeleteOnly = !tileMenuIsReturnSegment && (
     tileMenuIsDeleteOnlySecondaryRoute || (tileMenuIsCompletedMaterialOrder && !debugMode)
   );
+  const tileMenuCanEditService = Boolean(tileMenuRequest)
+    && !tileMenuIsReturnSegment
+    && !(tileMenuIsCompletedMaterialOrder && !debugMode);
+  const tileMenuServiceLabel = tileMenu?.segment === 'secondary' || isSecondaryRouteRequest(tileMenuRequest)
+    ? 'Set service time'
+    : 'Set unload time';
   const groupedEventsByTruck = useMemo(
     () => visibleTruckLanes.map(lane => dayEvents.filter(event => event.truckId === lane.id)),
     [dayEvents, visibleTruckLanes],
@@ -2936,7 +3008,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
 
     const start = eventStartMinutesMap[selectedScheduleEvent.orderId] ?? selectedScheduleEvent.hour * 60 + selectedScheduleEvent.minute;
-    const primaryMinutes = getPrimaryPhaseMinutes(selectedSchedulePrimaryRouteEstimate, selectedScheduleSecondaryRoute);
+    const primaryMinutes = getPrimaryPhaseMinutes(
+      selectedSchedulePrimaryRouteEstimate,
+      selectedScheduleSecondaryRoute,
+      getRequestServiceMinutes(selectedScheduleRequest),
+    );
     const departureMinutes = start + primaryMinutes;
     return {
       scheduledDate: selectedScheduleEvent.date,
@@ -2948,6 +3024,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     selectedScheduleEvent,
     selectedScheduleIsStandaloneSecondary,
     selectedSchedulePrimaryRouteEstimate,
+    selectedScheduleRequest,
     selectedScheduleRouteSchedule,
     selectedScheduleSecondaryRoute,
   ]);
@@ -3046,11 +3123,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ? getSecondaryRouteTiming(selectedScheduleRequest.secondaryRoute, selectedScheduleEffectiveReturnTransit, selectedScheduleSecondaryTimingEstimate)
       : !selectedScheduleEffectiveReturnTransit
         ? removeReturnLegFromTiming(applyReturnEstimateToTiming(
-          getTimingProfile(selectedSchedulePrimaryTimingSource, null),
+          getTimingProfile(selectedSchedulePrimaryTimingSource, null, getRequestServiceMinutes(selectedScheduleRequest)),
           selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
         ))
         : applyReturnEstimateToTiming(
-          getTimingProfile(selectedSchedulePrimaryTimingSource, null),
+          getTimingProfile(selectedSchedulePrimaryTimingSource, null, getRequestServiceMinutes(selectedScheduleRequest)),
           selectedScheduleRouteContext.segment === 'secondary' ? selectedSchedulePrimaryRouteEstimate : null,
         )
     : null;
@@ -3121,7 +3198,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         const secondaryEnd = startMinutes + (selectedScheduleTiming?.transitMinutes || 0) + (selectedScheduleTiming?.loadingMinutes || 0);
         return `${formatTimeChip(Math.floor(startMinutes / 60), Math.floor(startMinutes % 60))} - ${formatTimeChip(Math.floor(secondaryEnd / 60), Math.floor(secondaryEnd % 60))}`;
       }
-      const secondaryStart = startMinutes + getPrimaryPhaseMinutes(selectedSchedulePrimaryRouteEstimate, selectedScheduleSecondaryRoute);
+      const secondaryStart = startMinutes + getPrimaryPhaseMinutes(
+        selectedSchedulePrimaryRouteEstimate,
+        selectedScheduleSecondaryRoute,
+        getRequestServiceMinutes(selectedScheduleRequest),
+      );
       const secondaryDuration = Math.max(
         1,
         Math.round((selectedScheduleSecondaryRoute.travelDurationSeconds || 0) / 60)
@@ -3145,6 +3226,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     selectedScheduleIsReturnSegment,
     selectedScheduleIsSecondarySegment,
     selectedSchedulePrimaryRouteEstimate,
+    selectedScheduleRequest,
     selectedScheduleSecondaryRoute,
     selectedScheduleTiming?.loadingMinutes,
     selectedScheduleTiming?.returnMinutes,
@@ -3234,7 +3316,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       ).totalMinutes || 90);
     }
     const timing = applyReturnEstimateToTiming(
-      getTimingProfile(selectedRouteEstimate, requestModal?.request?.secondaryRoute || null),
+      getTimingProfile(
+        selectedRouteEstimate,
+        requestModal?.request?.secondaryRoute || null,
+        getRequestServiceMinutes(requestModal?.request),
+      ),
       requestModal?.routeContext?.segment === 'secondary' ? selectedReturnRouteEstimate : null,
     );
     const preferredTiming = requestModalReturnTransitEnabled ? timing : removeReturnLegFromTiming(timing);
@@ -3257,8 +3343,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       requestModal?.request?.secondaryRoute || null,
       getReturnTransitEnabled(requestModal?.request?.id),
       requestModal?.routeContext?.segment === 'secondary' ? selectedReturnRouteEstimate : null,
+      getRequestServiceMinutes(requestModal?.request),
     ),
-    [getReturnTransitEnabled, requestModal?.request?.id, requestModal?.request?.secondaryRoute, requestModal?.routeContext?.segment, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedReturnRouteEstimate, selectedRouteEstimate],
+    [getReturnTransitEnabled, requestModal?.request, requestModal?.routeContext?.segment, requestModal?.siteLocation, selectedDate, selectedHour, selectedMinute, selectedReturnRouteEstimate, selectedRouteEstimate],
   );
   const requestModalActionRows = useMemo(() => getDeliveryActionRows(requestModal?.request), [requestModal]);
 
@@ -3473,6 +3560,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       eventOverviewModal.request.secondaryRoute || null,
       getReturnTransitEnabled(eventOverviewModal.event?.orderId),
       eventOverviewModal.returnRouteEstimate || null,
+      getRequestServiceMinutes(eventOverviewModal.request),
     );
   }, [eventOverviewModal, getReturnTransitEnabled]);
   const manualTimeEvent = useMemo(
@@ -3480,6 +3568,11 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     [dayEvents, manualTimeModal],
   );
   const manualTimeRequest = manualTimeEvent ? requestMetaMap[manualTimeEvent.orderId] : null;
+  const serviceTimeEvent = useMemo(
+    () => serviceTimeModal ? dayEvents.find(event => event.orderId === serviceTimeModal.requestId) || null : null,
+    [dayEvents, serviceTimeModal],
+  );
+  const serviceTimeRequest = serviceTimeEvent ? requestMetaMap[serviceTimeEvent.orderId] : null;
 
   const openRequestModal = useCallback(async requestId => {
     setRequestModalLoading(true);
@@ -3988,7 +4081,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
       routeEstimate = buildPrimaryRouteTimingEstimate(estimate, returnEstimate);
     }
-    const timing = getTimingProfile(routeEstimate, null);
+    const timing = getTimingProfile(routeEstimate, null, getRequestServiceMinutes(request));
     return (includeReturnTransitToYard ? timing : removeReturnLegFromTiming(timing)).totalMinutes;
   }, [eventCycleStateMap, eventDurationMinutesMap, getReturnTransitEnabled, getTollsEnabled]);
 
@@ -4241,6 +4334,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     }
     const anchorId = scheduleEvent.orderId;
     const currentStart = eventStartMinutesMap[anchorId] ?? scheduleEvent.hour * 60 + scheduleEvent.minute;
+    setServiceTimeModal(null);
     setManualTimeModal({
       requestId: anchorId,
       requestIds: selectedEvents.length ? selectedEvents.map(event => event.orderId) : [anchorId],
@@ -4253,6 +4347,110 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const closeManualScheduleTime = useCallback(() => {
     setManualTimeModal(null);
   }, []);
+
+  const openServiceTimeEditor = useCallback((requestId, segment = 'primary') => {
+    const request = requestMetaMap[requestId] || allRequests.find(item => item.id === requestId) || null;
+    if (!request || segment === 'return') {
+      setServiceTimeModal(null);
+      return;
+    }
+    const serviceSegment = segment === 'secondary' || isSecondaryRouteRequest(request) ? 'secondary' : 'primary';
+    setManualTimeModal(null);
+    setServiceTimeModal({
+      requestId,
+      segment: serviceSegment,
+      value: String(getRequestSegmentServiceMinutes(request, serviceSegment)),
+      error: '',
+    });
+  }, [allRequests, requestMetaMap]);
+
+  const closeServiceTimeEditor = useCallback(() => {
+    setServiceTimeModal(null);
+  }, []);
+
+  const handleServiceTimeSave = useCallback((event) => {
+    event.preventDefault();
+    if (!serviceTimeModal?.requestId) {
+      return;
+    }
+
+    const requestId = serviceTimeModal.requestId;
+    const serviceSegment = serviceTimeModal.segment === 'secondary' ? 'secondary' : 'primary';
+    const parsedMinutes = Number(serviceTimeModal.value);
+    if (!Number.isFinite(parsedMinutes) || parsedMinutes < 0 || parsedMinutes > 240) {
+      setServiceTimeModal(current => current ? { ...current, error: 'Enter a service time between 0 and 240 minutes.' } : current);
+      return;
+    }
+
+    const serviceMinutes = normalizeServiceMinutes(parsedMinutes);
+    const previousRequests = allRequests;
+    const previousEvents = dayEvents;
+    const previousMetaMap = requestMetaMap;
+    const previousStartMap = eventStartMinutesMap;
+    const previousDurationMap = eventDurationMinutesMap;
+    const previousPrimaryDurationMap = eventPrimaryDurationMinutesMap;
+    const previousCycleStateMap = eventCycleStateMap;
+    const targetRequest = requestMetaMap[requestId] || allRequests.find(item => item.id === requestId) || null;
+    if (!targetRequest) {
+      setServiceTimeModal(null);
+      return;
+    }
+
+    const updatedRequest = applyServiceMinutesToRequest(targetRequest, serviceMinutes, serviceSegment);
+    const nextRequests = allRequests.map(request => request.id === requestId ? updatedRequest : request);
+    setServiceTimeModal(null);
+    setTileMenu(null);
+    setAllRequests(nextRequests);
+    setRouteLoading(requestId, true, 'primary');
+    optimisticRequestOverridesRef.current.set(requestId, {
+      request: updatedRequest,
+      expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+    });
+    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+
+    const loadingStartedAt = Date.now();
+    materialOrderRequestsAPI.setServiceMinutes(requestId, {
+      serviceMinutes,
+      segment: serviceSegment,
+    })
+      .then(savedRequest => {
+        const normalizedSavedRequest = savedRequest || updatedRequest;
+        optimisticRequestOverridesRef.current.set(requestId, {
+          request: normalizedSavedRequest,
+          expiresAt: Date.now() + OPTIMISTIC_OVERRIDE_TTL_MS,
+        });
+        setError('');
+      })
+      .catch(err => {
+        optimisticRequestOverridesRef.current.delete(requestId);
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setError(err?.message || 'Failed to update service time.');
+      })
+      .finally(() => {
+        const remainingLoadingMs = ROUTE_LOADING_MIN_MS - (Date.now() - loadingStartedAt);
+        window.setTimeout(() => setRouteLoading(requestId, false, 'primary'), Math.max(0, remainingLoadingMs));
+      });
+  }, [
+    allRequests,
+    dayEvents,
+    eventCycleStateMap,
+    eventDurationMinutesMap,
+    eventPrimaryDurationMinutesMap,
+    eventStartMinutesMap,
+    projectRequestsToBoard,
+    requestMetaMap,
+    selectedDate,
+    serviceTimeModal,
+    setRouteLoading,
+  ]);
 
   const handleManualScheduleTime = useCallback((event) => {
     event.preventDefault();
@@ -4480,7 +4678,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
       const parentTiming = isSecondaryRouteRequest(request)
         ? getSecondaryRouteTiming(request.secondaryRoute, getReturnTransitEnabled(request.id), parentTimingEstimate)
-        : getTimingProfile(parentTimingEstimate, null);
+        : getTimingProfile(parentTimingEstimate, null, getRequestServiceMinutes(request));
       const parentTotalMinutes = Math.max(primaryPhaseMinutes, Math.round(parentTiming.totalMinutes || primaryPhaseMinutes || 0));
       const visibleParentDurationMinutes = eventDurationMinutesMap[request.id] ?? parentTotalMinutes;
       const secondaryDepartureOffsetMinutes = startsAfterReturnTransit
@@ -5841,8 +6039,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                       const timing = isSecondaryRequest
                         ? getSecondaryRouteTiming(request.secondaryRoute, eventReturnTransitEnabled, routeEstimate)
                         : eventReturnTransitEnabled
-                          ? getTimingProfile(routeEstimate, request?.secondaryRoute || null)
-                          : removeReturnLegFromTiming(getTimingProfile(routeEstimate, request?.secondaryRoute || null));
+                          ? getTimingProfile(routeEstimate, request?.secondaryRoute || null, getRequestServiceMinutes(request))
+                          : removeReturnLegFromTiming(getTimingProfile(routeEstimate, request?.secondaryRoute || null, getRequestServiceMinutes(request)));
                       const completedReturnSegmentMinutes = isCompleteTile && eventReturnTransitEnabled
                         ? Math.max(0, durationMinutes - primaryDurationMinutes)
                         : 0;
@@ -5859,6 +6057,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                         ? getPrimaryPhaseMinutes(
                           routeEstimate,
                           request?.secondaryRoute || null,
+                          getRequestServiceMinutes(request),
                         )
                         : primaryDurationMinutes;
                       const displayPrimaryDurationMinutes = !isSecondaryRequest && request?.secondaryRoute && status !== 'return_transit'
@@ -5950,6 +6149,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                             if (!selectedScheduleEventIdSet.has(event.orderId) || selectedScheduleEventIds.length <= 1) {
                               handleSelectScheduleEvent(event.orderId, menuSegment);
                             }
+                            setManualTimeModal(null);
+                            setServiceTimeModal(null);
                             setTileMenu({
                               orderId: event.orderId,
                               segment: menuSegment,
@@ -6234,11 +6435,42 @@ export default function TruckSchedulePage({ user, onNavigate }) {
 
       {tileMenu ? (
         <div
-          className={`transport-tile-menu${manualTimeModal ? ' set-time-open' : ''}`}
+          className={`transport-tile-menu${manualTimeModal || serviceTimeModal ? ' set-time-open' : ''}`}
           style={{ left: tileMenu.x, top: tileMenu.y }}
           onClick={(event) => event.stopPropagation()}
           role="menu"
         >
+          {tileMenuCanEditService ? (
+            <button type="button" role="menuitem" onClick={() => openServiceTimeEditor(tileMenu.orderId, tileMenu.segment || 'primary')} disabled={Boolean(dragSchedulingId)}>
+              <span>{tileMenuServiceLabel}</span>
+            </button>
+          ) : null}
+          {serviceTimeModal && tileMenuCanEditService ? (
+            <form className="transport-tile-time-editor" onSubmit={handleServiceTimeSave}>
+              <div className="transport-tile-time-editor-head">
+                <span>{serviceTimeModal.segment === 'secondary' ? 'Service time' : 'Unload time'}</span>
+                <strong>{serviceTimeRequest?.builderName || serviceTimeRequest?.secondaryRoute?.destination || serviceTimeEvent?.builderName || 'Selected tile'}</strong>
+              </div>
+              <div className="transport-tile-time-row transport-tile-service-row">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="240"
+                  step="5"
+                  value={serviceTimeModal.value}
+                  onChange={(inputEvent) => setServiceTimeModal(current => current ? { ...current, value: inputEvent.target.value, error: '' } : current)}
+                  autoFocus
+                />
+                <b>min</b>
+              </div>
+              {serviceTimeModal.error ? <p className="transport-tile-time-error">{serviceTimeModal.error}</p> : null}
+              <div className="transport-tile-time-actions">
+                <button type="button" onClick={closeServiceTimeEditor}>Cancel</button>
+                <button type="submit">Apply</button>
+              </div>
+            </form>
+          ) : null}
           {!tileMenuIsDeleteOnly ? (
             <>
               {!tileMenuIsReturnSegment ? (
