@@ -3087,13 +3087,13 @@
 .transport-desktop-workspace .transport-refresh-button {
     position: relative !important;
     min-width: 118px !important;
-    padding: 0 16px !important;
-    border-color: #fed7aa !important;
-    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
-    color: #9a3412 !important;
+    padding: 0 16px 0 12px !important;
+    border-color: #d7e0eb !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
     font-weight: 800 !important;
-    overflow: hidden !important;
-    box-shadow: 0 8px 18px rgba(249, 115, 22, 0.12) !important;
+    overflow: visible !important;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08) !important;
     transition: border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease !important;
 }
 
@@ -3101,18 +3101,15 @@
 .transport-page-frame .transport-refresh-button::after,
 .transport-desktop-workspace .transport-refresh-button::after {
     content: "" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent) !important;
-    transform: translateX(-120%) !important;
-    pointer-events: none !important;
+    display: none !important;
 }
 
 .transport-refresh-button:hover,
 .transport-page-frame .transport-refresh-button:hover,
 .transport-desktop-workspace .transport-refresh-button:hover {
     border-color: #fb923c !important;
-    box-shadow: 0 10px 22px rgba(249, 115, 22, 0.18) !important;
+    background: #ffffff !important;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12) !important;
     transform: translateY(-1px) !important;
 }
 
@@ -3133,7 +3130,7 @@
 .transport-page-frame .transport-refresh-button.done,
 .transport-desktop-workspace .transport-refresh-button.done {
     border-color: #86efac !important;
-    background: linear-gradient(180deg, #ecfdf5 0%, #dcfce7 100%) !important;
+    background: #ffffff !important;
     color: #166534 !important;
     box-shadow: 0 10px 22px rgba(22, 163, 74, 0.16) !important;
     animation: transport-refresh-pop 420ms ease-out !important;
@@ -3143,7 +3140,7 @@
 .transport-page-frame .transport-refresh-button.error,
 .transport-desktop-workspace .transport-refresh-button.error {
     border-color: #fecaca !important;
-    background: #fff1f2 !important;
+    background: #ffffff !important;
     color: #b91c1c !important;
 }
 
@@ -3153,12 +3150,25 @@
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 22px !important;
-    height: 22px !important;
+    flex: 0 0 24px !important;
+    width: 24px !important;
+    min-width: 24px !important;
+    height: 24px !important;
     border-radius: 999px !important;
-    background: rgba(249, 115, 22, 0.14) !important;
+    background: #fff7ed !important;
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.22) !important;
     color: currentColor !important;
+    position: relative !important;
+    z-index: 2 !important;
+    overflow: visible !important;
     transition: background 160ms ease, color 160ms ease !important;
+}
+
+.transport-refresh-button > span:not(.transport-refresh-icon),
+.transport-page-frame .transport-refresh-button > span:not(.transport-refresh-icon),
+.transport-desktop-workspace .transport-refresh-button > span:not(.transport-refresh-icon) {
+    position: relative !important;
+    z-index: 2 !important;
 }
 
 .transport-refresh-button.syncing .transport-refresh-icon svg,

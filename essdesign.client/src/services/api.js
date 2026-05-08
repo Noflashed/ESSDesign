@@ -757,10 +757,12 @@ async function saveSafetyProjectsDocument(doc) {
 
 const restEndpoint = (table, query = '') => `${SUPABASE_REST_BASE}/${table}${query}`;
 
-async function readRestRows(table, query = '') {
+async function readRestRows(table, query = '', options = {}) {
+    const { force = false } = options;
     const response = await fetch(restEndpoint(table, query), {
         method: 'GET',
-        headers: supabaseRestHeaders()
+        headers: supabaseRestHeaders(),
+        cache: force ? 'no-store' : 'default'
     });
     if (!response.ok) {
         const details = await response.text();
@@ -1835,12 +1837,12 @@ async function seedMaterialOrderRequestsTableFromStorage() {
     return materialOrderRequestsTableSeedPromise;
 }
 
-async function readMaterialOrderRequestTableRecords({ seed = true } = {}) {
-    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc');
+async function readMaterialOrderRequestTableRecords({ seed = true, force = false } = {}) {
+    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc', { force });
     if (seed && rows.length === 0) {
         const seeded = await seedMaterialOrderRequestsTableFromStorage();
         if (seeded.length > 0) {
-            rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc');
+            rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc', { force });
         }
     }
     return rows.map(mapMaterialOrderRequestRow).filter(Boolean);
@@ -2327,8 +2329,8 @@ async function listStorageObjects(prefix) {
 }
 
 export const materialOrderRequestsAPI = {
-    listActiveRequests: async ({ includeArchived = false } = {}) => {
-        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords());
+    listActiveRequests: async ({ includeArchived = false, force = false } = {}) => {
+        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords({ force }));
         if (tableRecords) {
             return tableRecords
                 .map(normalizeMaterialOrderRequestListItem)
@@ -2336,7 +2338,7 @@ export const materialOrderRequestsAPI = {
                 .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
         }
 
-        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
+        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH, { force });
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         return items
             .map(normalizeMaterialOrderRequestListItem)
@@ -2456,8 +2458,8 @@ export const materialOrderRequestsAPI = {
         return record;
     }),
 
-    listArchivedRequests: async () => {
-        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords());
+    listArchivedRequests: async ({ force = false } = {}) => {
+        const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords({ force }));
         if (tableRecords) {
             return tableRecords
                 .map(normalizeMaterialOrderRequestListItem)
@@ -2465,7 +2467,7 @@ export const materialOrderRequestsAPI = {
                 .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
         }
 
-        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH);
+        const raw = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH, { force });
         const items = Array.isArray(raw?.requests) ? raw.requests : [];
         const fromIndex = items
             .map(normalizeMaterialOrderRequestListItem)

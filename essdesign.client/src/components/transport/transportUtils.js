@@ -327,12 +327,13 @@ export function findProjectLocation(builders, request) {
   );
 }
 
-export async function getSafetyBuildersCached(getBuildersFn) {
+export async function getSafetyBuildersCached(getBuildersFn, options = {}) {
+  const { force = false } = options;
   const now = Date.now();
-  if (safetyBuildersCache && now - safetyBuildersCacheAt < SAFETY_BUILDERS_CACHE_MS) {
+  if (!force && safetyBuildersCache && now - safetyBuildersCacheAt < SAFETY_BUILDERS_CACHE_MS) {
     return safetyBuildersCache;
   }
-  const builders = await getBuildersFn({ includeArchived: true }).catch(() => []);
+  const builders = await getBuildersFn({ includeArchived: true, force }).catch(() => []);
   safetyBuildersCache = builders;
   safetyBuildersCacheAt = now;
   return builders;

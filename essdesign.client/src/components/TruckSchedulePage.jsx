@@ -2295,6 +2295,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const tollsSharedMigrationRef = useRef(new Set());
   const boardProjectionSignatureRef = useRef('');
   const requestMetaSignatureRef = useRef('');
+  const boardProjectionRunRef = useRef(0);
+  const loadBoardRunRef = useRef(0);
   const refreshFeedbackTimerRef = useRef(null);
   const dragPointerOffsetMinutesRef = useRef(0);
   const selectionDragContextRef = useRef(null);
@@ -2410,6 +2412,16 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   }, []);
 
   const projectRequestsToBoard = useCallback((requests, siteLocationMapOverride, fallbackDate = selectedDate, options = {}) => {
+    const expectedProjectionRunId = typeof options.expectedProjectionRunId === 'number'
+      ? options.expectedProjectionRunId
+      : null;
+    if (expectedProjectionRunId !== null && expectedProjectionRunId !== boardProjectionRunRef.current) {
+      return null;
+    }
+    if (expectedProjectionRunId === null && options.bumpProjectionRun !== false) {
+      boardProjectionRunRef.current += 1;
+    }
+    const projectionRunId = boardProjectionRunRef.current;
     const dateKey = typeof fallbackDate === 'string' ? fallbackDate : formatDateKey(fallbackDate || selectedDate);
     const siteLocationMap = siteLocationMapOverride || requestSiteLocationMapRef.current;
     const requestsForDay = (requests || []).filter(request => request.scheduledDate === dateKey && !request.scheduleRemovedAt);
@@ -2427,7 +2439,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     const flowRouteMap = routeMap;
     const board = buildBoardState(requestsForDay, routeMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap });
     applyBoardProjection(requestsForDay, board, options);
-    return { requestsForDay, board };
+    return { requestsForDay, board, projectionRunId };
   }, [applyBoardProjection, debugMode, rememberStableRouteEstimates, returnTransitByRequestId, selectedDate, tollsByRequestId]);
 
   const visibleTruckLanes = useMemo(() => {
@@ -2437,18 +2449,26 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return TRUCK_LANES;
   }, [assignedTruck, isTruckRole]);
 
-  const loadBoard = useCallback(async () => {
+  const loadBoard = useCallback(async (options = {}) => {
+    const { force = false } = options;
     const dateKey = formatDateKey(selectedDate);
     const loadKey = `${dateKey}:${JSON.stringify(tollsByRequestId || {})}:${JSON.stringify(returnTransitByRequestId || {})}`;
-    if (loadPromiseRef.current?.loadKey === loadKey) {
+    if (!force && loadPromiseRef.current?.loadKey === loadKey) {
       return loadPromiseRef.current.promise;
     }
+    const loadRunId = loadBoardRunRef.current + 1;
+    loadBoardRunRef.current = loadRunId;
+    boardProjectionRunRef.current += 1;
+    const isCurrentLoad = () => loadBoardRunRef.current === loadRunId;
     const task = (async () => {
-      const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
+      const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders, { force });
       const [active, archived] = await Promise.all([
-        materialOrderRequestsAPI.listActiveRequests({ includeArchived: true }).catch(() => []),
-        materialOrderRequestsAPI.listArchivedRequests().catch(() => []),
+        materialOrderRequestsAPI.listActiveRequests({ includeArchived: true, force }).catch(() => []),
+        materialOrderRequestsAPI.listArchivedRequests({ force }).catch(() => []),
       ]);
+      if (!isCurrentLoad()) {
+        return false;
+      }
       const merged = applyOptimisticRequestOverrides(
         dedupeRequests([...active, ...archived]),
         optimisticRequestOverridesRef.current,
@@ -2554,11 +2574,17 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       );
       rememberStableRouteEstimates(cachedRouteMap);
       const initialBoard = buildBoardState(requestsForDay, cachedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: cachedRouteMap });
+      if (!isCurrentLoad()) {
+        return false;
+      }
       applyBoardProjection(requestsForDay, initialBoard);
       setLoadingBoard(false);
       const requestLookup = new Map(requestsForDay.map(request => [request.id, request]));
       const resolvedRouteEntries = await Promise.all(
         requestsForDay.map(async request => {
+          if (!isCurrentLoad()) {
+            return [request.id, null];
+          }
           const routeContext = getBoardRouteContextForRequest(request, requestLookup, nextSiteLocationMap, selectedDate, effectiveTollsByRequestId, effectiveReturnTransitByRequestId);
           if (!routeContext) {
             return [request.id, null];
@@ -2585,6 +2611,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           }
         }),
       );
+      if (!isCurrentLoad()) {
+        return false;
+      }
       const resolvedRouteMap = Object.fromEntries(resolvedRouteEntries.map(([id, estimate]) => [id, estimate]));
       rememberStableRouteEstimates(resolvedRouteMap);
       const nextBoard = buildBoardState(requestsForDay, resolvedRouteMap, debugMode ? debugNowRef.current : null, effectiveReturnTransitByRequestId, { flowRouteMap: resolvedRouteMap });
@@ -2593,8 +2622,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       setLastRefreshLabel(formatLastRefreshTime());
       return true;
     })().catch(err => {
-      setError(err?.message || 'Failed to load truck schedule.');
-      setLoadingBoard(false);
+      if (isCurrentLoad()) {
+        setError(err?.message || 'Failed to load truck schedule.');
+        setLoadingBoard(false);
+      }
       return false;
     }).finally(() => {
       if (loadPromiseRef.current?.promise === task) {
@@ -2618,7 +2649,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       refreshFeedbackTimerRef.current = null;
     }
     setManualRefreshStatus('syncing');
-    const refreshed = await loadBoard().catch(() => false);
+    const refreshed = await loadBoard({ force: true }).catch(() => false);
     setManualRefreshStatus(refreshed ? 'done' : 'error');
     refreshFeedbackTimerRef.current = window.setTimeout(() => {
       setManualRefreshStatus('idle');
@@ -2637,7 +2668,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       if (document.visibilityState !== 'visible') {
         return;
       }
-      loadBoard().catch(() => {});
+      loadBoard({ force: true }).catch(() => {});
     };
     const refreshFromPolling = () => {
       if (document.visibilityState !== 'visible') {
@@ -4308,7 +4339,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         return Boolean(routeRequest);
       });
       setAllRequests(nextRequests);
-      projectRequestsToBoard(nextRequests, moveSiteLocationMap, selectedDate, { force: true });
+      const boardProjection = projectRequestsToBoard(nextRequests, moveSiteLocationMap, selectedDate, { force: true });
+      const projectionRunId = boardProjection?.projectionRunId ?? boardProjectionRunRef.current;
       if (routeRefreshIds.length > 0) {
         const activeRouteLoadingSegments = new Map();
         (async () => {
@@ -4339,7 +4371,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               await resolveBoardRouteEstimate(routeContext);
             }
           }));
-          projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, { force: true });
+          projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
+            force: true,
+            expectedProjectionRunId: projectionRunId,
+          });
           const remainingLoadingMs = ROUTE_LOADING_MIN_MS - (Date.now() - loadingStartedAt);
           if (remainingLoadingMs > 0) {
             await new Promise(resolve => window.setTimeout(resolve, remainingLoadingMs));
@@ -4626,7 +4661,8 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     });
 
     setAllRequests(nextRequests);
-    projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    const boardProjection = projectRequestsToBoard(nextRequests, requestSiteLocationMapRef.current, selectedDate, { force: true });
+    const projectionRunId = boardProjection?.projectionRunId ?? boardProjectionRunRef.current;
     clearSelectedScheduleEvents();
     setSelectedScheduleEventId(selectionContext.anchorOrderId);
     setSelectedScheduleSegment('primary');
@@ -4675,7 +4711,10 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           }
         }),
       );
-      projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, { force: true });
+      projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
+        force: true,
+        expectedProjectionRunId: projectionRunId,
+      });
     })().catch(() => {});
 
     Promise.all(
