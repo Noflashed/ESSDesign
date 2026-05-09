@@ -4615,6 +4615,43 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       deliveryConfirmedAt: null,
     } : null;
 
+    const scheduleWritePromise = updatedRequest
+      ? materialOrderRequestsAPI.setSchedule(requestId, {
+          date: formatDateKey(selectedDate),
+          hour,
+          minute,
+          truckId: truck?.id ?? truckId,
+          truckLabel: truck?.rego ?? null,
+          clearRunLink: shouldUpdateRunLink,
+          sourceOrderId: nextSourceOrderId,
+          connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
+          connectedParentSegment: nextConnectedParentSegment,
+        })
+        .then(() => Array.from(directContinuationIds).reduce(
+          (promise, continuationId) => promise.then(() => materialOrderRequestsAPI.clearRunLink(continuationId)),
+          Promise.resolve(),
+        ))
+        .then(() => {
+          setError('');
+          return true;
+        })
+        .catch(err => {
+          optimisticRequestOverridesRef.current.delete(requestId);
+          directContinuationIds.forEach(continuationId => optimisticRequestOverridesRef.current.delete(continuationId));
+          boardProjectionSignatureRef.current = '';
+          requestMetaSignatureRef.current = '';
+          setAllRequests(previousRequests);
+          setDayEvents(previousEvents);
+          setRequestMetaMap(previousMetaMap);
+          setEventStartMinutesMap(previousStartMap);
+          setEventDurationMinutesMap(previousDurationMap);
+          setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+          setEventCycleStateMap(previousCycleStateMap);
+          setError(err?.message || 'Failed to schedule request.');
+          return false;
+        })
+      : Promise.resolve(false);
+
     if (updatedRequest) {
       const nextRequests = previousRequests.some(item => item.id === requestId)
         ? previousRequests.map(item => {
@@ -4675,7 +4712,13 @@ export default function TruckSchedulePage({ user, onNavigate }) {
               }
             }
           }));
-          await persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
+          if (sharedRouteSnapshotEntries.length > 0) {
+            const scheduleSaved = await scheduleWritePromise;
+            if (!scheduleSaved) {
+              return;
+            }
+            await persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
+          }
           projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
             force: true,
             expectedProjectionRunId: projectionRunId,
@@ -4715,39 +4758,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
         }
       });
     }
-
-    materialOrderRequestsAPI.setSchedule(requestId, {
-        date: formatDateKey(selectedDate),
-        hour,
-        minute,
-        truckId: truck?.id ?? truckId,
-        truckLabel: truck?.rego ?? null,
-        clearRunLink: shouldUpdateRunLink,
-        sourceOrderId: nextSourceOrderId,
-        connectedParentStartMinutes: nextSourceOrderId ? safeMinutes : null,
-        connectedParentSegment: nextConnectedParentSegment,
-      })
-      .then(() => Array.from(directContinuationIds).reduce(
-        (promise, continuationId) => promise.then(() => materialOrderRequestsAPI.clearRunLink(continuationId)),
-        Promise.resolve(),
-      ))
-      .then(() => {
-        setError('');
-      })
-      .catch(err => {
-        optimisticRequestOverridesRef.current.delete(requestId);
-        directContinuationIds.forEach(continuationId => optimisticRequestOverridesRef.current.delete(continuationId));
-        boardProjectionSignatureRef.current = '';
-        requestMetaSignatureRef.current = '';
-        setAllRequests(previousRequests);
-        setDayEvents(previousEvents);
-        setRequestMetaMap(previousMetaMap);
-        setEventStartMinutesMap(previousStartMap);
-        setEventDurationMinutesMap(previousDurationMap);
-        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
-        setEventCycleStateMap(previousCycleStateMap);
-        setError(err?.message || 'Failed to schedule request.');
-      });
   }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getReturnTransitEnabled, getTollsEnabled, mergeRequestSiteLocationMap, persistSharedRouteSnapshots, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate, setRouteLoading]);
 
   const getProjectedDurationForGroupMove = useCallback((request, startMinutes, dateKey, fallbackDurationMinutes = 90) => {
@@ -4990,6 +5000,34 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       }
     });
 
+    const scheduleWritePromise = Promise.all(
+      updates.map(update => materialOrderRequestsAPI.setSchedule(update.requestId, {
+        date: dateKey,
+        hour: update.hour,
+        minute: update.minute,
+        truckId: update.truckId,
+        truckLabel: update.truckLabel,
+      })),
+    )
+      .then(() => {
+        setError('');
+        return true;
+      })
+      .catch(err => {
+        updates.forEach(update => optimisticRequestOverridesRef.current.delete(update.requestId));
+        boardProjectionSignatureRef.current = '';
+        requestMetaSignatureRef.current = '';
+        setAllRequests(previousRequests);
+        setDayEvents(previousEvents);
+        setRequestMetaMap(previousMetaMap);
+        setEventStartMinutesMap(previousStartMap);
+        setEventDurationMinutesMap(previousDurationMap);
+        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
+        setEventCycleStateMap(previousCycleStateMap);
+        setError(err?.message || 'Failed to move selected deliveries.');
+        return false;
+      });
+
     (async () => {
       const builders = await getSafetyBuildersCached(safetyProjectsAPI.getBuilders);
       let nextSiteLocationMap = requestSiteLocationMapRef.current;
@@ -5024,38 +5062,18 @@ export default function TruckSchedulePage({ user, onNavigate }) {
           }
         }),
       );
-      await persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
+      if (sharedRouteSnapshotEntries.length > 0) {
+        const scheduleSaved = await scheduleWritePromise;
+        if (!scheduleSaved) {
+          return;
+        }
+        await persistSharedRouteSnapshots(sharedRouteSnapshotEntries);
+      }
       projectRequestsToBoard(nextRequests, nextSiteLocationMap, selectedDate, {
         force: true,
         expectedProjectionRunId: projectionRunId,
       });
     })().catch(() => {});
-
-    Promise.all(
-      updates.map(update => materialOrderRequestsAPI.setSchedule(update.requestId, {
-        date: dateKey,
-        hour: update.hour,
-        minute: update.minute,
-        truckId: update.truckId,
-        truckLabel: update.truckLabel,
-      })),
-    )
-      .then(() => {
-        setError('');
-      })
-      .catch(err => {
-        updates.forEach(update => optimisticRequestOverridesRef.current.delete(update.requestId));
-        boardProjectionSignatureRef.current = '';
-        requestMetaSignatureRef.current = '';
-        setAllRequests(previousRequests);
-        setDayEvents(previousEvents);
-        setRequestMetaMap(previousMetaMap);
-        setEventStartMinutesMap(previousStartMap);
-        setEventDurationMinutesMap(previousDurationMap);
-        setEventPrimaryDurationMinutesMap(previousPrimaryDurationMap);
-        setEventCycleStateMap(previousCycleStateMap);
-        setError(err?.message || 'Failed to move selected deliveries.');
-      });
   }, [allRequests, clearSelectedScheduleEvents, dayEvents, eventCycleStateMap, eventDurationMinutesMap, eventPrimaryDurationMinutesMap, eventStartMinutesMap, getProjectedDurationForGroupMove, getTollsEnabled, mergeRequestSiteLocationMap, persistSharedRouteSnapshots, projectRequestsToBoard, requestMetaMap, returnTransitByRequestId, selectedDate]);
 
   const openManualScheduleTime = useCallback((requestId, selectionIds = []) => {
