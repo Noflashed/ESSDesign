@@ -40,6 +40,8 @@ namespace ESSDesign.Server.Services
             public int? ScheduledHour { get; set; }
             public int? ScheduledMinute { get; set; }
             public bool EnableTolls { get; set; }
+            public string? Segment { get; set; }
+            public bool ForceRefresh { get; set; }
         }
 
         public sealed class RoutePreviewBetweenRequest
@@ -50,6 +52,8 @@ namespace ESSDesign.Server.Services
             public int? ScheduledHour { get; set; }
             public int? ScheduledMinute { get; set; }
             public bool EnableTolls { get; set; }
+            public string? Segment { get; set; }
+            public bool ForceRefresh { get; set; }
         }
 
         public sealed class AddressSuggestionRequest
@@ -84,6 +88,10 @@ namespace ESSDesign.Server.Services
             public string TrafficProvider { get; set; } = string.Empty;
             public string TrafficNote { get; set; } = string.Empty;
             public List<RoutePoint> PathPoints { get; set; } = new();
+            public string RouteKey { get; set; } = string.Empty;
+            public DateTimeOffset? LastRefreshedAt { get; set; }
+            public DateTimeOffset? ExpiresAt { get; set; }
+            public bool SharedTraffic { get; set; }
         }
 
         private class RouteTimingResult

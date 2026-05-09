@@ -23,9 +23,12 @@ const routeEstimatePromiseCache = new Map();
 const routeEstimateValueCache = new Map();
 const routeBetweenEstimatePromiseCache = new Map();
 const routeBetweenEstimateValueCache = new Map();
+const routeDataCacheAt = new Map();
+const routeBetweenDataCacheAt = new Map();
 let safetyBuildersCache = null;
 let safetyBuildersCacheAt = 0;
 const SAFETY_BUILDERS_CACHE_MS = 60 * 1000;
+const ROUTE_DATA_CACHE_MS = 60 * 1000;
 
 export function isTruckDeviceRole(role) {
   return role === 'truck_ess01' || role === 'truck_ess02' || role === 'truck_ess03';
@@ -142,6 +145,29 @@ function buildRouteEstimateFromData(routeData) {
         trafficNote: routeData.trafficNote,
       }
     : null;
+}
+
+function isRouteCacheFresh(cacheTimes, key) {
+  const cachedAt = cacheTimes.get(key);
+  return typeof cachedAt === 'number' && Date.now() - cachedAt < ROUTE_DATA_CACHE_MS;
+}
+
+function isRouteCacheExpired(cacheTimes, key) {
+  return cacheTimes.has(key) && !isRouteCacheFresh(cacheTimes, key);
+}
+
+function clearRouteCacheEntry(key) {
+  routeDataCache.delete(key);
+  routeEstimatePromiseCache.delete(key);
+  routeEstimateValueCache.delete(key);
+  routeDataCacheAt.delete(key);
+}
+
+function clearRouteBetweenCacheEntry(key) {
+  routeBetweenDataCache.delete(key);
+  routeBetweenEstimatePromiseCache.delete(key);
+  routeBetweenEstimateValueCache.delete(key);
+  routeBetweenDataCacheAt.delete(key);
 }
 
 export function formatActionTimestamp(isoValue) {
@@ -401,12 +427,18 @@ export async function getCachedRouteData(siteLocation, schedule = {}) {
   if (!key) {
     return null;
   }
+  if (routeDataCache.has(key) && isRouteCacheExpired(routeDataCacheAt, key)) {
+    clearRouteCacheEntry(key);
+  }
   if (!routeDataCache.has(key)) {
     routeDataCache.set(
       key,
       fetchRouteData(siteLocation, schedule).then(routeData => {
         if (!routeData) {
-          routeDataCache.delete(key);
+          clearRouteCacheEntry(key);
+        } else {
+          routeDataCache.set(key, routeData);
+          routeDataCacheAt.set(key, Date.now());
         }
         return routeData;
       }),
@@ -419,6 +451,9 @@ export async function getCachedRouteEstimate(siteLocation, schedule = {}) {
   const key = routeCacheKey(siteLocation, schedule);
   if (!key) {
     return null;
+  }
+  if (routeDataCache.has(key) && isRouteCacheExpired(routeDataCacheAt, key)) {
+    clearRouteCacheEntry(key);
   }
   if (!routeEstimatePromiseCache.has(key)) {
     routeEstimatePromiseCache.set(
@@ -440,6 +475,10 @@ export function getCachedRouteEstimateValue(siteLocation, schedule = {}) {
   const key = routeCacheKey(siteLocation, schedule);
   if (!key) {
     return null;
+  }
+  if (routeDataCache.has(key) && isRouteCacheExpired(routeDataCacheAt, key)) {
+    clearRouteCacheEntry(key);
+    return undefined;
   }
   return routeEstimateValueCache.has(key) ? routeEstimateValueCache.get(key) : undefined;
 }
@@ -488,12 +527,18 @@ export async function getCachedRouteDataBetween(fromLocation, toLocation, schedu
   if (!key) {
     return null;
   }
+  if (routeBetweenDataCache.has(key) && isRouteCacheExpired(routeBetweenDataCacheAt, key)) {
+    clearRouteBetweenCacheEntry(key);
+  }
   if (!routeBetweenDataCache.has(key)) {
     routeBetweenDataCache.set(
       key,
       fetchRouteDataBetween(fromLocation, toLocation, schedule).then(routeData => {
         if (!routeData) {
-          routeBetweenDataCache.delete(key);
+          clearRouteBetweenCacheEntry(key);
+        } else {
+          routeBetweenDataCache.set(key, routeData);
+          routeBetweenDataCacheAt.set(key, Date.now());
         }
         return routeData;
       }),
@@ -506,6 +551,9 @@ export async function getCachedRouteEstimateBetween(fromLocation, toLocation, sc
   const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
   if (!key) {
     return null;
+  }
+  if (routeBetweenDataCache.has(key) && isRouteCacheExpired(routeBetweenDataCacheAt, key)) {
+    clearRouteBetweenCacheEntry(key);
   }
   if (!routeBetweenEstimatePromiseCache.has(key)) {
     routeBetweenEstimatePromiseCache.set(
@@ -528,6 +576,10 @@ export function getCachedRouteEstimateBetweenValue(fromLocation, toLocation, sch
   if (!key) {
     return null;
   }
+  if (routeBetweenDataCache.has(key) && isRouteCacheExpired(routeBetweenDataCacheAt, key)) {
+    clearRouteBetweenCacheEntry(key);
+    return undefined;
+  }
   return routeBetweenEstimateValueCache.has(key) ? routeBetweenEstimateValueCache.get(key) : undefined;
 }
 
@@ -535,6 +587,10 @@ export function getCachedRouteDataBetweenValue(fromLocation, toLocation, schedul
   const key = routeBetweenCacheKey(fromLocation, toLocation, schedule);
   if (!key) {
     return null;
+  }
+  if (routeBetweenDataCache.has(key) && isRouteCacheExpired(routeBetweenDataCacheAt, key)) {
+    clearRouteBetweenCacheEntry(key);
+    return undefined;
   }
   const cached = routeBetweenDataCache.get(key);
   if (!cached || typeof cached.then === 'function') {
@@ -550,6 +606,7 @@ export function seedCachedRouteDataBetween(fromLocation, toLocation, schedule = 
   }
   const estimate = buildRouteEstimateFromData(routeData);
   routeBetweenDataCache.set(key, routeData);
+  routeBetweenDataCacheAt.set(key, Date.now());
   routeBetweenEstimateValueCache.set(key, estimate);
   routeBetweenEstimatePromiseCache.set(key, Promise.resolve(estimate));
 }

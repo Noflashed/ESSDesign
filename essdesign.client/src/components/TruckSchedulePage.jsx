@@ -1124,8 +1124,7 @@ function getCachedBoardRouteEstimate(routeContext) {
     return null;
   }
   if (routeContext.segment === 'standalone-secondary') {
-    const sharedOutboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation);
-    const outboundEstimate = sharedOutboundEstimate || getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+    const outboundEstimate = getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
     if (outboundEstimate === undefined) {
       return undefined;
     }
@@ -1143,17 +1142,15 @@ function getCachedBoardRouteEstimate(routeContext) {
       toLocation: YARD_LOCATION,
       schedule: returnSchedule,
     };
-    const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-      || getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+    const returnEstimate = getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
     if (returnEstimate === undefined) {
       return undefined;
     }
     return buildSecondaryRouteTimingEstimate(outboundEstimate, returnEstimate);
   }
-  const sharedOutboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation);
-  const outboundEstimate = sharedOutboundEstimate || (routeContext.fromLocation
+  const outboundEstimate = routeContext.fromLocation
     ? getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
-    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule));
+    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
   if (outboundEstimate === undefined) {
     return undefined;
   }
@@ -1171,8 +1168,7 @@ function getCachedBoardRouteEstimate(routeContext) {
     toLocation: YARD_LOCATION,
     schedule: returnSchedule,
   };
-  const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-    || getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  const returnEstimate = getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
   if (returnEstimate === undefined) {
     return undefined;
   }
@@ -1184,8 +1180,7 @@ function getBoardRouteLoadingSegment(routeContext) {
     return null;
   }
   if (routeContext.segment === 'standalone-secondary') {
-    const outboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation)
-      || getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+    const outboundEstimate = getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
     if (outboundEstimate === undefined) {
       return 'primary';
     }
@@ -1203,14 +1198,13 @@ function getBoardRouteLoadingSegment(routeContext) {
       toLocation: YARD_LOCATION,
       schedule: returnSchedule,
     };
-    const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-      || getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+    const returnEstimate = getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
     return returnEstimate === undefined ? 'return' : null;
   }
 
-  const outboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation) || (routeContext.fromLocation
+  const outboundEstimate = routeContext.fromLocation
     ? getCachedRouteEstimateBetweenValue(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
-    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule));
+    : getCachedRouteEstimateValue(routeContext.toLocation, routeContext.schedule);
   if (outboundEstimate === undefined) {
     return 'primary';
   }
@@ -1228,8 +1222,7 @@ function getBoardRouteLoadingSegment(routeContext) {
     toLocation: YARD_LOCATION,
     schedule: returnSchedule,
   };
-  const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-    || getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  const returnEstimate = getCachedRouteEstimateBetweenValue(routeContext.toLocation, YARD_LOCATION, returnSchedule);
   return returnEstimate === undefined ? 'return' : null;
 }
 
@@ -1241,8 +1234,8 @@ async function resolveBoardRouteEstimate(routeContext) {
     if (!routeContext.fromLocation) {
       return null;
     }
-    const outboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation)
-      || await getCachedRouteEstimateBetween(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule);
+    const outboundEstimate = await getCachedRouteEstimateBetween(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
+      || getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation);
     if (!routeContext.includeReturnTransitToYard || !outboundEstimate) {
       return buildSecondaryRouteTimingEstimate(outboundEstimate, null);
     }
@@ -1257,13 +1250,14 @@ async function resolveBoardRouteEstimate(routeContext) {
       toLocation: YARD_LOCATION,
       schedule: returnSchedule,
     };
-    const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-      || await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+    const returnEstimate = await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule)
+      || getSharedRouteEstimateForContext(returnContext, routeContext.toLocation);
     return buildSecondaryRouteTimingEstimate(outboundEstimate, returnEstimate);
   }
-  const outboundEstimate = getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation) || await (routeContext.fromLocation
+  const outboundEstimate = await (routeContext.fromLocation
     ? getCachedRouteEstimateBetween(routeContext.fromLocation, routeContext.toLocation, routeContext.schedule)
-    : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule));
+    : getCachedRouteEstimate(routeContext.toLocation, routeContext.schedule))
+    || getSharedRouteEstimateForContext(routeContext, routeContext.fromLocation);
   if (!routeContext.includeReturnTransitToYard || routeContext.request?.secondaryRoute || !outboundEstimate) {
     return outboundEstimate;
   }
@@ -1278,8 +1272,8 @@ async function resolveBoardRouteEstimate(routeContext) {
     toLocation: YARD_LOCATION,
     schedule: returnSchedule,
   };
-  const returnEstimate = getSharedRouteEstimateForContext(returnContext, routeContext.toLocation)
-    || await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule);
+  const returnEstimate = await getCachedRouteEstimateBetween(routeContext.toLocation, YARD_LOCATION, returnSchedule)
+    || getSharedRouteEstimateForContext(returnContext, routeContext.toLocation);
   return buildPrimaryRouteTimingEstimate(outboundEstimate, returnEstimate);
 }
 
@@ -1399,19 +1393,9 @@ function getSharedRouteEstimateForContext(context, fromLocationOverride = '') {
   return buildEstimateFromRouteData(getSharedRouteDataForContext(context, fromLocationOverride));
 }
 
-function hydrateSharedRouteSnapshots(requests = []) {
-  requests.forEach(request => {
-    const snapshots = request?.itemValues?.__transportRouteSnapshots;
-    if (!snapshots || typeof snapshots !== 'object') {
-      return;
-    }
-    Object.values(snapshots).forEach(snapshot => {
-      if (!snapshot?.fromLocation || !snapshot?.toLocation || !snapshot.routeData) {
-        return;
-      }
-      seedCachedRouteDataBetween(snapshot.fromLocation, snapshot.toLocation, snapshot.schedule || {}, normalizeSharedRouteData(snapshot.routeData));
-    });
-  });
+function hydrateSharedRouteSnapshots(_requests = []) {
+  // Legacy per-order route snapshots are no longer used to seed live traffic.
+  // The backend shared route-estimate table is the source of truth.
 }
 
 function collectSharedRouteSnapshots(routeContext) {
@@ -2093,27 +2077,24 @@ function getCachedRouteEstimateForContext(context) {
     return null;
   }
   const fromLocation = context.fromLocation || (context.segment === 'primary' ? YARD_LOCATION : '');
-  const sharedEstimate = getSharedRouteEstimateForContext(context, fromLocation);
-  if (sharedEstimate) {
-    return sharedEstimate;
-  }
-  return fromLocation
-    ? getCachedRouteEstimateBetweenValue(fromLocation, context.toLocation, context.schedule) ?? null
+  const cachedEstimate = fromLocation
+    ? getCachedRouteEstimateBetweenValue(fromLocation, context.toLocation, context.schedule)
     : null;
+  return cachedEstimate === undefined
+    ? null
+    : cachedEstimate ?? getSharedRouteEstimateForContext(context, fromLocation);
 }
 
-function fetchRouteDataForContext(context) {
+async function fetchRouteDataForContext(context) {
   if (!context?.toLocation) {
-    return Promise.resolve(null);
+    return null;
   }
   const fromLocation = context.fromLocation || (context.segment === 'primary' ? YARD_LOCATION : '');
-  const sharedRouteData = getSharedRouteDataForContext(context, fromLocation);
-  if (sharedRouteData) {
-    return Promise.resolve(sharedRouteData);
+  if (!fromLocation) {
+    return null;
   }
-  return fromLocation
-    ? getCachedRouteDataBetween(fromLocation, context.toLocation, context.schedule)
-    : Promise.resolve(null);
+  return await getCachedRouteDataBetween(fromLocation, context.toLocation, context.schedule)
+    || getSharedRouteDataForContext(context, fromLocation);
 }
 
 function buildEstimateFromRouteData(routeData) {

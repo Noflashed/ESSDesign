@@ -8,13 +8,16 @@ namespace ESSDesign.Server.Controllers
     public class AnalysisController : ControllerBase
     {
         private readonly DeliveryAnalysisService _deliveryAnalysisService;
+        private readonly TransportRouteEstimateService _transportRouteEstimateService;
         private readonly ILogger<AnalysisController> _logger;
 
         public AnalysisController(
             DeliveryAnalysisService deliveryAnalysisService,
+            TransportRouteEstimateService transportRouteEstimateService,
             ILogger<AnalysisController> logger)
         {
             _deliveryAnalysisService = deliveryAnalysisService;
+            _transportRouteEstimateService = transportRouteEstimateService;
             _logger = logger;
         }
 
@@ -78,7 +81,7 @@ namespace ESSDesign.Server.Controllers
 
             try
             {
-                var result = await _deliveryAnalysisService.GetRoutePreviewAsync(request);
+                var result = await _transportRouteEstimateService.GetOrRefreshYardRouteAsync(request, HttpContext.RequestAborted);
                 if (result == null)
                 {
                     return NotFound(new { error = "Route preview unavailable for this site." });
@@ -105,7 +108,7 @@ namespace ESSDesign.Server.Controllers
 
             try
             {
-                var result = await _deliveryAnalysisService.GetRoutePreviewBetweenAsync(request);
+                var result = await _transportRouteEstimateService.GetOrRefreshRouteBetweenAsync(request, HttpContext.RequestAborted);
                 if (result == null)
                 {
                     return NotFound(new { error = "Route preview unavailable for this route." });
