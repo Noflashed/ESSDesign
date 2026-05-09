@@ -1038,7 +1038,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                 onChange={(event) => handleQuantityChange('__hiabRequired', event.target.checked)}
                                 disabled={isArchivedView}
                             />
-                            <span>Hiab required?</span>
+                            <span>HIAB</span>
                         </label>
 
                         <label className="transport-order-field">
@@ -1177,6 +1177,10 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                         <dd>{form.orderDate || 'Not dated'}</dd>
                                     </div>
                                 </dl>
+
+                                {form.itemValues.__hiabRequired ? (
+                                    <p className="transport-order-summary-hiab">HIAB has been nominated for this order.</p>
+                                ) : null}
 
                                 <div className="transport-order-selected-list">
                                     <h3>Selected materials</h3>

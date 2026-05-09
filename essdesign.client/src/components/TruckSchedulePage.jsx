@@ -6592,7 +6592,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   <div>
                     <strong>{request.builderName || 'Material Order'}</strong>
                     <span>{request.projectName || 'Awaiting site assignment'}</span>
-                    {isHiabRequired(request) ? <em className="transport-hiab-pill">Hiab required</em> : null}
+                    {isHiabRequired(request) ? <em className="transport-hiab-pill">HIAB</em> : null}
                   </div>
                   <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
                 </div>
@@ -7089,7 +7089,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   <div><b>{getScaffoldDetailText(request)}</b></div>
                   <strong>{request.builderName || 'Material Order'}</strong>
                   <span>{request.projectName || 'Awaiting site assignment'}</span>
-                  {isHiabRequired(request) ? <em className="transport-hiab-pill">Hiab required</em> : null}
+                  {isHiabRequired(request) ? <em className="transport-hiab-pill">HIAB</em> : null}
                   <small>Requested by {request.requestedByName || 'Transport'}</small>
                   <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
                   <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
