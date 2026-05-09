@@ -32,6 +32,12 @@ function todayDate() {
     return new Date().toISOString().slice(0, 10);
 }
 
+function normalizeBooleanFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') return ['true', 'yes', '1', 'on'].includes(value.trim().toLowerCase());
+    return Boolean(value);
+}
+
 function formatDateTime(value) {
     if (!value) return 'Not scheduled';
     const date = new Date(value);
@@ -359,7 +365,8 @@ function createBlankOrder(user) {
         notes: '',
         itemValues: {
             __details: '',
-            __scaffoldingSystem: 'Kwikstage'
+            __scaffoldingSystem: 'Kwikstage',
+            __hiabRequired: false,
         }
     };
 }
@@ -375,7 +382,8 @@ function normalizeOrder(order, user) {
         itemValues: {
             __details: order?.itemValues?.__details || '',
             __scaffoldingSystem: order?.itemValues?.__scaffoldingSystem || 'Kwikstage',
-            ...(order?.itemValues || {})
+            ...(order?.itemValues || {}),
+            __hiabRequired: normalizeBooleanFlag(order?.itemValues?.__hiabRequired ?? order?.hiabRequired)
         }
     };
 }
@@ -1021,6 +1029,16 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
                                     placeholder="External perimeter scaffold, loading bay, stair access..."
                                 />
                             )}
+                        </label>
+
+                        <label className="transport-order-checkbox-field">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(form.itemValues.__hiabRequired)}
+                                onChange={(event) => handleQuantityChange('__hiabRequired', event.target.checked)}
+                                disabled={isArchivedView}
+                            />
+                            <span>Hiab required?</span>
                         </label>
 
                         <label className="transport-order-field">

@@ -755,6 +755,13 @@ function getScaffoldDetailText(request, event) {
   );
 }
 
+function isHiabRequired(request) {
+  const value = request?.hiabRequired ?? request?.hiab_required ?? request?.itemValues?.__hiabRequired ?? request?.item_values?.__hiabRequired;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return ['true', 'yes', '1', 'on'].includes(value.trim().toLowerCase());
+  return Boolean(value);
+}
+
 function getEffectiveDeliveryStatus(request, cycleState = null) {
   const status = request?.deliveryStatus || 'scheduled';
   return cycleState?.presumedInTransitFromParent && status === 'scheduled'
@@ -6585,6 +6592,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   <div>
                     <strong>{request.builderName || 'Material Order'}</strong>
                     <span>{request.projectName || 'Awaiting site assignment'}</span>
+                    {isHiabRequired(request) ? <em className="transport-hiab-pill">Hiab required</em> : null}
                   </div>
                   <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>
                 </div>
@@ -7081,6 +7089,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
                   <div><b>{getScaffoldDetailText(request)}</b></div>
                   <strong>{request.builderName || 'Material Order'}</strong>
                   <span>{request.projectName || 'Awaiting site assignment'}</span>
+                  {isHiabRequired(request) ? <em className="transport-hiab-pill">Hiab required</em> : null}
                   <small>Requested by {request.requestedByName || 'Transport'}</small>
                   <small>Submitted {request.submittedAt ? new Date(request.submittedAt).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}</small>
                   <button type="button" onClick={() => openRequestModal(request.id)}>Schedule</button>

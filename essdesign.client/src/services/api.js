@@ -1574,6 +1574,14 @@ function normalizeConnectedParentSegment(value) {
     return value === 'return' || value === 'primary' ? value : null;
 }
 
+function normalizeBooleanFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        return ['true', 'yes', '1', 'on'].includes(value.trim().toLowerCase());
+    }
+    return Boolean(value);
+}
+
 function normalizeMaterialOrderRequestListItem(item) {
     const scheduledAtIso = buildMaterialOrderRequestScheduleIso(item);
     const archivedAt = item?.archivedAt || null;
@@ -1581,6 +1589,12 @@ function normalizeMaterialOrderRequestListItem(item) {
     const scheduledDate = item?.scheduledDate || null;
     const scheduledTruckId = item?.scheduledTruckId || item?.truckId || null;
     const scheduledTruckLabel = item?.scheduledTruckLabel || item?.truckLabel || null;
+    const itemValues = item?.itemValues && typeof item.itemValues === 'object'
+        ? item.itemValues
+        : item?.item_values && typeof item.item_values === 'object'
+            ? item.item_values
+            : {};
+    const hiabRequired = normalizeBooleanFlag(item?.hiabRequired ?? item?.hiab_required ?? itemValues.__hiabRequired);
     const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
     const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
@@ -1601,11 +1615,8 @@ function normalizeMaterialOrderRequestListItem(item) {
         scaffoldingSystem: item?.scaffoldingSystem || '',
         details: item?.details || '',
         notes: item?.notes || '',
-        itemValues: item?.itemValues && typeof item.itemValues === 'object'
-            ? item.itemValues
-            : item?.item_values && typeof item.item_values === 'object'
-                ? item.item_values
-                : {},
+        itemValues,
+        hiabRequired,
         serviceMinutes: getStoredServiceMinutes(item),
         returnTransitToYard: getStoredReturnTransitToYard(item),
         hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(item),
@@ -1641,6 +1652,12 @@ function normalizeMaterialOrderRequestRecord(record) {
     const scheduledDate = record.scheduledDate || null;
     const scheduledTruckId = record.scheduledTruckId || record.truckId || null;
     const scheduledTruckLabel = record.scheduledTruckLabel || record.truckLabel || null;
+    const itemValues = record.itemValues && typeof record.itemValues === 'object'
+        ? record.itemValues
+        : record.item_values && typeof record.item_values === 'object'
+            ? record.item_values
+            : {};
+    const hiabRequired = normalizeBooleanFlag(record.hiabRequired ?? record.hiab_required ?? itemValues.__hiabRequired);
     const endOfDay = scheduledDate ? new Date(`${scheduledDate}T23:59:59`).getTime() : null;
     const shouldArchive = !archivedAt && endOfDay !== null && isFinite(endOfDay) && endOfDay <= Date.now();
 
@@ -1651,11 +1668,8 @@ function normalizeMaterialOrderRequestRecord(record) {
         notes: record.notes || '',
         details: record.details || record?.itemValues?.__details || record?.item_values?.__details || '',
         scaffoldingSystem: record.scaffoldingSystem || record?.itemValues?.__scaffoldingSystem || record?.item_values?.__scaffoldingSystem || '',
-        itemValues: record.itemValues && typeof record.itemValues === 'object'
-            ? record.itemValues
-            : record.item_values && typeof record.item_values === 'object'
-                ? record.item_values
-                : {},
+        itemValues,
+        hiabRequired,
         serviceMinutes: getStoredServiceMinutes(record),
         returnTransitToYard: getStoredReturnTransitToYard(record),
         hasReturnTransitToYardSetting: hasStoredReturnTransitToYard(record),
@@ -2408,6 +2422,7 @@ export const materialOrderRequestsAPI = {
         const pdfPath = materialOrderRequestPdfPath(requestId);
         const scaffoldingSystem = form?.itemValues?.__scaffoldingSystem || '';
         const details = form?.itemValues?.__details || '';
+        const hiabRequired = normalizeBooleanFlag(form?.itemValues?.__hiabRequired ?? form?.hiabRequired);
         const record = {
             id: requestId,
             sourceOrderId: form?.id || null,
@@ -2423,9 +2438,11 @@ export const materialOrderRequestsAPI = {
             notes: form?.notes || '',
             itemValues: {
                 ...(form?.itemValues || {}),
+                __hiabRequired: hiabRequired,
                 __serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
                 __returnTransitToYard: Boolean(form?.returnTransitToYard),
             },
+            hiabRequired,
             serviceMinutes: normalizeServiceMinutes(form?.serviceMinutes, 30),
             returnTransitToYard: Boolean(form?.returnTransitToYard),
             hasReturnTransitToYardSetting: true,
@@ -2488,6 +2505,7 @@ export const materialOrderRequestsAPI = {
                     details,
                     notes: record.notes || '',
                     itemValues: record.itemValues || {},
+                    hiabRequired,
                     serviceMinutes: record.serviceMinutes,
                     returnTransitToYard: record.returnTransitToYard,
                     hasReturnTransitToYardSetting: true,

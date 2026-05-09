@@ -1532,6 +1532,25 @@
     line-height: 13px;
 }
 
+.transport-hiab-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    width: fit-content !important;
+    min-height: 22px !important;
+    margin-top: 6px !important;
+    padding: 3px 8px !important;
+    border: 1px solid #f6b26b !important;
+    border-radius: 999px !important;
+    background: #fff7ed !important;
+    color: #9a3412 !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    font-style: normal !important;
+    font-weight: 800 !important;
+    letter-spacing: 0 !important;
+    white-space: nowrap !important;
+}
+
 .transport-reference-pending-card button {
     align-self: end;
     height: 30px;
@@ -5365,6 +5384,24 @@
 
 .transport-order-static-control.with-icon svg {
     color: #64748b !important;
+}
+
+.transport-order-checkbox-field {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    color: #263b59 !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+}
+
+.transport-order-checkbox-field input {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 !important;
+    accent-color: #ff7a1a !important;
 }
 
 .transport-order-input-icon {
