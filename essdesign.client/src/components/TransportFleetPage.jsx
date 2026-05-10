@@ -38,7 +38,7 @@ function escapeHtml(value) {
   }[character]));
 }
 
-function truckSvg() {
+function truckSvgMarkup() {
   return `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M4 7.5h10.1v8.1H4z" />
@@ -47,6 +47,17 @@ function truckSvg() {
       <circle cx="17.2" cy="16.3" r="1.7" />
     </svg>
   `;
+}
+
+function TruckIconSvg() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 7.5h10.1v8.1H4z" />
+      <path d="M14.1 10h3.8l2.1 2.7v2.9h-5.9z" />
+      <circle cx="7.3" cy="16.3" r="1.7" />
+      <circle cx="17.2" cy="16.3" r="1.7" />
+    </svg>
+  );
 }
 
 function formatLastPing(recordedAt, now) {
@@ -118,7 +129,7 @@ function markerIcon(truck) {
     <div class="${markerClass}" style="--truck-color:${escapeHtml(color)};--heading:${heading}deg">
       <span class="fleet-live-marker-pulse"></span>
       <span class="fleet-live-heading${headingClass}"></span>
-      <span class="fleet-live-marker-core">${truckSvg()}</span>
+      <span class="fleet-live-marker-core">${truckSvgMarkup()}</span>
       <strong>${escapeHtml(truck.rego)}</strong>
       <span class="fleet-live-marker-chip">
         <i></i><b>${escapeHtml(formatSpeed(truck.speedKmh))}</b>
@@ -373,7 +384,7 @@ export default function TransportFleetPage() {
               style={{ '--truck-color': truck.status.color || truck.visual.color }}
               onClick={() => setSelectedTruckId(truck.id)}
             >
-              <span className="fleet-live-card-avatar">{truckSvg()}</span>
+              <span className="fleet-live-card-avatar"><TruckIconSvg /></span>
               <span className="fleet-live-card-copy">
                 <strong>{truck.rego}</strong>
                 <small>{truck.lastPingLabel}</small>
