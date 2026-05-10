@@ -52,7 +52,7 @@ builder.Services.AddScoped<MaterialOrderingAiService>();
 builder.Services.AddScoped<AdminAssistantService>();
 builder.Services.AddScoped<DeliveryAnalysisService>();
 builder.Services.AddScoped<TransportRouteEstimateService>();
-builder.Services.AddHostedService<TransportRouteEstimateRefreshService>();
+builder.Services.AddScoped<TomTomUsageBudgetService>();
 builder.Services.AddHttpClient();
 
 // Configure Resend Email Service (optional - emails are skipped if API key is not set)

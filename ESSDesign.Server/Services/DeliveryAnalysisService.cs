@@ -143,16 +143,19 @@ namespace ESSDesign.Server.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<DeliveryAnalysisService> _logger;
+        private readonly TomTomUsageBudgetService _tomTomUsageBudgetService;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
         public DeliveryAnalysisService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
-            ILogger<DeliveryAnalysisService> logger)
+            ILogger<DeliveryAnalysisService> logger,
+            TomTomUsageBudgetService tomTomUsageBudgetService)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
+            _tomTomUsageBudgetService = tomTomUsageBudgetService;
         }
 
         private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)
@@ -225,6 +228,11 @@ namespace ESSDesign.Server.Services
         {
             var apiKey = GetTomTomApiKey();
             if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return new List<AddressSuggestionResult>();
+            }
+
+            if (!await _tomTomUsageBudgetService.TryConsumeAsync("search"))
             {
                 return new List<AddressSuggestionResult>();
             }
@@ -459,6 +467,11 @@ namespace ESSDesign.Server.Services
         {
             var apiKey = GetTomTomApiKey();
             if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return null;
+            }
+
+            if (!await _tomTomUsageBudgetService.TryConsumeAsync("routing"))
             {
                 return null;
             }

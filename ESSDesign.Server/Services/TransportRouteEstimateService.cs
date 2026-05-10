@@ -12,13 +12,14 @@ namespace ESSDesign.Server.Services
         public const string YardLocation = "130 Gilba Road, Girraween, NSW, Australia";
 
         private const string EstimatesTable = "ess_transport_route_estimates";
-        private static readonly TimeSpan EstimateTtl = TimeSpan.FromMinutes(15);
-        private static readonly TimeSpan BackgroundRefreshAge = TimeSpan.FromMinutes(14);
+        private static readonly TimeSpan EstimateTtl = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan ActiveRequestWindow = TimeSpan.FromMinutes(45);
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> RouteLocks = new(StringComparer.Ordinal);
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<TransportRouteEstimateService> _logger;
         private readonly DeliveryAnalysisService _deliveryAnalysisService;
+        private readonly TomTomUsageBudgetService _tomTomUsageBudgetService;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
         private readonly string _supabaseUrl;
         private readonly string _supabaseKey;
@@ -27,11 +28,13 @@ namespace ESSDesign.Server.Services
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             ILogger<TransportRouteEstimateService> logger,
-            DeliveryAnalysisService deliveryAnalysisService)
+            DeliveryAnalysisService deliveryAnalysisService,
+            TomTomUsageBudgetService tomTomUsageBudgetService)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
             _deliveryAnalysisService = deliveryAnalysisService;
+            _tomTomUsageBudgetService = tomTomUsageBudgetService;
             _supabaseUrl = configuration["Supabase:Url"] ?? string.Empty;
             _supabaseKey = configuration["Supabase:ServiceRoleKey"]
                 ?? configuration["Supabase:Key"]
@@ -85,20 +88,27 @@ namespace ESSDesign.Server.Services
             try
             {
                 var now = DateTimeOffset.UtcNow;
+                var existing = await ReadRouteRowAsync(routeKey, cancellationToken);
                 if (!request.ForceRefresh)
                 {
-                    var existing = await ReadRouteRowAsync(routeKey, cancellationToken);
                     if (TryBuildFreshResult(existing, now, out var cachedResult))
                     {
-                        await TouchActiveUntilAsync(existing!, BuildActiveUntilUtc(request.ScheduledDate, now), cancellationToken);
+                        await MarkRouteRequestedAsync(existing!, BuildActiveUntilUtc(request.ScheduledDate, now), cancellationToken);
                         return cachedResult;
                     }
+                }
+
+                if (await _tomTomUsageBudgetService.IsHardLimitReachedAsync(cancellationToken)
+                    && TryBuildSavedResult(existing, out var savedResult))
+                {
+                    await MarkRouteRequestedAsync(existing!, BuildActiveUntilUtc(request.ScheduledDate, now), cancellationToken);
+                    return savedResult;
                 }
 
                 var result = await _deliveryAnalysisService.GetRoutePreviewBetweenAsync(request);
                 if (result == null)
                 {
-                    return null;
+                    return TryBuildSavedResult(existing, out var fallbackResult) ? fallbackResult : null;
                 }
 
                 var refreshedAt = DateTimeOffset.UtcNow;
@@ -114,48 +124,6 @@ namespace ESSDesign.Server.Services
             {
                 routeLock.Release();
             }
-        }
-
-        public async Task<int> RefreshDueRoutesAsync(CancellationToken cancellationToken = default)
-        {
-            var rows = await ReadActiveRouteRowsAsync(cancellationToken);
-            var now = DateTimeOffset.UtcNow;
-            var refreshed = 0;
-            foreach (var row in rows)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!IsDueForBackgroundRefresh(row, now))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var result = await GetOrRefreshRouteBetweenAsync(
-                        new DeliveryAnalysisService.RoutePreviewBetweenRequest
-                        {
-                            FromLocation = row.FromLocation,
-                            ToLocation = row.ToLocation,
-                            ScheduledDate = row.ScheduledDate,
-                            ScheduledHour = row.ScheduledHour,
-                            ScheduledMinute = row.ScheduledMinute,
-                            EnableTolls = row.EnableTolls,
-                            Segment = row.Segment,
-                            ForceRefresh = true,
-                        },
-                        cancellationToken);
-                    if (result != null)
-                    {
-                        refreshed += 1;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Shared route refresh failed for {RouteKey}", row.RouteKey);
-                }
-            }
-
-            return refreshed;
         }
 
         public static string BuildRouteKey(
@@ -205,6 +173,12 @@ namespace ESSDesign.Server.Services
             return result != null;
         }
 
+        private static bool TryBuildSavedResult(RouteEstimateRow? row, out DeliveryAnalysisService.RoutePreviewResult? result)
+        {
+            result = row == null ? null : BuildResult(row);
+            return result != null;
+        }
+
         private static DeliveryAnalysisService.RoutePreviewResult? BuildResult(RouteEstimateRow row)
         {
             if (row.RouteData.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
@@ -232,14 +206,6 @@ namespace ESSDesign.Server.Services
                 $"{EstimatesTable}?select=*&route_key=eq.{Uri.EscapeDataString(routeKey)}&limit=1",
                 cancellationToken);
             return rows.FirstOrDefault();
-        }
-
-        private async Task<List<RouteEstimateRow>> ReadActiveRouteRowsAsync(CancellationToken cancellationToken)
-        {
-            var now = Uri.EscapeDataString(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-            return await ReadRowsAsync(
-                $"{EstimatesTable}?select=*&active_until=gte.{now}&order=expires_at.asc&limit=150",
-                cancellationToken);
         }
 
         private async Task<List<RouteEstimateRow>> ReadRowsAsync(string relativeUrl, CancellationToken cancellationToken)
@@ -297,6 +263,8 @@ namespace ESSDesign.Server.Services
                     last_refreshed_at = refreshedAt,
                     expires_at = refreshedAt.Add(EstimateTtl),
                     active_until = activeUntil,
+                    last_requested_at = refreshedAt,
+                    request_count = 1,
                     updated_at = refreshedAt,
                 },
             };
@@ -314,14 +282,20 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        private async Task TouchActiveUntilAsync(RouteEstimateRow row, DateTimeOffset activeUntil, CancellationToken cancellationToken)
+        private async Task MarkRouteRequestedAsync(RouteEstimateRow row, DateTimeOffset activeUntil, CancellationToken cancellationToken)
         {
             if (!HasSupabaseConfig() || row.ActiveUntil.HasValue && row.ActiveUntil.Value >= activeUntil)
             {
                 return;
             }
 
-            var payload = new { active_until = activeUntil, updated_at = DateTimeOffset.UtcNow };
+            var payload = new
+            {
+                active_until = activeUntil,
+                last_requested_at = DateTimeOffset.UtcNow,
+                request_count = Math.Max(0, row.RequestCount) + 1,
+                updated_at = DateTimeOffset.UtcNow,
+            };
             using var request = CreateSupabaseRequest(
                 HttpMethod.Patch,
                 $"{EstimatesTable}?route_key=eq.{Uri.EscapeDataString(row.RouteKey)}",
@@ -357,42 +331,10 @@ namespace ESSDesign.Server.Services
             return false;
         }
 
-        private static bool IsDueForBackgroundRefresh(RouteEstimateRow row, DateTimeOffset now)
-        {
-            if (string.IsNullOrWhiteSpace(row.FromLocation) || string.IsNullOrWhiteSpace(row.ToLocation))
-            {
-                return false;
-            }
-
-            if (row.ActiveUntil.HasValue && row.ActiveUntil.Value <= now)
-            {
-                return false;
-            }
-
-            var sydneyNow = TimeZoneInfo.ConvertTime(now, GetSydneyTimeZone());
-            if (DateTime.TryParseExact(row.ScheduledDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var routeDate)
-                && routeDate.Date > sydneyNow.Date.AddDays(1))
-            {
-                return false;
-            }
-
-            return !row.LastRefreshedAt.HasValue
-                || row.LastRefreshedAt.Value <= now.Subtract(BackgroundRefreshAge)
-                || !row.ExpiresAt.HasValue
-                || row.ExpiresAt.Value <= now;
-        }
-
         private static DateTimeOffset BuildActiveUntilUtc(string? scheduledDate, DateTimeOffset now)
         {
-            if (DateTime.TryParseExact(scheduledDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
-            {
-                var localTime = parsedDate.Date.AddDays(1).AddHours(2);
-                var offset = GetSydneyTimeZone().GetUtcOffset(localTime);
-                var activeUntil = new DateTimeOffset(localTime, offset).ToUniversalTime();
-                return activeUntil > now.AddHours(2) ? activeUntil : now.AddHours(2);
-            }
-
-            return now.AddHours(2);
+            _ = scheduledDate;
+            return now.Add(ActiveRequestWindow);
         }
 
         private static TimeZoneInfo GetSydneyTimeZone()
@@ -444,6 +386,12 @@ namespace ESSDesign.Server.Services
 
             [JsonPropertyName("active_until")]
             public DateTimeOffset? ActiveUntil { get; set; }
+
+            [JsonPropertyName("last_requested_at")]
+            public DateTimeOffset? LastRequestedAt { get; set; }
+
+            [JsonPropertyName("request_count")]
+            public int RequestCount { get; set; }
         }
     }
 }
