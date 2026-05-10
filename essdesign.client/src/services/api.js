@@ -311,6 +311,7 @@ let verifiedSafetyBucket = false;
 const storageJsonCache = new Map();
 const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
 const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
+const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
@@ -808,6 +809,120 @@ async function deleteRestRows(table, query) {
         throw new Error(details || `Failed to delete from ${table}`);
     }
 }
+
+function parseOptionalJson(value, fallback = null) {
+    if (value == null) {
+        return fallback;
+    }
+    if (typeof value === 'object') {
+        return value;
+    }
+    try {
+        return JSON.parse(value);
+    } catch {
+        return fallback;
+    }
+}
+
+function normalizeNumberOrNull(value) {
+    if (value == null || value === '') {
+        return null;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapTruckLiveLocationRow(row) {
+    if (!row) {
+        return null;
+    }
+    const latitude = normalizeNumberOrNull(row.latitude);
+    const longitude = normalizeNumberOrNull(row.longitude);
+    if (latitude === null || longitude === null) {
+        return null;
+    }
+    return {
+        truckId: row.truck_id || row.truckId || '',
+        truckLabel: row.truck_label || row.truckLabel || '',
+        roleName: row.role_name || row.roleName || '',
+        driverUserId: row.driver_user_id || row.driverUserId || null,
+        deliveryRequestId: row.delivery_request_id || row.deliveryRequestId || null,
+        latitude,
+        longitude,
+        accuracyM: normalizeNumberOrNull(row.accuracy_m ?? row.accuracyM),
+        headingDeg: normalizeNumberOrNull(row.heading_deg ?? row.headingDeg ?? row.heading),
+        speedMps: normalizeNumberOrNull(row.speed_mps ?? row.speedMps ?? row.speed),
+        batteryPercent: normalizeNumberOrNull(row.battery_percent ?? row.batteryPercent ?? row.battery_level),
+        status: row.status || '',
+        routePath: parseOptionalJson(row.route_path ?? row.routePath, []),
+        recordedAt: row.recorded_at || row.recordedAt || row.updated_at || row.updatedAt || null,
+        updatedAt: row.updated_at || row.updatedAt || null,
+    };
+}
+
+function mapTruckLiveLocationToRow(location) {
+    return {
+        truck_id: location.truckId,
+        truck_label: location.truckLabel || '',
+        role_name: location.roleName || '',
+        driver_user_id: location.driverUserId || null,
+        delivery_request_id: location.deliveryRequestId || null,
+        latitude: normalizeNumberOrNull(location.latitude),
+        longitude: normalizeNumberOrNull(location.longitude),
+        accuracy_m: normalizeNumberOrNull(location.accuracyM),
+        heading_deg: normalizeNumberOrNull(location.headingDeg),
+        speed_mps: normalizeNumberOrNull(location.speedMps),
+        battery_percent: normalizeNumberOrNull(location.batteryPercent),
+        status: location.status || '',
+        recorded_at: location.recordedAt || nowIso(),
+    };
+}
+
+export const truckLiveLocationsAPI = {
+    getLatest: async ({ force = true } = {}) => {
+        const select = [
+            'truck_id',
+            'truck_label',
+            'role_name',
+            'driver_user_id',
+            'delivery_request_id',
+            'latitude',
+            'longitude',
+            'accuracy_m',
+            'heading_deg',
+            'speed_mps',
+            'battery_percent',
+            'status',
+            'route_path',
+            'recorded_at',
+            'updated_at',
+        ].join(',');
+        const rows = await readRestRows(TRUCK_LIVE_LOCATIONS_TABLE, `?select=${select}&order=recorded_at.desc&limit=24`, { force });
+        const latestByTruck = new Map();
+        (Array.isArray(rows) ? rows : [])
+            .map(mapTruckLiveLocationRow)
+            .filter(Boolean)
+            .forEach(location => {
+                const key = location.truckId || location.truckLabel;
+                if (key && !latestByTruck.has(key)) {
+                    latestByTruck.set(key, location);
+                }
+            });
+        return Array.from(latestByTruck.values());
+    },
+
+    upsertLocation: async (location) => {
+        if (!location?.truckId) {
+            throw new Error('Truck id is required to publish live location.');
+        }
+        const row = mapTruckLiveLocationToRow(location);
+        if (row.latitude === null || row.longitude === null) {
+            throw new Error('Latitude and longitude are required to publish live location.');
+        }
+        const rows = await postRestRows(TRUCK_LIVE_LOCATIONS_TABLE, [row], 'truck_id');
+        return mapTruckLiveLocationRow(Array.isArray(rows) ? rows[0] : rows) || mapTruckLiveLocationRow(row);
+    },
+};
 
 function mapEmployeeRow(row) {
     return {
