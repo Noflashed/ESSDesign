@@ -878,6 +878,18 @@ function mapTruckLiveLocationToRow(location) {
     };
 }
 
+function isMissingTruckLiveLocationsTableError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes(TRUCK_LIVE_LOCATIONS_TABLE)
+        && (
+            message.includes('pgrst205')
+            || message.includes('schema cache')
+            || message.includes('could not find')
+            || message.includes('does not exist')
+            || message.includes('not found')
+        );
+}
+
 export const truckLiveLocationsAPI = {
     getLatest: async ({ force = true } = {}) => {
         const select = [
@@ -897,7 +909,15 @@ export const truckLiveLocationsAPI = {
             'recorded_at',
             'updated_at',
         ].join(',');
-        const rows = await readRestRows(TRUCK_LIVE_LOCATIONS_TABLE, `?select=${select}&order=recorded_at.desc&limit=24`, { force });
+        let rows = [];
+        try {
+            rows = await readRestRows(TRUCK_LIVE_LOCATIONS_TABLE, `?select=${select}&order=recorded_at.desc&limit=24`, { force });
+        } catch (error) {
+            if (isMissingTruckLiveLocationsTableError(error)) {
+                throw new Error('Live truck tracking table is not deployed yet. Run database/migrations/022_add_truck_live_locations.sql in Supabase, then refresh this page.');
+            }
+            throw error;
+        }
         const latestByTruck = new Map();
         (Array.isArray(rows) ? rows : [])
             .map(mapTruckLiveLocationRow)
@@ -919,7 +939,15 @@ export const truckLiveLocationsAPI = {
         if (row.latitude === null || row.longitude === null) {
             throw new Error('Latitude and longitude are required to publish live location.');
         }
-        const rows = await postRestRows(TRUCK_LIVE_LOCATIONS_TABLE, [row], 'truck_id');
+        let rows = [];
+        try {
+            rows = await postRestRows(TRUCK_LIVE_LOCATIONS_TABLE, [row], 'truck_id');
+        } catch (error) {
+            if (isMissingTruckLiveLocationsTableError(error)) {
+                throw new Error('Live truck tracking table is not deployed yet. Run database/migrations/022_add_truck_live_locations.sql in Supabase.');
+            }
+            throw error;
+        }
         return mapTruckLiveLocationRow(Array.isArray(rows) ? rows[0] : rows) || mapTruckLiveLocationRow(row);
     },
 };

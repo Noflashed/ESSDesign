@@ -65,4 +65,6 @@ to anon, authenticated
 using (truck_id in ('truck-1', 'truck-2', 'truck-3'))
 with check (truck_id in ('truck-1', 'truck-2', 'truck-3'));
 
+notify pgrst, 'reload schema';
+
 commit;
