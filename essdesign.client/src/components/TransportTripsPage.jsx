@@ -468,6 +468,7 @@ function TripListCard({ trip, selected, onSelect }) {
       <div className="transport-trip-card-foot">
         <span>{statusLabel}</span>
         <span>{trip.legs.length} leg{trip.legs.length === 1 ? '' : 's'}</span>
+        <b>Open details</b>
       </div>
     </button>
   );
@@ -543,17 +544,13 @@ export default function TransportTripsPage() {
   }, [trips, truckFilter]);
 
   useEffect(() => {
-    if (!filteredTrips.length) {
+    if (selectedTripId && !filteredTrips.some(trip => trip.id === selectedTripId)) {
       setSelectedTripId(null);
-      return;
-    }
-    if (!selectedTripId || !filteredTrips.some(trip => trip.id === selectedTripId)) {
-      setSelectedTripId(filteredTrips[0].id);
     }
   }, [filteredTrips, selectedTripId]);
 
   const selectedTrip = useMemo(
-    () => filteredTrips.find(trip => trip.id === selectedTripId) || filteredTrips[0] || null,
+    () => filteredTrips.find(trip => trip.id === selectedTripId) || null,
     [filteredTrips, selectedTripId],
   );
 
@@ -625,10 +622,16 @@ export default function TransportTripsPage() {
       <div className="transport-trips-toolbar">
         <div>
           <h1>Trips</h1>
-          <p>Completed truck movements with traffic, fuel, toll and alternative-route analysis.</p>
+          <p>Select a completed trip to open its GPS breadcrumbs, traffic, fuel and route information.</p>
         </div>
         <div className="transport-trips-actions">
-          <select value={truckFilter} onChange={event => setTruckFilter(event.target.value)}>
+          <select
+            value={truckFilter}
+            onChange={event => {
+              setTruckFilter(event.target.value);
+              setSelectedTripId(null);
+            }}
+          >
             <option value="all">All trucks</option>
             {TRUCK_LANES.map(lane => <option key={lane.rego} value={lane.rego}>{lane.rego}</option>)}
           </select>
@@ -645,10 +648,13 @@ export default function TransportTripsPage() {
         <TripMetric label="Trips with tolls" value={loading ? 'Loading' : tollTripCount} tone="orange" />
       </div>
 
-      <div className="transport-trips-layout">
+      <div className={`transport-trips-layout ${selectedTrip ? 'transport-trips-layout-open' : 'transport-trips-layout-list-only'}`}>
         <aside className="transport-trips-list">
           <div className="transport-trips-list-head">
-            <strong>Recent trips</strong>
+            <div>
+              <strong>Recent trips</strong>
+              <small>Click a trip to open its recorded information.</small>
+            </div>
             <span>Last {TRIP_WINDOW_DAYS} days</span>
           </div>
           {loading ? (
@@ -667,8 +673,8 @@ export default function TransportTripsPage() {
           )}
         </aside>
 
-        <section className="transport-trips-detail">
-          {selectedTrip ? (
+        {selectedTrip ? (
+          <section className="transport-trips-detail">
             <>
               <div className="transport-trip-detail-head">
                 <div>
@@ -679,7 +685,17 @@ export default function TransportTripsPage() {
                   <h2>{selectedTrip.title}</h2>
                   <p>{selectedTrip.siteLocation || selectedTrip.subtitle}</p>
                 </div>
-                <TripPill tone={selectedTrip.tollsEnabled ? 'orange' : 'green'}>{selectedTrip.tollsEnabled ? 'Tolls used' : 'No tolls recorded'}</TripPill>
+                <div className="transport-trip-detail-actions">
+                  <TripPill tone={selectedTrip.tollsEnabled ? 'orange' : 'green'}>{selectedTrip.tollsEnabled ? 'Tolls used' : 'No tolls recorded'}</TripPill>
+                  <button type="button" onClick={() => setSelectedTripId(null)}>Close</button>
+                </div>
+              </div>
+
+              <div className="transport-trip-stat-grid transport-trip-stat-grid-hero">
+                <TripMetric label={usingGpsBreadcrumbs ? 'GPS trip time' : 'Time taken'} value={statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Not confirmed'} />
+                <TripMetric label="Distance travelled" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
+                <TripMetric label={usingGpsBreadcrumbs ? 'GPS slow / idle time' : 'Traffic encountered'} value={statsTrafficSeconds != null ? formatDuration(statsTrafficSeconds || 0) : 'Calculating'} tone="orange" />
+                <TripMetric label="Route source" value={usingGpsBreadcrumbs ? `${gpsRoute.pointCount} GPS breadcrumbs` : (plannedRoute?.trafficProvider || 'TomTom route preview')} />
               </div>
 
               <div className="transport-trip-detail-grid">
@@ -705,14 +721,10 @@ export default function TransportTripsPage() {
                 </div>
 
                 <div className="transport-trip-stat-grid">
-                  <TripMetric label={usingGpsBreadcrumbs ? 'GPS trip time' : 'Time taken'} value={statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Not confirmed'} />
                   <TripMetric label="TomTom planned time" value={plannedRoute ? formatDuration(plannedRoute.durationSeconds) : 'Calculating'} />
-                  <TripMetric label="Distance travelled" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
-                  <TripMetric label={usingGpsBreadcrumbs ? 'GPS slow / idle time' : 'Traffic encountered'} value={statsTrafficSeconds != null ? formatDuration(statsTrafficSeconds || 0) : 'Calculating'} tone="orange" />
                   <TripMetric label="Fuel used estimate" value={formatFuel(fuel.litres)} tone="green" />
                   <TripMetric label="Consumption estimate" value={fuel.consumption ? `${fuel.consumption.toFixed(1)} L/100km` : 'Pending route'} tone="green" />
                   <TripMetric label="Toll fees estimate" value={formatCurrency(tollEstimate)} tone="orange" />
-                  <TripMetric label="Route source" value={usingGpsBreadcrumbs ? `${gpsRoute.pointCount} GPS breadcrumbs` : (plannedRoute?.trafficProvider || 'TomTom route preview')} />
                 </div>
               </div>
 
@@ -783,13 +795,8 @@ export default function TransportTripsPage() {
                 </div>
               </div>
             </>
-          ) : (
-            <div className="transport-trips-no-selection">
-              <h2>No trip selected</h2>
-              <p>Completed transport trips will appear here once drivers have started and completed deliveries.</p>
-            </div>
-          )}
-        </section>
+          </section>
+        ) : null}
       </div>
     </div>
   );

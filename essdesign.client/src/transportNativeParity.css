@@ -7215,9 +7215,16 @@
 
 .transport-trips-layout {
     display: grid;
-    grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
     gap: 18px;
     align-items: start;
+}
+
+.transport-trips-layout-open {
+    grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+}
+
+.transport-trips-layout-list-only {
+    grid-template-columns: minmax(0, 980px);
 }
 
 .transport-trips-list,
@@ -7244,10 +7251,23 @@
     padding: 4px 4px 7px;
 }
 
+.transport-trips-list-head div {
+    min-width: 0;
+}
+
 .transport-trips-list-head strong {
+    display: block;
     color: #102B5C;
     font-size: 17px;
     font-weight: 950;
+}
+
+.transport-trips-list-head small {
+    display: block;
+    margin-top: 4px;
+    color: #7A869F;
+    font-size: 12px;
+    font-weight: 800;
 }
 
 .transport-trips-list-head span {
@@ -7322,6 +7342,12 @@
     border-top: 1px solid #E5ECF6;
 }
 
+.transport-trip-card-foot b {
+    color: #2D63D8;
+    font-size: 12px;
+    font-weight: 950;
+}
+
 .transport-trip-pill {
     display: inline-flex;
     align-items: center;
@@ -7370,6 +7396,24 @@
     justify-content: space-between;
     gap: 18px;
     margin-bottom: 16px;
+}
+
+.transport-trip-detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.transport-trip-detail-actions button {
+    min-height: 36px;
+    border: 1px solid #DDE5F1;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: #102B5C;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 950;
+    cursor: pointer;
 }
 
 .transport-trip-detail-kicker {
@@ -7422,6 +7466,11 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+}
+
+.transport-trip-stat-grid-hero {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 14px;
 }
 
 .transport-trip-stat-grid .transport-trip-metric {
@@ -7545,6 +7594,7 @@
 @media (max-width: 1180px) {
     .transport-trips-layout,
     .transport-trip-detail-grid,
+    .transport-trip-stat-grid-hero,
     .transport-trip-panels {
         grid-template-columns: 1fr;
     }
@@ -7560,7 +7610,8 @@
     }
 
     .transport-trips-toolbar,
-    .transport-trip-detail-head {
+    .transport-trip-detail-head,
+    .transport-trip-detail-actions {
         display: grid;
     }
 
