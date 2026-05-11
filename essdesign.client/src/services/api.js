@@ -312,6 +312,7 @@ const storageJsonCache = new Map();
 const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
 const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
 const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
+const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
@@ -860,6 +861,37 @@ function mapTruckLiveLocationRow(row) {
     };
 }
 
+function mapTruckLocationHistoryRow(row) {
+    if (!row) {
+        return null;
+    }
+    const latitude = normalizeNumberOrNull(row.latitude);
+    const longitude = normalizeNumberOrNull(row.longitude);
+    if (latitude === null || longitude === null) {
+        return null;
+    }
+    return {
+        id: row.id || row.client_point_id || '',
+        clientPointId: row.client_point_id || row.clientPointId || null,
+        truckId: row.truck_id || row.truckId || '',
+        truckLabel: row.truck_label || row.truckLabel || '',
+        roleName: row.role_name || row.roleName || '',
+        driverUserId: row.driver_user_id || row.driverUserId || null,
+        deliveryRequestId: row.delivery_request_id || row.deliveryRequestId || null,
+        latitude,
+        longitude,
+        accuracyM: normalizeNumberOrNull(row.accuracy_m ?? row.accuracyM),
+        headingDeg: normalizeNumberOrNull(row.heading_deg ?? row.headingDeg ?? row.heading),
+        speedMps: normalizeNumberOrNull(row.speed_mps ?? row.speedMps ?? row.speed),
+        batteryPercent: normalizeNumberOrNull(row.battery_percent ?? row.batteryPercent ?? row.battery_level),
+        status: row.status || '',
+        trackingState: row.tracking_state || row.trackingState || '',
+        motionState: row.motion_state || row.motionState || '',
+        recordedAt: row.recorded_at || row.recordedAt || null,
+        uploadedAt: row.uploaded_at || row.uploadedAt || null,
+    };
+}
+
 function mapTruckLiveLocationToRow(location) {
     return {
         truck_id: location.truckId,
@@ -881,6 +913,18 @@ function mapTruckLiveLocationToRow(location) {
 function isMissingTruckLiveLocationsTableError(error) {
     const message = String(error?.message || error || '').toLowerCase();
     return message.includes(TRUCK_LIVE_LOCATIONS_TABLE)
+        && (
+            message.includes('pgrst205')
+            || message.includes('schema cache')
+            || message.includes('could not find')
+            || message.includes('does not exist')
+            || message.includes('not found')
+        );
+}
+
+function isMissingTruckLocationHistoryTableError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes(TRUCK_LOCATION_HISTORY_TABLE)
         && (
             message.includes('pgrst205')
             || message.includes('schema cache')
@@ -949,6 +993,61 @@ export const truckLiveLocationsAPI = {
             throw error;
         }
         return mapTruckLiveLocationRow(Array.isArray(rows) ? rows[0] : rows) || mapTruckLiveLocationRow(row);
+    },
+
+    getHistory: async ({ truckId, truckLabel, fromIso, toIso, limit = 5000, force = true } = {}) => {
+        const cleanTruckId = String(truckId || '').trim();
+        const cleanTruckLabel = String(truckLabel || '').trim();
+        if (!cleanTruckId && !cleanTruckLabel) {
+            throw new Error('Truck id or truck label is required to load GPS breadcrumbs.');
+        }
+        if (!fromIso || !toIso) {
+            throw new Error('A start and end time are required to load GPS breadcrumbs.');
+        }
+
+        const select = [
+            'id',
+            'client_point_id',
+            'truck_id',
+            'truck_label',
+            'role_name',
+            'driver_user_id',
+            'delivery_request_id',
+            'latitude',
+            'longitude',
+            'accuracy_m',
+            'heading_deg',
+            'speed_mps',
+            'battery_percent',
+            'status',
+            'tracking_state',
+            'motion_state',
+            'recorded_at',
+            'uploaded_at',
+        ].join(',');
+        const params = new URLSearchParams();
+        params.set('select', select);
+        if (cleanTruckId) {
+            params.set('truck_id', `eq.${cleanTruckId}`);
+        } else {
+            params.set('truck_label', `eq.${cleanTruckLabel}`);
+        }
+        params.append('recorded_at', `gte.${fromIso}`);
+        params.append('recorded_at', `lte.${toIso}`);
+        params.set('order', 'recorded_at.asc');
+        params.set('limit', String(Math.max(1, Math.min(Number(limit) || 5000, 10000))));
+
+        try {
+            const rows = await readRestRows(TRUCK_LOCATION_HISTORY_TABLE, `?${params.toString()}`, { force });
+            return (Array.isArray(rows) ? rows : [])
+                .map(mapTruckLocationHistoryRow)
+                .filter(Boolean);
+        } catch (error) {
+            if (isMissingTruckLocationHistoryTableError(error)) {
+                throw new Error('Truck GPS history table is not deployed yet. Run database/migrations/024_add_truck_location_history.sql in Supabase, then refresh this page.');
+            }
+            throw error;
+        }
     },
 };
 

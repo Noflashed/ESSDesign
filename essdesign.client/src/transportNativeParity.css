@@ -7151,7 +7151,8 @@
 }
 
 .transport-trips-error,
-.transport-trip-route-error {
+.transport-trip-route-error,
+.transport-trip-route-warning {
     margin-bottom: 14px;
     border: 1px solid #F3C2C2;
     border-radius: 14px;
@@ -7160,6 +7161,13 @@
     padding: 12px 14px;
     font-size: 13px;
     font-weight: 850;
+}
+
+.transport-trip-route-warning {
+    margin: 12px;
+    border-color: #F6D79D;
+    background: #FFF8EA;
+    color: #8A5A12;
 }
 
 .transport-trips-summary {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI } from '../services/api';
+import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI, truckLiveLocationsAPI } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   TRUCK_LANES,
@@ -13,6 +13,8 @@ const FUEL_LITRES_PER_100KM = 22;
 const TRAFFIC_IDLE_LITRES_PER_MINUTE = 0.035;
 const DEFAULT_SERVICE_MINUTES = 20;
 const TRIP_WINDOW_DAYS = 45;
+const GPS_QUERY_PADDING_MINUTES = 2;
+const MAX_REASONABLE_GPS_SPEED_MPS = 45;
 
 const TRIP_STATUS_COPY = {
   completed: 'Completed',
@@ -120,10 +122,14 @@ function isSecondaryRouteRequest(request) {
   return request?.routeType === 'secondary_route' || request?.scheduleType === 'secondary_route';
 }
 
-function getTruckLabel(request) {
+function getTruckInfo(request) {
   const truckId = request.scheduledTruckId || request.truckId || request.truck_id;
   const lane = TRUCK_LANES.find(item => item.id === truckId || item.rego === truckId);
-  return request.scheduledTruckLabel || request.truckLabel || lane?.rego || truckId || 'Unassigned';
+  const truckLabel = request.scheduledTruckLabel || request.truckLabel || lane?.rego || truckId || 'Unassigned';
+  return {
+    truckId: lane?.id || (String(truckId || '').startsWith('truck-') ? truckId : ''),
+    truckLabel,
+  };
 }
 
 function getTollsEnabled(request, key = 'primary') {
@@ -157,7 +163,7 @@ function makeLeg(id, label, from, to, departureAt, tollsEnabled, kind) {
 }
 
 function buildTripFromRequest(request, builders) {
-  const truckLabel = getTruckLabel(request);
+  const { truckId, truckLabel } = getTruckInfo(request);
   if (!truckLabel || truckLabel === 'Unassigned') return null;
 
   const startedAt = request.deliveryStartedAt || request.actualStartAt || request.startedAt || request.scheduledAtIso || request.scheduledAt;
@@ -214,6 +220,7 @@ function buildTripFromRequest(request, builders) {
   return {
     id: request.id,
     request,
+    truckId,
     truckLabel,
     title: orderTitle,
     subtitle: request.projectName || request.secondaryRoute?.reason || request.scaffoldType || 'Completed transport movement',
@@ -258,6 +265,99 @@ function combineRoutes(routes) {
   };
 }
 
+function toRadians(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function distanceBetweenPoints(a, b) {
+  const lat1 = Number(a?.latitude ?? a?.lat);
+  const lon1 = Number(a?.longitude ?? a?.lon);
+  const lat2 = Number(b?.latitude ?? b?.lat);
+  const lon2 = Number(b?.longitude ?? b?.lon);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return 0;
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function cleanHistoryPoints(points) {
+  const sorted = (points || [])
+    .filter(point => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)) && asDate(point.recordedAt))
+    .filter(point => point.accuracyM == null || Number(point.accuracyM) <= 200)
+    .sort((a, b) => asDate(a.recordedAt).getTime() - asDate(b.recordedAt).getTime());
+  const cleaned = [];
+  sorted.forEach(point => {
+    const previous = cleaned[cleaned.length - 1];
+    if (!previous) {
+      cleaned.push(point);
+      return;
+    }
+    const seconds = secondsBetween(previous.recordedAt, point.recordedAt);
+    const distance = distanceBetweenPoints(previous, point);
+    if (seconds > 0 && distance / seconds > MAX_REASONABLE_GPS_SPEED_MPS) {
+      return;
+    }
+    if (seconds === 0 && distance < 1) {
+      return;
+    }
+    cleaned.push(point);
+  });
+  return cleaned;
+}
+
+function buildRouteFromHistory(points) {
+  const cleaned = cleanHistoryPoints(points);
+  if (cleaned.length < 2) return null;
+  let distanceMeters = 0;
+  let movingSeconds = 0;
+  let slowOrIdleSeconds = 0;
+  let maxSpeedMps = 0;
+
+  for (let index = 1; index < cleaned.length; index += 1) {
+    const previous = cleaned[index - 1];
+    const current = cleaned[index];
+    const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
+    if (intervalSeconds <= 0 || intervalSeconds > 180) {
+      continue;
+    }
+    const segmentMeters = distanceBetweenPoints(previous, current);
+    distanceMeters += segmentMeters;
+    const recordedSpeed = Number(current.speedMps);
+    const calculatedSpeed = segmentMeters / intervalSeconds;
+    const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
+    maxSpeedMps = Math.max(maxSpeedMps, speed);
+    if (speed >= 2.2 || segmentMeters >= 20) {
+      movingSeconds += intervalSeconds;
+    } else {
+      slowOrIdleSeconds += intervalSeconds;
+    }
+  }
+
+  const first = cleaned[0];
+  const last = cleaned[cleaned.length - 1];
+  const durationSeconds = secondsBetween(first.recordedAt, last.recordedAt);
+  return {
+    yard: { lat: Number(first.latitude), lon: Number(first.longitude) },
+    site: { lat: Number(last.latitude), lon: Number(last.longitude) },
+    pathPoints: cleaned.map(point => ({ lat: Number(point.latitude), lon: Number(point.longitude) })),
+    distanceMeters,
+    durationSeconds,
+    baseDurationSeconds: movingSeconds,
+    trafficDelaySeconds: slowOrIdleSeconds,
+    trafficProvider: 'GPS breadcrumbs',
+    trafficNote: `${cleaned.length} recorded GPS points`,
+    pointCount: cleaned.length,
+    movingSeconds,
+    slowOrIdleSeconds,
+    maxSpeedMps,
+    startedAt: first.recordedAt,
+    endedAt: last.recordedAt,
+  };
+}
+
 function calculateFuel(distanceMeters, trafficDelaySeconds) {
   const distanceKm = Number(distanceMeters || 0) / 1000;
   if (!distanceKm) return { litres: null, consumption: null };
@@ -277,11 +377,10 @@ function estimateTollFees(route, tollsUsed) {
   return Math.min(65, Math.max(6.5, distanceKm * 0.55 + 4.8));
 }
 
-function routeComparison(current, candidate) {
-  if (!current?.combined || !candidate?.combined) return null;
-  const deltaSeconds = Number(current.combined.durationSeconds || 0) - Number(candidate.combined.durationSeconds || 0);
-  const deltaDistance = Number(current.combined.distanceMeters || 0) - Number(candidate.combined.distanceMeters || 0);
-  return { deltaSeconds, deltaDistance };
+function routeComparisonAgainstActual(actualSeconds, candidate) {
+  if (!Number.isFinite(actualSeconds) || actualSeconds <= 0 || !candidate?.combined) return null;
+  const deltaSeconds = actualSeconds - Number(candidate.combined.durationSeconds || 0);
+  return { deltaSeconds };
 }
 
 async function fetchRouteBundle(trip, mode) {
@@ -306,6 +405,37 @@ async function fetchRouteBundle(trip, mode) {
     legs,
     combined: combineRoutes(legs.map(leg => leg.route)),
   };
+}
+
+async function fetchTripHistory(trip) {
+  const start = asDate(trip.startedAt);
+  const end = asDate(trip.cycleEndedAt || trip.completedAt || trip.startedAt);
+  if (!start || !end || end <= start) {
+    return { points: [], route: null, error: '' };
+  }
+  const fromIso = new Date(start.getTime() - GPS_QUERY_PADDING_MINUTES * 60 * 1000).toISOString();
+  const toIso = new Date(end.getTime() + GPS_QUERY_PADDING_MINUTES * 60 * 1000).toISOString();
+  try {
+    const points = await truckLiveLocationsAPI.getHistory({
+      truckId: trip.truckId,
+      truckLabel: trip.truckLabel,
+      fromIso,
+      toIso,
+      limit: 10000,
+      force: true,
+    });
+    return {
+      points,
+      route: buildRouteFromHistory(points),
+      error: '',
+    };
+  } catch (error) {
+    return {
+      points: [],
+      route: null,
+      error: error?.message || 'Could not load GPS breadcrumbs for this trip.',
+    };
+  }
 }
 
 function TripMetric({ label, value, tone = 'default' }) {
@@ -383,7 +513,7 @@ export default function TransportTripsPage() {
   const trips = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - TRIP_WINDOW_DAYS);
-    return requests
+    const baseTrips = requests
       .map(request => buildTripFromRequest(request, builders))
       .filter(Boolean)
       .filter(trip => {
@@ -391,6 +521,20 @@ export default function TransportTripsPage() {
         return start && start >= cutoff;
       })
       .sort((a, b) => (asDate(b.startedAt)?.getTime() || 0) - (asDate(a.startedAt)?.getTime() || 0));
+    const byTruck = new Map();
+    baseTrips.forEach(trip => {
+      const key = trip.truckId || trip.truckLabel;
+      if (!byTruck.has(key)) byTruck.set(key, []);
+      byTruck.get(key).push(trip);
+    });
+    byTruck.forEach(truckTrips => {
+      truckTrips.sort((a, b) => (asDate(a.startedAt)?.getTime() || 0) - (asDate(b.startedAt)?.getTime() || 0));
+      truckTrips.forEach((trip, index) => {
+        const nextTrip = truckTrips[index + 1];
+        trip.cycleEndedAt = nextTrip?.startedAt || trip.completedAt;
+      });
+    });
+    return baseTrips;
   }, [builders, requests]);
 
   const filteredTrips = useMemo(() => {
@@ -419,7 +563,7 @@ export default function TransportTripsPage() {
       return;
     }
     let cancelled = false;
-    const cacheKey = `${selectedTrip.id}:${selectedTrip.startedAt}:${selectedTrip.completedAt || ''}:${selectedTrip.legs.map(leg => `${leg.from}|${leg.to}|${leg.tollsEnabled}`).join('>')}`;
+    const cacheKey = `${selectedTrip.id}:${selectedTrip.startedAt}:${selectedTrip.completedAt || ''}:${selectedTrip.cycleEndedAt || ''}:${selectedTrip.legs.map(leg => `${leg.from}|${leg.to}|${leg.tollsEnabled}`).join('>')}`;
     const cached = analysisCacheRef.current.get(cacheKey);
     if (cached) {
       setAnalysis(cached);
@@ -435,13 +579,16 @@ export default function TransportTripsPage() {
       try {
         const allTolls = selectedTrip.legs.every(leg => leg.tollsEnabled);
         const noTolls = selectedTrip.legs.every(leg => !leg.tollsEnabled);
-        const current = await fetchRouteBundle(selectedTrip, 'current');
+        const [current, history] = await Promise.all([
+          fetchRouteBundle(selectedTrip, 'current'),
+          fetchTripHistory(selectedTrip),
+        ]);
         const [tolls, avoidTolls] = await Promise.all([
           allTolls ? Promise.resolve(current) : fetchRouteBundle(selectedTrip, 'tolls'),
           noTolls ? Promise.resolve(current) : fetchRouteBundle(selectedTrip, 'avoid-tolls'),
         ]);
         if (cancelled) return;
-        const next = { current, tolls, avoidTolls };
+        const next = { current, tolls, avoidTolls, history };
         analysisCacheRef.current.set(cacheKey, next);
         setAnalysis(next);
       } catch (routeError) {
@@ -455,11 +602,17 @@ export default function TransportTripsPage() {
     return () => { cancelled = true; };
   }, [selectedTrip]);
 
-  const currentRoute = analysis?.current?.combined || null;
-  const fuel = calculateFuel(currentRoute?.distanceMeters, currentRoute?.trafficDelaySeconds);
-  const tollEstimate = estimateTollFees(currentRoute, selectedTrip?.tollsEnabled);
-  const tollComparison = routeComparison(analysis?.current, analysis?.tolls);
-  const avoidTollComparison = routeComparison(analysis?.current, analysis?.avoidTolls);
+  const plannedRoute = analysis?.current?.combined || null;
+  const gpsRoute = analysis?.history?.route || null;
+  const displayRoute = gpsRoute || plannedRoute;
+  const usingGpsBreadcrumbs = Boolean(gpsRoute);
+  const statsDistanceMeters = gpsRoute?.distanceMeters ?? plannedRoute?.distanceMeters;
+  const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds;
+  const statsTrafficSeconds = gpsRoute?.slowOrIdleSeconds ?? plannedRoute?.trafficDelaySeconds;
+  const fuel = calculateFuel(statsDistanceMeters, statsTrafficSeconds);
+  const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
+  const tollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.tolls);
+  const avoidTollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.avoidTolls);
   const avgActualSeconds = trips.length
     ? trips.reduce((sum, trip) => sum + Number(trip.actualDurationSeconds || 0), 0) / trips.length
     : 0;
@@ -532,7 +685,7 @@ export default function TransportTripsPage() {
               <div className="transport-trip-detail-grid">
                 <div className="transport-trip-route-card">
                   <RouteMapCanvas
-                    routeData={currentRoute}
+                    routeData={displayRoute}
                     loading={analysisLoading}
                     siteLocation={selectedTrip.siteLocation}
                     className="transport-trip-route-map"
@@ -543,17 +696,23 @@ export default function TransportTripsPage() {
                     destinationLabel="Finish"
                   />
                   {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
+                  {!analysisLoading && analysis?.history?.error ? (
+                    <div className="transport-trip-route-warning">{analysis.history.error}</div>
+                  ) : null}
+                  {!analysisLoading && !analysis?.history?.error && !usingGpsBreadcrumbs ? (
+                    <div className="transport-trip-route-warning">No GPS breadcrumbs were recorded for this trip window yet, so this map is using the TomTom planned route fallback.</div>
+                  ) : null}
                 </div>
 
                 <div className="transport-trip-stat-grid">
-                  <TripMetric label="Time taken" value={selectedTrip.actualDurationSeconds ? formatDuration(selectedTrip.actualDurationSeconds) : 'Not confirmed'} />
-                  <TripMetric label="Route duration" value={currentRoute ? formatDuration(currentRoute.durationSeconds) : 'Calculating'} />
-                  <TripMetric label="Distance travelled" value={currentRoute ? formatDistance(currentRoute.distanceMeters) : 'Calculating'} />
-                  <TripMetric label="Traffic encountered" value={currentRoute ? formatDuration(currentRoute.trafficDelaySeconds || 0) : 'Calculating'} tone="orange" />
+                  <TripMetric label={usingGpsBreadcrumbs ? 'GPS trip time' : 'Time taken'} value={statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Not confirmed'} />
+                  <TripMetric label="TomTom planned time" value={plannedRoute ? formatDuration(plannedRoute.durationSeconds) : 'Calculating'} />
+                  <TripMetric label="Distance travelled" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
+                  <TripMetric label={usingGpsBreadcrumbs ? 'GPS slow / idle time' : 'Traffic encountered'} value={statsTrafficSeconds != null ? formatDuration(statsTrafficSeconds || 0) : 'Calculating'} tone="orange" />
                   <TripMetric label="Fuel used estimate" value={formatFuel(fuel.litres)} tone="green" />
                   <TripMetric label="Consumption estimate" value={fuel.consumption ? `${fuel.consumption.toFixed(1)} L/100km` : 'Pending route'} tone="green" />
                   <TripMetric label="Toll fees estimate" value={formatCurrency(tollEstimate)} tone="orange" />
-                  <TripMetric label="Route source" value={currentRoute?.trafficProvider || 'TomTom route preview'} />
+                  <TripMetric label="Route source" value={usingGpsBreadcrumbs ? `${gpsRoute.pointCount} GPS breadcrumbs` : (plannedRoute?.trafficProvider || 'TomTom route preview')} />
                 </div>
               </div>
 
@@ -563,7 +722,16 @@ export default function TransportTripsPage() {
                   <div className="transport-trip-timeline">
                     <div><span>Started</span><strong>{formatClock(selectedTrip.startedAt)}</strong></div>
                     <div><span>Arrived / unloading</span><strong>{formatClock(selectedTrip.unloadingAt)}</strong></div>
-                    <div><span>Completed</span><strong>{formatClock(selectedTrip.completedAt)}</strong></div>
+                    <div><span>Cycle ended</span><strong>{formatClock(selectedTrip.cycleEndedAt || selectedTrip.completedAt)}</strong></div>
+                  </div>
+                </div>
+
+                <div className="transport-trip-panel">
+                  <h3>GPS breadcrumb playback</h3>
+                  <div className="transport-trip-timeline">
+                    <div><span>Points</span><strong>{analysis?.history?.points?.length ?? 0}</strong></div>
+                    <div><span>Max speed</span><strong>{gpsRoute?.maxSpeedMps ? `${Math.round(gpsRoute.maxSpeedMps * 3.6)} km/h` : 'Pending'}</strong></div>
+                    <div><span>Moving time</span><strong>{gpsRoute?.movingSeconds ? formatDuration(gpsRoute.movingSeconds) : 'Pending'}</strong></div>
                   </div>
                 </div>
 
@@ -609,6 +777,7 @@ export default function TransportTripsPage() {
 
                 <div className="transport-trip-panel transport-trip-assumptions">
                   <h3>Calculation assumptions</h3>
+                  <p>Where available, distance, trip time and slow/idle delay are calculated from the actual iOS GPS breadcrumb trail, not from the scheduled route.</p>
                   <p>Fuel is estimated for a 7.5 tonne diesel truck at {FUEL_LITRES_PER_100KM} L/100km with a traffic idle uplift of {TRAFFIC_IDLE_LITRES_PER_MINUTE.toFixed(3)} L/min.</p>
                   <p>Toll fees are labelled as estimates because the current stored route response records toll preference and route time, not the exact toll gantry charges.</p>
                 </div>
