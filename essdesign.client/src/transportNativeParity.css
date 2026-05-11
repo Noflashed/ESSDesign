@@ -7091,3 +7091,483 @@
         right: 14px;
     }
 }
+
+/* Transport trips */
+.transport-trips-page {
+    min-height: 100%;
+    padding: 28px 30px 36px;
+    background: #F4F7FC;
+    color: #102B5C;
+}
+
+.transport-trips-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.transport-trips-toolbar h1 {
+    margin: 0;
+    color: #102B5C;
+    font-size: clamp(28px, 2.4vw, 40px);
+    font-weight: 950;
+    letter-spacing: -0.04em;
+}
+
+.transport-trips-toolbar p {
+    margin: 7px 0 0;
+    color: #66758E;
+    font-size: 15px;
+    font-weight: 750;
+}
+
+.transport-trips-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.transport-trips-actions select,
+.transport-trips-actions button {
+    min-height: 48px;
+    border: 1px solid #DDE5F1;
+    border-radius: 15px;
+    background: #FFFFFF;
+    color: #102B5C;
+    font-size: 14px;
+    font-weight: 900;
+    box-shadow: 0 8px 18px rgba(16, 43, 92, 0.06);
+}
+
+.transport-trips-actions select {
+    padding: 0 36px 0 14px;
+}
+
+.transport-trips-actions button {
+    padding: 0 16px;
+    cursor: pointer;
+}
+
+.transport-trips-error,
+.transport-trip-route-error {
+    margin-bottom: 14px;
+    border: 1px solid #F3C2C2;
+    border-radius: 14px;
+    background: #FFF4F4;
+    color: #A12222;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.transport-trips-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.transport-trip-metric {
+    min-width: 0;
+    border: 1px solid #E2E8F3;
+    border-radius: 20px;
+    background: #FFFFFF;
+    padding: 17px 18px;
+    box-shadow: 0 16px 34px rgba(16, 43, 92, 0.07);
+}
+
+.transport-trip-metric span,
+.transport-trip-metric strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-trip-metric span {
+    color: #7A869F;
+    font-size: 11px;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.transport-trip-metric strong {
+    margin-top: 8px;
+    color: #102B5C;
+    font-size: 23px;
+    font-weight: 950;
+    letter-spacing: -0.04em;
+}
+
+.transport-trip-metric-orange strong { color: #E77D28; }
+.transport-trip-metric-green strong { color: #33A85A; }
+
+.transport-trips-layout {
+    display: grid;
+    grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.transport-trips-list,
+.transport-trips-detail {
+    border: 1px solid #E2E8F3;
+    border-radius: 26px;
+    background: #FFFFFF;
+    box-shadow: 0 20px 45px rgba(16, 43, 92, 0.08);
+}
+
+.transport-trips-list {
+    display: grid;
+    gap: 10px;
+    max-height: calc(100vh - 250px);
+    overflow: auto;
+    padding: 15px;
+}
+
+.transport-trips-list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 4px 7px;
+}
+
+.transport-trips-list-head strong {
+    color: #102B5C;
+    font-size: 17px;
+    font-weight: 950;
+}
+
+.transport-trips-list-head span {
+    color: #7A869F;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.transport-trip-card {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    border: 1px solid #E2E8F3;
+    border-radius: 20px;
+    background: #F8FAFE;
+    padding: 14px;
+    color: #102B5C;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.transport-trip-card:hover,
+.transport-trip-card.selected {
+    border-color: #9FB4D9;
+    background: #FFFFFF;
+    box-shadow: 0 14px 25px rgba(16, 43, 92, 0.12);
+    transform: translateY(-1px);
+}
+
+.transport-trip-card-head,
+.transport-trip-card-meta,
+.transport-trip-card-foot,
+.transport-trip-detail-kicker {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.transport-trip-card-head strong {
+    color: #102B5C;
+    font-size: 15px;
+    font-weight: 950;
+}
+
+.transport-trip-card h3 {
+    margin: 0;
+    color: #102B5C;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: -0.03em;
+}
+
+.transport-trip-card p {
+    margin: 0;
+    color: #64748B;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.transport-trip-card-meta span,
+.transport-trip-card-foot span {
+    color: #7A869F;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.transport-trip-card-foot {
+    padding-top: 8px;
+    border-top: 1px solid #E5ECF6;
+}
+
+.transport-trip-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 27px;
+    border-radius: 999px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 950;
+    white-space: nowrap;
+}
+
+.transport-trip-pill-navy {
+    background: #EEF4FF;
+    color: #102B5C;
+}
+
+.transport-trip-pill-green {
+    background: #EAF8EF;
+    color: #26964C;
+}
+
+.transport-trip-pill-orange {
+    background: #FFF2E7;
+    color: #E77D28;
+}
+
+.transport-trips-empty,
+.transport-trips-no-selection {
+    border: 1px dashed #C9D5E8;
+    border-radius: 18px;
+    padding: 22px;
+    color: #66758E;
+    font-size: 14px;
+    font-weight: 850;
+    text-align: center;
+}
+
+.transport-trips-detail {
+    min-width: 0;
+    padding: 20px;
+}
+
+.transport-trip-detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+}
+
+.transport-trip-detail-kicker {
+    justify-content: flex-start;
+    margin-bottom: 8px;
+}
+
+.transport-trip-detail-kicker span {
+    color: #66758E;
+    font-size: 13px;
+    font-weight: 850;
+}
+
+.transport-trip-detail-head h2 {
+    margin: 0;
+    color: #102B5C;
+    font-size: clamp(24px, 2vw, 34px);
+    font-weight: 950;
+    letter-spacing: -0.04em;
+}
+
+.transport-trip-detail-head p {
+    margin: 7px 0 0;
+    color: #66758E;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.transport-trip-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+    gap: 14px;
+    align-items: stretch;
+}
+
+.transport-trip-route-card {
+    min-width: 0;
+    border-radius: 22px;
+    overflow: hidden;
+    background: #EEF4FF;
+    border: 1px solid #DCE6F6;
+}
+
+.transport-trip-route-map {
+    min-height: 420px;
+    height: 100%;
+}
+
+.transport-trip-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.transport-trip-stat-grid .transport-trip-metric {
+    padding: 14px;
+    border-radius: 18px;
+    box-shadow: none;
+    background: #F8FAFE;
+}
+
+.transport-trip-stat-grid .transport-trip-metric strong {
+    font-size: 18px;
+}
+
+.transport-trip-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.transport-trip-panel {
+    min-width: 0;
+    border: 1px solid #E2E8F3;
+    border-radius: 20px;
+    background: #F8FAFE;
+    padding: 16px;
+}
+
+.transport-trip-panel h3 {
+    margin: 0 0 12px;
+    color: #102B5C;
+    font-size: 16px;
+    font-weight: 950;
+    letter-spacing: -0.02em;
+}
+
+.transport-trip-timeline {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.transport-trip-timeline div,
+.transport-trip-leg,
+.transport-trip-alt-row {
+    border: 1px solid #E2E8F3;
+    border-radius: 15px;
+    background: #FFFFFF;
+    padding: 12px;
+}
+
+.transport-trip-timeline span,
+.transport-trip-leg span,
+.transport-trip-leg small,
+.transport-trip-alt-row span,
+.transport-trip-assumptions p,
+.transport-trip-alternatives p {
+    color: #66758E;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.transport-trip-timeline strong,
+.transport-trip-leg strong,
+.transport-trip-leg b,
+.transport-trip-alt-row strong,
+.transport-trip-alt-row b {
+    display: block;
+    color: #102B5C;
+    font-weight: 950;
+}
+
+.transport-trip-timeline strong {
+    margin-top: 5px;
+    font-size: 16px;
+}
+
+.transport-trip-legs,
+.transport-trip-alternatives {
+    display: grid;
+    gap: 10px;
+}
+
+.transport-trip-leg,
+.transport-trip-alt-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.transport-trip-leg div,
+.transport-trip-alt-row div {
+    min-width: 0;
+}
+
+.transport-trip-leg span,
+.transport-trip-alt-row span {
+    display: block;
+    margin-top: 4px;
+}
+
+.transport-trip-leg b,
+.transport-trip-alt-row b {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.transport-trip-leg small {
+    display: block;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.transport-trip-assumptions p,
+.transport-trip-alternatives p {
+    margin: 8px 0 0;
+}
+
+@media (max-width: 1180px) {
+    .transport-trips-layout,
+    .transport-trip-detail-grid,
+    .transport-trip-panels {
+        grid-template-columns: 1fr;
+    }
+
+    .transport-trips-list {
+        max-height: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .transport-trips-page {
+        padding: 18px 14px 28px;
+    }
+
+    .transport-trips-toolbar,
+    .transport-trip-detail-head {
+        display: grid;
+    }
+
+    .transport-trips-actions,
+    .transport-trips-summary,
+    .transport-trip-stat-grid,
+    .transport-trip-timeline {
+        grid-template-columns: 1fr;
+    }
+
+    .transport-trips-summary {
+        display: grid;
+    }
+
+    .transport-trip-route-map {
+        min-height: 320px;
+    }
+}

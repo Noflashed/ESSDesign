@@ -4,6 +4,7 @@ import TruckSchedulePage from './TruckSchedulePage';
 import TruckDeliverySchedulePage from './TruckDeliverySchedulePage';
 import TransportSettingsPage from './TransportSettingsPage';
 import TransportFleetPage from './TransportFleetPage';
+import TransportTripsPage from './TransportTripsPage';
 import NativeTransportShell from './transport/NativeTransportShell';
 import { getTruckAssignment, isTruckDeviceRole } from './transport/transportUtils';
 import { truckLiveLocationsAPI } from '../services/api';
@@ -131,7 +132,7 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
       { key: 'truck-schedule', label: 'Dynamic Schedule', icon: 'dynamic' },
       { key: 'material-ordering-active', label: 'Schedule Management', icon: 'schedule', match: ['material-ordering-active', 'material-ordering-archived'] },
       { key: 'material-ordering-new', label: 'Material Orders', icon: 'orders', match: ['material-ordering-new', 'material-ordering'] },
-      { key: 'transport-trips', label: 'Trips', icon: 'trips', disabled: true },
+      { key: 'transport-trips', label: 'Trips', icon: 'trips' },
       { key: 'transport-fleet', label: 'Fleet', icon: 'fleet' },
       { key: 'transport-drivers', label: 'Drivers', icon: 'drivers', disabled: true },
       { key: 'transport-clients', label: 'Clients', icon: 'clients', disabled: true },
@@ -166,7 +167,10 @@ export default function TransportSuitePage({ user, currentPage, onNavigate, onEx
     if (currentPage === 'transport-fleet') {
       return <TransportFleetPage user={user} />;
     }
-    if (['transport-trips', 'transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts'].includes(currentPage)) {
+    if (currentPage === 'transport-trips') {
+      return <TransportTripsPage user={user} />;
+    }
+    if (['transport-clients', 'transport-inventory', 'transport-yard', 'transport-reports', 'transport-alerts'].includes(currentPage)) {
       const title = currentPage.replace('transport-', '').replace(/^\w/, value => value.toUpperCase());
       return (
         <TransportPlaceholderPage
