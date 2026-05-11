@@ -15,8 +15,15 @@ const DEFAULT_SERVICE_MINUTES = 20;
 const TRIP_WINDOW_DAYS = 45;
 const GPS_QUERY_PADDING_MINUTES = 2;
 const MAX_REASONABLE_GPS_SPEED_MPS = 45;
+const GPS_TRIP_END_IDLE_SECONDS = 12 * 60;
+const GPS_TRIP_MAX_POINT_GAP_SECONDS = 20 * 60;
+const GPS_TRIP_MIN_DURATION_SECONDS = 90;
+const GPS_TRIP_MIN_DISTANCE_METERS = 150;
+const GPS_TRIP_STOP_RADIUS_METERS = 80;
+const GPS_HISTORY_LIMIT_PER_TRUCK = 10000;
 
 const TRIP_STATUS_COPY = {
+  gps: 'GPS trip',
   completed: 'Completed',
   return_transit: 'Return transit',
   delivered: 'Delivered',
@@ -358,6 +365,180 @@ function buildRouteFromHistory(points) {
   };
 }
 
+function formatCoordinateLocation(point) {
+  const lat = Number(point?.latitude ?? point?.lat);
+  const lon = Number(point?.longitude ?? point?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
+  return `${lat.toFixed(6)},${lon.toFixed(6)}`;
+}
+
+function isMovingSegment(previous, current) {
+  if (!previous || !current) return false;
+  const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
+  if (intervalSeconds <= 0 || intervalSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) return false;
+  const segmentMeters = distanceBetweenPoints(previous, current);
+  const recordedSpeed = Number(current.speedMps);
+  const calculatedSpeed = segmentMeters / intervalSeconds;
+  const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
+  return speed >= 2.2 || segmentMeters >= 20;
+}
+
+function buildGpsTripFromPoints(points, lane, sequence) {
+  const route = buildRouteFromHistory(points);
+  if (!route) return null;
+  if (Number(route.durationSeconds || 0) < GPS_TRIP_MIN_DURATION_SECONDS) return null;
+  if (Number(route.distanceMeters || 0) < GPS_TRIP_MIN_DISTANCE_METERS) return null;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const startedAt = route.startedAt || first?.recordedAt;
+  const completedAt = route.endedAt || last?.recordedAt;
+  const fromLocation = formatCoordinateLocation(first);
+  const toLocation = formatCoordinateLocation(last);
+  if (!startedAt || !completedAt || !fromLocation || !toLocation) return null;
+  const scheduledDate = scheduleFromIso(startedAt).scheduledDate;
+  return {
+    id: `gps-${lane.id || lane.rego}-${startedAt}-${completedAt}-${sequence}`,
+    source: 'gps',
+    truckId: lane.id,
+    truckLabel: lane.rego,
+    title: `${lane.rego} GPS trip`,
+    subtitle: `${formatDateTime(startedAt)} to ${formatDateTime(completedAt)}`,
+    siteLocation: toLocation,
+    startedAt,
+    unloadingAt: null,
+    completedAt,
+    cycleEndedAt: completedAt,
+    scheduledDate,
+    status: 'gps',
+    actualDurationSeconds: route.durationSeconds,
+    serviceMinutes: 0,
+    legs: [{
+      id: 'gps',
+      label: 'Recorded truck movement',
+      from: fromLocation,
+      to: toLocation,
+      departureAt: startedAt,
+      tollsEnabled: false,
+      kind: 'gps',
+    }],
+    tollsEnabled: false,
+    gpsRoute: route,
+    historyPoints: points,
+  };
+}
+
+function segmentGpsHistoryIntoTrips(points, lane) {
+  const cleaned = cleanHistoryPoints(points);
+  const trips = [];
+  let activePoints = [];
+  let stationarySince = null;
+  let stationaryPoint = null;
+  let sequence = 0;
+
+  const finishActiveTrip = (endAt = null) => {
+    if (activePoints.length < 2) {
+      activePoints = [];
+      stationarySince = null;
+      stationaryPoint = null;
+      return;
+    }
+    const finalPoints = endAt
+      ? activePoints.filter(point => asDate(point.recordedAt) && asDate(point.recordedAt) <= asDate(endAt))
+      : activePoints;
+    const trip = buildGpsTripFromPoints(finalPoints, lane, sequence);
+    if (trip) {
+      trips.push(trip);
+      sequence += 1;
+    }
+    activePoints = [];
+    stationarySince = null;
+    stationaryPoint = null;
+  };
+
+  for (let index = 1; index < cleaned.length; index += 1) {
+    const previous = cleaned[index - 1];
+    const current = cleaned[index];
+    const gapSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
+    const moving = isMovingSegment(previous, current);
+
+    if (activePoints.length && gapSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) {
+      finishActiveTrip(previous.recordedAt);
+      if (!moving) continue;
+    }
+
+    if (!activePoints.length) {
+      if (!moving) continue;
+      activePoints = [previous, current];
+      stationarySince = null;
+      stationaryPoint = null;
+      continue;
+    }
+
+    activePoints.push(current);
+    if (moving) {
+      stationarySince = null;
+      stationaryPoint = null;
+      continue;
+    }
+
+    if (!stationarySince) {
+      stationarySince = previous.recordedAt;
+      stationaryPoint = previous;
+      continue;
+    }
+
+    const stationarySeconds = secondsBetween(stationarySince, current.recordedAt);
+    const stationaryDriftMeters = distanceBetweenPoints(stationaryPoint, current);
+    if (stationarySeconds >= GPS_TRIP_END_IDLE_SECONDS && stationaryDriftMeters <= GPS_TRIP_STOP_RADIUS_METERS) {
+      finishActiveTrip(stationarySince);
+    }
+  }
+
+  if (activePoints.length) {
+    const lastPoint = activePoints[activePoints.length - 1];
+    const lastPointAgeSeconds = secondsBetween(lastPoint?.recordedAt, new Date().toISOString());
+    if (stationarySince || lastPointAgeSeconds >= GPS_TRIP_END_IDLE_SECONDS) {
+      finishActiveTrip(stationarySince || lastPoint?.recordedAt);
+    }
+  }
+  return trips;
+}
+
+async function fetchGpsTripsFromHistory() {
+  const toIso = new Date().toISOString();
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - TRIP_WINDOW_DAYS);
+  const fromIso = fromDate.toISOString();
+  const perTruckTrips = await Promise.all(TRUCK_LANES.map(async lane => {
+    try {
+      const points = await truckLiveLocationsAPI.getHistory({
+        truckId: lane.id,
+        truckLabel: lane.rego,
+        fromIso,
+        toIso,
+        limit: GPS_HISTORY_LIMIT_PER_TRUCK,
+        order: 'recorded_at.desc',
+        force: true,
+      });
+      return segmentGpsHistoryIntoTrips(points, lane);
+    } catch {
+      return [];
+    }
+  }));
+  return perTruckTrips.flat();
+}
+
+function tripsOverlap(firstTrip, secondTrip) {
+  const firstStart = asDate(firstTrip.startedAt);
+  const firstEnd = asDate(firstTrip.cycleEndedAt || firstTrip.completedAt || firstTrip.startedAt);
+  const secondStart = asDate(secondTrip.startedAt);
+  const secondEnd = asDate(secondTrip.cycleEndedAt || secondTrip.completedAt || secondTrip.startedAt);
+  if (!firstStart || !firstEnd || !secondStart || !secondEnd) return false;
+  const paddingMs = 5 * 60 * 1000;
+  return firstStart.getTime() <= secondEnd.getTime() + paddingMs
+    && secondStart.getTime() <= firstEnd.getTime() + paddingMs;
+}
+
 function calculateFuel(distanceMeters, trafficDelaySeconds) {
   const distanceKm = Number(distanceMeters || 0) / 1000;
   if (!distanceKm) return { litres: null, consumption: null };
@@ -408,6 +589,14 @@ async function fetchRouteBundle(trip, mode) {
 }
 
 async function fetchTripHistory(trip) {
+  if (trip?.source === 'gps' && Array.isArray(trip.historyPoints) && trip.historyPoints.length) {
+    return {
+      points: trip.historyPoints,
+      route: trip.gpsRoute || buildRouteFromHistory(trip.historyPoints),
+      error: '',
+    };
+  }
+
   const start = asDate(trip.startedAt);
   const end = asDate(trip.cycleEndedAt || trip.completedAt || trip.startedAt);
   if (!start || !end || end <= start) {
@@ -477,6 +666,7 @@ function TripListCard({ trip, selected, onSelect }) {
 export default function TransportTripsPage() {
   const [requests, setRequests] = useState([]);
   const [builders, setBuilders] = useState([]);
+  const [gpsTrips, setGpsTrips] = useState([]);
   const [selectedTripId, setSelectedTripId] = useState(null);
   const [truckFilter, setTruckFilter] = useState('all');
   const [loadVersion, setLoadVersion] = useState(0);
@@ -493,14 +683,16 @@ export default function TransportTripsPage() {
       setLoading(true);
       setError('');
       try {
-        const [active, archived, builderRows] = await Promise.all([
+        const [active, archived, builderRows, gpsTripRows] = await Promise.all([
           materialOrderRequestsAPI.listActiveRequests({ includeArchived: true, force: true }),
           materialOrderRequestsAPI.listArchivedRequests({ force: true }).catch(() => []),
           safetyProjectsAPI.getBuilders({ includeArchived: true, force: true }).catch(() => []),
+          fetchGpsTripsFromHistory(),
         ]);
         if (cancelled) return;
         setRequests(uniqueRequests([...(active || []), ...(archived || [])]));
         setBuilders(builderRows || []);
+        setGpsTrips(gpsTripRows || []);
       } catch (loadError) {
         if (!cancelled) setError(loadError?.message || 'Unable to load completed trips.');
       } finally {
@@ -514,13 +706,25 @@ export default function TransportTripsPage() {
   const trips = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - TRIP_WINDOW_DAYS);
-    const baseTrips = requests
+    const scheduledTrips = requests
       .map(request => buildTripFromRequest(request, builders))
       .filter(Boolean)
       .filter(trip => {
         const start = asDate(trip.startedAt);
         return start && start >= cutoff;
-      })
+      });
+    const gpsBackedTrips = gpsTrips
+      .filter(trip => {
+        const start = asDate(trip.startedAt);
+        return start && start >= cutoff;
+      });
+    const scheduleFallbackTrips = scheduledTrips.filter(scheduledTrip => (
+      !gpsBackedTrips.some(gpsTrip => (
+        (gpsTrip.truckId && scheduledTrip.truckId && gpsTrip.truckId === scheduledTrip.truckId)
+          || gpsTrip.truckLabel === scheduledTrip.truckLabel
+      ) && tripsOverlap(gpsTrip, scheduledTrip))
+    ));
+    const baseTrips = [...gpsBackedTrips, ...scheduleFallbackTrips]
       .sort((a, b) => (asDate(b.startedAt)?.getTime() || 0) - (asDate(a.startedAt)?.getTime() || 0));
     const byTruck = new Map();
     baseTrips.forEach(trip => {
@@ -532,11 +736,13 @@ export default function TransportTripsPage() {
       truckTrips.sort((a, b) => (asDate(a.startedAt)?.getTime() || 0) - (asDate(b.startedAt)?.getTime() || 0));
       truckTrips.forEach((trip, index) => {
         const nextTrip = truckTrips[index + 1];
-        trip.cycleEndedAt = nextTrip?.startedAt || trip.completedAt;
+        if (trip.source !== 'gps') {
+          trip.cycleEndedAt = nextTrip?.startedAt || trip.completedAt;
+        }
       });
     });
     return baseTrips;
-  }, [builders, requests]);
+  }, [builders, gpsTrips, requests]);
 
   const filteredTrips = useMemo(() => {
     if (truckFilter === 'all') return trips;

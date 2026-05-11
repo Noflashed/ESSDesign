@@ -995,7 +995,7 @@ export const truckLiveLocationsAPI = {
         return mapTruckLiveLocationRow(Array.isArray(rows) ? rows[0] : rows) || mapTruckLiveLocationRow(row);
     },
 
-    getHistory: async ({ truckId, truckLabel, fromIso, toIso, limit = 5000, force = true } = {}) => {
+    getHistory: async ({ truckId, truckLabel, fromIso, toIso, limit = 5000, order = 'recorded_at.asc', force = true } = {}) => {
         const cleanTruckId = String(truckId || '').trim();
         const cleanTruckLabel = String(truckLabel || '').trim();
         if (!cleanTruckId && !cleanTruckLabel) {
@@ -1034,7 +1034,7 @@ export const truckLiveLocationsAPI = {
         }
         params.append('recorded_at', `gte.${fromIso}`);
         params.append('recorded_at', `lte.${toIso}`);
-        params.set('order', 'recorded_at.asc');
+        params.set('order', order);
         params.set('limit', String(Math.max(1, Math.min(Number(limit) || 5000, 10000))));
 
         try {

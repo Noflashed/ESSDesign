@@ -169,8 +169,42 @@ namespace ESSDesign.Server.Services
             return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         }
 
+        private static bool TryParseCoordinateText(string value, out (double Lat, double Lon) coordinates)
+        {
+            coordinates = default;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var parts = value.Trim().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2)
+            {
+                return false;
+            }
+
+            if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) ||
+                !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var lon))
+            {
+                return false;
+            }
+
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180)
+            {
+                return false;
+            }
+
+            coordinates = (lat, lon);
+            return true;
+        }
+
         private async Task<(double Lat, double Lon)?> GeocodeAsync(string address, HttpClient client)
         {
+            if (TryParseCoordinateText(address, out var coordinates))
+            {
+                return coordinates;
+            }
+
             try
             {
                 var url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q={Uri.EscapeDataString(address)}";
