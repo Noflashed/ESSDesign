@@ -15,6 +15,7 @@ namespace ESSDesign.Server.Services
         private static readonly TimeSpan EstimateTtl = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan ActiveRequestWindow = TimeSpan.FromMinutes(45);
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> RouteLocks = new(StringComparer.Ordinal);
+        private static readonly ConcurrentDictionary<string, RouteEstimateRow> MemoryRouteEstimates = new(StringComparer.Ordinal);
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<TransportRouteEstimateService> _logger;
@@ -205,7 +206,8 @@ namespace ESSDesign.Server.Services
             var rows = await ReadRowsAsync(
                 $"{EstimatesTable}?select=*&route_key=eq.{Uri.EscapeDataString(routeKey)}&limit=1",
                 cancellationToken);
-            return rows.FirstOrDefault();
+            return rows.FirstOrDefault()
+                ?? (MemoryRouteEstimates.TryGetValue(routeKey, out var memoryRow) ? memoryRow : null);
         }
 
         private async Task<List<RouteEstimateRow>> ReadRowsAsync(string relativeUrl, CancellationToken cancellationToken)
@@ -234,6 +236,8 @@ namespace ESSDesign.Server.Services
             DateTimeOffset refreshedAt,
             CancellationToken cancellationToken)
         {
+            StoreMemoryRouteRow(request, result, refreshedAt);
+
             if (!HasSupabaseConfig())
             {
                 return;
@@ -284,6 +288,8 @@ namespace ESSDesign.Server.Services
 
         private async Task MarkRouteRequestedAsync(RouteEstimateRow row, DateTimeOffset activeUntil, CancellationToken cancellationToken)
         {
+            TouchMemoryRouteRow(row.RouteKey, activeUntil);
+
             if (!HasSupabaseConfig() || row.ActiveUntil.HasValue && row.ActiveUntil.Value >= activeUntil)
             {
                 return;
@@ -306,6 +312,53 @@ namespace ESSDesign.Server.Services
                 var details = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning("Unable to touch shared route estimate {RouteKey}: {Status} {Details}", row.RouteKey, response.StatusCode, details);
             }
+        }
+
+        private void StoreMemoryRouteRow(
+            DeliveryAnalysisService.RoutePreviewBetweenRequest request,
+            DeliveryAnalysisService.RoutePreviewResult result,
+            DateTimeOffset refreshedAt)
+        {
+            if (string.IsNullOrWhiteSpace(result.RouteKey))
+            {
+                return;
+            }
+
+            var activeUntil = BuildActiveUntilUtc(request.ScheduledDate, refreshedAt);
+            MemoryRouteEstimates[result.RouteKey] = new RouteEstimateRow
+            {
+                RouteKey = result.RouteKey,
+                Segment = string.IsNullOrWhiteSpace(request.Segment) ? "primary" : request.Segment.Trim().ToLowerInvariant(),
+                FromLocation = request.FromLocation.Trim(),
+                ToLocation = request.ToLocation.Trim(),
+                ScheduledDate = string.IsNullOrWhiteSpace(request.ScheduledDate) ? null : request.ScheduledDate,
+                ScheduledHour = request.ScheduledHour,
+                ScheduledMinute = request.ScheduledMinute,
+                EnableTolls = request.EnableTolls,
+                RouteData = JsonSerializer.SerializeToElement(result, _jsonOptions),
+                LastRefreshedAt = refreshedAt,
+                ExpiresAt = refreshedAt.Add(EstimateTtl),
+                ActiveUntil = activeUntil,
+                LastRequestedAt = refreshedAt,
+                RequestCount = 1,
+            };
+        }
+
+        private static void TouchMemoryRouteRow(string routeKey, DateTimeOffset activeUntil)
+        {
+            if (!MemoryRouteEstimates.TryGetValue(routeKey, out var row))
+            {
+                return;
+            }
+
+            if (!row.ActiveUntil.HasValue || row.ActiveUntil.Value < activeUntil)
+            {
+                row.ActiveUntil = activeUntil;
+            }
+
+            row.LastRequestedAt = DateTimeOffset.UtcNow;
+            row.RequestCount = Math.Max(0, row.RequestCount) + 1;
+            MemoryRouteEstimates[routeKey] = row;
         }
 
         private HttpRequestMessage CreateSupabaseRequest(HttpMethod method, string relativeUrl, string? jsonBody = null)

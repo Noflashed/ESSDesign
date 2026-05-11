@@ -11,7 +11,10 @@ namespace ESSDesign.Server.Services
         private const string UsageTable = "ess_tomtom_api_usage";
         private const int DefaultSoftDailyLimit = 1800;
         private const int DefaultHardDailyLimit = 2300;
+        private const int DefaultFallbackHardDailyLimit = 250;
         private static readonly SemaphoreSlim UsageLock = new(1, 1);
+        private static string _fallbackUsageDate = string.Empty;
+        private static int _fallbackUsageCount;
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
@@ -38,29 +41,36 @@ namespace ESSDesign.Server.Services
         {
             if (!HasSupabaseConfig())
             {
-                return false;
+                return await IsFallbackHardLimitReachedAsync(cancellationToken);
             }
 
             var count = await GetTodayUsageCountAsync(cancellationToken);
-            return count >= HardDailyLimit;
+            return count.HasValue
+                ? count.Value >= HardDailyLimit
+                : await IsFallbackHardLimitReachedAsync(cancellationToken);
         }
 
         public async Task<bool> TryConsumeAsync(string category, CancellationToken cancellationToken = default)
         {
             if (!HasSupabaseConfig())
             {
-                return true;
+                return await TryConsumeFallbackAsync(category, cancellationToken);
             }
 
             await UsageLock.WaitAsync(cancellationToken);
             try
             {
                 var count = await GetTodayUsageCountAsync(cancellationToken);
-                if (count >= HardDailyLimit)
+                if (!count.HasValue)
+                {
+                    return TryConsumeFallbackUnsafe(category, DateTimeOffset.UtcNow);
+                }
+
+                if (count.Value >= HardDailyLimit)
                 {
                     _logger.LogWarning(
                         "TomTom daily hard limit reached ({Count}/{Limit}); skipping {Category} call",
-                        count,
+                        count.Value,
                         HardDailyLimit,
                         category);
                     return false;
@@ -68,10 +78,10 @@ namespace ESSDesign.Server.Services
 
                 if (!await InsertUsageEventAsync(NormalizeCategory(category), cancellationToken))
                 {
-                    return false;
+                    return TryConsumeFallbackUnsafe(category, DateTimeOffset.UtcNow);
                 }
 
-                var nextCount = count + 1;
+                var nextCount = count.Value + 1;
                 if (nextCount >= SoftDailyLimit)
                 {
                     _logger.LogWarning(
@@ -91,6 +101,8 @@ namespace ESSDesign.Server.Services
 
         private int SoftDailyLimit => ReadConfigInt("TomTom:DailySoftLimit", DefaultSoftDailyLimit);
 
+        private int FallbackHardDailyLimit => ReadConfigInt("TomTom:FallbackDailyHardLimit", DefaultFallbackHardDailyLimit);
+
         private int HardDailyLimit
         {
             get
@@ -107,7 +119,7 @@ namespace ESSDesign.Server.Services
                 : fallback;
         }
 
-        private async Task<int> GetTodayUsageCountAsync(CancellationToken cancellationToken)
+        private async Task<int?> GetTodayUsageCountAsync(CancellationToken cancellationToken)
         {
             var usageDate = GetSydneyUsageDate(DateTimeOffset.UtcNow);
             using var request = CreateSupabaseRequest(
@@ -121,7 +133,7 @@ namespace ESSDesign.Server.Services
             {
                 var details = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogWarning("Unable to read TomTom usage count: {Status} {Details}", response.StatusCode, details);
-                return HardDailyLimit;
+                return null;
             }
 
             if (TryReadContentRangeCount(response, out var count))
@@ -131,6 +143,72 @@ namespace ESSDesign.Server.Services
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             return JsonSerializer.Deserialize<List<TomTomUsageRow>>(json, _jsonOptions)?.Count ?? 0;
+        }
+
+        private async Task<bool> IsFallbackHardLimitReachedAsync(CancellationToken cancellationToken)
+        {
+            await UsageLock.WaitAsync(cancellationToken);
+            try
+            {
+                return IsFallbackHardLimitReachedUnsafe(DateTimeOffset.UtcNow);
+            }
+            finally
+            {
+                UsageLock.Release();
+            }
+        }
+
+        private async Task<bool> TryConsumeFallbackAsync(string category, CancellationToken cancellationToken)
+        {
+            await UsageLock.WaitAsync(cancellationToken);
+            try
+            {
+                return TryConsumeFallbackUnsafe(category, DateTimeOffset.UtcNow);
+            }
+            finally
+            {
+                UsageLock.Release();
+            }
+        }
+
+        private bool IsFallbackHardLimitReachedUnsafe(DateTimeOffset now)
+        {
+            EnsureFallbackUsageDate(now);
+            return _fallbackUsageCount >= FallbackHardDailyLimit;
+        }
+
+        private bool TryConsumeFallbackUnsafe(string category, DateTimeOffset now)
+        {
+            EnsureFallbackUsageDate(now);
+            if (_fallbackUsageCount >= FallbackHardDailyLimit)
+            {
+                _logger.LogWarning(
+                    "TomTom fallback daily hard limit reached ({Count}/{Limit}); skipping {Category} call until budget table is available",
+                    _fallbackUsageCount,
+                    FallbackHardDailyLimit,
+                    category);
+                return false;
+            }
+
+            _fallbackUsageCount += 1;
+            _logger.LogWarning(
+                "Using in-memory TomTom fallback budget ({Count}/{Limit}) for {Category}; apply database/migrations/023_add_tomtom_usage_budget.sql for persistent tracking",
+                _fallbackUsageCount,
+                FallbackHardDailyLimit,
+                category);
+            return true;
+        }
+
+        private static void EnsureFallbackUsageDate(DateTimeOffset now)
+        {
+            var usageDate = GetSydneyUsageDate(now);
+            if (string.Equals(_fallbackUsageDate, usageDate, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _fallbackUsageDate = usageDate;
+            _fallbackUsageCount = 0;
         }
 
         private static bool TryReadContentRangeCount(HttpResponseMessage response, out int count)
@@ -193,7 +271,7 @@ namespace ESSDesign.Server.Services
                 return true;
             }
 
-            _logger.LogWarning("Supabase configuration missing; TomTom budget guard is disabled.");
+            _logger.LogWarning("Supabase configuration missing; TomTom usage will use the in-memory fallback budget.");
             return false;
         }
 
