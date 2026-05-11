@@ -7150,6 +7150,25 @@
     cursor: pointer;
 }
 
+.transport-trips-queue-tools {
+    width: calc(100% - 48px);
+    max-width: 1180px;
+    margin: 0 0 18px 24px;
+}
+
+.transport-trips-queue-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.transport-trips-queue-tools .material-ordering-queue-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 16px;
+}
+
 .transport-trips-error,
 .transport-trip-route-error,
 .transport-trip-route-warning {
@@ -7220,11 +7239,11 @@
 }
 
 .transport-trips-layout-open {
-    grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+    grid-template-columns: minmax(360px, 430px) minmax(0, 1fr);
 }
 
 .transport-trips-layout-list-only {
-    grid-template-columns: minmax(0, 980px);
+    grid-template-columns: minmax(0, 1180px);
 }
 
 .transport-trips-list,
@@ -7237,10 +7256,10 @@
 
 .transport-trips-list {
     display: grid;
-    gap: 10px;
+    gap: 18px;
     max-height: calc(100vh - 250px);
     overflow: auto;
-    padding: 15px;
+    padding: 18px;
 }
 
 .transport-trips-list-head {
@@ -7278,12 +7297,12 @@
 
 .transport-trip-card {
     display: grid;
-    gap: 8px;
+    gap: 14px;
     width: 100%;
     border: 1px solid #E2E8F3;
-    border-radius: 20px;
-    background: #F8FAFE;
-    padding: 14px;
+    border-radius: 24px;
+    background: #FFFFFF;
+    padding: 22px;
     color: #102B5C;
     text-align: left;
     cursor: pointer;
@@ -7298,6 +7317,10 @@
     transform: translateY(-1px);
 }
 
+.transport-trip-card-analysis {
+    box-shadow: 0 14px 34px rgba(16, 43, 92, 0.07);
+}
+
 .transport-trip-card-head,
 .transport-trip-card-meta,
 .transport-trip-card-foot,
@@ -7308,10 +7331,65 @@
     gap: 8px;
 }
 
+.transport-trip-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.transport-trip-card-time {
+    color: #7A869F;
+    font-size: 13px;
+    font-weight: 850;
+}
+
 .transport-trip-card-head strong {
     color: #102B5C;
     font-size: 15px;
     font-weight: 950;
+}
+
+.transport-trip-card-route {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.transport-trip-card-route div,
+.transport-trip-card-analysis-grid div {
+    min-width: 0;
+    border: 1px solid #E6EDF6;
+    border-radius: 16px;
+    background: #F8FAFE;
+    padding: 12px 14px;
+}
+
+.transport-trip-card-route span,
+.transport-trip-card-analysis-grid span {
+    display: block;
+    color: #7A869F;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.transport-trip-card-route strong,
+.transport-trip-card-analysis-grid strong {
+    display: block;
+    margin-top: 6px;
+    overflow: hidden;
+    color: #102B5C;
+    font-size: 14px;
+    font-weight: 950;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-trip-card-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .transport-trip-card h3 {
@@ -7513,6 +7591,10 @@
     gap: 10px;
 }
 
+.transport-trip-location-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .transport-trip-timeline div,
 .transport-trip-leg,
 .transport-trip-alt-row {
@@ -7601,6 +7683,12 @@
 
     .transport-trips-list {
         max-height: none;
+    }
+
+    .transport-trip-card-analysis-grid,
+    .transport-trip-card-route,
+    .transport-trip-location-pair {
+        grid-template-columns: 1fr;
     }
 }
 

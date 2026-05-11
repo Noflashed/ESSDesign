@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { analysisAPI, materialOrderRequestsAPI, safetyProjectsAPI, truckLiveLocationsAPI } from '../services/api';
+import { analysisAPI, truckLiveLocationsAPI } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   TRUCK_LANES,
-  YARD_LOCATION,
   formatBoardDay,
   formatDistance,
   formatDuration,
@@ -11,9 +10,7 @@ import {
 
 const FUEL_LITRES_PER_100KM = 22;
 const TRAFFIC_IDLE_LITRES_PER_MINUTE = 0.035;
-const DEFAULT_SERVICE_MINUTES = 20;
 const TRIP_WINDOW_DAYS = 45;
-const GPS_QUERY_PADDING_MINUTES = 2;
 const MAX_REASONABLE_GPS_SPEED_MPS = 45;
 const GPS_TRIP_END_IDLE_SECONDS = 12 * 60;
 const GPS_TRIP_MAX_POINT_GAP_SECONDS = 20 * 60;
@@ -40,12 +37,6 @@ function secondsBetween(start, end) {
   const endDate = asDate(end);
   if (!startDate || !endDate) return 0;
   return Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 1000));
-}
-
-function addSeconds(iso, seconds) {
-  const date = asDate(iso);
-  if (!date) return null;
-  return new Date(date.getTime() + seconds * 1000).toISOString();
 }
 
 function scheduleFromIso(iso) {
@@ -85,169 +76,6 @@ function formatFuel(litres) {
   if (!Number.isFinite(litres)) return 'Pending route';
   if (litres < 10) return `${litres.toFixed(1)} L`;
   return `${Math.round(litres)} L`;
-}
-
-function normaliseText(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
-function findBuilder(builders, request) {
-  const builderId = request.builderId || request.builder_id;
-  const builderName = normaliseText(request.builderName || request.builder || request.clientName);
-  return builders.find(builder => {
-    if (builderId && builder.id === builderId) return true;
-    return builderName && normaliseText(builder.name) === builderName;
-  }) || null;
-}
-
-function findProjectLocation(builders, request) {
-  const builder = findBuilder(builders, request);
-  const projectId = request.projectId || request.project_id;
-  const projectName = normaliseText(request.projectName || request.project || request.siteName);
-  const project = builder?.projects?.find(item => {
-    if (projectId && item.id === projectId) return true;
-    return projectName && normaliseText(item.name) === projectName;
-  });
-
-  return [
-    request.siteLocation,
-    request.deliveryAddress,
-    request.projectLocation,
-    request.address,
-    request.location,
-    project?.siteLocation,
-    project?.projectLocation,
-    project?.deliveryAddress,
-    project?.address,
-    project?.location,
-    builder?.siteLocation,
-    builder?.address,
-  ].find(value => String(value || '').trim()) || '';
-}
-
-function isSecondaryRouteRequest(request) {
-  return request?.routeType === 'secondary_route' || request?.scheduleType === 'secondary_route';
-}
-
-function getTruckInfo(request) {
-  const truckId = request.scheduledTruckId || request.truckId || request.truck_id;
-  const lane = TRUCK_LANES.find(item => item.id === truckId || item.rego === truckId);
-  const truckLabel = request.scheduledTruckLabel || request.truckLabel || lane?.rego || truckId || 'Unassigned';
-  return {
-    truckId: lane?.id || (String(truckId || '').startsWith('truck-') ? truckId : ''),
-    truckLabel,
-  };
-}
-
-function getTollsEnabled(request, key = 'primary') {
-  const values = request.itemValues || {};
-  if (key === 'secondary') {
-    return Boolean(request.secondaryTollsEnabled ?? values.__secondaryTollsEnabled ?? request.tollsEnabled ?? values.__tollsEnabled);
-  }
-  if (key === 'return') {
-    return Boolean(request.returnTollsEnabled ?? values.__returnTollsEnabled ?? request.tollsEnabled ?? values.__tollsEnabled);
-  }
-  return Boolean(request.tollsEnabled ?? values.__tollsEnabled);
-}
-
-function getServiceMinutes(request) {
-  const value = Number(request.secondaryRoute?.serviceMinutes ?? request.serviceMinutes ?? request.unloadMinutes);
-  if (Number.isFinite(value) && value >= 0) return value;
-  return DEFAULT_SERVICE_MINUTES;
-}
-
-function makeLeg(id, label, from, to, departureAt, tollsEnabled, kind) {
-  if (!String(from || '').trim() || !String(to || '').trim()) return null;
-  return {
-    id,
-    label,
-    from: String(from).trim(),
-    to: String(to).trim(),
-    departureAt,
-    tollsEnabled: Boolean(tollsEnabled),
-    kind,
-  };
-}
-
-function buildTripFromRequest(request, builders) {
-  const { truckId, truckLabel } = getTruckInfo(request);
-  if (!truckLabel || truckLabel === 'Unassigned') return null;
-
-  const startedAt = request.deliveryStartedAt || request.actualStartAt || request.startedAt || request.scheduledAtIso || request.scheduledAt;
-  const unloadingAt = request.deliveryUnloadingAt || request.unloadingStartedAt || request.arrivedAt;
-  const completedAt = request.deliveryConfirmedAt || request.deliveredAt || request.completedAt || request.archivedAt;
-  const status = request.deliveryStatus || (completedAt ? 'completed' : 'scheduled');
-  const hasCompletedMovement = Boolean(completedAt || status === 'return_transit' || status === 'delivered');
-  if (!hasCompletedMovement || !startedAt) return null;
-
-  const siteLocation = isSecondaryRouteRequest(request)
-    ? request.secondaryRoute?.destination || request.secondaryRoute?.linkedRequestSiteLocation || findProjectLocation(builders, request)
-    : findProjectLocation(builders, request);
-
-  const serviceMinutes = getServiceMinutes(request);
-  const projectedSecondaryDeparture = unloadingAt
-    ? addSeconds(unloadingAt, serviceMinutes * 60)
-    : addSeconds(startedAt, 60 * 60);
-  const returnDeparture = completedAt || projectedSecondaryDeparture || startedAt;
-  const secondary = request.secondaryRoute || null;
-  const legs = [];
-
-  if (isSecondaryRouteRequest(request)) {
-    const secondaryStart = secondary?.startingLocation || YARD_LOCATION;
-    const secondaryEnd = secondary?.destination || secondary?.linkedRequestSiteLocation || siteLocation;
-    const secondaryLeg = makeLeg('secondary', 'Secondary route', secondaryStart, secondaryEnd, startedAt, getTollsEnabled(request, 'secondary'), 'secondary');
-    if (secondaryLeg) legs.push(secondaryLeg);
-    const returnLeg = request.returnTransitToYard === false
-      ? null
-      : makeLeg('return', 'Return to yard', secondaryEnd, YARD_LOCATION, returnDeparture, getTollsEnabled(request, 'return'), 'return');
-    if (returnLeg) legs.push(returnLeg);
-  } else {
-    const primaryLeg = makeLeg('primary', 'Yard to site', YARD_LOCATION, siteLocation, startedAt, getTollsEnabled(request, 'primary'), 'primary');
-    if (primaryLeg) legs.push(primaryLeg);
-
-    const secondaryEnd = secondary?.destination || secondary?.linkedRequestSiteLocation;
-    if (secondaryEnd) {
-      const secondaryStart = secondary?.startingLocation || siteLocation || YARD_LOCATION;
-      const secondaryLeg = makeLeg('secondary', secondary?.label || 'Secondary route', secondaryStart, secondaryEnd, projectedSecondaryDeparture, getTollsEnabled(request, 'secondary'), 'secondary');
-      if (secondaryLeg) legs.push(secondaryLeg);
-      const returnLeg = request.returnTransitToYard === false
-        ? null
-        : makeLeg('return', 'Return to yard', secondaryEnd, YARD_LOCATION, returnDeparture, getTollsEnabled(request, 'return'), 'return');
-      if (returnLeg) legs.push(returnLeg);
-    } else if (request.returnTransitToYard !== false && siteLocation) {
-      const returnLeg = makeLeg('return', 'Return to yard', siteLocation, YARD_LOCATION, returnDeparture, getTollsEnabled(request, 'return'), 'return');
-      if (returnLeg) legs.push(returnLeg);
-    }
-  }
-
-  const scheduledDate = request.scheduledDate || (asDate(startedAt) ? scheduleFromIso(startedAt).scheduledDate : null);
-  const actualDurationSeconds = completedAt ? secondsBetween(startedAt, completedAt) : 0;
-  const orderTitle = request.builderName || request.clientName || request.projectName || request.secondaryRoute?.label || 'Transport trip';
-
-  return {
-    id: request.id,
-    request,
-    truckId,
-    truckLabel,
-    title: orderTitle,
-    subtitle: request.projectName || request.secondaryRoute?.reason || request.scaffoldType || 'Completed transport movement',
-    siteLocation,
-    startedAt,
-    unloadingAt,
-    completedAt,
-    scheduledDate,
-    status,
-    actualDurationSeconds,
-    serviceMinutes,
-    legs,
-    tollsEnabled: legs.some(leg => leg.tollsEnabled),
-  };
-}
-
-function uniqueRequests(requests) {
-  const map = new Map();
-  requests.filter(Boolean).forEach(request => map.set(request.id, request));
-  return Array.from(map.values());
 }
 
 function combineRoutes(routes) {
@@ -372,6 +200,13 @@ function formatCoordinateLocation(point) {
   return `${lat.toFixed(6)},${lon.toFixed(6)}`;
 }
 
+function formatEstimatedLocation(point) {
+  const lat = Number(point?.latitude ?? point?.lat);
+  const lon = Number(point?.longitude ?? point?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return 'Unknown location';
+  return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
 function isMovingSegment(previous, current) {
   if (!previous || !current) return false;
   const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
@@ -403,6 +238,8 @@ function buildGpsTripFromPoints(points, lane, sequence) {
     truckLabel: lane.rego,
     title: `${lane.rego} GPS trip`,
     subtitle: `${formatDateTime(startedAt)} to ${formatDateTime(completedAt)}`,
+    startLocationEstimate: formatEstimatedLocation(first),
+    endLocationEstimate: formatEstimatedLocation(last),
     siteLocation: toLocation,
     startedAt,
     unloadingAt: null,
@@ -528,17 +365,6 @@ async function fetchGpsTripsFromHistory() {
   return perTruckTrips.flat();
 }
 
-function tripsOverlap(firstTrip, secondTrip) {
-  const firstStart = asDate(firstTrip.startedAt);
-  const firstEnd = asDate(firstTrip.cycleEndedAt || firstTrip.completedAt || firstTrip.startedAt);
-  const secondStart = asDate(secondTrip.startedAt);
-  const secondEnd = asDate(secondTrip.cycleEndedAt || secondTrip.completedAt || secondTrip.startedAt);
-  if (!firstStart || !firstEnd || !secondStart || !secondEnd) return false;
-  const paddingMs = 5 * 60 * 1000;
-  return firstStart.getTime() <= secondEnd.getTime() + paddingMs
-    && secondStart.getTime() <= firstEnd.getTime() + paddingMs;
-}
-
 function calculateFuel(distanceMeters, trafficDelaySeconds) {
   const distanceKm = Number(distanceMeters || 0) / 1000;
   if (!distanceKm) return { litres: null, consumption: null };
@@ -597,34 +423,7 @@ async function fetchTripHistory(trip) {
     };
   }
 
-  const start = asDate(trip.startedAt);
-  const end = asDate(trip.cycleEndedAt || trip.completedAt || trip.startedAt);
-  if (!start || !end || end <= start) {
-    return { points: [], route: null, error: '' };
-  }
-  const fromIso = new Date(start.getTime() - GPS_QUERY_PADDING_MINUTES * 60 * 1000).toISOString();
-  const toIso = new Date(end.getTime() + GPS_QUERY_PADDING_MINUTES * 60 * 1000).toISOString();
-  try {
-    const points = await truckLiveLocationsAPI.getHistory({
-      truckId: trip.truckId,
-      truckLabel: trip.truckLabel,
-      fromIso,
-      toIso,
-      limit: 10000,
-      force: true,
-    });
-    return {
-      points,
-      route: buildRouteFromHistory(points),
-      error: '',
-    };
-  } catch (error) {
-    return {
-      points: [],
-      route: null,
-      error: error?.message || 'Could not load GPS breadcrumbs for this trip.',
-    };
-  }
+  return { points: [], route: null, error: 'This trip does not have GPS breadcrumb history.' };
 }
 
 function TripMetric({ label, value, tone = 'default' }) {
@@ -642,30 +441,45 @@ function TripPill({ children, tone = 'navy' }) {
 
 function TripListCard({ trip, selected, onSelect }) {
   const statusLabel = TRIP_STATUS_COPY[trip.status] || TRIP_STATUS_COPY.completed;
+  const route = trip.gpsRoute || buildRouteFromHistory(trip.historyPoints);
+  const fuel = calculateFuel(route?.distanceMeters, route?.slowOrIdleSeconds);
   return (
-    <button type="button" className={`transport-trip-card ${selected ? 'selected' : ''}`} onClick={onSelect}>
+    <button type="button" className={`transport-trip-card transport-trip-card-analysis ${selected ? 'selected' : ''}`} onClick={onSelect}>
       <div className="transport-trip-card-head">
-        <strong>{trip.truckLabel}</strong>
-        <TripPill tone={trip.tollsEnabled ? 'orange' : 'green'}>{trip.tollsEnabled ? 'Tolls enabled' : 'No tolls'}</TripPill>
+        <div className="transport-trip-card-badges">
+          <TripPill tone="green">{statusLabel}</TripPill>
+          <TripPill>{trip.truckLabel}</TripPill>
+        </div>
+        <span className="transport-trip-card-time">{formatDateTime(trip.startedAt)}</span>
       </div>
-      <h3>{trip.title}</h3>
-      <p>{trip.subtitle}</p>
-      <div className="transport-trip-card-meta">
-        <span>{formatDateTime(trip.startedAt)}</span>
-        <span>{formatDuration(trip.actualDurationSeconds || trip.legs.length * 1800)}</span>
+
+      <div className="transport-trip-card-route">
+        <div>
+          <span>Estimated start location</span>
+          <strong>{trip.startLocationEstimate || trip.legs?.[0]?.from || 'Unknown location'}</strong>
+        </div>
+        <div>
+          <span>Estimated end location</span>
+          <strong>{trip.endLocationEstimate || trip.legs?.[0]?.to || 'Unknown location'}</strong>
+        </div>
       </div>
+
+      <div className="transport-trip-card-analysis-grid">
+        <div><span>Duration</span><strong>{route?.durationSeconds ? formatDuration(route.durationSeconds) : 'Pending'}</strong></div>
+        <div><span>Distance</span><strong>{route?.distanceMeters ? formatDistance(route.distanceMeters) : 'Pending'}</strong></div>
+        <div><span>Slow / idle</span><strong>{route?.slowOrIdleSeconds != null ? formatDuration(route.slowOrIdleSeconds || 0) : 'Pending'}</strong></div>
+        <div><span>Fuel est.</span><strong>{formatFuel(fuel.litres)}</strong></div>
+      </div>
+
       <div className="transport-trip-card-foot">
-        <span>{statusLabel}</span>
-        <span>{trip.legs.length} leg{trip.legs.length === 1 ? '' : 's'}</span>
-        <b>Open details</b>
+        <span>{route?.pointCount || trip.historyPoints?.length || 0} GPS breadcrumbs</span>
+        <b>Open analysis</b>
       </div>
     </button>
   );
 }
 
 export default function TransportTripsPage() {
-  const [requests, setRequests] = useState([]);
-  const [builders, setBuilders] = useState([]);
   const [gpsTrips, setGpsTrips] = useState([]);
   const [selectedTripId, setSelectedTripId] = useState(null);
   const [truckFilter, setTruckFilter] = useState('all');
@@ -683,18 +497,11 @@ export default function TransportTripsPage() {
       setLoading(true);
       setError('');
       try {
-        const [active, archived, builderRows, gpsTripRows] = await Promise.all([
-          materialOrderRequestsAPI.listActiveRequests({ includeArchived: true, force: true }),
-          materialOrderRequestsAPI.listArchivedRequests({ force: true }).catch(() => []),
-          safetyProjectsAPI.getBuilders({ includeArchived: true, force: true }).catch(() => []),
-          fetchGpsTripsFromHistory(),
-        ]);
+        const gpsTripRows = await fetchGpsTripsFromHistory();
         if (cancelled) return;
-        setRequests(uniqueRequests([...(active || []), ...(archived || [])]));
-        setBuilders(builderRows || []);
         setGpsTrips(gpsTripRows || []);
       } catch (loadError) {
-        if (!cancelled) setError(loadError?.message || 'Unable to load completed trips.');
+        if (!cancelled) setError(loadError?.message || 'Unable to load driven GPS trips.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -706,43 +513,13 @@ export default function TransportTripsPage() {
   const trips = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - TRIP_WINDOW_DAYS);
-    const scheduledTrips = requests
-      .map(request => buildTripFromRequest(request, builders))
-      .filter(Boolean)
+    return gpsTrips
       .filter(trip => {
         const start = asDate(trip.startedAt);
         return start && start >= cutoff;
-      });
-    const gpsBackedTrips = gpsTrips
-      .filter(trip => {
-        const start = asDate(trip.startedAt);
-        return start && start >= cutoff;
-      });
-    const scheduleFallbackTrips = scheduledTrips.filter(scheduledTrip => (
-      !gpsBackedTrips.some(gpsTrip => (
-        (gpsTrip.truckId && scheduledTrip.truckId && gpsTrip.truckId === scheduledTrip.truckId)
-          || gpsTrip.truckLabel === scheduledTrip.truckLabel
-      ) && tripsOverlap(gpsTrip, scheduledTrip))
-    ));
-    const baseTrips = [...gpsBackedTrips, ...scheduleFallbackTrips]
+      })
       .sort((a, b) => (asDate(b.startedAt)?.getTime() || 0) - (asDate(a.startedAt)?.getTime() || 0));
-    const byTruck = new Map();
-    baseTrips.forEach(trip => {
-      const key = trip.truckId || trip.truckLabel;
-      if (!byTruck.has(key)) byTruck.set(key, []);
-      byTruck.get(key).push(trip);
-    });
-    byTruck.forEach(truckTrips => {
-      truckTrips.sort((a, b) => (asDate(a.startedAt)?.getTime() || 0) - (asDate(b.startedAt)?.getTime() || 0));
-      truckTrips.forEach((trip, index) => {
-        const nextTrip = truckTrips[index + 1];
-        if (trip.source !== 'gps') {
-          trip.cycleEndedAt = nextTrip?.startedAt || trip.completedAt;
-        }
-      });
-    });
-    return baseTrips;
-  }, [builders, gpsTrips, requests]);
+  }, [gpsTrips]);
 
   const filteredTrips = useMemo(() => {
     if (truckFilter === 'all') return trips;
@@ -819,7 +596,6 @@ export default function TransportTripsPage() {
   const avgActualSeconds = trips.length
     ? trips.reduce((sum, trip) => sum + Number(trip.actualDurationSeconds || 0), 0) / trips.length
     : 0;
-  const tollTripCount = trips.filter(trip => trip.tollsEnabled).length;
   const todayKey = scheduleFromIso(new Date().toISOString()).scheduledDate;
   const todayTripCount = trips.filter(trip => trip.scheduledDate === todayKey).length;
 
@@ -827,8 +603,8 @@ export default function TransportTripsPage() {
     <div className="transport-trips-page">
       <div className="transport-trips-toolbar">
         <div>
-          <h1>Trips</h1>
-          <p>Select a completed trip to open its GPS breadcrumbs, traffic, fuel and route information.</p>
+          <h1>Trip Analysis</h1>
+          <p>Actual completed driven trips generated from truck GPS breadcrumbs only.</p>
         </div>
         <div className="transport-trips-actions">
           <select
@@ -847,11 +623,20 @@ export default function TransportTripsPage() {
 
       {error ? <div className="transport-trips-error">{error}</div> : null}
 
-      <div className="transport-trips-summary">
-        <TripMetric label="Completed trips" value={loading ? 'Loading' : filteredTrips.length} />
-        <TripMetric label="Trips today" value={loading ? 'Loading' : todayTripCount} />
-        <TripMetric label="Average actual time" value={avgActualSeconds ? formatDuration(avgActualSeconds) : 'Pending'} />
-        <TripMetric label="Trips with tolls" value={loading ? 'Loading' : tollTripCount} tone="orange" />
+      <div className="transport-trips-queue-tools">
+        <div className="transport-trips-queue-chip-row">
+          <button type="button" className="material-ordering-queue-chip">
+            Filter: {truckFilter === 'all' ? 'All trucks' : truckFilter}
+          </button>
+          <button type="button" className="material-ordering-queue-chip">
+            GPS only
+          </button>
+        </div>
+        <div className="material-ordering-queue-meta">
+          <span>Total {loading ? '...' : filteredTrips.length} {filteredTrips.length === 1 ? 'driven trip' : 'driven trips'}</span>
+          <span>Today: {todayTripCount}</span>
+          <span>Average: {avgActualSeconds ? formatDuration(avgActualSeconds) : 'Pending'}</span>
+        </div>
       </div>
 
       <div className={`transport-trips-layout ${selectedTrip ? 'transport-trips-layout-open' : 'transport-trips-layout-list-only'}`}>
@@ -889,10 +674,10 @@ export default function TransportTripsPage() {
                     <span>{selectedTrip.scheduledDate ? formatBoardDay(selectedTrip.scheduledDate) : 'Date unavailable'}</span>
                   </div>
                   <h2>{selectedTrip.title}</h2>
-                  <p>{selectedTrip.siteLocation || selectedTrip.subtitle}</p>
+                  <p>{selectedTrip.subtitle}</p>
                 </div>
                 <div className="transport-trip-detail-actions">
-                  <TripPill tone={selectedTrip.tollsEnabled ? 'orange' : 'green'}>{selectedTrip.tollsEnabled ? 'Tolls used' : 'No tolls recorded'}</TripPill>
+                  <TripPill tone="green">GPS recorded</TripPill>
                   <button type="button" onClick={() => setSelectedTripId(null)}>Close</button>
                 </div>
               </div>
@@ -930,7 +715,7 @@ export default function TransportTripsPage() {
                   <TripMetric label="TomTom planned time" value={plannedRoute ? formatDuration(plannedRoute.durationSeconds) : 'Calculating'} />
                   <TripMetric label="Fuel used estimate" value={formatFuel(fuel.litres)} tone="green" />
                   <TripMetric label="Consumption estimate" value={fuel.consumption ? `${fuel.consumption.toFixed(1)} L/100km` : 'Pending route'} tone="green" />
-                  <TripMetric label="Toll fees estimate" value={formatCurrency(tollEstimate)} tone="orange" />
+                  <TripMetric label="Toll fees estimate" value={tollEstimate ? formatCurrency(tollEstimate) : 'Not mapped'} tone="orange" />
                 </div>
               </div>
 
@@ -939,8 +724,16 @@ export default function TransportTripsPage() {
                   <h3>Trip timeline</h3>
                   <div className="transport-trip-timeline">
                     <div><span>Started</span><strong>{formatClock(selectedTrip.startedAt)}</strong></div>
-                    <div><span>Arrived / unloading</span><strong>{formatClock(selectedTrip.unloadingAt)}</strong></div>
-                    <div><span>Cycle ended</span><strong>{formatClock(selectedTrip.cycleEndedAt || selectedTrip.completedAt)}</strong></div>
+                    <div><span>Ended</span><strong>{formatClock(selectedTrip.completedAt)}</strong></div>
+                    <div><span>Total time</span><strong>{statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Pending'}</strong></div>
+                  </div>
+                </div>
+
+                <div className="transport-trip-panel">
+                  <h3>Estimated locations</h3>
+                  <div className="transport-trip-timeline transport-trip-location-pair">
+                    <div><span>Start location</span><strong>{selectedTrip.startLocationEstimate || selectedTrip.legs?.[0]?.from || 'Unknown location'}</strong></div>
+                    <div><span>End location</span><strong>{selectedTrip.endLocationEstimate || selectedTrip.legs?.[0]?.to || 'Unknown location'}</strong></div>
                   </div>
                 </div>
 
@@ -954,7 +747,7 @@ export default function TransportTripsPage() {
                 </div>
 
                 <div className="transport-trip-panel">
-                  <h3>Route legs</h3>
+                  <h3>Recorded movement</h3>
                   <div className="transport-trip-legs">
                     {selectedTrip.legs.map((leg, index) => {
                       const analysedLeg = analysis?.current?.legs?.[index];
@@ -966,7 +759,7 @@ export default function TransportTripsPage() {
                           </div>
                           <div>
                             <b>{analysedLeg?.route ? formatDuration(analysedLeg.route.durationSeconds) : 'Calculating'}</b>
-                            <small>{leg.tollsEnabled ? 'Tolls enabled' : 'Avoid tolls'}</small>
+                            <small>GPS start/end estimate</small>
                           </div>
                         </div>
                       );
@@ -995,9 +788,10 @@ export default function TransportTripsPage() {
 
                 <div className="transport-trip-panel transport-trip-assumptions">
                   <h3>Calculation assumptions</h3>
-                  <p>Where available, distance, trip time and slow/idle delay are calculated from the actual iOS GPS breadcrumb trail, not from the scheduled route.</p>
+                  <p>Distance, trip time and slow/idle delay are calculated from the actual iOS GPS breadcrumb trail, not from scheduled orders.</p>
+                  <p>Start and end locations are estimated from the first and last accepted GPS points in the trip.</p>
                   <p>Fuel is estimated for a 7.5 tonne diesel truck at {FUEL_LITRES_PER_100KM} L/100km with a traffic idle uplift of {TRAFFIC_IDLE_LITRES_PER_MINUTE.toFixed(3)} L/min.</p>
-                  <p>Toll fees are labelled as estimates because the current stored route response records toll preference and route time, not the exact toll gantry charges.</p>
+                  <p>Toll fees require route matching against toll roads, so GPS-only trips show toll data only when the route estimate can infer it.</p>
                 </div>
               </div>
             </>
