@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as L from 'leaflet';
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { truckLiveLocationsAPI } from '../services/api';
 import { TRUCK_LANES } from './transport/transportUtils';
 
-const FLEET_REFRESH_MS = 10 * 1000;
+const FLEET_REFRESH_MS = 5 * 1000;
+const FLEET_HIDDEN_REFRESH_MS = 30 * 1000;
 const SYDNEY_CENTER = [-33.8688, 151.2093];
 
 const FALLBACK_POSITIONS = {
@@ -86,7 +87,11 @@ function classifyTruck(location, speedKmh, now) {
   const recordedAt = new Date(location.recordedAt || location.updatedAt || 0).getTime();
   const ageMs = Number.isFinite(recordedAt) ? now - recordedAt : Infinity;
 
-  if (ageMs > 5 * 60 * 1000) {
+  if (ageMs > 10 * 60 * 1000) {
+    return { key: 'offline', label: 'GPS offline', color: '#7B8492' };
+  }
+
+  if (ageMs > 2 * 60 * 1000) {
     return { key: 'stale', label: 'GPS stale', color: '#7B8492' };
   }
 
@@ -182,6 +187,117 @@ function FleetMapController({ trucks, selectedTruckId, followVersion }) {
   return null;
 }
 
+function easeInOut(value) {
+  return value < 0.5 ? 2 * value * value : 1 - Math.pow(-2 * value + 2, 2) / 2;
+}
+
+function FleetLiveMarker({ truck, onSelect }) {
+  const map = useMap();
+  const markerRef = useRef(null);
+  const animationRef = useRef(null);
+  const currentPositionRef = useRef([truck.latitude, truck.longitude]);
+  const onSelectRef = useRef(onSelect);
+  const targetKey = `${truck.latitude?.toFixed(6)}:${truck.longitude?.toFixed(6)}`;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!truck.hasPosition) {
+      return undefined;
+    }
+
+    const marker = L.marker([truck.latitude, truck.longitude], {
+      icon: markerIcon(truck),
+      riseOnHover: true,
+      zIndexOffset: truck.status.key === 'moving' ? 40 : 0,
+    }).addTo(map);
+    marker.bindTooltip(`<strong>${escapeHtml(truck.rego)}</strong><span>${escapeHtml(truck.status.label)}</span>`, {
+      direction: 'top',
+      offset: [0, -44],
+      opacity: 0.96,
+      className: 'fleet-live-tooltip',
+    });
+    const handleClick = () => onSelectRef.current?.();
+    marker.on('click', handleClick);
+    markerRef.current = marker;
+    currentPositionRef.current = [truck.latitude, truck.longitude];
+
+    return () => {
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      marker.off('click', handleClick);
+      marker.remove();
+      markerRef.current = null;
+    };
+  }, [map, truck.hasPosition, truck.id]);
+
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) {
+      return;
+    }
+    marker.setIcon(markerIcon(truck));
+    marker.setZIndexOffset(truck.status.key === 'moving' ? 40 : 0);
+    marker.setTooltipContent(`<strong>${escapeHtml(truck.rego)}</strong><span>${escapeHtml(truck.status.label)}</span>`);
+  }, [truck]);
+
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker || !truck.hasPosition) {
+      return undefined;
+    }
+
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    const from = currentPositionRef.current || [truck.latitude, truck.longitude];
+    const to = [truck.latitude, truck.longitude];
+    const ageMs = truck.recordedAt ? Date.now() - new Date(truck.recordedAt).getTime() : Infinity;
+    const shouldJump = truck.status.key === 'offline' || truck.status.key === 'stale' || ageMs > 60 * 1000;
+    const duration = shouldJump ? 0 : Math.min(4800, Math.max(1200, FLEET_REFRESH_MS * 0.9));
+
+    if (!duration || (Math.abs(from[0] - to[0]) < 0.000001 && Math.abs(from[1] - to[1]) < 0.000001)) {
+      marker.setLatLng(to);
+      currentPositionRef.current = to;
+      return undefined;
+    }
+
+    const startedAt = performance.now();
+    const animate = (frameTime) => {
+      const progress = Math.min(1, (frameTime - startedAt) / duration);
+      const eased = easeInOut(progress);
+      const next = [
+        from[0] + (to[0] - from[0]) * eased,
+        from[1] + (to[1] - from[1]) * eased,
+      ];
+      marker.setLatLng(next);
+      currentPositionRef.current = next;
+      if (progress < 1) {
+        animationRef.current = window.requestAnimationFrame(animate);
+      } else {
+        currentPositionRef.current = to;
+        animationRef.current = null;
+      }
+    };
+    animationRef.current = window.requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [targetKey, truck.hasPosition, truck.recordedAt, truck.status.key]);
+
+  return null;
+}
+
 function FleetControlButton({ label, title, children, onClick }) {
   return (
     <button type="button" className="fleet-live-control" title={title || label} aria-label={label} onClick={onClick}>
@@ -234,10 +350,30 @@ export default function TransportFleetPage() {
       await loadLocations({ silent });
     };
     run(false);
-    const interval = window.setInterval(() => run(true), FLEET_REFRESH_MS);
+    let timer = null;
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        await run(true);
+        if (active) {
+          schedule();
+        }
+      }, document.visibilityState === 'hidden' ? FLEET_HIDDEN_REFRESH_MS : FLEET_REFRESH_MS);
+    };
+    const handleVisibility = () => {
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+      run(true);
+      schedule();
+    };
+    schedule();
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadLocations]);
 
@@ -267,6 +403,8 @@ export default function TransportFleetPage() {
     const speedMps = toNumber(location?.speedMps) ?? 0;
     const speedKmh = speedMps * 3.6;
     const status = classifyTruck(location, speedKmh, now);
+    const recordedAt = location?.recordedAt || location?.updatedAt || null;
+    const recordedAtMs = recordedAt ? new Date(recordedAt).getTime() : NaN;
     const visual = TRUCK_VISUALS[lane.id] || { color: status.color, routeColor: status.color };
 
     return {
@@ -281,7 +419,8 @@ export default function TransportFleetPage() {
       headingDeg: toNumber(location?.headingDeg),
       accuracyM: toNumber(location?.accuracyM),
       batteryPercent: toNumber(location?.batteryPercent),
-      recordedAt: location?.recordedAt || location?.updatedAt || null,
+      recordedAt,
+      ageMs: Number.isFinite(recordedAtMs) ? Math.max(0, now - recordedAtMs) : Infinity,
       updatedAt: location?.updatedAt || null,
       driverUserId: location?.driverUserId || null,
       deliveryRequestId: location?.deliveryRequestId || null,
@@ -328,19 +467,13 @@ export default function TransportFleetPage() {
             pathOptions={{ color: truck.visual.routeColor, weight: 5, opacity: 0.72 }}
           />
         ) : null)}
-        {trucks.map(truck => truck.hasPosition ? (
-          <Marker
-            key={truck.id}
-            position={[truck.latitude, truck.longitude]}
-            icon={markerIcon(truck)}
-            eventHandlers={{ click: () => setSelectedTruckId(truck.id) }}
-          >
-            <Tooltip direction="top" offset={[0, -44]} opacity={0.96} className="fleet-live-tooltip">
-              <strong>{truck.rego}</strong>
-              <span>{truck.status.label}</span>
-            </Tooltip>
-          </Marker>
-        ) : null)}
+	        {trucks.map(truck => truck.hasPosition ? (
+	          <FleetLiveMarker
+	            key={truck.id}
+	            truck={truck}
+	            onSelect={() => setSelectedTruckId(truck.id)}
+	          />
+	        ) : null)}
       </MapContainer>
 
       <div className="fleet-live-controls" aria-label="Fleet map controls">
@@ -362,7 +495,7 @@ export default function TransportFleetPage() {
         <span><i className="moving"></i>Moving</span>
         <span><i className="idle"></i>Idle / on route</span>
         <span><i className="returning"></i>Returning to yard</span>
-        <span><i className="stale"></i>GPS stale</span>
+	        <span><i className="stale"></i>GPS stale / offline</span>
       </div>
 
       <aside className="fleet-live-panel" aria-label="Live truck locations">
