@@ -151,9 +151,33 @@ function markerIcon(truck) {
   });
 }
 
+function fleetPoints(trucks) {
+  return trucks
+    .filter(truck => truck.hasPosition)
+    .map(truck => [truck.latitude, truck.longitude]);
+}
+
+function fitFleet(map, trucks, animate = true) {
+  const points = fleetPoints(trucks);
+
+  if (points.length === 0) {
+    map.setView(SYDNEY_CENTER, 10, { animate });
+    return;
+  }
+
+  map.fitBounds(points, {
+    paddingTopLeft: [58, 58],
+    paddingBottomRight: [420, 170],
+    maxZoom: 12,
+    animate,
+  });
+}
+
 function FleetMapController({ trucks, selectedTruckId, followVersion }) {
   const map = useMap();
-  const boundsKey = trucks.map(truck => `${truck.id}:${truck.latitude?.toFixed(5)}:${truck.longitude?.toFixed(5)}`).join('|');
+  const initialFitDoneRef = useRef(false);
+  const latestTrucksRef = useRef(trucks);
+  const lastFollowVersionRef = useRef(followVersion);
 
   useEffect(() => {
     const timer = window.setTimeout(() => map.invalidateSize(), 80);
@@ -161,28 +185,34 @@ function FleetMapController({ trucks, selectedTruckId, followVersion }) {
   }, [map]);
 
   useEffect(() => {
-    const selectedTruck = trucks.find(truck => truck.id === selectedTruckId && truck.hasPosition);
+    latestTrucksRef.current = trucks;
+  }, [trucks]);
+
+  useEffect(() => {
+    if (initialFitDoneRef.current || fleetPoints(trucks).length === 0) {
+      return;
+    }
+    initialFitDoneRef.current = true;
+    fitFleet(map, trucks, false);
+  }, [map, trucks]);
+
+  useEffect(() => {
+    if (!selectedTruckId) {
+      return;
+    }
+    const selectedTruck = latestTrucksRef.current.find(truck => truck.id === selectedTruckId && truck.hasPosition);
     if (selectedTruck) {
       map.setView([selectedTruck.latitude, selectedTruck.longitude], Math.max(map.getZoom(), 13), { animate: true });
+    }
+  }, [map, selectedTruckId]);
+
+  useEffect(() => {
+    if (followVersion === lastFollowVersionRef.current) {
       return;
     }
-
-    const points = trucks
-      .filter(truck => truck.hasPosition)
-      .map(truck => [truck.latitude, truck.longitude]);
-
-    if (points.length === 0) {
-      map.setView(SYDNEY_CENTER, 10, { animate: true });
-      return;
-    }
-
-    map.fitBounds(points, {
-      paddingTopLeft: [58, 58],
-      paddingBottomRight: [420, 170],
-      maxZoom: 12,
-      animate: true,
-    });
-  }, [boundsKey, followVersion, map, selectedTruckId]);
+    lastFollowVersionRef.current = followVersion;
+    fitFleet(map, latestTrucksRef.current, true);
+  }, [followVersion, map]);
 
   return null;
 }

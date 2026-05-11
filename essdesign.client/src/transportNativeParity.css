@@ -6742,10 +6742,12 @@
     place-items: center;
     width: 54px;
     height: 54px;
+    padding: 0;
     border: 0;
     border-radius: 13px;
     background: rgba(255, 255, 255, 0.94);
     color: #102B5C;
+    line-height: 0;
     box-shadow: 0 12px 24px rgba(16, 43, 92, 0.18);
     cursor: pointer;
     transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
@@ -6758,8 +6760,11 @@
 }
 
 .fleet-live-control svg {
+    display: block;
+    margin: auto;
     width: 26px;
     height: 26px;
+    flex: 0 0 26px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2.25;
