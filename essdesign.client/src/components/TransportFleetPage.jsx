@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { truckLiveLocationsAPI } from '../services/api';
 import { TRUCK_LANES } from './transport/transportUtils';
 
-const FLEET_REFRESH_MS = 5 * 1000;
+const FLEET_REFRESH_MS = 3 * 1000;
 const FLEET_HIDDEN_REFRESH_MS = 30 * 1000;
 const ROUTE_HISTORY_LOOKBACK_HOURS = 8;
 const ROUTE_HISTORY_REFRESH_MS = 20 * 1000;
@@ -165,6 +165,10 @@ function classifyTruck(location, speedKmh, now) {
   const recordedAt = new Date(location.recordedAt || location.updatedAt || 0).getTime();
   const ageMs = Number.isFinite(recordedAt) ? now - recordedAt : Infinity;
 
+  if (explicitStatus.includes('stationary')) {
+    return { key: 'stationary', label: 'Stationary', color: '#6B7280' };
+  }
+
   if (ageMs > 10 * 60 * 1000) {
     return { key: 'offline', label: 'GPS offline', color: '#7B8492' };
   }
@@ -177,15 +181,15 @@ function classifyTruck(location, speedKmh, now) {
     return { key: 'returning', label: 'Returning to yard', color: '#2388E9' };
   }
 
-  if (explicitStatus.includes('stationary') || explicitStatus === 'idle') {
-    return { key: 'stationary', label: 'Stationary', color: '#6B7280' };
+  if (explicitStatus === 'idle') {
+    return { key: 'idle', label: 'Idle', color: '#F59A23' };
   }
 
   if (explicitStatus.includes('route') || explicitStatus.includes('transit')) {
     return { key: 'on-route', label: 'On route', color: '#F59A23' };
   }
 
-  if (speedKmh > 5) {
+  if (speedKmh > 5 || explicitStatus.includes('moving')) {
     return { key: 'moving', label: 'Moving', color: '#4CAF50' };
   }
 
