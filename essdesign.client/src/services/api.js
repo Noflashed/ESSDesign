@@ -4374,6 +4374,10 @@ export const analysisAPI = {
         const response = await apiClient.post('/analysis/address-suggestions', { query, limit: 6 }, { signal: options.signal });
         return response.data;
     },
+    reverseGeocode: async ({ lat, lon }, options = {}) => {
+        const response = await apiClient.post('/analysis/reverse-geocode', { lat, lon }, { signal: options.signal });
+        return response.data;
+    },
 };
 
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI, essNewsAPI };

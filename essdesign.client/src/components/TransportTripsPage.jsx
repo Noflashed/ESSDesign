@@ -119,10 +119,43 @@ function getDriverLabel(trip) {
   return value.replace(/^auth0\|/i, '').replace(/[._-]+/g, ' ');
 }
 
-function getTripRouteLabels(trip) {
+function getPointCoordinate(point) {
+  const lat = Number(point?.latitude ?? point?.lat);
+  const lon = Number(point?.longitude ?? point?.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function getCoordinateKey(point) {
+  const coordinate = getPointCoordinate(point);
+  return coordinate ? `${coordinate.lat.toFixed(6)},${coordinate.lon.toFixed(6)}` : '';
+}
+
+function getTripEndpointPoints(trip) {
+  const historyPoints = Array.isArray(trip?.historyPoints) ? trip.historyPoints : [];
+  const firstHistoryPoint = historyPoints[0] || null;
+  const lastHistoryPoint = historyPoints[historyPoints.length - 1] || null;
   return {
-    start: trip?.startLocationEstimate || trip?.legs?.[0]?.from || 'Unknown start',
-    end: trip?.endLocationEstimate || trip?.legs?.[0]?.to || 'Unknown finish',
+    startPoint: firstHistoryPoint || trip?.gpsRoute?.yard || null,
+    endPoint: lastHistoryPoint || trip?.gpsRoute?.site || null,
+  };
+}
+
+function formatResolvedAddress(address) {
+  if (!address) return '';
+  return address.label || address.address || [address.street, address.suburb, address.state].filter(Boolean).join(', ');
+}
+
+function getTripRouteLabels(trip, addressLabels = {}) {
+  const { startPoint, endPoint } = getTripEndpointPoints(trip);
+  const startKey = getCoordinateKey(startPoint);
+  const endKey = getCoordinateKey(endPoint);
+  const startAddress = formatResolvedAddress(addressLabels[startKey]);
+  const endAddress = formatResolvedAddress(addressLabels[endKey]);
+  return {
+    start: startAddress || (startKey ? 'Recorded start location' : 'Unknown start'),
+    end: endAddress || (endKey ? 'Recorded finish location' : 'Unknown finish'),
+    startKey,
+    endKey,
   };
 }
 
@@ -161,10 +194,10 @@ function tripMatchesDateFilter(trip, dateFilter) {
   return true;
 }
 
-function exportTripsCsv(trips) {
+function exportTripsCsv(trips, addressLabels = {}) {
   const header = ['Truck', 'Driver', 'Start', 'Finish', 'Started', 'Ended', 'Duration', 'Distance', 'Fuel', 'Traffic'];
   const rows = trips.map(trip => {
-    const labels = getTripRouteLabels(trip);
+    const labels = getTripRouteLabels(trip, addressLabels);
     const stats = getTripStats(trip);
     return [
       trip.truckLabel,
@@ -592,9 +625,9 @@ function TripPill({ children, tone = 'navy' }) {
   return <span className={`transport-trip-pill transport-trip-pill-${tone}`}>{children}</span>;
 }
 
-function TripListCard({ trip, selected, onSelect }) {
+function TripListCard({ trip, selected, onSelect, addressLabels }) {
   const stats = getTripStats(trip);
-  const labels = getTripRouteLabels(trip);
+  const labels = getTripRouteLabels(trip, addressLabels);
   const driverLabel = getDriverLabel(trip);
   return (
     <button type="button" className={`transport-trip-card ${selected ? 'selected' : ''}`} onClick={onSelect}>
@@ -636,9 +669,9 @@ function TripListCard({ trip, selected, onSelect }) {
   );
 }
 
-function TripTimeline({ trip, stats }) {
-  const startLabel = getTripRouteLabels(trip).start;
-  const endLabel = getTripRouteLabels(trip).end;
+function TripTimeline({ trip, stats, addressLabels }) {
+  const startLabel = getTripRouteLabels(trip, addressLabels).start;
+  const endLabel = getTripRouteLabels(trip, addressLabels).end;
   const movingEnd = new Date((asDate(trip.startedAt)?.getTime() || 0) + Math.max(0, (stats.durationSeconds || 0) - (stats.trafficSeconds || 0)) * 1000);
   const trafficStart = new Date((asDate(trip.completedAt)?.getTime() || 0) - Math.max(0, stats.trafficSeconds || 0) * 1000);
   return (
@@ -717,7 +750,9 @@ export default function TransportTripsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const [mapOpenSignal, setMapOpenSignal] = useState(0);
+  const [addressLabels, setAddressLabels] = useState({});
   const analysisCacheRef = useRef(new Map());
+  const addressCacheRef = useRef(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -756,13 +791,13 @@ export default function TransportTripsPage() {
   }, [trips]);
 
   const filteredTrips = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
+      const query = searchTerm.trim().toLowerCase();
     return trips.filter(trip => {
       if (truckFilter !== 'all' && trip.truckLabel !== truckFilter) return false;
       if (driverFilter !== 'all' && getDriverLabel(trip) !== driverFilter) return false;
       if (!tripMatchesDateFilter(trip, dateFilter)) return false;
       if (!query) return true;
-      const labels = getTripRouteLabels(trip);
+      const labels = getTripRouteLabels(trip, addressLabels);
       const haystack = [
         trip.truckLabel,
         getDriverLabel(trip),
@@ -772,7 +807,7 @@ export default function TransportTripsPage() {
       ].join(' ').toLowerCase();
       return haystack.includes(query);
     });
-  }, [trips, truckFilter, driverFilter, dateFilter, searchTerm]);
+  }, [trips, truckFilter, driverFilter, dateFilter, searchTerm, addressLabels]);
 
   useEffect(() => {
     if (selectedTripId && !filteredTrips.some(trip => trip.id === selectedTripId)) {
@@ -787,6 +822,52 @@ export default function TransportTripsPage() {
     () => filteredTrips.find(trip => trip.id === selectedTripId) || null,
     [filteredTrips, selectedTripId],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const targetsByKey = new Map();
+    const addTripTargets = (trip) => {
+      if (!trip) return;
+      const { startPoint, endPoint } = getTripEndpointPoints(trip);
+      [startPoint, endPoint].forEach(point => {
+        const coordinate = getPointCoordinate(point);
+        const key = getCoordinateKey(point);
+        if (!key || targetsByKey.has(key) || addressCacheRef.current.has(key)) {
+          return;
+        }
+        targetsByKey.set(key, coordinate);
+      });
+    };
+
+    addTripTargets(selectedTrip);
+    filteredTrips.slice(0, 12).forEach(addTripTargets);
+    const targets = Array.from(targetsByKey.entries()).slice(0, 24);
+    if (!targets.length) {
+      return () => { cancelled = true; };
+    }
+
+    async function loadAddresses() {
+      const resolved = {};
+      await Promise.all(targets.map(async ([key, coordinate]) => {
+        try {
+          const address = await analysisAPI.reverseGeocode(coordinate);
+          const nextAddress = address || {};
+          addressCacheRef.current.set(key, nextAddress);
+          resolved[key] = nextAddress;
+        } catch {
+          const fallback = { label: '' };
+          addressCacheRef.current.set(key, fallback);
+          resolved[key] = fallback;
+        }
+      }));
+      if (!cancelled && Object.keys(resolved).length) {
+        setAddressLabels(previous => ({ ...previous, ...resolved }));
+      }
+    }
+
+    loadAddresses();
+    return () => { cancelled = true; };
+  }, [filteredTrips, selectedTrip]);
 
   useEffect(() => {
     if (!selectedTrip || !selectedTrip.legs.length) {
@@ -837,7 +918,7 @@ export default function TransportTripsPage() {
   const gpsRoute = analysis?.history?.route || null;
   const displayRoute = gpsRoute || plannedRoute;
   const selectedStats = selectedTrip ? getTripStats(selectedTrip) : null;
-  const selectedLabels = selectedTrip ? getTripRouteLabels(selectedTrip) : { start: '', end: '' };
+  const selectedLabels = selectedTrip ? getTripRouteLabels(selectedTrip, addressLabels) : { start: '', end: '' };
   const usingGpsBreadcrumbs = Boolean(gpsRoute);
   const statsDistanceMeters = gpsRoute?.distanceMeters ?? plannedRoute?.distanceMeters ?? selectedStats?.distanceMeters;
   const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds ?? selectedStats?.durationSeconds;
@@ -869,7 +950,7 @@ export default function TransportTripsPage() {
     <div className="transport-trips-page">
       <div className="transport-trips-toolbar">
         <h1>Trip Analysis</h1>
-        <button type="button" className="transport-trip-export" onClick={() => exportTripsCsv(filteredTrips)} disabled={!filteredTrips.length}>
+        <button type="button" className="transport-trip-export" onClick={() => exportTripsCsv(filteredTrips, addressLabels)} disabled={!filteredTrips.length}>
           <TripIcon type="export" />
           <span>Export</span>
         </button>
@@ -948,6 +1029,7 @@ export default function TransportTripsPage() {
                 key={trip.id}
                 trip={trip}
                 selected={selectedTrip?.id === trip.id}
+                addressLabels={addressLabels}
                 onSelect={() => {
                   setSelectionCleared(false);
                   setSelectedTripId(trip.id);
@@ -992,7 +1074,7 @@ export default function TransportTripsPage() {
                 <RouteMapCanvas
                   routeData={displayRoute}
                   loading={analysisLoading}
-                  siteLocation={selectedTrip.siteLocation}
+                  siteLocation={selectedLabels.end}
                   className="transport-trip-route-map"
                   interactive
                   expandable
@@ -1034,7 +1116,7 @@ export default function TransportTripsPage() {
                     durationSeconds: statsDurationSeconds,
                     trafficSeconds: statsTrafficSeconds,
                     averageSpeedMps: (statsDistanceMeters && statsDurationSeconds) ? statsDistanceMeters / statsDurationSeconds : selectedStats?.averageSpeedMps,
-                  }} />
+                  }} addressLabels={addressLabels} />
                 </div>
 
                 <div className="transport-trip-panel transport-trip-alternatives">

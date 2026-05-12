@@ -141,5 +141,29 @@ namespace ESSDesign.Server.Controllers
                 return StatusCode(500, new { error = "Address suggestions failed. Please try again." });
             }
         }
+
+        [HttpPost("reverse-geocode")]
+        public async Task<IActionResult> ReverseGeocode(
+            [FromBody] DeliveryAnalysisService.ReverseGeocodeRequest request)
+        {
+            if (!double.IsFinite(request.Lat) || !double.IsFinite(request.Lon))
+                return BadRequest(new { error = "lat and lon are required." });
+
+            try
+            {
+                var result = await _deliveryAnalysisService.ReverseGeocodeAsync(request);
+                if (result == null)
+                {
+                    return NotFound(new { error = "Address unavailable for this GPS point." });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Reverse geocode failed for {Lat}, {Lon}", request.Lat, request.Lon);
+                return StatusCode(500, new { error = "Reverse geocode failed. Please try again." });
+            }
+        }
     }
 }

@@ -70,6 +70,25 @@ namespace ESSDesign.Server.Services
             public double? Lon { get; set; }
         }
 
+        public sealed class ReverseGeocodeRequest
+        {
+            public double Lat { get; set; }
+            public double Lon { get; set; }
+        }
+
+        public sealed class ReverseGeocodeResult
+        {
+            public string Label { get; set; } = string.Empty;
+            public string Address { get; set; } = string.Empty;
+            public string Street { get; set; } = string.Empty;
+            public string Suburb { get; set; } = string.Empty;
+            public string Municipality { get; set; } = string.Empty;
+            public string State { get; set; } = string.Empty;
+            public string Postcode { get; set; } = string.Empty;
+            public double Lat { get; set; }
+            public double Lon { get; set; }
+        }
+
         public sealed class RoutePoint
         {
             public double Lat { get; set; }
@@ -335,6 +354,90 @@ namespace ESSDesign.Server.Services
             {
                 _logger.LogWarning(ex, "TomTom address suggestions failed for {Query}", query);
                 return new List<AddressSuggestionResult>();
+            }
+        }
+
+        private static string ReadJsonString(JsonElement element, string propertyName)
+        {
+            return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var property)
+                ? property.GetString() ?? string.Empty
+                : string.Empty;
+        }
+
+        private async Task<ReverseGeocodeResult?> ReverseGeocodeWithTomTomAsync(double lat, double lon, HttpClient client)
+        {
+            var apiKey = GetTomTomApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return null;
+            }
+
+            if (!await _tomTomUsageBudgetService.TryConsumeAsync("reverse-geocode"))
+            {
+                return null;
+            }
+
+            try
+            {
+                var position = FormattableString.Invariant($"{lat:F6},{lon:F6}");
+                var url = $"https://api.tomtom.com/search/2/reverseGeocode/{position}.json" +
+                          "?radius=100" +
+                          "&returnSpeedLimit=false" +
+                          "&returnRoadUse=false" +
+                          "&allowFreeformNewLine=false" +
+                          $"&key={Uri.EscapeDataString(apiKey)}";
+
+                using var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var root = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
+                if (!root.TryGetProperty("addresses", out var addressesEl))
+                {
+                    return null;
+                }
+
+                var first = addressesEl.EnumerateArray().FirstOrDefault();
+                if (first.ValueKind != JsonValueKind.Object || !first.TryGetProperty("address", out var addressEl))
+                {
+                    return null;
+                }
+
+                var freeform = ReadJsonString(addressEl, "freeformAddress");
+                var streetNumber = ReadJsonString(addressEl, "streetNumber");
+                var streetName = ReadJsonString(addressEl, "streetName");
+                var street = string.Join(" ", new[] { streetNumber, streetName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                var suburb = ReadJsonString(addressEl, "municipalitySubdivision");
+                var municipality = ReadJsonString(addressEl, "municipality");
+                var state = ReadJsonString(addressEl, "countrySubdivision");
+                var postcode = ReadJsonString(addressEl, "postalCode");
+                var labelParts = new[]
+                {
+                    string.IsNullOrWhiteSpace(street) ? freeform : street,
+                    suburb,
+                    state,
+                }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase);
+
+                return new ReverseGeocodeResult
+                {
+                    Label = string.Join(", ", labelParts),
+                    Address = freeform,
+                    Street = street,
+                    Suburb = suburb,
+                    Municipality = municipality,
+                    State = state,
+                    Postcode = postcode,
+                    Lat = lat,
+                    Lon = lon,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "TomTom reverse geocode failed for {Lat}, {Lon}", lat, lon);
+                return null;
             }
         }
 
@@ -1148,6 +1251,19 @@ namespace ESSDesign.Server.Services
             httpClient.Timeout = TimeSpan.FromSeconds(6);
 
             return await SearchTomTomAddressesAsync(query, request.Limit, httpClient);
+        }
+
+        public async Task<ReverseGeocodeResult?> ReverseGeocodeAsync(ReverseGeocodeRequest request)
+        {
+            if (!double.IsFinite(request.Lat) || !double.IsFinite(request.Lon))
+            {
+                return null;
+            }
+
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(6);
+
+            return await ReverseGeocodeWithTomTomAsync(request.Lat, request.Lon, httpClient);
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)

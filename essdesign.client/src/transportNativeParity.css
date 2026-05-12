@@ -7172,7 +7172,7 @@
 /* Transport trips */
 .transport-trips-page {
     min-height: 100%;
-    padding: 26px 38px 34px;
+    padding: 18px 30px 26px;
     background: linear-gradient(180deg, #FFFFFF 0%, #F7FAFF 46%, #FFFFFF 100%);
     color: #0F2A62;
 }
@@ -7182,13 +7182,13 @@
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .transport-trips-toolbar h1 {
     margin: 0;
     color: #0F2A62;
-    font-size: clamp(26px, 2.1vw, 34px);
+    font-size: clamp(24px, 1.8vw, 30px);
     font-weight: 950;
     letter-spacing: -0.045em;
 }
@@ -7206,13 +7206,13 @@
 
 .transport-trip-export,
 .transport-trip-filter-button {
-    min-height: 44px;
+    min-height: 38px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
-    padding: 0 18px;
-    font-size: 14px;
+    padding: 0 14px;
+    font-size: 13px;
     font-weight: 900;
     cursor: pointer;
 }
@@ -7232,8 +7232,8 @@
 .transport-trip-metric-icon svg,
 .transport-trip-truck-avatar svg,
 .transport-trip-timeline-dot svg {
-    width: 17px;
-    height: 17px;
+    width: 15px;
+    height: 15px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -7243,14 +7243,14 @@
 
 .transport-trip-control-bar {
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) 150px 130px 132px 118px;
-    gap: 16px;
+    grid-template-columns: minmax(260px, 1fr) 138px 118px 124px 104px;
+    gap: 12px;
     align-items: center;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
 }
 
 .transport-trip-search {
-    min-height: 46px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -7264,7 +7264,7 @@
     outline: 0;
     background: transparent;
     color: #0F2A62;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 750;
 }
 
@@ -7277,7 +7277,7 @@
 }
 
 .transport-trip-filter-shell {
-    min-height: 46px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -7291,7 +7291,7 @@
     outline: 0;
     background: transparent;
     color: #0F2A62;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 900;
     cursor: pointer;
 }
@@ -7329,8 +7329,8 @@
 
 .transport-trips-layout {
     display: grid;
-    grid-template-columns: minmax(330px, 440px) minmax(0, 1fr);
-    gap: 20px;
+    grid-template-columns: minmax(310px, 405px) minmax(0, 1fr);
+    gap: 16px;
     align-items: stretch;
 }
 
@@ -7344,9 +7344,9 @@
 }
 
 .transport-trips-list {
-    height: calc(100vh - 164px);
+    height: calc(100vh - 126px);
     overflow: auto;
-    padding: 18px;
+    padding: 14px;
 }
 
 .transport-trips-list-head {
@@ -7354,12 +7354,12 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .transport-trips-list-head strong {
     color: #0F2A62;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 950;
 }
 
@@ -7368,10 +7368,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 29px;
+    min-height: 25px;
     border-radius: 999px;
     padding: 0 11px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 900;
     white-space: nowrap;
 }
@@ -7384,12 +7384,12 @@
 .transport-trip-card {
     width: 100%;
     display: grid;
-    gap: 14px;
-    margin-bottom: 12px;
+    gap: 10px;
+    margin-bottom: 10px;
     border: 1px solid #DDE7F4;
     border-radius: 12px;
     background: #FFFFFF;
-    padding: 14px;
+    padding: 12px;
     color: #0F2A62;
     text-align: left;
     cursor: pointer;
@@ -7424,12 +7424,12 @@
 
 .transport-trip-card-identity {
     min-width: 0;
-    gap: 12px;
+    gap: 10px;
 }
 
 .transport-trip-truck-avatar {
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -7449,14 +7449,14 @@
 }
 
 .transport-trip-card-identity strong {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 950;
 }
 
 .transport-trip-card-identity small {
     margin-top: 2px;
     color: #66758E;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 760;
 }
 
@@ -7476,8 +7476,8 @@
 }
 
 .transport-trip-card-route {
-    gap: 12px;
-    padding: 2px 0;
+    gap: 10px;
+    padding: 0;
 }
 
 .transport-trip-card-route b {
@@ -7519,22 +7519,22 @@
 
 .transport-trip-route-point span {
     color: #0F2A62;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 900;
 }
 
 .transport-trip-route-point strong {
-    margin-top: 6px;
+    margin-top: 4px;
     color: #71809A;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 760;
 }
 
 .transport-trip-card-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 9px;
-    padding-top: 12px;
+    gap: 7px;
+    padding-top: 9px;
     border-top: 1px solid #E5ECF6;
 }
 
@@ -7560,19 +7560,19 @@
 
 .transport-trip-card-metrics strong {
     color: #0F2A62;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 950;
 }
 
 .transport-trip-card-metrics span {
     color: #71809A;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 760;
 }
 
 .transport-trip-card-foot {
     color: #435471;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
 }
 
@@ -7606,27 +7606,27 @@
 }
 
 .transport-trips-detail {
-    height: calc(100vh - 164px);
+    height: calc(100vh - 126px);
     overflow: auto;
-    padding: 18px;
+    padding: 14px;
 }
 
 .transport-trip-detail-head {
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .transport-trip-detail-head h2 {
     margin: 0;
     color: #0F2A62;
-    font-size: clamp(21px, 1.7vw, 30px);
+    font-size: clamp(19px, 1.45vw, 26px);
     font-weight: 950;
     letter-spacing: -0.04em;
 }
 
 .transport-trip-detail-meta {
     flex-wrap: wrap;
-    gap: 15px;
-    margin-top: 8px;
+    gap: 12px;
+    margin-top: 6px;
     color: #66758E;
     font-size: 12px;
     font-weight: 800;
@@ -7645,44 +7645,44 @@
 
 .transport-trip-map-button,
 .transport-trip-close-button {
-    min-height: 37px;
+    min-height: 33px;
     border: 1px solid #D9E2F0;
     border-radius: 9px;
     background: #FFFFFF;
     color: #0F2A62;
-    padding: 0 13px;
-    font-size: 13px;
+    padding: 0 11px;
+    font-size: 12px;
     font-weight: 900;
     cursor: pointer;
 }
 
 .transport-trip-close-button {
-    width: 37px;
+    width: 33px;
     padding: 0;
     border-color: transparent;
     color: #415471;
-    font-size: 25px;
+    font-size: 22px;
     line-height: 1;
 }
 
 .transport-trip-route-card {
     position: relative;
-    min-height: 320px;
+    min-height: 260px;
     border: 1px solid #DDE7F4;
     border-radius: 11px;
     overflow: hidden;
     background: #EAF2FC;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .transport-trip-route-map {
-    height: 320px;
-    min-height: 320px;
+    height: 260px;
+    min-height: 260px;
 }
 
 .transport-trip-route-card .transport-route-canvas,
 .transport-trip-route-card .transport-leaflet-map {
-    min-height: 320px;
+    min-height: 260px;
 }
 
 .transport-trip-route-card .transport-route-map-hint,
@@ -7692,20 +7692,20 @@
 
 .transport-trip-map-legend {
     position: absolute;
-    left: 28px;
-    bottom: 18px;
+    left: 18px;
+    bottom: 14px;
     z-index: 2;
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: 14px;
     align-items: center;
     max-width: calc(100% - 56px);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.92);
-    padding: 10px 16px;
+    padding: 8px 12px;
     box-shadow: 0 12px 28px rgba(15, 42, 98, 0.14);
     color: #435471;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
 }
 
@@ -7752,20 +7752,20 @@
 
 .transport-trip-stat-grid-hero {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .transport-trip-metric {
     min-width: 0;
-    min-height: 94px;
+    min-height: 76px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 8px;
     border: 1px solid #DDE7F4;
     border-radius: 10px;
     background: #FFFFFF;
-    padding: 13px 10px;
+    padding: 10px 8px;
     box-shadow: 0 10px 20px rgba(15, 42, 98, 0.04);
     text-align: center;
 }
@@ -7799,7 +7799,7 @@
 
 .transport-trip-metric strong {
     color: #0F2A62;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 950;
     letter-spacing: -0.03em;
 }
@@ -7807,21 +7807,21 @@
 .transport-trip-metric span {
     margin-top: 3px;
     color: #526988;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 900;
 }
 
 .transport-trip-metric small {
     margin-top: 5px;
     color: #71809A;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 760;
 }
 
 .transport-trip-panels {
     display: grid;
     grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
-    gap: 16px;
+    gap: 12px;
 }
 
 .transport-trip-panel {
@@ -7829,13 +7829,13 @@
     border: 1px solid #DDE7F4;
     border-radius: 11px;
     background: #FFFFFF;
-    padding: 16px;
+    padding: 12px;
 }
 
 .transport-trip-panel h3 {
     margin: 0 0 10px;
     color: #0F2A62;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 950;
     letter-spacing: -0.02em;
 }
@@ -7868,17 +7868,17 @@
 .transport-trip-timeline-item {
     position: relative;
     display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
-    gap: 12px;
-    min-height: 62px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 54px;
     color: #0F2A62;
 }
 
 .transport-trip-timeline-dot {
     position: relative;
     z-index: 1;
-    width: 28px;
-    height: 28px;
+    width: 25px;
+    height: 25px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -7903,14 +7903,14 @@
 
 .transport-trip-timeline-item strong {
     color: #0F2A62;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 950;
 }
 
 .transport-trip-timeline-item b {
     margin-top: 2px;
     color: #2563EB;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 950;
 }
 
@@ -7921,7 +7921,7 @@
 .transport-trip-timeline-item small {
     margin-top: 3px;
     color: #66758E;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 760;
 }
 
@@ -7932,13 +7932,13 @@
 
 .transport-trip-alt-row {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) 78px 84px 92px 84px 76px 92px;
-    gap: 12px;
+    grid-template-columns: minmax(160px, 1fr) 68px 78px 84px 74px 70px 82px;
+    gap: 9px;
     align-items: center;
     border: 1px solid #DDE7F4;
     border-radius: 10px;
     background: #FBFDFF;
-    padding: 13px 12px;
+    padding: 10px;
 }
 
 .transport-trip-alt-main {
@@ -7957,20 +7957,20 @@
 
 .transport-trip-alt-main strong {
     color: #0F2A62;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 950;
 }
 
 .transport-trip-alt-row b {
     color: #0F2A62;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 950;
 }
 
 .transport-trip-alt-row span {
     margin-top: 3px;
     color: #71809A;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 760;
 }
 
@@ -7983,12 +7983,12 @@
 }
 
 .transport-trip-alt-row button {
-    min-height: 36px;
+    min-height: 32px;
     border: 1px solid #D9E2F0;
     border-radius: 8px;
     background: #FFFFFF;
     color: #0F2A62;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 900;
     cursor: pointer;
 }
