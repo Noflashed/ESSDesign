@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as L from 'leaflet';
-import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { truckLiveLocationsAPI } from '../services/api';
 import { TRUCK_LANES } from './transport/transportUtils';
@@ -9,6 +9,8 @@ const FLEET_REFRESH_MS = 3 * 1000;
 const FLEET_HIDDEN_REFRESH_MS = 30 * 1000;
 const ROUTE_HISTORY_LOOKBACK_HOURS = 8;
 const ROUTE_HISTORY_REFRESH_MS = 20 * 1000;
+const STATIONARY_WAKE_RADIUS_M = 125;
+const MOVING_WAKE_RADIUS_M = 100;
 const SYDNEY_CENTER = [-33.8688, 151.2093];
 
 const FALLBACK_POSITIONS = {
@@ -115,6 +117,16 @@ function previousLocationIcon(truck) {
     html: `<span style="--truck-color:${escapeHtml(truck.status.color || truck.visual.color)}"><b>Previous</b></span>`,
     iconSize: [92, 30],
     iconAnchor: [46, 15],
+  });
+}
+
+function radiusLabelIcon(truck) {
+  const radius = truck.wakeRadiusM;
+  return L.divIcon({
+    className: 'fleet-live-radius-label',
+    html: `<span style="--truck-color:${escapeHtml(truck.status.color || truck.visual.color)}"><b>${escapeHtml(`${radius}m`)}</b> wake radius</span>`,
+    iconSize: [124, 30],
+    iconAnchor: [62, -10],
   });
 }
 
@@ -432,6 +444,9 @@ function ControlIcon({ type }) {
   if (type === 'history') {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c4-7 8 4 12-3 1.7-3 2.9-4.8 5-5" /><circle cx="4" cy="17" r="2" /><circle cx="20" cy="9" r="2" /></svg>;
   }
+  if (type === 'radius') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" strokeDasharray="3 3" /><circle cx="12" cy="12" r="2" /><path d="M12 4v2M12 18v2M4 12h2M18 12h2" /></svg>;
+  }
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 4v6h-6" /></svg>;
 }
 
@@ -445,6 +460,7 @@ export default function TransportFleetPage() {
   const [now, setNow] = useState(Date.now());
   const [followVersion, setFollowVersion] = useState(0);
   const [routeHistoryEnabled, setRouteHistoryEnabled] = useState(false);
+  const [radiusDebugEnabled, setRadiusDebugEnabled] = useState(false);
   const [routeHistoryByTruck, setRouteHistoryByTruck] = useState({});
   const [stationaryAddresses, setStationaryAddresses] = useState({});
   const lastRouteHistoryLoadRef = useRef(0);
@@ -526,6 +542,9 @@ export default function TransportFleetPage() {
     const speedMps = toNumber(location?.speedMps) ?? 0;
     const speedKmh = speedMps * 3.6;
     const status = classifyTruck(location, speedKmh, now);
+    const wakeRadiusM = location
+      ? (status.key === 'stationary' ? STATIONARY_WAKE_RADIUS_M : MOVING_WAKE_RADIUS_M)
+      : null;
     const recordedAt = location?.recordedAt || location?.updatedAt || null;
     const recordedAtMs = recordedAt ? new Date(recordedAt).getTime() : NaN;
     const visual = TRUCK_VISUALS[lane.id] || { color: status.color, routeColor: status.color };
@@ -547,6 +566,10 @@ export default function TransportFleetPage() {
       updatedAt: location?.updatedAt || null,
       driverUserId: location?.driverUserId || null,
       deliveryRequestId: location?.deliveryRequestId || null,
+      wakeRadiusM,
+      wakeRadiusLabel: wakeRadiusM
+        ? `${wakeRadiusM}m ${status.key === 'stationary' ? 'stationary exit' : 'rolling force-quit'} radius`
+        : '',
       stationaryAddress: stationaryAddresses[lane.id] || '',
       routePath: Array.isArray(location?.routePath)
         ? location.routePath
@@ -683,7 +706,30 @@ export default function TransportFleetPage() {
             pathOptions={{ color: truck.visual.routeColor, weight: 5, opacity: 0.72 }}
           />
         ) : null)}
-	        {trucks.map(truck => truck.hasPosition ? (
+        {radiusDebugEnabled && trucks.map(truck => truck.hasPosition && truck.wakeRadiusM ? (
+          <Circle
+            key={`${truck.id}-wake-radius`}
+            center={[truck.latitude, truck.longitude]}
+            radius={truck.wakeRadiusM}
+            pathOptions={{
+              color: truck.status.color || truck.visual.color,
+              fillColor: truck.status.color || truck.visual.color,
+              fillOpacity: 0.08,
+              opacity: 0.82,
+              weight: 2,
+              dashArray: '8 8',
+            }}
+          />
+        ) : null)}
+        {radiusDebugEnabled && trucks.map(truck => truck.hasPosition && truck.wakeRadiusM ? (
+          <Marker
+            key={`${truck.id}-wake-radius-label`}
+            position={[truck.latitude, truck.longitude]}
+            icon={radiusLabelIcon(truck)}
+            interactive={false}
+          />
+        ) : null)}
+		        {trucks.map(truck => truck.hasPosition ? (
 	          <FleetLiveMarker
 	            key={truck.id}
 	            truck={truck}
@@ -710,6 +756,14 @@ export default function TransportFleetPage() {
         >
           <ControlIcon type="history" />
         </FleetControlButton>
+        <FleetControlButton
+          label={radiusDebugEnabled ? 'Hide wake radius debug' : 'Show wake radius debug'}
+          title={radiusDebugEnabled ? 'Hide geofence wake radius' : 'Show expected force-close wake radius'}
+          onClick={() => setRadiusDebugEnabled(value => !value)}
+          active={radiusDebugEnabled}
+        >
+          <ControlIcon type="radius" />
+        </FleetControlButton>
         <FleetControlButton label="Refresh live locations" onClick={() => loadLocations({ silent: false })}>
           <ControlIcon type="refresh" />
         </FleetControlButton>
@@ -720,7 +774,8 @@ export default function TransportFleetPage() {
         <span><i className="stationary"></i>Stationary</span>
         <span><i className="idle"></i>Idle / on route</span>
         <span><i className="returning"></i>Returning to yard</span>
-	        <span><i className="stale"></i>GPS stale / offline</span>
+		        <span><i className="stale"></i>GPS stale / offline</span>
+        {radiusDebugEnabled ? <span><i className="wake-radius"></i>Wake radius debug</span> : null}
       </div>
 
       <aside className="fleet-live-panel" aria-label="Live truck locations">
@@ -766,6 +821,9 @@ export default function TransportFleetPage() {
             <div><span>Status</span><strong>{selectedTruck.status.label}</strong></div>
             {selectedTruck.status.key === 'stationary' ? (
               <div><span>Stationed at</span><strong>{selectedTruck.stationaryAddress || 'Finding address...'}</strong></div>
+            ) : null}
+            {radiusDebugEnabled && selectedTruck.wakeRadiusM ? (
+              <div><span>Wake radius</span><strong>{selectedTruck.wakeRadiusLabel}</strong></div>
             ) : null}
             <div><span>Accuracy</span><strong>{Number.isFinite(selectedTruck.accuracyM) ? `${Math.round(selectedTruck.accuracyM)} m` : '--'}</strong></div>
             <div><span>Source</span><strong>{selectedTruck.hasLiveLocation ? 'Phone GPS' : 'Awaiting truck phone'}</strong></div>

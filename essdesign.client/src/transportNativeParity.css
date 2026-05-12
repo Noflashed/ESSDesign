@@ -6815,6 +6815,10 @@
 .fleet-live-legend .stationary { background: #6B7280; }
 .fleet-live-legend .returning { background: #2388E9; }
 .fleet-live-legend .stale { background: #7B8492; }
+.fleet-live-legend .wake-radius {
+    border: 2px dashed #102B5C;
+    background: rgba(16, 43, 92, 0.08);
+}
 
 .fleet-live-previous-icon {
     border: 0 !important;
@@ -6838,6 +6842,35 @@
 .fleet-live-previous-icon b {
     color: #102B5C;
     font-size: 11px;
+    font-weight: 950;
+}
+
+.fleet-live-radius-label {
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.fleet-live-radius-label span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 112px;
+    min-height: 27px;
+    padding: 0 10px;
+    border: 1px dashed color-mix(in srgb, var(--truck-color) 80%, #ffffff 20%);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #102B5C;
+    box-shadow: 0 10px 20px rgba(16, 43, 92, 0.16);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.fleet-live-radius-label b {
+    color: var(--truck-color);
+    font-size: 12px;
     font-weight: 950;
 }
 
