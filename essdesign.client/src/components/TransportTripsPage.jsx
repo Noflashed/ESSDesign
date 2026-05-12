@@ -3,7 +3,6 @@ import { analysisAPI, truckLiveLocationsAPI } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
 import {
   TRUCK_LANES,
-  formatBoardDay,
   formatDistance,
   formatDuration,
 } from './transport/transportUtils';
@@ -18,13 +17,6 @@ const GPS_TRIP_MIN_DURATION_SECONDS = 90;
 const GPS_TRIP_MIN_DISTANCE_METERS = 150;
 const GPS_TRIP_STOP_RADIUS_METERS = 80;
 const GPS_HISTORY_LIMIT_PER_TRUCK = 10000;
-
-const TRIP_STATUS_COPY = {
-  gps: 'GPS trip',
-  completed: 'Completed',
-  return_transit: 'Return transit',
-  delivered: 'Delivered',
-};
 
 function asDate(value) {
   if (!value) return null;
@@ -76,6 +68,129 @@ function formatFuel(litres) {
   if (!Number.isFinite(litres)) return 'Pending route';
   if (litres < 10) return `${litres.toFixed(1)} L`;
   return `${Math.round(litres)} L`;
+}
+
+function formatShortDate(value) {
+  const date = asDate(value);
+  if (!date) return 'Date unavailable';
+  return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatCompactDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0m';
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+}
+
+function formatSpeed(speedMps) {
+  if (!Number.isFinite(speedMps) || speedMps <= 0) return '0 km/h';
+  return `${Math.round(speedMps * 3.6)} km/h`;
+}
+
+function formatConsumption(value) {
+  return Number.isFinite(value) ? `${value.toFixed(1)} L/100km` : 'Pending';
+}
+
+function formatSignedMinutes(seconds, positiveSuffix = 'faster', negativeSuffix = 'slower') {
+  if (!Number.isFinite(seconds)) return 'Pending';
+  const minutes = Math.max(1, Math.round(Math.abs(seconds) / 60));
+  if (seconds > 0) return `${minutes}m ${positiveSuffix}`;
+  if (seconds < 0) return `+${minutes}m ${negativeSuffix}`;
+  return 'No change';
+}
+
+function formatSignedDistance(meters) {
+  if (!Number.isFinite(meters)) return 'Pending';
+  const km = Math.abs(meters) / 1000;
+  const value = km >= 10 ? km.toFixed(0) : km.toFixed(1);
+  if (meters > 0) return `+${value} km`;
+  if (meters < 0) return `-${value} km`;
+  return 'Same';
+}
+
+function getDriverLabel(trip) {
+  const raw = trip?.driverName || trip?.driverUserId || '';
+  if (!raw) return 'Driver not assigned';
+  const value = String(raw);
+  if (value.includes('@')) return value.split('@')[0].replace(/[._-]+/g, ' ');
+  return value.replace(/^auth0\|/i, '').replace(/[._-]+/g, ' ');
+}
+
+function getTripRouteLabels(trip) {
+  return {
+    start: trip?.startLocationEstimate || trip?.legs?.[0]?.from || 'Unknown start',
+    end: trip?.endLocationEstimate || trip?.legs?.[0]?.to || 'Unknown finish',
+  };
+}
+
+function getTripStats(trip) {
+  const route = trip?.gpsRoute || buildRouteFromHistory(trip?.historyPoints);
+  const distanceMeters = route?.distanceMeters ?? 0;
+  const durationSeconds = route?.durationSeconds ?? trip?.actualDurationSeconds ?? 0;
+  const trafficSeconds = route?.slowOrIdleSeconds ?? route?.trafficDelaySeconds ?? 0;
+  const fuel = calculateFuel(distanceMeters, trafficSeconds);
+  const averageSpeedMps = durationSeconds > 0 ? distanceMeters / durationSeconds : 0;
+  return {
+    route,
+    distanceMeters,
+    durationSeconds,
+    trafficSeconds,
+    fuel,
+    averageSpeedMps,
+    maxSpeedMps: route?.maxSpeedMps ?? 0,
+    pointCount: route?.pointCount || trip?.historyPoints?.length || 0,
+  };
+}
+
+function tripMatchesDateFilter(trip, dateFilter) {
+  if (dateFilter === 'all') return true;
+  const started = asDate(trip?.startedAt);
+  if (!started) return false;
+  const now = new Date();
+  if (dateFilter === 'today') {
+    return started.toDateString() === now.toDateString();
+  }
+  if (dateFilter === 'week') {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    return started >= weekAgo && started <= now;
+  }
+  return true;
+}
+
+function exportTripsCsv(trips) {
+  const header = ['Truck', 'Driver', 'Start', 'Finish', 'Started', 'Ended', 'Duration', 'Distance', 'Fuel', 'Traffic'];
+  const rows = trips.map(trip => {
+    const labels = getTripRouteLabels(trip);
+    const stats = getTripStats(trip);
+    return [
+      trip.truckLabel,
+      getDriverLabel(trip),
+      labels.start,
+      labels.end,
+      formatDateTime(trip.startedAt),
+      formatDateTime(trip.completedAt),
+      formatDuration(stats.durationSeconds),
+      formatDistance(stats.distanceMeters),
+      formatFuel(stats.fuel.litres),
+      formatDuration(stats.trafficSeconds || 0),
+    ];
+  });
+  const csv = [header, ...rows]
+    .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `ess-trips-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 function combineRoutes(routes) {
@@ -426,11 +541,49 @@ async function fetchTripHistory(trip) {
   return { points: [], route: null, error: 'This trip does not have GPS breadcrumb history.' };
 }
 
-function TripMetric({ label, value, tone = 'default' }) {
+function TripIcon({ type = 'truck' }) {
+  if (type === 'search') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 5 5" /></svg>;
+  }
+  if (type === 'calendar') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg>;
+  }
+  if (type === 'driver') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
+  }
+  if (type === 'export') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M5 20h14" /></svg>;
+  }
+  if (type === 'distance') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18c4-11 12-11 16 0" /><path d="M12 18l3-6" /></svg>;
+  }
+  if (type === 'time') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6l4 2" /></svg>;
+  }
+  if (type === 'fuel') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8v18H7z" /><path d="M15 8h2l2 3v7a2 2 0 0 0 4 0v-6" /><path d="M9 7h4" /></svg>;
+  }
+  if (type === 'traffic') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17h10l2-5H5l2 5Z" /><circle cx="8" cy="18" r="2" /><circle cx="16" cy="18" r="2" /><path d="M8 12l2-5h4l2 5" /></svg>;
+  }
+  if (type === 'toll') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M15 9.5c-.6-1-1.7-1.5-3.1-1.5-1.8 0-3 .8-3 2.1 0 3 6.2 1.3 6.2 4.7 0 1.4-1.2 2.3-3.2 2.3-1.6 0-2.8-.6-3.5-1.8" /><path d="M12 6v12" /></svg>;
+  }
+  if (type === 'speed') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 0 1 16 0" /><path d="m12 15 5-5" /><path d="M12 19h.01" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17H4V7h10v10h-2" /><path d="M14 10h4l3 3v4h-3" /><circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" /></svg>;
+}
+
+function TripMetric({ label, value, sublabel = '', icon = 'distance', tone = 'default' }) {
   return (
     <div className={`transport-trip-metric transport-trip-metric-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <div className="transport-trip-metric-icon"><TripIcon type={icon} /></div>
+      <div>
+        <strong>{value}</strong>
+        <span>{label}</span>
+        {sublabel ? <small>{sublabel}</small> : null}
+      </div>
     </div>
   );
 }
@@ -440,55 +593,130 @@ function TripPill({ children, tone = 'navy' }) {
 }
 
 function TripListCard({ trip, selected, onSelect }) {
-  const statusLabel = TRIP_STATUS_COPY[trip.status] || TRIP_STATUS_COPY.completed;
-  const route = trip.gpsRoute || buildRouteFromHistory(trip.historyPoints);
-  const fuel = calculateFuel(route?.distanceMeters, route?.slowOrIdleSeconds);
+  const stats = getTripStats(trip);
+  const labels = getTripRouteLabels(trip);
+  const driverLabel = getDriverLabel(trip);
   return (
-    <button type="button" className={`transport-trip-card transport-trip-card-analysis ${selected ? 'selected' : ''}`} onClick={onSelect}>
+    <button type="button" className={`transport-trip-card ${selected ? 'selected' : ''}`} onClick={onSelect}>
       <div className="transport-trip-card-head">
-        <div className="transport-trip-card-badges">
-          <TripPill tone="green">{statusLabel}</TripPill>
-          <TripPill>{trip.truckLabel}</TripPill>
+        <div className="transport-trip-card-identity">
+          <span className="transport-trip-truck-avatar"><TripIcon /></span>
+          <div>
+            <strong>{trip.truckLabel}</strong>
+            <small>{driverLabel}</small>
+          </div>
         </div>
-        <span className="transport-trip-card-time">{formatDateTime(trip.startedAt)}</span>
+        <TripPill tone="green">Complete</TripPill>
       </div>
 
       <div className="transport-trip-card-route">
-        <div>
-          <span>Estimated start location</span>
-          <strong>{trip.startLocationEstimate || trip.legs?.[0]?.from || 'Unknown location'}</strong>
+        <div className="transport-trip-route-point transport-trip-route-start">
+          <span>{labels.start}</span>
+          <strong>{formatClock(trip.startedAt)}</strong>
         </div>
-        <div>
-          <span>Estimated end location</span>
-          <strong>{trip.endLocationEstimate || trip.legs?.[0]?.to || 'Unknown location'}</strong>
+        <b aria-hidden="true">-&gt;</b>
+        <div className="transport-trip-route-point">
+          <span>{labels.end}</span>
+          <strong>{formatClock(trip.completedAt)}</strong>
         </div>
       </div>
 
-      <div className="transport-trip-card-analysis-grid">
-        <div><span>Duration</span><strong>{route?.durationSeconds ? formatDuration(route.durationSeconds) : 'Pending'}</strong></div>
-        <div><span>Distance</span><strong>{route?.distanceMeters ? formatDistance(route.distanceMeters) : 'Pending'}</strong></div>
-        <div><span>Slow / idle</span><strong>{route?.slowOrIdleSeconds != null ? formatDuration(route.slowOrIdleSeconds || 0) : 'Pending'}</strong></div>
-        <div><span>Fuel est.</span><strong>{formatFuel(fuel.litres)}</strong></div>
+      <div className="transport-trip-card-metrics">
+        <div><TripIcon type="time" /><strong>{formatCompactDuration(stats.durationSeconds)}</strong><span>Duration</span></div>
+        <div><TripIcon type="distance" /><strong>{formatDistance(stats.distanceMeters)}</strong><span>Distance</span></div>
+        <div><TripIcon type="fuel" /><strong>{formatFuel(stats.fuel.litres)}</strong><span>Fuel</span></div>
+        <div><TripIcon type="toll" /><strong>{formatCurrency(estimateTollFees(stats.route, trip.tollsEnabled) || 0)}</strong><span>Tolls</span></div>
       </div>
 
       <div className="transport-trip-card-foot">
-        <span>{route?.pointCount || trip.historyPoints?.length || 0} GPS breadcrumbs</span>
-        <b>Open analysis</b>
+        <span>{formatShortDate(trip.startedAt)} - Started {formatClock(trip.startedAt)}</span>
+        <b aria-hidden="true">›</b>
       </div>
     </button>
+  );
+}
+
+function TripTimeline({ trip, stats }) {
+  const startLabel = getTripRouteLabels(trip).start;
+  const endLabel = getTripRouteLabels(trip).end;
+  const movingEnd = new Date((asDate(trip.startedAt)?.getTime() || 0) + Math.max(0, (stats.durationSeconds || 0) - (stats.trafficSeconds || 0)) * 1000);
+  const trafficStart = new Date((asDate(trip.completedAt)?.getTime() || 0) - Math.max(0, stats.trafficSeconds || 0) * 1000);
+  return (
+    <div className="transport-trip-timeline-list">
+      <div className="transport-trip-timeline-item is-start">
+        <span className="transport-trip-timeline-dot"><TripIcon type="truck" /></span>
+        <div>
+          <strong>{formatClock(trip.startedAt)}</strong>
+          <b>Start</b>
+          <small>{startLabel}</small>
+        </div>
+      </div>
+      <div className="transport-trip-timeline-item is-moving">
+        <span className="transport-trip-timeline-dot"><TripIcon type="truck" /></span>
+        <div>
+          <strong>{formatClock(trip.startedAt)} - {stats.trafficSeconds ? formatClock(trafficStart) : formatClock(movingEnd)}</strong>
+          <b>Moving</b>
+          <small>{formatDistance(stats.distanceMeters)} - Avg {formatSpeed(stats.averageSpeedMps)}</small>
+        </div>
+      </div>
+      <div className="transport-trip-timeline-item is-traffic">
+        <span className="transport-trip-timeline-dot"><TripIcon type="traffic" /></span>
+        <div>
+          <strong>{stats.trafficSeconds ? `${formatClock(trafficStart)} - ${formatClock(trip.completedAt)}` : 'No major delay'}</strong>
+          <b>Traffic delay</b>
+          <small>{formatCompactDuration(stats.trafficSeconds || 0)}</small>
+        </div>
+      </div>
+      <div className="transport-trip-timeline-item is-end">
+        <span className="transport-trip-timeline-dot"><TripIcon type="driver" /></span>
+        <div>
+          <strong>{formatClock(trip.completedAt)}</strong>
+          <b>End</b>
+          <small>{endLabel}</small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance, tolls, comparison }) {
+  const duration = route?.durationSeconds;
+  const distance = route?.distanceMeters;
+  const deltaSeconds = Number.isFinite(actualSeconds) && Number.isFinite(duration) ? actualSeconds - duration : null;
+  const deltaMeters = Number.isFinite(actualDistance) && Number.isFinite(distance) ? distance - actualDistance : null;
+  const isFaster = Number.isFinite(deltaSeconds) && deltaSeconds > 0;
+  return (
+    <div className="transport-trip-alt-row">
+      <div className="transport-trip-alt-main">
+        <strong>{title}</strong>
+        <TripPill>{via}</TripPill>
+      </div>
+      <div><b>{duration ? formatCompactDuration(duration) : 'Pending'}</b><span>ETA</span></div>
+      <div className={isFaster ? 'positive' : 'negative'}><b>{formatSignedMinutes(deltaSeconds)}</b><span>Time saved</span></div>
+      <div><b>{distance ? formatDistance(distance) : 'Pending'}</b><span>Distance</span></div>
+      <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Difference</span></div>
+      <div><b>{formatCurrency(tolls || 0)}</b><span>Tolls</span></div>
+      <button type="button">View route</button>
+      {comparison ? null : null}
+    </div>
   );
 }
 
 export default function TransportTripsPage() {
   const [gpsTrips, setGpsTrips] = useState([]);
   const [selectedTripId, setSelectedTripId] = useState(null);
+  const [selectionCleared, setSelectionCleared] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('week');
   const [truckFilter, setTruckFilter] = useState('all');
+  const [driverFilter, setDriverFilter] = useState('all');
   const [loadVersion, setLoadVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
+  const [mapOpenSignal, setMapOpenSignal] = useState(0);
   const analysisCacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -521,16 +749,39 @@ export default function TransportTripsPage() {
       .sort((a, b) => (asDate(b.startedAt)?.getTime() || 0) - (asDate(a.startedAt)?.getTime() || 0));
   }, [gpsTrips]);
 
+  const driverOptions = useMemo(() => {
+    const labels = new Set();
+    trips.forEach(trip => labels.add(getDriverLabel(trip)));
+    return Array.from(labels).sort((a, b) => a.localeCompare(b));
+  }, [trips]);
+
   const filteredTrips = useMemo(() => {
-    if (truckFilter === 'all') return trips;
-    return trips.filter(trip => trip.truckLabel === truckFilter);
-  }, [trips, truckFilter]);
+    const query = searchTerm.trim().toLowerCase();
+    return trips.filter(trip => {
+      if (truckFilter !== 'all' && trip.truckLabel !== truckFilter) return false;
+      if (driverFilter !== 'all' && getDriverLabel(trip) !== driverFilter) return false;
+      if (!tripMatchesDateFilter(trip, dateFilter)) return false;
+      if (!query) return true;
+      const labels = getTripRouteLabels(trip);
+      const haystack = [
+        trip.truckLabel,
+        getDriverLabel(trip),
+        labels.start,
+        labels.end,
+        formatShortDate(trip.startedAt),
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [trips, truckFilter, driverFilter, dateFilter, searchTerm]);
 
   useEffect(() => {
     if (selectedTripId && !filteredTrips.some(trip => trip.id === selectedTripId)) {
       setSelectedTripId(null);
     }
-  }, [filteredTrips, selectedTripId]);
+    if (!selectedTripId && !selectionCleared && filteredTrips.length) {
+      setSelectedTripId(filteredTrips[0].id);
+    }
+  }, [filteredTrips, selectedTripId, selectionCleared]);
 
   const selectedTrip = useMemo(
     () => filteredTrips.find(trip => trip.id === selectedTripId) || null,
@@ -585,68 +836,109 @@ export default function TransportTripsPage() {
   const plannedRoute = analysis?.current?.combined || null;
   const gpsRoute = analysis?.history?.route || null;
   const displayRoute = gpsRoute || plannedRoute;
+  const selectedStats = selectedTrip ? getTripStats(selectedTrip) : null;
+  const selectedLabels = selectedTrip ? getTripRouteLabels(selectedTrip) : { start: '', end: '' };
   const usingGpsBreadcrumbs = Boolean(gpsRoute);
-  const statsDistanceMeters = gpsRoute?.distanceMeters ?? plannedRoute?.distanceMeters;
-  const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds;
-  const statsTrafficSeconds = gpsRoute?.slowOrIdleSeconds ?? plannedRoute?.trafficDelaySeconds;
+  const statsDistanceMeters = gpsRoute?.distanceMeters ?? plannedRoute?.distanceMeters ?? selectedStats?.distanceMeters;
+  const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds ?? selectedStats?.durationSeconds;
+  const statsTrafficSeconds = gpsRoute?.slowOrIdleSeconds ?? plannedRoute?.trafficDelaySeconds ?? selectedStats?.trafficSeconds;
   const fuel = calculateFuel(statsDistanceMeters, statsTrafficSeconds);
   const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
+  const tollRoute = analysis?.tolls?.combined || null;
+  const avoidTollRoute = analysis?.avoidTolls?.combined || null;
   const tollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.tolls);
   const avoidTollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.avoidTolls);
-  const avgActualSeconds = trips.length
-    ? trips.reduce((sum, trip) => sum + Number(trip.actualDurationSeconds || 0), 0) / trips.length
+  const avgActualSeconds = filteredTrips.length
+    ? filteredTrips.reduce((sum, trip) => sum + Number(getTripStats(trip).durationSeconds || 0), 0) / filteredTrips.length
     : 0;
   const todayKey = scheduleFromIso(new Date().toISOString()).scheduledDate;
   const todayTripCount = trips.filter(trip => trip.scheduledDate === todayKey).length;
+  const summary = filteredTrips.reduce((total, trip) => {
+    const stats = getTripStats(trip);
+    total.distanceMeters += Number(stats.distanceMeters || 0);
+    total.fuelLitres += Number(stats.fuel.litres || 0);
+    total.trafficSeconds += Number(stats.trafficSeconds || 0);
+    return total;
+  }, { distanceMeters: 0, fuelLitres: 0, trafficSeconds: 0 });
+  const trafficPercent = statsDurationSeconds ? Math.round((Number(statsTrafficSeconds || 0) / statsDurationSeconds) * 100) : 0;
+  const selectedTitle = selectedTrip
+    ? `${selectedTrip.truckLabel} - ${selectedLabels.start} to ${selectedLabels.end}`
+    : 'Select a trip';
 
   return (
     <div className="transport-trips-page">
       <div className="transport-trips-toolbar">
-        <div>
-          <h1>Trip Analysis</h1>
-          <p>Actual completed driven trips generated from truck GPS breadcrumbs only.</p>
+        <h1>Trip Analysis</h1>
+        <button type="button" className="transport-trip-export" onClick={() => exportTripsCsv(filteredTrips)} disabled={!filteredTrips.length}>
+          <TripIcon type="export" />
+          <span>Export</span>
+        </button>
+      </div>
+
+      <div className="transport-trip-control-bar">
+        <label className="transport-trip-search">
+          <input
+            value={searchTerm}
+            onChange={event => {
+              setSearchTerm(event.target.value);
+              setSelectionCleared(false);
+            }}
+            placeholder="Search trips, truck, driver or location..."
+          />
+          <TripIcon type="search" />
+        </label>
+
+        <div className="transport-trip-filter-shell">
+          <TripIcon type="calendar" />
+          <select value={dateFilter} onChange={event => {
+            setDateFilter(event.target.value);
+            setSelectionCleared(false);
+          }}>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+            <option value="all">Last {TRIP_WINDOW_DAYS} days</option>
+          </select>
         </div>
-        <div className="transport-trips-actions">
+
+        <div className="transport-trip-filter-shell">
+          <TripIcon type="truck" />
           <select
             value={truckFilter}
             onChange={event => {
               setTruckFilter(event.target.value);
               setSelectedTripId(null);
+              setSelectionCleared(false);
             }}
           >
-            <option value="all">All trucks</option>
+            <option value="all">Truck</option>
             {TRUCK_LANES.map(lane => <option key={lane.rego} value={lane.rego}>{lane.rego}</option>)}
           </select>
-          <button type="button" onClick={() => setLoadVersion(value => value + 1)} disabled={loading}>Refresh</button>
         </div>
+
+        <div className="transport-trip-filter-shell">
+          <TripIcon type="driver" />
+          <select value={driverFilter} onChange={event => {
+            setDriverFilter(event.target.value);
+            setSelectionCleared(false);
+          }}>
+            <option value="all">Driver</option>
+            {driverOptions.map(driver => <option key={driver} value={driver}>{driver}</option>)}
+          </select>
+        </div>
+
+        <button type="button" className="transport-trip-filter-button" onClick={() => setLoadVersion(value => value + 1)} disabled={loading}>
+          <TripIcon type="calendar" />
+          <span>{loading ? 'Loading' : 'Refresh'}</span>
+        </button>
       </div>
 
       {error ? <div className="transport-trips-error">{error}</div> : null}
 
-      <div className="transport-trips-queue-tools">
-        <div className="transport-trips-queue-chip-row">
-          <button type="button" className="material-ordering-queue-chip">
-            Filter: {truckFilter === 'all' ? 'All trucks' : truckFilter}
-          </button>
-          <button type="button" className="material-ordering-queue-chip">
-            GPS only
-          </button>
-        </div>
-        <div className="material-ordering-queue-meta">
-          <span>Total {loading ? '...' : filteredTrips.length} {filteredTrips.length === 1 ? 'driven trip' : 'driven trips'}</span>
-          <span>Today: {todayTripCount}</span>
-          <span>Average: {avgActualSeconds ? formatDuration(avgActualSeconds) : 'Pending'}</span>
-        </div>
-      </div>
-
-      <div className={`transport-trips-layout ${selectedTrip ? 'transport-trips-layout-open' : 'transport-trips-layout-list-only'}`}>
+      <div className="transport-trips-layout">
         <aside className="transport-trips-list">
           <div className="transport-trips-list-head">
-            <div>
-              <strong>Recent trips</strong>
-              <small>Click a trip to open its recorded information.</small>
-            </div>
-            <span>Last {TRIP_WINDOW_DAYS} days</span>
+            <strong>Trips</strong>
+            <span>{loading ? '...' : filteredTrips.length} trips</span>
           </div>
           {loading ? (
             <div className="transport-trips-empty">Loading completed trips...</div>
@@ -656,7 +948,10 @@ export default function TransportTripsPage() {
                 key={trip.id}
                 trip={trip}
                 selected={selectedTrip?.id === trip.id}
-                onSelect={() => setSelectedTripId(trip.id)}
+                onSelect={() => {
+                  setSelectionCleared(false);
+                  setSelectedTripId(trip.id);
+                }}
               />
             ))
           ) : (
@@ -669,134 +964,120 @@ export default function TransportTripsPage() {
             <>
               <div className="transport-trip-detail-head">
                 <div>
-                  <div className="transport-trip-detail-kicker">
-                    <TripPill>{selectedTrip.truckLabel}</TripPill>
-                    <span>{selectedTrip.scheduledDate ? formatBoardDay(selectedTrip.scheduledDate) : 'Date unavailable'}</span>
+                  <h2>{selectedTitle}</h2>
+                  <div className="transport-trip-detail-meta">
+                    <span><TripIcon type="calendar" /> {formatShortDate(selectedTrip.startedAt)}</span>
+                    <span><TripIcon type="truck" /> {selectedTrip.truckLabel}</span>
+                    <span><TripIcon type="driver" /> {getDriverLabel(selectedTrip)}</span>
                   </div>
-                  <h2>{selectedTrip.title}</h2>
-                  <p>{selectedTrip.subtitle}</p>
                 </div>
                 <div className="transport-trip-detail-actions">
-                  <TripPill tone="green">GPS recorded</TripPill>
-                  <button type="button" onClick={() => setSelectedTripId(null)}>Close</button>
+                  <TripPill tone="green">Complete</TripPill>
+                  <button type="button" className="transport-trip-map-button" onClick={() => setMapOpenSignal(value => value + 1)}>View on map ↗</button>
+                  <button
+                    type="button"
+                    className="transport-trip-close-button"
+                    onClick={() => {
+                      setSelectionCleared(true);
+                      setSelectedTripId(null);
+                    }}
+                    aria-label="Close trip analysis"
+                  >
+                    ×
+                  </button>
                 </div>
+              </div>
+
+              <div className="transport-trip-route-card">
+                <RouteMapCanvas
+                  routeData={displayRoute}
+                  loading={analysisLoading}
+                  siteLocation={selectedTrip.siteLocation}
+                  className="transport-trip-route-map"
+                  interactive
+                  expandable
+                  openSignal={mapOpenSignal}
+                  viewerTitle={`${selectedTrip.truckLabel} trip route`}
+                  originLabel="Start"
+                  destinationLabel="Finish"
+                />
+                <div className="transport-trip-map-legend">
+                  <span><i className="actual" /> Actual route</span>
+                  <span><i className="alternate-one" /> Alternative 1</span>
+                  <span><i className="alternate-two" /> Alternative 2</span>
+                  <span><i className="stop-dot" /> Stop / Idle</span>
+                  <span><i className="traffic-dot" /> Traffic delay</span>
+                </div>
+                {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
+                {!analysisLoading && analysis?.history?.error ? (
+                  <div className="transport-trip-route-warning">{analysis.history.error}</div>
+                ) : null}
+                {!analysisLoading && !analysis?.history?.error && !usingGpsBreadcrumbs ? (
+                  <div className="transport-trip-route-warning">No GPS breadcrumbs were recorded for this trip window yet, so this map is using the TomTom planned route fallback.</div>
+                ) : null}
               </div>
 
               <div className="transport-trip-stat-grid transport-trip-stat-grid-hero">
-                <TripMetric label={usingGpsBreadcrumbs ? 'GPS trip time' : 'Time taken'} value={statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Not confirmed'} />
-                <TripMetric label="Distance travelled" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
-                <TripMetric label={usingGpsBreadcrumbs ? 'GPS slow / idle time' : 'Traffic encountered'} value={statsTrafficSeconds != null ? formatDuration(statsTrafficSeconds || 0) : 'Calculating'} tone="orange" />
-                <TripMetric label="Route source" value={usingGpsBreadcrumbs ? `${gpsRoute.pointCount} GPS breadcrumbs` : (plannedRoute?.trafficProvider || 'TomTom route preview')} />
-              </div>
-
-              <div className="transport-trip-detail-grid">
-                <div className="transport-trip-route-card">
-                  <RouteMapCanvas
-                    routeData={displayRoute}
-                    loading={analysisLoading}
-                    siteLocation={selectedTrip.siteLocation}
-                    className="transport-trip-route-map"
-                    interactive
-                    expandable
-                    viewerTitle={`${selectedTrip.truckLabel} trip route`}
-                    originLabel="Start"
-                    destinationLabel="Finish"
-                  />
-                  {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
-                  {!analysisLoading && analysis?.history?.error ? (
-                    <div className="transport-trip-route-warning">{analysis.history.error}</div>
-                  ) : null}
-                  {!analysisLoading && !analysis?.history?.error && !usingGpsBreadcrumbs ? (
-                    <div className="transport-trip-route-warning">No GPS breadcrumbs were recorded for this trip window yet, so this map is using the TomTom planned route fallback.</div>
-                  ) : null}
-                </div>
-
-                <div className="transport-trip-stat-grid">
-                  <TripMetric label="TomTom planned time" value={plannedRoute ? formatDuration(plannedRoute.durationSeconds) : 'Calculating'} />
-                  <TripMetric label="Fuel used estimate" value={formatFuel(fuel.litres)} tone="green" />
-                  <TripMetric label="Consumption estimate" value={fuel.consumption ? `${fuel.consumption.toFixed(1)} L/100km` : 'Pending route'} tone="green" />
-                  <TripMetric label="Toll fees estimate" value={tollEstimate ? formatCurrency(tollEstimate) : 'Not mapped'} tone="orange" />
-                </div>
+                <TripMetric icon="distance" label="Distance" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
+                <TripMetric icon="time" label="Time taken" value={statsDurationSeconds ? formatCompactDuration(statsDurationSeconds) : 'Pending'} sublabel={`${formatClock(selectedTrip.startedAt)} - ${formatClock(selectedTrip.completedAt)}`} />
+                <TripMetric icon="fuel" label="Fuel estimate" value={formatFuel(fuel.litres)} sublabel={formatConsumption(fuel.consumption)} />
+                <TripMetric icon="traffic" label="Traffic delay" value={statsTrafficSeconds != null ? formatCompactDuration(statsTrafficSeconds || 0) : 'Pending'} sublabel={`${trafficPercent}% of trip`} tone="orange" />
+                <TripMetric icon="toll" label="Toll fees" value={tollEstimate ? formatCurrency(tollEstimate) : formatCurrency(0)} sublabel={selectedTrip.tollsEnabled ? 'Tolls used' : 'No toll flag'} />
+                <TripMetric icon="speed" label="Avg speed" value={formatSpeed((statsDistanceMeters && statsDurationSeconds) ? statsDistanceMeters / statsDurationSeconds : selectedStats?.averageSpeedMps)} sublabel={`Top ${formatSpeed(gpsRoute?.maxSpeedMps || selectedStats?.maxSpeedMps)}`} />
               </div>
 
               <div className="transport-trip-panels">
                 <div className="transport-trip-panel">
                   <h3>Trip timeline</h3>
-                  <div className="transport-trip-timeline">
-                    <div><span>Started</span><strong>{formatClock(selectedTrip.startedAt)}</strong></div>
-                    <div><span>Ended</span><strong>{formatClock(selectedTrip.completedAt)}</strong></div>
-                    <div><span>Total time</span><strong>{statsDurationSeconds ? formatDuration(statsDurationSeconds) : 'Pending'}</strong></div>
-                  </div>
-                </div>
-
-                <div className="transport-trip-panel">
-                  <h3>Estimated locations</h3>
-                  <div className="transport-trip-timeline transport-trip-location-pair">
-                    <div><span>Start location</span><strong>{selectedTrip.startLocationEstimate || selectedTrip.legs?.[0]?.from || 'Unknown location'}</strong></div>
-                    <div><span>End location</span><strong>{selectedTrip.endLocationEstimate || selectedTrip.legs?.[0]?.to || 'Unknown location'}</strong></div>
-                  </div>
-                </div>
-
-                <div className="transport-trip-panel">
-                  <h3>GPS breadcrumb playback</h3>
-                  <div className="transport-trip-timeline">
-                    <div><span>Points</span><strong>{analysis?.history?.points?.length ?? 0}</strong></div>
-                    <div><span>Max speed</span><strong>{gpsRoute?.maxSpeedMps ? `${Math.round(gpsRoute.maxSpeedMps * 3.6)} km/h` : 'Pending'}</strong></div>
-                    <div><span>Moving time</span><strong>{gpsRoute?.movingSeconds ? formatDuration(gpsRoute.movingSeconds) : 'Pending'}</strong></div>
-                  </div>
-                </div>
-
-                <div className="transport-trip-panel">
-                  <h3>Recorded movement</h3>
-                  <div className="transport-trip-legs">
-                    {selectedTrip.legs.map((leg, index) => {
-                      const analysedLeg = analysis?.current?.legs?.[index];
-                      return (
-                        <div key={`${leg.id}-${index}`} className="transport-trip-leg">
-                          <div>
-                            <strong>{leg.label}</strong>
-                            <span>{leg.from} to {leg.to}</span>
-                          </div>
-                          <div>
-                            <b>{analysedLeg?.route ? formatDuration(analysedLeg.route.durationSeconds) : 'Calculating'}</b>
-                            <small>GPS start/end estimate</small>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <TripTimeline trip={selectedTrip} stats={{
+                    distanceMeters: statsDistanceMeters,
+                    durationSeconds: statsDurationSeconds,
+                    trafficSeconds: statsTrafficSeconds,
+                    averageSpeedMps: (statsDistanceMeters && statsDurationSeconds) ? statsDistanceMeters / statsDurationSeconds : selectedStats?.averageSpeedMps,
+                  }} />
                 </div>
 
                 <div className="transport-trip-panel transport-trip-alternatives">
                   <h3>Alternative routes</h3>
-                  <div className="transport-trip-alt-row">
-                    <div>
-                      <strong>Tolls enabled</strong>
-                      <span>{analysis?.tolls?.combined ? `${formatDuration(analysis.tolls.combined.durationSeconds)} - ${formatDistance(analysis.tolls.combined.distanceMeters)}` : 'Calculating'}</span>
-                    </div>
-                    <b>{tollComparison ? (tollComparison.deltaSeconds > 0 ? `${formatDuration(tollComparison.deltaSeconds)} saved` : `${formatDuration(Math.abs(tollComparison.deltaSeconds))} slower`) : 'Pending'}</b>
-                  </div>
-                  <div className="transport-trip-alt-row">
-                    <div>
-                      <strong>Avoid toll roads</strong>
-                      <span>{analysis?.avoidTolls?.combined ? `${formatDuration(analysis.avoidTolls.combined.durationSeconds)} - ${formatDistance(analysis.avoidTolls.combined.distanceMeters)}` : 'Calculating'}</span>
-                    </div>
-                    <b>{avoidTollComparison ? (avoidTollComparison.deltaSeconds > 0 ? `${formatDuration(avoidTollComparison.deltaSeconds)} saved` : `${formatDuration(Math.abs(avoidTollComparison.deltaSeconds))} slower`) : 'Pending'}</b>
-                  </div>
-                  <p>Alternative timings are recalculated against the trip departure time so traffic assumptions match the scheduled time of day.</p>
-                </div>
-
-                <div className="transport-trip-panel transport-trip-assumptions">
-                  <h3>Calculation assumptions</h3>
-                  <p>Distance, trip time and slow/idle delay are calculated from the actual iOS GPS breadcrumb trail, not from scheduled orders.</p>
-                  <p>Start and end locations are estimated from the first and last accepted GPS points in the trip.</p>
-                  <p>Fuel is estimated for a 7.5 tonne diesel truck at {FUEL_LITRES_PER_100KM} L/100km with a traffic idle uplift of {TRAFFIC_IDLE_LITRES_PER_MINUTE.toFixed(3)} L/min.</p>
-                  <p>Toll fees require route matching against toll roads, so GPS-only trips show toll data only when the route estimate can infer it.</p>
+                  <small>Routes calculated at trip start time</small>
+                  <AlternativeRouteRow
+                    title="Alternative 1"
+                    via="via toll roads"
+                    route={tollRoute}
+                    actualSeconds={statsDurationSeconds}
+                    actualDistance={statsDistanceMeters}
+                    tolls={estimateTollFees(tollRoute, true)}
+                    comparison={tollComparison}
+                  />
+                  <AlternativeRouteRow
+                    title="Alternative 2"
+                    via="avoid tolls"
+                    route={avoidTollRoute}
+                    actualSeconds={statsDurationSeconds}
+                    actualDistance={statsDistanceMeters}
+                    tolls={0}
+                    comparison={avoidTollComparison}
+                  />
+                  <p>Alternative routes are calculated using historical traffic data from TomTom. Actual route, Route taken, Traffic delay, Fuel used, Alternative route, Time saved, Tolls and GPS playback remain based on the recorded truck dataset.</p>
                 </div>
               </div>
             </>
           </section>
-        ) : null}
+        ) : (
+          <section className="transport-trips-detail transport-trips-no-selection">
+            <strong>Select a driven trip</strong>
+            <span>The analysis panel will open here using the actual GPS breadcrumb dataset.</span>
+          </section>
+        )}
+      </div>
+
+      <div className="transport-trip-hidden-summary" aria-hidden="true">
+        <span>Actual driven trips: {filteredTrips.length}</span>
+        <span>Today: {todayTripCount}</span>
+        <span>Average: {avgActualSeconds ? formatDuration(avgActualSeconds) : 'Pending'}</span>
+        <span>Distance: {formatDistance(summary.distanceMeters)}</span>
+        <span>Fuel used: {formatFuel(summary.fuelLitres)}</span>
+        <span>Traffic delay: {formatDuration(summary.trafficSeconds)}</span>
       </div>
     </div>
   );

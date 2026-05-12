@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -151,11 +151,13 @@ export default function RouteMapCanvas({
   className = '',
   interactive = false,
   expandable = false,
+  openSignal = 0,
   viewerTitle = 'Route Preview',
   originLabel = 'Yard',
   destinationLabel = 'Site',
 }) {
   const [viewerOpen, setViewerOpen] = useState(false);
+  const lastOpenSignalRef = useRef(openSignal);
 
   useEffect(() => {
     if (!viewerOpen) {
@@ -175,6 +177,16 @@ export default function RouteMapCanvas({
       setViewerOpen(false);
     }
   }, [routeData]);
+
+  useEffect(() => {
+    if (!expandable || openSignal === lastOpenSignalRef.current) {
+      return;
+    }
+    lastOpenSignalRef.current = openSignal;
+    if (routeData) {
+      setViewerOpen(true);
+    }
+  }, [expandable, openSignal, routeData]);
 
   if (!routeData) {
     return loading ? (
