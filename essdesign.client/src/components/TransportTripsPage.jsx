@@ -145,15 +145,46 @@ function formatResolvedAddress(address) {
   return address.label || address.address || [address.street, address.suburb, address.state].filter(Boolean).join(', ');
 }
 
+function stripAddressNoise(value) {
+  return String(value || '')
+    .replace(/\b(Australia|New South Wales|Queensland|Victoria|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory)\b/gi, '')
+    .replace(/\b(NSW|QLD|VIC|SA|WA|TAS|NT|ACT)\b/gi, '')
+    .replace(/\b\d{4}\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function looksLikeStreetAddress(value) {
+  return /^\d+\b/.test(value)
+    || /\b(st|street|rd|road|ave|avenue|dr|drive|ct|court|cct|circuit|cres|crescent|ln|lane|hwy|highway|pde|parade|pl|place|way)\b/i.test(value);
+}
+
+function formatCompactAddress(label) {
+  const raw = String(label || '').trim();
+  if (!raw) return '';
+  if (/^(recorded|unknown)/i.test(raw)) return raw;
+
+  const parts = raw.split(',').map(part => stripAddressNoise(part)).filter(Boolean);
+  if (!parts.length) return raw;
+
+  const preferred = looksLikeStreetAddress(parts[0]) && parts[1] ? parts[1] : parts[0];
+  if (preferred.length <= 28) return preferred;
+  return `${preferred.slice(0, 25).trim()}...`;
+}
+
 function getTripRouteLabels(trip, addressLabels = {}) {
   const { startPoint, endPoint } = getTripEndpointPoints(trip);
   const startKey = getCoordinateKey(startPoint);
   const endKey = getCoordinateKey(endPoint);
   const startAddress = formatResolvedAddress(addressLabels[startKey]);
   const endAddress = formatResolvedAddress(addressLabels[endKey]);
+  const start = startAddress || (startKey ? 'Recorded start location' : 'Unknown start');
+  const end = endAddress || (endKey ? 'Recorded finish location' : 'Unknown finish');
   return {
-    start: startAddress || (startKey ? 'Recorded start location' : 'Unknown start'),
-    end: endAddress || (endKey ? 'Recorded finish location' : 'Unknown finish'),
+    start,
+    end,
+    startShort: formatCompactAddress(start),
+    endShort: formatCompactAddress(end),
     startKey,
     endKey,
   };
@@ -629,49 +660,40 @@ function TripListCard({ trip, selected, onSelect, addressLabels }) {
   const stats = getTripStats(trip);
   const labels = getTripRouteLabels(trip, addressLabels);
   const driverLabel = getDriverLabel(trip);
+  const routeTitle = `${labels.start} to ${labels.end}`;
   return (
-    <button type="button" className={`transport-trip-card ${selected ? 'selected' : ''}`} onClick={onSelect}>
-      <div className="transport-trip-card-head">
+    <button type="button" className={`transport-trip-card ${selected ? 'selected' : ''}`} onClick={onSelect} title={routeTitle}>
+      <div className="transport-trip-card-main">
         <div className="transport-trip-card-identity">
           <span className="transport-trip-truck-avatar"><TripIcon /></span>
           <div>
-            <strong>{trip.truckLabel}</strong>
+            <div className="transport-trip-card-title-row">
+              <strong>{trip.truckLabel}</strong>
+              <span>{formatClock(trip.startedAt)} - {formatClock(trip.completedAt)}</span>
+            </div>
+            <div className="transport-trip-card-route">
+              <span>{labels.startShort}</span>
+              <b aria-hidden="true">-&gt;</b>
+              <span>{labels.endShort}</span>
+            </div>
             <small>{driverLabel}</small>
           </div>
         </div>
-        <TripPill tone="green">Complete</TripPill>
       </div>
 
-      <div className="transport-trip-card-route">
-        <div className="transport-trip-route-point transport-trip-route-start">
-          <span>{labels.start}</span>
-          <strong>{formatClock(trip.startedAt)}</strong>
-        </div>
-        <b aria-hidden="true">-&gt;</b>
-        <div className="transport-trip-route-point">
-          <span>{labels.end}</span>
-          <strong>{formatClock(trip.completedAt)}</strong>
-        </div>
+      <div className="transport-trip-card-snapshot">
+        <span><b>{formatCompactDuration(stats.durationSeconds)}</b><small>Time</small></span>
+        <span><b>{formatDistance(stats.distanceMeters)}</b><small>Distance</small></span>
+        <span><b>{formatFuel(stats.fuel.litres)}</b><small>Fuel</small></span>
       </div>
 
-      <div className="transport-trip-card-metrics">
-        <div><TripIcon type="time" /><strong>{formatCompactDuration(stats.durationSeconds)}</strong><span>Duration</span></div>
-        <div><TripIcon type="distance" /><strong>{formatDistance(stats.distanceMeters)}</strong><span>Distance</span></div>
-        <div><TripIcon type="fuel" /><strong>{formatFuel(stats.fuel.litres)}</strong><span>Fuel</span></div>
-        <div><TripIcon type="toll" /><strong>{formatCurrency(estimateTollFees(stats.route, trip.tollsEnabled) || 0)}</strong><span>Tolls</span></div>
-      </div>
-
-      <div className="transport-trip-card-foot">
-        <span>{formatShortDate(trip.startedAt)} - Started {formatClock(trip.startedAt)}</span>
-        <b aria-hidden="true">›</b>
-      </div>
+      <b className="transport-trip-card-chevron" aria-hidden="true">&gt;</b>
     </button>
   );
 }
 
 function TripTimeline({ trip, stats, addressLabels }) {
-  const startLabel = getTripRouteLabels(trip, addressLabels).start;
-  const endLabel = getTripRouteLabels(trip, addressLabels).end;
+  const labels = getTripRouteLabels(trip, addressLabels);
   const movingEnd = new Date((asDate(trip.startedAt)?.getTime() || 0) + Math.max(0, (stats.durationSeconds || 0) - (stats.trafficSeconds || 0)) * 1000);
   const trafficStart = new Date((asDate(trip.completedAt)?.getTime() || 0) - Math.max(0, stats.trafficSeconds || 0) * 1000);
   return (
@@ -681,7 +703,7 @@ function TripTimeline({ trip, stats, addressLabels }) {
         <div>
           <strong>{formatClock(trip.startedAt)}</strong>
           <b>Start</b>
-          <small>{startLabel}</small>
+          <small title={labels.start}>{labels.startShort}</small>
         </div>
       </div>
       <div className="transport-trip-timeline-item is-moving">
@@ -705,7 +727,7 @@ function TripTimeline({ trip, stats, addressLabels }) {
         <div>
           <strong>{formatClock(trip.completedAt)}</strong>
           <b>End</b>
-          <small>{endLabel}</small>
+          <small title={labels.end}>{labels.endShort}</small>
         </div>
       </div>
     </div>
@@ -943,8 +965,11 @@ export default function TransportTripsPage() {
   }, { distanceMeters: 0, fuelLitres: 0, trafficSeconds: 0 });
   const trafficPercent = statsDurationSeconds ? Math.round((Number(statsTrafficSeconds || 0) / statsDurationSeconds) * 100) : 0;
   const selectedTitle = selectedTrip
-    ? `${selectedTrip.truckLabel} - ${selectedLabels.start} to ${selectedLabels.end}`
+    ? `${selectedTrip.truckLabel} Trip`
     : 'Select a trip';
+  const selectedRouteFullTitle = selectedTrip
+    ? `${selectedLabels.start} to ${selectedLabels.end}`
+    : '';
 
   return (
     <div className="transport-trips-page">
@@ -1047,6 +1072,11 @@ export default function TransportTripsPage() {
               <div className="transport-trip-detail-head">
                 <div>
                   <h2>{selectedTitle}</h2>
+                  <div className="transport-trip-detail-route-title" title={selectedRouteFullTitle}>
+                    <span>{selectedLabels.startShort}</span>
+                    <b aria-hidden="true">-&gt;</b>
+                    <span>{selectedLabels.endShort}</span>
+                  </div>
                   <div className="transport-trip-detail-meta">
                     <span><TripIcon type="calendar" /> {formatShortDate(selectedTrip.startedAt)}</span>
                     <span><TripIcon type="truck" /> {selectedTrip.truckLabel}</span>
@@ -1055,7 +1085,7 @@ export default function TransportTripsPage() {
                 </div>
                 <div className="transport-trip-detail-actions">
                   <TripPill tone="green">Complete</TripPill>
-                  <button type="button" className="transport-trip-map-button" onClick={() => setMapOpenSignal(value => value + 1)}>View on map ↗</button>
+                  <button type="button" className="transport-trip-map-button" onClick={() => setMapOpenSignal(value => value + 1)}>Open map</button>
                   <button
                     type="button"
                     className="transport-trip-close-button"
@@ -1065,47 +1095,64 @@ export default function TransportTripsPage() {
                     }}
                     aria-label="Close trip analysis"
                   >
-                    ×
+                    x
                   </button>
                 </div>
               </div>
 
-              <div className="transport-trip-route-card">
-                <RouteMapCanvas
-                  routeData={displayRoute}
-                  loading={analysisLoading}
-                  siteLocation={selectedLabels.end}
-                  className="transport-trip-route-map"
-                  interactive
-                  expandable
-                  openSignal={mapOpenSignal}
-                  viewerTitle={`${selectedTrip.truckLabel} trip route`}
-                  originLabel="Start"
-                  destinationLabel="Finish"
-                />
-                <div className="transport-trip-map-legend">
-                  <span><i className="actual" /> Actual route</span>
-                  <span><i className="alternate-one" /> Alternative 1</span>
-                  <span><i className="alternate-two" /> Alternative 2</span>
-                  <span><i className="stop-dot" /> Stop / Idle</span>
-                  <span><i className="traffic-dot" /> Traffic delay</span>
+              <div className="transport-trip-overview-grid">
+                <div className="transport-trip-route-card">
+                  <RouteMapCanvas
+                    routeData={displayRoute}
+                    loading={analysisLoading}
+                    siteLocation={selectedLabels.end}
+                    className="transport-trip-route-map"
+                    interactive
+                    expandable
+                    openSignal={mapOpenSignal}
+                    viewerTitle={`${selectedTrip.truckLabel} trip route`}
+                    originLabel="Start"
+                    destinationLabel="Finish"
+                  />
+                  <div className="transport-trip-map-legend">
+                    <span><i className="actual" /> Actual</span>
+                    <span><i className="alternate-one" /> Alt 1</span>
+                    <span><i className="alternate-two" /> Alt 2</span>
+                    <span><i className="stop-dot" /> Stop</span>
+                    <span><i className="traffic-dot" /> Delay</span>
+                  </div>
+                  {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
+                  {!analysisLoading && analysis?.history?.error ? (
+                    <div className="transport-trip-route-warning">{analysis.history.error}</div>
+                  ) : null}
+                  {!analysisLoading && !analysis?.history?.error && !usingGpsBreadcrumbs ? (
+                    <div className="transport-trip-route-warning">No GPS breadcrumbs were recorded for this trip window yet, so this map is using the TomTom planned route fallback.</div>
+                  ) : null}
                 </div>
-                {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
-                {!analysisLoading && analysis?.history?.error ? (
-                  <div className="transport-trip-route-warning">{analysis.history.error}</div>
-                ) : null}
-                {!analysisLoading && !analysis?.history?.error && !usingGpsBreadcrumbs ? (
-                  <div className="transport-trip-route-warning">No GPS breadcrumbs were recorded for this trip window yet, so this map is using the TomTom planned route fallback.</div>
-                ) : null}
-              </div>
 
-              <div className="transport-trip-stat-grid transport-trip-stat-grid-hero">
-                <TripMetric icon="distance" label="Distance" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
-                <TripMetric icon="time" label="Time taken" value={statsDurationSeconds ? formatCompactDuration(statsDurationSeconds) : 'Pending'} sublabel={`${formatClock(selectedTrip.startedAt)} - ${formatClock(selectedTrip.completedAt)}`} />
-                <TripMetric icon="fuel" label="Fuel estimate" value={formatFuel(fuel.litres)} sublabel={formatConsumption(fuel.consumption)} />
-                <TripMetric icon="traffic" label="Traffic delay" value={statsTrafficSeconds != null ? formatCompactDuration(statsTrafficSeconds || 0) : 'Pending'} sublabel={`${trafficPercent}% of trip`} tone="orange" />
-                <TripMetric icon="toll" label="Toll fees" value={tollEstimate ? formatCurrency(tollEstimate) : formatCurrency(0)} sublabel={selectedTrip.tollsEnabled ? 'Tolls used' : 'No toll flag'} />
-                <TripMetric icon="speed" label="Avg speed" value={formatSpeed((statsDistanceMeters && statsDurationSeconds) ? statsDistanceMeters / statsDurationSeconds : selectedStats?.averageSpeedMps)} sublabel={`Top ${formatSpeed(gpsRoute?.maxSpeedMps || selectedStats?.maxSpeedMps)}`} />
+                <div className="transport-trip-overview-side">
+                  <div className="transport-trip-address-strip">
+                    <div>
+                      <span>Start</span>
+                      <strong title={selectedLabels.start}>{selectedLabels.start}</strong>
+                      <small>{formatClock(selectedTrip.startedAt)}</small>
+                    </div>
+                    <div>
+                      <span>Finish</span>
+                      <strong title={selectedLabels.end}>{selectedLabels.end}</strong>
+                      <small>{formatClock(selectedTrip.completedAt)}</small>
+                    </div>
+                  </div>
+
+                  <div className="transport-trip-stat-grid transport-trip-stat-grid-hero">
+                    <TripMetric icon="distance" label="Distance" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
+                    <TripMetric icon="time" label="Time taken" value={statsDurationSeconds ? formatCompactDuration(statsDurationSeconds) : 'Pending'} sublabel={`${formatClock(selectedTrip.startedAt)} - ${formatClock(selectedTrip.completedAt)}`} />
+                    <TripMetric icon="fuel" label="Fuel estimate" value={formatFuel(fuel.litres)} sublabel={formatConsumption(fuel.consumption)} />
+                    <TripMetric icon="traffic" label="Traffic delay" value={statsTrafficSeconds != null ? formatCompactDuration(statsTrafficSeconds || 0) : 'Pending'} sublabel={`${trafficPercent}% of trip`} tone="orange" />
+                    <TripMetric icon="toll" label="Toll fees" value={tollEstimate ? formatCurrency(tollEstimate) : formatCurrency(0)} sublabel={selectedTrip.tollsEnabled ? 'Tolls used' : 'No toll flag'} />
+                    <TripMetric icon="speed" label="Avg speed" value={formatSpeed((statsDistanceMeters && statsDurationSeconds) ? statsDistanceMeters / statsDurationSeconds : selectedStats?.averageSpeedMps)} sublabel={`Top ${formatSpeed(gpsRoute?.maxSpeedMps || selectedStats?.maxSpeedMps)}`} />
+                  </div>
+                </div>
               </div>
 
               <div className="transport-trip-panels">
@@ -1140,7 +1187,6 @@ export default function TransportTripsPage() {
                     tolls={0}
                     comparison={avoidTollComparison}
                   />
-                  <p>Alternative routes are calculated using historical traffic data from TomTom. Actual route, Route taken, Traffic delay, Fuel used, Alternative route, Time saved, Tolls and GPS playback remain based on the recorded truck dataset.</p>
                 </div>
               </div>
             </>

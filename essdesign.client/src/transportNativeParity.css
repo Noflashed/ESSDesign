@@ -7329,8 +7329,8 @@
 
 .transport-trips-layout {
     display: grid;
-    grid-template-columns: minmax(310px, 405px) minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    gap: 14px;
     align-items: stretch;
 }
 
@@ -7346,7 +7346,7 @@
 .transport-trips-list {
     height: calc(100vh - 126px);
     overflow: auto;
-    padding: 14px;
+    padding: 10px;
 }
 
 .transport-trips-list-head {
@@ -7384,12 +7384,14 @@
 .transport-trip-card {
     width: 100%;
     display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 12px;
     gap: 10px;
-    margin-bottom: 10px;
+    align-items: center;
+    margin-bottom: 8px;
     border: 1px solid #DDE7F4;
-    border-radius: 12px;
+    border-radius: 10px;
     background: #FFFFFF;
-    padding: 12px;
+    padding: 10px;
     color: #0F2A62;
     text-align: left;
     cursor: pointer;
@@ -7403,10 +7405,10 @@
     transform: translateY(-1px);
 }
 
-.transport-trip-card-head,
+.transport-trip-card-main,
 .transport-trip-card-identity,
+.transport-trip-card-title-row,
 .transport-trip-card-route,
-.transport-trip-card-foot,
 .transport-trip-detail-head,
 .transport-trip-detail-actions,
 .transport-trip-detail-meta,
@@ -7415,8 +7417,7 @@
     align-items: center;
 }
 
-.transport-trip-card-head,
-.transport-trip-card-foot,
+.transport-trip-card-title-row,
 .transport-trip-detail-head {
     justify-content: space-between;
     gap: 12px;
@@ -7425,6 +7426,11 @@
 .transport-trip-card-identity {
     min-width: 0;
     gap: 10px;
+}
+
+.transport-trip-card-identity > div {
+    min-width: 0;
+    flex: 1;
 }
 
 .transport-trip-truck-avatar {
@@ -7454,10 +7460,17 @@
 }
 
 .transport-trip-card-identity small {
-    margin-top: 2px;
+    margin-top: 3px;
     color: #66758E;
     font-size: 11px;
     font-weight: 760;
+}
+
+.transport-trip-card-title-row span {
+    color: #71809A;
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
 }
 
 .transport-trip-pill-navy {
@@ -7476,15 +7489,71 @@
 }
 
 .transport-trip-card-route {
-    gap: 10px;
+    min-width: 0;
+    gap: 6px;
+    margin-top: 3px;
     padding: 0;
 }
 
 .transport-trip-card-route b {
     flex: 0 0 auto;
-    color: #0F2A62;
-    font-size: 18px;
+    color: #526988;
+    font-size: 11px;
     font-weight: 950;
+}
+
+.transport-trip-card-route span {
+    min-width: 0;
+    overflow: hidden;
+    color: #0F2A62;
+    font-size: 12px;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-trip-card-snapshot {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(50px, 64px));
+    gap: 6px;
+    align-items: center;
+}
+
+.transport-trip-card-snapshot span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    border-radius: 8px;
+    background: #F5F8FD;
+    padding: 6px 5px;
+    text-align: center;
+}
+
+.transport-trip-card-snapshot b,
+.transport-trip-card-snapshot small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-trip-card-snapshot b {
+    color: #0F2A62;
+    font-size: 11px;
+    font-weight: 950;
+}
+
+.transport-trip-card-snapshot small {
+    color: #71809A;
+    font-size: 9px;
+    font-weight: 780;
+}
+
+.transport-trip-card-chevron {
+    color: #526988;
+    font-size: 15px;
+    font-weight: 950;
+    line-height: 1;
 }
 
 .transport-trip-route-point {
@@ -7618,9 +7687,33 @@
 .transport-trip-detail-head h2 {
     margin: 0;
     color: #0F2A62;
-    font-size: clamp(19px, 1.45vw, 26px);
+    font-size: clamp(18px, 1.25vw, 22px);
     font-weight: 950;
-    letter-spacing: -0.04em;
+    letter-spacing: 0;
+}
+
+.transport-trip-detail-route-title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 4px;
+    color: #0F2A62;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.transport-trip-detail-route-title span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.transport-trip-detail-route-title b {
+    flex: 0 0 auto;
+    color: #526988;
+    font-size: 11px;
 }
 
 .transport-trip-detail-meta {
@@ -7661,28 +7754,90 @@
     padding: 0;
     border-color: transparent;
     color: #415471;
-    font-size: 22px;
+    font-size: 18px;
     line-height: 1;
+}
+
+.transport-trip-overview-grid {
+    display: grid;
+    grid-template-columns: minmax(360px, 1.35fr) minmax(280px, 0.65fr);
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 12px;
+}
+
+.transport-trip-overview-side {
+    min-width: 0;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+}
+
+.transport-trip-address-strip {
+    display: grid;
+    gap: 8px;
+}
+
+.transport-trip-address-strip div {
+    min-width: 0;
+    border: 1px solid #DDE7F4;
+    border-radius: 10px;
+    background: #FFFFFF;
+    padding: 9px 10px;
+}
+
+.transport-trip-address-strip span,
+.transport-trip-address-strip strong,
+.transport-trip-address-strip small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.transport-trip-address-strip span {
+    color: #71809A;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.transport-trip-address-strip strong {
+    margin-top: 3px;
+    color: #0F2A62;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.transport-trip-address-strip small {
+    margin-top: 5px;
+    color: #66758E;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
 }
 
 .transport-trip-route-card {
     position: relative;
-    min-height: 260px;
+    min-height: 288px;
     border: 1px solid #DDE7F4;
     border-radius: 11px;
     overflow: hidden;
     background: #EAF2FC;
-    margin-bottom: 12px;
+    margin-bottom: 0;
 }
 
 .transport-trip-route-map {
-    height: 260px;
-    min-height: 260px;
+    height: 288px;
+    min-height: 288px;
 }
 
 .transport-trip-route-card .transport-route-canvas,
 .transport-trip-route-card .transport-leaflet-map {
-    min-height: 260px;
+    min-height: 288px;
 }
 
 .transport-trip-route-card .transport-route-map-hint,
@@ -7747,27 +7902,27 @@
 
 .transport-trip-stat-grid {
     display: grid;
-    gap: 12px;
+    gap: 9px;
 }
 
 .transport-trip-stat-grid-hero {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    margin-bottom: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 0;
 }
 
 .transport-trip-metric {
     min-width: 0;
-    min-height: 76px;
+    min-height: 64px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
     border: 1px solid #DDE7F4;
     border-radius: 10px;
     background: #FFFFFF;
-    padding: 10px 8px;
+    padding: 9px;
     box-shadow: 0 10px 20px rgba(15, 42, 98, 0.04);
-    text-align: center;
+    text-align: left;
 }
 
 .transport-trip-metric-icon {
@@ -7799,9 +7954,9 @@
 
 .transport-trip-metric strong {
     color: #0F2A62;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 950;
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
 }
 
 .transport-trip-metric span {
@@ -7837,7 +7992,7 @@
     color: #0F2A62;
     font-size: 14px;
     font-weight: 950;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
 }
 
 .transport-trip-alternatives small {
@@ -8011,7 +8166,7 @@
 
 @media (max-width: 1320px) {
     .transport-trip-stat-grid-hero {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .transport-trip-alt-row {
@@ -8027,6 +8182,7 @@
 @media (max-width: 1120px) {
     .transport-trip-control-bar,
     .transport-trips-layout,
+    .transport-trip-overview-grid,
     .transport-trip-panels {
         grid-template-columns: 1fr;
     }
@@ -8052,6 +8208,15 @@
     .transport-trip-card-metrics,
     .transport-trip-stat-grid-hero {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .transport-trip-card {
+        grid-template-columns: minmax(0, 1fr) 12px;
+    }
+
+    .transport-trip-card-snapshot {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .transport-trip-route-card,
