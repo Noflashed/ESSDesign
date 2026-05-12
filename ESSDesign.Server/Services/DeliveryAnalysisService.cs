@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Globalization;
+using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 
 namespace ESSDesign.Server.Services
 {
@@ -130,6 +132,39 @@ namespace ESSDesign.Server.Services
             public List<RoutePoint> PathPoints { get; set; } = new();
         }
 
+        private sealed class ReverseGeocodeRow
+        {
+            [JsonPropertyName("coordinate_key")]
+            public string CoordinateKey { get; set; } = string.Empty;
+
+            [JsonPropertyName("latitude")]
+            public double Latitude { get; set; }
+
+            [JsonPropertyName("longitude")]
+            public double Longitude { get; set; }
+
+            [JsonPropertyName("label")]
+            public string Label { get; set; } = string.Empty;
+
+            [JsonPropertyName("address")]
+            public string Address { get; set; } = string.Empty;
+
+            [JsonPropertyName("street")]
+            public string Street { get; set; } = string.Empty;
+
+            [JsonPropertyName("suburb")]
+            public string Suburb { get; set; } = string.Empty;
+
+            [JsonPropertyName("municipality")]
+            public string Municipality { get; set; } = string.Empty;
+
+            [JsonPropertyName("state")]
+            public string State { get; set; } = string.Empty;
+
+            [JsonPropertyName("postcode")]
+            public string Postcode { get; set; } = string.Empty;
+        }
+
         public sealed class TimeSlotRecommendationRequest
         {
             public string SiteLocation { get; set; } = string.Empty;
@@ -158,12 +193,16 @@ namespace ESSDesign.Server.Services
         // Girraween yard coordinates (hardcoded — yard is always here)
         private const double YardLat = -33.8122;
         private const double YardLon = 150.9354;
+        private const string ReverseGeocodeTable = "ess_transport_reverse_geocodes";
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<DeliveryAnalysisService> _logger;
         private readonly TomTomUsageBudgetService _tomTomUsageBudgetService;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+        private readonly string _supabaseUrl;
+        private readonly string _supabaseKey;
+        private static readonly ConcurrentDictionary<string, ReverseGeocodeResult> MemoryReverseGeocodeCache = new(StringComparer.Ordinal);
 
         public DeliveryAnalysisService(
             IHttpClientFactory httpClientFactory,
@@ -175,6 +214,10 @@ namespace ESSDesign.Server.Services
             _configuration = configuration;
             _logger = logger;
             _tomTomUsageBudgetService = tomTomUsageBudgetService;
+            _supabaseUrl = configuration["Supabase:Url"] ?? string.Empty;
+            _supabaseKey = configuration["Supabase:ServiceRoleKey"]
+                ?? configuration["Supabase:Key"]
+                ?? string.Empty;
         }
 
         private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)
@@ -1253,6 +1296,137 @@ namespace ESSDesign.Server.Services
             return await SearchTomTomAddressesAsync(query, request.Limit, httpClient);
         }
 
+        private static string BuildReverseGeocodeKey(double lat, double lon)
+        {
+            return FormattableString.Invariant($"{Math.Round(lat, 5):F5},{Math.Round(lon, 5):F5}");
+        }
+
+        private bool HasSupabaseReverseGeocodeConfig()
+        {
+            return !string.IsNullOrWhiteSpace(_supabaseUrl) && !string.IsNullOrWhiteSpace(_supabaseKey);
+        }
+
+        private HttpRequestMessage CreateSupabaseReverseGeocodeRequest(HttpMethod method, string relativeUrl, string? jsonBody = null)
+        {
+            var request = new HttpRequestMessage(method, $"{_supabaseUrl.TrimEnd('/')}/rest/v1/{relativeUrl}");
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            if (jsonBody != null)
+            {
+                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            }
+            return request;
+        }
+
+        private static ReverseGeocodeResult? BuildReverseGeocodeResult(ReverseGeocodeRow row)
+        {
+            var label = row.Label;
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = string.Join(", ", new[] { row.Street, row.Suburb, row.State }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            }
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = row.Address;
+            }
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                return null;
+            }
+
+            return new ReverseGeocodeResult
+            {
+                Label = label,
+                Address = row.Address,
+                Street = row.Street,
+                Suburb = row.Suburb,
+                Municipality = row.Municipality,
+                State = row.State,
+                Postcode = row.Postcode,
+                Lat = row.Latitude,
+                Lon = row.Longitude,
+            };
+        }
+
+        private async Task<ReverseGeocodeResult?> ReadReverseGeocodeRowAsync(string coordinateKey)
+        {
+            if (!HasSupabaseReverseGeocodeConfig())
+            {
+                return null;
+            }
+
+            try
+            {
+                using var request = CreateSupabaseReverseGeocodeRequest(
+                    HttpMethod.Get,
+                    $"{ReverseGeocodeTable}?select=*&coordinate_key=eq.{Uri.EscapeDataString(coordinateKey)}&limit=1");
+                using var response = await _httpClientFactory.CreateClient().SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var details = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Unable to read shared reverse geocode {CoordinateKey}: {Status} {Details}", coordinateKey, response.StatusCode, details);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var rows = JsonSerializer.Deserialize<List<ReverseGeocodeRow>>(json, _jsonOptions) ?? new List<ReverseGeocodeRow>();
+                return rows.Select(BuildReverseGeocodeResult).FirstOrDefault(result => result != null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to read shared reverse geocode {CoordinateKey}", coordinateKey);
+                return null;
+            }
+        }
+
+        private async Task UpsertReverseGeocodeRowAsync(string coordinateKey, ReverseGeocodeResult result)
+        {
+            if (!HasSupabaseReverseGeocodeConfig())
+            {
+                return;
+            }
+
+            try
+            {
+                var now = DateTimeOffset.UtcNow;
+                var payload = new[]
+                {
+                    new
+                    {
+                        coordinate_key = coordinateKey,
+                        latitude = result.Lat,
+                        longitude = result.Lon,
+                        label = result.Label,
+                        address = result.Address,
+                        street = result.Street,
+                        suburb = result.Suburb,
+                        municipality = result.Municipality,
+                        state = result.State,
+                        postcode = result.Postcode,
+                        provider = "TomTom reverse geocode",
+                        last_refreshed_at = now,
+                        updated_at = now,
+                    },
+                };
+
+                using var request = CreateSupabaseReverseGeocodeRequest(
+                    HttpMethod.Post,
+                    $"{ReverseGeocodeTable}?on_conflict=coordinate_key",
+                    JsonSerializer.Serialize(payload, _jsonOptions));
+                request.Headers.TryAddWithoutValidation("Prefer", "resolution=merge-duplicates,return=representation");
+                using var response = await _httpClientFactory.CreateClient().SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var details = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Unable to upsert shared reverse geocode {CoordinateKey}: {Status} {Details}", coordinateKey, response.StatusCode, details);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to upsert shared reverse geocode {CoordinateKey}", coordinateKey);
+            }
+        }
+
         public async Task<ReverseGeocodeResult?> ReverseGeocodeAsync(ReverseGeocodeRequest request)
         {
             if (!double.IsFinite(request.Lat) || !double.IsFinite(request.Lon))
@@ -1260,10 +1434,31 @@ namespace ESSDesign.Server.Services
                 return null;
             }
 
+            var coordinateKey = BuildReverseGeocodeKey(request.Lat, request.Lon);
+            if (MemoryReverseGeocodeCache.TryGetValue(coordinateKey, out var memoryCached))
+            {
+                return memoryCached;
+            }
+
+            var cached = await ReadReverseGeocodeRowAsync(coordinateKey);
+            if (cached != null)
+            {
+                MemoryReverseGeocodeCache[coordinateKey] = cached;
+                return cached;
+            }
+
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.Timeout = TimeSpan.FromSeconds(6);
 
-            return await ReverseGeocodeWithTomTomAsync(request.Lat, request.Lon, httpClient);
+            var resolved = await ReverseGeocodeWithTomTomAsync(request.Lat, request.Lon, httpClient);
+            if (resolved == null)
+            {
+                return null;
+            }
+
+            MemoryReverseGeocodeCache[coordinateKey] = resolved;
+            await UpsertReverseGeocodeRowAsync(coordinateKey, resolved);
+            return resolved;
         }
 
         public async Task<TimeSlotRecommendationResult> RecommendTimeSlotAsync(TimeSlotRecommendationRequest request)
