@@ -286,6 +286,10 @@ function routeHasPath(route) {
   return Array.isArray(route?.pathPoints) && route.pathPoints.length > 1;
 }
 
+function getRouteAlternatives(route) {
+  return Array.isArray(route?.alternatives) ? route.alternatives : [];
+}
+
 function routePointKey(point) {
   const lat = Number(point?.lat ?? point?.latitude);
   const lon = Number(point?.lon ?? point?.longitude);
@@ -985,29 +989,61 @@ export default function TransportTripsPage() {
   const alternativeRouteItems = useMemo(() => {
     if (!routeHasPath(plannedRoute)) return [];
 
-    const providerAlternatives = Array.isArray(plannedRoute.alternatives)
-      ? plannedRoute.alternatives
-      : [];
-    const candidates = [
-      ...providerAlternatives.map((route, index) => ({
-        id: `alternative-provider-${index}`,
-        via: 'road alternative',
-        route,
-        tolls: estimateTollFees(route, selectedTrip?.tollsEnabled),
-      })),
-      {
+    const candidates = [];
+    const addCandidate = (candidate) => {
+      candidates.push({
+        ...candidate,
+        tolls: estimateTollFees(candidate.route, candidate.tollsUsed),
+      });
+    };
+
+    if (tollRoute?.usesTolls) {
+      addCandidate({
         id: 'alternative-tolls',
         via: 'via toll roads',
         route: tollRoute,
-        tolls: estimateTollFees(tollRoute, true),
-      },
-      {
-        id: 'alternative-avoid-tolls',
-        via: 'avoid tolls',
-        route: avoidTollRoute,
-        tolls: 0,
-      },
-    ];
+        tollsUsed: true,
+      });
+    }
+
+    getRouteAlternatives(tollRoute)
+      .filter(route => route?.usesTolls)
+      .forEach((route, index) => {
+        addCandidate({
+          id: `alternative-tolls-provider-${index}`,
+          via: 'via toll roads',
+          route,
+          tollsUsed: true,
+        });
+      });
+
+    getRouteAlternatives(plannedRoute).forEach((route, index) => {
+      const usesTolls = Boolean(route?.usesTolls);
+      addCandidate({
+        id: `alternative-provider-${index}`,
+        via: usesTolls ? 'via toll roads' : 'road alternative',
+        route,
+        tollsUsed: usesTolls,
+      });
+    });
+
+    addCandidate({
+      id: 'alternative-avoid-tolls',
+      via: 'avoid tolls',
+      route: avoidTollRoute,
+      tollsUsed: false,
+    });
+
+    getRouteAlternatives(avoidTollRoute)
+      .filter(route => !route?.usesTolls)
+      .forEach((route, index) => {
+        addCandidate({
+          id: `alternative-avoid-tolls-provider-${index}`,
+          via: 'avoid tolls',
+          route,
+          tollsUsed: false,
+        });
+      });
 
     const distinctCandidates = [];
     candidates.forEach(candidate => {
@@ -1030,7 +1066,7 @@ export default function TransportTripsPage() {
         legendClassName: index === 0 ? 'alternate-one' : 'alternate-two',
         routeData: candidate.route,
       }));
-  }, [plannedRoute, tollRoute, avoidTollRoute, selectedTrip?.tollsEnabled]);
+  }, [plannedRoute, tollRoute, avoidTollRoute]);
   const alternativeMapRoutes = useMemo(
     () => alternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
     [alternativeRouteItems],

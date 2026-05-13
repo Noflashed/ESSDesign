@@ -106,6 +106,7 @@ namespace ESSDesign.Server.Services
             public double DurationSeconds { get; set; }
             public double TrafficDelaySeconds { get; set; }
             public bool HasLiveTraffic { get; set; }
+            public bool UsesTolls { get; set; }
             public string TrafficProvider { get; set; } = string.Empty;
             public string TrafficNote { get; set; } = string.Empty;
             public List<RoutePoint> PathPoints { get; set; } = new();
@@ -132,6 +133,7 @@ namespace ESSDesign.Server.Services
         {
             public List<RoutePoint> PathPoints { get; set; } = new();
             public List<RouteProviderResult> Alternatives { get; set; } = new();
+            public bool UsesTolls { get; set; }
         }
 
         private sealed class ReverseGeocodeRow
@@ -668,6 +670,7 @@ namespace ESSDesign.Server.Services
                           "&routeType=fastest" +
                           "&maxAlternatives=2" +
                           "&alternativeType=anyRoute" +
+                          "&sectionType=tollRoad" +
                           "&coordinatePrecision=full" +
                           "&travelMode=truck" +
                           "&vehicleCommercial=true" +
@@ -747,6 +750,14 @@ namespace ESSDesign.Server.Services
                     }
 
                     var delayMinutes = Math.Round(trafficDelaySeconds / 60.0);
+                    var usesTolls = false;
+                    if (routeEl.TryGetProperty("sections", out var sectionsEl))
+                    {
+                        usesTolls = sectionsEl.EnumerateArray().Any(section =>
+                            section.TryGetProperty("sectionType", out var sectionTypeEl)
+                            && string.Equals(sectionTypeEl.GetString(), "TOLL_ROAD", StringComparison.OrdinalIgnoreCase));
+                    }
+
                     var routeKind = isAlternative
                         ? enableTolls ? "TomTom alternative route" : "TomTom toll-free alternative route"
                         : enableTolls ? "TomTom route" : "TomTom toll-free route";
@@ -757,6 +768,7 @@ namespace ESSDesign.Server.Services
                         BaseDurationSeconds = baseDurationSeconds,
                         DurationSeconds = Math.Max(baseDurationSeconds, durationSeconds),
                         HasLiveTraffic = true,
+                        UsesTolls = usesTolls,
                         TrafficProvider = "TomTom traffic",
                         TrafficNote = delayMinutes > 0
                             ? $"{routeKind} adding about {delayMinutes:F0} min"
@@ -1067,6 +1079,7 @@ namespace ESSDesign.Server.Services
                 DurationSeconds = source.DurationSeconds,
                 TrafficDelaySeconds = source.TrafficDelaySeconds,
                 HasLiveTraffic = source.HasLiveTraffic,
+                UsesTolls = source.UsesTolls,
                 TrafficProvider = source.TrafficProvider,
                 TrafficNote = source.TrafficNote,
                 PathPoints = source.PathPoints,
