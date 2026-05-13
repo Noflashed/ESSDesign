@@ -79,6 +79,39 @@ function FitBounds({ bounds }) {
   return null;
 }
 
+function AnimatedPolyline({ positions, pathOptions }) {
+  const lineRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let frameId = 0;
+    const startedAt = window.performance?.now?.() || Date.now();
+    const durationMs = 850;
+    const dashTravel = 48;
+
+    const animate = (timestamp) => {
+      const elapsed = timestamp - startedAt;
+      const progress = (elapsed % durationMs) / durationMs;
+      const dashOffset = `${-(dashTravel * progress)}`;
+      const line = lineRef.current;
+
+      if (line) {
+        line.setStyle({ dashOffset });
+        if (line._path) {
+          line._path.style.strokeDashoffset = dashOffset;
+        }
+      }
+
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    frameId = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [positions]);
+
+  return <Polyline ref={lineRef} positions={positions} pathOptions={{ ...pathOptions, dashOffset: '0' }} />;
+}
+
 function RouteMapInstance({
   routeData,
   className,
@@ -201,7 +234,7 @@ function RouteMapInstance({
           />
         ))}
         {alternativeRouteLines.map(route => (
-          <Polyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
+          <AnimatedPolyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
         ))}
         {routeData?.yard ? (
           <CircleMarker center={[routeData.yard.lat, routeData.yard.lon]} radius={8} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#102B5C', fillOpacity: 1 }}>

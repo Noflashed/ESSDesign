@@ -142,8 +142,8 @@ function getTripEndpointPoints(trip) {
   const firstHistoryPoint = historyPoints[0] || null;
   const lastHistoryPoint = historyPoints[historyPoints.length - 1] || null;
   return {
-    startPoint: firstHistoryPoint || trip?.gpsRoute?.yard || null,
-    endPoint: lastHistoryPoint || trip?.gpsRoute?.site || null,
+    startPoint: trip?.gpsRoute?.yard || firstHistoryPoint || null,
+    endPoint: trip?.gpsRoute?.site || lastHistoryPoint || null,
   };
 }
 
@@ -389,8 +389,52 @@ function cleanHistoryPoints(points) {
   return cleaned;
 }
 
+function getGpsSegmentMetrics(previous, current) {
+  if (!previous || !current) return null;
+  const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
+  if (intervalSeconds <= 0 || intervalSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) return null;
+  const segmentMeters = distanceBetweenPoints(previous, current);
+  const recordedSpeed = Number(current.speedMps);
+  const calculatedSpeed = segmentMeters / intervalSeconds;
+  const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
+  return { intervalSeconds, segmentMeters, speed };
+}
+
+function isMovingGpsSegment(metrics) {
+  return Boolean(metrics)
+    && (metrics.speed >= GPS_HEAVY_TRAFFIC_SPEED_MPS || metrics.segmentMeters >= GPS_MOVING_DISTANCE_METERS);
+}
+
+function getTerminalStopStartIndex(points) {
+  if (!Array.isArray(points) || points.length < 3) return null;
+  const finalPoint = points[points.length - 1];
+  let stopStartIndex = null;
+
+  for (let index = points.length - 1; index > 0; index -= 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const metrics = getGpsSegmentMetrics(previous, current);
+    if (!metrics || isMovingGpsSegment(metrics)) {
+      break;
+    }
+
+    if (distanceBetweenPoints(previous, finalPoint) > GPS_TRIP_STOP_RADIUS_METERS) {
+      break;
+    }
+
+    stopStartIndex = index - 1;
+  }
+
+  return stopStartIndex;
+}
+
 function buildRouteFromHistory(points) {
-  const cleaned = cleanHistoryPoints(points);
+  const cleanedPoints = cleanHistoryPoints(points);
+  if (cleanedPoints.length < 2) return null;
+  const terminalStopStartIndex = getTerminalStopStartIndex(cleanedPoints);
+  const cleaned = terminalStopStartIndex == null
+    ? cleanedPoints
+    : cleanedPoints.slice(0, terminalStopStartIndex + 1);
   if (cleaned.length < 2) return null;
   let distanceMeters = 0;
   let movingSeconds = 0;
@@ -432,16 +476,13 @@ function buildRouteFromHistory(points) {
   for (let index = 1; index < cleaned.length; index += 1) {
     const previous = cleaned[index - 1];
     const current = cleaned[index];
-    const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
-    if (intervalSeconds <= 0 || intervalSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) {
+    const metrics = getGpsSegmentMetrics(previous, current);
+    if (!metrics) {
       continue;
     }
+    const { intervalSeconds, segmentMeters, speed } = metrics;
     const trafficIntervalSeconds = Math.min(intervalSeconds, GPS_TRAFFIC_SEGMENT_CAP_SECONDS);
-    const segmentMeters = distanceBetweenPoints(previous, current);
     distanceMeters += segmentMeters;
-    const recordedSpeed = Number(current.speedMps);
-    const calculatedSpeed = segmentMeters / intervalSeconds;
-    const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
     maxSpeedMps = Math.max(maxSpeedMps, speed);
     const isHeavyTraffic = speed < GPS_HEAVY_TRAFFIC_SPEED_MPS && segmentMeters < GPS_MOVING_DISTANCE_METERS;
     const severity = isHeavyTraffic
@@ -462,6 +503,10 @@ function buildRouteFromHistory(points) {
   const first = cleaned[0];
   const last = cleaned[cleaned.length - 1];
   const durationSeconds = secondsBetween(first.recordedAt, last.recordedAt);
+  const originalLast = cleanedPoints[cleanedPoints.length - 1];
+  const excludedTerminalStopSeconds = terminalStopStartIndex == null
+    ? 0
+    : Math.max(0, secondsBetween(last.recordedAt, originalLast.recordedAt));
   return {
     yard: { lat: Number(first.latitude), lon: Number(first.longitude) },
     site: { lat: Number(last.latitude), lon: Number(last.longitude) },
@@ -471,8 +516,12 @@ function buildRouteFromHistory(points) {
     baseDurationSeconds: movingSeconds,
     trafficDelaySeconds: slowOrIdleSeconds,
     trafficProvider: 'GPS breadcrumbs',
-    trafficNote: `${cleaned.length} recorded GPS points`,
+    trafficNote: excludedTerminalStopSeconds
+      ? `${cleaned.length} recorded GPS points, terminal stop excluded`
+      : `${cleaned.length} recorded GPS points`,
     pointCount: cleaned.length,
+    recordedPointCount: cleanedPoints.length,
+    excludedTerminalStopSeconds,
     trafficSegments,
     movingSeconds,
     slowOrIdleSeconds,
@@ -497,14 +546,7 @@ function formatEstimatedLocation(point) {
 }
 
 function isMovingSegment(previous, current) {
-  if (!previous || !current) return false;
-  const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
-  if (intervalSeconds <= 0 || intervalSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) return false;
-  const segmentMeters = distanceBetweenPoints(previous, current);
-  const recordedSpeed = Number(current.speedMps);
-  const calculatedSpeed = segmentMeters / intervalSeconds;
-  const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
-  return speed >= GPS_HEAVY_TRAFFIC_SPEED_MPS || segmentMeters >= GPS_MOVING_DISTANCE_METERS;
+  return isMovingGpsSegment(getGpsSegmentMetrics(previous, current));
 }
 
 function buildGpsTripFromPoints(points, lane, sequence) {
@@ -512,10 +554,21 @@ function buildGpsTripFromPoints(points, lane, sequence) {
   if (!route) return null;
   if (Number(route.durationSeconds || 0) < GPS_TRIP_MIN_DURATION_SECONDS) return null;
   if (Number(route.distanceMeters || 0) < GPS_TRIP_MIN_DISTANCE_METERS) return null;
-  const first = points[0];
-  const last = points[points.length - 1];
-  const startedAt = route.startedAt || first?.recordedAt;
-  const completedAt = route.endedAt || last?.recordedAt;
+  const rawFirst = points[0];
+  const rawLast = points[points.length - 1];
+  const startedAt = route.startedAt || rawFirst?.recordedAt;
+  const completedAt = route.endedAt || rawLast?.recordedAt;
+  const startedAtDate = asDate(startedAt);
+  const completedAtDate = asDate(completedAt);
+  const routeHistoryPoints = (points || []).filter(point => {
+    const recordedAt = asDate(point.recordedAt);
+    return recordedAt && startedAtDate && completedAtDate
+      && recordedAt >= startedAtDate
+      && recordedAt <= completedAtDate;
+  });
+  const tripPoints = routeHistoryPoints.length >= 2 ? routeHistoryPoints : points;
+  const first = tripPoints[0];
+  const last = tripPoints[tripPoints.length - 1];
   const fromLocation = formatCoordinateLocation(first);
   const toLocation = formatCoordinateLocation(last);
   if (!startedAt || !completedAt || !fromLocation || !toLocation) return null;
@@ -549,7 +602,7 @@ function buildGpsTripFromPoints(points, lane, sequence) {
     }],
     tollsEnabled: false,
     gpsRoute: route,
-    historyPoints: points,
+    historyPoints: tripPoints,
   };
 }
 
