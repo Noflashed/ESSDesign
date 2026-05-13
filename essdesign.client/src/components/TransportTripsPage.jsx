@@ -949,6 +949,10 @@ export default function TransportTripsPage() {
   const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
   const tollRoute = analysis?.tolls?.combined || null;
   const avoidTollRoute = analysis?.avoidTolls?.combined || null;
+  const alternativeMapRoutes = useMemo(() => [
+    tollRoute ? { id: 'alternative-tolls', routeData: tollRoute } : null,
+    avoidTollRoute ? { id: 'alternative-avoid-tolls', routeData: avoidTollRoute } : null,
+  ].filter(Boolean), [tollRoute, avoidTollRoute]);
   const tollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.tolls);
   const avoidTollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.avoidTolls);
   const avgActualSeconds = filteredTrips.length
@@ -1113,6 +1117,7 @@ export default function TransportTripsPage() {
                     viewerTitle={`${selectedTrip.truckLabel} trip route`}
                     originLabel="Start"
                     destinationLabel="Finish"
+                    alternativeRoutes={alternativeMapRoutes}
                   />
                   <div className="transport-trip-map-legend">
                     <span><i className="actual" /> Actual</span>

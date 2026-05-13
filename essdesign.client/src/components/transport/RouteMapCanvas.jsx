@@ -2,6 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
+const ALTERNATIVE_ROUTE_STYLES = [
+  { color: '#8A96A8', weight: 4, opacity: 0.9, dashArray: '8 7' },
+  { color: '#F47C20', weight: 4, opacity: 0.92, dashArray: '7 6' },
+];
+
+function getRoutePathPoints(routeData) {
+  return (routeData?.pathPoints || [])
+    .map(point => [Number(point.lat ?? point.latitude), Number(point.lon ?? point.longitude)])
+    .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+}
+
+function getRouteAnchorPoints(routeData) {
+  return [routeData?.yard, routeData?.site, ...(routeData?.pathPoints || [])]
+    .filter(Boolean)
+    .map(point => [Number(point.lat ?? point.latitude), Number(point.lon ?? point.longitude)])
+    .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+}
+
 function Placeholder({ label }) {
   return (
     <div className="transport-map-placeholder">
@@ -36,21 +54,34 @@ function RouteMapInstance({
   launchViewer,
   originLabel = 'Yard',
   destinationLabel = 'Site',
+  alternativeRoutes = [],
 }) {
   const routePoints = useMemo(
-    () => (routeData?.pathPoints || [])
-      .map(point => [point.lat, point.lon])
-      .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon)),
+    () => getRoutePathPoints(routeData),
     [routeData],
   );
 
+  const alternativeRouteLines = useMemo(
+    () => alternativeRoutes
+      .map((route, index) => ({
+        id: route?.id || `alternative-route-${index}`,
+        points: getRoutePathPoints(route?.routeData || route),
+        pathOptions: {
+          ...ALTERNATIVE_ROUTE_STYLES[index % ALTERNATIVE_ROUTE_STYLES.length],
+          ...(route?.pathOptions || {}),
+        },
+      }))
+      .filter(route => route.points.length > 1),
+    [alternativeRoutes],
+  );
+
   const bounds = useMemo(() => {
-    const points = [routeData?.yard, routeData?.site, ...(routeData?.pathPoints || [])]
-      .filter(Boolean)
-      .map(point => [point.lat, point.lon])
-      .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+    const points = [
+      ...getRouteAnchorPoints(routeData),
+      ...alternativeRoutes.flatMap(route => getRouteAnchorPoints(route?.routeData || route)),
+    ];
     return points;
-  }, [routeData]);
+  }, [routeData, alternativeRoutes]);
 
   const livePoint = useMemo(() => {
     if (!showUserPoint || !userPoint) {
@@ -108,6 +139,9 @@ function RouteMapInstance({
           attribution='&copy; OpenStreetMap contributors &copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
+        {alternativeRouteLines.map(route => (
+          <Polyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
+        ))}
         {routePoints.length > 0 ? (
           <Polyline positions={routePoints} pathOptions={{ color: '#2FA6FF', weight: 5, opacity: 0.95 }} />
         ) : null}
@@ -155,6 +189,7 @@ export default function RouteMapCanvas({
   viewerTitle = 'Route Preview',
   originLabel = 'Yard',
   destinationLabel = 'Site',
+  alternativeRoutes = [],
 }) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const lastOpenSignalRef = useRef(openSignal);
@@ -211,6 +246,7 @@ export default function RouteMapCanvas({
         launchViewer={expandable ? () => setViewerOpen(true) : null}
         originLabel={originLabel}
         destinationLabel={destinationLabel}
+        alternativeRoutes={alternativeRoutes}
       />
       {viewerOpen ? (
         <div className="transport-route-viewer-root">
@@ -231,6 +267,7 @@ export default function RouteMapCanvas({
               userPoint={userPoint}
               originLabel={originLabel}
               destinationLabel={destinationLabel}
+              alternativeRoutes={alternativeRoutes}
             />
           </div>
         </div>
