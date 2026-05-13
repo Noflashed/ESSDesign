@@ -86,7 +86,7 @@ function AnimatedPolyline({ positions, pathOptions }) {
     if (typeof window === 'undefined') return undefined;
     let frameId = 0;
     const startedAt = window.performance?.now?.() || Date.now();
-    const durationMs = 850;
+    const durationMs = 1400;
     const dashTravel = 48;
 
     const animate = (timestamp) => {

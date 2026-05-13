@@ -1202,12 +1202,8 @@ export default function TransportTripsPage() {
   }, [plannedRoute, tollRoute, avoidTollRoute]);
 
   useEffect(() => {
-    const availableIds = new Set(alternativeRouteItems.map(item => item.id));
-    setHiddenAlternativeRouteIds(current => {
-      const next = current.filter(id => availableIds.has(id));
-      return next.length === current.length ? current : next;
-    });
-  }, [alternativeRouteItems]);
+    setHiddenAlternativeRouteIds(alternativeRouteItems.map(item => item.id));
+  }, [alternativeRouteItems, selectedTripId]);
 
   const handleAlternativeRouteVisibilityChange = (id, visible) => {
     setHiddenAlternativeRouteIds(current => {

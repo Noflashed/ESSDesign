@@ -7875,7 +7875,7 @@
 .leaflet-overlay-pane path.transport-alternative-route-line {
     stroke-dasharray: 12 12 !important;
     stroke-linecap: round;
-    animation: transport-route-dash-flow 850ms linear infinite !important;
+    animation: transport-route-dash-flow 1400ms linear infinite !important;
 }
 
 @keyframes transport-route-dash-flow {
