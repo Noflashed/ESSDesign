@@ -7847,13 +7847,24 @@
 }
 
 .transport-trip-route-map {
-    height: 288px;
-    min-height: 288px;
+    height: auto;
+    min-height: 0;
 }
 
 .transport-trip-route-card .transport-route-canvas,
 .transport-trip-route-card .transport-leaflet-map {
-    min-height: 288px;
+    min-height: 0;
+}
+
+.transport-trip-route-card .transport-route-canvas {
+    position: absolute;
+    inset: 0;
+    height: auto;
+}
+
+.transport-trip-route-card .transport-leaflet-map,
+.transport-trip-route-card .transport-route-canvas .leaflet-container {
+    height: 100%;
 }
 
 .transport-trip-route-card .transport-route-map-hint,
