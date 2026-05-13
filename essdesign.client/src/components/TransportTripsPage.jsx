@@ -747,9 +747,9 @@ function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance,
         <TripPill>{via}</TripPill>
       </div>
       <div><b>{duration ? formatCompactDuration(duration) : 'Pending'}</b><span>ETA</span></div>
-      <div className={isFaster ? 'positive' : 'negative'}><b>{formatSignedMinutes(deltaSeconds)}</b><span>Time saved</span></div>
+      <div className={isFaster ? 'positive' : 'negative'}><b>{formatSignedMinutes(deltaSeconds)}</b><span>Time diff</span></div>
       <div><b>{distance ? formatDistance(distance) : 'Pending'}</b><span>Distance</span></div>
-      <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Difference</span></div>
+      <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Distance diff</span></div>
       <div><b>{formatCurrency(tolls || 0)}</b><span>Tolls</span></div>
       <button type="button">View route</button>
       {comparison ? null : null}
@@ -938,11 +938,12 @@ export default function TransportTripsPage() {
 
   const plannedRoute = analysis?.current?.combined || null;
   const gpsRoute = analysis?.history?.route || null;
-  const displayRoute = gpsRoute || plannedRoute;
+  const roadRoute = plannedRoute || gpsRoute;
+  const displayRoute = roadRoute;
   const selectedStats = selectedTrip ? getTripStats(selectedTrip) : null;
   const selectedLabels = selectedTrip ? getTripRouteLabels(selectedTrip, addressLabels) : { start: '', end: '' };
   const usingGpsBreadcrumbs = Boolean(gpsRoute);
-  const statsDistanceMeters = gpsRoute?.distanceMeters ?? plannedRoute?.distanceMeters ?? selectedStats?.distanceMeters;
+  const statsDistanceMeters = roadRoute?.distanceMeters ?? selectedStats?.distanceMeters;
   const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds ?? selectedStats?.durationSeconds;
   const statsTrafficSeconds = gpsRoute?.slowOrIdleSeconds ?? plannedRoute?.trafficDelaySeconds ?? selectedStats?.trafficSeconds;
   const fuel = calculateFuel(statsDistanceMeters, statsTrafficSeconds);
@@ -1120,7 +1121,7 @@ export default function TransportTripsPage() {
                     alternativeRoutes={alternativeMapRoutes}
                   />
                   <div className="transport-trip-map-legend">
-                    <span><i className="actual" /> Actual</span>
+                    <span><i className="actual" /> Road route</span>
                     <span><i className="alternate-one" /> Alt 1</span>
                     <span><i className="alternate-two" /> Alt 2</span>
                     <span><i className="stop-dot" /> Stop</span>
@@ -1150,7 +1151,7 @@ export default function TransportTripsPage() {
                   </div>
 
                   <div className="transport-trip-stat-grid transport-trip-stat-grid-hero">
-                    <TripMetric icon="distance" label="Distance" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
+                    <TripMetric icon="distance" label="Road distance" value={statsDistanceMeters ? formatDistance(statsDistanceMeters) : 'Calculating'} />
                     <TripMetric icon="time" label="Time taken" value={statsDurationSeconds ? formatCompactDuration(statsDurationSeconds) : 'Pending'} sublabel={`${formatClock(selectedTrip.startedAt)} - ${formatClock(selectedTrip.completedAt)}`} />
                     <TripMetric icon="fuel" label="Fuel estimate" value={formatFuel(fuel.litres)} sublabel={formatConsumption(fuel.consumption)} />
                     <TripMetric icon="traffic" label="Traffic delay" value={statsTrafficSeconds != null ? formatCompactDuration(statsTrafficSeconds || 0) : 'Pending'} sublabel={`${trafficPercent}% of trip`} tone="orange" />
@@ -1178,8 +1179,8 @@ export default function TransportTripsPage() {
                     title="Alternative 1"
                     via="via toll roads"
                     route={tollRoute}
-                    actualSeconds={statsDurationSeconds}
-                    actualDistance={statsDistanceMeters}
+                    actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
+                    actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
                     tolls={estimateTollFees(tollRoute, true)}
                     comparison={tollComparison}
                   />
@@ -1187,8 +1188,8 @@ export default function TransportTripsPage() {
                     title="Alternative 2"
                     via="avoid tolls"
                     route={avoidTollRoute}
-                    actualSeconds={statsDurationSeconds}
-                    actualDistance={statsDistanceMeters}
+                    actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
+                    actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
                     tolls={0}
                     comparison={avoidTollComparison}
                   />

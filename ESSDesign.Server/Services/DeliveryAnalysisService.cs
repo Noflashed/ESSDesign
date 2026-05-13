@@ -663,6 +663,8 @@ namespace ESSDesign.Server.Services
                           "?traffic=true" +
                           "&computeTravelTimeFor=all" +
                           "&routeRepresentation=polyline" +
+                          "&routeType=fastest" +
+                          "&coordinatePrecision=full" +
                           "&travelMode=truck" +
                           "&vehicleCommercial=true" +
                           (enableTolls ? string.Empty : "&avoid=tollRoads") +
@@ -953,10 +955,38 @@ namespace ESSDesign.Server.Services
 
                 if (pathPoints.Count == 0) return null;
 
-                var timing = await GetTrafficAwareRouteAsync(fromLat, fromLon, toLat, toLon, client, departure, enableTolls);
-                var distanceMeters = timing?.DistanceMeters ?? route.GetProperty("distance").GetDouble();
-                var baseDurationSeconds = timing?.BaseDurationSeconds ?? route.GetProperty("duration").GetDouble();
-                var durationSeconds = timing?.DurationSeconds ?? baseDurationSeconds;
+                var distanceMeters = route.GetProperty("distance").GetDouble();
+                var baseDurationSeconds = route.GetProperty("duration").GetDouble();
+                var durationSeconds = baseDurationSeconds;
+                var hasLiveTraffic = false;
+                var trafficProvider = "OSRM";
+                var trafficNote = enableTolls
+                    ? "OSRM fallback route timing"
+                    : "OSRM fallback route timing; toll avoidance unavailable";
+
+                var departureTime = departure ?? GetSydneyNow();
+                var googleTiming = await GetGoogleTrafficRouteAsync(fromLat, fromLon, toLat, toLon, client, departureTime);
+                if (googleTiming != null)
+                {
+                    var delayRatio = googleTiming.BaseDurationSeconds > 0
+                        ? Math.Max(0, (googleTiming.DurationSeconds - googleTiming.BaseDurationSeconds) / googleTiming.BaseDurationSeconds)
+                        : 0;
+                    durationSeconds = Math.Max(baseDurationSeconds, baseDurationSeconds * (1 + delayRatio));
+                    hasLiveTraffic = googleTiming.HasLiveTraffic;
+                    trafficProvider = $"{googleTiming.TrafficProvider} with OSRM geometry";
+                    trafficNote = enableTolls
+                        ? googleTiming.TrafficNote
+                        : $"{googleTiming.TrafficNote}; OSRM fallback cannot avoid toll roads";
+                }
+                else
+                {
+                    var traffic = EstimateSydneyTrafficDelay(baseDurationSeconds, departureTime);
+                    durationSeconds = baseDurationSeconds + traffic.DelaySeconds;
+                    trafficProvider = "Sydney traffic estimate with OSRM geometry";
+                    trafficNote = enableTolls
+                        ? $"{traffic.Label}; ETA includes local time-of-day delay"
+                        : $"{traffic.Label}; toll avoidance unavailable in OSRM fallback";
+                }
 
                 return new RoutePreviewResult
                 {
@@ -966,9 +996,9 @@ namespace ESSDesign.Server.Services
                     BaseDurationSeconds = baseDurationSeconds,
                     DurationSeconds = durationSeconds,
                     TrafficDelaySeconds = Math.Max(0, durationSeconds - baseDurationSeconds),
-                    HasLiveTraffic = timing?.HasLiveTraffic ?? false,
-                    TrafficProvider = timing?.TrafficProvider ?? "OSRM",
-                    TrafficNote = timing?.TrafficNote ?? "Free-flow route timing",
+                    HasLiveTraffic = hasLiveTraffic,
+                    TrafficProvider = trafficProvider,
+                    TrafficNote = trafficNote,
                     PathPoints = pathPoints,
                 };
             }

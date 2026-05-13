@@ -12,6 +12,7 @@ namespace ESSDesign.Server.Services
         public const string YardLocation = "130 Gilba Road, Girraween, NSW, Australia";
 
         private const string EstimatesTable = "ess_transport_route_estimates";
+        private const string RouteKeyVersion = "road-v2";
         private static readonly TimeSpan EstimateTtl = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan ActiveRequestWindow = TimeSpan.FromMinutes(45);
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> RouteLocks = new(StringComparer.Ordinal);
@@ -145,6 +146,7 @@ namespace ESSDesign.Server.Services
 
             return string.Join("|", new[]
             {
+                RouteKeyVersion,
                 string.IsNullOrWhiteSpace(segment) ? "primary" : segment.Trim().ToLowerInvariant(),
                 from,
                 to,
