@@ -32,6 +32,7 @@ namespace ESSDesign.Server.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly SupabaseService _supabaseService;
+        private readonly DeliveryAnalysisService _deliveryAnalysisService;
         private readonly ILogger<AdminAssistantService> _logger;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -39,6 +40,13 @@ namespace ESSDesign.Server.Services
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
         private const string MaterialRequestsTable = "ess_material_order_requests";
+        private const string TruckLiveLocationsTable = "ess_truck_live_locations";
+        private static readonly (string TruckId, string Label, string RoleName, string Number)[] KnownTruckLanes =
+        {
+            ("truck-1", "ESS01", "truck_ess01", "1"),
+            ("truck-2", "ESS02", "truck_ess02", "2"),
+            ("truck-3", "ESS03", "truck_ess03", "3"),
+        };
         private static readonly HashSet<string> VagueDesignLookupWords = new(StringComparer.OrdinalIgnoreCase)
         {
             "a",
@@ -279,15 +287,42 @@ namespace ESSDesign.Server.Services
             public List<AdminAssistantLink> Links { get; set; } = new();
         }
 
+        private sealed class TruckLiveLocationContext
+        {
+            public string TruckId { get; set; } = string.Empty;
+            public string TruckLabel { get; set; } = string.Empty;
+            public string RoleName { get; set; } = string.Empty;
+            public string? DriverUserId { get; set; }
+            public string? DeliveryRequestId { get; set; }
+            public double Latitude { get; set; }
+            public double Longitude { get; set; }
+            public double? AccuracyM { get; set; }
+            public double? HeadingDeg { get; set; }
+            public double? SpeedMps { get; set; }
+            public double? BatteryPercent { get; set; }
+            public string Status { get; set; } = string.Empty;
+            public string RecordedAt { get; set; } = string.Empty;
+            public string UpdatedAt { get; set; } = string.Empty;
+            public int AgeMinutes { get; set; }
+            public bool IsStale { get; set; }
+            public bool IsOffline { get; set; }
+            public string Freshness { get; set; } = string.Empty;
+            public string StatusLabel { get; set; } = string.Empty;
+            public string Coordinates { get; set; } = string.Empty;
+            public string MapUrl { get; set; } = string.Empty;
+        }
+
         public AdminAssistantService(
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             SupabaseService supabaseService,
+            DeliveryAnalysisService deliveryAnalysisService,
             ILogger<AdminAssistantService> logger)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _supabaseService = supabaseService;
+            _deliveryAnalysisService = deliveryAnalysisService;
             _logger = logger;
         }
 
@@ -314,6 +349,12 @@ namespace ESSDesign.Server.Services
             }
 
             var context = await BuildContextAsync(cleanQuestion, cancellationToken);
+            var directTruckLocationResult = await TryBuildDirectTruckLocationResultAsync(cleanQuestion, context, cancellationToken);
+            if (directTruckLocationResult != null)
+            {
+                return directTruckLocationResult;
+            }
+
             if (TryBuildDirectTransportScheduleResult(cleanQuestion, context, out var directTransportResult))
             {
                 return directTransportResult;
@@ -357,6 +398,8 @@ For employee questions, use employeeSummary.employeeMatches first, then employee
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
 For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. If the user asks for a specific date and no isOnSchedule rows match that date, say there are no scheduled deliveries for that date; never invent or shift deliveries from another date. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
+
+For live truck location questions, use transportSummary.currentTruckLocations. These are GPS tracking pings from ess_truck_live_locations, not schedule guesses. Always include the truck label, the best available address or coordinates, and how fresh/stale the ping is. If a ping is stale or offline, say so plainly.
 
 Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
 
@@ -435,6 +478,195 @@ ESS context JSON:
             var withoutEmphasis = Regex.Replace(withoutBareUrls, @"(?<!\*)\*{1,3}([^*\r\n][^*\r\n]*?)\*{1,3}(?!\*)", "$1");
             withoutEmphasis = Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1");
             return withoutEmphasis;
+        }
+
+        private async Task<ChatResult?> TryBuildDirectTruckLocationResultAsync(
+            string question,
+            AdminAssistantContext context,
+            CancellationToken cancellationToken)
+        {
+            var normalized = NormalizeSearchText(question);
+            if (!IsTruckLocationQuestion(normalized))
+            {
+                return null;
+            }
+
+            var locations = context.TruckLiveLocations;
+            if (locations.Count == 0)
+            {
+                return new ChatResult
+                {
+                    Reply = "I checked live truck tracking, but there are no current GPS pings available yet.",
+                    Links = context.Links,
+                    Sources = context.Sources,
+                };
+            }
+
+            var requestedLocations = ResolveRequestedTruckLocations(normalized, locations);
+            if (requestedLocations.Count == 0)
+            {
+                return new ChatResult
+                {
+                    Reply = "Which truck do you want the current location for? I can check ESS01, ESS02, or ESS03.",
+                    Links = context.Links,
+                    Sources = context.Sources,
+                };
+            }
+
+            var lines = new List<string>();
+            var mapLinks = new List<AdminAssistantLink>();
+            foreach (var location in requestedLocations)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var address = await TryResolveTruckAddressAsync(location);
+                var position = !string.IsNullOrWhiteSpace(address)
+                    ? address
+                    : location.Coordinates;
+                var speed = location.SpeedMps.HasValue
+                    ? $"{Math.Round(location.SpeedMps.Value * 3.6):F0} km/h"
+                    : "speed unknown";
+                var freshness = string.IsNullOrWhiteSpace(location.Freshness)
+                    ? FormatTruckLocationAge(location.AgeMinutes)
+                    : location.Freshness;
+                var recordedAt = FormatSydneyDateTime(location.RecordedAt);
+                var staleNote = location.IsOffline
+                    ? " This is an offline/stale position, not a live moving ping."
+                    : location.IsStale
+                        ? " This ping is stale, so treat it as the last known position."
+                        : string.Empty;
+
+                lines.Add($"{location.TruckLabel} is at {position}. Last GPS ping: {freshness}{(string.IsNullOrWhiteSpace(recordedAt) ? string.Empty : $" ({recordedAt})")}. Status: {location.StatusLabel}; {speed}.{staleNote}");
+                mapLinks.Add(new AdminAssistantLink
+                {
+                    Label = $"Open {location.TruckLabel} on map",
+                    Url = location.MapUrl,
+                    Type = "map",
+                });
+            }
+
+            return new ChatResult
+            {
+                Reply = $"{string.Join("\n", lines)}\n\nSource: live truck tracking.",
+                Links = mapLinks.Concat(context.Links).ToList(),
+                Sources = context.Sources,
+            };
+        }
+
+        private async Task<string?> TryResolveTruckAddressAsync(TruckLiveLocationContext location)
+        {
+            try
+            {
+                var resolved = await _deliveryAnalysisService.ReverseGeocodeAsync(new DeliveryAnalysisService.ReverseGeocodeRequest
+                {
+                    Lat = location.Latitude,
+                    Lon = location.Longitude,
+                });
+                return string.IsNullOrWhiteSpace(resolved?.Label)
+                    ? resolved?.Address
+                    : resolved.Label;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to reverse geocode live truck location for {TruckLabel}", location.TruckLabel);
+                return null;
+            }
+        }
+
+        private static bool IsTruckLocationQuestion(string normalizedQuestion)
+        {
+            var hasTruckReference = normalizedQuestion.Contains("truck", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
+                KnownTruckLanes.Any(lane => TruckAliasAppears(normalizedQuestion, lane));
+            var hasLocationIntent = normalizedQuestion.Contains("where", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("location", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("located", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("position", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("gps", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("tracking", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("track", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("live", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("current", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("currently", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("now", StringComparison.OrdinalIgnoreCase);
+
+            return hasTruckReference && hasLocationIntent;
+        }
+
+        private static List<TruckLiveLocationContext> ResolveRequestedTruckLocations(
+            string normalizedQuestion,
+            IReadOnlyList<TruckLiveLocationContext> locations)
+        {
+            var requested = locations
+                .Where(location => TruckLocationMatchesQuestion(normalizedQuestion, location))
+                .ToList();
+            if (requested.Count > 0)
+            {
+                return requested;
+            }
+
+            var asksForAll = normalizedQuestion.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("all trucks", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("each truck", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("fleet", StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains("everyone", StringComparison.OrdinalIgnoreCase);
+            if (asksForAll || locations.Count == 1)
+            {
+                return locations.ToList();
+            }
+
+            return new List<TruckLiveLocationContext>();
+        }
+
+        private static bool TruckLocationMatchesQuestion(string normalizedQuestion, TruckLiveLocationContext location)
+        {
+            var compactQuestion = Regex.Replace(normalizedQuestion, @"\s+", string.Empty);
+            var label = string.IsNullOrWhiteSpace(location.TruckLabel)
+                ? ResolveKnownTruckLabel(location.TruckId, location.RoleName)
+                : location.TruckLabel;
+            var labelCompact = Regex.Replace(NormalizeSearchText(label), @"\s+", string.Empty);
+            var idCompact = Regex.Replace(NormalizeSearchText(location.TruckId), @"\s+", string.Empty);
+            var roleCompact = Regex.Replace(NormalizeSearchText(location.RoleName), @"\s+", string.Empty);
+
+            if ((!string.IsNullOrWhiteSpace(labelCompact) && compactQuestion.Contains(labelCompact, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(idCompact) && compactQuestion.Contains(idCompact, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(roleCompact) && compactQuestion.Contains(roleCompact, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            var number = ResolveTruckNumber(location.TruckId, location.TruckLabel, location.RoleName);
+            return !string.IsNullOrWhiteSpace(number) &&
+                Regex.IsMatch(normalizedQuestion, $@"\b(?:ess|truck)\s*0?{Regex.Escape(number)}\b", RegexOptions.IgnoreCase);
+        }
+
+        private static bool TruckAliasAppears(string normalizedQuestion, (string TruckId, string Label, string RoleName, string Number) lane)
+        {
+            return Regex.IsMatch(normalizedQuestion, $@"\b(?:ess|truck)\s*0?{Regex.Escape(lane.Number)}\b", RegexOptions.IgnoreCase) ||
+                normalizedQuestion.Contains(NormalizeSearchText(lane.TruckId), StringComparison.OrdinalIgnoreCase) ||
+                normalizedQuestion.Contains(NormalizeSearchText(lane.RoleName), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatTruckLocationAge(int ageMinutes)
+        {
+            if (ageMinutes <= 0) return "just now";
+            if (ageMinutes == 1) return "1 minute ago";
+            if (ageMinutes < 60) return $"{ageMinutes} minutes ago";
+            var hours = ageMinutes / 60;
+            var minutes = ageMinutes % 60;
+            return minutes == 0
+                ? $"{hours} hour{(hours == 1 ? string.Empty : "s")} ago"
+                : $"{hours} hour{(hours == 1 ? string.Empty : "s")} {minutes} min ago";
+        }
+
+        private static string FormatSydneyDateTime(string value)
+        {
+            if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var recordedAt))
+            {
+                return string.Empty;
+            }
+
+            var local = TimeZoneInfo.ConvertTime(recordedAt, GetSydneyTimeZone());
+            return local.ToString("d MMM h:mm tt", CultureInfo.InvariantCulture);
         }
 
         private static bool TryBuildDirectTransportScheduleResult(
@@ -917,6 +1149,9 @@ ESS context JSON:
             var materialRequestRowsTask = GetRestRowsAsync<JsonElement>(
                 $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000",
                 cancellationToken);
+            var truckLiveLocationsTask = GetRestRowsAsync<JsonElement>(
+                $"{TruckLiveLocationsTable}?select=truck_id,truck_label,role_name,driver_user_id,delivery_request_id,latitude,longitude,accuracy_m,heading_deg,speed_mps,battery_percent,status,recorded_at,updated_at&order=recorded_at.desc&limit=24",
+                cancellationToken);
             var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, cancellationToken);
             var materialRequestsTask = ReadStorageJsonAsync(SafetyBucket, MaterialRequestsPath, cancellationToken);
 
@@ -929,6 +1164,7 @@ ESS context JSON:
                 foldersTask,
                 documentsTask,
                 materialRequestRowsTask,
+                truckLiveLocationsTask,
                 projectsTask,
                 materialRequestsTask);
 
@@ -941,6 +1177,7 @@ ESS context JSON:
             sources.Add(materialRequestRowsTask.Result.Count > 0
                 ? "ess_material_order_requests"
                 : "project-information/material-order-requests/index.json");
+            sources.Add("ess_truck_live_locations");
             sources.Add("folders");
             sources.Add("design_documents");
 
@@ -953,12 +1190,14 @@ ESS context JSON:
             var documents = documentsTask.Result;
             var projectsDoc = projectsTask.Result;
             var materialRequestRows = materialRequestRowsTask.Result;
+            var truckLiveLocationRows = truckLiveLocationsTask.Result;
             var materialRequestsDoc = materialRequestsTask.Result;
             var search = await SearchDesignMatchesAsync(question, folders, documents, shouldSearchDesigns, cancellationToken);
+            var truckLiveLocations = BuildTruckLiveLocations(truckLiveLocationRows);
 
             var roster = BuildRosterSummary(planRows, today);
             var jobsites = BuildJobsitesSummary(projectsDoc, question);
-            var transport = BuildTransportSummary(materialRequestsDoc, materialRequestRows, today, question);
+            var transport = BuildTransportSummary(materialRequestsDoc, materialRequestRows, truckLiveLocations, today, question);
             var employeeSummary = BuildEmployeeSummary(employees, question);
             var userSummary = BuildUserSummary(userNames, userRoles, question);
             var designCatalogue = BuildDesignCatalogue(folders, documents, question);
@@ -972,6 +1211,7 @@ ESS context JSON:
                 projectsDoc,
                 materialRequestsDoc,
                 materialRequestRows,
+                truckLiveLocationRows,
                 folders,
                 documents);
 
@@ -984,6 +1224,7 @@ ESS context JSON:
                 RosterSummary = roster,
                 JobsiteSummary = jobsites,
                 TransportSummary = transport,
+                TruckLiveLocations = truckLiveLocations,
                 DesignCatalogue = designCatalogue,
                 DesignSearchMatches = search.Matches,
                 NotificationSummary = notificationSummary,
@@ -1413,6 +1654,7 @@ ESS context JSON:
             JsonDocument? projectsDoc,
             JsonDocument? materialRequestsDoc,
             IReadOnlyList<JsonElement> materialRequestRows,
+            IReadOnlyList<JsonElement> truckLiveLocations,
             IReadOnlyList<JsonElement> folders,
             IReadOnlyList<JsonElement> documents)
         {
@@ -1439,6 +1681,7 @@ ESS context JSON:
                     new { name = "user_notifications", rows = notifications.Count, coverage = "recent app notifications" },
                     new { name = "project-information/projects.json", rows = projectCount, coverage = $"{activeProjectCount} active projects, {archivedProjectCount} archived projects" },
                     new { name = hasMaterialRequestRows ? "ess_material_order_requests" : "project-information/material-order-requests/index.json", rows = materialRequestCount, coverage = $"{activeMaterialRequestCount} active material/transport requests" },
+                    new { name = "ess_truck_live_locations", rows = truckLiveLocations.Count, coverage = "latest live GPS tracking ping per truck: coordinates, speed, status, battery, and recorded time" },
                     new { name = "folders", rows = folders.Count, coverage = "design folder hierarchy" },
                     new { name = "design_documents", rows = documents.Count, coverage = "design document revisions and file metadata" },
                 },
@@ -1577,7 +1820,140 @@ ESS context JSON:
             };
         }
 
-        private object BuildTransportSummary(JsonDocument? requestsDoc, IReadOnlyList<JsonElement> requestRows, DateOnly today, string question)
+        private static List<TruckLiveLocationContext> BuildTruckLiveLocations(IReadOnlyList<JsonElement> rows)
+        {
+            var latestByTruck = new Dictionary<string, TruckLiveLocationContext>(StringComparer.OrdinalIgnoreCase);
+            var now = DateTimeOffset.UtcNow;
+
+            foreach (var row in rows)
+            {
+                var latitude = TryGetDoubleAny(row, "latitude", "lat");
+                var longitude = TryGetDoubleAny(row, "longitude", "lon", "lng");
+                if (latitude == null || longitude == null)
+                {
+                    continue;
+                }
+
+                var truckId = TryGetStringAny(row, "truck_id", "truckId") ?? string.Empty;
+                var roleName = TryGetStringAny(row, "role_name", "roleName") ?? string.Empty;
+                var truckLabel = TryGetStringAny(row, "truck_label", "truckLabel");
+                truckLabel = string.IsNullOrWhiteSpace(truckLabel)
+                    ? ResolveKnownTruckLabel(truckId, roleName)
+                    : truckLabel.Trim();
+                if (string.IsNullOrWhiteSpace(truckLabel))
+                {
+                    truckLabel = !string.IsNullOrWhiteSpace(roleName)
+                        ? roleName.Replace('_', ' ')
+                        : !string.IsNullOrWhiteSpace(truckId)
+                            ? truckId
+                            : "Truck";
+                }
+                var recordedAt = TryParseDateTimeOffset(TryGetStringAny(row, "recorded_at", "recordedAt"))
+                    ?? TryParseDateTimeOffset(TryGetStringAny(row, "updated_at", "updatedAt"))
+                    ?? now;
+                var updatedAt = TryParseDateTimeOffset(TryGetStringAny(row, "updated_at", "updatedAt")) ?? recordedAt;
+                var ageMinutes = Math.Max(0, (int)Math.Round((now - recordedAt.ToUniversalTime()).TotalMinutes, MidpointRounding.AwayFromZero));
+                var speedMps = TryGetDoubleAny(row, "speed_mps", "speedMps");
+                var statusLabel = BuildTruckLocationStatusLabel(TryGetString(row, "status"), speedMps, ageMinutes);
+                var context = new TruckLiveLocationContext
+                {
+                    TruckId = truckId,
+                    TruckLabel = truckLabel,
+                    RoleName = roleName,
+                    DriverUserId = TryGetStringAny(row, "driver_user_id", "driverUserId"),
+                    DeliveryRequestId = TryGetStringAny(row, "delivery_request_id", "deliveryRequestId"),
+                    Latitude = latitude.Value,
+                    Longitude = longitude.Value,
+                    AccuracyM = TryGetDoubleAny(row, "accuracy_m", "accuracyM"),
+                    HeadingDeg = TryGetDoubleAny(row, "heading_deg", "headingDeg"),
+                    SpeedMps = speedMps,
+                    BatteryPercent = TryGetDoubleAny(row, "battery_percent", "batteryPercent"),
+                    Status = TryGetString(row, "status") ?? string.Empty,
+                    RecordedAt = recordedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+                    UpdatedAt = updatedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+                    AgeMinutes = ageMinutes,
+                    IsStale = ageMinutes > 2,
+                    IsOffline = ageMinutes > 10,
+                    Freshness = FormatTruckLocationAge(ageMinutes),
+                    StatusLabel = statusLabel,
+                    Coordinates = FormattableString.Invariant($"{latitude.Value:F6}, {longitude.Value:F6}"),
+                    MapUrl = FormattableString.Invariant($"https://www.google.com/maps/search/?api=1&query={latitude.Value:F6},{longitude.Value:F6}"),
+                };
+
+                var key = string.IsNullOrWhiteSpace(context.TruckId)
+                    ? context.TruckLabel
+                    : context.TruckId;
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    key = context.RoleName;
+                }
+
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                if (!latestByTruck.TryGetValue(key, out var existing) ||
+                    string.CompareOrdinal(context.RecordedAt, existing.RecordedAt) > 0)
+                {
+                    latestByTruck[key] = context;
+                }
+            }
+
+            return latestByTruck.Values
+                .OrderBy(location => ResolveKnownTruckSort(location.TruckId, location.TruckLabel, location.RoleName))
+                .ThenBy(location => location.TruckLabel)
+                .ToList();
+        }
+
+        private static string BuildTruckLocationStatusLabel(string? status, double? speedMps, int ageMinutes)
+        {
+            var explicitStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+            if (ageMinutes > 10) return "GPS offline";
+            if (ageMinutes > 2) return "GPS stale";
+            if (explicitStatus.Contains("stationary", StringComparison.OrdinalIgnoreCase)) return "Stationary";
+            if (explicitStatus.Contains("return", StringComparison.OrdinalIgnoreCase)) return "Returning to yard";
+            if (explicitStatus.Contains("route", StringComparison.OrdinalIgnoreCase) || explicitStatus.Contains("transit", StringComparison.OrdinalIgnoreCase)) return "On route";
+            if (explicitStatus == "idle") return "Idle";
+            if (speedMps.HasValue && speedMps.Value * 3.6 > 5) return "Moving";
+            if (!string.IsNullOrWhiteSpace(status)) return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(explicitStatus.Replace('-', ' '));
+            return "Idle";
+        }
+
+        private static string ResolveKnownTruckLabel(string truckId, string roleName)
+        {
+            var known = KnownTruckLanes.FirstOrDefault(lane =>
+                string.Equals(lane.TruckId, truckId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(lane.RoleName, roleName, StringComparison.OrdinalIgnoreCase));
+            return string.IsNullOrWhiteSpace(known.Label) ? truckId : known.Label;
+        }
+
+        private static string ResolveTruckNumber(string truckId, string truckLabel, string roleName)
+        {
+            var known = KnownTruckLanes.FirstOrDefault(lane =>
+                string.Equals(lane.TruckId, truckId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(lane.Label, truckLabel, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(lane.RoleName, roleName, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(known.Number)) return known.Number;
+            var match = Regex.Match($"{truckId} {truckLabel} {roleName}", @"\d+");
+            return match.Success ? match.Value.TrimStart('0') : string.Empty;
+        }
+
+        private static int ResolveKnownTruckSort(string truckId, string truckLabel, string roleName)
+        {
+            var index = Array.FindIndex(KnownTruckLanes, lane =>
+                string.Equals(lane.TruckId, truckId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(lane.Label, truckLabel, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(lane.RoleName, roleName, StringComparison.OrdinalIgnoreCase));
+            return index < 0 ? 999 : index;
+        }
+
+        private object BuildTransportSummary(
+            JsonDocument? requestsDoc,
+            IReadOnlyList<JsonElement> requestRows,
+            IReadOnlyList<TruckLiveLocationContext> truckLiveLocations,
+            DateOnly today,
+            string question)
         {
             var todayKey = today.ToString("yyyy-MM-dd");
             var todayRequests = new List<object>();
@@ -1741,6 +2117,9 @@ ESS context JSON:
                 dataSource = requestRows.Count > 0 ? "ess_material_order_requests" : "project-information/material-order-requests/index.json",
                 activeMaterialRequests = activeRequests,
                 archivedMaterialRequests = archivedRequests,
+                liveTruckLocationCount = truckLiveLocations.Count,
+                staleTruckLocationCount = truckLiveLocations.Count(location => location.IsStale || location.IsOffline),
+                currentTruckLocations = truckLiveLocations,
                 scheduledTodayCount = todayRequests.Count,
                 activeScheduledTodayCount = activeTodayRequests.Count,
                 archivedScheduledTodayCount = archivedTodayRequests.Count,
@@ -2110,12 +2489,23 @@ ESS context JSON:
         {
             try
             {
-                var zone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
-                return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone));
+                return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetSydneyTimeZone()));
             }
             catch
             {
                 return DateOnly.FromDateTime(DateTime.UtcNow);
+            }
+        }
+
+        private static TimeZoneInfo GetSydneyTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
+            }
+            catch
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
             }
         }
 
@@ -2515,6 +2905,48 @@ ESS context JSON:
             return null;
         }
 
+        private static double? TryGetDouble(JsonElement element, string propertyName)
+        {
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
+            {
+                return null;
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var parsed))
+            {
+                return parsed;
+            }
+
+            return double.TryParse(value.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : null;
+        }
+
+        private static double? TryGetDoubleAny(JsonElement element, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                var value = TryGetDouble(element, propertyName);
+                if (value != null)
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
+        private static DateTimeOffset? TryParseDateTimeOffset(string? value)
+        {
+            return DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsed)
+                ? parsed
+                : null;
+        }
+
         private static bool TryGetBool(JsonElement element, string propertyName)
         {
             if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
@@ -2555,6 +2987,7 @@ ESS context JSON:
             public object RosterSummary { get; set; } = new();
             public object JobsiteSummary { get; set; } = new();
             public object TransportSummary { get; set; } = new();
+            public List<TruckLiveLocationContext> TruckLiveLocations { get; set; } = new();
             public object DesignCatalogue { get; set; } = new();
             public List<object> DesignSearchMatches { get; set; } = new();
             public object NotificationSummary { get; set; } = new();
