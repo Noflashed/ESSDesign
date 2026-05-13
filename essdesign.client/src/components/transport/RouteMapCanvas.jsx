@@ -139,12 +139,12 @@ function RouteMapInstance({
           attribution='&copy; OpenStreetMap contributors &copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
-        {alternativeRouteLines.map(route => (
-          <Polyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
-        ))}
         {routePoints.length > 0 ? (
           <Polyline positions={routePoints} pathOptions={{ color: '#2FA6FF', weight: 5, opacity: 0.95 }} />
         ) : null}
+        {alternativeRouteLines.map(route => (
+          <Polyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
+        ))}
         {routeData?.yard ? (
           <CircleMarker center={[routeData.yard.lat, routeData.yard.lon]} radius={8} pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#102B5C', fillOpacity: 1 }}>
             <Tooltip permanent direction="top" offset={[0, -10]} className="transport-route-tooltip transport-route-tooltip-yard">{originLabel}</Tooltip>

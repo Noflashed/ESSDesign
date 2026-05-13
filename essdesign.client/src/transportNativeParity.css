@@ -8007,6 +8007,10 @@
     gap: 12px;
 }
 
+.transport-trip-panels-single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .transport-trip-panel {
     min-width: 0;
     border: 1px solid #DDE7F4;

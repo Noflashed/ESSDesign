@@ -279,6 +279,42 @@ function combineRoutes(routes) {
   };
 }
 
+function routeHasPath(route) {
+  return Array.isArray(route?.pathPoints) && route.pathPoints.length > 1;
+}
+
+function routePointKey(point) {
+  const lat = Number(point?.lat ?? point?.latitude);
+  const lon = Number(point?.lon ?? point?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(5)},${lon.toFixed(5)}` : '';
+}
+
+function routeSampleKey(route) {
+  const points = Array.isArray(route?.pathPoints) ? route.pathPoints : [];
+  if (points.length < 2) return '';
+  const indexes = [0, Math.floor(points.length / 3), Math.floor((points.length * 2) / 3), points.length - 1];
+  return Array.from(new Set(indexes))
+    .map(index => routePointKey(points[index]))
+    .filter(Boolean)
+    .join('|');
+}
+
+function routesAreEquivalent(primaryRoute, candidateRoute) {
+  if (!routeHasPath(primaryRoute) || !routeHasPath(candidateRoute)) return false;
+  if (primaryRoute === candidateRoute) return true;
+
+  const primaryDistance = Number(primaryRoute.distanceMeters || 0);
+  const candidateDistance = Number(candidateRoute.distanceMeters || 0);
+  const primaryDuration = Number(primaryRoute.durationSeconds || 0);
+  const candidateDuration = Number(candidateRoute.durationSeconds || 0);
+  const distanceDelta = Math.abs(primaryDistance - candidateDistance);
+  const durationDelta = Math.abs(primaryDuration - candidateDuration);
+
+  return routeSampleKey(primaryRoute) === routeSampleKey(candidateRoute)
+    && distanceDelta < 100
+    && durationDelta < 60;
+}
+
 function toRadians(value) {
   return (Number(value) * Math.PI) / 180;
 }
@@ -563,12 +599,6 @@ function estimateTollFees(route, tollsUsed) {
   return Math.min(65, Math.max(6.5, distanceKm * 0.55 + 4.8));
 }
 
-function routeComparisonAgainstActual(actualSeconds, candidate) {
-  if (!Number.isFinite(actualSeconds) || actualSeconds <= 0 || !candidate?.combined) return null;
-  const deltaSeconds = actualSeconds - Number(candidate.combined.durationSeconds || 0);
-  return { deltaSeconds };
-}
-
 async function fetchRouteBundle(trip, mode) {
   const legs = await Promise.all(trip.legs.map(async leg => {
     const enableTolls = mode === 'tolls'
@@ -734,7 +764,7 @@ function TripTimeline({ trip, stats, addressLabels }) {
   );
 }
 
-function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance, tolls, comparison }) {
+function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance, tolls }) {
   const duration = route?.durationSeconds;
   const distance = route?.distanceMeters;
   const deltaSeconds = Number.isFinite(actualSeconds) && Number.isFinite(duration) ? actualSeconds - duration : null;
@@ -752,7 +782,6 @@ function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance,
       <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Distance diff</span></div>
       <div><b>{formatCurrency(tolls || 0)}</b><span>Tolls</span></div>
       <button type="button">View route</button>
-      {comparison ? null : null}
     </div>
   );
 }
@@ -950,12 +979,38 @@ export default function TransportTripsPage() {
   const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
   const tollRoute = analysis?.tolls?.combined || null;
   const avoidTollRoute = analysis?.avoidTolls?.combined || null;
-  const alternativeMapRoutes = useMemo(() => [
-    tollRoute ? { id: 'alternative-tolls', routeData: tollRoute } : null,
-    avoidTollRoute ? { id: 'alternative-avoid-tolls', routeData: avoidTollRoute } : null,
-  ].filter(Boolean), [tollRoute, avoidTollRoute]);
-  const tollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.tolls);
-  const avoidTollComparison = routeComparisonAgainstActual(statsDurationSeconds, analysis?.avoidTolls);
+  const alternativeRouteItems = useMemo(() => {
+    if (!routeHasPath(plannedRoute)) return [];
+
+    const candidates = [
+      {
+        id: 'alternative-tolls',
+        via: 'via toll roads',
+        route: tollRoute,
+        tolls: estimateTollFees(tollRoute, true),
+      },
+      {
+        id: 'alternative-avoid-tolls',
+        via: 'avoid tolls',
+        route: avoidTollRoute,
+        tolls: 0,
+      },
+    ];
+
+    return candidates
+      .filter(candidate => routeHasPath(candidate.route) && !routesAreEquivalent(plannedRoute, candidate.route))
+      .map((candidate, index) => ({
+        ...candidate,
+        title: `Alternative ${index + 1}`,
+        mapLabel: `Alt ${index + 1}`,
+        legendClassName: index === 0 ? 'alternate-one' : 'alternate-two',
+        routeData: candidate.route,
+      }));
+  }, [plannedRoute, tollRoute, avoidTollRoute]);
+  const alternativeMapRoutes = useMemo(
+    () => alternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
+    [alternativeRouteItems],
+  );
   const avgActualSeconds = filteredTrips.length
     ? filteredTrips.reduce((sum, trip) => sum + Number(getTripStats(trip).durationSeconds || 0), 0) / filteredTrips.length
     : 0;
@@ -1122,10 +1177,9 @@ export default function TransportTripsPage() {
                   />
                   <div className="transport-trip-map-legend">
                     <span><i className="actual" /> Road route</span>
-                    <span><i className="alternate-one" /> Alt 1</span>
-                    <span><i className="alternate-two" /> Alt 2</span>
-                    <span><i className="stop-dot" /> Stop</span>
-                    <span><i className="traffic-dot" /> Delay</span>
+                    {alternativeRouteItems.map(item => (
+                      <span key={item.id}><i className={item.legendClassName} /> {item.mapLabel}</span>
+                    ))}
                   </div>
                   {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
                   {!analysisLoading && analysis?.history?.error ? (
@@ -1161,7 +1215,7 @@ export default function TransportTripsPage() {
                 </div>
               </div>
 
-              <div className="transport-trip-panels">
+              <div className={`transport-trip-panels ${alternativeRouteItems.length ? '' : 'transport-trip-panels-single'}`}>
                 <div className="transport-trip-panel">
                   <h3>Trip timeline</h3>
                   <TripTimeline trip={selectedTrip} stats={{
@@ -1172,28 +1226,23 @@ export default function TransportTripsPage() {
                   }} addressLabels={addressLabels} />
                 </div>
 
-                <div className="transport-trip-panel transport-trip-alternatives">
-                  <h3>Alternative routes</h3>
-                  <small>Routes calculated at trip start time</small>
-                  <AlternativeRouteRow
-                    title="Alternative 1"
-                    via="via toll roads"
-                    route={tollRoute}
-                    actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
-                    actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
-                    tolls={estimateTollFees(tollRoute, true)}
-                    comparison={tollComparison}
-                  />
-                  <AlternativeRouteRow
-                    title="Alternative 2"
-                    via="avoid tolls"
-                    route={avoidTollRoute}
-                    actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
-                    actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
-                    tolls={0}
-                    comparison={avoidTollComparison}
-                  />
-                </div>
+                {alternativeRouteItems.length ? (
+                  <div className="transport-trip-panel transport-trip-alternatives">
+                    <h3>Alternative routes</h3>
+                    <small>Routes calculated at trip start time</small>
+                    {alternativeRouteItems.map(item => (
+                      <AlternativeRouteRow
+                        key={item.id}
+                        title={item.title}
+                        via={item.via}
+                        route={item.route}
+                        actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
+                        actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
+                        tolls={item.tolls}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </>
           </section>
