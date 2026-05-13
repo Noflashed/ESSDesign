@@ -17,6 +17,7 @@ const GPS_TRIP_MIN_DURATION_SECONDS = 90;
 const GPS_TRIP_MIN_DISTANCE_METERS = 150;
 const GPS_TRIP_STOP_RADIUS_METERS = 80;
 const GPS_HISTORY_LIMIT_PER_TRUCK = 10000;
+const ROUTE_TIME_SAME_THRESHOLD_SECONDS = 60;
 
 function asDate(value) {
   if (!value) return null;
@@ -96,6 +97,7 @@ function formatConsumption(value) {
 
 function formatSignedMinutes(seconds, positiveSuffix = 'faster', negativeSuffix = 'slower') {
   if (!Number.isFinite(seconds)) return 'Pending';
+  if (Math.abs(seconds) <= ROUTE_TIME_SAME_THRESHOLD_SECONDS) return 'same time';
   const minutes = Math.max(1, Math.round(Math.abs(seconds) / 60));
   if (seconds > 0) return `${minutes}m ${positiveSuffix}`;
   if (seconds < 0) return `+${minutes}m ${negativeSuffix}`;
@@ -771,12 +773,15 @@ function TripTimeline({ trip, stats, addressLabels }) {
   );
 }
 
-function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance, tolls }) {
+function AlternativeRouteRow({ title, via, route, baselineSeconds, baselineDistance, tolls }) {
   const duration = route?.durationSeconds;
   const distance = route?.distanceMeters;
-  const deltaSeconds = Number.isFinite(actualSeconds) && Number.isFinite(duration) ? actualSeconds - duration : null;
-  const deltaMeters = Number.isFinite(actualDistance) && Number.isFinite(distance) ? distance - actualDistance : null;
+  const deltaSeconds = Number.isFinite(baselineSeconds) && Number.isFinite(duration) ? baselineSeconds - duration : null;
+  const deltaMeters = Number.isFinite(baselineDistance) && Number.isFinite(distance) ? distance - baselineDistance : null;
   const isFaster = Number.isFinite(deltaSeconds) && deltaSeconds > 0;
+  const timeTone = !Number.isFinite(deltaSeconds) || Math.abs(deltaSeconds) <= ROUTE_TIME_SAME_THRESHOLD_SECONDS
+    ? 'neutral'
+    : isFaster ? 'positive' : 'negative';
   return (
     <div className="transport-trip-alt-row">
       <div className="transport-trip-alt-main">
@@ -784,7 +789,7 @@ function AlternativeRouteRow({ title, via, route, actualSeconds, actualDistance,
         <TripPill>{via}</TripPill>
       </div>
       <div><b>{duration ? formatCompactDuration(duration) : 'Pending'}</b><span>ETA</span></div>
-      <div className={isFaster ? 'positive' : 'negative'}><b>{formatSignedMinutes(deltaSeconds)}</b><span>Time diff</span></div>
+      <div className={timeTone}><b>{formatSignedMinutes(deltaSeconds)}</b><span>Time diff</span></div>
       <div><b>{distance ? formatDistance(distance) : 'Pending'}</b><span>Distance</span></div>
       <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Distance diff</span></div>
       <div><b>{formatCurrency(tolls || 0)}</b><span>Tolls</span></div>
@@ -808,6 +813,7 @@ export default function TransportTripsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const [mapOpenSignal, setMapOpenSignal] = useState(0);
+  const [showAlternativeRoutes, setShowAlternativeRoutes] = useState(true);
   const [addressLabels, setAddressLabels] = useState({});
   const analysisCacheRef = useRef(new Map());
   const addressCacheRef = useRef(new Map());
@@ -1067,9 +1073,13 @@ export default function TransportTripsPage() {
         routeData: candidate.route,
       }));
   }, [plannedRoute, tollRoute, avoidTollRoute]);
+  const visibleAlternativeRouteItems = useMemo(
+    () => showAlternativeRoutes ? alternativeRouteItems : [],
+    [showAlternativeRoutes, alternativeRouteItems],
+  );
   const alternativeMapRoutes = useMemo(
-    () => alternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
-    [alternativeRouteItems],
+    () => visibleAlternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
+    [visibleAlternativeRouteItems],
   );
   const avgActualSeconds = filteredTrips.length
     ? filteredTrips.reduce((sum, trip) => sum + Number(getTripStats(trip).durationSeconds || 0), 0) / filteredTrips.length
@@ -1237,9 +1247,19 @@ export default function TransportTripsPage() {
                   />
                   <div className="transport-trip-map-legend">
                     <span><i className="actual" /> Road route</span>
-                    {alternativeRouteItems.map(item => (
+                    {visibleAlternativeRouteItems.map(item => (
                       <span key={item.id}><i className={item.legendClassName} /> {item.mapLabel}</span>
                     ))}
+                    {alternativeRouteItems.length ? (
+                      <label className={`transport-trip-alt-toggle ${showAlternativeRoutes ? 'active' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={showAlternativeRoutes}
+                          onChange={event => setShowAlternativeRoutes(event.target.checked)}
+                        />
+                        <span>Alternatives</span>
+                      </label>
+                    ) : null}
                   </div>
                   {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
                   {!analysisLoading && analysis?.history?.error ? (
@@ -1275,7 +1295,7 @@ export default function TransportTripsPage() {
                 </div>
               </div>
 
-              <div className={`transport-trip-panels ${alternativeRouteItems.length ? '' : 'transport-trip-panels-single'}`}>
+              <div className={`transport-trip-panels ${visibleAlternativeRouteItems.length ? '' : 'transport-trip-panels-single'}`}>
                 <div className="transport-trip-panel">
                   <h3>Trip timeline</h3>
                   <TripTimeline trip={selectedTrip} stats={{
@@ -1286,18 +1306,18 @@ export default function TransportTripsPage() {
                   }} addressLabels={addressLabels} />
                 </div>
 
-                {alternativeRouteItems.length ? (
+                {visibleAlternativeRouteItems.length ? (
                   <div className="transport-trip-panel transport-trip-alternatives">
                     <h3>Alternative routes</h3>
                     <small>Routes calculated at trip start time</small>
-                    {alternativeRouteItems.map(item => (
+                    {visibleAlternativeRouteItems.map(item => (
                       <AlternativeRouteRow
                         key={item.id}
                         title={item.title}
                         via={item.via}
                         route={item.route}
-                        actualSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
-                        actualDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
+                        baselineSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
+                        baselineDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
                         tolls={item.tolls}
                       />
                     ))}
