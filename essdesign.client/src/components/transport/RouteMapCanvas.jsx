@@ -3,8 +3,12 @@ import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from
 import 'leaflet/dist/leaflet.css';
 
 const ALTERNATIVE_ROUTE_STYLES = [
-  { color: '#8A96A8', weight: 4, opacity: 0.9, dashArray: '8 7' },
-  { color: '#F47C20', weight: 4, opacity: 0.92, dashArray: '7 6' },
+  { color: '#F47C20', weight: 4, opacity: 0.94, dashArray: '10 10', lineCap: 'round' },
+  { color: '#7C3AED', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
+  { color: '#159447', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
+  { color: '#E3431A', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
+  { color: '#0EA5E9', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
+  { color: '#D97706', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
 ];
 
 function getRoutePathPoints(routeData) {
@@ -63,14 +67,23 @@ function RouteMapInstance({
 
   const alternativeRouteLines = useMemo(
     () => alternativeRoutes
-      .map((route, index) => ({
-        id: route?.id || `alternative-route-${index}`,
-        points: getRoutePathPoints(route?.routeData || route),
-        pathOptions: {
-          ...ALTERNATIVE_ROUTE_STYLES[index % ALTERNATIVE_ROUTE_STYLES.length],
-          ...(route?.pathOptions || {}),
-        },
-      }))
+      .map((route, index) => {
+        const baseOptions = ALTERNATIVE_ROUTE_STYLES[index % ALTERNATIVE_ROUTE_STYLES.length];
+        const customOptions = route?.pathOptions || {};
+        return {
+          id: route?.id || `alternative-route-${index}`,
+          points: getRoutePathPoints(route?.routeData || route),
+          pathOptions: {
+            ...baseOptions,
+            ...customOptions,
+            className: [
+              'transport-alternative-route-line',
+              `transport-alternative-route-line-${(index % ALTERNATIVE_ROUTE_STYLES.length) + 1}`,
+              customOptions.className,
+            ].filter(Boolean).join(' '),
+          },
+        };
+      })
       .filter(route => route.points.length > 1),
     [alternativeRoutes],
   );

@@ -19,6 +19,7 @@ const GPS_TRIP_MIN_DISTANCE_METERS = 150;
 const GPS_TRIP_STOP_RADIUS_METERS = 80;
 const GPS_HISTORY_LIMIT_PER_TRUCK = 10000;
 const ROUTE_TIME_SAME_THRESHOLD_SECONDS = 60;
+const ALTERNATIVE_ROUTE_COLORS = ['#F47C20', '#7C3AED', '#159447', '#E3431A', '#0EA5E9', '#D97706'];
 
 function asDate(value) {
   if (!value) return null;
@@ -1096,7 +1097,8 @@ export default function TransportTripsPage() {
         ...candidate,
         title: `Alternative ${index + 1}`,
         mapLabel: `Alt ${index + 1}`,
-        legendClassName: index === 0 ? 'alternate-one' : 'alternate-two',
+        legendClassName: 'alternate-route',
+        mapColor: ALTERNATIVE_ROUTE_COLORS[index % ALTERNATIVE_ROUTE_COLORS.length],
         routeData: candidate.route,
       }));
   }, [plannedRoute, tollRoute, avoidTollRoute]);
@@ -1124,7 +1126,11 @@ export default function TransportTripsPage() {
     [alternativeRouteItems, hiddenAlternativeRouteIds],
   );
   const alternativeMapRoutes = useMemo(
-    () => visibleAlternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
+    () => visibleAlternativeRouteItems.map(item => ({
+      id: item.id,
+      routeData: item.routeData,
+      pathOptions: { color: item.mapColor },
+    })),
     [visibleAlternativeRouteItems],
   );
   const avgActualSeconds = filteredTrips.length
@@ -1294,7 +1300,7 @@ export default function TransportTripsPage() {
                   <div className="transport-trip-map-legend">
                     <span><i className="actual" /> Road route</span>
                     {visibleAlternativeRouteItems.map(item => (
-                      <span key={item.id}><i className={item.legendClassName} /> {item.mapLabel}</span>
+                      <span key={item.id}><i className={item.legendClassName} style={{ borderTopColor: item.mapColor }} /> {item.mapLabel}</span>
                     ))}
                   </div>
                   {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}

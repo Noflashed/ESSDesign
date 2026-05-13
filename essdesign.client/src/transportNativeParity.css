@@ -7872,6 +7872,16 @@
     display: none;
 }
 
+.transport-alternative-route-line {
+    animation: transport-route-dash-flow 900ms linear infinite;
+}
+
+@keyframes transport-route-dash-flow {
+    to {
+        stroke-dashoffset: -40;
+    }
+}
+
 .transport-trip-map-legend {
     position: absolute;
     left: 18px;
@@ -7912,6 +7922,10 @@
 
 .transport-trip-map-legend .alternate-two {
     border-top-color: #F47C20;
+    border-top-style: dashed;
+}
+
+.transport-trip-map-legend .alternate-route {
     border-top-style: dashed;
 }
 
