@@ -13,6 +13,7 @@ const TRIP_WINDOW_DAYS = 45;
 const MAX_REASONABLE_GPS_SPEED_MPS = 45;
 const GPS_TRIP_END_IDLE_SECONDS = 12 * 60;
 const GPS_TRIP_MAX_POINT_GAP_SECONDS = 20 * 60;
+const GPS_TRAFFIC_SEGMENT_CAP_SECONDS = 5 * 60;
 const GPS_TRIP_MIN_DURATION_SECONDS = 90;
 const GPS_TRIP_MIN_DISTANCE_METERS = 150;
 const GPS_TRIP_STOP_RADIUS_METERS = 80;
@@ -284,6 +285,23 @@ function combineRoutes(routes) {
   };
 }
 
+function resolveTripTrafficSeconds(gpsRoute, plannedRoute, selectedStats, durationSeconds) {
+  const candidates = [
+    Number(gpsRoute?.slowOrIdleSeconds),
+    Number(gpsRoute?.trafficDelaySeconds),
+    Number(plannedRoute?.trafficDelaySeconds),
+    Number(selectedStats?.trafficSeconds),
+  ].filter(value => Number.isFinite(value) && value > 0);
+
+  const noTrafficSeconds = Number(plannedRoute?.baseDurationSeconds);
+  const actualSeconds = Number(durationSeconds);
+  if (Number.isFinite(noTrafficSeconds) && noTrafficSeconds > 0 && Number.isFinite(actualSeconds) && actualSeconds > noTrafficSeconds) {
+    candidates.push(actualSeconds - noTrafficSeconds);
+  }
+
+  return candidates.length ? Math.max(...candidates) : 0;
+}
+
 function routeHasPath(route) {
   return Array.isArray(route?.pathPoints) && route.pathPoints.length > 1;
 }
@@ -379,9 +397,10 @@ function buildRouteFromHistory(points) {
     const previous = cleaned[index - 1];
     const current = cleaned[index];
     const intervalSeconds = secondsBetween(previous.recordedAt, current.recordedAt);
-    if (intervalSeconds <= 0 || intervalSeconds > 180) {
+    if (intervalSeconds <= 0 || intervalSeconds > GPS_TRIP_MAX_POINT_GAP_SECONDS) {
       continue;
     }
+    const trafficIntervalSeconds = Math.min(intervalSeconds, GPS_TRAFFIC_SEGMENT_CAP_SECONDS);
     const segmentMeters = distanceBetweenPoints(previous, current);
     distanceMeters += segmentMeters;
     const recordedSpeed = Number(current.speedMps);
@@ -389,9 +408,9 @@ function buildRouteFromHistory(points) {
     const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
     maxSpeedMps = Math.max(maxSpeedMps, speed);
     if (speed >= 2.2 || segmentMeters >= 20) {
-      movingSeconds += intervalSeconds;
+      movingSeconds += trafficIntervalSeconds;
     } else {
-      slowOrIdleSeconds += intervalSeconds;
+      slowOrIdleSeconds += trafficIntervalSeconds;
     }
   }
 
@@ -995,7 +1014,7 @@ export default function TransportTripsPage() {
   const usingGpsBreadcrumbs = Boolean(gpsRoute);
   const statsDistanceMeters = roadRoute?.distanceMeters ?? selectedStats?.distanceMeters;
   const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds ?? selectedStats?.durationSeconds;
-  const statsTrafficSeconds = gpsRoute?.slowOrIdleSeconds ?? plannedRoute?.trafficDelaySeconds ?? selectedStats?.trafficSeconds;
+  const statsTrafficSeconds = resolveTripTrafficSeconds(gpsRoute, plannedRoute, selectedStats, statsDurationSeconds);
   const fuel = calculateFuel(statsDistanceMeters, statsTrafficSeconds);
   const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
   const tollRoute = analysis?.tolls?.combined || null;
