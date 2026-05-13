@@ -109,6 +109,7 @@ namespace ESSDesign.Server.Services
             public string TrafficProvider { get; set; } = string.Empty;
             public string TrafficNote { get; set; } = string.Empty;
             public List<RoutePoint> PathPoints { get; set; } = new();
+            public List<RoutePreviewResult> Alternatives { get; set; } = new();
             public string RouteKey { get; set; } = string.Empty;
             public DateTimeOffset? LastRefreshedAt { get; set; }
             public DateTimeOffset? ExpiresAt { get; set; }
@@ -130,6 +131,7 @@ namespace ESSDesign.Server.Services
         private sealed class RouteProviderResult : RouteTimingResult
         {
             public List<RoutePoint> PathPoints { get; set; } = new();
+            public List<RouteProviderResult> Alternatives { get; set; } = new();
         }
 
         private sealed class ReverseGeocodeRow
@@ -664,6 +666,8 @@ namespace ESSDesign.Server.Services
                           "&computeTravelTimeFor=all" +
                           "&routeRepresentation=polyline" +
                           "&routeType=fastest" +
+                          "&maxAlternatives=2" +
+                          "&alternativeType=anyRoute" +
                           "&coordinatePrecision=full" +
                           "&travelMode=truck" +
                           "&vehicleCommercial=true" +
@@ -685,68 +689,98 @@ namespace ESSDesign.Server.Services
                 }
 
                 var routes = routesEl.EnumerateArray().ToList();
-                if (routes.Count == 0 || !routes[0].TryGetProperty("summary", out var summary))
+                if (routes.Count == 0)
                 {
                     return null;
                 }
 
-                var distanceMeters = summary.TryGetProperty("lengthInMeters", out var lengthEl)
-                    ? lengthEl.GetDouble()
-                    : 0;
-                var durationSeconds = summary.TryGetProperty("travelTimeInSeconds", out var travelEl)
-                    ? travelEl.GetDouble()
-                    : 0;
-                var baseDurationSeconds = summary.TryGetProperty("noTrafficTravelTimeInSeconds", out var noTrafficEl)
-                    ? noTrafficEl.GetDouble()
-                    : durationSeconds;
-                var trafficDelaySeconds = summary.TryGetProperty("trafficDelayInSeconds", out var delayEl)
-                    ? Math.Max(0, delayEl.GetDouble())
-                    : Math.Max(0, durationSeconds - baseDurationSeconds);
-
-                if (distanceMeters <= 0 || durationSeconds <= 0)
+                RouteProviderResult? BuildRouteResult(JsonElement routeEl, bool isAlternative = false)
                 {
-                    return null;
-                }
-
-                var pathPoints = new List<RoutePoint>();
-                if (routes[0].TryGetProperty("legs", out var legsEl))
-                {
-                    foreach (var leg in legsEl.EnumerateArray())
+                    if (!routeEl.TryGetProperty("summary", out var summary))
                     {
-                        if (!leg.TryGetProperty("points", out var pointsEl))
-                        {
-                            continue;
-                        }
+                        return null;
+                    }
 
-                        foreach (var point in pointsEl.EnumerateArray())
+                    var distanceMeters = summary.TryGetProperty("lengthInMeters", out var lengthEl)
+                        ? lengthEl.GetDouble()
+                        : 0;
+                    var durationSeconds = summary.TryGetProperty("travelTimeInSeconds", out var travelEl)
+                        ? travelEl.GetDouble()
+                        : 0;
+                    var baseDurationSeconds = summary.TryGetProperty("noTrafficTravelTimeInSeconds", out var noTrafficEl)
+                        ? noTrafficEl.GetDouble()
+                        : durationSeconds;
+                    var trafficDelaySeconds = summary.TryGetProperty("trafficDelayInSeconds", out var delayEl)
+                        ? Math.Max(0, delayEl.GetDouble())
+                        : Math.Max(0, durationSeconds - baseDurationSeconds);
+
+                    if (distanceMeters <= 0 || durationSeconds <= 0)
+                    {
+                        return null;
+                    }
+
+                    var pathPoints = new List<RoutePoint>();
+                    if (routeEl.TryGetProperty("legs", out var legsEl))
+                    {
+                        foreach (var leg in legsEl.EnumerateArray())
                         {
-                            if (!point.TryGetProperty("latitude", out var latEl) || !point.TryGetProperty("longitude", out var lonEl))
+                            if (!leg.TryGetProperty("points", out var pointsEl))
                             {
                                 continue;
                             }
 
-                            pathPoints.Add(new RoutePoint { Lat = latEl.GetDouble(), Lon = lonEl.GetDouble() });
+                            foreach (var point in pointsEl.EnumerateArray())
+                            {
+                                if (!point.TryGetProperty("latitude", out var latEl) || !point.TryGetProperty("longitude", out var lonEl))
+                                {
+                                    continue;
+                                }
+
+                                pathPoints.Add(new RoutePoint { Lat = latEl.GetDouble(), Lon = lonEl.GetDouble() });
+                            }
                         }
+                    }
+
+                    if (pathPoints.Count < 2)
+                    {
+                        return null;
+                    }
+
+                    var delayMinutes = Math.Round(trafficDelaySeconds / 60.0);
+                    var routeKind = isAlternative
+                        ? enableTolls ? "TomTom alternative route" : "TomTom toll-free alternative route"
+                        : enableTolls ? "TomTom route" : "TomTom toll-free route";
+
+                    return new RouteProviderResult
+                    {
+                        DistanceMeters = distanceMeters,
+                        BaseDurationSeconds = baseDurationSeconds,
+                        DurationSeconds = Math.Max(baseDurationSeconds, durationSeconds),
+                        HasLiveTraffic = true,
+                        TrafficProvider = "TomTom traffic",
+                        TrafficNote = delayMinutes > 0
+                            ? $"{routeKind} adding about {delayMinutes:F0} min"
+                            : $"{routeKind} with no extra delay",
+                        PathPoints = pathPoints,
+                    };
+                }
+
+                var primaryRoute = BuildRouteResult(routes[0]);
+                if (primaryRoute == null)
+                {
+                    return null;
+                }
+
+                foreach (var alternativeRouteEl in routes.Skip(1))
+                {
+                    var alternativeRoute = BuildRouteResult(alternativeRouteEl, true);
+                    if (alternativeRoute != null)
+                    {
+                        primaryRoute.Alternatives.Add(alternativeRoute);
                     }
                 }
 
-                var delayMinutes = Math.Round(trafficDelaySeconds / 60.0);
-                return new RouteProviderResult
-                {
-                    DistanceMeters = distanceMeters,
-                    BaseDurationSeconds = baseDurationSeconds,
-                    DurationSeconds = Math.Max(baseDurationSeconds, durationSeconds),
-                    HasLiveTraffic = true,
-                    TrafficProvider = "TomTom traffic",
-                    TrafficNote = delayMinutes > 0
-                        ? enableTolls
-                            ? $"TomTom route adding about {delayMinutes:F0} min"
-                            : $"TomTom toll-free route adding about {delayMinutes:F0} min"
-                        : enableTolls
-                            ? "TomTom route with no extra delay"
-                            : "TomTom toll-free route with no extra delay",
-                    PathPoints = pathPoints,
-                };
+                return primaryRoute;
             }
             catch (Exception ex)
             {
@@ -1024,19 +1058,24 @@ namespace ESSDesign.Server.Services
                 return null;
             }
 
-            return new RoutePreviewResult
+            RoutePreviewResult BuildPreview(RouteProviderResult source, bool includeAlternatives) => new()
             {
                 Yard = new RoutePoint { Lat = fromLat, Lon = fromLon },
                 Site = new RoutePoint { Lat = toLat, Lon = toLon },
-                DistanceMeters = route.DistanceMeters,
-                BaseDurationSeconds = route.BaseDurationSeconds,
-                DurationSeconds = route.DurationSeconds,
-                TrafficDelaySeconds = route.TrafficDelaySeconds,
-                HasLiveTraffic = route.HasLiveTraffic,
-                TrafficProvider = route.TrafficProvider,
-                TrafficNote = route.TrafficNote,
-                PathPoints = route.PathPoints,
+                DistanceMeters = source.DistanceMeters,
+                BaseDurationSeconds = source.BaseDurationSeconds,
+                DurationSeconds = source.DurationSeconds,
+                TrafficDelaySeconds = source.TrafficDelaySeconds,
+                HasLiveTraffic = source.HasLiveTraffic,
+                TrafficProvider = source.TrafficProvider,
+                TrafficNote = source.TrafficNote,
+                PathPoints = source.PathPoints,
+                Alternatives = includeAlternatives
+                    ? source.Alternatives.Select(alternative => BuildPreview(alternative, false)).ToList()
+                    : new List<RoutePreviewResult>(),
             };
+
+            return BuildPreview(route, true);
         }
 
         private static string AddMinutesFormatted(string date, int hour, int minute, int addMinutes)

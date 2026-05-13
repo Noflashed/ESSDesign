@@ -276,6 +276,9 @@ function combineRoutes(routes) {
     hasLiveTraffic: validRoutes.some(route => route.hasLiveTraffic),
     trafficProvider: validRoutes.map(route => route.trafficProvider).filter(Boolean).join(', '),
     trafficNote: validRoutes.map(route => route.trafficNote).filter(Boolean).join(' '),
+    alternatives: validRoutes.length === 1 && Array.isArray(validRoutes[0].alternatives)
+      ? validRoutes[0].alternatives
+      : [],
   };
 }
 
@@ -982,7 +985,16 @@ export default function TransportTripsPage() {
   const alternativeRouteItems = useMemo(() => {
     if (!routeHasPath(plannedRoute)) return [];
 
+    const providerAlternatives = Array.isArray(plannedRoute.alternatives)
+      ? plannedRoute.alternatives
+      : [];
     const candidates = [
+      ...providerAlternatives.map((route, index) => ({
+        id: `alternative-provider-${index}`,
+        via: 'road alternative',
+        route,
+        tolls: estimateTollFees(route, selectedTrip?.tollsEnabled),
+      })),
       {
         id: 'alternative-tolls',
         via: 'via toll roads',
@@ -997,8 +1009,20 @@ export default function TransportTripsPage() {
       },
     ];
 
-    return candidates
-      .filter(candidate => routeHasPath(candidate.route) && !routesAreEquivalent(plannedRoute, candidate.route))
+    const distinctCandidates = [];
+    candidates.forEach(candidate => {
+      if (!routeHasPath(candidate.route) || routesAreEquivalent(plannedRoute, candidate.route)) {
+        return;
+      }
+
+      if (distinctCandidates.some(existing => routesAreEquivalent(existing.route, candidate.route))) {
+        return;
+      }
+
+      distinctCandidates.push(candidate);
+    });
+
+    return distinctCandidates
       .map((candidate, index) => ({
         ...candidate,
         title: `Alternative ${index + 1}`,
@@ -1006,7 +1030,7 @@ export default function TransportTripsPage() {
         legendClassName: index === 0 ? 'alternate-one' : 'alternate-two',
         routeData: candidate.route,
       }));
-  }, [plannedRoute, tollRoute, avoidTollRoute]);
+  }, [plannedRoute, tollRoute, avoidTollRoute, selectedTrip?.tollsEnabled]);
   const alternativeMapRoutes = useMemo(
     () => alternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
     [alternativeRouteItems],
