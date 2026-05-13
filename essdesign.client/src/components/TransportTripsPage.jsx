@@ -773,7 +773,7 @@ function TripTimeline({ trip, stats, addressLabels }) {
   );
 }
 
-function AlternativeRouteRow({ title, via, route, baselineSeconds, baselineDistance, tolls }) {
+function AlternativeRouteRow({ title, via, route, baselineSeconds, baselineDistance, tolls, isVisible, onVisibilityChange }) {
   const duration = route?.durationSeconds;
   const distance = route?.distanceMeters;
   const deltaSeconds = Number.isFinite(baselineSeconds) && Number.isFinite(duration) ? baselineSeconds - duration : null;
@@ -793,7 +793,15 @@ function AlternativeRouteRow({ title, via, route, baselineSeconds, baselineDista
       <div><b>{distance ? formatDistance(distance) : 'Pending'}</b><span>Distance</span></div>
       <div className={Number(deltaMeters) <= 0 ? 'positive' : 'negative'}><b>{formatSignedDistance(deltaMeters)}</b><span>Distance diff</span></div>
       <div><b>{formatCurrency(tolls || 0)}</b><span>Tolls</span></div>
-      <button type="button">View route</button>
+      <label className={`transport-trip-alt-visibility ${isVisible ? 'active' : ''}`}>
+        <input
+          type="checkbox"
+          checked={isVisible}
+          onChange={event => onVisibilityChange(event.target.checked)}
+          aria-label={`Show ${title} on map`}
+        />
+        <span>Map</span>
+      </label>
     </div>
   );
 }
@@ -813,7 +821,7 @@ export default function TransportTripsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const [mapOpenSignal, setMapOpenSignal] = useState(0);
-  const [showAlternativeRoutes, setShowAlternativeRoutes] = useState(true);
+  const [hiddenAlternativeRouteIds, setHiddenAlternativeRouteIds] = useState([]);
   const [addressLabels, setAddressLabels] = useState({});
   const analysisCacheRef = useRef(new Map());
   const addressCacheRef = useRef(new Map());
@@ -1073,9 +1081,28 @@ export default function TransportTripsPage() {
         routeData: candidate.route,
       }));
   }, [plannedRoute, tollRoute, avoidTollRoute]);
+
+  useEffect(() => {
+    const availableIds = new Set(alternativeRouteItems.map(item => item.id));
+    setHiddenAlternativeRouteIds(current => {
+      const next = current.filter(id => availableIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [alternativeRouteItems]);
+
+  const handleAlternativeRouteVisibilityChange = (id, visible) => {
+    setHiddenAlternativeRouteIds(current => {
+      if (visible) {
+        return current.filter(hiddenId => hiddenId !== id);
+      }
+
+      return current.includes(id) ? current : [...current, id];
+    });
+  };
+
   const visibleAlternativeRouteItems = useMemo(
-    () => showAlternativeRoutes ? alternativeRouteItems : [],
-    [showAlternativeRoutes, alternativeRouteItems],
+    () => alternativeRouteItems.filter(item => !hiddenAlternativeRouteIds.includes(item.id)),
+    [alternativeRouteItems, hiddenAlternativeRouteIds],
   );
   const alternativeMapRoutes = useMemo(
     () => visibleAlternativeRouteItems.map(item => ({ id: item.id, routeData: item.routeData })),
@@ -1250,16 +1277,6 @@ export default function TransportTripsPage() {
                     {visibleAlternativeRouteItems.map(item => (
                       <span key={item.id}><i className={item.legendClassName} /> {item.mapLabel}</span>
                     ))}
-                    {alternativeRouteItems.length ? (
-                      <label className={`transport-trip-alt-toggle ${showAlternativeRoutes ? 'active' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={showAlternativeRoutes}
-                          onChange={event => setShowAlternativeRoutes(event.target.checked)}
-                        />
-                        <span>Alternatives</span>
-                      </label>
-                    ) : null}
                   </div>
                   {analysisError ? <div className="transport-trip-route-error">{analysisError}</div> : null}
                   {!analysisLoading && analysis?.history?.error ? (
@@ -1295,7 +1312,7 @@ export default function TransportTripsPage() {
                 </div>
               </div>
 
-              <div className={`transport-trip-panels ${visibleAlternativeRouteItems.length ? '' : 'transport-trip-panels-single'}`}>
+              <div className={`transport-trip-panels ${alternativeRouteItems.length ? '' : 'transport-trip-panels-single'}`}>
                 <div className="transport-trip-panel">
                   <h3>Trip timeline</h3>
                   <TripTimeline trip={selectedTrip} stats={{
@@ -1306,11 +1323,11 @@ export default function TransportTripsPage() {
                   }} addressLabels={addressLabels} />
                 </div>
 
-                {visibleAlternativeRouteItems.length ? (
+                {alternativeRouteItems.length ? (
                   <div className="transport-trip-panel transport-trip-alternatives">
                     <h3>Alternative routes</h3>
                     <small>Routes calculated at trip start time</small>
-                    {visibleAlternativeRouteItems.map(item => (
+                    {alternativeRouteItems.map(item => (
                       <AlternativeRouteRow
                         key={item.id}
                         title={item.title}
@@ -1319,6 +1336,8 @@ export default function TransportTripsPage() {
                         baselineSeconds={plannedRoute?.durationSeconds ?? statsDurationSeconds}
                         baselineDistance={plannedRoute?.distanceMeters ?? statsDistanceMeters}
                         tolls={item.tolls}
+                        isVisible={!hiddenAlternativeRouteIds.includes(item.id)}
+                        onVisibilityChange={visible => handleAlternativeRouteVisibilityChange(item.id, visible)}
                       />
                     ))}
                   </div>

@@ -7928,31 +7928,6 @@
     background: #F47C20;
 }
 
-.transport-trip-alt-toggle {
-    pointer-events: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border-left: 1px solid #DDE7F4;
-    padding-left: 12px;
-    cursor: pointer;
-    color: #0F2A62;
-}
-
-.transport-trip-alt-toggle input {
-    width: 14px;
-    height: 14px;
-    margin: 0;
-    accent-color: #2563EB;
-    cursor: pointer;
-}
-
-.transport-trip-alt-toggle span {
-    margin: 0;
-    font-size: 10px;
-    font-weight: 900;
-}
-
 .transport-trip-stat-grid {
     display: grid;
     gap: 9px;
@@ -8198,15 +8173,37 @@
     color: #526988;
 }
 
-.transport-trip-alt-row button {
+.transport-trip-alt-visibility {
     min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
     border: 1px solid #D9E2F0;
     border-radius: 8px;
     background: #FFFFFF;
     color: #0F2A62;
-    font-size: 11px;
-    font-weight: 900;
     cursor: pointer;
+}
+
+.transport-trip-alt-visibility.active {
+    border-color: #2563EB;
+    background: #F5F8FF;
+}
+
+.transport-trip-alt-visibility input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: #2563EB;
+    cursor: pointer;
+}
+
+.transport-trip-alt-visibility span {
+    margin: 0;
+    color: #0F2A62;
+    font-size: 10px;
+    font-weight: 900;
 }
 
 .transport-trip-alternatives p {
