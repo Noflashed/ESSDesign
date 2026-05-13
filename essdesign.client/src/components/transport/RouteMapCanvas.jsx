@@ -3,18 +3,48 @@ import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from
 import 'leaflet/dist/leaflet.css';
 
 const ALTERNATIVE_ROUTE_STYLES = [
-  { color: '#F47C20', weight: 4, opacity: 0.94, dashArray: '10 10', lineCap: 'round' },
-  { color: '#7C3AED', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
-  { color: '#159447', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
-  { color: '#E3431A', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
-  { color: '#0EA5E9', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
-  { color: '#D97706', weight: 4, opacity: 0.92, dashArray: '10 10', lineCap: 'round' },
+  { color: '#F47C20', weight: 4, opacity: 0.94, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
+  { color: '#7C3AED', weight: 4, opacity: 0.92, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
+  { color: '#159447', weight: 4, opacity: 0.92, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
+  { color: '#E3431A', weight: 4, opacity: 0.92, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
+  { color: '#0EA5E9', weight: 4, opacity: 0.92, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
+  { color: '#D97706', weight: 4, opacity: 0.92, dashArray: '12 12', dashOffset: '0', lineCap: 'round' },
 ];
 
-function getRoutePathPoints(routeData) {
-  return (routeData?.pathPoints || [])
-    .map(point => [Number(point.lat ?? point.latitude), Number(point.lon ?? point.longitude)])
+const TRAFFIC_ROUTE_STYLES = {
+  normal: { color: '#2FA6FF', weight: 5, opacity: 0.95, lineCap: 'round' },
+  medium: { color: '#F5B400', weight: 6, opacity: 0.98, lineCap: 'round' },
+  heavy: { color: '#E3431A', weight: 7, opacity: 1, lineCap: 'round' },
+};
+
+function getPointLatLon(point) {
+  if (Array.isArray(point)) {
+    return [Number(point[0]), Number(point[1])];
+  }
+  return [Number(point?.lat ?? point?.latitude), Number(point?.lon ?? point?.longitude)];
+}
+
+function getPathPoints(points) {
+  return (points || [])
+    .map(getPointLatLon)
     .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+}
+
+function getRoutePathPoints(routeData) {
+  return getPathPoints(routeData?.pathPoints);
+}
+
+function getTrafficSegmentLines(routeData) {
+  return (routeData?.trafficSegments || [])
+    .map((segment, index) => {
+      const severity = TRAFFIC_ROUTE_STYLES[segment?.severity] ? segment.severity : 'normal';
+      return {
+        id: segment?.id || `traffic-route-segment-${index}`,
+        severity,
+        points: getPathPoints(segment?.points || segment?.pathPoints),
+      };
+    })
+    .filter(segment => segment.points.length > 1);
 }
 
 function getRouteAnchorPoints(routeData) {
@@ -62,6 +92,11 @@ function RouteMapInstance({
 }) {
   const routePoints = useMemo(
     () => getRoutePathPoints(routeData),
+    [routeData],
+  );
+
+  const trafficSegmentLines = useMemo(
+    () => getTrafficSegmentLines(routeData),
     [routeData],
   );
 
@@ -153,8 +188,18 @@ function RouteMapInstance({
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         {routePoints.length > 0 ? (
-          <Polyline positions={routePoints} pathOptions={{ color: '#2FA6FF', weight: 5, opacity: 0.95 }} />
+          <Polyline positions={routePoints} pathOptions={{ color: '#2FA6FF', weight: 5, opacity: trafficSegmentLines.length ? 0.22 : 0.95 }} />
         ) : null}
+        {trafficSegmentLines.map(segment => (
+          <Polyline
+            key={segment.id}
+            positions={segment.points}
+            pathOptions={{
+              ...TRAFFIC_ROUTE_STYLES[segment.severity],
+              className: `transport-traffic-route-line transport-traffic-route-line-${segment.severity}`,
+            }}
+          />
+        ))}
         {alternativeRouteLines.map(route => (
           <Polyline key={route.id} positions={route.points} pathOptions={route.pathOptions} />
         ))}

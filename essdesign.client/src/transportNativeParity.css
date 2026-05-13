@@ -7872,13 +7872,19 @@
     display: none;
 }
 
-.transport-alternative-route-line {
-    animation: transport-route-dash-flow 900ms linear infinite;
+.leaflet-overlay-pane path.transport-alternative-route-line {
+    stroke-dasharray: 12 12 !important;
+    stroke-linecap: round;
+    animation: transport-route-dash-flow 850ms linear infinite !important;
 }
 
 @keyframes transport-route-dash-flow {
+    from {
+        stroke-dashoffset: 0;
+    }
+
     to {
-        stroke-dashoffset: -40;
+        stroke-dashoffset: -48;
     }
 }
 
@@ -7927,6 +7933,14 @@
 
 .transport-trip-map-legend .alternate-route {
     border-top-style: dashed;
+}
+
+.transport-trip-map-legend .traffic-medium-line {
+    border-top-color: #F5B400;
+}
+
+.transport-trip-map-legend .traffic-heavy-line {
+    border-top-color: #E3431A;
 }
 
 .transport-trip-map-legend .stop-dot,

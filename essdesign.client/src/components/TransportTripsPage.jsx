@@ -14,6 +14,9 @@ const MAX_REASONABLE_GPS_SPEED_MPS = 45;
 const GPS_TRIP_END_IDLE_SECONDS = 12 * 60;
 const GPS_TRIP_MAX_POINT_GAP_SECONDS = 20 * 60;
 const GPS_TRAFFIC_SEGMENT_CAP_SECONDS = 5 * 60;
+const GPS_HEAVY_TRAFFIC_SPEED_MPS = 2.2;
+const GPS_MEDIUM_TRAFFIC_SPEED_MPS = 5.6;
+const GPS_MOVING_DISTANCE_METERS = 20;
 const GPS_TRIP_MIN_DURATION_SECONDS = 90;
 const GPS_TRIP_MIN_DISTANCE_METERS = 150;
 const GPS_TRIP_STOP_RADIUS_METERS = 80;
@@ -393,6 +396,38 @@ function buildRouteFromHistory(points) {
   let movingSeconds = 0;
   let slowOrIdleSeconds = 0;
   let maxSpeedMps = 0;
+  const trafficSegments = [];
+
+  const appendTrafficSegment = (severity, previous, current, durationSeconds, segmentMeters, speedMps) => {
+    const startPoint = { lat: Number(previous.latitude), lon: Number(previous.longitude) };
+    const endPoint = { lat: Number(current.latitude), lon: Number(current.longitude) };
+    if (![startPoint.lat, startPoint.lon, endPoint.lat, endPoint.lon].every(Number.isFinite)) {
+      return;
+    }
+
+    const lastSegment = trafficSegments[trafficSegments.length - 1];
+    const lastPoint = lastSegment?.points?.[lastSegment.points.length - 1];
+    if (lastSegment?.severity === severity && lastPoint?.lat === startPoint.lat && lastPoint?.lon === startPoint.lon) {
+      lastSegment.points.push(endPoint);
+      lastSegment.durationSeconds += durationSeconds;
+      lastSegment.distanceMeters += segmentMeters;
+      lastSegment.maxSpeedMps = Math.max(lastSegment.maxSpeedMps, speedMps);
+      lastSegment.minSpeedMps = Math.min(lastSegment.minSpeedMps, speedMps);
+      lastSegment.endedAt = current.recordedAt;
+      return;
+    }
+
+    trafficSegments.push({
+      severity,
+      points: [startPoint, endPoint],
+      durationSeconds,
+      distanceMeters: segmentMeters,
+      maxSpeedMps: speedMps,
+      minSpeedMps: speedMps,
+      startedAt: previous.recordedAt,
+      endedAt: current.recordedAt,
+    });
+  };
 
   for (let index = 1; index < cleaned.length; index += 1) {
     const previous = cleaned[index - 1];
@@ -408,7 +443,16 @@ function buildRouteFromHistory(points) {
     const calculatedSpeed = segmentMeters / intervalSeconds;
     const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
     maxSpeedMps = Math.max(maxSpeedMps, speed);
-    if (speed >= 2.2 || segmentMeters >= 20) {
+    const isHeavyTraffic = speed < GPS_HEAVY_TRAFFIC_SPEED_MPS && segmentMeters < GPS_MOVING_DISTANCE_METERS;
+    const severity = isHeavyTraffic
+      ? 'heavy'
+      : speed < GPS_MEDIUM_TRAFFIC_SPEED_MPS
+        ? 'medium'
+        : 'normal';
+
+    appendTrafficSegment(severity, previous, current, trafficIntervalSeconds, segmentMeters, speed);
+
+    if (speed >= GPS_HEAVY_TRAFFIC_SPEED_MPS || segmentMeters >= GPS_MOVING_DISTANCE_METERS) {
       movingSeconds += trafficIntervalSeconds;
     } else {
       slowOrIdleSeconds += trafficIntervalSeconds;
@@ -429,6 +473,7 @@ function buildRouteFromHistory(points) {
     trafficProvider: 'GPS breadcrumbs',
     trafficNote: `${cleaned.length} recorded GPS points`,
     pointCount: cleaned.length,
+    trafficSegments,
     movingSeconds,
     slowOrIdleSeconds,
     maxSpeedMps,
@@ -459,7 +504,7 @@ function isMovingSegment(previous, current) {
   const recordedSpeed = Number(current.speedMps);
   const calculatedSpeed = segmentMeters / intervalSeconds;
   const speed = Number.isFinite(recordedSpeed) && recordedSpeed >= 0 ? recordedSpeed : calculatedSpeed;
-  return speed >= 2.2 || segmentMeters >= 20;
+  return speed >= GPS_HEAVY_TRAFFIC_SPEED_MPS || segmentMeters >= GPS_MOVING_DISTANCE_METERS;
 }
 
 function buildGpsTripFromPoints(points, lane, sequence) {
@@ -1009,7 +1054,7 @@ export default function TransportTripsPage() {
   const plannedRoute = analysis?.current?.combined || null;
   const gpsRoute = analysis?.history?.route || null;
   const roadRoute = plannedRoute || gpsRoute;
-  const displayRoute = roadRoute;
+  const displayRoute = gpsRoute || roadRoute;
   const selectedStats = selectedTrip ? getTripStats(selectedTrip) : null;
   const selectedLabels = selectedTrip ? getTripRouteLabels(selectedTrip, addressLabels) : { start: '', end: '' };
   const usingGpsBreadcrumbs = Boolean(gpsRoute);
@@ -1017,7 +1062,7 @@ export default function TransportTripsPage() {
   const statsDurationSeconds = gpsRoute?.durationSeconds ?? selectedTrip?.actualDurationSeconds ?? plannedRoute?.durationSeconds ?? selectedStats?.durationSeconds;
   const statsTrafficSeconds = resolveTripTrafficSeconds(gpsRoute, plannedRoute, selectedStats, statsDurationSeconds);
   const fuel = calculateFuel(statsDistanceMeters, statsTrafficSeconds);
-  const tollEstimate = estimateTollFees(displayRoute, selectedTrip?.tollsEnabled);
+  const tollEstimate = estimateTollFees(roadRoute, selectedTrip?.tollsEnabled);
   const tollRoute = analysis?.tolls?.combined || null;
   const avoidTollRoute = analysis?.avoidTolls?.combined || null;
   const alternativeRouteItems = useMemo(() => {
@@ -1125,6 +1170,13 @@ export default function TransportTripsPage() {
     () => alternativeRouteItems.filter(item => !hiddenAlternativeRouteIds.includes(item.id)),
     [alternativeRouteItems, hiddenAlternativeRouteIds],
   );
+  const visibleTrafficLegendItems = useMemo(() => {
+    const severities = new Set((displayRoute?.trafficSegments || []).map(segment => segment?.severity));
+    return [
+      severities.has('medium') ? { id: 'traffic-medium', label: 'Medium traffic', className: 'traffic-medium-line' } : null,
+      severities.has('heavy') ? { id: 'traffic-heavy', label: 'Heavy traffic', className: 'traffic-heavy-line' } : null,
+    ].filter(Boolean);
+  }, [displayRoute]);
   const alternativeMapRoutes = useMemo(
     () => visibleAlternativeRouteItems.map(item => ({
       id: item.id,
@@ -1298,7 +1350,10 @@ export default function TransportTripsPage() {
                     alternativeRoutes={alternativeMapRoutes}
                   />
                   <div className="transport-trip-map-legend">
-                    <span><i className="actual" /> Road route</span>
+                    <span><i className="actual" /> {usingGpsBreadcrumbs ? 'Actual route' : 'Road route'}</span>
+                    {visibleTrafficLegendItems.map(item => (
+                      <span key={item.id}><i className={item.className} /> {item.label}</span>
+                    ))}
                     {visibleAlternativeRouteItems.map(item => (
                       <span key={item.id}><i className={item.legendClassName} style={{ borderTopColor: item.mapColor }} /> {item.mapLabel}</span>
                     ))}
