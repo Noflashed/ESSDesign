@@ -279,6 +279,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.
 const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
+const SCAFFOLD_AI_TRAINING_BUCKET = 'scaffold-ai-training';
 const SAFETY_PROJECTS_PATH = 'projects.json';
 
 const currentSupabaseBearer = () => localStorage.getItem('access_token') || SUPABASE_ANON_KEY;
@@ -313,6 +314,8 @@ const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
 const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
 const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
 const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
+const SCAFFOLD_AI_TRAINING_IMAGES_TABLE = 'ess_scaffold_ai_training_images';
+const SCAFFOLD_AI_ANNOTATIONS_TABLE = 'ess_scaffold_ai_annotations';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
@@ -4322,6 +4325,172 @@ export const essNewsAPI = {
             headers: storageHeaders()
         });
     }
+};
+
+const SCAFFOLD_AI_CLASSES = new Set(['ledger', 'transom', 'standard']);
+
+const normalizeScaffoldAiClass = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return SCAFFOLD_AI_CLASSES.has(normalized) ? normalized : 'ledger';
+};
+
+const encodeStoragePath = (path) => String(path || '').split('/').map(encodeURIComponent).join('/');
+
+const scaffoldAiPublicImageUrl = (objectPath) => getPublicStorageUrl(SCAFFOLD_AI_TRAINING_BUCKET, encodeStoragePath(objectPath));
+
+const mapScaffoldAiTrainingImageRow = (row) => {
+    if (!row?.id) return null;
+    return {
+        id: row.id,
+        componentClass: normalizeScaffoldAiClass(row.component_class),
+        objectPath: row.object_path || '',
+        fileName: row.file_name || 'training-image.jpg',
+        contentType: row.content_type || '',
+        width: row.width == null ? null : Number(row.width),
+        height: row.height == null ? null : Number(row.height),
+        uploadedBy: row.uploaded_by || null,
+        uploadedByName: row.uploaded_by_name || null,
+        notes: row.notes || '',
+        source: row.source || '',
+        labelStatus: row.label_status || 'class-labelled',
+        createdAt: row.created_at || '',
+        updatedAt: row.updated_at || '',
+    };
+};
+
+const mapScaffoldAiAnnotationRow = (row) => {
+    if (!row?.id) return null;
+    return {
+        id: row.id,
+        imageId: row.image_id,
+        componentClass: normalizeScaffoldAiClass(row.component_class),
+        x: Number(row.x || 0),
+        y: Number(row.y || 0),
+        width: Number(row.width || 0),
+        height: Number(row.height || 0),
+        createdBy: row.created_by || null,
+        createdByName: row.created_by_name || null,
+        createdAt: row.created_at || '',
+        updatedAt: row.updated_at || '',
+    };
+};
+
+async function signedScaffoldAiImageUrl(objectPath, expiresIn = 3600) {
+    const cleanPath = String(objectPath || '').trim();
+    if (!cleanPath) return '';
+    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${SCAFFOLD_AI_TRAINING_BUCKET}/${encodeStoragePath(cleanPath)}`, {
+        method: 'POST',
+        headers: storageHeaders(true),
+        body: JSON.stringify({ expiresIn })
+    });
+
+    if (!response.ok) {
+        return scaffoldAiPublicImageUrl(cleanPath);
+    }
+
+    const payload = await response.json();
+    return payload?.signedURL ? `${SUPABASE_URL}/storage/v1${payload.signedURL}` : scaffoldAiPublicImageUrl(cleanPath);
+}
+
+function isMissingScaffoldAiTableError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('ess_scaffold_ai')
+        && (
+            message.includes('pgrst205')
+            || message.includes('schema cache')
+            || message.includes('could not find')
+            || message.includes('does not exist')
+            || message.includes('not found')
+        );
+}
+
+export const scaffoldAiTrainingAPI = {
+    classes: [
+        { key: 'ledger', label: 'Ledger', color: '#2563EB' },
+        { key: 'transom', label: 'Transom', color: '#F47C20' },
+        { key: 'standard', label: 'Standard', color: '#16A34A' },
+    ],
+
+    listImages: async ({ componentClass = 'all', status = 'needs-boxes', limit = 240, force = true } = {}) => {
+        const params = new URLSearchParams();
+        params.set('select', 'id,component_class,object_path,file_name,content_type,width,height,uploaded_by,uploaded_by_name,notes,source,label_status,created_at,updated_at');
+        if (componentClass && componentClass !== 'all') {
+            params.set('component_class', `eq.${normalizeScaffoldAiClass(componentClass)}`);
+        }
+        params.set('order', 'created_at.desc');
+        params.set('limit', String(Math.max(1, Math.min(Number(limit) || 240, 1000))));
+
+        try {
+            const rows = await readRestRows(SCAFFOLD_AI_TRAINING_IMAGES_TABLE, `?${params.toString()}`, { force });
+            const images = (Array.isArray(rows) ? rows : []).map(mapScaffoldAiTrainingImageRow).filter(Boolean);
+            if (status === 'all') return images;
+            if (status === 'boxed') return images.filter(image => image.labelStatus === 'boxed');
+            if (status === 'empty') return images.filter(image => image.labelStatus === 'boxed-empty');
+            return images.filter(image => image.labelStatus !== 'boxed' && image.labelStatus !== 'boxed-empty');
+        } catch (error) {
+            if (isMissingScaffoldAiTableError(error)) {
+                throw new Error('Scaffold AI tables are not deployed yet. Run database/migrations/026_add_scaffold_ai_training_annotations.sql in Supabase, then refresh this page.');
+            }
+            throw error;
+        }
+    },
+
+    getImageUrl: signedScaffoldAiImageUrl,
+
+    listAnnotations: async (imageId) => {
+        if (!imageId) return [];
+        try {
+            const rows = await readRestRows(
+                SCAFFOLD_AI_ANNOTATIONS_TABLE,
+                `?select=*&image_id=eq.${encodeURIComponent(imageId)}&order=created_at.asc`,
+                { force: true }
+            );
+            return (Array.isArray(rows) ? rows : []).map(mapScaffoldAiAnnotationRow).filter(Boolean);
+        } catch (error) {
+            if (isMissingScaffoldAiTableError(error)) {
+                return [];
+            }
+            throw error;
+        }
+    },
+
+    saveAnnotations: async ({ imageId, annotations, user, markEmpty = false }) => {
+        if (!imageId) {
+            throw new Error('Select a training image before saving labels.');
+        }
+        const cleanAnnotations = Array.isArray(annotations) ? annotations
+            .map(annotation => ({
+                image_id: imageId,
+                component_class: normalizeScaffoldAiClass(annotation.componentClass),
+                x: Math.max(0, Math.min(1, Number(annotation.x) || 0)),
+                y: Math.max(0, Math.min(1, Number(annotation.y) || 0)),
+                width: Math.max(0.001, Math.min(1, Number(annotation.width) || 0)),
+                height: Math.max(0.001, Math.min(1, Number(annotation.height) || 0)),
+                created_by: user?.id || user?.email || null,
+                created_by_name: user?.fullName || user?.email || null,
+            }))
+            .filter(annotation => annotation.width > 0.001 && annotation.height > 0.001)
+            : [];
+
+        try {
+            await deleteRestRows(SCAFFOLD_AI_ANNOTATIONS_TABLE, `?image_id=eq.${encodeURIComponent(imageId)}`);
+            if (cleanAnnotations.length > 0) {
+                await postRestRows(SCAFFOLD_AI_ANNOTATIONS_TABLE, cleanAnnotations);
+            }
+            const labelStatus = cleanAnnotations.length > 0 ? 'boxed' : (markEmpty ? 'boxed-empty' : 'class-labelled');
+            const rows = await patchRestRows(
+                SCAFFOLD_AI_TRAINING_IMAGES_TABLE,
+                `?id=eq.${encodeURIComponent(imageId)}`,
+                { label_status: labelStatus, updated_at: nowIso() }
+            );
+            return Array.isArray(rows) ? mapScaffoldAiTrainingImageRow(rows[0]) : mapScaffoldAiTrainingImageRow(rows);
+        } catch (error) {
+            if (isMissingScaffoldAiTableError(error)) {
+                throw new Error('Scaffold AI annotation table is not deployed yet. Run database/migrations/026_add_scaffold_ai_training_annotations.sql in Supabase, then refresh this page.');
+            }
+            throw error;
+        }
+    },
 };
 
 export const usersAPI = {
