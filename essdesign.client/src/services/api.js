@@ -4491,6 +4491,22 @@ export const scaffoldAiTrainingAPI = {
             throw error;
         }
     },
+
+    suggestBoxes: async ({ imageUrl, objectPath, componentClass = 'ledger', targetClasses = [] } = {}) => {
+        try {
+            const response = await apiClient.post('/scaffold-ai/suggest-boxes', {
+                imageUrl,
+                objectPath,
+                componentClass: normalizeScaffoldAiClass(componentClass),
+                targetClasses: Array.isArray(targetClasses)
+                    ? targetClasses.map(normalizeScaffoldAiClass)
+                    : [normalizeScaffoldAiClass(componentClass)],
+            });
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.error || error.message || 'AI suggestion failed.');
+        }
+    },
 };
 
 export const usersAPI = {

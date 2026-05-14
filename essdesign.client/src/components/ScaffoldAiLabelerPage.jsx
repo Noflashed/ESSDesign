@@ -56,13 +56,19 @@ function getPointerPosition(event, stageEl) {
 }
 
 function normalizeAnnotation(row) {
+  const x = clamp01(row.x);
+  const y = clamp01(row.y);
+  const width = Math.max(0, Math.min(1 - x, Number(row.width) || 0));
+  const height = Math.max(0, Math.min(1 - y, Number(row.height) || 0));
   return {
     id: row.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     componentClass: row.componentClass || 'ledger',
-    x: clamp01(row.x),
-    y: clamp01(row.y),
-    width: clamp01(row.width),
-    height: clamp01(row.height),
+    x,
+    y,
+    width,
+    height,
+    confidence: row.confidence == null ? null : Number(row.confidence),
+    source: row.source || '',
   };
 }
 
@@ -87,7 +93,9 @@ export default function ScaffoldAiLabelerPage({ user }) {
   const [loading, setLoading] = useState(true);
   const [loadingImage, setLoadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [zoom, setZoom] = useState(1);
 
   const selectedImage = useMemo(
@@ -99,6 +107,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
   const loadImages = useCallback(async ({ keepSelection = true } = {}) => {
     setLoading(true);
     setError('');
+    setNotice('');
     try {
       const rows = await scaffoldAiTrainingAPI.listImages({
         componentClass: classFilter,
@@ -136,6 +145,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
       setSelectedBoxId(null);
       setDraft(null);
       setError('');
+      setNotice('');
       try {
         const [url, savedAnnotations] = await Promise.all([
           scaffoldAiTrainingAPI.getImageUrl(selectedImage.objectPath),
@@ -202,6 +212,43 @@ export default function ScaffoldAiLabelerPage({ user }) {
     setZoom(clampZoom(nextZoom));
   };
 
+  const suggestBoxes = async () => {
+    if (!selectedImage || !selectedImageUrl) return;
+    setSuggesting(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await scaffoldAiTrainingAPI.suggestBoxes({
+        imageUrl: selectedImageUrl,
+        objectPath: selectedImage.objectPath,
+        componentClass: activeClass,
+        targetClasses: [activeClass],
+      });
+      const suggestedBoxes = (Array.isArray(result?.boxes) ? result.boxes : [])
+        .map(box => normalizeAnnotation({
+          ...box,
+          id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          componentClass: box.componentClass || activeClass,
+          source: 'ai-suggested',
+        }))
+        .filter(box => box.width >= MIN_BOX_SIZE && box.height >= MIN_BOX_SIZE);
+
+      if (!suggestedBoxes.length) {
+        setNotice('AI did not find confident boxes for this class. Try zooming and drawing them manually.');
+        return;
+      }
+
+      setAnnotations(current => [...current, ...suggestedBoxes]);
+      setSelectedBoxId(suggestedBoxes[0].id);
+      const label = CLASS_LABELS[activeClass] || activeClass;
+      setNotice(`Added ${suggestedBoxes.length} AI suggested ${label} box${suggestedBoxes.length === 1 ? '' : 'es'}. Review and adjust before saving.`);
+    } catch (err) {
+      setError(err.message || 'AI could not suggest boxes for this image.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const save = async ({ markEmpty = false } = {}) => {
     if (!selectedImage) return;
     if (!markEmpty && annotations.length === 0) {
@@ -210,6 +257,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
     }
     setSaving(true);
     setError('');
+    setNotice('');
     try {
       const updatedImage = await scaffoldAiTrainingAPI.saveAnnotations({
         imageId: selectedImage.id,
@@ -252,6 +300,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
       </header>
 
       {error ? <div className="scaffold-ai-error">{error}</div> : null}
+      {notice ? <div className="scaffold-ai-notice">{notice}</div> : null}
 
       <div className="scaffold-ai-workbench">
         <aside className="scaffold-ai-queue">
@@ -318,6 +367,14 @@ export default function ScaffoldAiLabelerPage({ user }) {
               ))}
             </div>
             <div className="scaffold-ai-nav-actions">
+              <button
+                type="button"
+                className="ai-suggest"
+                onClick={suggestBoxes}
+                disabled={!selectedImage || !selectedImageUrl || loadingImage || saving || suggesting}
+              >
+                {suggesting ? 'Suggesting...' : 'AI Suggest Boxes'}
+              </button>
               <button type="button" onClick={() => goRelative(-1)} disabled={selectedIndex <= 0}>Previous</button>
               <button type="button" onClick={() => goRelative(1)} disabled={selectedIndex < 0 || selectedIndex >= images.length - 1}>Next</button>
             </div>
@@ -362,7 +419,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
                     type="button"
                     key={box.id}
                     data-box-id={box.id}
-                    className={`scaffold-ai-box${selectedBoxId === box.id ? ' selected' : ''}`}
+                    className={`scaffold-ai-box${selectedBoxId === box.id ? ' selected' : ''}${box.source === 'ai-suggested' ? ' ai-suggested' : ''}`}
                     style={{
                       '--box-color': CLASS_COLORS[box.componentClass] || '#2563EB',
                       left: `${box.x * 100}%`,
@@ -374,9 +431,9 @@ export default function ScaffoldAiLabelerPage({ user }) {
                       event.stopPropagation();
                       setSelectedBoxId(box.id);
                     }}
-                    title={`${CLASS_LABELS[box.componentClass]} box`}
+                    title={`${CLASS_LABELS[box.componentClass]} box${box.confidence != null ? ` · ${Math.round(box.confidence * 100)}% AI confidence` : ''}`}
                   >
-                    <span>{CLASS_LABELS[box.componentClass]}</span>
+                    <span>{CLASS_LABELS[box.componentClass]}{box.source === 'ai-suggested' ? ' · AI' : ''}</span>
                   </button>
                 ))}
 
@@ -433,7 +490,12 @@ export default function ScaffoldAiLabelerPage({ user }) {
                 <select value={box.componentClass} onChange={event => updateBoxClass(box.id, event.target.value)}>
                   {scaffoldAiTrainingAPI.classes.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
                 </select>
-                <button type="button" className="danger" onClick={() => deleteBox(box.id)}>Delete</button>
+                <div className="scaffold-ai-box-actions">
+                  {box.source === 'ai-suggested'
+                    ? <span className="scaffold-ai-suggested-chip">{box.confidence != null ? `${Math.round(box.confidence * 100)}% AI` : 'AI'}</span>
+                    : null}
+                  <button type="button" className="danger" onClick={() => deleteBox(box.id)}>Delete</button>
+                </div>
               </div>
             )) : (
               <div className="scaffold-ai-empty small">Draw boxes by click-dragging over the image.</div>
