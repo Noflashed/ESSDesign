@@ -16,17 +16,42 @@ const PROFILE_IMAGES_BUCKET = 'profile-images';
 
 const getPublicStorageUrl = (bucket, objectPath) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`;
 
+const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext';
+
+const getCachedAvatarExt = (userId) => {
+    try {
+        const raw = localStorage.getItem(AVATAR_EXT_CACHE_KEY);
+        const cache = raw ? JSON.parse(raw) : {};
+        return cache[userId] ?? null;
+    } catch { return null; }
+};
+
+const setCachedAvatarExt = (userId, ext) => {
+    try {
+        const raw = localStorage.getItem(AVATAR_EXT_CACHE_KEY);
+        const cache = raw ? JSON.parse(raw) : {};
+        cache[userId] = ext;
+        localStorage.setItem(AVATAR_EXT_CACHE_KEY, JSON.stringify(cache));
+    } catch { /* ignore */ }
+};
+
 const resolveProfileImageUrl = async (userId) => {
     if (!userId) return null;
+
+    const cached = getCachedAvatarExt(userId);
+    if (cached) {
+        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cached}`);
+    }
 
     const extensions = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
 
     for (const ext of extensions) {
         const objectPath = `${userId}/avatar.${ext}`;
-        const testUrl = `${getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath)}?t=${Date.now()}`;
+        const testUrl = getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath);
         try {
             const response = await fetch(testUrl, { method: 'HEAD' });
             if (response.ok) {
+                setCachedAvatarExt(userId, ext);
                 return testUrl;
             }
         } catch {
@@ -316,7 +341,7 @@ const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
 const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
 const SCAFFOLD_AI_TRAINING_IMAGES_TABLE = 'ess_scaffold_ai_training_images';
 const SCAFFOLD_AI_ANNOTATIONS_TABLE = 'ess_scaffold_ai_annotations';
-const MATERIAL_REQUEST_CACHE_TTL_MS = 15 * 1000;
+const MATERIAL_REQUEST_CACHE_TTL_MS = 60 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
 const STORAGE_JSON_REQUEST_TIMEOUT_MS = 15 * 1000;
