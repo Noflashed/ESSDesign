@@ -5,9 +5,17 @@ import './ScaffoldAiLabelerPage.css';
 const CLASS_LABELS = Object.fromEntries(scaffoldAiTrainingAPI.classes.map(item => [item.key, item.label]));
 const CLASS_COLORS = Object.fromEntries(scaffoldAiTrainingAPI.classes.map(item => [item.key, item.color]));
 const MIN_BOX_SIZE = 0.006;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function clampZoom(value) {
+  const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(value) || MIN_ZOOM));
+  return Math.round(next / ZOOM_STEP) * ZOOM_STEP;
 }
 
 function formatDate(value) {
@@ -80,6 +88,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
   const [loadingImage, setLoadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [zoom, setZoom] = useState(1);
 
   const selectedImage = useMemo(
     () => images.find(image => image.id === selectedImageId) || null,
@@ -189,6 +198,10 @@ export default function ScaffoldAiLabelerPage({ user }) {
     setSelectedBoxId(null);
   };
 
+  const updateZoom = (nextZoom) => {
+    setZoom(clampZoom(nextZoom));
+  };
+
   const save = async ({ markEmpty = false } = {}) => {
     if (!selectedImage) return;
     if (!markEmpty && annotations.length === 0) {
@@ -222,6 +235,7 @@ export default function ScaffoldAiLabelerPage({ user }) {
   };
 
   const draftBox = draft ? makeLocalBox(draft.componentClass, draft.start, draft.current) : null;
+  const zoomPercent = Math.round(zoom * 100);
 
   return (
     <div className="scaffold-ai-labeler-page">
@@ -309,11 +323,33 @@ export default function ScaffoldAiLabelerPage({ user }) {
             </div>
           </div>
 
+          <div className="scaffold-ai-zoom-bar">
+            <div className="scaffold-ai-zoom-copy">
+              <strong>{zoomPercent}%</strong>
+              <span>Zoom in for tighter boxes. Scroll inside the image area when zoomed.</span>
+            </div>
+            <div className="scaffold-ai-zoom-controls">
+              <button type="button" onClick={() => updateZoom(zoom - ZOOM_STEP)} disabled={zoom <= MIN_ZOOM}>-</button>
+              <input
+                type="range"
+                min={MIN_ZOOM}
+                max={MAX_ZOOM}
+                step={ZOOM_STEP}
+                value={zoom}
+                onChange={event => updateZoom(event.target.value)}
+                aria-label="Image zoom"
+              />
+              <button type="button" onClick={() => updateZoom(zoom + ZOOM_STEP)} disabled={zoom >= MAX_ZOOM}>+</button>
+              <button type="button" onClick={() => updateZoom(1)} disabled={zoom === 1}>Fit</button>
+            </div>
+          </div>
+
           <div className={`scaffold-ai-stage${selectedImageUrl ? '' : ' empty'}`}>
             {selectedImageUrl ? (
               <div
                 ref={stageRef}
                 className="scaffold-ai-image-frame"
+                style={{ width: `${zoom * 100}%` }}
                 onPointerDown={beginDraw}
                 onPointerMove={moveDraw}
                 onPointerUp={endDraw}

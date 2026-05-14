@@ -223,7 +223,7 @@
 
 .scaffold-ai-canvas-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   padding: 16px;
 }
@@ -249,13 +249,74 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--class-color) 30%, transparent);
 }
 
-.scaffold-ai-stage {
-  position: relative;
-  overflow: hidden;
+.scaffold-ai-zoom-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.scaffold-ai-zoom-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+}
+
+.scaffold-ai-zoom-copy strong {
+  color: #102653;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.scaffold-ai-zoom-copy span {
+  color: #66748d;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.scaffold-ai-zoom-controls {
+  display: grid;
+  grid-template-columns: 40px minmax(160px, 240px) 40px 54px;
+  align-items: center;
+  gap: 8px;
+}
+
+.scaffold-ai-zoom-controls button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d8e1ef;
+  border-radius: 11px;
+  background: #fff;
+  color: #14264b;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.scaffold-ai-zoom-controls button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.scaffold-ai-zoom-controls input {
+  width: 100%;
+  accent-color: #2563eb;
+}
+
+.scaffold-ai-stage {
+  position: relative;
+  overflow: auto;
+  display: block;
   min-height: 520px;
+  max-height: calc(100vh - 290px);
+  padding: 18px;
+  box-sizing: border-box;
   border: 1px solid #d9e4f2;
   border-radius: 20px;
   background:
@@ -266,24 +327,24 @@
   background-color: #e8eef7;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
   background-size: 20px 20px;
-  touch-action: none;
+  touch-action: auto;
   user-select: none;
 }
 
 .scaffold-ai-image-frame {
   position: relative;
-  display: inline-flex;
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
+  max-width: none;
+  min-width: 100%;
+  margin: 0 auto;
   line-height: 0;
   touch-action: none;
 }
 
 .scaffold-ai-image-frame img {
   display: block;
-  max-width: 100%;
-  max-height: calc(100vh - 260px);
-  width: auto;
+  max-width: none;
+  width: 100%;
   height: auto;
   object-fit: contain;
   pointer-events: none;
@@ -496,5 +557,13 @@ button.scaffold-ai-box {
   }
   .scaffold-ai-stage {
     min-height: 420px;
+    max-height: none;
+  }
+  .scaffold-ai-zoom-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .scaffold-ai-zoom-controls {
+    grid-template-columns: 40px minmax(0, 1fr) 40px 54px;
   }
 }
