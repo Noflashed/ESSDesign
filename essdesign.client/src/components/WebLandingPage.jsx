@@ -1,22 +1,32 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { essNewsAPI } from '../services/api';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
-const BACKGROUND_VIDEO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/Background%20image.mp4';
 
 export default function WebLandingPage({ onOpenDirectory }) {
+    const [backdropUrl, setBackdropUrl] = useState(null);
+
+    useEffect(() => {
+        essNewsAPI.getAll()
+            .then(items => {
+                const imageItems = items.filter(item => item.mediaType === 'image' && item.mediaUrl);
+                if (imageItems.length === 0) return;
+                const pick = imageItems[Math.floor(Math.random() * imageItems.length)];
+                setBackdropUrl(pick.mediaUrl);
+            })
+            .catch(() => { /* fall back to gradient background */ });
+    }, []);
+
     return (
         <section className="web-landing-page">
-            <video
-                className="web-landing-backdrop"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                aria-hidden="true"
-            >
-                <source src={BACKGROUND_VIDEO_URL} type="video/mp4" />
-            </video>
+            {backdropUrl && (
+                <img
+                    src={backdropUrl}
+                    className="web-landing-backdrop"
+                    aria-hidden="true"
+                    alt=""
+                />
+            )}
             <div className="web-landing-overlay" aria-hidden="true" />
             <div className="web-landing-grid" aria-hidden="true" />
 
