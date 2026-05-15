@@ -12,7 +12,7 @@ export default function WebLandingPage({ onOpenDirectory }) {
                 muted
                 loop
                 playsInline
-                preload="auto"
+                preload="metadata"
                 aria-hidden="true"
             >
                 <source src={BACKGROUND_VIDEO_URL} type="video/mp4" />
