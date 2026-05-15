@@ -273,9 +273,9 @@ export default function ESSNewsPage() {
                                 <div className="ess-news-card-media">
                                     {item.mediaUrl ? (
                                         item.mediaType === 'video' ? (
-                                            <video src={item.mediaUrl} className="ess-news-card-media-content" controls />
+                                            <video src={item.mediaUrl} className="ess-news-card-media-content" controls preload="none" />
                                         ) : (
-                                            <img src={item.mediaUrl} className="ess-news-card-media-content" alt={item.title} />
+                                            <img src={item.mediaUrl} className="ess-news-card-media-content" alt={item.title} loading="lazy" />
                                         )
                                     ) : (
                                         <div className="ess-news-card-no-media">No media</div>

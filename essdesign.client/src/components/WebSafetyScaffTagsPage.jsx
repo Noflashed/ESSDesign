@@ -174,7 +174,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                         <div className="module-item-sub">No photos attached.</div>
                                     ) : (
                                         <div className="module-photo-grid">
-                                            {photoUrls.map(url => <img key={url} src={url} alt="Scaff-tag" className="module-photo" />)}
+                                            {photoUrls.map(url => <img key={url} src={url} alt="Scaff-tag" className="module-photo" loading="lazy" />)}
                                         </div>
                                     )}
                                 </div>
