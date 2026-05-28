@@ -4330,7 +4330,7 @@ export const essNewsAPI = {
         const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${ESS_NEWS_BUCKET}/${path}`, {
             method: 'POST',
-            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': file.type },
+            headers: storageHeaders(true),
             body: file
         });
         if (!response.ok) {
