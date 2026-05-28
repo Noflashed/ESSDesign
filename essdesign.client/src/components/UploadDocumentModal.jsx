@@ -12,7 +12,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [users, setUsers] = useState([]);
     const [uploading, setUploading] = useState(false);
 
-    const revisionOptions = Array.from({ length: 15 }, (_, i) => {
+    const revisionOptions = Array.from({ length: 20 }, (_, i) => {
         const num = i + 1;
         return num < 10 ? `0${num}` : `${num}`;
     });

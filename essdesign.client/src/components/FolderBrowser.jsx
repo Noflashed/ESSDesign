@@ -79,7 +79,7 @@ const formatRevisionNumber = (revisionNumber) => {
     return `Revision ${String(revisionNumber).padStart(2, '0')}`;
 };
 
-const REVISION_OPTIONS = Array.from({ length: 15 }, (_, index) => {
+const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
     const revision = index + 1;
     return revision < 10 ? `0${revision}` : `${revision}`;
 });
