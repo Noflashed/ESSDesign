@@ -531,7 +531,7 @@ function App() {
             ] : []),
             ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
-    const showHeaderSearch = currentPage === 'design';
+    const showHeaderSearch = false;
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);

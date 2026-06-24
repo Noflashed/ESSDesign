@@ -830,6 +830,7 @@
     border-radius: 0;
     box-shadow: none;
     min-height: 100%;
+    height: 100%;
     width: 100%;
     overflow: hidden;
     padding: 0;
@@ -851,6 +852,7 @@
     display: flex;
     flex-direction: column;
     min-height: 100%;
+    height: 100%;
     background: var(--doc-panel);
     color: var(--doc-text);
     font-family: "Google Sans", Roboto, Arial, sans-serif;
@@ -868,7 +870,7 @@
     gap: 18px;
     padding: 28px 32px 22px;
     border-bottom: 1px solid var(--doc-border);
-    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    background: #ffffff;
 }
 
 .document-breadcrumbs {
@@ -940,6 +942,13 @@
     align-items: center;
     gap: 10px;
     margin: 0;
+    min-width: 0;
+}
+
+.document-table-toolbar {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--doc-border);
+    background: #ffffff;
 }
 
 .document-search {
@@ -973,6 +982,85 @@
     transform: translateY(-50%);
     color: #475569;
     pointer-events: none;
+}
+
+.document-search-suggestions {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid var(--doc-border);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+}
+
+.search-suggestion {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--doc-text);
+    text-align: left;
+}
+
+.search-suggestion:hover {
+    background: var(--doc-hover);
+}
+
+.search-suggestion-icon {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+}
+
+.search-suggestion-icon.folder {
+    color: #f4c542;
+}
+
+.search-suggestion-icon.document {
+    color: #dc2626;
+}
+
+.search-suggestion-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.search-suggestion-copy strong,
+.search-suggestion-copy small,
+.search-suggestion-empty {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-suggestion-copy strong {
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.search-suggestion-copy small,
+.search-suggestion-empty {
+    color: var(--doc-muted);
+    font-size: 12px;
+}
+
+.search-suggestion-empty {
+    padding: 10px 12px;
 }
 
 .toolbar-btn,
@@ -1116,6 +1204,7 @@
     grid-template-columns: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
+    align-items: stretch;
     background: #ffffff;
 }
 
@@ -1131,7 +1220,7 @@
 .list-tools {
     display: flex;
     justify-content: flex-end;
-    padding: 20px 28px 8px;
+    padding: 16px 28px 8px;
 }
 
 .sort-control {
@@ -1310,6 +1399,14 @@
     background: #ffffff;
 }
 
+.pdf-preview-card.large iframe {
+    pointer-events: none;
+    opacity: 0.72;
+    filter: grayscale(0.35) contrast(0.9);
+    transform: scale(1.02);
+    transform-origin: top center;
+}
+
 .pdf-sheet-lines {
     position: absolute;
     inset: 26px 28px 28px;
@@ -1407,7 +1504,7 @@
     white-space: nowrap;
 }
 
-.owner-avatar {
+.document-page .owner-avatar {
     width: 24px;
     height: 24px;
     display: inline-flex;
@@ -1581,6 +1678,9 @@
 
 .document-details-panel {
     min-width: 0;
+    height: 100%;
+    min-height: 0;
+    align-self: stretch;
     padding: 24px;
     border-left: 1px solid var(--doc-border);
     background: #ffffff;
@@ -1768,11 +1868,14 @@
 :root[data-theme="dark"] .document-page,
 :root[data-theme="dark"] .document-page-header,
 :root[data-theme="dark"] .document-content,
+:root[data-theme="dark"] .document-table-toolbar,
 :root[data-theme="dark"] .document-details-panel,
 :root[data-theme="dark"] .list-header,
 :root[data-theme="dark"] .item-card,
 :root[data-theme="dark"] .list-item,
 :root[data-theme="dark"] .document-search input,
+:root[data-theme="dark"] .document-search-suggestions,
+:root[data-theme="dark"] .search-suggestion,
 :root[data-theme="dark"] .toolbar-btn,
 :root[data-theme="dark"] .btn-new,
 :root[data-theme="dark"] .toolbar-icon-btn,

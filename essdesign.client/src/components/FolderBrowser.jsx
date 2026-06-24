@@ -54,20 +54,6 @@ const SearchIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
-const FilterIcon = ({ size = 16, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="4" y1="21" x2="4" y2="14"></line>
-        <line x1="4" y1="10" x2="4" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="12"></line>
-        <line x1="12" y1="8" x2="12" y2="3"></line>
-        <line x1="20" y1="21" x2="20" y2="16"></line>
-        <line x1="20" y1="12" x2="20" y2="3"></line>
-        <line x1="1" y1="14" x2="7" y2="14"></line>
-        <line x1="9" y1="8" x2="15" y2="8"></line>
-        <line x1="17" y1="16" x2="23" y2="16"></line>
-    </svg>
-);
-
 const MoreIcon = ({ size = 18, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="5" r="1"></circle>
@@ -198,6 +184,55 @@ const getDocumentSearchText = (item) => [
     getOwnerLabel(item)
 ].filter(Boolean).join(' ').toLowerCase();
 
+const isSearchResultDocument = (result) => {
+    const type = String(result?.type || '').toLowerCase();
+    return type.includes('document') || type.includes('pdf') || result?.isDocument;
+};
+
+const getSearchResultName = (result) => (
+    result?.name
+    || result?.displayName
+    || result?.essDesignIssueName
+    || result?.thirdPartyDesignName
+    || 'Untitled'
+);
+
+const getSearchResultMeta = (result) => {
+    const typeLabel = isSearchResultDocument(result) ? 'PDF' : 'Folder';
+    const path = result?.path ? ` - ${result.path}` : '';
+    return `${typeLabel}${path}`;
+};
+
+const buildSearchSuggestions = (results) => {
+    if (!Array.isArray(results)) return [];
+
+    const suggestions = [];
+
+    results.forEach(result => {
+        suggestions.push({ ...result, type: result?.type || 'folder' });
+
+        if (Array.isArray(result?.documents)) {
+            result.documents.forEach(document => {
+                suggestions.push({
+                    ...document,
+                    type: 'document',
+                    parentFolderId: document.folderId || result.id,
+                    path: result.path,
+                    name: getItemDisplayName({ ...document, isDocument: true })
+                });
+            });
+        }
+    });
+
+    const seen = new Set();
+    return suggestions.filter(item => {
+        const key = `${item.type}-${item.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
+
 const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
     const revision = index + 1;
     return revision < 10 ? `0${revision}` : `${revision}`;
@@ -274,12 +309,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [newRevisionNumber, setNewRevisionNumber] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterMode, setFilterMode] = useState('all');
+    const [searchSuggestions, setSearchSuggestions] = useState([]);
+    const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
+    const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
     const [selectedItemId, setSelectedItemId] = useState(null);
     const [detailsPanelDismissed, setDetailsPanelDismissed] = useState(false);
     const [previewPdfUrl, setPreviewPdfUrl] = useState('');
     const [previewPdfLoading, setPreviewPdfLoading] = useState(false);
     const cacheRef = useRef(new Map());
+    const searchSelectionRef = useRef(false);
 
     // Drag-and-drop state
     const draggedItemRef = useRef(null);
@@ -413,10 +451,48 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     useEffect(() => {
         setSearchQuery('');
-        setFilterMode('all');
+        setSearchSuggestions([]);
+        setShowSearchSuggestions(false);
         setSelectedItemId(null);
         setDetailsPanelDismissed(false);
     }, [currentFolder]);
+
+    useEffect(() => {
+        const query = searchQuery.trim();
+
+        if (query.length < 2) {
+            setSearchSuggestions([]);
+            setSearchSuggestionsLoading(false);
+            setShowSearchSuggestions(false);
+            return;
+        }
+
+        if (searchSelectionRef.current) {
+            searchSelectionRef.current = false;
+            setSearchSuggestionsLoading(false);
+            setShowSearchSuggestions(false);
+            return;
+        }
+
+        setShowSearchSuggestions(true);
+        setSearchSuggestionsLoading(true);
+
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                const results = await foldersAPI.search(query);
+                setSearchSuggestions(buildSearchSuggestions(results).slice(0, 8));
+            } catch (error) {
+                if (error?.name !== 'CanceledError' && error?.code !== 'ERR_CANCELED') {
+                    console.error('Search suggestions error:', error);
+                }
+                setSearchSuggestions([]);
+            } finally {
+                setSearchSuggestionsLoading(false);
+            }
+        }, 240);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [searchQuery]);
 
     useEffect(() => {
         loadCurrentFolder();
@@ -497,6 +573,33 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setCurrentFolder(folderId);
         if (onFolderChange) {
             onFolderChange(folderId);
+        }
+    };
+
+    const handleSearchSuggestionSelect = (result) => {
+        searchSelectionRef.current = true;
+        setSearchQuery(getSearchResultName(result));
+        setShowSearchSuggestions(false);
+
+        const resultId = result?.id;
+
+        if (isSearchResultDocument(result)) {
+            const localMatch = folders.find(item => item.isDocument && item.id === resultId);
+            if (localMatch) {
+                setSelectedItemId(localMatch.id);
+                setDetailsPanelDismissed(false);
+                return;
+            }
+
+            const parentFolderId = result?.parentFolderId || result?.folderId;
+            if (parentFolderId) {
+                handleFolderClick(parentFolderId);
+            }
+            return;
+        }
+
+        if (resultId) {
+            handleFolderClick(resultId);
         }
     };
 
@@ -986,8 +1089,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         const normalizedQuery = searchQuery.trim().toLowerCase();
 
         return sortedItems.filter(item => {
-            if (filterMode === 'documents' && !item.isDocument) return false;
-            if (filterMode === 'folders' && item.isDocument) return false;
             if (!normalizedQuery) return true;
 
             if (item.isDocument) {
@@ -1000,7 +1101,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 getFolderItemCount(item)
             ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
         });
-    }, [filterMode, getSortedFolders, searchQuery]);
+    }, [getSortedFolders, searchQuery]);
 
     const selectedPreviewItem = useMemo(() => {
         if (detailsPanelDismissed || visibleItems.length === 0) {
@@ -1047,7 +1148,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 const data = await foldersAPI.getDownloadUrl(selectedPreviewItem.id, preferredType);
                 if (!cancelled) {
                     const resolvedUrl = foldersAPI.resolvePublicFileUrl(data?.url || '');
-                    setPreviewPdfUrl(resolvedUrl ? `${resolvedUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '');
+                    setPreviewPdfUrl(resolvedUrl ? `${resolvedUrl}#page=2&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '');
                 }
             } catch (error) {
                 console.error('Failed to load PDF preview:', error);
@@ -1110,80 +1211,108 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         </div>
                         <ShareIcon size={18} />
                     </div>
-
-                    <div className="browser-toolbar document-toolbar">
-                        <label className="document-search">
-                            <span className="sr-only">Search documents</span>
-                            <input
-                                type="search"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search in this folder"
-                            />
-                            <SearchIcon size={18} />
-                        </label>
-                        <button
-                            type="button"
-                            className={`toolbar-btn ${filterMode !== 'all' ? 'active' : ''}`}
-                            onClick={() => setFilterMode(prev => (
-                                prev === 'all' ? 'documents' : prev === 'documents' ? 'folders' : 'all'
-                            ))}
-                            title="Toggle item filter"
-                        >
-                            <FilterIcon size={15} />
-                            {filterMode === 'all' ? 'Filter' : filterMode === 'documents' ? 'Documents' : 'Folders'}
-                        </button>
-                        <div className="document-toolbar-spacer"></div>
-                        {canManage && (
-                            <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
-                                <FolderPlusIcon size={16} /> New Folder
-                            </button>
-                        )}
-                        {canManage && (
-                            <div className={`upload-split${!currentFolder ? ' disabled' : ''}`}>
-                                <button
-                                    className="btn-upload"
-                                    onClick={() => currentFolder && setShowUploadModal(true)}
-                                    disabled={!currentFolder}
-                                    title={currentFolder ? 'Upload Document' : 'Open a folder to upload documents'}
-                                >
-                                    <UploadIcon size={16} /> Upload Document
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-upload-menu"
-                                    onClick={() => currentFolder && setShowUploadModal(true)}
-                                    disabled={!currentFolder}
-                                    title={currentFolder ? 'Upload options' : 'Open a folder to upload documents'}
-                                >
-                                    <SortArrowIcon direction="desc" />
-                                </button>
-                            </div>
-                        )}
-                        <div className="view-toggle">
-                            <button
-                                className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                                onClick={() => handleViewModeSelect('list')}
-                                title="List view"
-                            >
-                                <ListIcon size={18} />
-                            </button>
-                            <button
-                                className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                                onClick={() => handleViewModeSelect('grid')}
-                                title="Grid view"
-                            >
-                                <GridIcon size={18} />
-                            </button>
-                        </div>
-                        <button type="button" className="toolbar-icon-btn" title="Details">
-                            <InfoIcon size={18} />
-                        </button>
-                    </div>
                 </header>
 
                 <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
                     <div className="document-items-panel">
+                        <div className="document-table-toolbar">
+                            <div className="browser-toolbar document-toolbar">
+                                <label className="document-search">
+                                    <span className="sr-only">Search documents</span>
+                                    <input
+                                        type="search"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onFocus={() => {
+                                            if (searchQuery.trim().length >= 2) {
+                                                setShowSearchSuggestions(true);
+                                            }
+                                        }}
+                                        onBlur={() => window.setTimeout(() => setShowSearchSuggestions(false), 140)}
+                                        placeholder="Search in this folder"
+                                    />
+                                    <SearchIcon size={18} />
+                                    {showSearchSuggestions && (
+                                        <div className="document-search-suggestions">
+                                            {searchSuggestionsLoading ? (
+                                                <div className="search-suggestion-empty">Searching...</div>
+                                            ) : searchSuggestions.length > 0 ? (
+                                                searchSuggestions.map(result => {
+                                                    const isDocument = isSearchResultDocument(result);
+                                                    return (
+                                                        <button
+                                                            key={`${result.type}-${result.id}`}
+                                                            type="button"
+                                                            className="search-suggestion"
+                                                            onMouseDown={(event) => {
+                                                                event.preventDefault();
+                                                                handleSearchSuggestionSelect(result);
+                                                            }}
+                                                        >
+                                                            <span className={`search-suggestion-icon ${isDocument ? 'document' : 'folder'}`}>
+                                                                {isDocument ? <DocumentIcon size={18} /> : <FolderIcon size={18} />}
+                                                            </span>
+                                                            <span className="search-suggestion-copy">
+                                                                <strong>{getSearchResultName(result)}</strong>
+                                                                <small>{getSearchResultMeta(result)}</small>
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="search-suggestion-empty">No matching folders or PDFs</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </label>
+                                <div className="document-toolbar-spacer"></div>
+                                {canManage && (
+                                    <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
+                                        <FolderPlusIcon size={16} /> New Folder
+                                    </button>
+                                )}
+                                {canManage && (
+                                    <div className={`upload-split${!currentFolder ? ' disabled' : ''}`}>
+                                        <button
+                                            className="btn-upload"
+                                            onClick={() => currentFolder && setShowUploadModal(true)}
+                                            disabled={!currentFolder}
+                                            title={currentFolder ? 'Upload Document' : 'Open a folder to upload documents'}
+                                        >
+                                            <UploadIcon size={16} /> Upload Document
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-upload-menu"
+                                            onClick={() => currentFolder && setShowUploadModal(true)}
+                                            disabled={!currentFolder}
+                                            title={currentFolder ? 'Upload options' : 'Open a folder to upload documents'}
+                                        >
+                                            <SortArrowIcon direction="desc" />
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="view-toggle">
+                                    <button
+                                        className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                                        onClick={() => handleViewModeSelect('list')}
+                                        title="List view"
+                                    >
+                                        <ListIcon size={18} />
+                                    </button>
+                                    <button
+                                        className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                                        onClick={() => handleViewModeSelect('grid')}
+                                        title="Grid view"
+                                    >
+                                        <GridIcon size={18} />
+                                    </button>
+                                </div>
+                                <button type="button" className="toolbar-icon-btn" title="Details">
+                                    <InfoIcon size={18} />
+                                </button>
+                            </div>
+                        </div>
                         {loading ? (
                             <div className="loading">
                                 <div className="spinner-small"></div>
