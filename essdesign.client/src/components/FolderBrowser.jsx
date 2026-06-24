@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { foldersAPI, authAPI, usersAPI } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
@@ -47,6 +47,79 @@ const FolderPlusIcon = ({ size = 14, color = 'currentColor' }) => (
     </svg>
 );
 
+const SearchIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+);
+
+const FilterIcon = ({ size = 16, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="4" y1="21" x2="4" y2="14"></line>
+        <line x1="4" y1="10" x2="4" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12" y2="3"></line>
+        <line x1="20" y1="21" x2="20" y2="16"></line>
+        <line x1="20" y1="12" x2="20" y2="3"></line>
+        <line x1="1" y1="14" x2="7" y2="14"></line>
+        <line x1="9" y1="8" x2="15" y2="8"></line>
+        <line x1="17" y1="16" x2="23" y2="16"></line>
+    </svg>
+);
+
+const MoreIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="5" r="1"></circle>
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="12" cy="19" r="1"></circle>
+    </svg>
+);
+
+const GridIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7"></rect>
+        <rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="3" y="14" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect>
+    </svg>
+);
+
+const ListIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+    </svg>
+);
+
+const InfoIcon = ({ size = 18, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+);
+
+const ShareIcon = ({ size = 16, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <line x1="19" y1="8" x2="19" y2="14"></line>
+        <line x1="22" y1="11" x2="16" y2="11"></line>
+    </svg>
+);
+
+const CheckCircleIcon = ({ size = 13, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+    </svg>
+);
+
 const SortArrowIcon = ({ direction }) => (
     <svg className="sort-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         {direction === 'asc' ? (
@@ -78,6 +151,52 @@ const formatRevisionNumber = (revisionNumber) => {
     if (!revisionNumber) return 'Revision 00';
     return `Revision ${String(revisionNumber).padStart(2, '0')}`;
 };
+
+const formatCompactRevisionNumber = (revisionNumber) => {
+    if (!revisionNumber) return 'Rev 00';
+    return `Rev ${String(revisionNumber).padStart(2, '0')}`;
+};
+
+const getItemDisplayName = (item) => (
+    item?.isDocument
+        ? (item.essDesignIssueName || item.thirdPartyDesignName || 'Document')
+        : (item?.name || 'Folder')
+);
+
+const getOwnerLabel = (item) => (
+    item?.ownerName || (item?.userId ? `${item.userId.slice(0, 8)}...` : 'Unknown')
+);
+
+const getOwnerInitials = (item) => {
+    const label = getOwnerLabel(item);
+    const cleanLabel = label.replace('...', '').trim();
+    if (!cleanLabel) return 'UN';
+
+    const parts = cleanLabel.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+
+    return cleanLabel.slice(0, 2).toUpperCase();
+};
+
+const getFolderItemCount = (item) => {
+    const subFolderCount = Array.isArray(item?.subFolders) ? item.subFolders.length : 0;
+    const documentCount = Array.isArray(item?.documents) ? item.documents.length : (item?.documentCount || 0);
+    const totalCount = subFolderCount + documentCount;
+
+    if (totalCount === 0) return 'No items';
+    return `${totalCount} item${totalCount === 1 ? '' : 's'}`;
+};
+
+const getDocumentSearchText = (item) => [
+    getItemDisplayName(item),
+    item?.revisionNumber,
+    item?.description,
+    item?.essDesignIssueName,
+    item?.thirdPartyDesignName,
+    getOwnerLabel(item)
+].filter(Boolean).join(' ').toLowerCase();
 
 const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
     const revision = index + 1;
@@ -154,6 +273,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [editDocumentTarget, setEditDocumentTarget] = useState(null);
     const [newRevisionNumber, setNewRevisionNumber] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterMode, setFilterMode] = useState('all');
+    const [selectedItemId, setSelectedItemId] = useState(null);
+    const [detailsPanelDismissed, setDetailsPanelDismissed] = useState(false);
     const cacheRef = useRef(new Map());
 
     // Drag-and-drop state
@@ -285,6 +408,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setCurrentFolder(selectedFolderId);
         }
     }, [selectedFolderId]);
+
+    useEffect(() => {
+        setSearchQuery('');
+        setFilterMode('all');
+        setSelectedItemId(null);
+        setDetailsPanelDismissed(false);
+    }, [currentFolder]);
 
     useEffect(() => {
         loadCurrentFolder();
@@ -849,6 +979,54 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         return sorted;
     }, [folders, sortField, sortDirection]);
 
+    const visibleItems = useMemo(() => {
+        const sortedItems = getSortedFolders();
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        return sortedItems.filter(item => {
+            if (filterMode === 'documents' && !item.isDocument) return false;
+            if (filterMode === 'folders' && item.isDocument) return false;
+            if (!normalizedQuery) return true;
+
+            if (item.isDocument) {
+                return getDocumentSearchText(item).includes(normalizedQuery);
+            }
+
+            return [
+                item.name,
+                getOwnerLabel(item),
+                getFolderItemCount(item)
+            ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
+        });
+    }, [filterMode, getSortedFolders, searchQuery]);
+
+    const selectedPreviewItem = useMemo(() => {
+        if (detailsPanelDismissed || visibleItems.length === 0) {
+            return null;
+        }
+
+        return visibleItems.find(item => item.id === selectedItemId)
+            || visibleItems.find(item => item.isDocument)
+            || visibleItems[0];
+    }, [detailsPanelDismissed, selectedItemId, visibleItems]);
+
+    const folderSummary = useMemo(() => ({
+        folderCount: visibleItems.filter(item => !item.isDocument).length,
+        documentCount: visibleItems.filter(item => item.isDocument).length
+    }), [visibleItems]);
+
+    const latestRevisionNumber = useMemo(() => (
+        visibleItems.reduce((latest, item) => {
+            if (!item.isDocument) return latest;
+            const revision = Number(item.revisionNumber);
+            return Number.isFinite(revision) ? Math.max(latest, revision) : latest;
+        }, 0)
+    ), [visibleItems]);
+
+    const currentFolderLabel = breadcrumbs.length > 0
+        ? breadcrumbs[breadcrumbs.length - 1].name
+        : 'Design Documents';
+
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
         document.addEventListener('click', handleClick);
@@ -857,263 +1035,540 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     return (
         <div className="folder-browser">
-            <div className="browser-toolbar">
-                {canManage && (
-                    <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
-                        + New Folder
-                    </button>
-                )}
-                {canManage && currentFolder && (
-                    <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
-                        <UploadIcon size={16} /> Upload Document
-                    </button>
-                )}
-                <div className="view-toggle">
-                    <button
-                        className="view-btn"
-                        onClick={() => handleBreadcrumbClick(null)}
-                        title="Home"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
-                            <path d="M9 21V12h6v9" />
-                        </svg>
-                    </button>
-                    <button
-                        className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                        onClick={() => handleViewModeSelect('grid')}
-                        title="Grid view"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                    </button>
-                    <button
-                        className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                        onClick={() => handleViewModeSelect('list')}
-                        title="List view"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="8" y1="6" x2="21" y2="6"></line>
-                            <line x1="8" y1="12" x2="21" y2="12"></line>
-                            <line x1="8" y1="18" x2="21" y2="18"></line>
-                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <div className="breadcrumbs">
-                <span className="breadcrumb" onClick={() => handleBreadcrumbClick(null)}>
-                    Home
-                </span>
-                {breadcrumbs.map((crumb) => (
-                    <React.Fragment key={crumb.id}>
-                        <span className="breadcrumb-sep">/</span>
-                        <span className="breadcrumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
-                            {crumb.name}
+            <section className="document-page">
+                <header className="document-page-header">
+                    <div className="breadcrumbs document-breadcrumbs" aria-label="Folder path">
+                        <button
+                            type="button"
+                            className="breadcrumb-home"
+                            onClick={() => handleBreadcrumbClick(null)}
+                            title="Home"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+                                <path d="M9 21V12h6v9" />
+                            </svg>
+                        </button>
+                        <span className="breadcrumb" onClick={() => handleBreadcrumbClick(null)}>
+                            Home
                         </span>
-                    </React.Fragment>
-                ))}
-            </div>
-
-            {loading ? (
-                <div className="loading">
-                    <div className="spinner-small"></div>
-                    Loading...
-                </div>
-            ) : (
-                <>
-                    {viewMode === 'list' && (
-                        <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
-                            <div className="list-header-icon"></div>
-                            <div
-                                className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
-                                onClick={() => handleSort('name')}
-                                data-col-key="name"
-                            >
-                                <span>Name</span>
-                                {sortField === 'name' && (
-                                    <SortArrowIcon direction={sortDirection} />
-                                )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
-                            </div>
-                            {showRevisionColumn && (
-                                <div
-                                    className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
-                                    onClick={() => handleSort('revision')}
-                                    data-col-key="revision"
-                                >
-                                    <span>Revision</span>
-                                    {sortField === 'revision' && (
-                                        <SortArrowIcon direction={sortDirection} />
-                                    )}
-                                    <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
-                                </div>
-                            )}
-                            <div
-                                className={`list-header-cell sortable ${sortField === 'owner' ? 'active' : ''}`}
-                                onClick={() => handleSort('owner')}
-                                data-col-key="owner"
-                            >
-                                <span>Owner</span>
-                                {sortField === 'owner' && (
-                                    <SortArrowIcon direction={sortDirection} />
-                                )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 2 : 1)} onDoubleClick={handleResetColWidths} />
-                            </div>
-                            <div
-                                className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
-                                onClick={() => handleSort('modified')}
-                                data-col-key="modified"
-                            >
-                                <span>Date Modified</span>
-                                {sortField === 'modified' && (
-                                    <SortArrowIcon direction={sortDirection} />
-                                )}
-                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 2)} onDoubleClick={handleResetColWidths} />
-                            </div>
-                            <div
-                                className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
-                                onClick={() => handleSort('size')}
-                                data-col-key="size"
-                            >
-                                <span>File Size</span>
-                                {sortField === 'size' && (
-                                    <SortArrowIcon direction={sortDirection} />
-                                )}
-                            </div>
-                            <div className="list-header-actions"></div>
-                        </div>
-                    )}
-                    <div
-                        className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
-                        onContextMenu={canManage ? handleEmptySpaceContextMenu : undefined}
-                    >
-                        {getSortedFolders().map(item => (
-                        viewMode === 'grid' ? (
-                            <div
-                                key={item.id}
-                                className={`item-card ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
-                                draggable={canManage && !!item.isDocument}
-                                onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
-                                onDragEnd={item.isDocument ? handleDragEnd : undefined}
-                                onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
-                                onDragLeave={!item.isDocument ? handleDragLeave : undefined}
-                                onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
-                                onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
-                            >
-                                <div className="item-icon">
-                                    {item.isDocument ? <DocumentIcon size={32} /> : <FolderIcon size={32} />}
-                                </div>
-                                <div className="item-name">
-                                    {item.isDocument
-                                        ? (item.essDesignIssueName || item.thirdPartyDesignName || formatRevisionNumber(item.revisionNumber))
-                                        : item.name
-                                    }
-                                </div>
-                                {item.isDocument && (
-                                    <div className="document-files">
-                                        {item.essDesignIssuePath && (
-                                            <button
-                                                onClick={() => handleViewPDF(item, 'ess')}
-                                                className="file-btn"
-                                            >
-                                                <FileTextIcon size={14} /> ESS Design
-                                            </button>
-                                        )}
-                                        {item.thirdPartyDesignPath && (
-                                            <button
-                                                onClick={() => handleViewPDF(item, 'thirdparty')}
-                                                className="file-btn"
-                                            >
-                                                <FileTextIcon size={14} /> Third-Party
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div
-                                key={item.id}
-                                className={`list-item ${item.isDocument ? 'document' : 'folder'}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
-                                style={{ gridTemplateColumns }}
-                                draggable={canManage && !!item.isDocument}
-                                onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
-                                onDragEnd={item.isDocument ? handleDragEnd : undefined}
-                                onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
-                                onDragLeave={!item.isDocument ? handleDragLeave : undefined}
-                                onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
-                                onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
-                            >
-                                <div className="list-item-icon">
-                                    {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
-                                </div>
-                                <div className="list-item-name">
-                                    {item.isDocument
-                                        ? (item.essDesignIssueName || item.thirdPartyDesignName || 'Document')
-                                        : (item.name || 'Folder')
-                                    }
-                                </div>
-                                {showRevisionColumn && (
-                                    <div className="list-item-revision">
-                                        {item.isDocument ? formatRevisionNumber(item.revisionNumber) : ''}
-                                    </div>
-                                )}
-                                <div className="list-item-owner">
-                                    {item.ownerName || (item.userId ? item.userId.slice(0, 8) + '...' : 'Unknown')}
-                                </div>
-                                <div className="list-item-modified">
-                                    {formatDate(item.updatedAt || item.createdAt)}
-                                </div>
-                                <div className="list-item-size">
-                                    {formatFileSize(item.isDocument ? item.totalFileSize : item.fileSize)}
-                                </div>
-                                <div className="list-item-actions">
-                                    {item.isDocument ? (
-                                        <>
-                                            {item.essDesignIssuePath ? (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleViewPDF(item, 'ess');
-                                                    }}
-                                                    className="file-btn-small"
-                                                >
-                                                    ESS Design
-                                                </button>
-                                            ) : (
-                                                <div className="file-btn-placeholder"></div>
-                                            )}
-                                            {item.thirdPartyDesignPath ? (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleViewPDF(item, 'thirdparty');
-                                                    }}
-                                                    className="file-btn-small"
-                                                >
-                                                    Third-Party Design
-                                                </button>
-                                            ) : (
-                                                <div className="file-btn-placeholder"></div>
-                                            )}
-                                        </>
-                                    ) : null}
-                                </div>
-                            </div>
-                        )
+                        {breadcrumbs.map((crumb) => (
+                            <React.Fragment key={crumb.id}>
+                                <span className="breadcrumb-sep">/</span>
+                                <span className="breadcrumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
+                                    {crumb.name}
+                                </span>
+                            </React.Fragment>
                         ))}
                     </div>
-                </>
-            )}
+
+                    <div className="document-title-row">
+                        <div>
+                            <h2>Design Documents</h2>
+                            <p>
+                                {currentFolderLabel}
+                                <span>{folderSummary.folderCount} folder{folderSummary.folderCount === 1 ? '' : 's'}</span>
+                                <span>{folderSummary.documentCount} document{folderSummary.documentCount === 1 ? '' : 's'}</span>
+                            </p>
+                        </div>
+                        <ShareIcon size={18} />
+                    </div>
+
+                    <div className="browser-toolbar document-toolbar">
+                        <label className="document-search">
+                            <span className="sr-only">Search documents</span>
+                            <input
+                                type="search"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search in this folder"
+                            />
+                            <SearchIcon size={18} />
+                        </label>
+                        <button
+                            type="button"
+                            className={`toolbar-btn ${filterMode !== 'all' ? 'active' : ''}`}
+                            onClick={() => setFilterMode(prev => (
+                                prev === 'all' ? 'documents' : prev === 'documents' ? 'folders' : 'all'
+                            ))}
+                            title="Toggle item filter"
+                        >
+                            <FilterIcon size={15} />
+                            {filterMode === 'all' ? 'Filter' : filterMode === 'documents' ? 'Documents' : 'Folders'}
+                        </button>
+                        <div className="document-toolbar-spacer"></div>
+                        {canManage && (
+                            <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
+                                <FolderPlusIcon size={16} /> New Folder
+                            </button>
+                        )}
+                        {canManage && currentFolder && (
+                            <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
+                                <UploadIcon size={16} /> Upload Document
+                            </button>
+                        )}
+                        <div className="view-toggle">
+                            <button
+                                className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                                onClick={() => handleViewModeSelect('list')}
+                                title="List view"
+                            >
+                                <ListIcon size={18} />
+                            </button>
+                            <button
+                                className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                                onClick={() => handleViewModeSelect('grid')}
+                                title="Grid view"
+                            >
+                                <GridIcon size={18} />
+                            </button>
+                        </div>
+                        <button type="button" className="toolbar-icon-btn" title="Details">
+                            <InfoIcon size={18} />
+                        </button>
+                    </div>
+                </header>
+
+                <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
+                    <div className="document-items-panel">
+                        {loading ? (
+                            <div className="loading">
+                                <div className="spinner-small"></div>
+                                Loading...
+                            </div>
+                        ) : (
+                            <>
+                                {viewMode === 'list' && (
+                                    <div className="list-tools">
+                                        <button
+                                            type="button"
+                                            className="sort-control"
+                                            onClick={() => handleSort('modified')}
+                                        >
+                                            Sort by: {sortField === 'modified' ? 'Modified' : sortField.charAt(0).toUpperCase() + sortField.slice(1)}
+                                            <SortArrowIcon direction={sortDirection} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {viewMode === 'list' && (
+                                    <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
+                                        <div className="list-header-icon"></div>
+                                        <div
+                                            className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
+                                            onClick={() => handleSort('name')}
+                                            data-col-key="name"
+                                        >
+                                            <span>Name</span>
+                                            {sortField === 'name' && (
+                                                <SortArrowIcon direction={sortDirection} />
+                                            )}
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
+                                        </div>
+                                        {showRevisionColumn && (
+                                            <div
+                                                className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
+                                                onClick={() => handleSort('revision')}
+                                                data-col-key="revision"
+                                            >
+                                                <span>Revision</span>
+                                                {sortField === 'revision' && (
+                                                    <SortArrowIcon direction={sortDirection} />
+                                                )}
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
+                                            </div>
+                                        )}
+                                        <div
+                                            className={`list-header-cell sortable ${sortField === 'owner' ? 'active' : ''}`}
+                                            onClick={() => handleSort('owner')}
+                                            data-col-key="owner"
+                                        >
+                                            <span>Owner</span>
+                                            {sortField === 'owner' && (
+                                                <SortArrowIcon direction={sortDirection} />
+                                            )}
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 2 : 1)} onDoubleClick={handleResetColWidths} />
+                                        </div>
+                                        <div
+                                            className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
+                                            onClick={() => handleSort('modified')}
+                                            data-col-key="modified"
+                                        >
+                                            <span>Modified</span>
+                                            {sortField === 'modified' && (
+                                                <SortArrowIcon direction={sortDirection} />
+                                            )}
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 2)} onDoubleClick={handleResetColWidths} />
+                                        </div>
+                                        <div
+                                            className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
+                                            onClick={() => handleSort('size')}
+                                            data-col-key="size"
+                                        >
+                                            <span>Size</span>
+                                            {sortField === 'size' && (
+                                                <SortArrowIcon direction={sortDirection} />
+                                            )}
+                                        </div>
+                                        <div className="list-header-actions">Files</div>
+                                    </div>
+                                )}
+
+                                <div
+                                    className={viewMode === 'grid' ? 'items-grid' : 'items-list'}
+                                    onContextMenu={canManage ? handleEmptySpaceContextMenu : undefined}
+                                >
+                                    {visibleItems.length === 0 ? (
+                                        <div className="documents-empty-state">
+                                            <SearchIcon size={24} />
+                                            <strong>No documents found</strong>
+                                            <span>Try a different search term or open another folder.</span>
+                                        </div>
+                                    ) : (
+                                        visibleItems.map(item => {
+                                            const isSelected = selectedPreviewItem?.id === item.id;
+                                            const isLatest = item.isDocument && Number(item.revisionNumber) === latestRevisionNumber && latestRevisionNumber > 0;
+
+                                            return viewMode === 'grid' ? (
+                                                <div
+                                                    key={item.id}
+                                                    className={`item-card ${item.isDocument ? 'document' : 'folder'}${isSelected ? ' selected' : ''}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
+                                                    draggable={canManage && !!item.isDocument}
+                                                    onClick={() => {
+                                                        setSelectedItemId(item.id);
+                                                        setDetailsPanelDismissed(false);
+                                                    }}
+                                                    onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
+                                                    onDragEnd={item.isDocument ? handleDragEnd : undefined}
+                                                    onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                                    onDragLeave={!item.isDocument ? handleDragLeave : undefined}
+                                                    onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
+                                                    onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
+                                                    onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
+                                                >
+                                                    {isSelected && <span className="card-selected-mark"><CheckCircleIcon size={12} /></span>}
+                                                    {canManage && (
+                                                        <button
+                                                            type="button"
+                                                            className="card-menu-btn"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                setContextMenu({ x: rect.left, y: rect.bottom + 6, item });
+                                                            }}
+                                                            title="More actions"
+                                                        >
+                                                            <MoreIcon size={16} />
+                                                        </button>
+                                                    )}
+
+                                                    {item.isDocument ? (
+                                                        <div className="pdf-preview-card" aria-hidden="true">
+                                                            <div className="pdf-sheet-lines">
+                                                                <span></span>
+                                                                <span></span>
+                                                                <span></span>
+                                                                <span></span>
+                                                            </div>
+                                                            <span className="pdf-badge">PDF</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="folder-preview-card" aria-hidden="true">
+                                                            <FolderIcon size={86} />
+                                                        </div>
+                                                    )}
+
+                                                    <div className="item-card-body">
+                                                        <div className="item-name">
+                                                            {getItemDisplayName(item)}
+                                                        </div>
+                                                        {item.isDocument ? (
+                                                            <>
+                                                                <div className="document-card-badges">
+                                                                    <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
+                                                                    {isLatest && <span className="status-chip latest">Latest</span>}
+                                                                    {item.essDesignIssuePath && item.thirdPartyDesignPath && <span className="status-chip complete">Complete</span>}
+                                                                </div>
+                                                                <div className="document-card-meta">
+                                                                    <span className="owner-avatar">{getOwnerInitials(item)}</span>
+                                                                    <span>{getOwnerLabel(item)}</span>
+                                                                    <span>{formatDate(item.updatedAt || item.createdAt)}</span>
+                                                                </div>
+                                                                <div className="document-card-size">
+                                                                    {formatFileSize(item.totalFileSize)}
+                                                                </div>
+                                                                <div className="document-files">
+                                                                    {item.essDesignIssuePath && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleViewPDF(item, 'ess');
+                                                                            }}
+                                                                            className="file-btn"
+                                                                        >
+                                                                            <FileTextIcon size={13} /> ESS Design
+                                                                        </button>
+                                                                    )}
+                                                                    {item.thirdPartyDesignPath && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleViewPDF(item, 'thirdparty');
+                                                                            }}
+                                                                            className="file-btn"
+                                                                        >
+                                                                            <FileTextIcon size={13} /> Third-Party
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="folder-card-meta">
+                                                                <span>{getFolderItemCount(item)}</span>
+                                                                <span>Modified {formatDate(item.updatedAt || item.createdAt)}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    key={item.id}
+                                                    className={`list-item ${item.isDocument ? 'document' : 'folder'}${isSelected ? ' selected' : ''}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
+                                                    style={{ gridTemplateColumns }}
+                                                    draggable={canManage && !!item.isDocument}
+                                                    onClick={() => {
+                                                        setSelectedItemId(item.id);
+                                                        setDetailsPanelDismissed(false);
+                                                    }}
+                                                    onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
+                                                    onDragEnd={item.isDocument ? handleDragEnd : undefined}
+                                                    onDragOver={canManage && !item.isDocument ? (e) => handleDragOver(e, item) : undefined}
+                                                    onDragLeave={!item.isDocument ? handleDragLeave : undefined}
+                                                    onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
+                                                    onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
+                                                    onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
+                                                >
+                                                    <div className="list-item-icon">
+                                                        <span className={`row-select-mark${isSelected ? ' selected' : ''}`}>
+                                                            {isSelected && <CheckCircleIcon size={11} />}
+                                                        </span>
+                                                    </div>
+                                                    <div className="list-item-name">
+                                                        {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
+                                                        <span>{getItemDisplayName(item)}</span>
+                                                    </div>
+                                                    {showRevisionColumn && (
+                                                        <div className="list-item-revision">
+                                                            {item.isDocument ? (
+                                                                <>
+                                                                    <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
+                                                                    {isLatest && <span className="status-chip latest">Latest</span>}
+                                                                </>
+                                                            ) : '-'}
+                                                        </div>
+                                                    )}
+                                                    <div className="list-item-owner">
+                                                        <span className="owner-avatar">{getOwnerInitials(item)}</span>
+                                                    </div>
+                                                    <div className="list-item-modified">
+                                                        {formatDate(item.updatedAt || item.createdAt)}
+                                                    </div>
+                                                    <div className="list-item-size">
+                                                        {formatFileSize(item.isDocument ? item.totalFileSize : item.fileSize)}
+                                                    </div>
+                                                    <div className="list-item-actions">
+                                                        {item.isDocument ? (
+                                                            <>
+                                                                {item.essDesignIssuePath ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleViewPDF(item, 'ess');
+                                                                        }}
+                                                                        className="file-btn-small"
+                                                                    >
+                                                                        ESS Design <CheckCircleIcon />
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="file-btn-placeholder"></div>
+                                                                )}
+                                                                {item.thirdPartyDesignPath ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleViewPDF(item, 'thirdparty');
+                                                                        }}
+                                                                        className="file-btn-small"
+                                                                    >
+                                                                        Third-Party <CheckCircleIcon />
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="file-btn-placeholder"></div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="folder-file-count">{getFolderItemCount(item)}</span>
+                                                        )}
+                                                        {canManage && (
+                                                            <button
+                                                                type="button"
+                                                                className="row-menu-btn"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                    setContextMenu({ x: rect.left, y: rect.bottom + 6, item });
+                                                                }}
+                                                                title="More actions"
+                                                            >
+                                                                <MoreIcon size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {selectedPreviewItem && (
+                        <aside className="document-details-panel" aria-label="Selected item details">
+                            <div className="details-panel-header">
+                                <div>
+                                    <h3>{getItemDisplayName(selectedPreviewItem)}</h3>
+                                    <p>
+                                        {selectedPreviewItem.isDocument
+                                            ? `${formatCompactRevisionNumber(selectedPreviewItem.revisionNumber)} - Modified ${formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}`
+                                            : `${getFolderItemCount(selectedPreviewItem)} - Modified ${formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}`}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="details-close-btn"
+                                    onClick={() => setDetailsPanelDismissed(true)}
+                                    title="Close details"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+
+                            {selectedPreviewItem.isDocument ? (
+                                <div className="details-preview pdf-preview-card large" aria-hidden="true">
+                                    <div className="pdf-sheet-lines">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </div>
+                                    <span className="pdf-badge">PDF</span>
+                                </div>
+                            ) : (
+                                <div className="details-preview folder-preview-card large" aria-hidden="true">
+                                    <FolderIcon size={110} />
+                                </div>
+                            )}
+
+                            <div className="details-tabs">
+                                <button type="button" className="active">Details</button>
+                                <button type="button">Activity</button>
+                            </div>
+
+                            <dl className="details-list">
+                                {selectedPreviewItem.isDocument && (
+                                    <>
+                                        <div>
+                                            <dt>Revision</dt>
+                                            <dd>
+                                                <span className="revision-chip">{formatCompactRevisionNumber(selectedPreviewItem.revisionNumber)}</span>
+                                                {Number(selectedPreviewItem.revisionNumber) === latestRevisionNumber && latestRevisionNumber > 0 && (
+                                                    <span className="status-chip latest">Latest</span>
+                                                )}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>File Size</dt>
+                                            <dd>{formatFileSize(selectedPreviewItem.totalFileSize)}</dd>
+                                        </div>
+                                    </>
+                                )}
+                                <div>
+                                    <dt>Owner</dt>
+                                    <dd><span className="owner-avatar">{getOwnerInitials(selectedPreviewItem)}</span>{getOwnerLabel(selectedPreviewItem)}</dd>
+                                </div>
+                                <div>
+                                    <dt>Modified</dt>
+                                    <dd>{formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}</dd>
+                                </div>
+                                <div>
+                                    <dt>Folder</dt>
+                                    <dd>{breadcrumbs.length > 0 ? breadcrumbs.map(crumb => crumb.name).join(' / ') : 'Home'}</dd>
+                                </div>
+                            </dl>
+
+                            {selectedPreviewItem.isDocument && (
+                                <>
+                                    <div className="details-section">
+                                        <h4>Files</h4>
+                                        <div className="details-file-list">
+                                            {selectedPreviewItem.essDesignIssuePath && (
+                                                <button type="button" onClick={() => handleViewPDF(selectedPreviewItem, 'ess')}>
+                                                    <FileTextIcon size={14} /> ESS Design <CheckCircleIcon />
+                                                </button>
+                                            )}
+                                            {selectedPreviewItem.thirdPartyDesignPath && (
+                                                <button type="button" onClick={() => handleViewPDF(selectedPreviewItem, 'thirdparty')}>
+                                                    <FileTextIcon size={14} /> Third-Party <CheckCircleIcon />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="details-section">
+                                        <h4>Change Notes</h4>
+                                        <p className="change-notes">
+                                            {selectedPreviewItem.description || 'No change notes have been added for this revision.'}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+
+                            {canManage && (
+                                <div className="details-actions">
+                                    <button type="button" className="details-primary-action" onClick={() => handleOpenShareModal(selectedPreviewItem)}>
+                                        <ShareIcon size={16} /> Share
+                                    </button>
+                                    {selectedPreviewItem.isDocument && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setReplaceDocumentTarget(selectedPreviewItem);
+                                                    setShowReplaceDocumentModal(true);
+                                                }}
+                                            >
+                                                <UploadIcon size={16} /> Replace PDF
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setEditDocumentTarget(selectedPreviewItem);
+                                                    setNewRevisionNumber(selectedPreviewItem.revisionNumber);
+                                                    setShowEditDocumentModal(true);
+                                                }}
+                                            >
+                                                <FileTextIcon size={16} /> Change Revision
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </aside>
+                    )}
+                </div>
+            </section>
 
             {canManage && contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
