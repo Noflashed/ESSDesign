@@ -806,6 +806,11 @@
 }
 
 /* Professional document library surface */
+.module-page:has(.folder-browser) {
+    height: 100%;
+    padding: 0;
+}
+
 .folder-browser {
     --doc-primary: #0b57d0;
     --doc-primary-hover: #0848af;
@@ -821,10 +826,11 @@
     --doc-green: #15803d;
     --doc-green-bg: #e9f7ef;
     background: var(--doc-panel);
-    border: 1px solid var(--doc-border);
-    border-radius: 10px;
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-    min-height: calc(100vh - 48px);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    min-height: 100%;
+    width: 100%;
     overflow: hidden;
     padding: 0;
 }
@@ -844,15 +850,23 @@
 .document-page {
     display: flex;
     flex-direction: column;
-    min-height: calc(100vh - 50px);
+    min-height: 100%;
     background: var(--doc-panel);
     color: var(--doc-text);
+    font-family: "Google Sans", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+}
+
+.document-page button,
+.document-page input {
+    font-family: inherit;
 }
 
 .document-page-header {
     display: grid;
     gap: 18px;
-    padding: 24px 28px 22px;
+    padding: 28px 32px 22px;
     border-bottom: 1px solid var(--doc-border);
     background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
@@ -903,25 +917,18 @@
 .document-title-row h2 {
     margin: 0;
     color: var(--doc-text);
-    font-size: 28px;
-    font-weight: 720;
+    font-size: 30px;
+    font-weight: 600;
     letter-spacing: 0;
     line-height: 1.12;
 }
 
 .document-title-row p {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    margin: 8px 0 0;
+    margin: 4px 0 0;
     color: var(--doc-muted);
-    font-size: 13px;
-}
-
-.document-title-row p span {
-    padding-left: 10px;
-    border-left: 1px solid var(--doc-border);
+    font-size: 0;
+    height: 0;
+    overflow: hidden;
 }
 
 .document-title-row > svg {
@@ -946,7 +953,7 @@
     height: 44px;
     padding: 0 44px 0 14px;
     border: 1px solid var(--doc-border);
-    border-radius: 8px;
+    border-radius: 6px;
     background: #ffffff;
     color: var(--doc-text);
     font-size: 14px;
@@ -970,7 +977,6 @@
 
 .toolbar-btn,
 .btn-new,
-.btn-upload,
 .toolbar-icon-btn,
 .sort-control {
     height: 44px;
@@ -980,11 +986,11 @@
     gap: 9px;
     padding: 0 16px;
     border: 1px solid var(--doc-border);
-    border-radius: 8px;
+    border-radius: 6px;
     background: #ffffff;
     color: var(--doc-text);
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 500;
     line-height: 1;
     white-space: nowrap;
     transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
@@ -1004,16 +1010,67 @@
     color: var(--doc-primary);
 }
 
-.btn-upload {
-    border-color: var(--doc-primary);
-    background: var(--doc-primary);
-    color: #ffffff;
+.upload-split {
+    display: inline-flex;
+    height: 44px;
+    border-radius: 6px;
     box-shadow: 0 8px 18px rgba(11, 87, 208, 0.18);
 }
 
-.btn-upload:hover {
+.upload-split.disabled {
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+.btn-upload {
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-width: 158px;
+    padding: 0 18px;
+    border-color: var(--doc-primary);
+    border-width: 1px;
+    border-style: solid;
+    border-right-color: rgba(255, 255, 255, 0.26);
+    border-radius: 6px 0 0 6px;
+    background: var(--doc-primary);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.btn-upload-menu {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border-color: var(--doc-primary-hover);
+    border-width: 1px;
+    border-style: solid;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    background: var(--doc-primary);
+    color: #ffffff;
+}
+
+.btn-upload-menu .sort-arrow {
+    width: 10px;
+    height: 10px;
+}
+
+.btn-upload:hover,
+.btn-upload-menu:hover {
     background: var(--doc-primary-hover);
+}
+
+.btn-upload:disabled,
+.btn-upload-menu:disabled {
+    cursor: not-allowed;
 }
 
 .document-toolbar-spacer {
@@ -1025,7 +1082,7 @@
     gap: 2px;
     padding: 3px;
     border: 1px solid var(--doc-border);
-    border-radius: 8px;
+    border-radius: 6px;
     background: #ffffff;
 }
 
@@ -1033,7 +1090,7 @@
     width: 38px;
     height: 36px;
     padding: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     color: #475569;
 }
 
@@ -1212,6 +1269,7 @@
 
 .folder-preview-card {
     background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #6b7280;
 }
 
 .folder-preview-card svg {
@@ -1236,6 +1294,20 @@
         linear-gradient(35deg, transparent 45%, rgba(100, 116, 139, 0.34) 46%, rgba(100, 116, 139, 0.34) 48%, transparent 49%),
         linear-gradient(145deg, transparent 42%, rgba(100, 116, 139, 0.22) 43%, rgba(100, 116, 139, 0.22) 45%, transparent 46%);
     opacity: 0.7;
+}
+
+.pdf-preview-card:has(iframe)::before,
+.pdf-preview-card:has(iframe) .pdf-badge {
+    display: none;
+}
+
+.pdf-preview-card iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #ffffff;
 }
 
 .pdf-sheet-lines {
@@ -1274,9 +1346,14 @@
     display: block;
     color: var(--doc-text);
     font-size: 14px;
-    font-weight: 720;
+    font-weight: 600;
     line-height: 1.35;
     word-break: break-word;
+}
+
+.item-card.folder .item-name,
+.list-item.folder .list-item-name span {
+    text-transform: capitalize;
 }
 
 .document-card-badges,
@@ -1398,7 +1475,7 @@
 }
 
 .list-item {
-    min-height: 58px;
+    min-height: 56px;
     align-items: center;
     padding: 0 12px;
     border: none;
@@ -1442,11 +1519,19 @@
     gap: 10px;
     color: var(--doc-text);
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 500;
 }
 
 .list-item-name svg {
     flex: 0 0 auto;
+}
+
+.list-item.folder .list-item-name svg {
+    color: #f4c542;
+}
+
+.list-item.document .list-item-name svg {
+    color: #dc2626;
 }
 
 .list-item-revision,
@@ -1540,6 +1625,20 @@
 .pdf-preview-card.large,
 .folder-preview-card.large {
     height: 176px;
+}
+
+.pdf-preview-loading {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    z-index: 2;
 }
 
 .details-tabs {

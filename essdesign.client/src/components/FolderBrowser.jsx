@@ -9,7 +9,7 @@ import './FolderBrowser.css';
 // Professional SVG Icons (Google Drive style)
 const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill="#5F6368" stroke="#5F6368" strokeWidth="0.5"/>
+        <path d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z" fill={color} stroke={color} strokeWidth="0.5"/>
     </svg>
 );
 
@@ -277,6 +277,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [filterMode, setFilterMode] = useState('all');
     const [selectedItemId, setSelectedItemId] = useState(null);
     const [detailsPanelDismissed, setDetailsPanelDismissed] = useState(false);
+    const [previewPdfUrl, setPreviewPdfUrl] = useState('');
+    const [previewPdfLoading, setPreviewPdfLoading] = useState(false);
     const cacheRef = useRef(new Map());
 
     // Drag-and-drop state
@@ -1010,11 +1012,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             || visibleItems[0];
     }, [detailsPanelDismissed, selectedItemId, visibleItems]);
 
-    const folderSummary = useMemo(() => ({
-        folderCount: visibleItems.filter(item => !item.isDocument).length,
-        documentCount: visibleItems.filter(item => item.isDocument).length
-    }), [visibleItems]);
-
     const latestRevisionNumber = useMemo(() => (
         visibleItems.reduce((latest, item) => {
             if (!item.isDocument) return latest;
@@ -1026,6 +1023,50 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const currentFolderLabel = breadcrumbs.length > 0
         ? breadcrumbs[breadcrumbs.length - 1].name
         : 'Design Documents';
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadPreviewUrl = async () => {
+            if (!selectedPreviewItem?.isDocument) {
+                setPreviewPdfUrl('');
+                setPreviewPdfLoading(false);
+                return;
+            }
+
+            const preferredType = selectedPreviewItem.essDesignIssuePath ? 'ess' : 'thirdparty';
+            if (!selectedPreviewItem.essDesignIssuePath && !selectedPreviewItem.thirdPartyDesignPath) {
+                setPreviewPdfUrl('');
+                setPreviewPdfLoading(false);
+                return;
+            }
+
+            setPreviewPdfLoading(true);
+
+            try {
+                const data = await foldersAPI.getDownloadUrl(selectedPreviewItem.id, preferredType);
+                if (!cancelled) {
+                    const resolvedUrl = foldersAPI.resolvePublicFileUrl(data?.url || '');
+                    setPreviewPdfUrl(resolvedUrl ? `${resolvedUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '');
+                }
+            } catch (error) {
+                console.error('Failed to load PDF preview:', error);
+                if (!cancelled) {
+                    setPreviewPdfUrl('');
+                }
+            } finally {
+                if (!cancelled) {
+                    setPreviewPdfLoading(false);
+                }
+            }
+        };
+
+        loadPreviewUrl();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedPreviewItem]);
 
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
@@ -1065,11 +1106,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     <div className="document-title-row">
                         <div>
                             <h2>Design Documents</h2>
-                            <p>
-                                {currentFolderLabel}
-                                <span>{folderSummary.folderCount} folder{folderSummary.folderCount === 1 ? '' : 's'}</span>
-                                <span>{folderSummary.documentCount} document{folderSummary.documentCount === 1 ? '' : 's'}</span>
-                            </p>
+                            <p>{currentFolderLabel}</p>
                         </div>
                         <ShareIcon size={18} />
                     </div>
@@ -1102,10 +1139,26 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 <FolderPlusIcon size={16} /> New Folder
                             </button>
                         )}
-                        {canManage && currentFolder && (
-                            <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
-                                <UploadIcon size={16} /> Upload Document
-                            </button>
+                        {canManage && (
+                            <div className={`upload-split${!currentFolder ? ' disabled' : ''}`}>
+                                <button
+                                    className="btn-upload"
+                                    onClick={() => currentFolder && setShowUploadModal(true)}
+                                    disabled={!currentFolder}
+                                    title={currentFolder ? 'Upload Document' : 'Open a folder to upload documents'}
+                                >
+                                    <UploadIcon size={16} /> Upload Document
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-upload-menu"
+                                    onClick={() => currentFolder && setShowUploadModal(true)}
+                                    disabled={!currentFolder}
+                                    title={currentFolder ? 'Upload options' : 'Open a folder to upload documents'}
+                                >
+                                    <SortArrowIcon direction="desc" />
+                                </button>
+                            </div>
                         )}
                         <div className="view-toggle">
                             <button
@@ -1455,15 +1508,26 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             </div>
 
                             {selectedPreviewItem.isDocument ? (
-                                <div className="details-preview pdf-preview-card large" aria-hidden="true">
-                                    <div className="pdf-sheet-lines">
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
-                                    </div>
-                                    <span className="pdf-badge">PDF</span>
+                                <div className="details-preview pdf-preview-card large">
+                                    {previewPdfUrl ? (
+                                        <iframe
+                                            src={previewPdfUrl}
+                                            title={`${getItemDisplayName(selectedPreviewItem)} preview`}
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <>
+                                            <div className="pdf-sheet-lines">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                            <span className="pdf-badge">PDF</span>
+                                            {previewPdfLoading && <span className="pdf-preview-loading">Loading preview...</span>}
+                                        </>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="details-preview folder-preview-card large" aria-hidden="true">
