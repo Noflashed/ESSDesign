@@ -2446,7 +2446,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
   const [lastRefreshLabel, setLastRefreshLabel] = useState(() => formatLastRefreshTime());
   const [error, setError] = useState('');
   const [showPendingPanel, setShowPendingPanel] = useState(true);
-  const [timelineScaleMode, setTimelineScaleMode] = useState('standard');
+  const [timelineScaleMode, setTimelineScaleMode] = useState('detailed');
   const [snapToTimeMarks, setSnapToTimeMarks] = useState(() => {
     const saved = localStorage.getItem(`${SNAP_PREF_KEY}:${user?.id || user?.role || 'anon'}`);
     return saved === 'true';
