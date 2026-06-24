@@ -167,12 +167,24 @@ const getOwnerInitials = (item) => {
 };
 
 const getFolderItemCount = (item) => {
-    const subFolderCount = Array.isArray(item?.subFolders) ? item.subFolders.length : 0;
-    const documentCount = Array.isArray(item?.documents) ? item.documents.length : (item?.documentCount || 0);
+    const subFolderCount = Array.isArray(item?.subFolders)
+        ? item.subFolders.length
+        : (item?.subFolderCount || item?.SubFolderCount || 0);
+    const documentCount = Array.isArray(item?.documents)
+        ? item.documents.length
+        : (item?.documentCount || item?.DocumentCount || 0);
     const totalCount = subFolderCount + documentCount;
 
     if (totalCount === 0) return 'No items';
-    return `${totalCount} item${totalCount === 1 ? '' : 's'}`;
+    const parts = [];
+    if (subFolderCount > 0) {
+        parts.push(`${subFolderCount} folder${subFolderCount === 1 ? '' : 's'}`);
+    }
+    if (documentCount > 0) {
+        parts.push(`${documentCount} PDF${documentCount === 1 ? '' : 's'}`);
+    }
+
+    return parts.join(' / ');
 };
 
 const getSearchResultName = (result) => (
@@ -236,6 +248,8 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
     return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
+const pdfThumbnailCache = new Map();
+
 function PdfPageThumbnail({ documentItem }) {
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const [thumbnailStatus, setThumbnailStatus] = useState('loading');
@@ -255,6 +269,14 @@ function PdfPageThumbnail({ documentItem }) {
             if (!documentItem.essDesignIssuePath && !documentItem.thirdPartyDesignPath) {
                 setThumbnailUrl('');
                 setThumbnailStatus('unavailable');
+                return;
+            }
+
+            const cacheKey = `${documentItem.id}-${preferredType}-${documentItem.updatedAt || documentItem.createdAt || ''}`;
+            const cachedThumbnail = pdfThumbnailCache.get(cacheKey);
+            if (cachedThumbnail) {
+                setThumbnailUrl(cachedThumbnail);
+                setThumbnailStatus('ready');
                 return;
             }
 
@@ -279,19 +301,17 @@ function PdfPageThumbnail({ documentItem }) {
                     throw new Error('No PDF URL returned for preview');
                 }
 
-                const response = await fetch(resolvedUrl);
-                if (!response.ok) {
-                    throw new Error(`Preview PDF fetch failed with status ${response.status}`);
-                }
-
-                const bytes = await response.arrayBuffer();
-                if (cancelled) return;
-
-                loadedPdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                loadedPdf = await pdfjsLib.getDocument({
+                    url: resolvedUrl,
+                    disableAutoFetch: true,
+                    disableFontFace: true,
+                    useSystemFonts: false,
+                    isEvalSupported: false
+                }).promise;
                 const pageNumber = Math.min(2, loadedPdf.numPages || 1);
                 const page = await loadedPdf.getPage(pageNumber);
                 const initialViewport = page.getViewport({ scale: 1 });
-                const targetWidth = 360;
+                const targetWidth = 170;
                 const scale = targetWidth / initialViewport.width;
                 const viewport = page.getViewport({ scale });
                 const canvas = document.createElement('canvas');
@@ -303,7 +323,9 @@ function PdfPageThumbnail({ documentItem }) {
                 await page.render({ canvasContext: context, viewport }).promise;
 
                 if (!cancelled) {
-                    setThumbnailUrl(canvas.toDataURL('image/jpeg', 0.58));
+                    const previewDataUrl = canvas.toDataURL('image/jpeg', 0.34);
+                    pdfThumbnailCache.set(cacheKey, previewDataUrl);
+                    setThumbnailUrl(previewDataUrl);
                     setThumbnailStatus('ready');
                 }
             } catch (error) {
@@ -385,7 +407,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const draggedItemRef = useRef(null);
     const [dragOverFolderId, setDragOverFolderId] = useState(null);
     const [viewMode, setViewMode] = useState(() => {
-        return initialViewMode || localStorage.getItem('viewMode') || 'grid';
+        if (initialViewMode) return initialViewMode;
+        return localStorage.getItem('viewModeUserSelected') === 'true'
+            ? (localStorage.getItem('viewMode') || 'list')
+            : 'list';
     }); // 'grid' or 'list'
     const [sortField, setSortField] = useState(() => {
         return localStorage.getItem('sortField') || 'name';

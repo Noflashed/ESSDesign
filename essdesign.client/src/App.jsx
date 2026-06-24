@@ -22,7 +22,7 @@ import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
-import { authAPI, preferencesAPI, foldersAPI } from './services/api';
+import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
 import './App.css';
 
 // Load logo from Supabase Storage
@@ -483,7 +483,11 @@ function App() {
         const saved = localStorage.getItem('sidebarWidth');
         return saved ? parseInt(saved) : 280;
     });
-    const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'grid');
+    const [viewMode, setViewMode] = useState(() => (
+        localStorage.getItem('viewModeUserSelected') === 'true'
+            ? (localStorage.getItem('viewMode') || 'list')
+            : 'list'
+    ));
     const [pdfViewer, setPdfViewer] = useState(null);
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -505,6 +509,7 @@ function App() {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [currentPage, setCurrentPage] = useState('landing');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
+    const [avatarProfileUser, setAvatarProfileUser] = useState(null);
 
     useEffect(() => {
         if (currentPage === 'landing') {
@@ -548,7 +553,10 @@ function App() {
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
-    const avatarCandidates = useMemo(() => buildAvatarCandidates(user), [user]);
+    const avatarSourceUser = useMemo(() => (
+        avatarProfileUser ? { ...user, ...avatarProfileUser } : user
+    ), [avatarProfileUser, user]);
+    const avatarCandidates = useMemo(() => buildAvatarCandidates(avatarSourceUser), [avatarSourceUser]);
     const [avatarIndex, setAvatarIndex] = useState(0);
 
     const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
@@ -673,6 +681,43 @@ function App() {
         }
     }, [showHeaderSearch]);
 
+    useEffect(() => {
+        let active = true;
+
+        const loadAvatarProfile = async () => {
+            if (!isAuthenticated || !user) {
+                setAvatarProfileUser(null);
+                return;
+            }
+
+            try {
+                const users = await usersAPI.getAllUsers();
+                if (!active) return;
+
+                const userId = user?.id || user?.Id || user?.userId || user?.user_id || '';
+                const email = (user?.email || '').trim().toLowerCase();
+                const match = Array.isArray(users)
+                    ? users.find(candidate => (
+                        (userId && (candidate.id === userId || candidate.Id === userId || candidate.userId === userId || candidate.user_id === userId))
+                        || (email && (candidate.email || '').trim().toLowerCase() === email)
+                    ))
+                    : null;
+
+                setAvatarProfileUser(match || null);
+            } catch (error) {
+                if (active) {
+                    setAvatarProfileUser(null);
+                }
+            }
+        };
+
+        loadAvatarProfile();
+
+        return () => {
+            active = false;
+        };
+    }, [isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.email]);
+
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
         const authUrlParams = new URLSearchParams(window.location.search);
@@ -740,7 +785,7 @@ function App() {
                 setTheme(prefs.theme);
                 localStorage.setItem('theme', prefs.theme);
             }
-            if (prefs.viewMode) {
+            if (prefs.viewMode && localStorage.getItem('viewModeUserSelected') === 'true') {
                 setViewMode(prefs.viewMode);
                 localStorage.setItem('viewMode', prefs.viewMode);
             }
@@ -978,6 +1023,7 @@ function App() {
 
     const handleViewModeChange = (newViewMode) => {
         setViewMode(newViewMode);
+        localStorage.setItem('viewModeUserSelected', 'true');
         localStorage.setItem('viewMode', newViewMode);
         savePreferencesToBackend({ viewMode: newViewMode });
     };
