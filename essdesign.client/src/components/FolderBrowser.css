@@ -133,6 +133,10 @@
     padding-left: 10px;
 }
 
+.list-header-cell[data-col-key="owner"] {
+    padding-right: 12px;
+}
+
 .list-header .sortable {
     cursor: pointer;
     user-select: none;
