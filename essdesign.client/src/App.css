@@ -830,133 +830,45 @@ body {
     flex-wrap: wrap;
 }
 
-.site-registry-filter-field {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-}
-
-.site-registry-builder-select-wrap {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-}
-
-.site-registry-builder-select-button {
-    width: min(280px, 58vw);
+.site-registry-search-field {
+    width: min(360px, 100%);
     min-height: 38px;
     border: 1px solid rgba(37, 99, 235, 0.22);
     border-radius: 6px;
     background: var(--bg-primary);
     color: var(--text-primary);
     box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.72);
-    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
     font-size: 14px;
     font-weight: 600;
-    padding: 0 38px 0 12px;
-    text-align: left;
-    outline: none;
+    padding: 0 12px;
     transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 
-.site-registry-builder-select-button span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.site-registry-search-field svg {
+    color: #2563eb;
+    flex: 0 0 auto;
 }
 
-.site-registry-builder-select-button:hover,
-.site-registry-builder-select-wrap.open .site-registry-builder-select-button {
-    border-color: rgba(37, 99, 235, 0.42);
-    box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.85);
+.site-registry-search-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    outline: none;
 }
 
-.site-registry-builder-select-button:focus {
+.site-registry-search-field:focus-within {
     border-color: #2563eb;
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12), inset 2px 0 0 #2563eb;
 }
 
-.site-registry-builder-select-icon {
-    position: absolute;
-    right: 13px;
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid #2563eb;
-    border-bottom: 1.5px solid #2563eb;
-    pointer-events: none;
-    transform: translateY(-2px) rotate(45deg);
-    transition: transform 0.16s ease;
-}
-
-.site-registry-builder-select-wrap.open .site-registry-builder-select-icon {
-    transform: translateY(2px) rotate(225deg);
-}
-
-.site-registry-builder-menu {
-    position: absolute;
-    top: calc(100% + 5px);
-    left: 0;
-    z-index: 30;
-    width: min(300px, 78vw);
-    max-height: 236px;
-    overflow-y: auto;
-    padding: 4px;
-    border: 1px solid var(--border-color);
-    border-radius: 7px;
-    background: var(--card-bg);
-    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
-    display: grid;
-    gap: 2px;
-    animation: siteRegistryMenuIn 0.1s ease-out;
-}
-
-.site-registry-builder-option {
-    width: 100%;
-    border: 1px solid transparent;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--text-primary);
-    cursor: pointer;
-    display: grid;
-    gap: 2px;
-    padding: 7px 9px;
-    text-align: left;
-    transition: background 0.12s ease, border-color 0.12s ease;
-}
-
-.site-registry-builder-option span {
-    font-size: 13px;
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.site-registry-builder-option small {
+.site-registry-search-field input::placeholder {
     color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
-}
-
-.site-registry-builder-option:hover,
-.site-registry-builder-option:focus {
-    border-color: rgba(37, 99, 235, 0.16);
-    background: rgba(37, 99, 235, 0.055);
-    outline: none;
-}
-
-.site-registry-builder-option.selected {
-    border-color: rgba(37, 99, 235, 0.26);
-    background: rgba(37, 99, 235, 0.075);
-    box-shadow: inset 2px 0 0 #2563eb;
 }
 
 @keyframes siteRegistryMenuIn {
@@ -1351,19 +1263,7 @@ body {
         gap: 14px;
     }
 
-    .site-registry-filter-field {
-        width: 100%;
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .site-registry-builder-select-wrap {
-        width: 100%;
-    }
-
-    .site-registry-builder-select-button,
-    .site-registry-builder-menu {
+    .site-registry-search-field {
         width: 100%;
     }
 

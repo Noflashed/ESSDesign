@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Pencil, Trash2 } from 'lucide-react';
+import { Archive, Pencil, Search, Trash2 } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
@@ -30,10 +30,8 @@ export default function SiteInformationPage() {
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
     const [selectedInfoProject, setSelectedInfoProject] = useState(null);
-    const [builderMenuOpen, setBuilderMenuOpen] = useState(false);
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
-    const [projectFilter, setProjectFilter] = useState('');
-    const [locationFilter, setLocationFilter] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
 
@@ -56,39 +54,42 @@ export default function SiteInformationPage() {
     }, []);
 
     useEffect(() => {
-        if (!builderMenuOpen && !columnFilterMenu) {
+        if (!columnFilterMenu) {
             return undefined;
         }
 
         const closeMenu = () => {
-            setBuilderMenuOpen(false);
             setColumnFilterMenu('');
         };
         window.addEventListener('click', closeMenu);
         return () => window.removeEventListener('click', closeMenu);
-    }, [builderMenuOpen, columnFilterMenu]);
+    }, [columnFilterMenu]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
 
-    const selectedBuilderLabel = selectedBuilder?.name || 'All Builders';
-
     const visibleProjects = useMemo(() => {
-        const cleanProjectFilter = projectFilter.trim().toLowerCase();
-        const cleanLocationFilter = locationFilter.trim().toLowerCase();
+        const cleanSearchQuery = searchQuery.trim().toLowerCase();
         const sourceBuilders = selectedBuilder ? [selectedBuilder] : builders;
         return sourceBuilders
             .flatMap(builder => builder.projects.map(project => ({ ...project, builder })))
             .filter(project => showArchived || statusFilter === 'archived' || !project.archived)
             .filter(project => statusFilter === 'all' || (statusFilter === 'archived' ? project.archived : !project.archived))
-            .filter(project => !cleanProjectFilter || project.name.toLowerCase().includes(cleanProjectFilter))
-            .filter(project => !cleanLocationFilter || (project.siteLocation || '').toLowerCase().includes(cleanLocationFilter));
-    }, [builders, selectedBuilder, showArchived, projectFilter, locationFilter, statusFilter]);
+            .filter(project => {
+                if (!cleanSearchQuery) {
+                    return true;
+                }
+                return [
+                    project.name,
+                    project.builder.name,
+                    project.siteLocation || 'Not set',
+                    project.archived ? 'Archived' : 'Active',
+                ].join(' ').toLowerCase().includes(cleanSearchQuery);
+            });
+    }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
 
-    const hasProjectFilter = projectFilter.trim().length > 0;
-    const hasLocationFilter = locationFilter.trim().length > 0;
     const hasStatusFilter = statusFilter !== 'all';
 
     const openCreateProject = () => {
@@ -231,12 +232,10 @@ export default function SiteInformationPage() {
 
     const selectBuilderFilter = (builderId) => {
         setSelectedBuilderId(builderId);
-        setBuilderMenuOpen(false);
         setColumnFilterMenu('');
     };
 
     const toggleColumnFilterMenu = (menuName) => {
-        setBuilderMenuOpen(false);
         setColumnFilterMenu(prev => prev === menuName ? '' : menuName);
     };
 
@@ -300,66 +299,16 @@ export default function SiteInformationPage() {
                 ) : (
                     <section className="site-registry-table-section">
                         <div className="site-registry-toolbar">
-                            <div className="site-registry-filter-field">
-                                <span>Builder</span>
-                                <span className={`site-registry-builder-select-wrap ${builderMenuOpen ? 'open' : ''}`}>
-                                    <button
-                                        type="button"
-                                        className="site-registry-builder-select-button"
-                                        onClick={event => {
-                                            event.stopPropagation();
-                                            setBuilderMenuOpen(prev => !prev);
-                                        }}
-                                        onKeyDown={event => {
-                                            if (event.key === 'Escape') {
-                                                setBuilderMenuOpen(false);
-                                            }
-                                        }}
-                                        aria-haspopup="listbox"
-                                        aria-expanded={builderMenuOpen}
-                                    >
-                                        <span>{selectedBuilderLabel}</span>
-                                    </button>
-                                    <span className="site-registry-builder-select-icon" aria-hidden="true" />
-                                    {builderMenuOpen ? (
-                                        <div className="site-registry-builder-menu" role="listbox" aria-label="Builder filter">
-                                            <button
-                                                type="button"
-                                                className={`site-registry-builder-option ${selectedBuilderId === '' ? 'selected' : ''}`}
-                                                onClick={event => {
-                                                    event.stopPropagation();
-                                                    selectBuilderFilter('');
-                                                }}
-                                                role="option"
-                                                aria-selected={selectedBuilderId === ''}
-                                            >
-                                                <span>All Builders</span>
-                                                <small>Show every project</small>
-                                            </button>
-                                            {builders.map(builder => {
-                                                const activeCount = builder.projects.filter(project => !project.archived).length;
-                                                const archivedCount = builder.projects.filter(project => project.archived).length;
-                                                return (
-                                                    <button
-                                                        key={builder.id}
-                                                        type="button"
-                                                        className={`site-registry-builder-option ${selectedBuilderId === builder.id ? 'selected' : ''}`}
-                                                        onClick={event => {
-                                                            event.stopPropagation();
-                                                            selectBuilderFilter(builder.id);
-                                                        }}
-                                                        role="option"
-                                                        aria-selected={selectedBuilderId === builder.id}
-                                                    >
-                                                        <span>{builder.name}</span>
-                                                        <small>{activeCount} active{archivedCount ? ` / ${archivedCount} archived` : ''}</small>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : null}
-                                </span>
-                            </div>
+                            <label className="site-registry-search-field">
+                                <Search size={16} strokeWidth={2.2} aria-hidden="true" />
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={event => setSearchQuery(event.target.value)}
+                                    placeholder="Search projects, builders, locations..."
+                                    aria-label="Search site registry"
+                                />
+                            </label>
                             <label className="site-registry-toggle">
                                 <input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />
                                 <span className="site-registry-toggle-track" aria-hidden="true">
@@ -376,27 +325,7 @@ export default function SiteInformationPage() {
                             <table className="site-registry-table">
                                 <thead>
                                     <tr>
-                                        <th>
-                                            <div className={`site-registry-column-filter ${hasProjectFilter ? 'filtered' : ''} ${columnFilterMenu === 'project' ? 'open' : ''}`}>
-                                                <button type="button" onClick={event => {
-                                                    event.stopPropagation();
-                                                    toggleColumnFilterMenu('project');
-                                                }}>
-                                                    <span>Project</span>
-                                                </button>
-                                                {columnFilterMenu === 'project' ? (
-                                                    <div className="site-registry-column-menu" onClick={event => event.stopPropagation()}>
-                                                        <input
-                                                            value={projectFilter}
-                                                            onChange={event => setProjectFilter(event.target.value)}
-                                                            placeholder="Filter projects"
-                                                            autoFocus
-                                                        />
-                                                        <button type="button" onClick={() => setProjectFilter('')}>Clear</button>
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                        </th>
+                                        <th>Project</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${selectedBuilderId ? 'filtered' : ''} ${columnFilterMenu === 'builder' ? 'open' : ''}`}>
                                                 <button type="button" onClick={event => {
@@ -422,27 +351,7 @@ export default function SiteInformationPage() {
                                                 ) : null}
                                             </div>
                                         </th>
-                                        <th>
-                                            <div className={`site-registry-column-filter ${hasLocationFilter ? 'filtered' : ''} ${columnFilterMenu === 'location' ? 'open' : ''}`}>
-                                                <button type="button" onClick={event => {
-                                                    event.stopPropagation();
-                                                    toggleColumnFilterMenu('location');
-                                                }}>
-                                                    <span>Site Geographic Location</span>
-                                                </button>
-                                                {columnFilterMenu === 'location' ? (
-                                                    <div className="site-registry-column-menu" onClick={event => event.stopPropagation()}>
-                                                        <input
-                                                            value={locationFilter}
-                                                            onChange={event => setLocationFilter(event.target.value)}
-                                                            placeholder="Filter locations"
-                                                            autoFocus
-                                                        />
-                                                        <button type="button" onClick={() => setLocationFilter('')}>Clear</button>
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                        </th>
+                                        <th>Site Geographic Location</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${hasStatusFilter ? 'filtered' : ''} ${columnFilterMenu === 'status' ? 'open' : ''}`}>
                                                 <button type="button" onClick={event => {
