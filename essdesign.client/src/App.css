@@ -934,12 +934,8 @@ body {
 
 .site-registry-header {
     border-bottom: 1px solid var(--border-color);
+    justify-content: flex-end;
     padding-bottom: 18px;
-}
-
-.site-registry-header h2 {
-    font-size: 32px;
-    margin-bottom: 0;
 }
 
 .site-registry-outline-action {
@@ -1034,13 +1030,6 @@ body {
     min-width: 104px;
 }
 
-.site-registry-counts {
-    margin-left: auto;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 600;
-}
-
 .site-registry-table-wrap {
     width: 100%;
     overflow-x: auto;
@@ -1061,7 +1050,7 @@ body {
 .site-registry-table td {
     border-right: 1px solid var(--border-color);
     border-bottom: 1px solid var(--border-color);
-    padding: 16px 18px;
+    padding: 11px 16px;
     text-align: left;
     vertical-align: middle;
 }
@@ -1083,7 +1072,7 @@ body {
 }
 
 .site-registry-table td {
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.35;
     background: var(--card-bg);
 }
@@ -1211,10 +1200,6 @@ body {
         width: 100%;
     }
 
-    .site-registry-counts {
-        width: 100%;
-        margin-left: 0;
-    }
 }
 
 .site-registry-card {

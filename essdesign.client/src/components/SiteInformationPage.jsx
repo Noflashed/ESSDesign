@@ -61,16 +61,6 @@ export default function SiteInformationPage() {
             .filter(project => showArchived || !project.archived);
     }, [builders, selectedBuilder, showArchived]);
 
-    const activeProjectCount = useMemo(
-        () => builders.reduce((count, builder) => count + builder.projects.filter(project => !project.archived).length, 0),
-        [builders]
-    );
-
-    const archivedProjectCount = useMemo(
-        () => builders.reduce((count, builder) => count + builder.projects.filter(project => project.archived).length, 0),
-        [builders]
-    );
-
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
         setSiteAddressSuggestions([]);
@@ -248,9 +238,6 @@ export default function SiteInformationPage() {
         <div className="module-page">
             <div className="module-shell site-registry-shell">
                 <div className="module-header site-registry-header">
-                    <div>
-                        <h2>Projects</h2>
-                    </div>
                     <div className="module-list-actions">
                         <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>Add Builder</button>
                         <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>Add Project</button>
@@ -281,7 +268,6 @@ export default function SiteInformationPage() {
                             {selectedBuilder ? (
                                 <button className="module-secondary-btn compact site-registry-edit-builder" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
                             ) : null}
-                            <div className="site-registry-counts">{activeProjectCount} active / {archivedProjectCount} archived</div>
                         </div>
 
                         <div className="site-registry-table-wrap">
