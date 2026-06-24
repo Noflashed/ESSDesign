@@ -974,8 +974,9 @@
 
 .document-search {
     position: relative;
-    flex: 1 1 320px;
-    max-width: 360px;
+    flex: 1 1 520px;
+    min-width: 420px;
+    max-width: 620px;
 }
 
 .document-search input {
@@ -1958,6 +1959,7 @@
     }
 
     .document-search {
+        min-width: 0;
         max-width: none;
         flex-basis: 100%;
     }

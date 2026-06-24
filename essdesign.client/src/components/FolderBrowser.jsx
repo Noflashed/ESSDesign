@@ -1355,19 +1355,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         ) : (
                             <>
                                 {viewMode === 'list' && (
-                                    <div className="list-tools">
-                                        <button
-                                            type="button"
-                                            className="sort-control"
-                                            onClick={() => handleSort('modified')}
-                                        >
-                                            Sort by: {sortField === 'modified' ? 'Modified' : sortField.charAt(0).toUpperCase() + sortField.slice(1)}
-                                            <SortArrowIcon direction={sortDirection} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {viewMode === 'list' && (
                                     <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
                                         <div className="list-header-icon"></div>
                                         <div
