@@ -236,6 +236,115 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
     return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
+function PdfPageThumbnail({ documentItem }) {
+    const [thumbnailUrl, setThumbnailUrl] = useState('');
+    const [thumbnailStatus, setThumbnailStatus] = useState('loading');
+
+    useEffect(() => {
+        let cancelled = false;
+        let loadedPdf = null;
+
+        const renderThumbnail = async () => {
+            if (!documentItem?.isDocument) {
+                setThumbnailUrl('');
+                setThumbnailStatus('idle');
+                return;
+            }
+
+            const preferredType = documentItem.essDesignIssuePath ? 'ess' : 'thirdparty';
+            if (!documentItem.essDesignIssuePath && !documentItem.thirdPartyDesignPath) {
+                setThumbnailUrl('');
+                setThumbnailStatus('unavailable');
+                return;
+            }
+
+            setThumbnailStatus('loading');
+            setThumbnailUrl('');
+
+            try {
+                const [pdfjsLib, downloadData] = await Promise.all([
+                    import('pdfjs-dist/build/pdf.mjs'),
+                    foldersAPI.getDownloadUrl(documentItem.id, preferredType)
+                ]);
+
+                if (cancelled) return;
+
+                pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+                    'pdfjs-dist/build/pdf.worker.min.mjs',
+                    import.meta.url
+                ).toString();
+
+                const resolvedUrl = foldersAPI.resolvePublicFileUrl(downloadData?.url || '');
+                if (!resolvedUrl) {
+                    throw new Error('No PDF URL returned for preview');
+                }
+
+                const response = await fetch(resolvedUrl);
+                if (!response.ok) {
+                    throw new Error(`Preview PDF fetch failed with status ${response.status}`);
+                }
+
+                const bytes = await response.arrayBuffer();
+                if (cancelled) return;
+
+                loadedPdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+                const pageNumber = Math.min(2, loadedPdf.numPages || 1);
+                const page = await loadedPdf.getPage(pageNumber);
+                const initialViewport = page.getViewport({ scale: 1 });
+                const targetWidth = 360;
+                const scale = targetWidth / initialViewport.width;
+                const viewport = page.getViewport({ scale });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d', { alpha: false });
+
+                canvas.width = Math.floor(viewport.width);
+                canvas.height = Math.floor(viewport.height);
+
+                await page.render({ canvasContext: context, viewport }).promise;
+
+                if (!cancelled) {
+                    setThumbnailUrl(canvas.toDataURL('image/jpeg', 0.58));
+                    setThumbnailStatus('ready');
+                }
+            } catch (error) {
+                console.error('Failed to render PDF thumbnail:', error);
+                if (!cancelled) {
+                    setThumbnailUrl('');
+                    setThumbnailStatus('unavailable');
+                }
+            } finally {
+                if (loadedPdf) {
+                    loadedPdf.destroy();
+                    loadedPdf = null;
+                }
+            }
+        };
+
+        renderThumbnail();
+
+        return () => {
+            cancelled = true;
+            if (loadedPdf) {
+                loadedPdf.destroy();
+                loadedPdf = null;
+            }
+        };
+    }, [documentItem]);
+
+    return (
+        <div className="pdf-page-thumbnail" aria-label="Low quality preview of PDF page 2">
+            {thumbnailUrl ? (
+                <img src={thumbnailUrl} alt="PDF page 2 preview" />
+            ) : (
+                <div className="pdf-thumbnail-state">
+                    {thumbnailStatus === 'loading' ? 'Rendering preview...' : 'Preview unavailable'}
+                </div>
+            )}
+            <span className="pdf-badge">PDF</span>
+        </div>
+    );
+}
+
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
@@ -526,6 +635,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setCurrentFolder(folderId);
         if (onFolderChange) {
             onFolderChange(folderId);
+        }
+    };
+
+    const handleBreadcrumbClick = (folderId) => {
+        const nextFolderId = folderId || null;
+        setCurrentFolder(nextFolderId);
+        if (onFolderChange) {
+            onFolderChange(nextFolderId);
         }
     };
 
@@ -1019,13 +1136,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, [getSortedFolders]);
 
     const selectedPreviewItem = useMemo(() => {
-        if (detailsPanelDismissed || visibleItems.length === 0) {
+        if (detailsPanelDismissed || !selectedItemId || visibleItems.length === 0) {
             return null;
         }
 
-        return visibleItems.find(item => item.id === selectedItemId)
-            || visibleItems.find(item => item.isDocument)
-            || visibleItems[0];
+        const selectedItem = visibleItems.find(item => item.id === selectedItemId);
+        return selectedItem?.isDocument ? selectedItem : null;
     }, [detailsPanelDismissed, selectedItemId, visibleItems]);
 
     const latestRevisionNumber = useMemo(() => (
@@ -1048,6 +1164,30 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
                     <div className="document-items-panel">
                         <div className="document-table-toolbar">
+                            <div className="document-path-row" aria-label="Folder path">
+                                <button
+                                    type="button"
+                                    className="breadcrumb-home"
+                                    onClick={() => handleBreadcrumbClick(null)}
+                                    title="Home"
+                                >
+                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+                                        <path d="M9 21V12h6v9" />
+                                    </svg>
+                                </button>
+                                <button type="button" className="path-crumb" onClick={() => handleBreadcrumbClick(null)}>
+                                    Home
+                                </button>
+                                {breadcrumbs.map((crumb) => (
+                                    <React.Fragment key={crumb.id}>
+                                        <span className="path-separator">/</span>
+                                        <button type="button" className="path-crumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
+                                            {crumb.name}
+                                        </button>
+                                    </React.Fragment>
+                                ))}
+                            </div>
                             <div className="browser-toolbar document-toolbar">
                                 <label className="document-search">
                                     <span className="sr-only">Search documents</span>
@@ -1246,8 +1386,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     className={`item-card ${item.isDocument ? 'document' : 'folder'}${isSelected ? ' selected' : ''}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
                                                     draggable={canManage && !!item.isDocument}
                                                     onClick={() => {
-                                                        setSelectedItemId(item.id);
-                                                        setDetailsPanelDismissed(false);
+                                                        setSelectedItemId(item.isDocument ? item.id : null);
+                                                        setDetailsPanelDismissed(!item.isDocument);
                                                     }}
                                                     onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
                                                     onDragEnd={item.isDocument ? handleDragEnd : undefined}
@@ -1348,8 +1488,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     style={{ gridTemplateColumns }}
                                                     draggable={canManage && !!item.isDocument}
                                                     onClick={() => {
-                                                        setSelectedItemId(item.id);
-                                                        setDetailsPanelDismissed(false);
+                                                        setSelectedItemId(item.isDocument ? item.id : null);
+                                                        setDetailsPanelDismissed(!item.isDocument);
                                                     }}
                                                     onDragStart={item.isDocument ? (e) => handleDragStart(e, item) : undefined}
                                                     onDragEnd={item.isDocument ? handleDragEnd : undefined}
@@ -1467,23 +1607,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
                             {selectedPreviewItem.isDocument ? (
                                 <div className="details-preview pdf-preview-card large">
-                                    <div className="pdf-page-thumbnail" aria-label="Low quality preview of PDF page 2">
-                                        <div className="pdf-page-frame">
-                                            <span className="pdf-page-label">Page 2</span>
-                                            <span className="drawing-line horizontal top"></span>
-                                            <span className="drawing-line horizontal middle"></span>
-                                            <span className="drawing-line horizontal bottom"></span>
-                                            <span className="drawing-line vertical left"></span>
-                                            <span className="drawing-line vertical center"></span>
-                                            <span className="drawing-line vertical right"></span>
-                                            <span className="drawing-line diagonal one"></span>
-                                            <span className="drawing-line diagonal two"></span>
-                                            <span className="drawing-box box-one"></span>
-                                            <span className="drawing-box box-two"></span>
-                                            <span className="drawing-box box-three"></span>
-                                        </div>
-                                        <span className="pdf-badge">PDF</span>
-                                    </div>
+                                    <PdfPageThumbnail documentItem={selectedPreviewItem} />
                                 </div>
                             ) : (
                                 <div className="details-preview folder-preview-card large" aria-hidden="true">

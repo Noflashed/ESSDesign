@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import FolderBrowser from './components/FolderBrowser';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -433,6 +433,7 @@ const normalizeAvatarSource = (value) => {
 };
 
 const buildAvatarCandidates = (user) => {
+    const userId = user?.id || user?.Id || user?.userId || user?.user_id || user?.sub;
     const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
@@ -450,8 +451,12 @@ const buildAvatarCandidates = (user) => {
         user?.AvatarPath
     ].filter(Boolean);
 
-    const storageCandidates = user?.id ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
-        .map((ext) => `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${user.id}/avatar.${ext}`) : [];
+    const storageCandidates = userId ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
+        .flatMap((ext) => [
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}/avatar.${ext}`,
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}/profile.${ext}`,
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}.${ext}`
+        ]) : [];
 
     return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
 };
@@ -543,7 +548,7 @@ function App() {
     const searchRef = useRef(null);
     const userMenuRef = useRef(null);
     const searchTimerRef = useRef(null);
-    const avatarCandidates = buildAvatarCandidates(user);
+    const avatarCandidates = useMemo(() => buildAvatarCandidates(user), [user]);
     const [avatarIndex, setAvatarIndex] = useState(0);
 
     const buildAppUrl = useCallback((folderId, page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }) => {
@@ -1114,11 +1119,11 @@ function App() {
             .map(part => part[0]?.toUpperCase())
             .join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
-    const userAvatarUrl = avatarCandidates[avatarIndex] || null;
+    const userAvatarUrl = avatarIndex < avatarCandidates.length ? avatarCandidates[avatarIndex] : null;
 
     useEffect(() => {
         setAvatarIndex(0);
-    }, [user?.id, user?.avatarUrl, user?.avatar_url, user?.picture, user?.profileImageUrl, user?.profile_image_url, user?.avatarPath, user?.avatar_path]);
+    }, [avatarCandidates.join('|')]);
 
     const handleDocumentClick = (document) => {
         // Determine which PDF to show (prioritize ESS Design Issue)
@@ -1454,7 +1459,7 @@ function App() {
                             aria-expanded={showUserMenu}
                         >
                             {userAvatarUrl ? (
-                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" onError={() => setAvatarIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)} />
+                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={() => setAvatarIndex((current) => current + 1)} />
                             ) : (
                                 <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
                             )}
@@ -1467,7 +1472,7 @@ function App() {
                                 <div className="user-menu-summary">
                                     <div className="user-menu-avatar" aria-hidden="true">
                                         {userAvatarUrl ? (
-                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" onError={() => setAvatarIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)} />
+                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={() => setAvatarIndex((current) => current + 1)} />
                                         ) : (
                                             userInitials
                                         )}
