@@ -5318,28 +5318,10 @@ button.stat-card {
 
 .ess-news-topbar {
     display: grid;
-    grid-template-columns: minmax(190px, 1fr) minmax(300px, 420px) auto auto;
+    grid-template-columns: minmax(300px, 420px) auto auto;
     align-items: center;
+    justify-content: start;
     gap: 12px;
-}
-
-.ess-news-heading {
-    display: grid;
-    gap: 4px;
-}
-
-.ess-news-heading h2 {
-    margin: 0;
-    color: var(--text-primary);
-    font-size: 24px;
-    font-weight: 800;
-    line-height: 1.15;
-}
-
-.ess-news-heading p {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 14px;
 }
 
 .ess-news-search {

@@ -202,10 +202,6 @@ export default function ESSNewsPage() {
         <div className="module-page">
             <div className="module-shell ess-news-shell">
                 <div className="ess-news-topbar">
-                    <div className="ess-news-heading">
-                        <h2>ESS News</h2>
-                        <p>Manage mobile app carousel items</p>
-                    </div>
                     <label className="ess-news-search">
                         <Search size={17} strokeWidth={2.2} aria-hidden="true" />
                         <input
