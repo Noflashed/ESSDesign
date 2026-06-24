@@ -1,13 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Eye, Image as ImageIcon, Pencil, PlayCircle, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
+
+function formatNewsDate(value) {
+    if (!value) return 'Not set';
+    return new Date(value).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function emptyComposer() {
+    return {
+        id: null,
+        title: '',
+        subtitle: '',
+        mediaUrl: null,
+        mediaType: 'image',
+        thumbnailUrl: null,
+    };
+}
 
 export default function ESSNewsPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [showForm, setShowForm] = useState(false);
-    const [formTitle, setFormTitle] = useState('');
-    const [formSubtitle, setFormSubtitle] = useState('');
+    const [composer, setComposer] = useState(emptyComposer());
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaPreview, setMediaPreview] = useState(null);
     const [thumbFile, setThumbFile] = useState(null);
@@ -15,7 +32,9 @@ export default function ESSNewsPage() {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
     const [deletingId, setDeletingId] = useState(null);
-    const [dragOver, setDragOver] = useState(false);
+    const [dragOverMedia, setDragOverMedia] = useState(false);
+    const [dragOverCover, setDragOverCover] = useState(false);
+    const [previewItem, setPreviewItem] = useState(null);
     const fileInputRef = useRef(null);
     const thumbInputRef = useRef(null);
 
@@ -32,74 +51,113 @@ export default function ESSNewsPage() {
             .finally(() => setLoading(false));
     };
 
-    const handleFileChange = (file) => {
-        if (!file) return;
-        setSaveError('');
-        const isVideo = file.type.startsWith('video/');
-        if (!file.type.startsWith('image/') && !isVideo) {
-            setSaveError('Only image and video files are supported');
-            return;
-        }
-        setMediaFile(file);
-        if (isVideo) {
-            setMediaPreview({ url: URL.createObjectURL(file), type: 'video' });
-        } else {
-            const reader = new FileReader();
-            reader.onload = (e) => setMediaPreview({ url: e.target.result, type: 'image' });
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file) handleFileChange(file);
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!formTitle.trim()) { setSaveError('Title is required'); return; }
-        setSaving(true);
-        setSaveError('');
-        const isVideo = mediaFile?.type.startsWith('video/');
-        if (isVideo && !thumbFile) { setSaveError('A cover image is required for video items'); setSaving(false); return; }
-        try {
-            let mediaUrl = null;
-            let mediaType = 'image';
-            let thumbnailUrl = null;
-            if (mediaFile) {
-                mediaUrl = await essNewsAPI.uploadMedia(mediaFile);
-                mediaType = isVideo ? 'video' : 'image';
-            }
-            if (thumbFile) {
-                thumbnailUrl = await essNewsAPI.uploadMedia(thumbFile);
-            }
-            const created = await essNewsAPI.create({
-                title: formTitle.trim(),
-                subtitle: formSubtitle.trim(),
-                mediaUrl,
-                mediaType,
-                thumbnailUrl,
-            });
-            setItems(prev => [created, ...prev]);
-            resetForm();
-        } catch (err) {
-            setSaveError(err.message || 'Failed to save');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const resetForm = () => {
-        setFormTitle('');
-        setFormSubtitle('');
+    const resetComposer = () => {
+        setComposer(emptyComposer());
         setMediaFile(null);
         setMediaPreview(null);
         setThumbFile(null);
         setThumbPreview(null);
         setSaveError('');
-        setShowForm(false);
+        setDragOverMedia(false);
+        setDragOverCover(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (thumbInputRef.current) thumbInputRef.current.value = '';
+    };
+
+    const beginEdit = (item) => {
+        setComposer({
+            id: item.id,
+            title: item.title || '',
+            subtitle: item.subtitle || '',
+            mediaUrl: item.mediaUrl || null,
+            mediaType: item.mediaType || 'image',
+            thumbnailUrl: item.thumbnailUrl || null,
+        });
+        setMediaFile(null);
+        setMediaPreview(item.mediaUrl ? { url: item.mediaUrl, type: item.mediaType || 'image', existing: true } : null);
+        setThumbFile(null);
+        setThumbPreview(item.thumbnailUrl || null);
+        setSaveError('');
+    };
+
+    const handleFileChange = (file) => {
+        if (!file) return;
+        setSaveError('');
+        const isVideo = file.type.startsWith('video/');
+        if (!file.type.startsWith('image/') && !isVideo) {
+            setSaveError('Only image and video files are supported.');
+            return;
+        }
+        setMediaFile(file);
+        setComposer(prev => ({
+            ...prev,
+            mediaType: isVideo ? 'video' : 'image',
+        }));
+        setMediaPreview({ url: URL.createObjectURL(file), type: isVideo ? 'video' : 'image' });
+    };
+
+    const handleCoverChange = (file) => {
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            setSaveError('Cover image must be an image file.');
+            return;
+        }
+        setThumbFile(file);
+        setThumbPreview(URL.createObjectURL(file));
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!composer.title.trim()) {
+            setSaveError('Title is required.');
+            return;
+        }
+
+        const nextMediaType = mediaFile?.type.startsWith('video/')
+            ? 'video'
+            : mediaFile?.type.startsWith('image/')
+                ? 'image'
+                : composer.mediaType || 'image';
+        const needsCover = nextMediaType === 'video' && !thumbFile && !composer.thumbnailUrl;
+        if (needsCover) {
+            setSaveError('A cover image is required for video items.');
+            return;
+        }
+
+        setSaving(true);
+        setSaveError('');
+        try {
+            let mediaUrl = composer.mediaUrl;
+            let thumbnailUrl = composer.thumbnailUrl;
+
+            if (mediaFile) {
+                mediaUrl = await essNewsAPI.uploadMedia(mediaFile);
+            }
+            if (thumbFile) {
+                thumbnailUrl = await essNewsAPI.uploadMedia(thumbFile);
+            }
+
+            const payload = {
+                title: composer.title.trim(),
+                subtitle: composer.subtitle.trim(),
+                mediaUrl,
+                mediaType: nextMediaType,
+                thumbnailUrl,
+            };
+
+            if (composer.id) {
+                const updated = await essNewsAPI.update(composer.id, payload);
+                setItems(prev => prev.map(item => item.id === updated.id ? updated : item));
+            } else {
+                const created = await essNewsAPI.create(payload);
+                setItems(prev => [created, ...prev]);
+            }
+            resetComposer();
+        } catch (err) {
+            setSaveError(err.message || 'Failed to save news item.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleDelete = async (item) => {
@@ -108,13 +166,33 @@ export default function ESSNewsPage() {
         try {
             await essNewsAPI.delete(item.id);
             if (item.mediaUrl) essNewsAPI.deleteMedia(item.mediaUrl).catch(() => {});
-            setItems(prev => prev.filter(n => n.id !== item.id));
+            if (item.thumbnailUrl) essNewsAPI.deleteMedia(item.thumbnailUrl).catch(() => {});
+            setItems(prev => prev.filter(newsItem => newsItem.id !== item.id));
+            if (composer.id === item.id) resetComposer();
         } catch (err) {
-            alert(err.message || 'Failed to delete');
+            alert(err.message || 'Failed to delete news item.');
         } finally {
             setDeletingId(null);
         }
     };
+
+    const filteredItems = useMemo(() => {
+        const query = searchTerm.trim().toLowerCase();
+        if (statusFilter === 'draft' || statusFilter === 'archived') {
+            return [];
+        }
+        return items.filter(item => {
+            if (!query) return true;
+            return [item.title, item.subtitle, item.mediaType, formatNewsDate(item.createdAt)]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(query);
+        });
+    }, [items, searchTerm, statusFilter]);
+
+    const publishedCount = items.length;
+    const isEditing = Boolean(composer.id);
 
     if (loading) {
         return <div className="module-page"><div className="module-empty">Loading news...</div></div>;
@@ -122,183 +200,254 @@ export default function ESSNewsPage() {
 
     return (
         <div className="module-page">
-            <div className="module-shell">
-                <div className="module-header">
-                    <div>
+            <div className="module-shell ess-news-shell">
+                <div className="ess-news-topbar">
+                    <div className="ess-news-heading">
                         <h2>ESS News</h2>
-                        <p>News items displayed on the mobile app home screen carousel.</p>
+                        <p>Manage mobile app carousel items</p>
                     </div>
-                    {!showForm && (
-                        <button className="module-primary-btn compact" onClick={() => setShowForm(true)}>
-                            + Add news item
-                        </button>
-                    )}
+                    <label className="ess-news-search">
+                        <Search size={17} strokeWidth={2.2} aria-hidden="true" />
+                        <input
+                            type="search"
+                            value={searchTerm}
+                            onChange={event => setSearchTerm(event.target.value)}
+                            placeholder="Search news by title or subtitle..."
+                            aria-label="Search ESS News"
+                        />
+                    </label>
+                    <div className="ess-news-filter-tabs" aria-label="ESS News filters">
+                        <button type="button" className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>All ({items.length})</button>
+                        <button type="button" className={statusFilter === 'published' ? 'active' : ''} onClick={() => setStatusFilter('published')}>Published ({publishedCount})</button>
+                        <button type="button" className={statusFilter === 'draft' ? 'active' : ''} onClick={() => setStatusFilter('draft')}>Draft (0)</button>
+                        <button type="button" className={statusFilter === 'archived' ? 'active' : ''} onClick={() => setStatusFilter('archived')}>Archived (0)</button>
+                    </div>
+                    <button className="module-primary-btn compact ess-news-add-button" onClick={resetComposer}>
+                        <Plus size={17} strokeWidth={2.4} />
+                        <span>Add News</span>
+                    </button>
                 </div>
 
-                {error && (
+                {error ? (
                     <div className="module-card">
-                        <p style={{ color: '#b91c1c', fontSize: 14 }}>{error}</p>
-                        <button className="module-primary-btn compact" onClick={load} style={{ marginTop: 8 }}>Retry</button>
+                        <p className="ess-news-error-text">{error}</p>
+                        <button className="module-primary-btn compact" onClick={load}>Retry</button>
                     </div>
-                )}
+                ) : null}
 
-                {showForm && (
-                    <div className="module-card">
-                        <div className="module-card-title">New news item</div>
-                        <form className="module-form" onSubmit={handleSubmit}>
-                            <div className="module-field">
-                                <label>Title *</label>
+                <div className="ess-news-workspace">
+                    <section className="ess-news-panel ess-news-list-panel">
+                        <div className="ess-news-panel-header">
+                            <h3>Published Items</h3>
+                        </div>
+                        <div className="ess-news-table-wrap">
+                            <table className="ess-news-table">
+                                <thead>
+                                    <tr>
+                                        <th>Media</th>
+                                        <th>Title</th>
+                                        <th>Subtitle</th>
+                                        <th>Type</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredItems.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="ess-news-empty-cell">
+                                                {items.length === 0 ? 'No news items yet.' : 'No news items match this view.'}
+                                            </td>
+                                        </tr>
+                                    ) : filteredItems.map(item => (
+                                        <tr key={item.id}>
+                                            <td>
+                                                <button type="button" className="ess-news-media-thumb" onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.title}`}>
+                                                    {item.mediaUrl ? (
+                                                        item.mediaType === 'video' ? (
+                                                            <>
+                                                                <video src={item.mediaUrl} preload="metadata" />
+                                                                <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" />
+                                                            </>
+                                                        ) : (
+                                                            <img src={item.mediaUrl} alt="" loading="lazy" />
+                                                        )
+                                                    ) : (
+                                                        <span>No media</span>
+                                                    )}
+                                                </button>
+                                            </td>
+                                            <td><strong>{item.title}</strong></td>
+                                            <td><span className="ess-news-subtitle-cell">{item.subtitle || 'No subtitle'}</span></td>
+                                            <td>
+                                                <span className={`ess-news-type-pill ${item.mediaType === 'video' ? 'video' : 'image'}`}>
+                                                    {item.mediaType === 'video' ? 'Video' : 'Image'}
+                                                </span>
+                                            </td>
+                                            <td>{formatNewsDate(item.createdAt)}</td>
+                                            <td>
+                                                <div className="ess-news-table-actions">
+                                                    <button type="button" className="ess-news-action-btn view" onClick={() => setPreviewItem(item)}>
+                                                        <Eye size={14} strokeWidth={2.3} />
+                                                        <span>View</span>
+                                                    </button>
+                                                    <button type="button" className="ess-news-action-btn edit" onClick={() => beginEdit(item)}>
+                                                        <Pencil size={14} strokeWidth={2.3} />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="ess-news-icon-danger"
+                                                        disabled={deletingId === item.id}
+                                                        onClick={() => handleDelete(item)}
+                                                        aria-label={`Delete ${item.title}`}
+                                                    >
+                                                        <Trash2 size={15} strokeWidth={2.4} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="ess-news-table-footer">
+                            <span>Showing {filteredItems.length} of {items.length} items</span>
+                        </div>
+                    </section>
+
+                    <aside className="ess-news-panel ess-news-composer">
+                        <div className="ess-news-panel-header">
+                            <h3>{isEditing ? 'Edit News Item' : 'New News Item'}</h3>
+                            {isEditing ? (
+                                <button type="button" className="ess-news-clear-edit" onClick={resetComposer} aria-label="Cancel editing">
+                                    <X size={16} strokeWidth={2.4} />
+                                </button>
+                            ) : null}
+                        </div>
+                        <form className="ess-news-form" onSubmit={handleSubmit}>
+                            <label className="ess-news-field">
+                                <span>Title <b>*</b></span>
                                 <input
                                     type="text"
-                                    value={formTitle}
-                                    onChange={e => setFormTitle(e.target.value)}
-                                    placeholder="Enter title"
+                                    value={composer.title}
+                                    onChange={event => setComposer(prev => ({ ...prev, title: event.target.value }))}
+                                    placeholder="Enter a title"
                                     maxLength={120}
-                                    autoFocus
                                 />
-                            </div>
-                            <div className="module-field">
-                                <label>Subtitle</label>
+                            </label>
+                            <label className="ess-news-field">
+                                <span>Subtitle</span>
                                 <input
                                     type="text"
-                                    value={formSubtitle}
-                                    onChange={e => setFormSubtitle(e.target.value)}
-                                    placeholder="Enter subtitle (optional)"
+                                    value={composer.subtitle}
+                                    onChange={event => setComposer(prev => ({ ...prev, subtitle: event.target.value }))}
+                                    placeholder="Enter a subtitle (optional)"
                                     maxLength={200}
                                 />
-                            </div>
-                            <div className="module-field">
-                                <label>Media (image or video)</label>
-                                <div
-                                    className={`ess-news-upload-zone${mediaPreview ? ' has-preview' : ''}${dragOver ? ' drag-over' : ''}`}
-                                    onClick={() => !mediaPreview && fileInputRef.current?.click()}
-                                    onDrop={handleDrop}
-                                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                                    onDragLeave={() => setDragOver(false)}
+                            </label>
+
+                            <div className="ess-news-field">
+                                <span>Media <b>*</b></span>
+                                <button
+                                    type="button"
+                                    className={`ess-news-dropzone${mediaPreview ? ' has-preview' : ''}${dragOverMedia ? ' drag-over' : ''}`}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    onDrop={event => {
+                                        event.preventDefault();
+                                        setDragOverMedia(false);
+                                        handleFileChange(event.dataTransfer.files[0]);
+                                    }}
+                                    onDragOver={event => {
+                                        event.preventDefault();
+                                        setDragOverMedia(true);
+                                    }}
+                                    onDragLeave={() => setDragOverMedia(false)}
                                 >
                                     {mediaPreview ? (
                                         mediaPreview.type === 'video' ? (
-                                            <video src={mediaPreview.url} className="ess-news-upload-preview" controls />
+                                            <video src={mediaPreview.url} className="ess-news-dropzone-preview" controls />
                                         ) : (
-                                            <img src={mediaPreview.url} className="ess-news-upload-preview" alt="Preview" />
+                                            <img src={mediaPreview.url} className="ess-news-dropzone-preview" alt="Media preview" />
                                         )
                                     ) : (
-                                        <div className="ess-news-upload-placeholder">
-                                            <div className="ess-news-upload-icon">
-                                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                    <polyline points="17 8 12 3 7 8" />
-                                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                                </svg>
-                                            </div>
-                                            <div>Click or drag to upload image or video</div>
-                                            <div className="ess-news-upload-hint">JPG, PNG, GIF, MP4, MOV</div>
-                                        </div>
+                                        <span className="ess-news-dropzone-placeholder">
+                                            <UploadCloud size={34} strokeWidth={1.8} />
+                                            <strong>Drag and drop media here</strong>
+                                            <em>or click to browse</em>
+                                            <small>Supports: JPG, PNG, GIF, MP4, MOV</small>
+                                        </span>
                                     )}
-                                </div>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,video/*"
-                                    style={{ display: 'none' }}
-                                    onChange={e => handleFileChange(e.target.files[0])}
-                                />
-                                {mediaPreview && (
-                                    <button
-                                        type="button"
-                                        className="module-secondary-btn compact"
-                                        style={{ marginTop: 8 }}
-                                        onClick={() => { setMediaFile(null); setMediaPreview(null); }}
-                                    >
-                                        Remove media
-                                    </button>
-                                )}
+                                </button>
+                                <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={event => handleFileChange(event.target.files[0])} />
                             </div>
 
-                            {mediaPreview?.type === 'video' && (
-                                <div className="module-field">
-                                    <label>Cover image <span style={{ color: '#b91c1c' }}>*</span> <span style={{ fontWeight: 400, opacity: 0.7 }}>(shown as carousel background on mobile)</span></label>
-                                    <div
-                                        className={`ess-news-upload-zone${thumbPreview ? ' has-preview' : ''}`}
-                                        onClick={() => !thumbPreview && thumbInputRef.current?.click()}
-                                        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { setThumbFile(f); const r = new FileReader(); r.onload = ev => setThumbPreview(ev.target.result); r.readAsDataURL(f); } }}
-                                        onDragOver={e => e.preventDefault()}
-                                    >
-                                        {thumbPreview ? (
-                                            <img src={thumbPreview} className="ess-news-upload-preview" alt="Cover" />
-                                        ) : (
-                                            <div className="ess-news-upload-placeholder">
-                                                <div className="ess-news-upload-icon">
-                                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                                                    </svg>
-                                                </div>
-                                                <div>Upload a cover image for the carousel</div>
-                                                <div className="ess-news-upload-hint">JPG, PNG</div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <input ref={thumbInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) { setThumbFile(f); const r = new FileReader(); r.onload = ev => setThumbPreview(ev.target.result); r.readAsDataURL(f); } }} />
-                                    {thumbPreview && (
-                                        <button type="button" className="module-secondary-btn compact" style={{ marginTop: 8 }} onClick={() => { setThumbFile(null); setThumbPreview(null); }}>
-                                            Remove cover image
-                                        </button>
+                            <div className="ess-news-field">
+                                <span>Cover Image {composer.mediaType === 'video' ? <b>*</b> : <small>(Optional)</small>}</span>
+                                <button
+                                    type="button"
+                                    className={`ess-news-dropzone ess-news-cover-dropzone${thumbPreview ? ' has-preview' : ''}${dragOverCover ? ' drag-over' : ''}`}
+                                    onClick={() => thumbInputRef.current?.click()}
+                                    onDrop={event => {
+                                        event.preventDefault();
+                                        setDragOverCover(false);
+                                        handleCoverChange(event.dataTransfer.files[0]);
+                                    }}
+                                    onDragOver={event => {
+                                        event.preventDefault();
+                                        setDragOverCover(true);
+                                    }}
+                                    onDragLeave={() => setDragOverCover(false)}
+                                >
+                                    {thumbPreview ? (
+                                        <img src={thumbPreview} className="ess-news-dropzone-preview" alt="Cover preview" />
+                                    ) : (
+                                        <span className="ess-news-dropzone-placeholder">
+                                            <ImageIcon size={31} strokeWidth={1.8} />
+                                            <strong>Drag and drop cover image</strong>
+                                            <em>or click to browse</em>
+                                            <small>Supports: JPG, PNG. Recommended 16:9</small>
+                                        </span>
                                     )}
-                                </div>
-                            )}
-
-                            {saveError && <p style={{ color: '#b91c1c', fontSize: 13 }}>{saveError}</p>}
-                            <div style={{ display: 'flex', gap: 10 }}>
-                                <button type="submit" className="module-primary-btn compact" disabled={saving}>
-                                    {saving ? 'Publishing...' : 'Publish'}
                                 </button>
-                                <button type="button" className="module-secondary-btn compact" onClick={resetForm} disabled={saving}>
-                                    Cancel
+                                <input ref={thumbInputRef} type="file" accept="image/*" hidden onChange={event => handleCoverChange(event.target.files[0])} />
+                            </div>
+
+                            {saveError ? <p className="ess-news-save-error">{saveError}</p> : null}
+                            <div className="ess-news-composer-actions">
+                                <button type="button" className="module-secondary-btn compact" onClick={resetComposer} disabled={saving}>Cancel</button>
+                                <button type="submit" className="module-primary-btn compact" disabled={saving}>
+                                    {saving ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save Changes' : 'Publish')}
                                 </button>
                             </div>
                         </form>
-                    </div>
-                )}
-
-                {!error && items.length === 0 && (
-                    <div className="module-card">
-                        <div className="module-empty-inline">No news items yet. Add your first item above.</div>
-                    </div>
-                )}
-
-                {items.length > 0 && (
-                    <div className="ess-news-grid">
-                        {items.map(item => (
-                            <div key={item.id} className="ess-news-card">
-                                <div className="ess-news-card-media">
-                                    {item.mediaUrl ? (
-                                        item.mediaType === 'video' ? (
-                                            <video src={item.mediaUrl} className="ess-news-card-media-content" controls preload="none" />
-                                        ) : (
-                                            <img src={item.mediaUrl} className="ess-news-card-media-content" alt={item.title} loading="lazy" />
-                                        )
-                                    ) : (
-                                        <div className="ess-news-card-no-media">No media</div>
-                                    )}
-                                </div>
-                                <div className="ess-news-card-body">
-                                    <div className="ess-news-card-title">{item.title}</div>
-                                    {item.subtitle && <div className="ess-news-card-subtitle">{item.subtitle}</div>}
-                                    <div className="ess-news-card-meta">{new Date(item.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-                                    <button
-                                        className="module-danger-btn compact"
-                                        style={{ marginTop: 12 }}
-                                        disabled={deletingId === item.id}
-                                        onClick={() => handleDelete(item)}
-                                    >
-                                        {deletingId === item.id ? 'Deleting…' : 'Delete'}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                    </aside>
+                </div>
             </div>
+
+            {previewItem ? (
+                <div className="module-modal-backdrop" onClick={() => setPreviewItem(null)}>
+                    <div className="module-modal compact ess-news-preview-modal" onClick={event => event.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>{previewItem.title}</h3>
+                            <button className="nav-drawer-close" onClick={() => setPreviewItem(null)}>x</button>
+                        </div>
+                        <div className="ess-news-preview-media">
+                            {previewItem.mediaUrl ? (
+                                previewItem.mediaType === 'video' ? (
+                                    <video src={previewItem.mediaUrl} controls />
+                                ) : (
+                                    <img src={previewItem.mediaUrl} alt={previewItem.title} />
+                                )
+                            ) : (
+                                <div>No media</div>
+                            )}
+                        </div>
+                        {previewItem.subtitle ? <p className="ess-news-preview-subtitle">{previewItem.subtitle}</p> : null}
+                        <div className="ess-news-preview-meta">{formatNewsDate(previewItem.createdAt)}</div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

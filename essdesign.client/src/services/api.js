@@ -4180,6 +4180,27 @@ export const essNewsAPI = {
         };
     },
 
+    update: async (id, { title, subtitle, mediaUrl, mediaType, thumbnailUrl }) => {
+        const payload = {
+            title,
+            subtitle: subtitle || '',
+            media_url: mediaUrl || null,
+            media_type: mediaType || 'image',
+            thumbnail_url: thumbnailUrl || null,
+        };
+        const rows = await patchRestRows('ess_news', `?id=eq.${encodeURIComponent(id)}`, payload);
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        return {
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle || '',
+            mediaUrl: row.media_url || null,
+            mediaType: row.media_type || 'image',
+            thumbnailUrl: row.thumbnail_url || null,
+            createdAt: row.created_at
+        };
+    },
+
     delete: async (id) => {
         await deleteRestRows('ess_news', `?id=eq.${id}`);
     },
