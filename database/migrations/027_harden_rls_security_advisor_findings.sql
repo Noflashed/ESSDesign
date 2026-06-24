@@ -65,9 +65,7 @@ declare
     'ess_transport_route_estimates',
     'ess_truck_live_locations',
     'ess_truck_location_history',
-    'ess_transport_reverse_geocodes',
-    'ess_scaffold_ai_training_images',
-    'ess_scaffold_ai_annotations'
+    'ess_transport_reverse_geocodes'
   ];
 begin
   foreach table_name in array harden_tables loop
@@ -157,18 +155,6 @@ begin
     execute $policy$create policy "truck_location_history_update_truck_role" on public.ess_truck_location_history for update to authenticated using (public.current_user_can_write_truck(truck_id)) with check (public.current_user_can_write_truck(truck_id))$policy$;
   end if;
 
-  if to_regclass('public.ess_scaffold_ai_training_images') is not null then
-    execute $policy$create policy "scaffold_ai_training_images_select_authenticated" on public.ess_scaffold_ai_training_images for select to authenticated using (auth.uid() is not null)$policy$;
-    execute $policy$create policy "scaffold_ai_training_images_insert_admin" on public.ess_scaffold_ai_training_images for insert to authenticated with check (public.current_user_has_any_role(array['admin']))$policy$;
-    execute $policy$create policy "scaffold_ai_training_images_update_admin" on public.ess_scaffold_ai_training_images for update to authenticated using (public.current_user_has_any_role(array['admin'])) with check (public.current_user_has_any_role(array['admin']))$policy$;
-  end if;
-
-  if to_regclass('public.ess_scaffold_ai_annotations') is not null then
-    execute $policy$create policy "scaffold_ai_annotations_select_authenticated" on public.ess_scaffold_ai_annotations for select to authenticated using (auth.uid() is not null)$policy$;
-    execute $policy$create policy "scaffold_ai_annotations_insert_admin" on public.ess_scaffold_ai_annotations for insert to authenticated with check (public.current_user_has_any_role(array['admin']))$policy$;
-    execute $policy$create policy "scaffold_ai_annotations_update_admin" on public.ess_scaffold_ai_annotations for update to authenticated using (public.current_user_has_any_role(array['admin'])) with check (public.current_user_has_any_role(array['admin']))$policy$;
-    execute $policy$create policy "scaffold_ai_annotations_delete_admin" on public.ess_scaffold_ai_annotations for delete to authenticated using (public.current_user_has_any_role(array['admin']))$policy$;
-  end if;
 end $$;
 
 revoke all on function public.handle_auth_user_change() from public, anon, authenticated;
