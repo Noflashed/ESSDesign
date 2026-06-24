@@ -3,7 +3,6 @@ import {
   MATERIAL_ORDER_REQUESTS_CHANGED_EVENT,
   getJitteredPollingDelay,
   materialOrderRequestsAPI,
-  recordForegroundPollingCycle,
   safetyProjectsAPI,
 } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
@@ -140,7 +139,6 @@ export default function TruckDeliverySchedulePage({ user }) {
       if (document.visibilityState !== 'visible') {
         return;
       }
-      recordForegroundPollingCycle('truck-delivery-schedule');
       loadEvents().catch(() => {});
     };
     const handleVisibilityChange = () => {

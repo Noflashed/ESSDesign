@@ -4,7 +4,6 @@ import {
   analysisAPI,
   getJitteredPollingDelay,
   materialOrderRequestsAPI,
-  recordForegroundPollingCycle,
   safetyProjectsAPI,
 } from '../services/api';
 import RouteMapCanvas from './transport/RouteMapCanvas';
@@ -2960,7 +2959,6 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       if (document.visibilityState !== 'visible') {
         return;
       }
-      recordForegroundPollingCycle('transport-schedule-board');
       loadBoard().catch(() => {});
     };
     const handleVisibilityChange = () => {

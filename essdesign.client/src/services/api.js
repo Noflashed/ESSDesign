@@ -330,7 +330,6 @@ const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFE
 
 export const MATERIAL_ORDER_REQUESTS_CHANGED_EVENT = 'ess-material-order-requests-changed';
 export const SAFETY_PROJECTS_CHANGED_EVENT = 'ess-safety-projects-changed';
-export const WEB_APP_STORAGE_METRICS_EVENT = 'ess-web-app-storage-metrics-updated';
 
 let verifiedSafetyBucket = false;
 const storageJsonCache = new Map();
@@ -344,7 +343,6 @@ const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
 const STORAGE_JSON_REQUEST_TIMEOUT_MS = 15 * 1000;
 const STORAGE_JSON_CACHE_SYNC_CHANNEL = 'ess-storage-json-cache-sync';
 const STORAGE_JSON_CACHE_SYNC_KEY = 'ess-storage-json-cache-sync-message';
-const WEB_APP_STORAGE_METRICS_KEY = 'ess-web-app-storage-metrics';
 const MATERIAL_REQUEST_INDEX_WRITE_LOCK_NAME = 'ess-material-request-index-write';
 const storageJsonCacheTabId = makeId();
 const seenStorageJsonSyncMessages = new Set();
@@ -402,134 +400,6 @@ function dispatchBrowserEvent(name, detail = {}) {
         return;
     }
     window.dispatchEvent(new CustomEvent(name, { detail }));
-}
-
-function createEmptyStorageMetrics() {
-    const timestamp = nowIso();
-    return {
-        startedAt: timestamp,
-        updatedAt: timestamp,
-        totals: {
-            networkRequests: 0,
-            cacheHits: 0,
-            bytesDownloaded: 0,
-            foregroundPollingCycles: 0
-        },
-        paths: {},
-        polling: {}
-    };
-}
-
-function readStorageMetrics() {
-    if (typeof window === 'undefined') {
-        return createEmptyStorageMetrics();
-    }
-    try {
-        const raw = window.localStorage.getItem(WEB_APP_STORAGE_METRICS_KEY);
-        if (!raw) {
-            return createEmptyStorageMetrics();
-        }
-        const parsed = JSON.parse(raw);
-        return {
-            ...createEmptyStorageMetrics(),
-            ...parsed,
-            totals: {
-                ...createEmptyStorageMetrics().totals,
-                ...(parsed.totals || {})
-            },
-            paths: parsed.paths || {},
-            polling: parsed.polling || {}
-        };
-    } catch {
-        return createEmptyStorageMetrics();
-    }
-}
-
-function writeStorageMetrics(metrics) {
-    const nextMetrics = {
-        ...metrics,
-        updatedAt: nowIso()
-    };
-    if (typeof window !== 'undefined') {
-        try {
-            window.localStorage.setItem(WEB_APP_STORAGE_METRICS_KEY, JSON.stringify(nextMetrics));
-        } catch {
-            // Metrics are best-effort only.
-        }
-    }
-    dispatchBrowserEvent(WEB_APP_STORAGE_METRICS_EVENT, { metrics: nextMetrics });
-    return nextMetrics;
-}
-
-function updateStorageMetrics(mutator) {
-    const metrics = readStorageMetrics();
-    mutator(metrics);
-    return writeStorageMetrics(metrics);
-}
-
-function ensurePathStorageMetrics(metrics, path) {
-    const key = path || 'unknown';
-    if (!metrics.paths[key]) {
-        metrics.paths[key] = {
-            networkRequests: 0,
-            cacheHits: 0,
-            bytesDownloaded: 0,
-            lastAccessedAt: null
-        };
-    }
-    return metrics.paths[key];
-}
-
-function getTextByteLength(value) {
-    const text = String(value || '');
-    if (typeof TextEncoder !== 'undefined') {
-        return new TextEncoder().encode(text).length;
-    }
-    return text.length;
-}
-
-function recordStorageJsonCacheHit(path) {
-    updateStorageMetrics((metrics) => {
-        const pathMetrics = ensurePathStorageMetrics(metrics, path);
-        pathMetrics.cacheHits += 1;
-        pathMetrics.lastAccessedAt = nowIso();
-        metrics.totals.cacheHits += 1;
-    });
-}
-
-function recordStorageJsonNetwork(path, bytesDownloaded = 0) {
-    const safeBytes = Math.max(0, Number(bytesDownloaded) || 0);
-    updateStorageMetrics((metrics) => {
-        const pathMetrics = ensurePathStorageMetrics(metrics, path);
-        pathMetrics.networkRequests += 1;
-        pathMetrics.bytesDownloaded += safeBytes;
-        pathMetrics.lastAccessedAt = nowIso();
-        metrics.totals.networkRequests += 1;
-        metrics.totals.bytesDownloaded += safeBytes;
-    });
-}
-
-export function getWebAppStorageMetrics() {
-    return readStorageMetrics();
-}
-
-export function resetWebAppStorageMetrics() {
-    return writeStorageMetrics(createEmptyStorageMetrics());
-}
-
-export function recordForegroundPollingCycle(source = 'unknown') {
-    updateStorageMetrics((metrics) => {
-        const key = source || 'unknown';
-        if (!metrics.polling[key]) {
-            metrics.polling[key] = {
-                cycles: 0,
-                lastPolledAt: null
-            };
-        }
-        metrics.polling[key].cycles += 1;
-        metrics.polling[key].lastPolledAt = nowIso();
-        metrics.totals.foregroundPollingCycles += 1;
-    });
 }
 
 export function getJitteredPollingDelay(baseMs, jitterMinMs = 1000, jitterMaxMs = 3000) {
@@ -3866,7 +3736,6 @@ async function readStorageJson(path, options = {}) {
 
     if (!force && cached) {
         if (cached.promise) {
-            recordStorageJsonCacheHit(path);
             try {
                 return cloneJsonValue(await withStorageJsonLockTimeout(cached.promise, path));
             } catch (error) {
@@ -3878,7 +3747,6 @@ async function readStorageJson(path, options = {}) {
             }
         }
         if (cached.expiresAt > now) {
-            recordStorageJsonCacheHit(path);
             return cloneJsonValue(cached.value);
         }
     }
@@ -3886,7 +3754,6 @@ async function readStorageJson(path, options = {}) {
     let fetchPromise;
     fetchPromise = (async () => {
         const timeout = createStorageJsonAbortSignal(path);
-        let networkRecorded = false;
         let responseText = '';
         try {
             const response = await fetch(safetyModuleObjectUrl(path), {
@@ -3896,8 +3763,6 @@ async function readStorageJson(path, options = {}) {
                 cache: force ? 'no-store' : 'default'
             });
             responseText = await response.text();
-            recordStorageJsonNetwork(path, getTextByteLength(responseText));
-            networkRecorded = true;
 
             if (response.status === 404) {
                 setStorageJsonCache(path, null, ttlMs);
@@ -3917,9 +3782,6 @@ async function readStorageJson(path, options = {}) {
             setStorageJsonCache(path, json, ttlMs);
             return json;
         } catch (error) {
-            if (!networkRecorded) {
-                recordStorageJsonNetwork(path, getTextByteLength(responseText));
-            }
             if (error?.name === 'AbortError') {
                 throw new Error(`Timed out loading ${path}`);
             }

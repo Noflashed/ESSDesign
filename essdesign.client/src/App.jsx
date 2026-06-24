@@ -21,7 +21,6 @@ import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
-import WebAppDebugPage from './components/WebAppDebugPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI } from './services/api';
 import './App.css';
@@ -179,16 +178,6 @@ const NewsNavIcon = ({ size = 18 }) => (
         <line x1="8" y1="14" x2="13" y2="14" />
     </svg>
 );
-const DebugNavIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 19V5" />
-        <path d="M20 19H4" />
-        <rect x="7" y="11" width="3" height="5" rx="1" />
-        <rect x="12" y="7" width="3" height="9" rx="1" />
-        <rect x="17" y="9" width="3" height="7" rx="1" />
-    </svg>
-);
-
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
     'design': DesignNavIcon,
@@ -199,7 +188,6 @@ const NAV_PAGE_ICONS = {
     'rostering': CalendarNavIcon,
     'employees': UsersNavIcon,
     'ess-news': NewsNavIcon,
-    'web-app-debug': DebugNavIcon,
 };
 
 function NavPageIcon({ pageKey, size = 18 }) {
@@ -208,7 +196,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 }
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news', 'web-app-debug']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
@@ -541,7 +529,6 @@ function App() {
                 { key: 'rostering', label: 'ESS Rostering' },
                 { key: 'employees', label: 'Employees' },
             ] : []),
-            ...(user?.role === 'admin' ? [{ key: 'web-app-debug', label: 'Web-App Debug' }] : []),
             ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
     const showHeaderSearch = currentPage === 'design';
@@ -1231,10 +1218,6 @@ function App() {
 
         if (currentPage === 'ess-news' && isAdmin) {
             return <ESSNewsPage />;
-        }
-
-        if (currentPage === 'web-app-debug' && isAdmin) {
-            return <WebAppDebugPage />;
         }
 
         return (

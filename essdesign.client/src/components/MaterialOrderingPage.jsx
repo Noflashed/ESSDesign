@@ -5,7 +5,6 @@ import {
     getJitteredPollingDelay,
     materialOrdersAPI,
     materialOrderRequestsAPI,
-    recordForegroundPollingCycle,
     safetyProjectsAPI,
 } from '../services/api';
 import {
@@ -747,7 +746,6 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
             if (document.visibilityState !== 'visible') {
                 return;
             }
-            recordForegroundPollingCycle('material-ordering-page');
             loadPageData();
         };
         let pollingTimeout = null;
