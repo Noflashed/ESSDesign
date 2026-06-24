@@ -143,12 +143,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     useEffect(() => {
         let active = true;
         (async () => {
-            try {
-                await authAPI.syncEmployeeLinks();
-            } catch (err) {
-                console.error('Failed to sync existing employee links:', err);
-            }
-
             return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
         })()
             .then(([builders, employeeRows, userRows]) => {
@@ -169,6 +163,19 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             .finally(() => {
                 if (active) setLoading(false);
             });
+
+        authAPI.syncEmployeeLinks()
+            .then(async (result) => {
+                if (!active || !result?.syncedCount) return;
+                const [employeeRows, userRows] = await Promise.all([rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
+                if (!active) return;
+                setEmployees(employeeRows);
+                setAppUsers(userRows || []);
+            })
+            .catch((err) => {
+                console.error('Failed to sync existing employee links:', err);
+            });
+
         return () => { active = false; };
     }, []);
 

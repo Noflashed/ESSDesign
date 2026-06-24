@@ -714,6 +714,96 @@ namespace ESSDesign.Server.Services
             SanitizeUserForClient(user);
         }
 
+        private async Task<List<EmployeeRoleRow>> GetEmployeeRoleRowsAsync()
+        {
+            return await GetRestRowsAsync<EmployeeRoleRow>(
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}");
+        }
+
+        private static (Dictionary<string, EmployeeRoleRow> ByLinkedUserId, Dictionary<string, EmployeeRoleRow> ByEmail) BuildEmployeeRoleLookup(IEnumerable<EmployeeRoleRow> employees)
+        {
+            var byLinkedUserId = new Dictionary<string, EmployeeRoleRow>(StringComparer.OrdinalIgnoreCase);
+            var byEmail = new Dictionary<string, EmployeeRoleRow>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var employee in employees)
+            {
+                if (employee.LinkedAuthUserId.HasValue)
+                {
+                    byLinkedUserId[employee.LinkedAuthUserId.Value.ToString().ToLowerInvariant()] = employee;
+                }
+
+                var email = employee.Email?.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(email))
+                {
+                    byEmail[email] = employee;
+                }
+            }
+
+            return (byLinkedUserId, byEmail);
+        }
+
+        private static EmployeeRoleRow? FindEmployeeForUser(
+            UserInfo user,
+            (Dictionary<string, EmployeeRoleRow> ByLinkedUserId, Dictionary<string, EmployeeRoleRow> ByEmail) lookup)
+        {
+            if (TryNormalizeUserId(user.Id, out var normalizedUserId)
+                && lookup.ByLinkedUserId.TryGetValue(normalizedUserId, out var linkedEmployee))
+            {
+                return linkedEmployee;
+            }
+
+            var normalizedEmail = user.Email?.Trim().ToLowerInvariant();
+            return !string.IsNullOrWhiteSpace(normalizedEmail)
+                && lookup.ByEmail.TryGetValue(normalizedEmail, out var emailEmployee)
+                ? emailEmployee
+                : null;
+        }
+
+        private static string ResolveUserListRole(string? userId, IReadOnlyDictionary<string, string> roles, EmployeeRoleRow? employee)
+        {
+            var normalizedUserId = TryNormalizeUserId(userId, out var parsedUserId) ? parsedUserId : string.Empty;
+            if (!string.IsNullOrWhiteSpace(normalizedUserId) && roles.TryGetValue(normalizedUserId, out var storedRole))
+            {
+                var normalizedRole = NormalizeRole(storedRole);
+                if (normalizedRole != AppRoles.Viewer)
+                {
+                    return normalizedRole;
+                }
+            }
+
+            var bootstrapRole = NormalizeRole(GetBootstrapRole(normalizedUserId));
+            if (bootstrapRole != AppRoles.Viewer)
+            {
+                return bootstrapRole;
+            }
+
+            if (employee != null)
+            {
+                return employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
+            }
+
+            return roles.TryGetValue(normalizedUserId, out var fallbackRole)
+                ? NormalizeRole(fallbackRole)
+                : AppRoles.Viewer;
+        }
+
+        private static void EnrichUserInfoWithEmployeeRole(UserInfo user, EmployeeRoleRow? employee)
+        {
+            if (employee == null)
+            {
+                SanitizeUserForClient(user);
+                return;
+            }
+
+            user.EmployeeId = employee.Id;
+            user.EmployeeFirstName = employee.FirstName?.Trim();
+            user.EmployeeLastName = employee.LastName?.Trim();
+            user.EmployeePhoneNumber = employee.PhoneNumber?.Trim();
+            user.LeadingHand = employee.LeadingHand;
+            user.EmployeeTitle = GetRoleDisplayName(user.Role);
+            SanitizeUserForClient(user);
+        }
+
         private async Task<Dictionary<string, string>> GetAllUserRolesAsync()
         {
             try
@@ -1969,16 +2059,22 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var users = await GetRestRowsAsync<UserInfo>(
+                var usersTask = GetRestRowsAsync<UserInfo>(
                     $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&order=full_name.asc");
-                var roles = await GetAllUserRolesAsync();
+                var rolesTask = GetAllUserRolesAsync();
+                var employeeRowsTask = GetEmployeeRoleRowsAsync();
+
+                await Task.WhenAll(usersTask, rolesTask, employeeRowsTask);
+
+                var users = usersTask.Result;
+                var roles = rolesTask.Result;
+                var employeeLookup = BuildEmployeeRoleLookup(employeeRowsTask.Result);
 
                 foreach (var user in users)
                 {
-                    user.Role = roles.TryGetValue(user.Id, out var role)
-                        ? role
-                        : await EnsureUserRoleAsync(user.Id);
-                    await EnrichUserInfoWithEmployeeRoleAsync(user);
+                    var employee = FindEmployeeForUser(user, employeeLookup);
+                    user.Role = ResolveUserListRole(user.Id, roles, employee);
+                    EnrichUserInfoWithEmployeeRole(user, employee);
                     SanitizeUserForClient(user);
                 }
 
@@ -2006,16 +2102,22 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var users = await GetRestRowsAsync<UserInfo>(
+                var usersTask = GetRestRowsAsync<UserInfo>(
                     $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&id=in.{BuildInFilter(validUserIds)}&order=full_name.asc");
-                var roles = await GetUserRolesByIdsAsync(validUserIds);
+                var rolesTask = GetUserRolesByIdsAsync(validUserIds);
+                var employeeRowsTask = GetEmployeeRoleRowsAsync();
+
+                await Task.WhenAll(usersTask, rolesTask, employeeRowsTask);
+
+                var users = usersTask.Result;
+                var roles = rolesTask.Result;
+                var employeeLookup = BuildEmployeeRoleLookup(employeeRowsTask.Result);
 
                 foreach (var user in users)
                 {
-                    user.Role = roles.TryGetValue(user.Id, out var role)
-                        ? role
-                        : await EnsureUserRoleAsync(user.Id);
-                    await EnrichUserInfoWithEmployeeRoleAsync(user);
+                    var employee = FindEmployeeForUser(user, employeeLookup);
+                    user.Role = ResolveUserListRole(user.Id, roles, employee);
+                    EnrichUserInfoWithEmployeeRole(user, employee);
                     SanitizeUserForClient(user);
                 }
 
