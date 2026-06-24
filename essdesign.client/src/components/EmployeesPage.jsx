@@ -59,6 +59,36 @@ function getRolePillClass(role) {
     }
 }
 
+function getInitials(name = '') {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '??';
+    return parts.slice(0, 2).map(part => part[0]?.toUpperCase()).join('');
+}
+
+function getAccountStatus(entry) {
+    if (entry.isVerified) {
+        return { label: 'Verified', className: 'verified' };
+    }
+    if (entry.type === 'employee' && entry.employee?.inviteSentAt) {
+        return { label: 'Invite Sent', className: 'invited' };
+    }
+    if (entry.appUser) {
+        return { label: 'App Account', className: 'app' };
+    }
+    return { label: 'Not Linked', className: 'unlinked' };
+}
+
+function formatEmployeeDate(value) {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
 function TreeIcon() {
     return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -139,6 +169,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [appUserPendingDelete, setAppUserPendingDelete] = useState(null);
     const [showTruckDeviceModal, setShowTruckDeviceModal] = useState(false);
     const [truckDeviceForm, setTruckDeviceForm] = useState(emptyTruckDeviceForm());
+    const [selectedInfoEntry, setSelectedInfoEntry] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -178,11 +209,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
         return () => { active = false; };
     }, []);
-
-    const siteLabelById = useMemo(
-        () => Object.fromEntries(sites.map((site) => [site.id, site.label])),
-        [sites]
-    );
 
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
@@ -235,12 +261,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const phone = (entry.displayPhone || '').toLowerCase();
             const email = (entry.displayEmail || '').toLowerCase();
             const role = getRoleLabel(entry.role).toLowerCase();
-            const prefs = entry.employee
-                ? entry.employee.preferredSiteIds.map((id) => (siteLabelById[id] || '').toLowerCase()).join(' ')
-                : '';
-            return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || prefs.includes(q);
+            return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q);
         });
-    }, [mergedEntries, search, siteLabelById]);
+    }, [mergedEntries, search]);
 
     const openEmployeeEditor = (employee, effectiveRole) => {
         const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
@@ -472,9 +495,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             <div className="module-shell employees-shell">
                 <div className="employees-toolbar">
                     <div className="employees-toolbar-copy">
-                        <div className="employees-toolbar-eyebrow">ESS Workforce</div>
                         <h2>Employee Directory</h2>
-                        <p>Manage employee details, preferred projects, leading hand relationships, and app accounts from one place.</p>
                     </div>
                     <div className="module-form-actions">
                         <button type="button" className="module-secondary-btn" onClick={openTruckDeviceCreator}>
@@ -488,23 +509,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
                 <div className="module-card employees-card">
                     <div className="employees-search-row">
-                        <div className="module-field employees-search-field">
-                            <label>Search</label>
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email, role, or preferred site" />
-                        </div>
-                        <div className="employees-search-stats">
-                            <div className="employees-stat">
-                                <span className="employees-stat-value">{mergedEntries.length}</span>
-                                <span className="employees-stat-label">Total</span>
-                            </div>
-                            <div className="employees-stat">
-                                <span className="employees-stat-value">{mergedEntries.filter((e) => e.leadingHand).length}</span>
-                                <span className="employees-stat-label">Leading Hands</span>
-                            </div>
-                            <div className="employees-stat">
-                                <span className="employees-stat-value">{mergedEntries.filter((e) => e.isVerified).length}</span>
-                                <span className="employees-stat-label">Verified</span>
-                            </div>
+                        <div className="employees-search-field">
+                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
                         </div>
                     </div>
                     {error && !showModal && !showAppUserModal && !employeePendingDelete && !appUserPendingDelete ? (
@@ -515,75 +521,158 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     ) : filteredEntries.length === 0 ? (
                         <div className="module-empty-inline">No employees found.</div>
                     ) : (
-                        <div className="employee-cluster-grid">
-                            {filteredEntries.map((entry) => (
-                                <div key={entry.key} className="module-list-card employee-cluster-card">
-                                    <div className="employee-card-icon-rail">
-                                        {entry.leadingHand && entry.type === 'employee' ? (
-                                            <EmployeeActionButton
-                                                title={`Open leading hand relationships for ${entry.displayName}`}
-                                                onClick={() => onOpenLeadingHandRelationships?.(entry.employee)}
+                        <div className="employees-table-wrap">
+                            <table className="employees-table">
+                                <thead>
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Role</th>
+                                        <th>Phone</th>
+                                        <th>Email</th>
+                                        <th>Account Status</th>
+                                        <th>Leading Hand</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredEntries.map((entry) => {
+                                        const status = getAccountStatus(entry);
+                                        return (
+                                            <tr
+                                                key={entry.key}
+                                                className="employees-data-row"
+                                                onClick={() => setSelectedInfoEntry(entry)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault();
+                                                        setSelectedInfoEntry(entry);
+                                                    }
+                                                }}
+                                                tabIndex={0}
                                             >
-                                                <TreeIcon />
-                                            </EmployeeActionButton>
-                                        ) : null}
-                                        <EmployeeActionButton
-                                            title={`Edit ${entry.displayName}`}
-                                            onClick={() => {
-                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
-                                                else openAppUserEditor(entry.appUser);
-                                            }}
-                                        >
-                                            <EditIcon />
-                                        </EmployeeActionButton>
-                                        <EmployeeActionButton
-                                            danger
-                                            title={`Delete ${entry.displayName}`}
-                                            onClick={() => {
-                                                if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
-                                                else setAppUserPendingDelete(entry.appUser);
-                                            }}
-                                        >
-                                            <DeleteIcon />
-                                        </EmployeeActionButton>
-                                    </div>
-
-                                    <div className="employee-card-top">
-                                        <div className="employee-card-identity">
-                                            <div className="employee-card-heading">
-                                                <div className="module-item-title">{entry.displayName}</div>
-                                                {entry.leadingHand ? <span className="employee-lh-badge">LH</span> : null}
-                                            </div>
-                                            <div className="module-item-sub employee-phone">
-                                                {entry.type === 'employee'
-                                                    ? (entry.displayPhone || 'No phone number')
-                                                    : (entry.displayPhone || entry.displayEmail || '')}
-                                            </div>
-                                        </div>
-                                        <div className="employee-card-statuses">
-                                            {entry.type === 'employee' ? (
-                                                <div className="employee-status-pill">
-                                                    <span className="employee-status-dot employee-status-dot-phone" />
-                                                    Contact Ready
-                                                </div>
-                                            ) : null}
-                                            {entry.type === 'employee' && !entry.isVerified && entry.employee.inviteSentAt ? (
-                                                <div className="employee-status-pill employee-status-pill-invited">Invited</div>
-                                            ) : null}
-                                            {entry.isVerified ? (
-                                                <div className="employee-status-pill employee-status-pill-verified">Verified</div>
-                                            ) : null}
-                                            <div className={`employee-status-pill ${getRolePillClass(entry.role)}`}>
-                                                {getRoleLabel(entry.role)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+                                                <td>
+                                                    <div className="employees-identity-cell">
+                                                        <span className="employees-avatar">{getInitials(entry.displayName)}</span>
+                                                        <strong>{entry.displayName}</strong>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>
+                                                        {getRoleLabel(entry.role)}
+                                                    </span>
+                                                </td>
+                                                <td>{entry.displayPhone || '-'}</td>
+                                                <td>{entry.displayEmail || '-'}</td>
+                                                <td>
+                                                    <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
+                                                </td>
+                                                <td>
+                                                    {entry.leadingHand ? (
+                                                        <span className="employees-leading-check" aria-label="Leading hand">✓</span>
+                                                    ) : (
+                                                        <span className="employees-muted-dash">-</span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <div className="employees-table-actions">
+                                                        <EmployeeActionButton
+                                                            title={`Open leading hand relationships for ${entry.displayName}`}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                if (entry.leadingHand && entry.type === 'employee') {
+                                                                    onOpenLeadingHandRelationships?.(entry.employee);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <TreeIcon />
+                                                        </EmployeeActionButton>
+                                                        <EmployeeActionButton
+                                                            title={`Edit ${entry.displayName}`}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
+                                                                else openAppUserEditor(entry.appUser);
+                                                            }}
+                                                        >
+                                                            <EditIcon />
+                                                        </EmployeeActionButton>
+                                                        <EmployeeActionButton
+                                                            danger
+                                                            title={`Delete ${entry.displayName}`}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
+                                                                else setAppUserPendingDelete(entry.appUser);
+                                                            }}
+                                                        >
+                                                            <DeleteIcon />
+                                                        </EmployeeActionButton>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            <div className="employees-table-footer">
+                                Showing 1 to {filteredEntries.length} of {mergedEntries.length} employees
+                            </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {selectedInfoEntry && (
+                <div className="module-modal-backdrop" onClick={() => setSelectedInfoEntry(null)}>
+                    <div className="module-modal compact employees-info-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Employee Information</h3>
+                            <button className="nav-drawer-close" onClick={() => setSelectedInfoEntry(null)}>×</button>
+                        </div>
+                        <div className="employees-info-list">
+                            <div className="employees-info-row">
+                                <span>Full Name</span>
+                                <strong>{selectedInfoEntry.displayName}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Role</span>
+                                <strong><span className={`employees-role-pill ${getRolePillClass(selectedInfoEntry.role)}`}>{getRoleLabel(selectedInfoEntry.role)}</span></strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Phone Number</span>
+                                <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Email</span>
+                                <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Account Status</span>
+                                <strong><span className={`employees-account-pill ${getAccountStatus(selectedInfoEntry).className}`}>{getAccountStatus(selectedInfoEntry).label}</span></strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Linked App Account</span>
+                                <strong>{selectedInfoEntry.appUser ? `Yes (${selectedInfoEntry.appUser.email})` : 'No'}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Invite Sent</span>
+                                <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Verified On</span>
+                                <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
+                            </div>
+                            <div className="employees-info-row">
+                                <span>Leading Hand</span>
+                                <strong>{selectedInfoEntry.leadingHand ? 'Yes' : 'No'}</strong>
+                            </div>
+                        </div>
+                        <div className="module-form-actions">
+                            <button type="button" className="module-secondary-btn compact" onClick={() => setSelectedInfoEntry(null)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showModal && (
                 <div className="module-modal-backdrop" onClick={() => setShowModal(false)}>
