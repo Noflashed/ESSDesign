@@ -30,6 +30,7 @@ export default function SiteInformationPage() {
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
     const [selectedInfoProject, setSelectedInfoProject] = useState(null);
+    const [builderMenuOpen, setBuilderMenuOpen] = useState(false);
     const [error, setError] = useState('');
 
     const loadBuilders = async () => {
@@ -50,10 +51,22 @@ export default function SiteInformationPage() {
         loadBuilders().catch(() => {});
     }, []);
 
+    useEffect(() => {
+        if (!builderMenuOpen) {
+            return undefined;
+        }
+
+        const closeMenu = () => setBuilderMenuOpen(false);
+        window.addEventListener('click', closeMenu);
+        return () => window.removeEventListener('click', closeMenu);
+    }, [builderMenuOpen]);
+
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
+
+    const selectedBuilderLabel = selectedBuilder?.name || 'All Builders';
 
     const visibleProjects = useMemo(() => {
         const sourceBuilders = selectedBuilder ? [selectedBuilder] : builders;
@@ -200,6 +213,11 @@ export default function SiteInformationPage() {
         setSelectedInfoProject(null);
     };
 
+    const selectBuilderFilter = (builderId) => {
+        setSelectedBuilderId(builderId);
+        setBuilderMenuOpen(false);
+    };
+
     const toggleArchiveProject = async (builderId, project) => {
         const isArchiving = !project.archived;
         const confirmed = window.confirm(
@@ -260,16 +278,66 @@ export default function SiteInformationPage() {
                 ) : (
                     <section className="site-registry-table-section">
                         <div className="site-registry-toolbar">
-                            <label className="site-registry-filter-field">
+                            <div className="site-registry-filter-field">
                                 <span>Builder</span>
-                                <span className="site-registry-builder-select-wrap">
-                                    <select value={selectedBuilderId} onChange={event => setSelectedBuilderId(event.target.value)}>
-                                        <option value="">All Builders</option>
-                                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                                    </select>
+                                <span className={`site-registry-builder-select-wrap ${builderMenuOpen ? 'open' : ''}`}>
+                                    <button
+                                        type="button"
+                                        className="site-registry-builder-select-button"
+                                        onClick={event => {
+                                            event.stopPropagation();
+                                            setBuilderMenuOpen(prev => !prev);
+                                        }}
+                                        onKeyDown={event => {
+                                            if (event.key === 'Escape') {
+                                                setBuilderMenuOpen(false);
+                                            }
+                                        }}
+                                        aria-haspopup="listbox"
+                                        aria-expanded={builderMenuOpen}
+                                    >
+                                        <span>{selectedBuilderLabel}</span>
+                                    </button>
                                     <span className="site-registry-builder-select-icon" aria-hidden="true" />
+                                    {builderMenuOpen ? (
+                                        <div className="site-registry-builder-menu" role="listbox" aria-label="Builder filter">
+                                            <button
+                                                type="button"
+                                                className={`site-registry-builder-option ${selectedBuilderId === '' ? 'selected' : ''}`}
+                                                onClick={event => {
+                                                    event.stopPropagation();
+                                                    selectBuilderFilter('');
+                                                }}
+                                                role="option"
+                                                aria-selected={selectedBuilderId === ''}
+                                            >
+                                                <span>All Builders</span>
+                                                <small>Show every project</small>
+                                            </button>
+                                            {builders.map(builder => {
+                                                const activeCount = builder.projects.filter(project => !project.archived).length;
+                                                const archivedCount = builder.projects.filter(project => project.archived).length;
+                                                return (
+                                                    <button
+                                                        key={builder.id}
+                                                        type="button"
+                                                        className={`site-registry-builder-option ${selectedBuilderId === builder.id ? 'selected' : ''}`}
+                                                        onClick={event => {
+                                                            event.stopPropagation();
+                                                            selectBuilderFilter(builder.id);
+                                                        }}
+                                                        role="option"
+                                                        aria-selected={selectedBuilderId === builder.id}
+                                                    >
+                                                        <span>{builder.name}</span>
+                                                        <small>{activeCount} active{archivedCount ? ` / ${archivedCount} archived` : ''}</small>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
                                 </span>
-                            </label>
+                            </div>
                             <label className="site-registry-toggle">
                                 <input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />
                                 <span className="site-registry-toggle-track" aria-hidden="true">
