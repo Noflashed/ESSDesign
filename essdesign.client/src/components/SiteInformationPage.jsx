@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Archive, Pencil, Trash2 } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
@@ -36,7 +37,7 @@ export default function SiteInformationPage() {
         try {
             const nextBuilders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
             setBuilders(nextBuilders);
-            setSelectedBuilderId(prev => prev && nextBuilders.some(builder => builder.id === prev) ? prev : (nextBuilders[0]?.id || ''));
+            setSelectedBuilderId(prev => prev && nextBuilders.some(builder => builder.id === prev) ? prev : '');
         } catch (err) {
             setError(err.message || 'Failed to load site information');
         } finally {
@@ -49,14 +50,16 @@ export default function SiteInformationPage() {
     }, []);
 
     const selectedBuilder = useMemo(
-        () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
+        () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
 
-    const visibleProjects = useMemo(
-        () => (selectedBuilder?.projects || []).filter(project => showArchived || !project.archived),
-        [selectedBuilder, showArchived]
-    );
+    const visibleProjects = useMemo(() => {
+        const sourceBuilders = selectedBuilder ? [selectedBuilder] : builders;
+        return sourceBuilders
+            .flatMap(builder => builder.projects.map(project => ({ ...project, builder })))
+            .filter(project => showArchived || !project.archived);
+    }, [builders, selectedBuilder, showArchived]);
 
     const activeProjectCount = useMemo(
         () => builders.reduce((count, builder) => count + builder.projects.filter(project => !project.archived).length, 0),
@@ -176,7 +179,7 @@ export default function SiteInformationPage() {
                 ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name)
                 : await safetyProjectsAPI.createBuilder(builderForm.name);
             setBuilders(nextBuilders);
-            setSelectedBuilderId(builderForm.id || nextBuilders.find(builder => builder.name.toLowerCase() === builderForm.name.trim().toLowerCase())?.id || nextBuilders[0]?.id || '');
+            setSelectedBuilderId(builderForm.id || nextBuilders.find(builder => builder.name.toLowerCase() === builderForm.name.trim().toLowerCase())?.id || '');
             setShowBuilderModal(false);
         } catch (err) {
             setError(err.message || 'Could not save builder');
@@ -243,15 +246,14 @@ export default function SiteInformationPage() {
 
     return (
         <div className="module-page">
-            <div className="module-shell">
-                <div className="module-header">
+            <div className="module-shell site-registry-shell">
+                <div className="module-header site-registry-header">
                     <div>
-                        <h2>Site Registry</h2>
-                        <p>Manage shared builders and projects for both the web app and iOS app.</p>
+                        <h2>Projects</h2>
                     </div>
                     <div className="module-list-actions">
-                        <button className="module-primary-btn compact" onClick={openCreateBuilder}>Add Builder</button>
-                        <button className="module-primary-btn compact" onClick={openCreateProject}>Add Project</button>
+                        <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>Add Builder</button>
+                        <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>Add Project</button>
                     </div>
                 </div>
 
@@ -260,82 +262,82 @@ export default function SiteInformationPage() {
                 {loading ? (
                     <div className="module-empty">Loading site information...</div>
                 ) : (
-                    <div className="module-grid module-grid-two site-registry-grid">
-                        <section className="module-card site-registry-card">
-                            <div className="module-card-title">Builders</div>
-                            {builders.length === 0 ? (
-                                <div className="module-empty-inline">No builders created yet.</div>
-                            ) : (
-                                <div className="module-list site-registry-builder-list">
-                                    {builders.map(builder => (
-                                        <button
-                                            key={builder.id}
-                                            className={`module-file-row ${selectedBuilder?.id === builder.id ? 'active-row' : ''}`}
-                                            onClick={() => setSelectedBuilderId(builder.id)}
-                                        >
-                                            <div>
-                                                <div className="module-item-title">{builder.name}</div>
-                                                <div className="module-item-sub">
-                                                    {builder.projects.filter(project => !project.archived).length} active
-                                                    {builder.projects.some(project => project.archived) ? ` • ${builder.projects.filter(project => project.archived).length} archived` : ''}
-                                                </div>
-                                            </div>
-                                            <span className="module-link-arrow">Select</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
+                    <section className="site-registry-table-section">
+                        <div className="site-registry-toolbar">
+                            <label className="site-registry-filter-field">
+                                <span>Builder</span>
+                                <select value={selectedBuilderId} onChange={event => setSelectedBuilderId(event.target.value)}>
+                                    <option value="">All Builders</option>
+                                    {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
+                                </select>
+                            </label>
+                            <label className="site-registry-toggle">
+                                <input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />
+                                <span className="site-registry-toggle-track" aria-hidden="true">
+                                    <span className="site-registry-toggle-thumb" />
+                                </span>
+                                <span>Show Archived</span>
+                            </label>
+                            {selectedBuilder ? (
+                                <button className="module-secondary-btn compact site-registry-edit-builder" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
+                            ) : null}
+                            <div className="site-registry-counts">{activeProjectCount} active / {archivedProjectCount} archived</div>
+                        </div>
 
-                        <section className="module-card site-registry-card">
-                            <div className="module-list-header">
-                                <div>
-                                    <div className="module-card-title">Projects</div>
-                                    <div className="module-item-sub">{activeProjectCount} active • {archivedProjectCount} archived</div>
-                                </div>
-                                <div className="module-list-actions">
-                                    <button className="module-secondary-btn compact" onClick={() => setShowArchived(prev => !prev)}>
-                                        {showArchived ? 'Hide Archived Jobs' : 'Show Archived Jobs'}
-                                    </button>
-                                    {selectedBuilder ? (
-                                        <button className="module-secondary-btn compact" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
-                                    ) : null}
-                                </div>
-                            </div>
-                            {!selectedBuilder ? (
-                                <div className="module-empty-inline">Select a builder to manage its projects.</div>
-                            ) : visibleProjects.length === 0 ? (
-                                <div className="module-empty-inline">
-                                    {showArchived ? 'This builder has no projects yet.' : 'This builder has no active projects.'}
-                                </div>
-                            ) : (
-                                <div className="module-list site-registry-project-list">
-                                    {visibleProjects.map(project => (
-                                        <div key={project.id} className={`module-list-card ${project.archived ? 'module-list-card-archived' : ''}`}>
-                                            <div className="module-list-header">
-                                                <div>
-                                                    <div className="module-item-title">{project.name}</div>
-                                                    <div className="module-item-sub">
-                                                        {selectedBuilder.name}{project.archived ? ' • Archived' : ''}
-                                                    </div>
-                                                    {project.siteLocation ? (
-                                                        <div className="site-registry-project-location">{project.siteLocation}</div>
-                                                    ) : null}
-                                                </div>
-                                                <div className="module-list-actions">
-                                                    <button className="module-secondary-btn" onClick={() => openEditProject(selectedBuilder.id, project)}>Edit</button>
-                                                    <button className="module-secondary-btn" onClick={() => toggleArchiveProject(selectedBuilder.id, project)}>
-                                                        {project.archived ? 'Unarchive' : 'Archive'}
+                        <div className="site-registry-table-wrap">
+                            <table className="site-registry-table">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Builder</th>
+                                        <th>Site Geographic Location</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleProjects.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" className="site-registry-empty-cell">
+                                                {builders.length === 0
+                                                    ? 'No builders created yet.'
+                                                    : showArchived
+                                                        ? 'No projects found.'
+                                                        : 'No active projects found.'}
+                                            </td>
+                                        </tr>
+                                    ) : visibleProjects.map(project => (
+                                        <tr key={`${project.builder.id}-${project.id}`}>
+                                            <td>{project.name}</td>
+                                            <td>{project.builder.name}</td>
+                                            <td>{project.siteLocation || 'Not set'}</td>
+                                            <td>
+                                                <span className={`site-registry-status ${project.archived ? 'archived' : 'active'}`}>
+                                                    {project.archived ? 'Archived' : 'Active'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="site-registry-table-actions">
+                                                    <button className="site-registry-action-btn edit" onClick={() => openEditProject(project.builder.id, project)}>
+                                                        <Pencil size={14} strokeWidth={2.4} />
+                                                        <span>Edit</span>
                                                     </button>
-                                                    <button className="module-danger-btn" onClick={() => removeProject(selectedBuilder.id, project.id)}>Delete</button>
+                                                    <button className="site-registry-action-btn archive" onClick={() => toggleArchiveProject(project.builder.id, project)}>
+                                                        <Archive size={14} strokeWidth={2.2} />
+                                                        <span>{project.archived ? 'Unarchive' : 'Archive'}</span>
+                                                    </button>
+                                                    <button className="site-registry-action-btn delete" onClick={() => removeProject(project.builder.id, project.id)}>
+                                                        <Trash2 size={14} strokeWidth={2.2} />
+                                                        <span>Delete</span>
+                                                    </button>
                                                 </div>
-                                            </div>
-                                        </div>
+                                            </td>
+                                        </tr>
                                     ))}
-                                </div>
-                            )}
-                        </section>
-                    </div>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 )}
             </div>
 
@@ -344,7 +346,7 @@ export default function SiteInformationPage() {
                     <div className="module-modal compact" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
                             <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
-                            <button className="nav-drawer-close" onClick={closeProjectModal}>×</button>
+                            <button className="nav-drawer-close" onClick={closeProjectModal}>x</button>
                         </div>
                         <form className="module-form" onSubmit={saveProject}>
                             <div className="module-field">
@@ -425,7 +427,7 @@ export default function SiteInformationPage() {
                     <div className="module-modal compact" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
                             <h3>{builderForm.id ? 'Edit Builder' : 'Add Builder'}</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowBuilderModal(false)}>×</button>
+                            <button className="nav-drawer-close" onClick={() => setShowBuilderModal(false)}>x</button>
                         </div>
                         <form className="module-form" onSubmit={saveBuilder}>
                             <div className="module-field">
