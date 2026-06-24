@@ -1155,6 +1155,11 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--card-bg);
+    transition: padding-bottom 0.12s ease;
+}
+
+.site-registry-table-wrap.filter-menu-open {
+    padding-bottom: 230px;
 }
 
 .site-registry-table {

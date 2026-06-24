@@ -372,7 +372,7 @@ export default function SiteInformationPage() {
                             ) : null}
                         </div>
 
-                        <div className="site-registry-table-wrap">
+                        <div className={`site-registry-table-wrap ${columnFilterMenu ? 'filter-menu-open' : ''}`}>
                             <table className="site-registry-table">
                                 <thead>
                                     <tr>
