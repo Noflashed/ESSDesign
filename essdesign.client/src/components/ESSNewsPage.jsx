@@ -18,12 +18,12 @@ function emptyComposer() {
     };
 }
 
-function optimizedNewsImageUrl(url, width = 220) {
+function optimizedNewsImageUrl(url, quality = 72) {
     if (!url || !url.includes('/storage/v1/object/public/')) {
         return url;
     }
     const separator = url.includes('?') ? '&' : '?';
-    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}width=${width}&quality=72&resize=cover`;
+    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}quality=${quality}`;
 }
 
 function newsThumbnailUrl(item) {
@@ -31,9 +31,9 @@ function newsThumbnailUrl(item) {
         return '';
     }
     if (item.mediaType === 'video') {
-        return item.thumbnailUrl ? optimizedNewsImageUrl(item.thumbnailUrl, 220) : '';
+        return item.thumbnailUrl ? optimizedNewsImageUrl(item.thumbnailUrl) : '';
     }
-    return optimizedNewsImageUrl(item.mediaUrl, 220);
+    return optimizedNewsImageUrl(item.mediaUrl);
 }
 
 export default function ESSNewsPage() {
