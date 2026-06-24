@@ -262,10 +262,13 @@ export default function SiteInformationPage() {
                         <div className="site-registry-toolbar">
                             <label className="site-registry-filter-field">
                                 <span>Builder</span>
-                                <select value={selectedBuilderId} onChange={event => setSelectedBuilderId(event.target.value)}>
-                                    <option value="">All Builders</option>
-                                    {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                                </select>
+                                <span className="site-registry-builder-select-wrap">
+                                    <select value={selectedBuilderId} onChange={event => setSelectedBuilderId(event.target.value)}>
+                                        <option value="">All Builders</option>
+                                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
+                                    </select>
+                                    <span className="site-registry-builder-select-icon" aria-hidden="true" />
+                                </span>
                             </label>
                             <label className="site-registry-toggle">
                                 <input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />
