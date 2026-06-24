@@ -4701,20 +4701,6 @@ body {
     letter-spacing: 0.04em;
 }
 
-.profile-button-icon {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 .user-menu {
     position: relative;
 }

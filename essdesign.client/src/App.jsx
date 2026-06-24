@@ -68,17 +68,6 @@ const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
     </svg>
 );
 
-const UserProfileIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-            d="M20 21C20 17.6863 16.866 15 13 15H11C7.13401 15 4 17.6863 4 21"
-            stroke={color}
-            strokeWidth="1.8"
-            strokeLinecap="round"
-        />
-        <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.8" />
-    </svg>
-);
 const ThemeIcon = ({ theme, size = 18, color = 'currentColor' }) => (
     theme === 'light' ? (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -558,6 +547,7 @@ function App() {
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
     const [avatarDebugEvents, setAvatarDebugEvents] = useState([]);
+    const [resolvedDisplayAvatarUrl, setResolvedDisplayAvatarUrl] = useState('');
     const avatarDebugEnabled = useMemo(() => isAvatarDebugEnabled(), []);
 
     useEffect(() => {
@@ -1297,22 +1287,75 @@ function App() {
             .map(part => part[0]?.toUpperCase())
             .join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
-    const userAvatarUrl = avatarIndex < avatarCandidates.length ? avatarCandidates[avatarIndex] : null;
+    const probingAvatarUrl = avatarIndex < avatarCandidates.length ? avatarCandidates[avatarIndex] : null;
+    const userAvatarUrl = resolvedDisplayAvatarUrl || null;
     const avatarDebugSnapshot = useMemo(() => ({
         authUser: summarizeAvatarRecord(user),
         matchedProfile: summarizeAvatarRecord(avatarProfileUser),
         mergedProfile: summarizeAvatarRecord(avatarSourceUser),
         avatarIndex,
-        currentAvatarUrl: userAvatarUrl,
+        currentAvatarUrl: probingAvatarUrl,
+        displayAvatarUrl: userAvatarUrl,
         candidateCount: avatarCandidates.length,
         avatarCandidates,
         failures: avatarDebugEvents
-    }), [avatarCandidates, avatarDebugEvents, avatarIndex, avatarProfileUser, avatarSourceUser, user, userAvatarUrl]);
+    }), [avatarCandidates, avatarDebugEvents, avatarIndex, avatarProfileUser, avatarSourceUser, probingAvatarUrl, user, userAvatarUrl]);
 
     useEffect(() => {
         setAvatarIndex(0);
         setAvatarDebugEvents([]);
+        setResolvedDisplayAvatarUrl('');
     }, [avatarCandidates.join('|')]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const candidates = [...new Set(avatarCandidates.filter(Boolean))];
+
+        setResolvedDisplayAvatarUrl('');
+        if (candidates.length === 0) {
+            return undefined;
+        }
+
+        const probeCandidate = (index) => {
+            if (cancelled) return;
+            if (index >= candidates.length) {
+                setAvatarIndex(index);
+                return;
+            }
+
+            const url = candidates[index];
+            setAvatarIndex(index);
+            const image = new Image();
+            image.referrerPolicy = 'no-referrer';
+            image.onload = () => {
+                if (cancelled) return;
+                setResolvedDisplayAvatarUrl(url);
+                if (avatarDebugEnabled) {
+                    console.info('[ESS Avatar] image candidate loaded', { loadedIndex: index, loadedUrl: url });
+                }
+            };
+            image.onerror = () => {
+                if (cancelled) return;
+                const failure = {
+                    failedIndex: index,
+                    failedUrl: url,
+                    nextUrl: candidates[index + 1] || null
+                };
+                if (avatarDebugEnabled) {
+                    setAvatarDebugEvents((current) => [...current.slice(-7), failure]);
+                    console.warn('[ESS Avatar] image candidate failed', failure);
+                }
+                probeCandidate(index + 1);
+            };
+            image.src = url;
+        };
+
+        probeCandidate(0);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [avatarCandidates, avatarDebugEnabled]);
 
     useEffect(() => {
         if (!avatarDebugEnabled) return;
@@ -1333,7 +1376,7 @@ function App() {
             setAvatarDebugEvents((current) => [...current.slice(-7), failure]);
             console.warn('[ESS Avatar] image candidate failed', failure);
         }
-        setAvatarIndex((current) => current + 1);
+        setResolvedDisplayAvatarUrl('');
     }, [avatarCandidates, avatarDebugEnabled, avatarIndex, userAvatarUrl]);
 
     const handleDocumentClick = (document) => {
@@ -1674,9 +1717,6 @@ function App() {
                             ) : (
                                 <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
                             )}
-                            <span className="profile-button-icon" aria-hidden="true">
-                                <UserProfileIcon size={16} />
-                            </span>
                         </button>
                         {showUserMenu && (
                             <div className="user-menu-dropdown">

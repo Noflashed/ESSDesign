@@ -997,7 +997,7 @@
     box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.1);
 }
 
-.document-search svg {
+.document-search > svg {
     position: absolute;
     top: 50%;
     right: 14px;
