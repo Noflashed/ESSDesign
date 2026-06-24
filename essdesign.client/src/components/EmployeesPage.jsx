@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { authAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
+const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
+
 function emptyEmployeeForm() {
     return {
         id: null,
@@ -66,6 +68,41 @@ function getInitials(name = '') {
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return '??';
     return parts.slice(0, 2).map(part => part[0]?.toUpperCase()).join('');
+}
+
+function normalizeAvatarSource(value) {
+    if (!value || typeof value !== 'string') return [];
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        return [trimmed];
+    }
+
+    const normalizedPath = trimmed.replace(/^\/+/, '');
+    if (normalizedPath.startsWith('storage/v1/')) {
+        return [`${SUPABASE_BASE_URL}/${normalizedPath}`];
+    }
+
+    return [
+        `${SUPABASE_BASE_URL}/storage/v1/object/public/${normalizedPath}`,
+        `${SUPABASE_BASE_URL}/storage/v1/object/public/public-assets/${normalizedPath}`
+    ];
+}
+
+function getAvatarCandidates(user) {
+    const rawValues = [
+        user?.avatarUrl,
+        user?.avatar_url,
+        user?.picture,
+        user?.profileImageUrl,
+        user?.profile_image_url,
+        user?.profileImage,
+        user?.profile_image,
+        user?.avatarPath,
+        user?.avatar_path
+    ].filter(Boolean);
+
+    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
 }
 
 function getAccountStatus(entry) {
@@ -171,6 +208,28 @@ function EmployeeColumnFilter({ label, filterKey, active, open, onToggle, childr
                 </div>
             ) : null}
         </div>
+    );
+}
+
+function EmployeeAvatar({ entry }) {
+    const [candidateIndex, setCandidateIndex] = useState(0);
+    const avatarCandidates = entry.avatarCandidates || [];
+    const avatarUrl = avatarCandidates[candidateIndex] || '';
+
+    useEffect(() => {
+        setCandidateIndex(0);
+    }, [entry.key, avatarCandidates.join('|')]);
+
+    return (
+        <span className={`employees-avatar ${avatarUrl ? 'has-image' : ''}`}>
+            {avatarUrl ? (
+                <img
+                    src={avatarUrl}
+                    alt=""
+                    onError={() => setCandidateIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)}
+                />
+            ) : getInitials(entry.displayName)}
+        </span>
     );
 }
 
@@ -286,6 +345,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 role: effectiveRole,
                 leadingHand: effectiveRole === 'leading_hand',
                 preferredSiteIds: emp.preferredSiteIds || [],
+                avatarCandidates: getAvatarCandidates(appUser),
             });
         }
 
@@ -303,6 +363,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     role: u.role,
                     leadingHand: u.role === 'leading_hand',
                     preferredSiteIds: [],
+                    avatarCandidates: getAvatarCandidates(u),
                 });
             }
         }
@@ -681,7 +742,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             >
                                                 <td>
                                                     <div className="employees-identity-cell">
-                                                        <span className="employees-avatar">{getInitials(entry.displayName)}</span>
+                                                        <EmployeeAvatar entry={entry} />
                                                         <strong>{entry.displayName}</strong>
                                                     </div>
                                                 </td>

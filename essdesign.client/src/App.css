@@ -1907,11 +1907,41 @@ body {
 
 .employees-toolbar .module-primary-btn,
 .employees-toolbar .module-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 42px;
     border-radius: 5px;
     padding: 0 24px;
+    gap: 10px;
     font-size: 14px;
     font-weight: 700;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+.employees-toolbar .module-primary-btn {
+    border: 1px solid #1d4ed8;
+    background: #1d4ed8;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.18);
+}
+
+.employees-toolbar .module-primary-btn:hover {
+    background: #1746c7;
+    border-color: #1746c7;
+}
+
+.employees-toolbar .module-secondary-btn {
+    border: 1px solid #b7caf7;
+    background: #fff;
+    color: #1d4ed8;
+}
+
+.employees-toolbar .module-secondary-btn:hover {
+    border-color: #1d4ed8;
+    background: #eff6ff;
+    color: #1d4ed8;
 }
 
 .employees-toolbar .module-primary-btn svg,
@@ -2143,6 +2173,19 @@ body {
     font-weight: 800;
     visibility: visible;
     opacity: 1;
+    overflow: hidden;
+}
+
+.employees-avatar.has-image {
+    background: #fff;
+    padding: 0;
+}
+
+.employees-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .employees-role-pill {
@@ -2211,8 +2254,12 @@ body {
 }
 
 .employees-pagination button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 36px;
     height: 34px;
+    padding: 0;
     border: 1px solid #d7dde8;
     border-radius: 5px;
     background: #fff;
@@ -2220,6 +2267,8 @@ body {
     cursor: pointer;
     font-size: 14px;
     font-weight: 700;
+    line-height: 1;
+    box-sizing: border-box;
 }
 
 .employees-pagination button.active {
