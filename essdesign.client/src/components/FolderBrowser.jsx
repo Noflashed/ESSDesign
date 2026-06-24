@@ -175,20 +175,6 @@ const getFolderItemCount = (item) => {
     return `${totalCount} item${totalCount === 1 ? '' : 's'}`;
 };
 
-const getDocumentSearchText = (item) => [
-    getItemDisplayName(item),
-    item?.revisionNumber,
-    item?.description,
-    item?.essDesignIssueName,
-    item?.thirdPartyDesignName,
-    getOwnerLabel(item)
-].filter(Boolean).join(' ').toLowerCase();
-
-const isSearchResultDocument = (result) => {
-    const type = String(result?.type || '').toLowerCase();
-    return type.includes('document') || type.includes('pdf') || result?.isDocument;
-};
-
 const getSearchResultName = (result) => (
     result?.name
     || result?.displayName
@@ -198,39 +184,8 @@ const getSearchResultName = (result) => (
 );
 
 const getSearchResultMeta = (result) => {
-    const typeLabel = isSearchResultDocument(result) ? 'PDF' : 'Folder';
     const path = result?.path ? ` - ${result.path}` : '';
-    return `${typeLabel}${path}`;
-};
-
-const buildSearchSuggestions = (results) => {
-    if (!Array.isArray(results)) return [];
-
-    const suggestions = [];
-
-    results.forEach(result => {
-        suggestions.push({ ...result, type: result?.type || 'folder' });
-
-        if (Array.isArray(result?.documents)) {
-            result.documents.forEach(document => {
-                suggestions.push({
-                    ...document,
-                    type: 'document',
-                    parentFolderId: document.folderId || result.id,
-                    path: result.path,
-                    name: getItemDisplayName({ ...document, isDocument: true })
-                });
-            });
-        }
-    });
-
-    const seen = new Set();
-    return suggestions.filter(item => {
-        const key = `${item.type}-${item.id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
+    return `Folder${path}`;
 };
 
 const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
@@ -314,8 +269,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
     const [selectedItemId, setSelectedItemId] = useState(null);
     const [detailsPanelDismissed, setDetailsPanelDismissed] = useState(false);
-    const [previewPdfUrl, setPreviewPdfUrl] = useState('');
-    const [previewPdfLoading, setPreviewPdfLoading] = useState(false);
     const cacheRef = useRef(new Map());
     const searchSelectionRef = useRef(false);
 
@@ -480,7 +433,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         const timeoutId = window.setTimeout(async () => {
             try {
                 const results = await foldersAPI.search(query);
-                setSearchSuggestions(buildSearchSuggestions(results).slice(0, 8));
+                setSearchSuggestions(Array.isArray(results) ? results.slice(0, 8) : []);
             } catch (error) {
                 if (error?.name !== 'CanceledError' && error?.code !== 'ERR_CANCELED') {
                     console.error('Search suggestions error:', error);
@@ -583,31 +536,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
         const resultId = result?.id;
 
-        if (isSearchResultDocument(result)) {
-            const localMatch = folders.find(item => item.isDocument && item.id === resultId);
-            if (localMatch) {
-                setSelectedItemId(localMatch.id);
-                setDetailsPanelDismissed(false);
-                return;
-            }
-
-            const parentFolderId = result?.parentFolderId || result?.folderId;
-            if (parentFolderId) {
-                handleFolderClick(parentFolderId);
-            }
-            return;
-        }
-
         if (resultId) {
             handleFolderClick(resultId);
-        }
-    };
-
-    const handleBreadcrumbClick = (folderId) => {
-        const newFolderId = folderId || null;
-        setCurrentFolder(newFolderId);
-        if (onFolderChange) {
-            onFolderChange(newFolderId);
         }
     };
 
@@ -1085,23 +1015,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, [folders, sortField, sortDirection]);
 
     const visibleItems = useMemo(() => {
-        const sortedItems = getSortedFolders();
-        const normalizedQuery = searchQuery.trim().toLowerCase();
-
-        return sortedItems.filter(item => {
-            if (!normalizedQuery) return true;
-
-            if (item.isDocument) {
-                return getDocumentSearchText(item).includes(normalizedQuery);
-            }
-
-            return [
-                item.name,
-                getOwnerLabel(item),
-                getFolderItemCount(item)
-            ].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery);
-        });
-    }, [getSortedFolders, searchQuery]);
+        return getSortedFolders();
+    }, [getSortedFolders]);
 
     const selectedPreviewItem = useMemo(() => {
         if (detailsPanelDismissed || visibleItems.length === 0) {
@@ -1121,54 +1036,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         }, 0)
     ), [visibleItems]);
 
-    const currentFolderLabel = breadcrumbs.length > 0
-        ? breadcrumbs[breadcrumbs.length - 1].name
-        : 'Design Documents';
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadPreviewUrl = async () => {
-            if (!selectedPreviewItem?.isDocument) {
-                setPreviewPdfUrl('');
-                setPreviewPdfLoading(false);
-                return;
-            }
-
-            const preferredType = selectedPreviewItem.essDesignIssuePath ? 'ess' : 'thirdparty';
-            if (!selectedPreviewItem.essDesignIssuePath && !selectedPreviewItem.thirdPartyDesignPath) {
-                setPreviewPdfUrl('');
-                setPreviewPdfLoading(false);
-                return;
-            }
-
-            setPreviewPdfLoading(true);
-
-            try {
-                const data = await foldersAPI.getDownloadUrl(selectedPreviewItem.id, preferredType);
-                if (!cancelled) {
-                    const resolvedUrl = foldersAPI.resolvePublicFileUrl(data?.url || '');
-                    setPreviewPdfUrl(resolvedUrl ? `${resolvedUrl}#page=2&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '');
-                }
-            } catch (error) {
-                console.error('Failed to load PDF preview:', error);
-                if (!cancelled) {
-                    setPreviewPdfUrl('');
-                }
-            } finally {
-                if (!cancelled) {
-                    setPreviewPdfLoading(false);
-                }
-            }
-        };
-
-        loadPreviewUrl();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [selectedPreviewItem]);
-
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
         document.addEventListener('click', handleClick);
@@ -1178,41 +1045,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     return (
         <div className="folder-browser">
             <section className="document-page">
-                <header className="document-page-header">
-                    <div className="breadcrumbs document-breadcrumbs" aria-label="Folder path">
-                        <button
-                            type="button"
-                            className="breadcrumb-home"
-                            onClick={() => handleBreadcrumbClick(null)}
-                            title="Home"
-                        >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
-                                <path d="M9 21V12h6v9" />
-                            </svg>
-                        </button>
-                        <span className="breadcrumb" onClick={() => handleBreadcrumbClick(null)}>
-                            Home
-                        </span>
-                        {breadcrumbs.map((crumb) => (
-                            <React.Fragment key={crumb.id}>
-                                <span className="breadcrumb-sep">/</span>
-                                <span className="breadcrumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
-                                    {crumb.name}
-                                </span>
-                            </React.Fragment>
-                        ))}
-                    </div>
-
-                    <div className="document-title-row">
-                        <div>
-                            <h2>Design Documents</h2>
-                            <p>{currentFolderLabel}</p>
-                        </div>
-                        <ShareIcon size={18} />
-                    </div>
-                </header>
-
                 <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
                     <div className="document-items-panel">
                         <div className="document-table-toolbar">
@@ -1229,7 +1061,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             }
                                         }}
                                         onBlur={() => window.setTimeout(() => setShowSearchSuggestions(false), 140)}
-                                        placeholder="Search in this folder"
+                                        placeholder="Search folders"
                                     />
                                     <SearchIcon size={18} />
                                     {showSearchSuggestions && (
@@ -1237,30 +1069,27 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {searchSuggestionsLoading ? (
                                                 <div className="search-suggestion-empty">Searching...</div>
                                             ) : searchSuggestions.length > 0 ? (
-                                                searchSuggestions.map(result => {
-                                                    const isDocument = isSearchResultDocument(result);
-                                                    return (
-                                                        <button
-                                                            key={`${result.type}-${result.id}`}
-                                                            type="button"
-                                                            className="search-suggestion"
-                                                            onMouseDown={(event) => {
-                                                                event.preventDefault();
-                                                                handleSearchSuggestionSelect(result);
-                                                            }}
-                                                        >
-                                                            <span className={`search-suggestion-icon ${isDocument ? 'document' : 'folder'}`}>
-                                                                {isDocument ? <DocumentIcon size={18} /> : <FolderIcon size={18} />}
-                                                            </span>
-                                                            <span className="search-suggestion-copy">
-                                                                <strong>{getSearchResultName(result)}</strong>
-                                                                <small>{getSearchResultMeta(result)}</small>
-                                                            </span>
-                                                        </button>
-                                                    );
-                                                })
+                                                searchSuggestions.map(result => (
+                                                    <button
+                                                        key={`folder-${result.id}`}
+                                                        type="button"
+                                                        className="search-suggestion"
+                                                        onMouseDown={(event) => {
+                                                            event.preventDefault();
+                                                            handleSearchSuggestionSelect(result);
+                                                        }}
+                                                    >
+                                                        <span className="search-suggestion-icon folder">
+                                                            <FolderIcon size={18} />
+                                                        </span>
+                                                        <span className="search-suggestion-copy">
+                                                            <strong>{getSearchResultName(result)}</strong>
+                                                            <small>{getSearchResultMeta(result)}</small>
+                                                        </span>
+                                                    </button>
+                                                ))
                                             ) : (
-                                                <div className="search-suggestion-empty">No matching folders or PDFs</div>
+                                                <div className="search-suggestion-empty">No matching folders</div>
                                             )}
                                         </div>
                                     )}
@@ -1638,25 +1467,23 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
                             {selectedPreviewItem.isDocument ? (
                                 <div className="details-preview pdf-preview-card large">
-                                    {previewPdfUrl ? (
-                                        <iframe
-                                            src={previewPdfUrl}
-                                            title={`${getItemDisplayName(selectedPreviewItem)} preview`}
-                                            loading="lazy"
-                                        />
-                                    ) : (
-                                        <>
-                                            <div className="pdf-sheet-lines">
-                                                <span></span>
-                                                <span></span>
-                                                <span></span>
-                                                <span></span>
-                                                <span></span>
-                                            </div>
-                                            <span className="pdf-badge">PDF</span>
-                                            {previewPdfLoading && <span className="pdf-preview-loading">Loading preview...</span>}
-                                        </>
-                                    )}
+                                    <div className="pdf-page-thumbnail" aria-label="Low quality preview of PDF page 2">
+                                        <div className="pdf-page-frame">
+                                            <span className="pdf-page-label">Page 2</span>
+                                            <span className="drawing-line horizontal top"></span>
+                                            <span className="drawing-line horizontal middle"></span>
+                                            <span className="drawing-line horizontal bottom"></span>
+                                            <span className="drawing-line vertical left"></span>
+                                            <span className="drawing-line vertical center"></span>
+                                            <span className="drawing-line vertical right"></span>
+                                            <span className="drawing-line diagonal one"></span>
+                                            <span className="drawing-line diagonal two"></span>
+                                            <span className="drawing-box box-one"></span>
+                                            <span className="drawing-box box-two"></span>
+                                            <span className="drawing-box box-three"></span>
+                                        </div>
+                                        <span className="pdf-badge">PDF</span>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="details-preview folder-preview-card large" aria-hidden="true">

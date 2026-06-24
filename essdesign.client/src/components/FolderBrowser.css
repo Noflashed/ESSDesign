@@ -865,78 +865,6 @@
     font-family: inherit;
 }
 
-.document-page-header {
-    display: grid;
-    gap: 18px;
-    padding: 28px 32px 22px;
-    border-bottom: 1px solid var(--doc-border);
-    background: #ffffff;
-}
-
-.document-breadcrumbs {
-    gap: 9px;
-    margin: 0;
-    color: var(--doc-muted);
-    font-size: 13px;
-}
-
-.breadcrumb-home {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: #475569;
-}
-
-.breadcrumb-home:hover,
-.breadcrumb:hover {
-    background: var(--doc-hover);
-    color: var(--doc-primary);
-}
-
-.breadcrumb {
-    border-radius: 7px;
-    color: inherit;
-    padding: 4px 6px;
-}
-
-.breadcrumb-sep {
-    color: #94a3b8;
-}
-
-.document-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-}
-
-.document-title-row h2 {
-    margin: 0;
-    color: var(--doc-text);
-    font-size: 30px;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.12;
-}
-
-.document-title-row p {
-    margin: 4px 0 0;
-    color: var(--doc-muted);
-    font-size: 0;
-    height: 0;
-    overflow: hidden;
-}
-
-.document-title-row > svg {
-    color: #334155;
-}
-
 .browser-toolbar.document-toolbar {
     display: flex;
     align-items: center;
@@ -1385,28 +1313,6 @@
     opacity: 0.7;
 }
 
-.pdf-preview-card:has(iframe)::before,
-.pdf-preview-card:has(iframe) .pdf-badge {
-    display: none;
-}
-
-.pdf-preview-card iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    background: #ffffff;
-}
-
-.pdf-preview-card.large iframe {
-    pointer-events: none;
-    opacity: 0.72;
-    filter: grayscale(0.35) contrast(0.9);
-    transform: scale(1.02);
-    transform-origin: top center;
-}
-
 .pdf-sheet-lines {
     position: absolute;
     inset: 26px 28px 28px;
@@ -1431,6 +1337,136 @@
     font-size: 9px;
     font-weight: 800;
     letter-spacing: 0;
+}
+
+.pdf-preview-card.large::before {
+    display: none;
+}
+
+.pdf-page-thumbnail {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: #f8fafc;
+}
+
+.pdf-page-frame {
+    position: relative;
+    width: min(100%, 232px);
+    height: 142px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    border-radius: 3px;
+    background:
+        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 18px 18px,
+        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px) 0 0 / 18px 18px,
+        #ffffff;
+    opacity: 0.82;
+    filter: grayscale(0.25) contrast(0.86);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.pdf-page-label {
+    position: absolute;
+    right: 8px;
+    bottom: 6px;
+    color: rgba(100, 116, 139, 0.52);
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.drawing-line,
+.drawing-box {
+    position: absolute;
+    display: block;
+    border-color: rgba(100, 116, 139, 0.45);
+}
+
+.drawing-line.horizontal {
+    left: 22px;
+    right: 28px;
+    height: 1px;
+    border-top: 1px solid rgba(100, 116, 139, 0.45);
+}
+
+.drawing-line.horizontal.top {
+    top: 28px;
+}
+
+.drawing-line.horizontal.middle {
+    top: 72px;
+}
+
+.drawing-line.horizontal.bottom {
+    bottom: 28px;
+}
+
+.drawing-line.vertical {
+    top: 20px;
+    bottom: 24px;
+    width: 1px;
+    border-left: 1px solid rgba(100, 116, 139, 0.38);
+}
+
+.drawing-line.vertical.left {
+    left: 42px;
+}
+
+.drawing-line.vertical.center {
+    left: 50%;
+}
+
+.drawing-line.vertical.right {
+    right: 46px;
+}
+
+.drawing-line.diagonal {
+    width: 160px;
+    height: 1px;
+    border-top: 1px solid rgba(100, 116, 139, 0.4);
+    transform-origin: left center;
+}
+
+.drawing-line.diagonal.one {
+    left: 34px;
+    top: 30px;
+    transform: rotate(31deg);
+}
+
+.drawing-line.diagonal.two {
+    left: 48px;
+    bottom: 26px;
+    transform: rotate(-28deg);
+}
+
+.drawing-box {
+    border: 1px solid rgba(100, 116, 139, 0.38);
+    background: rgba(241, 245, 249, 0.35);
+}
+
+.drawing-box.box-one {
+    left: 54px;
+    top: 42px;
+    width: 54px;
+    height: 34px;
+}
+
+.drawing-box.box-two {
+    right: 56px;
+    top: 36px;
+    width: 48px;
+    height: 52px;
+}
+
+.drawing-box.box-three {
+    left: 92px;
+    bottom: 30px;
+    width: 72px;
+    height: 22px;
 }
 
 .item-card-body {
@@ -1866,7 +1902,6 @@
 }
 
 :root[data-theme="dark"] .document-page,
-:root[data-theme="dark"] .document-page-header,
 :root[data-theme="dark"] .document-content,
 :root[data-theme="dark"] .document-table-toolbar,
 :root[data-theme="dark"] .document-details-panel,
@@ -1909,18 +1944,6 @@
 @media (max-width: 760px) {
     .folder-browser {
         min-height: calc(100vh - 32px);
-    }
-
-    .document-page-header {
-        padding: 20px 18px;
-    }
-
-    .document-title-row {
-        align-items: flex-start;
-    }
-
-    .document-title-row h2 {
-        font-size: 23px;
     }
 
     .browser-toolbar.document-toolbar {

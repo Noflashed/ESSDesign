@@ -415,7 +415,7 @@ const normalizeAvatarSource = (value) => {
     const trimmed = value.trim();
     if (!trimmed) return [];
 
-    if (/^https?:\/\//i.test(trimmed)) {
+    if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
         return [trimmed];
     }
 
@@ -436,16 +436,24 @@ const buildAvatarCandidates = (user) => {
     const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
+        user?.AvatarUrl,
         user?.picture,
+        user?.Picture,
         user?.profileImageUrl,
         user?.profile_image_url,
+        user?.ProfileImageUrl,
         user?.profileImage,
         user?.profile_image,
+        user?.ProfileImage,
         user?.avatarPath,
-        user?.avatar_path
+        user?.avatar_path,
+        user?.AvatarPath
     ].filter(Boolean);
 
-    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
+    const storageCandidates = user?.id ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
+        .map((ext) => `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${user.id}/avatar.${ext}`) : [];
+
+    return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
 };
 
 function App() {
