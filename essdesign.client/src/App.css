@@ -980,17 +980,17 @@ body {
 }
 
 .site-registry-builder-select-button {
-    width: min(320px, 58vw);
-    min-height: 44px;
+    width: min(280px, 58vw);
+    min-height: 38px;
     border: 1px solid rgba(37, 99, 235, 0.22);
-    border-radius: 8px;
-    background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border-radius: 6px;
+    background: var(--bg-primary);
     color: var(--text-primary);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 3px 0 0 rgba(37, 99, 235, 0.75);
+    box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.72);
     cursor: pointer;
     font-size: 14px;
-    font-weight: 700;
-    padding: 0 46px 0 18px;
+    font-weight: 600;
+    padding: 0 38px 0 12px;
     text-align: left;
     outline: none;
     transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
@@ -1006,21 +1006,21 @@ body {
 .site-registry-builder-select-button:hover,
 .site-registry-builder-select-wrap.open .site-registry-builder-select-button {
     border-color: rgba(37, 99, 235, 0.42);
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08), inset 3px 0 0 rgba(37, 99, 235, 0.85);
+    box-shadow: inset 2px 0 0 rgba(37, 99, 235, 0.85);
 }
 
 .site-registry-builder-select-button:focus {
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14), inset 3px 0 0 #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12), inset 2px 0 0 #2563eb;
 }
 
 .site-registry-builder-select-icon {
     position: absolute;
-    right: 16px;
-    width: 9px;
-    height: 9px;
-    border-right: 2px solid #2563eb;
-    border-bottom: 2px solid #2563eb;
+    right: 13px;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid #2563eb;
+    border-bottom: 1.5px solid #2563eb;
     pointer-events: none;
     transform: translateY(-2px) rotate(45deg);
     transition: transform 0.16s ease;
@@ -1032,39 +1032,39 @@ body {
 
 .site-registry-builder-menu {
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 5px);
     left: 0;
     z-index: 30;
-    width: min(360px, 78vw);
-    max-height: 320px;
+    width: min(300px, 78vw);
+    max-height: 236px;
     overflow-y: auto;
-    padding: 8px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 10px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
     background: var(--card-bg);
-    box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
     display: grid;
-    gap: 6px;
-    animation: siteRegistryMenuIn 0.14s ease-out;
+    gap: 2px;
+    animation: siteRegistryMenuIn 0.1s ease-out;
 }
 
 .site-registry-builder-option {
     width: 100%;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: 5px;
     background: transparent;
     color: var(--text-primary);
     cursor: pointer;
     display: grid;
-    gap: 4px;
-    padding: 10px 12px;
+    gap: 2px;
+    padding: 7px 9px;
     text-align: left;
-    transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .site-registry-builder-option span {
-    font-size: 14px;
-    font-weight: 800;
+    font-size: 13px;
+    font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1072,30 +1072,29 @@ body {
 
 .site-registry-builder-option small {
     color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     text-transform: none;
     letter-spacing: 0;
 }
 
 .site-registry-builder-option:hover,
 .site-registry-builder-option:focus {
-    border-color: rgba(37, 99, 235, 0.2);
-    background: rgba(37, 99, 235, 0.07);
+    border-color: rgba(37, 99, 235, 0.16);
+    background: rgba(37, 99, 235, 0.055);
     outline: none;
-    transform: translateX(2px);
 }
 
 .site-registry-builder-option.selected {
-    border-color: rgba(37, 99, 235, 0.38);
-    background: rgba(37, 99, 235, 0.1);
-    box-shadow: inset 3px 0 0 #2563eb;
+    border-color: rgba(37, 99, 235, 0.26);
+    background: rgba(37, 99, 235, 0.075);
+    box-shadow: inset 2px 0 0 #2563eb;
 }
 
 @keyframes siteRegistryMenuIn {
     from {
         opacity: 0;
-        transform: translateY(-6px) scale(0.98);
+        transform: translateY(-3px);
     }
     to {
         opacity: 1;
