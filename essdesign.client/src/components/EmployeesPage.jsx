@@ -201,7 +201,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [search, setSearch] = useState('');
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
-    const [siteFilter, setSiteFilter] = useState('all');
     const [accountFilter, setAccountFilter] = useState('all');
     const [leadingHandFilter, setLeadingHandFilter] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
@@ -266,11 +265,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         return () => window.removeEventListener('click', closeMenu);
     }, [columnFilterMenu]);
 
-    const siteLabelById = useMemo(
-        () => Object.fromEntries(sites.map((site) => [site.id, site.shortLabel || site.label])),
-        [sites]
-    );
-
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
         const linkedUserIds = new Set();
@@ -316,27 +310,15 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         return result;
     }, [employees, appUsers]);
 
-    const getPreferredSiteLabels = (entry) => (entry.preferredSiteIds || [])
-        .map((siteId) => siteLabelById[siteId])
-        .filter(Boolean);
-
     const roleFilterOptions = useMemo(() => {
         const roles = Array.from(new Set(mergedEntries.map((entry) => entry.role).filter(Boolean)));
         return roles.map((role) => ({ value: role, label: getRoleLabel(role) })).sort((a, b) => a.label.localeCompare(b.label));
     }, [mergedEntries]);
 
-    const siteFilterOptions = useMemo(() => {
-        const siteIds = Array.from(new Set(mergedEntries.flatMap((entry) => entry.preferredSiteIds || [])));
-        return siteIds
-            .map((siteId) => ({ value: siteId, label: siteLabelById[siteId] || siteId }))
-            .sort((a, b) => a.label.localeCompare(b.label));
-    }, [mergedEntries, siteLabelById]);
-
     const filteredEntries = useMemo(() => {
         const q = search.trim().toLowerCase();
         return mergedEntries.filter((entry) => {
             if (roleFilter !== 'all' && entry.role !== roleFilter) return false;
-            if (siteFilter !== 'all' && !(entry.preferredSiteIds || []).includes(siteFilter)) return false;
             if (accountFilter !== 'all' && getAccountStatus(entry).className !== accountFilter) return false;
             if (leadingHandFilter !== 'all') {
                 const wantsLeadingHand = leadingHandFilter === 'yes';
@@ -347,11 +329,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const phone = (entry.displayPhone || '').toLowerCase();
             const email = (entry.displayEmail || '').toLowerCase();
             const role = getRoleLabel(entry.role).toLowerCase();
-            const sitesText = getPreferredSiteLabels(entry).join(' ').toLowerCase();
             const account = getAccountStatus(entry).label.toLowerCase();
-            return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || sitesText.includes(q) || account.includes(q);
+            return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || account.includes(q);
         });
-    }, [mergedEntries, search, roleFilter, siteFilter, accountFilter, leadingHandFilter, siteLabelById]);
+    }, [mergedEntries, search, roleFilter, accountFilter, leadingHandFilter]);
 
     const pageSize = 10;
     const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
@@ -365,7 +346,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, roleFilter, siteFilter, accountFilter, leadingHandFilter]);
+    }, [search, roleFilter, accountFilter, leadingHandFilter]);
 
     const openEmployeeEditor = (employee, effectiveRole) => {
         const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
@@ -653,22 +634,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <th>Email</th>
                                         <th>
                                             <EmployeeColumnFilter
-                                                label="Preferred Sites"
-                                                filterKey="sites"
-                                                active={siteFilter !== 'all'}
-                                                open={columnFilterMenu === 'sites'}
-                                                onToggle={(key) => setColumnFilterMenu((current) => current === key ? '' : key)}
-                                            >
-                                                <button type="button" className={siteFilter === 'all' ? 'selected' : ''} onClick={() => { setSiteFilter('all'); setColumnFilterMenu(''); }}>All Sites</button>
-                                                {siteFilterOptions.map((option) => (
-                                                    <button key={option.value} type="button" className={siteFilter === option.value ? 'selected' : ''} onClick={() => { setSiteFilter(option.value); setColumnFilterMenu(''); }}>
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </EmployeeColumnFilter>
-                                        </th>
-                                        <th>
-                                            <EmployeeColumnFilter
                                                 label="Account Status"
                                                 filterKey="account"
                                                 active={accountFilter !== 'all'}
@@ -727,22 +692,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 </td>
                                                 <td>{entry.displayPhone || '-'}</td>
                                                 <td>{entry.displayEmail || '-'}</td>
-                                                <td>
-                                                    <div className="employees-site-chip-list">
-                                                        {getPreferredSiteLabels(entry).length > 0 ? (
-                                                            <>
-                                                                {getPreferredSiteLabels(entry).slice(0, 2).map((label) => (
-                                                                    <span key={label} className="employees-site-chip">{label}</span>
-                                                                ))}
-                                                                {getPreferredSiteLabels(entry).length > 2 ? (
-                                                                    <span className="employees-site-chip compact">+{getPreferredSiteLabels(entry).length - 2}</span>
-                                                                ) : null}
-                                                            </>
-                                                        ) : (
-                                                            <span className="employees-muted-dash">-</span>
-                                                        )}
-                                                    </div>
-                                                </td>
                                                 <td>
                                                     <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
                                                 </td>
@@ -834,18 +783,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <div className="employees-info-row">
                                 <span>Email</span>
                                 <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Preferred Sites</span>
-                                <strong>
-                                    {getPreferredSiteLabels(selectedInfoEntry).length > 0 ? (
-                                        <span className="employees-site-chip-list">
-                                            {getPreferredSiteLabels(selectedInfoEntry).map((label) => (
-                                                <span key={label} className="employees-site-chip">{label}</span>
-                                            ))}
-                                        </span>
-                                    ) : '-'}
-                                </strong>
                             </div>
                             <div className="employees-info-row">
                                 <span>Account Status</span>
