@@ -5350,10 +5350,11 @@ button.stat-card {
 }
 
 .ess-news-workspace {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(330px, 410px) minmax(680px, 1fr);
-    gap: 22px;
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
+    overflow: hidden;
 }
 
 .ess-news-panel {
@@ -5381,11 +5382,19 @@ button.stat-card {
 }
 
 .ess-news-table-header {
-    justify-content: flex-start;
+    justify-content: space-between;
 }
 
 .ess-news-table-header .ess-news-search {
     width: min(430px, 100%);
+}
+
+.ess-news-add-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    white-space: nowrap;
 }
 
 .ess-news-table-wrap {
@@ -5569,11 +5578,6 @@ button.stat-card {
     font-size: 13px;
 }
 
-.ess-news-composer {
-    position: sticky;
-    top: 16px;
-}
-
 .ess-news-clear-edit {
     width: 30px;
     height: 30px;
@@ -5585,6 +5589,48 @@ button.stat-card {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+}
+
+.ess-news-drawer-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    border: 0;
+    background: rgba(15, 23, 42, 0.08);
+    cursor: default;
+}
+
+.ess-news-composer-drawer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 25;
+    width: min(410px, calc(100vw - 42px));
+    max-height: 100%;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+    transform: translateX(calc(-100% - 24px));
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.22s ease, visibility 0.22s ease;
+}
+
+.ess-news-composer-drawer.open {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.ess-news-drawer-header {
+    min-height: 46px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 12px;
 }
 
 .ess-news-form {
@@ -5747,10 +5793,6 @@ button.stat-card {
     .ess-news-workspace {
         grid-template-columns: 1fr;
     }
-
-    .ess-news-composer {
-        position: static;
-    }
 }
 
 @media (max-width: 760px) {
@@ -5760,6 +5802,16 @@ button.stat-card {
 
     .ess-news-search {
         width: 100%;
+    }
+
+    .ess-news-table-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .ess-news-add-new {
+        width: 100%;
+        justify-content: center;
     }
 
     .ess-news-composer-actions {

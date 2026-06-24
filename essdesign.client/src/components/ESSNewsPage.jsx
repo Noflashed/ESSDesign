@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Image as ImageIcon, Pencil, PlayCircle, Search, Trash2, UploadCloud, X } from 'lucide-react';
+import { Eye, Image as ImageIcon, Pencil, PlayCircle, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
 
 function formatNewsDate(value) {
@@ -23,6 +23,7 @@ export default function ESSNewsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [composer, setComposer] = useState(emptyComposer());
+    const [composerOpen, setComposerOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaPreview, setMediaPreview] = useState(null);
@@ -63,6 +64,16 @@ export default function ESSNewsPage() {
         if (thumbInputRef.current) thumbInputRef.current.value = '';
     };
 
+    const openNewComposer = () => {
+        resetComposer();
+        setComposerOpen(true);
+    };
+
+    const closeComposer = () => {
+        resetComposer();
+        setComposerOpen(false);
+    };
+
     const beginEdit = (item) => {
         setComposer({
             id: item.id,
@@ -77,6 +88,7 @@ export default function ESSNewsPage() {
         setThumbFile(null);
         setThumbPreview(item.thumbnailUrl || null);
         setSaveError('');
+        setComposerOpen(true);
     };
 
     const handleFileChange = (file) => {
@@ -151,7 +163,7 @@ export default function ESSNewsPage() {
                 const created = await essNewsAPI.create(payload);
                 setItems(prev => [created, ...prev]);
             }
-            resetComposer();
+            closeComposer();
         } catch (err) {
             setSaveError(err.message || 'Failed to save news item.');
         } finally {
@@ -167,7 +179,7 @@ export default function ESSNewsPage() {
             if (item.mediaUrl) essNewsAPI.deleteMedia(item.mediaUrl).catch(() => {});
             if (item.thumbnailUrl) essNewsAPI.deleteMedia(item.thumbnailUrl).catch(() => {});
             setItems(prev => prev.filter(newsItem => newsItem.id !== item.id));
-            if (composer.id === item.id) resetComposer();
+            if (composer.id === item.id) closeComposer();
         } catch (err) {
             alert(err.message || 'Failed to delete news item.');
         } finally {
@@ -203,14 +215,12 @@ export default function ESSNewsPage() {
                 ) : null}
 
                 <div className="ess-news-workspace">
-                    <aside className="ess-news-panel ess-news-composer">
-                        <div className="ess-news-panel-header">
-                            <h3>{isEditing ? 'Edit News Item' : 'New News Item'}</h3>
-                            {isEditing ? (
-                                <button type="button" className="ess-news-clear-edit" onClick={resetComposer} aria-label="Cancel editing">
-                                    <X size={16} strokeWidth={2.4} />
-                                </button>
-                            ) : null}
+                    {composerOpen ? <button type="button" className="ess-news-drawer-scrim" onClick={closeComposer} aria-label="Close news editor" /> : null}
+                    <aside className={`ess-news-composer-drawer ${composerOpen ? 'open' : ''}`} aria-hidden={!composerOpen}>
+                        <div className="ess-news-drawer-header">
+                            <button type="button" className="ess-news-clear-edit" onClick={closeComposer} aria-label="Close news editor">
+                                <X size={16} strokeWidth={2.4} />
+                            </button>
                         </div>
                         <form className="ess-news-form" onSubmit={handleSubmit}>
                             <label className="ess-news-field">
@@ -302,7 +312,7 @@ export default function ESSNewsPage() {
 
                             {saveError ? <p className="ess-news-save-error">{saveError}</p> : null}
                             <div className="ess-news-composer-actions">
-                                <button type="button" className="module-secondary-btn compact" onClick={resetComposer} disabled={saving}>Cancel</button>
+                                <button type="button" className="module-secondary-btn compact" onClick={closeComposer} disabled={saving}>Cancel</button>
                                 <button type="submit" className="module-primary-btn compact" disabled={saving}>
                                     {saving ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save Changes' : 'Publish')}
                                 </button>
@@ -322,6 +332,10 @@ export default function ESSNewsPage() {
                                     aria-label="Search ESS News"
                                 />
                             </label>
+                            <button type="button" className="module-primary-btn compact ess-news-add-new" onClick={openNewComposer}>
+                                <Plus size={16} strokeWidth={2.4} />
+                                <span>Add New</span>
+                            </button>
                         </div>
                         <div className="ess-news-table-wrap">
                             <table className="ess-news-table">
