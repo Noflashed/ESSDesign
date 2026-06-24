@@ -348,7 +348,7 @@ export default function SiteInformationPage() {
                                                 ) : null}
                                             </div>
                                         </th>
-                                        <th>Site Geographic Location</th>
+                                        <th>Site Location</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${hasStatusFilter ? 'filtered' : ''} ${columnFilterMenu === 'status' ? 'open' : ''}`}>
                                                 <button type="button" onClick={event => {
@@ -461,7 +461,7 @@ export default function SiteInformationPage() {
                                 <strong>{selectedInfoProject.builder.name}</strong>
                             </div>
                             <div className="site-registry-info-row">
-                                <span>Site Geographic Location</span>
+                                <span>Site Location</span>
                                 <strong>{selectedInfoProject.siteLocation || 'Not set'}</strong>
                             </div>
                             <div className="site-registry-info-row">
@@ -493,7 +493,7 @@ export default function SiteInformationPage() {
                                 <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Crown Sydney Hotel Resort" />
                             </div>
                             <div className="module-field">
-                                <label>Site Geographic Location</label>
+                                <label>Site Location</label>
                                 <div className="site-registry-address-autocomplete transport-address-autocomplete">
                                     <input
                                         value={projectForm.siteLocation}
