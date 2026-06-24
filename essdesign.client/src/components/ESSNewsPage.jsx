@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Image as ImageIcon, Pencil, PlayCircle, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
+import { Eye, Image as ImageIcon, Pencil, PlayCircle, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
 
 function formatNewsDate(value) {
@@ -24,7 +24,6 @@ export default function ESSNewsPage() {
     const [error, setError] = useState('');
     const [composer, setComposer] = useState(emptyComposer());
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
     const [mediaFile, setMediaFile] = useState(null);
     const [mediaPreview, setMediaPreview] = useState(null);
     const [thumbFile, setThumbFile] = useState(null);
@@ -178,9 +177,6 @@ export default function ESSNewsPage() {
 
     const filteredItems = useMemo(() => {
         const query = searchTerm.trim().toLowerCase();
-        if (statusFilter === 'draft' || statusFilter === 'archived') {
-            return [];
-        }
         return items.filter(item => {
             if (!query) return true;
             return [item.title, item.subtitle, item.mediaType, formatNewsDate(item.createdAt)]
@@ -189,9 +185,7 @@ export default function ESSNewsPage() {
                 .toLowerCase()
                 .includes(query);
         });
-    }, [items, searchTerm, statusFilter]);
-
-    const publishedCount = items.length;
+    }, [items, searchTerm]);
     const isEditing = Boolean(composer.id);
 
     if (loading) {
@@ -212,16 +206,6 @@ export default function ESSNewsPage() {
                             aria-label="Search ESS News"
                         />
                     </label>
-                    <div className="ess-news-filter-tabs" aria-label="ESS News filters">
-                        <button type="button" className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>All ({items.length})</button>
-                        <button type="button" className={statusFilter === 'published' ? 'active' : ''} onClick={() => setStatusFilter('published')}>Published ({publishedCount})</button>
-                        <button type="button" className={statusFilter === 'draft' ? 'active' : ''} onClick={() => setStatusFilter('draft')}>Draft (0)</button>
-                        <button type="button" className={statusFilter === 'archived' ? 'active' : ''} onClick={() => setStatusFilter('archived')}>Archived (0)</button>
-                    </div>
-                    <button className="module-primary-btn compact ess-news-add-button" onClick={resetComposer}>
-                        <Plus size={17} strokeWidth={2.4} />
-                        <span>Add News</span>
-                    </button>
                 </div>
 
                 {error ? (
