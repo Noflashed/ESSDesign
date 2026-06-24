@@ -1692,7 +1692,7 @@ body {
 
 .employees-table {
     width: 100%;
-    min-width: 1180px;
+    min-width: 1060px;
     border-collapse: separate;
     border-spacing: 0;
 }
@@ -2042,38 +2042,32 @@ body {
 
 .employees-table th:nth-child(1),
 .employees-table td:nth-child(1) {
-    width: 17%;
+    width: 18%;
 }
 
 .employees-table th:nth-child(2),
 .employees-table td:nth-child(2) {
-    width: 13%;
+    width: 14%;
 }
 
 .employees-table th:nth-child(3),
 .employees-table td:nth-child(3) {
-    width: 13%;
+    width: 14%;
 }
 
 .employees-table th:nth-child(4),
 .employees-table td:nth-child(4) {
-    width: 24%;
+    width: 26%;
 }
 
 .employees-table th:nth-child(5),
 .employees-table td:nth-child(5) {
-    width: 13%;
+    width: 14%;
 }
 
 .employees-table th:nth-child(6),
 .employees-table td:nth-child(6) {
-    width: 10%;
-    text-align: center;
-}
-
-.employees-table th:nth-child(7),
-.employees-table td:nth-child(7) {
-    width: 10%;
+    width: 14%;
 }
 
 .employees-table td {
@@ -2337,11 +2331,58 @@ body {
     max-width: 460px;
     border-radius: 8px;
     box-shadow: 0 20px 54px rgba(15, 23, 42, 0.22);
+    color: #172033;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
 }
 
 .employees-info-modal .module-modal-header {
     padding-bottom: 14px;
     border-bottom: 1px solid #dfe4ed;
+}
+
+.employees-info-modal .module-modal-header h3,
+.employees-page .module-modal-header h3 {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.employees-page .module-modal,
+.employees-page .module-modal input,
+.employees-page .module-modal select,
+.employees-page .module-modal button,
+.employees-page .module-modal label,
+.employees-page .module-modal p {
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    letter-spacing: 0;
+}
+
+.employees-page .module-modal label {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.employees-page .module-modal input,
+.employees-page .module-modal select {
+    border-radius: 5px;
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.employees-page .module-modal .module-primary-btn,
+.employees-page .module-modal .module-secondary-btn,
+.employees-page .module-modal .module-danger-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1;
 }
 
 .employees-info-list {
@@ -2358,6 +2399,19 @@ body {
     align-items: center;
     gap: 7px;
     color: #166534;
+}
+
+.employees-info-row span:first-child {
+    color: #526173;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.employees-info-row strong {
+    color: #172033;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.25;
 }
 
 .employees-info-check svg {

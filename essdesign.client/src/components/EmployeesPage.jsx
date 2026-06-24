@@ -89,20 +89,28 @@ function normalizeAvatarSource(value) {
     ];
 }
 
-function getAvatarCandidates(user) {
+function getAvatarCandidates(user, { includeStorageCandidates = true } = {}) {
     const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
+        user?.AvatarUrl,
         user?.picture,
+        user?.Picture,
         user?.profileImageUrl,
         user?.profile_image_url,
+        user?.ProfileImageUrl,
         user?.profileImage,
         user?.profile_image,
+        user?.ProfileImage,
         user?.avatarPath,
-        user?.avatar_path
+        user?.avatar_path,
+        user?.AvatarPath
     ].filter(Boolean);
 
-    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
+    const storageCandidates = includeStorageCandidates && user?.id ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
+        .map((ext) => `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${user.id}/avatar.${ext}`) : [];
+
+    return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
 }
 
 function getAccountStatus(entry) {
@@ -226,7 +234,7 @@ function EmployeeAvatar({ entry }) {
                 <img
                     src={avatarUrl}
                     alt=""
-                    onError={() => setCandidateIndex((current) => current + 1 < avatarCandidates.length ? current + 1 : current)}
+                    onError={() => setCandidateIndex((current) => Math.min(current + 1, avatarCandidates.length))}
                 />
             ) : getInitials(entry.displayName)}
         </span>
@@ -261,7 +269,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [accountFilter, setAccountFilter] = useState('all');
-    const [leadingHandFilter, setLeadingHandFilter] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyEmployeeForm());
@@ -326,13 +333,19 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
+        const appUserByEmail = Object.fromEntries(appUsers
+            .filter((u) => u.email)
+            .map((u) => [u.email.trim().toLowerCase(), u]));
         const linkedUserIds = new Set();
         const result = [];
 
         for (const emp of employees) {
-            const appUser = emp.linkedAuthUserId ? (appUserById[emp.linkedAuthUserId] ?? null) : null;
+            const emailKey = (emp.email || '').trim().toLowerCase();
+            const linkedAppUser = emp.linkedAuthUserId ? (appUserById[emp.linkedAuthUserId] ?? null) : null;
+            const appUser = linkedAppUser ?? appUserByEmail[emailKey] ?? null;
             if (appUser) linkedUserIds.add(appUser.id);
             const effectiveRole = appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder');
+            const appUserAvatars = getAvatarCandidates(appUser);
             result.push({
                 key: `emp-${emp.id}`,
                 type: 'employee',
@@ -345,7 +358,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 role: effectiveRole,
                 leadingHand: effectiveRole === 'leading_hand',
                 preferredSiteIds: emp.preferredSiteIds || [],
-                avatarCandidates: getAvatarCandidates(appUser),
+                avatarCandidates: appUserAvatars.length > 0 ? appUserAvatars : getAvatarCandidates(emp, { includeStorageCandidates: false }),
             });
         }
 
@@ -381,10 +394,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         return mergedEntries.filter((entry) => {
             if (roleFilter !== 'all' && entry.role !== roleFilter) return false;
             if (accountFilter !== 'all' && getAccountStatus(entry).className !== accountFilter) return false;
-            if (leadingHandFilter !== 'all') {
-                const wantsLeadingHand = leadingHandFilter === 'yes';
-                if (entry.leadingHand !== wantsLeadingHand) return false;
-            }
             if (!q) return true;
             const name = entry.displayName.toLowerCase();
             const phone = (entry.displayPhone || '').toLowerCase();
@@ -393,7 +402,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const account = getAccountStatus(entry).label.toLowerCase();
             return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || account.includes(q);
         });
-    }, [mergedEntries, search, roleFilter, accountFilter, leadingHandFilter]);
+    }, [mergedEntries, search, roleFilter, accountFilter]);
 
     const pageSize = 10;
     const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
@@ -407,7 +416,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, roleFilter, accountFilter, leadingHandFilter]);
+    }, [search, roleFilter, accountFilter]);
 
     const openEmployeeEditor = (employee, effectiveRole) => {
         const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
@@ -635,7 +644,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     return (
-        <div className="module-page">
+        <div className="module-page employees-page">
             <div className="module-shell employees-shell">
                 <div className="employees-toolbar">
                     <div className="employees-toolbar-copy">
@@ -708,19 +717,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 <button type="button" className={accountFilter === 'unlinked' ? 'selected' : ''} onClick={() => { setAccountFilter('unlinked'); setColumnFilterMenu(''); }}>Not Linked</button>
                                             </EmployeeColumnFilter>
                                         </th>
-                                        <th>
-                                            <EmployeeColumnFilter
-                                                label="Leading Hand"
-                                                filterKey="leading"
-                                                active={leadingHandFilter !== 'all'}
-                                                open={columnFilterMenu === 'leading'}
-                                                onToggle={(key) => setColumnFilterMenu((current) => current === key ? '' : key)}
-                                            >
-                                                <button type="button" className={leadingHandFilter === 'all' ? 'selected' : ''} onClick={() => { setLeadingHandFilter('all'); setColumnFilterMenu(''); }}>All</button>
-                                                <button type="button" className={leadingHandFilter === 'yes' ? 'selected' : ''} onClick={() => { setLeadingHandFilter('yes'); setColumnFilterMenu(''); }}>Leading Hand</button>
-                                                <button type="button" className={leadingHandFilter === 'no' ? 'selected' : ''} onClick={() => { setLeadingHandFilter('no'); setColumnFilterMenu(''); }}>Not Leading Hand</button>
-                                            </EmployeeColumnFilter>
-                                        </th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -757,25 +753,18 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                     <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
                                                 </td>
                                                 <td>
-                                                    {entry.leadingHand ? (
-                                                        <span className="employees-leading-check" aria-label="Leading hand"><CheckCircleIcon /></span>
-                                                    ) : (
-                                                        <span className="employees-muted-dash">-</span>
-                                                    )}
-                                                </td>
-                                                <td>
                                                     <div className="employees-table-actions">
-                                                        <EmployeeActionButton
-                                                            title={`Open leading hand relationships for ${entry.displayName}`}
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                if (entry.leadingHand && entry.type === 'employee') {
+                                                        {entry.leadingHand && entry.type === 'employee' ? (
+                                                            <EmployeeActionButton
+                                                                title={`Open leading hand relationships for ${entry.displayName}`}
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
                                                                     onOpenLeadingHandRelationships?.(entry.employee);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <TreeIcon />
-                                                        </EmployeeActionButton>
+                                                                }}
+                                                            >
+                                                                <TreeIcon />
+                                                            </EmployeeActionButton>
+                                                        ) : null}
                                                         <EmployeeActionButton
                                                             title={`Edit ${entry.displayName}`}
                                                             onClick={(event) => {
