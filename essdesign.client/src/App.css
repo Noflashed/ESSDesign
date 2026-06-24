@@ -5352,8 +5352,15 @@ button.stat-card {
 .ess-news-workspace {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0 minmax(0, 1fr);
+    column-gap: 0;
     align-items: start;
+    transition: grid-template-columns 0.22s ease, column-gap 0.22s ease;
+}
+
+.ess-news-workspace.drawer-open {
+    grid-template-columns: minmax(330px, 410px) minmax(0, 1fr);
+    column-gap: 22px;
 }
 
 .ess-news-panel {
@@ -5602,37 +5609,28 @@ button.stat-card {
     flex: 0 0 auto;
 }
 
-.ess-news-drawer-scrim {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    border: 0;
-    background: rgba(15, 23, 42, 0.08);
-    cursor: default;
-}
-
 .ess-news-composer-drawer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 25;
-    width: min(410px, calc(100vw - 42px));
+    position: sticky;
+    top: 16px;
+    width: 100%;
     max-height: calc(100vh - 132px);
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--card-bg);
-    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
-    transform: translateX(calc(-100% - 24px));
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.11);
+    transform: translateX(-18px);
     visibility: hidden;
     pointer-events: none;
-    transition: transform 0.22s ease, visibility 0.22s ease;
+    opacity: 0;
+    transition: transform 0.22s ease, visibility 0.22s ease, opacity 0.18s ease;
 }
 
-.ess-news-composer-drawer.open {
+.ess-news-workspace.drawer-open .ess-news-composer-drawer {
     transform: translateX(0);
     visibility: visible;
     pointer-events: auto;
+    opacity: 1;
 }
 
 .ess-news-drawer-header {
@@ -5809,6 +5807,19 @@ button.stat-card {
 @media (max-width: 1180px) {
     .ess-news-workspace {
         grid-template-columns: 1fr;
+        row-gap: 14px;
+    }
+
+    .ess-news-workspace.drawer-open {
+        grid-template-columns: 1fr;
+        column-gap: 0;
+    }
+
+    .ess-news-composer-drawer {
+        position: relative;
+        top: 0;
+        max-height: none;
+        transform: translateY(-8px);
     }
 }
 

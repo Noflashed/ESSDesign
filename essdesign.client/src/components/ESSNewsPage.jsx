@@ -232,9 +232,8 @@ export default function ESSNewsPage() {
                     </div>
                 ) : null}
 
-                <div className="ess-news-workspace">
-                    {composerOpen ? <button type="button" className="ess-news-drawer-scrim" onClick={closeComposer} aria-label="Close news editor" /> : null}
-                    <aside className={`ess-news-composer-drawer ${composerOpen ? 'open' : ''}`} aria-hidden={!composerOpen}>
+                <div className={`ess-news-workspace ${composerOpen ? 'drawer-open' : ''}`}>
+                    <aside className="ess-news-composer-drawer" aria-hidden={!composerOpen}>
                         <div className="ess-news-drawer-header">
                             <span>Add new item</span>
                             <button type="button" className="ess-news-clear-edit" onClick={closeComposer} aria-label="Close news editor">
