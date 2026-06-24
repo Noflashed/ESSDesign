@@ -1038,28 +1038,27 @@ namespace ESSDesign.Server.Services
         {
             try
             {
+                var now = DateTime.UtcNow;
                 var folder = new Folder
                 {
                     Id = Guid.NewGuid(),
                     Name = name,
                     ParentFolderId = parentFolderId,
                     UserId = userId,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 var response = await _supabase.From<Folder>().Insert(folder);
                 var created = response.Models.FirstOrDefault();
                 if (created == null) throw new Exception("Failed to create folder");
 
-                // Clear parent folder cache
                 if (parentFolderId.HasValue)
                 {
-                    _folderCache.TryRemove(parentFolderId.Value, out _);
+                    await TouchFolderModifiedAsync(parentFolderId.Value, now);
                 }
                 else
                 {
-                    // Root folder created - invalidate root cache
                     _rootFoldersCache = null;
                 }
 
@@ -1085,15 +1084,19 @@ namespace ESSDesign.Server.Services
                 if (folder == null) throw new Exception("Folder not found");
 
                 folder.Name = newName;
-                folder.UpdatedAt = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                folder.UpdatedAt = now;
 
                 await _supabase.From<Folder>().Update(folder);
 
-                // Clear cache
                 _folderCache.TryRemove(folderId, out _);
                 if (folder.ParentFolderId.HasValue)
                 {
-                    _folderCache.TryRemove(folder.ParentFolderId.Value, out _);
+                    await TouchFolderModifiedAsync(folder.ParentFolderId.Value, now);
+                }
+                else
+                {
+                    _rootFoldersCache = null;
                 }
 
                 _logger.LogInformation("Renamed folder {FolderId}", folderId);
@@ -1119,15 +1122,13 @@ namespace ESSDesign.Server.Services
                     .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
                     .Delete();
 
-                // Clear cache
                 _folderCache.TryRemove(folderId, out _);
                 if (folder?.ParentFolderId != null)
                 {
-                    _folderCache.TryRemove(folder.ParentFolderId.Value, out _);
+                    await TouchFolderModifiedAsync(folder.ParentFolderId.Value);
                 }
                 else
                 {
-                    // Root folder deleted - invalidate root cache
                     _rootFoldersCache = null;
                 }
 
@@ -1156,6 +1157,7 @@ namespace ESSDesign.Server.Services
         {
             try
             {
+                var now = DateTime.UtcNow;
                 var document = new DesignDocument
                 {
                     Id = Guid.NewGuid(),
@@ -1163,8 +1165,8 @@ namespace ESSDesign.Server.Services
                     RevisionNumber = revisionNumber,
                     Description = description,
                     UserId = userId,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 // Upload files in parallel
@@ -1188,8 +1190,7 @@ namespace ESSDesign.Server.Services
                 var created = response.Models.FirstOrDefault();
                 if (created == null) throw new Exception("Failed to create document");
 
-                // Clear folder cache
-                _folderCache.TryRemove(folderId, out _);
+                await TouchFolderModifiedAsync(folderId, now);
 
                 _logger.LogInformation("Uploaded document Rev {RevisionNumber}", revisionNumber);
                 return created.Id;
@@ -1237,8 +1238,7 @@ namespace ESSDesign.Server.Services
 
                     await Task.WhenAll(deleteTasks);
 
-                    // Clear folder cache
-                    _folderCache.TryRemove(document.FolderId, out _);
+                    await TouchFolderModifiedAsync(document.FolderId);
                 }
 
                 await _supabase
@@ -1268,16 +1268,19 @@ namespace ESSDesign.Server.Services
                     throw new FileNotFoundException("Document not found");
 
                 var oldFolderId = document.FolderId;
+                var now = DateTime.UtcNow;
                 document.FolderId = targetFolderId;
-                document.UpdatedAt = DateTime.UtcNow;
+                document.UpdatedAt = now;
 
                 await _supabase
                     .From<DesignDocument>()
                     .Update(document);
 
-                // Clear cache for both old and new folders
-                _folderCache.TryRemove(oldFolderId, out _);
-                _folderCache.TryRemove(targetFolderId, out _);
+                await TouchFolderModifiedAsync(oldFolderId, now);
+                if (targetFolderId != oldFolderId)
+                {
+                    await TouchFolderModifiedAsync(targetFolderId, now);
+                }
 
                 _logger.LogInformation("Moved document {DocumentId} from folder {OldFolderId} to folder {TargetFolderId}", documentId, oldFolderId, targetFolderId);
             }
@@ -1301,14 +1304,14 @@ namespace ESSDesign.Server.Services
                     throw new FileNotFoundException("Document not found");
 
                 document.RevisionNumber = newRevisionNumber;
-                document.UpdatedAt = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                document.UpdatedAt = now;
 
                 await _supabase
                     .From<DesignDocument>()
                     .Update(document);
 
-                // Clear folder cache
-                _folderCache.TryRemove(document.FolderId, out _);
+                await TouchFolderModifiedAsync(document.FolderId, now);
 
                 _logger.LogInformation("Updated document {DocumentId} revision to {RevisionNumber}", documentId, newRevisionNumber);
             }
@@ -1371,13 +1374,14 @@ namespace ESSDesign.Server.Services
 
                 document.Description = description;
                 document.UserId = userId ?? document.UserId;
-                document.UpdatedAt = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                document.UpdatedAt = now;
 
                 await _supabase
                     .From<DesignDocument>()
                     .Update(document);
 
-                _folderCache.TryRemove(document.FolderId, out _);
+                await TouchFolderModifiedAsync(document.FolderId, now);
 
                 _logger.LogInformation("Replaced files for document {DocumentId}", documentId);
                 return document;
@@ -1701,6 +1705,37 @@ namespace ESSDesign.Server.Services
                 Bytes = bytes,
                 ContentType = contentType
             };
+        }
+
+        private async Task TouchFolderModifiedAsync(Guid? folderId, DateTime? modifiedAt = null)
+        {
+            var currentId = folderId;
+            var timestamp = modifiedAt ?? DateTime.UtcNow;
+
+            while (currentId.HasValue)
+            {
+                var folder = await _supabase
+                    .From<Folder>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, currentId.Value.ToString())
+                    .Single();
+
+                if (folder == null)
+                {
+                    _folderCache.TryRemove(currentId.Value, out _);
+                    return;
+                }
+
+                folder.UpdatedAt = timestamp;
+                await _supabase.From<Folder>().Update(folder);
+
+                _folderCache.TryRemove(folder.Id, out _);
+                if (!folder.ParentFolderId.HasValue)
+                {
+                    _rootFoldersCache = null;
+                }
+
+                currentId = folder.ParentFolderId;
+            }
         }
 
         // Method to clear entire cache (useful for testing)
