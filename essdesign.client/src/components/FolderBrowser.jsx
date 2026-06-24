@@ -330,7 +330,7 @@ function PdfPageThumbnail({ documentItem }) {
                 const pageNumber = Math.min(2, loadedPdf.numPages || 1);
                 const page = await loadedPdf.getPage(pageNumber);
                 const initialViewport = page.getViewport({ scale: 1 });
-                const targetWidth = 170;
+                const targetWidth = 280;
                 const scale = targetWidth / initialViewport.width;
                 const viewport = page.getViewport({ scale });
                 const canvas = document.createElement('canvas');
@@ -342,7 +342,7 @@ function PdfPageThumbnail({ documentItem }) {
                 await page.render({ canvasContext: context, viewport }).promise;
 
                 if (!cancelled) {
-                    const previewDataUrl = canvas.toDataURL('image/jpeg', 0.34);
+                    const previewDataUrl = canvas.toDataURL('image/jpeg', 0.58);
                     pdfThumbnailCache.set(cacheKey, previewDataUrl);
                     setThumbnailUrl(previewDataUrl);
                     setThumbnailStatus('ready');

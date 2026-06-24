@@ -484,6 +484,27 @@ const buildAvatarCandidates = (user) => {
     return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
 };
 
+const isAvatarDebugEnabled = () => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.has('debugAvatar') || localStorage.getItem('debugAvatar') === 'true';
+};
+
+const summarizeAvatarRecord = (record) => {
+    if (!record) return null;
+    return {
+        id: record.id || record.Id || null,
+        userId: record.userId || record.user_id || record.sub || null,
+        employeeId: record.employeeId || record.EmployeeId || record.employee_id || null,
+        linkedAuthUserId: record.linkedAuthUserId || record.linked_auth_user_id || record.LinkedAuthUserId || null,
+        email: record.email || null,
+        fullName: record.fullName || record.full_name || null,
+        avatarUrl: record.avatarUrl || record.avatar_url || record.AvatarUrl || null,
+        profileImageUrl: record.profileImageUrl || record.profile_image_url || record.ProfileImageUrl || null,
+        avatarPath: record.avatarPath || record.avatar_path || record.AvatarPath || null
+    };
+};
+
 function App() {
     const sharedFolderLink = getSharedFolderLinkFromUrl();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -533,6 +554,7 @@ function App() {
     const [currentPage, setCurrentPage] = useState('landing');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
+    const avatarDebugEnabled = useMemo(() => isAvatarDebugEnabled(), []);
 
     useEffect(() => {
         if (currentPage === 'landing') {
@@ -757,8 +779,7 @@ function App() {
                         .some(candidateId => matchedUserIds.has(String(candidateId)))
                     || (email && (candidate.email || '').trim().toLowerCase() === email)
                 ));
-
-                setAvatarProfileUser(match || employeeMatch ? {
+                const nextAvatarProfile = match || employeeMatch ? {
                     ...(employeeMatch || {}),
                     ...(match || {}),
                     employeeId: employeeMatch?.id || employeeId || match?.employeeId || match?.EmployeeId || null,
@@ -770,8 +791,32 @@ function App() {
                     employeeAvatarUrl: employeeMatch?.avatarUrl || employeeMatch?.avatar_url || employeeMatch?.AvatarUrl,
                     employeeProfileImageUrl: employeeMatch?.profileImageUrl || employeeMatch?.profile_image_url || employeeMatch?.ProfileImageUrl,
                     employeeAvatarPath: employeeMatch?.avatarPath || employeeMatch?.avatar_path || employeeMatch?.AvatarPath
-                } : null);
+                } : null;
+
+                if (avatarDebugEnabled) {
+                    console.groupCollapsed('[ESS Avatar] profile lookup');
+                    console.log('current auth user', summarizeAvatarRecord(user));
+                    console.log('users result', {
+                        status: usersResult.status,
+                        count: users.length,
+                        reason: usersResult.status === 'rejected' ? usersResult.reason : null
+                    });
+                    console.log('employees result', {
+                        status: employeesResult.status,
+                        count: employees.length,
+                        reason: employeesResult.status === 'rejected' ? employeesResult.reason : null
+                    });
+                    console.log('matched app user', summarizeAvatarRecord(match));
+                    console.log('matched employee', summarizeAvatarRecord(employeeMatch));
+                    console.log('merged avatar profile', summarizeAvatarRecord(nextAvatarProfile));
+                    console.groupEnd();
+                }
+
+                setAvatarProfileUser(nextAvatarProfile);
             } catch (error) {
+                if (avatarDebugEnabled) {
+                    console.warn('[ESS Avatar] profile lookup failed', error);
+                }
                 if (active) {
                     setAvatarProfileUser(null);
                 }
@@ -783,7 +828,7 @@ function App() {
         return () => {
             active = false;
         };
-    }, [isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.sub, user?.employeeId, user?.EmployeeId, user?.employee_id, user?.email]);
+    }, [avatarDebugEnabled, isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.sub, user?.employeeId, user?.EmployeeId, user?.employee_id, user?.email]);
 
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
@@ -1238,6 +1283,36 @@ function App() {
         setAvatarIndex(0);
     }, [avatarCandidates.join('|')]);
 
+    useEffect(() => {
+        if (!avatarDebugEnabled) return;
+
+        window.__essAvatarDebug = {
+            authUser: summarizeAvatarRecord(user),
+            matchedProfile: summarizeAvatarRecord(avatarProfileUser),
+            mergedProfile: summarizeAvatarRecord(avatarSourceUser),
+            avatarIndex,
+            currentAvatarUrl: userAvatarUrl,
+            candidateCount: avatarCandidates.length,
+            avatarCandidates
+        };
+
+        console.groupCollapsed('[ESS Avatar] candidates');
+        console.log(window.__essAvatarDebug);
+        console.groupEnd();
+    }, [avatarDebugEnabled, user, avatarProfileUser, avatarSourceUser, avatarIndex, userAvatarUrl, avatarCandidates]);
+
+    const handleAvatarImageError = useCallback((event) => {
+        const failedUrl = event.currentTarget?.currentSrc || event.currentTarget?.src || userAvatarUrl;
+        if (avatarDebugEnabled) {
+            console.warn('[ESS Avatar] image candidate failed', {
+                failedIndex: avatarIndex,
+                failedUrl,
+                nextUrl: avatarCandidates[avatarIndex + 1] || null
+            });
+        }
+        setAvatarIndex((current) => current + 1);
+    }, [avatarCandidates, avatarDebugEnabled, avatarIndex, userAvatarUrl]);
+
     const handleDocumentClick = (document) => {
         // Determine which PDF to show (prioritize ESS Design Issue)
         const hasEssDesign = document.essDesignIssuePath;
@@ -1572,7 +1647,7 @@ function App() {
                             aria-expanded={showUserMenu}
                         >
                             {userAvatarUrl ? (
-                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={() => setAvatarIndex((current) => current + 1)} />
+                                <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={handleAvatarImageError} />
                             ) : (
                                 <span className="profile-button-initials" aria-hidden="true">{userInitials}</span>
                             )}
@@ -1585,7 +1660,7 @@ function App() {
                                 <div className="user-menu-summary">
                                     <div className="user-menu-avatar" aria-hidden="true">
                                         {userAvatarUrl ? (
-                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={() => setAvatarIndex((current) => current + 1)} />
+                                            <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={handleAvatarImageError} />
                                         ) : (
                                             userInitials
                                         )}
