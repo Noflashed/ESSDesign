@@ -1894,15 +1894,19 @@ body {
 
 .employees-shell {
     max-width: 100%;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    color: #172033;
 }
 
 .employees-toolbar {
-    align-items: center;
-    margin-bottom: 18px;
+    align-items: flex-end;
+    margin-bottom: 22px;
 }
 
 .employees-toolbar .module-form-actions {
+    align-items: center;
     gap: 18px;
+    padding-bottom: 0;
 }
 
 .employees-toolbar .module-primary-btn,
@@ -1954,7 +1958,12 @@ body {
     color: #0f172a;
     font-size: 24px;
     font-weight: 800;
-    line-height: 1.2;
+    line-height: 1.15;
+    letter-spacing: 0;
+}
+
+.employees-toolbar-copy {
+    gap: 18px;
 }
 
 .employees-card {
@@ -1965,14 +1974,15 @@ body {
 }
 
 .employees-search-row {
-    min-height: 58px;
+    min-height: 42px;
     padding: 0;
     border-bottom: 0;
+    display: block;
 }
 
 .employees-search-field {
     position: relative;
-    width: min(460px, 100%);
+    width: min(448px, 100%);
 }
 
 .employees-search-field > svg {
@@ -1991,6 +2001,15 @@ body {
     padding: 0 14px 0 40px;
     border-color: #cbd5e1;
     color: #1e293b;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+.employees-search-field input::placeholder {
+    color: #8792a8;
+    font-weight: 500;
 }
 
 .employees-table-wrap {
@@ -2008,6 +2027,7 @@ body {
 .employees-table td {
     border-bottom-color: #dfe4ed;
     padding: 13px 16px;
+    letter-spacing: 0;
 }
 
 .employees-table th {
@@ -2017,6 +2037,7 @@ body {
     color: #0f172a;
     font-size: 12px;
     font-weight: 800;
+    line-height: 1.2;
 }
 
 .employees-table th:nth-child(1),
@@ -2057,8 +2078,10 @@ body {
 
 .employees-table td {
     height: 58px;
-    color: #24324a;
-    font-size: 14px;
+    color: #26354f;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.25;
 }
 
 .employees-column-label,
@@ -2188,6 +2211,20 @@ body {
     object-fit: cover;
 }
 
+.employees-identity-cell strong {
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.employees-table td:nth-child(3),
+.employees-table td:nth-child(4) {
+    color: #334155;
+    font-weight: 500;
+}
+
 .employees-role-pill {
     min-height: 24px;
     border-radius: 4px;
@@ -2195,6 +2232,17 @@ body {
     border: 1px solid #bfdbfe;
     background: #eff6ff;
     color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+.employees-account-pill {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0;
 }
 
 .employees-role-pill.employee-status-pill-lh {
@@ -2245,6 +2293,9 @@ body {
     justify-content: space-between;
     min-height: 62px;
     border-top: 0;
+    color: #526173;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 .employees-pagination {

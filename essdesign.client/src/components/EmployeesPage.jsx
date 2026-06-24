@@ -640,6 +640,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 <div className="employees-toolbar">
                     <div className="employees-toolbar-copy">
                         <h2>Employee Directory</h2>
+                        <div className="employees-search-row">
+                            <div className="employees-search-field">
+                                <Search size={18} />
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
+                            </div>
+                        </div>
                     </div>
                     <div className="module-form-actions">
                         <button type="button" className="module-secondary-btn" onClick={openTruckDeviceCreator}>
@@ -654,12 +660,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 </div>
 
                 <div className="module-card employees-card">
-                    <div className="employees-search-row">
-                        <div className="employees-search-field">
-                            <Search size={18} />
-                            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
-                        </div>
-                    </div>
                     {error && !showModal && !showAppUserModal && !employeePendingDelete && !appUserPendingDelete ? (
                         <div className="module-error">{error}</div>
                     ) : null}
