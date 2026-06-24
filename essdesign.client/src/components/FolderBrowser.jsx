@@ -99,6 +99,23 @@ const ShareIcon = ({ size = 16, color = 'currentColor' }) => (
     </svg>
 );
 
+const EditIcon = ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+    </svg>
+);
+
+const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>
+);
+
 const CheckCircleIcon = ({ size = 13, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -210,6 +227,8 @@ const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, 
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 288;
 const MIN_COL_WIDTH_FR = 0.2;
+const CONTEXT_MENU_WIDTH = 224;
+const CONTEXT_MENU_MARGIN = 12;
 
 const sanitizeColWidths = (value) => {
     const next = { ...DEFAULT_COL_WIDTHS };
@@ -1089,10 +1108,31 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         });
     };
 
+    const openContextMenu = useCallback((anchor, item = null, options = {}) => {
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const menuHeight = item?.isDocument ? 244 : item ? 244 : 76;
+        const rawX = options.preferLeft
+            ? anchor.left - CONTEXT_MENU_WIDTH + (options.offsetX ?? 0)
+            : anchor.x ?? anchor.left ?? 0;
+        const rawY = anchor.y ?? anchor.bottom ?? anchor.top ?? 0;
+        const maxX = Math.max(CONTEXT_MENU_MARGIN, viewportWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_MARGIN);
+        const maxY = Math.max(CONTEXT_MENU_MARGIN, viewportHeight - menuHeight - CONTEXT_MENU_MARGIN);
+        const x = Math.min(Math.max(rawX, CONTEXT_MENU_MARGIN), maxX);
+        const y = Math.min(Math.max(rawY, CONTEXT_MENU_MARGIN), maxY);
+
+        setContextMenu({
+            x,
+            y,
+            item,
+            isEmptySpace: options.isEmptySpace || false
+        });
+    }, []);
+
     const handleContextMenu = (e, item) => {
         if (!canManage) return;
         e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY, item });
+        openContextMenu({ x: e.clientX, y: e.clientY }, item);
     };
 
     const handleEmptySpaceContextMenu = (e) => {
@@ -1100,7 +1140,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         // Only trigger if clicking on the grid/list container itself, not on items
         if (e.target.classList.contains('items-grid') || e.target.classList.contains('items-list')) {
             e.preventDefault();
-            setContextMenu({ x: e.clientX, y: e.clientY, item: null, isEmptySpace: true });
+            openContextMenu({ x: e.clientX, y: e.clientY }, null, { isEmptySpace: true });
         }
     };
     const handleSort = (field) => {
@@ -1430,7 +1470,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const rect = e.currentTarget.getBoundingClientRect();
-                                                                setContextMenu({ x: rect.left, y: rect.bottom + 6, item });
+                                                                openContextMenu({ left: rect.left, bottom: rect.bottom + 6 }, item, { preferLeft: true, offsetX: -8 });
                                                             }}
                                                             title="More actions"
                                                         >
@@ -1592,7 +1632,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     const rect = e.currentTarget.getBoundingClientRect();
-                                                                    setContextMenu({ x: rect.left, y: rect.bottom + 6, item });
+                                                                    openContextMenu({ left: rect.left, bottom: rect.bottom + 6 }, item, { preferLeft: true, offsetX: -8 });
                                                                 }}
                                                                 title="More actions"
                                                             >
@@ -1671,10 +1711,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     <dt>Modified</dt>
                                     <dd>{formatDate(selectedPreviewItem.updatedAt || selectedPreviewItem.createdAt)}</dd>
                                 </div>
-                                <div>
-                                    <dt>Folder</dt>
-                                    <dd>{breadcrumbs.length > 0 ? breadcrumbs.map(crumb => crumb.name).join(' / ') : 'Home'}</dd>
-                                </div>
                             </dl>
 
                             {selectedPreviewItem.isDocument && (
@@ -1742,77 +1778,77 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             {canManage && contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
                     {contextMenu.isEmptySpace && (
-                        <div onClick={() => {
+                        <button type="button" className="context-menu-item" onClick={() => {
                             setNewFolderParent(currentFolder);
                             setShowNewFolderModal(true);
                             setContextMenu(null);
                         }}>
-                            <FolderPlusIcon size={14} /> New Folder
-                        </div>
+                            <FolderPlusIcon size={15} /> <span>New Folder</span>
+                        </button>
                     )}
                     {contextMenu.item && !contextMenu.item.isDocument && (
                         <>
-                            <div onClick={() => {
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 handleOpenShareModal(contextMenu.item);
                                 setContextMenu(null);
                             }}>
-                                Share Folder
-                            </div>
-                            <div className="context-menu-divider"></div>
-                            <div onClick={() => {
+                                <ShareIcon size={15} /> <span>Share Folder</span>
+                            </button>
+                            <div className="context-menu-divider" role="separator"></div>
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 setNewFolderParent(contextMenu.item.id);
                                 setShowNewFolderModal(true);
                                 setContextMenu(null);
                             }}>
-                                <FolderPlusIcon size={14} /> New Subfolder
-                            </div>
-                            <div className="context-menu-divider"></div>
-                            <div onClick={() => {
+                                <FolderPlusIcon size={15} /> <span>New Subfolder</span>
+                            </button>
+                            <div className="context-menu-divider" role="separator"></div>
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 setRenameTarget(contextMenu.item);
                                 setNewFolderName(contextMenu.item.name);
                                 setShowRenameModal(true);
                                 setContextMenu(null);
                             }}>
-                                Rename
-                            </div>
-                            <div onClick={() => {
+                                <EditIcon size={15} /> <span>Rename</span>
+                            </button>
+                            <button type="button" className="context-menu-item danger" onClick={() => {
                                 handleDeleteFolder(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                Delete
-                            </div>
+                                <TrashIcon size={15} /> <span>Delete</span>
+                            </button>
                         </>
                     )}
                     {contextMenu.item && contextMenu.item.isDocument && (
                         <>
-                            <div onClick={() => {
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 handleOpenShareModal(contextMenu.item);
                                 setContextMenu(null);
                             }}>
-                                Share PDF
-                            </div>
-                            <div onClick={() => {
+                                <ShareIcon size={15} /> <span>Share PDF</span>
+                            </button>
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 setReplaceDocumentTarget(contextMenu.item);
                                 setShowReplaceDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                Edit Revision
-                            </div>
-                            <div onClick={() => {
+                                <UploadIcon size={15} /> <span>Replace PDF</span>
+                            </button>
+                            <button type="button" className="context-menu-item" onClick={() => {
                                 setEditDocumentTarget(contextMenu.item);
                                 setNewRevisionNumber(contextMenu.item.revisionNumber);
                                 setShowEditDocumentModal(true);
                                 setContextMenu(null);
                             }}>
-                                Change Revision Number
-                            </div>
-                            <div className="context-menu-divider"></div>
-                            <div onClick={() => {
+                                <EditIcon size={15} /> <span>Change Revision</span>
+                            </button>
+                            <div className="context-menu-divider" role="separator"></div>
+                            <button type="button" className="context-menu-item danger" onClick={() => {
                                 handleDeleteDocument(contextMenu.item.id);
                                 setContextMenu(null);
                             }}>
-                                Delete
-                            </div>
+                                <TrashIcon size={15} /> <span>Delete PDF</span>
+                            </button>
                         </>
                     )}
                 </div>

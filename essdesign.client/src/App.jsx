@@ -22,7 +22,7 @@ import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
-import { authAPI, preferencesAPI, foldersAPI, usersAPI } from './services/api';
+import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI } from './services/api';
 import './App.css';
 
 // Load logo from Supabase Storage
@@ -433,30 +433,53 @@ const normalizeAvatarSource = (value) => {
 };
 
 const buildAvatarCandidates = (user) => {
-    const userId = user?.id || user?.Id || user?.userId || user?.user_id || user?.sub;
+    const storageIds = [
+        user?.id,
+        user?.Id,
+        user?.userId,
+        user?.user_id,
+        user?.sub,
+        user?.employeeId,
+        user?.EmployeeId,
+        user?.employee_id,
+        user?.linkedAuthUserId,
+        user?.linked_auth_user_id,
+        user?.LinkedAuthUserId,
+        user?.appUserId,
+        user?.app_user_id
+    ].filter(Boolean);
     const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
         user?.AvatarUrl,
+        user?.employeeAvatarUrl,
+        user?.employee_avatar_url,
+        user?.EmployeeAvatarUrl,
         user?.picture,
         user?.Picture,
         user?.profileImageUrl,
         user?.profile_image_url,
         user?.ProfileImageUrl,
+        user?.employeeProfileImageUrl,
+        user?.employee_profile_image_url,
+        user?.EmployeeProfileImageUrl,
         user?.profileImage,
         user?.profile_image,
         user?.ProfileImage,
         user?.avatarPath,
         user?.avatar_path,
-        user?.AvatarPath
+        user?.AvatarPath,
+        user?.employeeAvatarPath,
+        user?.employee_avatar_path,
+        user?.EmployeeAvatarPath
     ].filter(Boolean);
 
-    const storageCandidates = userId ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
+    const storageCandidates = storageIds.flatMap((id) => ['jpg', 'jpeg', 'png', 'webp', 'heic']
         .flatMap((ext) => [
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}/avatar.${ext}`,
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}/profile.${ext}`,
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${userId}.${ext}`
-        ]) : [];
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}/avatar.${ext}`,
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}/profile.${ext}`,
+            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}.${ext}`
+        ]));
 
     return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
 };
@@ -691,19 +714,63 @@ function App() {
             }
 
             try {
-                const users = await usersAPI.getAllUsers();
+                const [usersResult, employeesResult] = await Promise.allSettled([
+                    usersAPI.getAllUsers(),
+                    rosteringAPI.getEmployees()
+                ]);
                 if (!active) return;
 
-                const userId = user?.id || user?.Id || user?.userId || user?.user_id || '';
+                const userIds = [
+                    user?.id,
+                    user?.Id,
+                    user?.userId,
+                    user?.user_id,
+                    user?.sub
+                ].filter(Boolean).map(String);
+                const userIdSet = new Set(userIds);
+                const employeeId = user?.employeeId || user?.EmployeeId || user?.employee_id || '';
                 const email = (user?.email || '').trim().toLowerCase();
-                const match = Array.isArray(users)
-                    ? users.find(candidate => (
-                        (userId && (candidate.id === userId || candidate.Id === userId || candidate.userId === userId || candidate.user_id === userId))
-                        || (email && (candidate.email || '').trim().toLowerCase() === email)
-                    ))
-                    : null;
+                const users = usersResult.status === 'fulfilled' && Array.isArray(usersResult.value)
+                    ? usersResult.value
+                    : [];
+                const employees = employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value)
+                    ? employeesResult.value
+                    : [];
+                const match = users.find(candidate => (
+                    [candidate.id, candidate.Id, candidate.userId, candidate.user_id, candidate.sub]
+                        .filter(Boolean)
+                        .some(candidateId => userIdSet.has(String(candidateId)))
+                    || (email && (candidate.email || '').trim().toLowerCase() === email)
+                ));
+                const matchedUserIds = new Set([
+                    ...userIds,
+                    match?.id,
+                    match?.Id,
+                    match?.userId,
+                    match?.user_id,
+                    match?.sub
+                ].filter(Boolean).map(String));
+                const employeeMatch = employees.find(candidate => (
+                    (employeeId && String(candidate.id) === String(employeeId))
+                    || [candidate.linkedAuthUserId, candidate.linked_auth_user_id, candidate.LinkedAuthUserId]
+                        .filter(Boolean)
+                        .some(candidateId => matchedUserIds.has(String(candidateId)))
+                    || (email && (candidate.email || '').trim().toLowerCase() === email)
+                ));
 
-                setAvatarProfileUser(match || null);
+                setAvatarProfileUser(match || employeeMatch ? {
+                    ...(employeeMatch || {}),
+                    ...(match || {}),
+                    employeeId: employeeMatch?.id || employeeId || match?.employeeId || match?.EmployeeId || null,
+                    linkedAuthUserId: employeeMatch?.linkedAuthUserId
+                        || employeeMatch?.linked_auth_user_id
+                        || match?.id
+                        || user?.id
+                        || null,
+                    employeeAvatarUrl: employeeMatch?.avatarUrl || employeeMatch?.avatar_url || employeeMatch?.AvatarUrl,
+                    employeeProfileImageUrl: employeeMatch?.profileImageUrl || employeeMatch?.profile_image_url || employeeMatch?.ProfileImageUrl,
+                    employeeAvatarPath: employeeMatch?.avatarPath || employeeMatch?.avatar_path || employeeMatch?.AvatarPath
+                } : null);
             } catch (error) {
                 if (active) {
                     setAvatarProfileUser(null);
@@ -716,7 +783,7 @@ function App() {
         return () => {
             active = false;
         };
-    }, [isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.email]);
+    }, [isAuthenticated, user?.id, user?.Id, user?.userId, user?.user_id, user?.sub, user?.employeeId, user?.EmployeeId, user?.employee_id, user?.email]);
 
     const checkAuth = async () => {
         const callbackResult = authAPI.consumeAuthCallbackFromUrl?.();
