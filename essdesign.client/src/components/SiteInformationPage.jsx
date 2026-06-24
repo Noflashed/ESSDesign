@@ -29,6 +29,7 @@ export default function SiteInformationPage() {
     const [builderForm, setBuilderForm] = useState({ id: null, name: '' });
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
+    const [openInfoProjectKey, setOpenInfoProjectKey] = useState('');
     const [error, setError] = useState('');
 
     const loadBuilders = async () => {
@@ -191,6 +192,10 @@ export default function SiteInformationPage() {
         }
     };
 
+    const toggleProjectInfo = (projectKey) => {
+        setOpenInfoProjectKey(prev => prev === projectKey ? '' : projectKey);
+    };
+
     const toggleArchiveProject = async (builderId, project) => {
         const isArchiving = !project.archived;
         const confirmed = window.confirm(
@@ -292,9 +297,38 @@ export default function SiteInformationPage() {
                                                         : 'No active projects found.'}
                                             </td>
                                         </tr>
-                                    ) : visibleProjects.map(project => (
-                                        <tr key={`${project.builder.id}-${project.id}`}>
-                                            <td>{project.name}</td>
+                                    ) : visibleProjects.map(project => {
+                                        const projectKey = `${project.builder.id}-${project.id}`;
+                                        const isInfoOpen = openInfoProjectKey === projectKey;
+                                        return (
+                                        <tr
+                                            key={projectKey}
+                                            className={`site-registry-data-row ${isInfoOpen ? 'info-open' : ''}`}
+                                            onClick={() => toggleProjectInfo(projectKey)}
+                                            onKeyDown={event => {
+                                                if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault();
+                                                    toggleProjectInfo(projectKey);
+                                                }
+                                            }}
+                                            tabIndex={0}
+                                        >
+                                            <td className="site-registry-project-cell">
+                                                <span>{project.name}</span>
+                                                <div className="site-registry-row-popout" role="tooltip">
+                                                    <div className="site-registry-row-popout-title">Site Information</div>
+                                                    <div className="site-registry-row-popout-grid">
+                                                        <span>Project</span>
+                                                        <strong>{project.name}</strong>
+                                                        <span>Builder</span>
+                                                        <strong>{project.builder.name}</strong>
+                                                        <span>Location</span>
+                                                        <strong>{project.siteLocation || 'Not set'}</strong>
+                                                        <span>Status</span>
+                                                        <strong>{project.archived ? 'Archived' : 'Active'}</strong>
+                                                    </div>
+                                                </div>
+                                            </td>
                                             <td>{project.builder.name}</td>
                                             <td>{project.siteLocation || 'Not set'}</td>
                                             <td>
@@ -304,22 +338,32 @@ export default function SiteInformationPage() {
                                             </td>
                                             <td>
                                                 <div className="site-registry-table-actions">
-                                                    <button className="site-registry-action-btn edit" onClick={() => openEditProject(project.builder.id, project)}>
+                                                    <button className="site-registry-action-btn edit" onClick={event => {
+                                                        event.stopPropagation();
+                                                        openEditProject(project.builder.id, project);
+                                                    }}>
                                                         <Pencil size={14} strokeWidth={2.4} />
                                                         <span>Edit</span>
                                                     </button>
-                                                    <button className="site-registry-action-btn archive" onClick={() => toggleArchiveProject(project.builder.id, project)}>
+                                                    <button className="site-registry-action-btn archive" onClick={event => {
+                                                        event.stopPropagation();
+                                                        toggleArchiveProject(project.builder.id, project);
+                                                    }}>
                                                         <Archive size={14} strokeWidth={2.2} />
                                                         <span>{project.archived ? 'Unarchive' : 'Archive'}</span>
                                                     </button>
-                                                    <button className="site-registry-action-btn delete" onClick={() => removeProject(project.builder.id, project.id)}>
+                                                    <button className="site-registry-action-btn delete" onClick={event => {
+                                                        event.stopPropagation();
+                                                        removeProject(project.builder.id, project.id);
+                                                    }}>
                                                         <Trash2 size={14} strokeWidth={2.2} />
                                                         <span>Delete</span>
                                                     </button>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
