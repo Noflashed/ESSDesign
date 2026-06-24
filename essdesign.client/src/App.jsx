@@ -147,6 +147,15 @@ const BoxNavIcon = ({ size = 18 }) => (
         <line x1="12" y1="22.08" x2="12" y2="12" />
     </svg>
 );
+const TruckNavIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 7h11v10H3z" />
+        <path d="M14 10h4l3 3v4h-7z" />
+        <circle cx="7" cy="18" r="2" />
+        <circle cx="18" cy="18" r="2" />
+        <path d="M3 17h2M9 17h7M20 17h1" />
+    </svg>
+);
 const CalendarNavIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -186,6 +195,7 @@ const NAV_PAGE_ICONS = {
     'site-information': MapNavIcon,
     'safety': ShieldNavIcon,
     'material-ordering': BoxNavIcon,
+    'truck-schedule': TruckNavIcon,
     'rostering': CalendarNavIcon,
     'employees': UsersNavIcon,
     'ess-news': NewsNavIcon,
