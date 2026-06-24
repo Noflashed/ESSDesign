@@ -18,6 +18,24 @@ function emptyComposer() {
     };
 }
 
+function optimizedNewsImageUrl(url, width = 220) {
+    if (!url || !url.includes('/storage/v1/object/public/')) {
+        return url;
+    }
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}width=${width}&quality=72&resize=cover`;
+}
+
+function newsThumbnailUrl(item) {
+    if (!item?.mediaUrl) {
+        return '';
+    }
+    if (item.mediaType === 'video') {
+        return item.thumbnailUrl ? optimizedNewsImageUrl(item.thumbnailUrl, 220) : '';
+    }
+    return optimizedNewsImageUrl(item.mediaUrl, 220);
+}
+
 export default function ESSNewsPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -218,6 +236,7 @@ export default function ESSNewsPage() {
                     {composerOpen ? <button type="button" className="ess-news-drawer-scrim" onClick={closeComposer} aria-label="Close news editor" /> : null}
                     <aside className={`ess-news-composer-drawer ${composerOpen ? 'open' : ''}`} aria-hidden={!composerOpen}>
                         <div className="ess-news-drawer-header">
+                            <span>Add new item</span>
                             <button type="button" className="ess-news-clear-edit" onClick={closeComposer} aria-label="Close news editor">
                                 <X size={16} strokeWidth={2.4} />
                             </button>
@@ -356,55 +375,71 @@ export default function ESSNewsPage() {
                                                 {items.length === 0 ? 'No news items yet.' : 'No news items match this view.'}
                                             </td>
                                         </tr>
-                                    ) : filteredItems.map(item => (
-                                        <tr key={item.id}>
-                                            <td>
-                                                <button type="button" className="ess-news-media-thumb" onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.title}`}>
-                                                    {item.mediaUrl ? (
-                                                        item.mediaType === 'video' ? (
+                                    ) : filteredItems.map(item => {
+                                        const thumbUrl = newsThumbnailUrl(item);
+                                        return (
+                                            <tr key={item.id}>
+                                                <td>
+                                                    <button type="button" className="ess-news-media-thumb" onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.title}`}>
+                                                        {thumbUrl ? (
                                                             <>
-                                                                <video src={item.mediaUrl} preload="metadata" />
-                                                                <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" />
+                                                                <img
+                                                                    src={thumbUrl}
+                                                                    alt=""
+                                                                    loading="lazy"
+                                                                    decoding="async"
+                                                                    onError={event => {
+                                                                        if (item.mediaType === 'image' && item.mediaUrl && event.currentTarget.src !== item.mediaUrl) {
+                                                                            event.currentTarget.src = item.mediaUrl;
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                {item.mediaType === 'video' ? <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" /> : null}
                                                             </>
                                                         ) : (
-                                                            <img src={item.mediaUrl} alt="" loading="lazy" />
-                                                        )
-                                                    ) : (
-                                                        <span>No media</span>
-                                                    )}
-                                                </button>
-                                            </td>
-                                            <td><strong>{item.title}</strong></td>
-                                            <td><span className="ess-news-subtitle-cell">{item.subtitle || 'No subtitle'}</span></td>
-                                            <td>
-                                                <span className={`ess-news-type-pill ${item.mediaType === 'video' ? 'video' : 'image'}`}>
-                                                    {item.mediaType === 'video' ? 'Video' : 'Image'}
-                                                </span>
-                                            </td>
-                                            <td>{formatNewsDate(item.createdAt)}</td>
-                                            <td>
-                                                <div className="ess-news-table-actions">
-                                                    <button type="button" className="ess-news-action-btn view" onClick={() => setPreviewItem(item)}>
-                                                        <Eye size={14} strokeWidth={2.3} />
-                                                        <span>View</span>
+                                                            item.mediaType === 'video' ? (
+                                                                <>
+                                                                    <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" />
+                                                                    <span>Video</span>
+                                                                </>
+                                                            ) : (
+                                                                <span>No media</span>
+                                                            )
+                                                        )}
                                                     </button>
-                                                    <button type="button" className="ess-news-action-btn edit" onClick={() => beginEdit(item)}>
-                                                        <Pencil size={14} strokeWidth={2.3} />
-                                                        <span>Edit</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="ess-news-icon-danger"
-                                                        disabled={deletingId === item.id}
-                                                        onClick={() => handleDelete(item)}
-                                                        aria-label={`Delete ${item.title}`}
-                                                    >
-                                                        <Trash2 size={15} strokeWidth={2.4} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                </td>
+                                                <td><strong>{item.title}</strong></td>
+                                                <td><span className="ess-news-subtitle-cell">{item.subtitle || 'No subtitle'}</span></td>
+                                                <td>
+                                                    <span className={`ess-news-type-pill ${item.mediaType === 'video' ? 'video' : 'image'}`}>
+                                                        {item.mediaType === 'video' ? 'Video' : 'Image'}
+                                                    </span>
+                                                </td>
+                                                <td>{formatNewsDate(item.createdAt)}</td>
+                                                <td>
+                                                    <div className="ess-news-table-actions">
+                                                        <button type="button" className="ess-news-action-btn view" onClick={() => setPreviewItem(item)}>
+                                                            <Eye size={14} strokeWidth={2.3} />
+                                                            <span>View</span>
+                                                        </button>
+                                                        <button type="button" className="ess-news-action-btn edit" onClick={() => beginEdit(item)}>
+                                                            <Pencil size={14} strokeWidth={2.3} />
+                                                            <span>Edit</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="ess-news-icon-danger"
+                                                            disabled={deletingId === item.id}
+                                                            onClick={() => handleDelete(item)}
+                                                            aria-label={`Delete ${item.title}`}
+                                                        >
+                                                            <Trash2 size={15} strokeWidth={2.4} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
