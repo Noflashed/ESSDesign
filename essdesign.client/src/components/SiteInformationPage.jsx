@@ -29,7 +29,7 @@ export default function SiteInformationPage() {
     const [builderForm, setBuilderForm] = useState({ id: null, name: '' });
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
-    const [openInfoProjectKey, setOpenInfoProjectKey] = useState('');
+    const [selectedInfoProject, setSelectedInfoProject] = useState(null);
     const [error, setError] = useState('');
 
     const loadBuilders = async () => {
@@ -192,8 +192,12 @@ export default function SiteInformationPage() {
         }
     };
 
-    const toggleProjectInfo = (projectKey) => {
-        setOpenInfoProjectKey(prev => prev === projectKey ? '' : projectKey);
+    const openProjectInfo = (project) => {
+        setSelectedInfoProject(project);
+    };
+
+    const closeProjectInfo = () => {
+        setSelectedInfoProject(null);
     };
 
     const toggleArchiveProject = async (builderId, project) => {
@@ -297,38 +301,20 @@ export default function SiteInformationPage() {
                                                         : 'No active projects found.'}
                                             </td>
                                         </tr>
-                                    ) : visibleProjects.map(project => {
-                                        const projectKey = `${project.builder.id}-${project.id}`;
-                                        const isInfoOpen = openInfoProjectKey === projectKey;
-                                        return (
+                                    ) : visibleProjects.map(project => (
                                         <tr
-                                            key={projectKey}
-                                            className={`site-registry-data-row ${isInfoOpen ? 'info-open' : ''}`}
-                                            onClick={() => toggleProjectInfo(projectKey)}
+                                            key={`${project.builder.id}-${project.id}`}
+                                            className="site-registry-data-row"
+                                            onClick={() => openProjectInfo(project)}
                                             onKeyDown={event => {
                                                 if (event.key === 'Enter' || event.key === ' ') {
                                                     event.preventDefault();
-                                                    toggleProjectInfo(projectKey);
+                                                    openProjectInfo(project);
                                                 }
                                             }}
                                             tabIndex={0}
                                         >
-                                            <td className="site-registry-project-cell">
-                                                <span>{project.name}</span>
-                                                <div className="site-registry-row-popout" role="tooltip">
-                                                    <div className="site-registry-row-popout-title">Site Information</div>
-                                                    <div className="site-registry-row-popout-grid">
-                                                        <span>Project</span>
-                                                        <strong>{project.name}</strong>
-                                                        <span>Builder</span>
-                                                        <strong>{project.builder.name}</strong>
-                                                        <span>Location</span>
-                                                        <strong>{project.siteLocation || 'Not set'}</strong>
-                                                        <span>Status</span>
-                                                        <strong>{project.archived ? 'Archived' : 'Active'}</strong>
-                                                    </div>
-                                                </div>
-                                            </td>
+                                            <td>{project.name}</td>
                                             <td>{project.builder.name}</td>
                                             <td>{project.siteLocation || 'Not set'}</td>
                                             <td>
@@ -362,14 +348,42 @@ export default function SiteInformationPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                        );
-                                    })}
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                     </section>
                 )}
             </div>
+
+            {selectedInfoProject && (
+                <div className="module-modal-backdrop" onClick={closeProjectInfo}>
+                    <div className="module-modal compact site-registry-info-modal" onClick={e => e.stopPropagation()}>
+                        <div className="module-modal-header">
+                            <h3>Site Information</h3>
+                            <button className="nav-drawer-close" onClick={closeProjectInfo}>x</button>
+                        </div>
+                        <div className="site-registry-info-list">
+                            <div className="site-registry-info-row">
+                                <span>Project</span>
+                                <strong>{selectedInfoProject.name}</strong>
+                            </div>
+                            <div className="site-registry-info-row">
+                                <span>Builder</span>
+                                <strong>{selectedInfoProject.builder.name}</strong>
+                            </div>
+                            <div className="site-registry-info-row">
+                                <span>Site Geographic Location</span>
+                                <strong>{selectedInfoProject.siteLocation || 'Not set'}</strong>
+                            </div>
+                            <div className="site-registry-info-row">
+                                <span>Status</span>
+                                <strong>{selectedInfoProject.archived ? 'Archived' : 'Active'}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showProjectModal && (
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>

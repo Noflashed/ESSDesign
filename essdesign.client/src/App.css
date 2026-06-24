@@ -1087,8 +1087,7 @@ body {
 }
 
 .site-registry-data-row:hover td,
-.site-registry-data-row:focus-visible td,
-.site-registry-data-row.info-open td {
+.site-registry-data-row:focus-visible td {
     background: rgba(29, 78, 216, 0.045);
 }
 
@@ -1096,60 +1095,33 @@ body {
     box-shadow: inset 3px 0 0 #1d4ed8;
 }
 
-.site-registry-project-cell {
-    position: relative;
+.site-registry-info-modal {
+    max-width: 520px;
 }
 
-.site-registry-row-popout {
-    position: absolute;
-    top: calc(100% - 4px);
-    left: 16px;
-    width: min(360px, 78vw);
-    z-index: 25;
+.site-registry-info-list {
     display: grid;
     gap: 12px;
-    padding: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.42);
-    border-radius: 8px;
-    background: var(--card-bg);
-    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
-    color: var(--text-primary);
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(8px) scale(0.98);
-    transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.site-registry-data-row:hover .site-registry-row-popout,
-.site-registry-data-row:focus-visible .site-registry-row-popout,
-.site-registry-data-row.info-open .site-registry-row-popout {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateY(0) scale(1);
-}
-
-.site-registry-row-popout-title {
-    color: var(--text-primary);
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.site-registry-row-popout-grid {
+.site-registry-info-row {
     display: grid;
-    grid-template-columns: 82px minmax(0, 1fr);
-    gap: 8px 12px;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
 }
 
-.site-registry-row-popout-grid span {
+.site-registry-info-row span {
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 700;
 }
 
-.site-registry-row-popout-grid strong {
-    min-width: 0;
+.site-registry-info-row strong {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     overflow-wrap: anywhere;
 }
