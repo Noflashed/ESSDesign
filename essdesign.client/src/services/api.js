@@ -35,12 +35,20 @@ const setCachedAvatarExt = (userId, ext) => {
     } catch { /* ignore */ }
 };
 
-const resolveProfileImageUrl = async (userId) => {
+export const resolveProfileImageUrl = async (userId) => {
     if (!userId) return null;
 
     const cached = getCachedAvatarExt(userId);
     if (cached) {
-        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cached}`);
+        const cachedUrl = getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cached}`);
+        try {
+            const response = await fetch(cachedUrl, { method: 'HEAD' });
+            if (response.ok) {
+                return cachedUrl;
+            }
+        } catch {
+            // Fall through and probe the known extensions.
+        }
     }
 
     const extensions = ['jpg', 'jpeg', 'png', 'webp', 'heic'];

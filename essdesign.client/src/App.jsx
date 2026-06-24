@@ -22,7 +22,7 @@ import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
-import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI } from './services/api';
+import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
 import './App.css';
 
 // Load logo from Supabase Storage
@@ -434,21 +434,24 @@ const normalizeAvatarSource = (value) => {
 
 const buildAvatarCandidates = (user) => {
     const storageIds = [
-        user?.id,
-        user?.Id,
-        user?.userId,
-        user?.user_id,
-        user?.sub,
         user?.employeeId,
         user?.EmployeeId,
         user?.employee_id,
         user?.linkedAuthUserId,
         user?.linked_auth_user_id,
         user?.LinkedAuthUserId,
+        user?.id,
+        user?.Id,
+        user?.userId,
+        user?.user_id,
+        user?.sub,
         user?.appUserId,
         user?.app_user_id
     ].filter(Boolean);
     const rawValues = [
+        user?.resolvedAvatarUrl,
+        user?.resolved_avatar_url,
+        user?.ResolvedAvatarUrl,
         user?.avatarUrl,
         user?.avatar_url,
         user?.AvatarUrl,
@@ -554,6 +557,7 @@ function App() {
     const [currentPage, setCurrentPage] = useState('landing');
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
+    const [avatarDebugEvents, setAvatarDebugEvents] = useState([]);
     const avatarDebugEnabled = useMemo(() => isAvatarDebugEnabled(), []);
 
     useEffect(() => {
@@ -779,9 +783,25 @@ function App() {
                         .some(candidateId => matchedUserIds.has(String(candidateId)))
                     || (email && (candidate.email || '').trim().toLowerCase() === email)
                 ));
+                const avatarIdsToVerify = [
+                    employeeMatch?.id,
+                    employeeId,
+                    employeeMatch?.linkedAuthUserId,
+                    employeeMatch?.linked_auth_user_id,
+                    match?.id,
+                    match?.Id,
+                    user?.id,
+                    user?.Id
+                ].filter(Boolean);
+                let resolvedAvatarUrl = null;
+                for (const candidateId of [...new Set(avatarIdsToVerify.map(String))]) {
+                    resolvedAvatarUrl = await resolveProfileImageUrl(candidateId);
+                    if (resolvedAvatarUrl) break;
+                }
                 const nextAvatarProfile = match || employeeMatch ? {
                     ...(employeeMatch || {}),
                     ...(match || {}),
+                    resolvedAvatarUrl,
                     employeeId: employeeMatch?.id || employeeId || match?.employeeId || match?.EmployeeId || null,
                     linkedAuthUserId: employeeMatch?.linkedAuthUserId
                         || employeeMatch?.linked_auth_user_id
@@ -1278,37 +1298,40 @@ function App() {
             .join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
     const userAvatarUrl = avatarIndex < avatarCandidates.length ? avatarCandidates[avatarIndex] : null;
+    const avatarDebugSnapshot = useMemo(() => ({
+        authUser: summarizeAvatarRecord(user),
+        matchedProfile: summarizeAvatarRecord(avatarProfileUser),
+        mergedProfile: summarizeAvatarRecord(avatarSourceUser),
+        avatarIndex,
+        currentAvatarUrl: userAvatarUrl,
+        candidateCount: avatarCandidates.length,
+        avatarCandidates,
+        failures: avatarDebugEvents
+    }), [avatarCandidates, avatarDebugEvents, avatarIndex, avatarProfileUser, avatarSourceUser, user, userAvatarUrl]);
 
     useEffect(() => {
         setAvatarIndex(0);
+        setAvatarDebugEvents([]);
     }, [avatarCandidates.join('|')]);
 
     useEffect(() => {
         if (!avatarDebugEnabled) return;
 
-        window.__essAvatarDebug = {
-            authUser: summarizeAvatarRecord(user),
-            matchedProfile: summarizeAvatarRecord(avatarProfileUser),
-            mergedProfile: summarizeAvatarRecord(avatarSourceUser),
-            avatarIndex,
-            currentAvatarUrl: userAvatarUrl,
-            candidateCount: avatarCandidates.length,
-            avatarCandidates
-        };
+        window.__essAvatarDebug = avatarDebugSnapshot;
 
-        console.groupCollapsed('[ESS Avatar] candidates');
-        console.log(window.__essAvatarDebug);
-        console.groupEnd();
-    }, [avatarDebugEnabled, user, avatarProfileUser, avatarSourceUser, avatarIndex, userAvatarUrl, avatarCandidates]);
+        console.info('[ESS Avatar] debug enabled', avatarDebugSnapshot);
+    }, [avatarDebugEnabled, avatarDebugSnapshot]);
 
     const handleAvatarImageError = useCallback((event) => {
         const failedUrl = event.currentTarget?.currentSrc || event.currentTarget?.src || userAvatarUrl;
         if (avatarDebugEnabled) {
-            console.warn('[ESS Avatar] image candidate failed', {
+            const failure = {
                 failedIndex: avatarIndex,
                 failedUrl,
                 nextUrl: avatarCandidates[avatarIndex + 1] || null
-            });
+            };
+            setAvatarDebugEvents((current) => [...current.slice(-7), failure]);
+            console.warn('[ESS Avatar] image candidate failed', failure);
         }
         setAvatarIndex((current) => current + 1);
     }, [avatarCandidates, avatarDebugEnabled, avatarIndex, userAvatarUrl]);
@@ -1747,6 +1770,48 @@ function App() {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {avatarDebugEnabled && (
+                <aside className="avatar-debug-panel" aria-label="Avatar debug panel">
+                    <div className="avatar-debug-header">
+                        <strong>Avatar Debug</strong>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                navigator.clipboard?.writeText(JSON.stringify(avatarDebugSnapshot, null, 2));
+                            }}
+                        >
+                            Copy
+                        </button>
+                    </div>
+                    <dl>
+                        <div>
+                            <dt>Auth ID</dt>
+                            <dd>{avatarDebugSnapshot.authUser?.id || avatarDebugSnapshot.authUser?.userId || '-'}</dd>
+                        </div>
+                        <div>
+                            <dt>Employee ID</dt>
+                            <dd>{avatarDebugSnapshot.mergedProfile?.employeeId || '-'}</dd>
+                        </div>
+                        <div>
+                            <dt>Linked Auth</dt>
+                            <dd>{avatarDebugSnapshot.mergedProfile?.linkedAuthUserId || '-'}</dd>
+                        </div>
+                        <div>
+                            <dt>Candidates</dt>
+                            <dd>{avatarDebugSnapshot.candidateCount} total, trying {avatarDebugSnapshot.avatarIndex + 1}</dd>
+                        </div>
+                    </dl>
+                    <div className="avatar-debug-url">
+                        <span>Current URL</span>
+                        <code>{avatarDebugSnapshot.currentAvatarUrl || 'No current avatar URL'}</code>
+                    </div>
+                    <div className="avatar-debug-url">
+                        <span>Last failure</span>
+                        <code>{avatarDebugSnapshot.failures.at(-1)?.failedUrl || 'No failures recorded yet'}</code>
+                    </div>
+                </aside>
             )}
 
             {pdfViewer && (
