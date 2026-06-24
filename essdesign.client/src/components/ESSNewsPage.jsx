@@ -195,19 +195,6 @@ export default function ESSNewsPage() {
     return (
         <div className="module-page">
             <div className="module-shell ess-news-shell">
-                <div className="ess-news-topbar">
-                    <label className="ess-news-search">
-                        <Search size={17} strokeWidth={2.2} aria-hidden="true" />
-                        <input
-                            type="search"
-                            value={searchTerm}
-                            onChange={event => setSearchTerm(event.target.value)}
-                            placeholder="Search news by title or subtitle..."
-                            aria-label="Search ESS News"
-                        />
-                    </label>
-                </div>
-
                 {error ? (
                     <div className="module-card">
                         <p className="ess-news-error-text">{error}</p>
@@ -216,86 +203,6 @@ export default function ESSNewsPage() {
                 ) : null}
 
                 <div className="ess-news-workspace">
-                    <section className="ess-news-panel ess-news-list-panel">
-                        <div className="ess-news-panel-header">
-                            <h3>Published Items</h3>
-                        </div>
-                        <div className="ess-news-table-wrap">
-                            <table className="ess-news-table">
-                                <thead>
-                                    <tr>
-                                        <th>Media</th>
-                                        <th>Title</th>
-                                        <th>Subtitle</th>
-                                        <th>Type</th>
-                                        <th>Created</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredItems.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="6" className="ess-news-empty-cell">
-                                                {items.length === 0 ? 'No news items yet.' : 'No news items match this view.'}
-                                            </td>
-                                        </tr>
-                                    ) : filteredItems.map(item => (
-                                        <tr key={item.id}>
-                                            <td>
-                                                <button type="button" className="ess-news-media-thumb" onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.title}`}>
-                                                    {item.mediaUrl ? (
-                                                        item.mediaType === 'video' ? (
-                                                            <>
-                                                                <video src={item.mediaUrl} preload="metadata" />
-                                                                <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" />
-                                                            </>
-                                                        ) : (
-                                                            <img src={item.mediaUrl} alt="" loading="lazy" />
-                                                        )
-                                                    ) : (
-                                                        <span>No media</span>
-                                                    )}
-                                                </button>
-                                            </td>
-                                            <td><strong>{item.title}</strong></td>
-                                            <td><span className="ess-news-subtitle-cell">{item.subtitle || 'No subtitle'}</span></td>
-                                            <td>
-                                                <span className={`ess-news-type-pill ${item.mediaType === 'video' ? 'video' : 'image'}`}>
-                                                    {item.mediaType === 'video' ? 'Video' : 'Image'}
-                                                </span>
-                                            </td>
-                                            <td>{formatNewsDate(item.createdAt)}</td>
-                                            <td>
-                                                <div className="ess-news-table-actions">
-                                                    <button type="button" className="ess-news-action-btn view" onClick={() => setPreviewItem(item)}>
-                                                        <Eye size={14} strokeWidth={2.3} />
-                                                        <span>View</span>
-                                                    </button>
-                                                    <button type="button" className="ess-news-action-btn edit" onClick={() => beginEdit(item)}>
-                                                        <Pencil size={14} strokeWidth={2.3} />
-                                                        <span>Edit</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className="ess-news-icon-danger"
-                                                        disabled={deletingId === item.id}
-                                                        onClick={() => handleDelete(item)}
-                                                        aria-label={`Delete ${item.title}`}
-                                                    >
-                                                        <Trash2 size={15} strokeWidth={2.4} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="ess-news-table-footer">
-                            <span>Showing {filteredItems.length} of {items.length} items</span>
-                        </div>
-                    </section>
-
                     <aside className="ess-news-panel ess-news-composer">
                         <div className="ess-news-panel-header">
                             <h3>{isEditing ? 'Edit News Item' : 'New News Item'}</h3>
@@ -402,6 +309,95 @@ export default function ESSNewsPage() {
                             </div>
                         </form>
                     </aside>
+
+                    <section className="ess-news-panel ess-news-list-panel">
+                        <div className="ess-news-panel-header ess-news-table-header">
+                            <label className="ess-news-search">
+                                <Search size={17} strokeWidth={2.2} aria-hidden="true" />
+                                <input
+                                    type="search"
+                                    value={searchTerm}
+                                    onChange={event => setSearchTerm(event.target.value)}
+                                    placeholder="Search news by title or subtitle..."
+                                    aria-label="Search ESS News"
+                                />
+                            </label>
+                        </div>
+                        <div className="ess-news-table-wrap">
+                            <table className="ess-news-table">
+                                <thead>
+                                    <tr>
+                                        <th>Media</th>
+                                        <th>Title</th>
+                                        <th>Subtitle</th>
+                                        <th>Type</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredItems.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="ess-news-empty-cell">
+                                                {items.length === 0 ? 'No news items yet.' : 'No news items match this view.'}
+                                            </td>
+                                        </tr>
+                                    ) : filteredItems.map(item => (
+                                        <tr key={item.id}>
+                                            <td>
+                                                <button type="button" className="ess-news-media-thumb" onClick={() => setPreviewItem(item)} aria-label={`Preview ${item.title}`}>
+                                                    {item.mediaUrl ? (
+                                                        item.mediaType === 'video' ? (
+                                                            <>
+                                                                <video src={item.mediaUrl} preload="metadata" />
+                                                                <PlayCircle size={24} strokeWidth={2.1} className="ess-news-play-mark" />
+                                                            </>
+                                                        ) : (
+                                                            <img src={item.mediaUrl} alt="" loading="lazy" />
+                                                        )
+                                                    ) : (
+                                                        <span>No media</span>
+                                                    )}
+                                                </button>
+                                            </td>
+                                            <td><strong>{item.title}</strong></td>
+                                            <td><span className="ess-news-subtitle-cell">{item.subtitle || 'No subtitle'}</span></td>
+                                            <td>
+                                                <span className={`ess-news-type-pill ${item.mediaType === 'video' ? 'video' : 'image'}`}>
+                                                    {item.mediaType === 'video' ? 'Video' : 'Image'}
+                                                </span>
+                                            </td>
+                                            <td>{formatNewsDate(item.createdAt)}</td>
+                                            <td>
+                                                <div className="ess-news-table-actions">
+                                                    <button type="button" className="ess-news-action-btn view" onClick={() => setPreviewItem(item)}>
+                                                        <Eye size={14} strokeWidth={2.3} />
+                                                        <span>View</span>
+                                                    </button>
+                                                    <button type="button" className="ess-news-action-btn edit" onClick={() => beginEdit(item)}>
+                                                        <Pencil size={14} strokeWidth={2.3} />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="ess-news-icon-danger"
+                                                        disabled={deletingId === item.id}
+                                                        onClick={() => handleDelete(item)}
+                                                        aria-label={`Delete ${item.title}`}
+                                                    >
+                                                        <Trash2 size={15} strokeWidth={2.4} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="ess-news-table-footer">
+                            <span>Showing {filteredItems.length} of {items.length} items</span>
+                        </div>
+                    </section>
                 </div>
             </div>
 
