@@ -285,13 +285,6 @@ export default function SiteInformationPage() {
     return (
         <div className="module-page">
             <div className="module-shell site-registry-shell">
-                <div className="module-header site-registry-header">
-                    <div className="module-list-actions">
-                        <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>Add Builder</button>
-                        <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>Add Project</button>
-                    </div>
-                </div>
-
                 {error ? <div className="module-error">{error}</div> : null}
 
                 {loading ? (
@@ -319,6 +312,10 @@ export default function SiteInformationPage() {
                             {selectedBuilder ? (
                                 <button className="module-secondary-btn compact site-registry-edit-builder" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
                             ) : null}
+                            <div className="site-registry-toolbar-actions">
+                                <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>Add Builder</button>
+                                <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>Add Project</button>
+                            </div>
                         </div>
 
                         <div className={`site-registry-table-wrap ${columnFilterMenu ? 'filter-menu-open' : ''}`}>
