@@ -109,6 +109,7 @@ namespace ESSDesign.Server.Services
                 var result = foldersResponse.Models
                     .Select(folder => BuildFolderSummary(folder, userNames))
                     .ToList();
+                await PopulateFolderItemCountsAsync(result);
 
                 _rootFoldersCache = result;
                 _rootFoldersCacheExpiry = DateTime.UtcNow.Add(_cacheExpiration);
@@ -170,6 +171,7 @@ namespace ESSDesign.Server.Services
 
                 var userNames = await GetUserNamesAsync(userIds);
                 var result = BuildFolderDetail(folderResponse, subfolders, documents, userNames);
+                await PopulateFolderItemCountsAsync(result.SubFolders);
 
                 _folderCache[folderId] = (result, DateTime.UtcNow.Add(_cacheExpiration));
                 return result;
@@ -1032,14 +1034,62 @@ namespace ESSDesign.Server.Services
             IEnumerable<DesignDocument> documents,
             IReadOnlyDictionary<string, string> userNames)
         {
+            var subfolderList = subfolders.ToList();
+            var documentList = documents.ToList();
             var response = BuildFolderSummary(folder, userNames);
-            response.SubFolders = subfolders
+            response.SubFolderCount = subfolderList.Count;
+            response.DocumentCount = documentList.Count;
+            response.SubFolders = subfolderList
                 .Select(subfolder => BuildFolderSummary(subfolder, userNames))
                 .ToList();
-            response.Documents = documents
+            response.Documents = documentList
                 .Select(document => BuildDocumentResponse(document, userNames))
                 .ToList();
             return response;
+        }
+
+        private async Task PopulateFolderItemCountsAsync(IReadOnlyCollection<FolderResponse> folders)
+        {
+            if (folders.Count == 0)
+            {
+                return;
+            }
+
+            var folderIds = folders
+                .Select(folder => folder.Id)
+                .Distinct()
+                .ToList();
+
+            var subfoldersTask = _supabase
+                .From<Folder>()
+                .Filter("parent_folder_id", Postgrest.Constants.Operator.In, folderIds)
+                .Get();
+
+            var documentsTask = _supabase
+                .From<DesignDocument>()
+                .Filter("folder_id", Postgrest.Constants.Operator.In, folderIds)
+                .Get();
+
+            await Task.WhenAll(subfoldersTask, documentsTask);
+
+            var subfolderCounts = (await subfoldersTask).Models
+                .Where(folder => folder.ParentFolderId.HasValue)
+                .GroupBy(folder => folder.ParentFolderId!.Value)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            var documentCounts = (await documentsTask).Models
+                .GroupBy(document => document.FolderId)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            foreach (var folder in folders)
+            {
+                folder.SubFolderCount = subfolderCounts.TryGetValue(folder.Id, out var subfolderCount)
+                    ? subfolderCount
+                    : 0;
+                folder.DocumentCount = documentCounts.TryGetValue(folder.Id, out var documentCount)
+                    ? documentCount
+                    : 0;
+            }
         }
 
         private DocumentResponse BuildDocumentResponse(DesignDocument document, IReadOnlyDictionary<string, string> userNames)

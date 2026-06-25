@@ -422,6 +422,8 @@ namespace ESSDesign.Server.Models
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public long? FileSize { get; set; }
+        public int SubFolderCount { get; set; }
+        public int DocumentCount { get; set; }
         public List<FolderResponse> SubFolders { get; set; } = new();
         public List<DocumentResponse> Documents { get; set; } = new();
     }
