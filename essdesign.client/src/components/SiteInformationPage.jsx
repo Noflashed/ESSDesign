@@ -284,9 +284,6 @@ export default function SiteInformationPage() {
     return (
         <div className="module-page site-registry-page">
             <div className="module-shell site-registry-shell">
-                <div className="site-registry-page-header">
-                    <h1>Site Registry</h1>
-                </div>
                 {error ? <div className="module-error">{error}</div> : null}
 
                 {loading ? (
