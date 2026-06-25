@@ -6722,11 +6722,15 @@ button.stat-card {
     width: 100%;
     max-width: none;
     min-height: 100%;
+    height: 100%;
     margin: 0;
     padding: 32px 42px;
     background: #ffffff;
     color: #0f172a;
     font-family: "Google Sans", Roboto, Arial, sans-serif;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
 }
 
 .site-registry-page-header {
@@ -6745,11 +6749,18 @@ button.stat-card {
 }
 
 .site-registry-table-section {
+    min-height: min(760px, calc(100vh - 96px));
+    display: grid;
+    grid-template-rows: 40px minmax(0, 1fr);
+    align-content: start;
     gap: 24px;
 }
 
 .site-registry-toolbar {
     gap: 16px;
+    height: 40px;
+    flex-wrap: nowrap;
+    align-items: center;
 }
 
 .site-registry-search-field {
@@ -6837,6 +6848,7 @@ button.stat-card {
 }
 
 .site-registry-table-wrap {
+    height: min(680px, calc(100vh - 160px));
     min-height: 560px;
     overflow: visible;
     border: 1px solid #dbe5f4;
@@ -7279,6 +7291,20 @@ button.stat-card {
 @media (max-width: 900px) {
     .site-registry-shell {
         padding: 22px;
+    }
+
+    .site-registry-table-section {
+        min-height: auto;
+        grid-template-rows: auto minmax(520px, 1fr);
+    }
+
+    .site-registry-toolbar {
+        height: auto;
+        flex-wrap: wrap;
+    }
+
+    .site-registry-table-wrap {
+        height: auto;
     }
 
     .site-registry-project-form {
