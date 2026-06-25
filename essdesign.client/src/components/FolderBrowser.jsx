@@ -373,6 +373,14 @@ const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.75, status: 0.95, owner: 1, 
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 176;
 const MIN_COL_WIDTH_FR = 0.2;
+const LIST_COLUMN_MIN_WIDTHS = {
+    name: 0,
+    revision: 112,
+    status: 116,
+    owner: 0,
+    modified: 0,
+    size: 0
+};
 const CONTEXT_MENU_WIDTH = 224;
 const CONTEXT_MENU_MARGIN = 12;
 
@@ -395,20 +403,21 @@ const sanitizeColWidths = (value) => {
 
 const buildGridTemplateColumns = (widths, includeRevision) => {
     const normalized = sanitizeColWidths(widths);
+    const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
     const dynamicColumns = includeRevision
         ? [
-            `minmax(0, ${normalized.name}fr)`,
-            `minmax(0, ${normalized.revision}fr)`,
-            `minmax(0, ${normalized.status}fr)`,
-            `minmax(0, ${normalized.owner}fr)`,
-            `minmax(0, ${normalized.modified}fr)`,
-            `minmax(0, ${normalized.size}fr)`
+            columnTrack('name'),
+            columnTrack('revision'),
+            columnTrack('status'),
+            columnTrack('owner'),
+            columnTrack('modified'),
+            columnTrack('size')
         ]
         : [
-            `minmax(0, ${normalized.name}fr)`,
-            `minmax(0, ${normalized.owner}fr)`,
-            `minmax(0, ${normalized.modified}fr)`,
-            `minmax(0, ${normalized.size}fr)`
+            columnTrack('name'),
+            columnTrack('owner'),
+            columnTrack('modified'),
+            columnTrack('size')
         ];
 
     return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');

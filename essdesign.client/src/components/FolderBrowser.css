@@ -127,6 +127,8 @@
     box-sizing: border-box;
 }
 
+.list-header-cell[data-col-key="revision"],
+.list-header-cell[data-col-key="status"],
 .list-header-cell[data-col-key="owner"],
 .list-header-cell[data-col-key="modified"],
 .list-header-cell[data-col-key="size"] {
@@ -246,6 +248,8 @@
     box-sizing: border-box;
 }
 
+.list-item-revision,
+.list-item-status,
 .list-item-owner,
 .list-item-modified,
 .list-item-size {
