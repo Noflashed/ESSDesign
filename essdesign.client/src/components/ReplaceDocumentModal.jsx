@@ -60,7 +60,7 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
         let active = true;
         const missingUsers = users.filter((user) => {
             const lookupId = getUserAvatarLookupId(user);
-            return lookupId && !(lookupId in avatarUrls) && !(user.avatarUrl || user.AvatarUrl);
+            return lookupId && !(lookupId in avatarUrls) && !(user.resolvedAvatarUrl || user.profileImageUrl || user.avatarUrl || user.AvatarUrl);
         });
 
         if (missingUsers.length === 0) {
@@ -258,6 +258,12 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                             )}
                         </div>
                         <div className="upload-user-search">
+                            <span aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                                    <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                            </span>
                             <input
                                 type="search"
                                 value={recipientSearch}

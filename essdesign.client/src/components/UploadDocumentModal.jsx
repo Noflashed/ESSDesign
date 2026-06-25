@@ -42,7 +42,7 @@ const getUserRoleLabel = (user) => (
 
 export function RecipientAvatar({ user, avatarUrls }) {
     const lookupId = getUserAvatarLookupId(user);
-    const avatarUrl = user.avatarUrl || user.AvatarUrl || avatarUrls?.[lookupId] || '';
+    const avatarUrl = user.resolvedAvatarUrl || user.profileImageUrl || user.avatarUrl || user.AvatarUrl || avatarUrls?.[lookupId] || '';
     return (
         <span className={`recipient-avatar${avatarUrl ? ' has-image' : ''}`} aria-hidden="true">
             {avatarUrl ? <img src={avatarUrl} alt="" /> : getUserInitials(user)}
@@ -52,6 +52,31 @@ export function RecipientAvatar({ user, avatarUrls }) {
 
 let notificationRecipientsCache = null;
 let notificationRecipientsPromise = null;
+const notificationRecipientAvatarCache = new Map();
+
+const resolveNotificationRecipientAvatar = async (user) => {
+    const lookupId = getUserAvatarLookupId(user);
+    const existingUrl = user.resolvedAvatarUrl || user.profileImageUrl || user.avatarUrl || user.AvatarUrl;
+    if (existingUrl || !lookupId) {
+        return existingUrl || '';
+    }
+
+    if (notificationRecipientAvatarCache.has(lookupId)) {
+        return notificationRecipientAvatarCache.get(lookupId);
+    }
+
+    const avatarUrl = await resolveProfileImageUrl(lookupId).catch(() => null);
+    notificationRecipientAvatarCache.set(lookupId, avatarUrl || '');
+    return avatarUrl || '';
+};
+
+const hydrateNotificationRecipients = async (userList) => {
+    const users = Array.isArray(userList) ? userList : [];
+    return Promise.all(users.map(async (user) => ({
+        ...user,
+        resolvedAvatarUrl: await resolveNotificationRecipientAvatar(user)
+    })));
+};
 
 export const loadNotificationRecipients = async () => {
     if (notificationRecipientsCache) {
@@ -60,8 +85,8 @@ export const loadNotificationRecipients = async () => {
 
     if (!notificationRecipientsPromise) {
         notificationRecipientsPromise = usersAPI.getNotificationRecipients()
-            .then((userList) => {
-                notificationRecipientsCache = Array.isArray(userList) ? userList : [];
+            .then(async (userList) => {
+                notificationRecipientsCache = await hydrateNotificationRecipients(userList);
                 return notificationRecipientsCache;
             })
             .finally(() => {
@@ -130,7 +155,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
         let active = true;
         const missingUsers = users.filter((user) => {
             const lookupId = getUserAvatarLookupId(user);
-            return lookupId && !(lookupId in avatarUrls) && !(user.avatarUrl || user.AvatarUrl);
+            return lookupId && !(lookupId in avatarUrls) && !(user.resolvedAvatarUrl || user.profileImageUrl || user.avatarUrl || user.AvatarUrl);
         });
 
         if (missingUsers.length === 0) {
@@ -276,7 +301,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                 <div className="document-upload-header">
                     <div>
                         <h3>Upload Document</h3>
-                        <p>Add a new ESS Design PDF revision.</p>
+                        <p>Add a new ESS Design PDF revision</p>
                     </div>
                     <button type="button" className="document-upload-close" onClick={onClose} disabled={uploading} aria-label="Close">
                         &times;
