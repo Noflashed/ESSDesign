@@ -379,11 +379,6 @@ function SearchFolderNode({ folder, depth, initialChildren, onNavigate, onViewPD
                                         ESS Design
                                     </button>
                                 )}
-                                {doc.thirdPartyDesignPath && (
-                                    <button className="search-doc-btn" onClick={(e) => { e.stopPropagation(); onViewPDF(doc, 'thirdparty'); }}>
-                                        Third-Party
-                                    </button>
-                                )}
                             </div>
                         </div>
                     ))}
@@ -1192,12 +1187,12 @@ function App() {
         handleFolderSelect(folderId);
     };
 
-    const handleSearchViewPDF = (doc, type) => {
-        const fileName = type === 'ess' ? doc.essDesignIssueName : doc.thirdPartyDesignName;
+    const handleSearchViewPDF = (doc, type = 'ess') => {
+        const fileName = doc.essDesignIssueName;
         setPdfViewer({
             documentId: doc.id,
             fileName: fileName || 'document.pdf',
-            fileType: type
+            fileType: type || 'ess'
         });
         closeSearch();
     };
@@ -1380,21 +1375,11 @@ function App() {
     }, [avatarCandidates, avatarDebugEnabled, avatarIndex, userAvatarUrl]);
 
     const handleDocumentClick = (document) => {
-        // Determine which PDF to show (prioritize ESS Design Issue)
-        const hasEssDesign = document.essDesignIssuePath;
-        const hasThirdParty = document.thirdPartyDesignPath;
-
-        if (hasEssDesign) {
+        if (document.essDesignIssuePath) {
             setPdfViewer({
                 documentId: document.id,
                 fileName: document.essDesignIssueName || 'document.pdf',
                 fileType: 'ess'
-            });
-        } else if (hasThirdParty) {
-            setPdfViewer({
-                documentId: document.id,
-                fileName: document.thirdPartyDesignName || 'document.pdf',
-                fileType: 'thirdparty'
             });
         }
     };

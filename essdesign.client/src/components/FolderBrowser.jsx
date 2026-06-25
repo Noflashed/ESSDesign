@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from '../services/api';
-import UploadDocumentModal from './UploadDocumentModal';
+import UploadDocumentModal, { prefetchNotificationRecipients } from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
@@ -162,7 +162,7 @@ const formatCompactRevisionNumber = (revisionNumber) => {
 
 const getItemDisplayName = (item) => (
     item?.isDocument
-        ? (item.essDesignIssueName || item.thirdPartyDesignName || 'Document')
+        ? (item.essDesignIssueName || 'Document')
         : (item?.name || 'Folder')
 );
 
@@ -336,7 +336,6 @@ const getSearchResultName = (result) => (
     result?.name
     || result?.displayName
     || result?.essDesignIssueName
-    || result?.thirdPartyDesignName
     || 'Untitled'
 );
 
@@ -353,7 +352,7 @@ const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
 // Default column widths as fractions (must match grid-template-columns order after icon)
 const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
-const LIST_ACTIONS_WIDTH_PX = 288;
+const LIST_ACTIONS_WIDTH_PX = 176;
 const MIN_COL_WIDTH_FR = 0.2;
 const CONTEXT_MENU_WIDTH = 224;
 const CONTEXT_MENU_MARGIN = 12;
@@ -412,8 +411,8 @@ function PdfPageThumbnail({ documentItem }) {
                 return;
             }
 
-            const preferredType = documentItem.essDesignIssuePath ? 'ess' : 'thirdparty';
-            if (!documentItem.essDesignIssuePath && !documentItem.thirdPartyDesignPath) {
+            const preferredType = 'ess';
+            if (!documentItem.essDesignIssuePath) {
                 setThumbnailUrl('');
                 setThumbnailStatus('unavailable');
                 return;
@@ -682,6 +681,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             setCurrentFolder(selectedFolderId);
         }
     }, [selectedFolderId]);
+
+    useEffect(() => {
+        if (canManage) {
+            prefetchNotificationRecipients();
+        }
+    }, [canManage]);
 
     useEffect(() => {
         setSearchQuery('');
@@ -1227,12 +1232,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         handleMoveDocument(dragged, targetFolder);
     };
 
-    const handleViewPDF = (document, type) => {
-        const fileName = type === 'ess' ? document.essDesignIssueName : document.thirdPartyDesignName;
+    const handleViewPDF = (document, type = 'ess') => {
+        const fileName = document.essDesignIssueName;
         setPdfViewer({
             documentId: document.id,
             fileName: fileName || 'document.pdf',
-            fileType: type
+            fileType: type || 'ess'
         });
     };
 
@@ -1562,7 +1567,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
                                         </div>
-                                        <div className="list-header-actions">Files</div>
+                                        <div className="list-header-actions">File</div>
                                     </div>
                                 )}
 
@@ -1639,7 +1644,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                 <div className="document-card-badges">
                                                                     <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
                                                                     {isLatest && <span className="status-chip latest">Latest</span>}
-                                                                    {item.essDesignIssuePath && item.thirdPartyDesignPath && <span className="status-chip complete">Complete</span>}
                                                                 </div>
                                                                 <div className="document-card-meta">
                                                                     <OwnerAvatar item={item} />
@@ -1659,17 +1663,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                             className="file-btn"
                                                                         >
                                                                             <FileTextIcon size={13} /> ESS Design
-                                                                        </button>
-                                                                    )}
-                                                                    {item.thirdPartyDesignPath && (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleViewPDF(item, 'thirdparty');
-                                                                            }}
-                                                                            className="file-btn"
-                                                                        >
-                                                                            <FileTextIcon size={13} /> Third-Party
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1741,19 +1734,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                         className="file-btn-small"
                                                                     >
                                                                         ESS Design <CheckCircleIcon />
-                                                                    </button>
-                                                                ) : (
-                                                                    <div className="file-btn-placeholder"></div>
-                                                                )}
-                                                                {item.thirdPartyDesignPath ? (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleViewPDF(item, 'thirdparty');
-                                                                        }}
-                                                                        className="file-btn-small"
-                                                                    >
-                                                                        Third-Party <CheckCircleIcon />
                                                                     </button>
                                                                 ) : (
                                                                     <div className="file-btn-placeholder"></div>
@@ -1858,11 +1838,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {selectedPreviewItem.essDesignIssuePath && (
                                                 <button type="button" onClick={() => handleViewPDF(selectedPreviewItem, 'ess')}>
                                                     <FileTextIcon size={14} /> ESS Design <CheckCircleIcon />
-                                                </button>
-                                            )}
-                                            {selectedPreviewItem.thirdPartyDesignPath && (
-                                                <button type="button" onClick={() => handleViewPDF(selectedPreviewItem, 'thirdparty')}>
-                                                    <FileTextIcon size={14} /> Third-Party <CheckCircleIcon />
                                                 </button>
                                             )}
                                         </div>
@@ -2083,7 +2058,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                         <h3>{shareTarget.isDocument ? 'Share PDF' : 'Share Folder'}</h3>
                         <p className="share-modal-subtitle">
                             Send <strong>{shareTarget.isDocument
-                                ? (shareTarget.essDesignIssueName || shareTarget.thirdPartyDesignName || formatRevisionNumber(shareTarget.revisionNumber))
+                                ? (shareTarget.essDesignIssueName || formatRevisionNumber(shareTarget.revisionNumber))
                                 : shareTarget.name}</strong> by email.
                         </p>
                         <div className="share-section">

@@ -2,14 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { foldersAPI, usersAPI } from '../services/api';
 import { useToast } from './Toast';
 
+let notificationRecipientsCache = null;
+let notificationRecipientsPromise = null;
+
+export const loadNotificationRecipients = async () => {
+    if (notificationRecipientsCache) {
+        return notificationRecipientsCache;
+    }
+
+    if (!notificationRecipientsPromise) {
+        notificationRecipientsPromise = usersAPI.getNotificationRecipients()
+            .then((userList) => {
+                notificationRecipientsCache = Array.isArray(userList) ? userList : [];
+                return notificationRecipientsCache;
+            })
+            .finally(() => {
+                notificationRecipientsPromise = null;
+            });
+    }
+
+    return notificationRecipientsPromise;
+};
+
+export const prefetchNotificationRecipients = () => {
+    loadNotificationRecipients().catch(() => []);
+};
+
 function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const { showToast, updateToast } = useToast();
     const [revisionNumber, setRevisionNumber] = useState('01');
     const [essDesignFile, setEssDesignFile] = useState(null);
-    const [thirdPartyFile, setThirdPartyFile] = useState(null);
     const [description, setDescription] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
-    const [users, setUsers] = useState([]);
+    const [users, setUsers] = useState(() => notificationRecipientsCache || []);
+    const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
     const [uploading, setUploading] = useState(false);
 
     const revisionOptions = Array.from({ length: 20 }, (_, i) => {
@@ -18,15 +44,27 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     });
 
     useEffect(() => {
+        let active = true;
+
         const fetchUsers = async () => {
             try {
-                const userList = await usersAPI.getNotificationRecipients();
+                const userList = await loadNotificationRecipients();
+                if (!active) return;
                 setUsers(userList);
             } catch (error) {
                 console.error('Failed to fetch users:', error);
+            } finally {
+                if (active) {
+                    setRecipientsLoading(false);
+                }
             }
         };
+
         fetchUsers();
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     const handleSubmit = async (e) => {
@@ -35,15 +73,14 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
             alert('Please select a revision number');
             return;
         }
-        if (!essDesignFile && !thirdPartyFile) {
-            alert('Please select at least one file');
+        if (!essDesignFile) {
+            alert('Please select a PDF file');
             return;
         }
 
         setUploading(true);
 
-        const uploadFiles = [essDesignFile, thirdPartyFile].filter(Boolean);
-        const uploadLabel = uploadFiles.length === 1 ? uploadFiles[0].name : `${uploadFiles.length} files`;
+        const uploadLabel = essDesignFile.name;
         const progressToastId = showToast({
             type: 'info',
             variant: 'upload-progress',
@@ -63,7 +100,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     folderId,
                     revisionNumber,
                     essDesignFile,
-                    thirdPartyFile,
+                    null,
                     description,
                     selectedRecipients,
                     {
@@ -136,98 +173,101 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal upload-modal" onClick={(e) => e.stopPropagation()}>
-                <h3>Upload Document</h3>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Revision Number</label>
-                        <select
-                            value={revisionNumber}
-                            onChange={(e) => setRevisionNumber(e.target.value)}
-                            required
-                        >
-                            {revisionOptions.map(rev => (
-                                <option key={rev} value={rev}>
-                                    Revision {rev}
-                                </option>
-                            ))}
-                        </select>
+        <div className="modal-overlay" onClick={() => !uploading && onClose()}>
+            <div className="modal upload-modal document-upload-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="document-upload-header">
+                    <div>
+                        <h3>Upload Document</h3>
+                        <p>Add a new ESS Design PDF revision.</p>
+                    </div>
+                    <button type="button" className="document-upload-close" onClick={onClose} disabled={uploading} aria-label="Close">
+                        &times;
+                    </button>
+                </div>
+                <form className="document-upload-form" onSubmit={handleSubmit}>
+                    <div className="upload-form-grid">
+                        <label className="upload-field">
+                            <span>Revision</span>
+                            <select
+                                value={revisionNumber}
+                                onChange={(e) => setRevisionNumber(e.target.value)}
+                                required
+                            >
+                                {revisionOptions.map(rev => (
+                                    <option key={rev} value={rev}>
+                                        Revision {rev}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className={`upload-file-drop${essDesignFile ? ' has-file' : ''}`}>
+                            <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={(e) => setEssDesignFile(e.target.files[0] || null)}
+                            />
+                            <span className="upload-file-kicker">PDF file</span>
+                            <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
+                            {essDesignFile && <span className="upload-selected-file">Selected</span>}
+                        </label>
                     </div>
 
-                    <div className="file-uploads">
-                        <div className="file-upload-box">
-                            <label>
-                                ESS Design Issue
-                                <input
-                                    type="file"
-                                    accept=".pdf"
-                                    onChange={(e) => setEssDesignFile(e.target.files[0])}
-                                />
-                            </label>
-                            {essDesignFile && <div className="file-selected">✓ {essDesignFile.name}</div>}
-                        </div>
-
-                        <div className="file-upload-box">
-                            <label>
-                                Third-Party Engineer Design
-                                <input
-                                    type="file"
-                                    accept=".pdf"
-                                    onChange={(e) => setThirdPartyFile(e.target.files[0])}
-                                />
-                            </label>
-                            {thirdPartyFile && <div className="file-selected">✓ {thirdPartyFile.name}</div>}
-                        </div>
-                    </div>
-
-                    <div className="form-group">
-                        <label>Change Description (Optional)</label>
-                        <small style={{ display: 'block', color: '#666', marginBottom: '4px', fontSize: '12px' }}>
-                            Start each line with a dash (-) or asterisk (*) for bullet points
-                        </small>
+                    <label className="upload-field">
+                        <span>Change Notes</span>
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="- First change&#10;- Second change&#10;- Third change"
                             rows={4}
-                            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontFamily: 'monospace' }}
+                            className="modal-textarea"
                         />
-                    </div>
+                    </label>
 
-                    <div className="form-group">
-                        <label>Notify Users (Optional)</label>
-                        <div className="recipient-selection">
-                            {users.map(user => (
-                                <label key={user.id} className="recipient-checkbox">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedRecipients.includes(user.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedRecipients([...selectedRecipients, user.id]);
-                                            } else {
-                                                setSelectedRecipients(selectedRecipients.filter(id => id !== user.id));
-                                            }
-                                        }}
-                                    />
-                                    {user.fullName} ({user.email})
-                                </label>
-                            ))}
+                    <div className="upload-field">
+                        <div className="upload-field-row">
+                            <span>Notify Users</span>
+                            {selectedRecipients.length > 0 && (
+                                <span className="recipients-count">
+                                    {selectedRecipients.length} selected
+                                </span>
+                            )}
                         </div>
-                        {selectedRecipients.length > 0 && (
-                            <div className="recipients-count">
-                                {selectedRecipients.length} user{selectedRecipients.length > 1 ? 's' : ''} will be notified
-                            </div>
-                        )}
+                        <div className="recipient-selection upload-recipient-list">
+                            {recipientsLoading ? (
+                                <div className="recipient-loading">Loading users...</div>
+                            ) : users.length === 0 ? (
+                                <div className="recipient-loading">No users available</div>
+                            ) : (
+                                users.map(user => (
+                                    <label key={user.id} className="recipient-checkbox">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedRecipients.includes(user.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedRecipients((prev) => [...prev, user.id]);
+                                                } else {
+                                                    setSelectedRecipients((prev) => prev.filter(id => id !== user.id));
+                                                }
+                                            }}
+                                        />
+                                        <span>
+                                            <strong>{user.fullName || user.email}</strong>
+                                            <small>{user.email}</small>
+                                        </span>
+                                    </label>
+                                ))
+                            )}
+                        </div>
                     </div>
 
-                    <div className="modal-actions">
+                    <div className="modal-actions upload-modal-actions">
                         <button type="button" onClick={onClose} disabled={uploading}>
                             Cancel
                         </button>
                         <button type="submit" disabled={uploading}>
-                            {uploading ? 'Uploading...' : 'Upload'}
+                            {uploading ? 'Uploading...' : 'Upload Document'}
                         </button>
                     </div>
                 </form>

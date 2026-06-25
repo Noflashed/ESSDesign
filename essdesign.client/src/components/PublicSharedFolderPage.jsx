@@ -9,7 +9,7 @@ function countFiles(folder) {
 }
 
 function SharedDocumentRow({ document }) {
-    const title = document.displayName || document.essDesignIssueName || document.thirdPartyDesignName || 'Design file';
+    const title = document.displayName || document.essDesignIssueName || 'Design file';
     const revision = document.revisionNumber ? `Revision ${document.revisionNumber}` : 'Revision not specified';
 
     return (
@@ -31,11 +31,6 @@ function SharedDocumentRow({ document }) {
                 {document.essDesignUrl ? (
                     <a href={foldersAPI.resolvePublicFileUrl(document.essDesignUrl)} target="_blank" rel="noopener noreferrer">
                         ESS PDF
-                    </a>
-                ) : null}
-                {document.thirdPartyDesignUrl ? (
-                    <a className="alt" href={foldersAPI.resolvePublicFileUrl(document.thirdPartyDesignUrl)} target="_blank" rel="noopener noreferrer">
-                        Third-Party PDF
                     </a>
                 ) : null}
             </div>
