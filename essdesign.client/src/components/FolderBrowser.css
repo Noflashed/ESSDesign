@@ -1576,6 +1576,13 @@
     object-fit: cover;
 }
 
+.owner-name-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .folder-card-meta {
     display: grid;
     gap: 5px;

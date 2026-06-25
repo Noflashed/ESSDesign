@@ -184,7 +184,46 @@ const getOwnerInitials = (item) => {
 };
 
 const ownerAvatarUrlCache = new Map();
+const OWNER_AVATAR_CACHE_KEY = 'ess-owner-avatar-url-cache-v1';
 let ownerEmployeeRowsPromise = null;
+
+const readOwnerAvatarStorageCache = () => {
+    try {
+        const raw = localStorage.getItem(OWNER_AVATAR_CACHE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
+const writeOwnerAvatarStorageCache = (cache) => {
+    try {
+        localStorage.setItem(OWNER_AVATAR_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // Ignore private browsing/quota failures.
+    }
+};
+
+const getStoredOwnerAvatarUrl = (ownerId) => {
+    if (!ownerId) return '';
+    const cache = readOwnerAvatarStorageCache();
+    return typeof cache[ownerId] === 'string' ? cache[ownerId] : '';
+};
+
+const setStoredOwnerAvatarUrl = (ownerId, url) => {
+    if (!ownerId || !url) return;
+    const cache = readOwnerAvatarStorageCache();
+    cache[ownerId] = url;
+    writeOwnerAvatarStorageCache(cache);
+};
+
+const clearStoredOwnerAvatarUrl = (ownerId) => {
+    if (!ownerId) return;
+    const cache = readOwnerAvatarStorageCache();
+    if (cache[ownerId] === undefined) return;
+    delete cache[ownerId];
+    writeOwnerAvatarStorageCache(cache);
+};
 
 const getOwnerEmployeeRows = () => {
     if (!ownerEmployeeRowsPromise) {
@@ -197,8 +236,8 @@ const normalizeOwnerName = (value) => (value || '').trim().toLowerCase().replace
 
 const resolveOwnerAvatarUrl = async (item) => {
     const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
-    const directUrl = await resolveProfileImageUrl(ownerId);
-    if (directUrl) return directUrl;
+    const storedUrl = getStoredOwnerAvatarUrl(ownerId);
+    if (storedUrl) return storedUrl;
 
     const ownerName = normalizeOwnerName(item?.ownerName || item?.OwnerName);
     const employees = await getOwnerEmployeeRows();
@@ -206,14 +245,23 @@ const resolveOwnerAvatarUrl = async (item) => {
         (ownerId && String(employee.linkedAuthUserId || employee.linked_auth_user_id || '').toLowerCase() === String(ownerId).toLowerCase())
         || (ownerName && normalizeOwnerName(`${employee.firstName || ''} ${employee.lastName || ''}`) === ownerName)
     ));
+    const employeeUrl = linkedEmployee?.id ? await resolveProfileImageUrl(linkedEmployee.id) : null;
+    if (employeeUrl) {
+        setStoredOwnerAvatarUrl(ownerId, employeeUrl);
+        return employeeUrl;
+    }
 
-    return linkedEmployee?.id ? resolveProfileImageUrl(linkedEmployee.id) : null;
+    const directUrl = await resolveProfileImageUrl(ownerId);
+    if (directUrl) {
+        setStoredOwnerAvatarUrl(ownerId, directUrl);
+    }
+    return directUrl;
 };
 
 function OwnerAvatar({ item }) {
     const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
     const initials = getOwnerInitials(item);
-    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarUrlCache.get(ownerId) || '');
+    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarUrlCache.get(ownerId) || getStoredOwnerAvatarUrl(ownerId) || '');
 
     useEffect(() => {
         let active = true;
@@ -254,6 +302,7 @@ function OwnerAvatar({ item }) {
                     alt=""
                     onError={() => {
                         ownerAvatarUrlCache.set(ownerId, '');
+                        clearStoredOwnerAvatarUrl(ownerId);
                         setAvatarUrl('');
                     }}
                 />
@@ -1279,6 +1328,27 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         return getSortedFolders();
     }, [getSortedFolders]);
 
+    useEffect(() => {
+        const uniqueOwnerItems = [];
+        const seenOwnerIds = new Set();
+
+        for (const item of visibleItems) {
+            const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
+            if (!ownerId || seenOwnerIds.has(ownerId) || ownerAvatarUrlCache.get(ownerId) !== undefined) {
+                continue;
+            }
+            seenOwnerIds.add(ownerId);
+            uniqueOwnerItems.push(item);
+        }
+
+        uniqueOwnerItems.forEach((item) => {
+            const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
+            resolveOwnerAvatarUrl(item)
+                .then((url) => ownerAvatarUrlCache.set(ownerId, url || ''))
+                .catch(() => ownerAvatarUrlCache.set(ownerId, ''));
+        });
+    }, [visibleItems]);
+
     const selectedPreviewItem = useMemo(() => {
         if (detailsPanelDismissed || !selectedItemId || visibleItems.length === 0) {
             return null;
@@ -1651,6 +1721,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     )}
                                                     <div className="list-item-owner">
                                                         <OwnerAvatar item={item} />
+                                                        <span className="owner-name-text">{getOwnerLabel(item)}</span>
                                                     </div>
                                                     <div className="list-item-modified">
                                                         {formatDate(item.updatedAt || item.createdAt)}
