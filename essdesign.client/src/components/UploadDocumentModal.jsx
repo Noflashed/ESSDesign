@@ -366,7 +366,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                         />
                     </label>
 
-                    <div className="upload-field">
+                    <div className="upload-field upload-notify-field">
                         <div className="upload-field-row">
                             <span>Notify Users</span>
                             {selectedRecipients.length > 0 && (
