@@ -1052,6 +1052,7 @@ namespace ESSDesign.Server.Services
                 Id = document.Id,
                 FolderId = document.FolderId,
                 RevisionNumber = document.RevisionNumber,
+                DrawingStatus = document.DrawingStatus,
                 Description = document.Description,
                 EssDesignIssuePath = document.EssDesignIssuePath,
                 EssDesignIssueName = document.EssDesignIssueName,
@@ -1064,6 +1065,19 @@ namespace ESSDesign.Server.Services
                 OwnerName = ownerName,
                 CreatedAt = document.CreatedAt,
                 UpdatedAt = document.UpdatedAt
+            };
+        }
+
+        private static string NormalizeDrawingStatus(string? drawingStatus)
+        {
+            var trimmed = drawingStatus?.Trim();
+            return trimmed switch
+            {
+                "Construction" => "Construction",
+                "Preliminary" => "Preliminary",
+                "Concept" => "Concept",
+                "As-Built" => "As-Built",
+                _ => "Construction"
             };
         }
 
@@ -1243,7 +1257,7 @@ namespace ESSDesign.Server.Services
                 ?? new FolderHierarchy();
         }
 
-        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null)
+        public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null, string? drawingStatus = null)
         {
             try
             {
@@ -1253,6 +1267,7 @@ namespace ESSDesign.Server.Services
                     Id = Guid.NewGuid(),
                     FolderId = folderId,
                     RevisionNumber = revisionNumber,
+                    DrawingStatus = NormalizeDrawingStatus(drawingStatus),
                     Description = description,
                     UserId = userId,
                     CreatedAt = now,
@@ -1417,7 +1432,8 @@ namespace ESSDesign.Server.Services
             IFormFile? essDesign,
             IFormFile? thirdParty,
             string? description = null,
-            string? userId = null)
+            string? userId = null,
+            string? drawingStatus = null)
         {
             try
             {
@@ -1463,6 +1479,7 @@ namespace ESSDesign.Server.Services
                 await Task.WhenAll(replaceTasks);
 
                 document.Description = description;
+                document.DrawingStatus = NormalizeDrawingStatus(drawingStatus ?? document.DrawingStatus);
                 document.UserId = userId ?? document.UserId;
                 var now = DateTime.UtcNow;
                 document.UpdatedAt = now;

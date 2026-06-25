@@ -40,6 +40,9 @@ namespace ESSDesign.Server.Models
         [Column("revision_number")]
         public string RevisionNumber { get; set; } = string.Empty;
 
+        [Column("drawing_status")]
+        public string? DrawingStatus { get; set; }
+
         [Column("description")]
         public string? Description { get; set; }
 
@@ -387,6 +390,7 @@ namespace ESSDesign.Server.Models
     {
         public Guid FolderId { get; set; }
         public string RevisionNumber { get; set; } = string.Empty;
+        public string? DrawingStatus { get; set; }
         public string? Description { get; set; }
         public string? UserId { get; set; }
         public IFormFile? EssDesignIssue { get; set; }
@@ -398,6 +402,7 @@ namespace ESSDesign.Server.Models
 
     public class ReplaceDocumentFilesRequest
     {
+        public string? DrawingStatus { get; set; }
         public string? Description { get; set; }
         public string? UserId { get; set; }
         public IFormFile? EssDesignIssue { get; set; }
@@ -426,6 +431,7 @@ namespace ESSDesign.Server.Models
         public Guid Id { get; set; }
         public Guid FolderId { get; set; }
         public string RevisionNumber { get; set; } = string.Empty;
+        public string? DrawingStatus { get; set; }
         public string? Description { get; set; }
         public string? EssDesignIssuePath { get; set; }
         public string? EssDesignIssueName { get; set; }

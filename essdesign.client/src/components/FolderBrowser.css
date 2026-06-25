@@ -231,6 +231,7 @@
 }
 
 .list-item-revision,
+.list-item-status,
 .list-item-owner,
 .list-item-modified,
 .list-item-size {
@@ -776,11 +777,16 @@
     background: #9fb3d8;
 }
 
-.upload-form-grid {
+.upload-form-grid,
+.upload-meta-grid {
     display: grid;
-    grid-template-columns: 170px minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     align-items: stretch;
+}
+
+.upload-meta-grid.single {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .upload-field,
@@ -802,12 +808,20 @@
 }
 
 .upload-field select,
+.upload-user-search input,
 .upload-field textarea {
     margin: 0;
     border-color: #dbe5f4;
     border-radius: 8px;
     background: #ffffff;
     color: #0f172a;
+}
+
+.upload-user-search input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 13px;
 }
 
 .upload-field textarea {
@@ -829,7 +843,7 @@
     display: grid;
     align-content: center;
     gap: 6px;
-    min-height: 118px;
+    min-height: 132px;
     padding: 18px;
     border: 1px dashed #adc1e4;
     border-radius: 8px;
@@ -889,7 +903,7 @@
 .upload-recipient-list {
     max-height: 220px;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
     padding: 10px;
     border-color: #dbe5f4;
@@ -899,7 +913,7 @@
 
 .upload-recipient-list .recipient-checkbox {
     min-width: 0;
-    align-items: flex-start;
+    align-items: center;
     gap: 9px;
     padding: 10px;
     border: 1px solid #e2e8f0;
@@ -908,7 +922,7 @@
 }
 
 .upload-recipient-list .recipient-checkbox input[type="checkbox"] {
-    margin: 2px 0 0;
+    margin: 0;
     flex: 0 0 auto;
 }
 
@@ -916,6 +930,21 @@
     min-width: 0;
     display: grid;
     gap: 2px;
+}
+
+.upload-recipient-list .recipient-checkbox .recipient-avatar {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1e3a8a;
+    font-size: 11px;
+    font-weight: 800;
 }
 
 .upload-recipient-list .recipient-checkbox strong,
@@ -954,7 +983,8 @@
 }
 
 @media (max-width: 680px) {
-    .upload-form-grid {
+    .upload-form-grid,
+    .upload-meta-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -1791,7 +1821,8 @@
 .document-card-meta,
 .document-files,
 .details-file-list,
-.list-item-revision {
+.list-item-revision,
+.list-item-status {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1818,6 +1849,45 @@
     border-color: #bbf7d0;
     background: var(--doc-green-bg);
     color: var(--doc-green);
+}
+
+.drawing-status-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 3px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.drawing-status-chip.construction {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.drawing-status-chip.preliminary {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.drawing-status-chip.concept {
+    border-color: #ddd6fe;
+    background: #f5f3ff;
+    color: #6d28d9;
+}
+
+.drawing-status-chip.as-built {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
 }
 
 .document-card-meta,
@@ -1987,6 +2057,7 @@
 }
 
 .list-item-revision,
+.list-item-status,
 .list-item-owner,
 .list-item-modified,
 .list-item-size {

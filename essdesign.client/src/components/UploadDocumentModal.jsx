@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { foldersAPI, usersAPI } from '../services/api';
 import { useToast } from './Toast';
 
+export const DRAWING_STATUS_OPTIONS = ['Construction', 'Preliminary', 'Concept', 'As-Built'];
+
 let notificationRecipientsCache = null;
 let notificationRecipientsPromise = null;
 
@@ -31,8 +33,10 @@ export const prefetchNotificationRecipients = () => {
 function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const { showToast, updateToast } = useToast();
     const [revisionNumber, setRevisionNumber] = useState('01');
+    const [drawingStatus, setDrawingStatus] = useState('Construction');
     const [essDesignFile, setEssDesignFile] = useState(null);
     const [description, setDescription] = useState('');
+    const [recipientSearch, setRecipientSearch] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState(() => notificationRecipientsCache || []);
     const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
@@ -42,6 +46,23 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
         const num = i + 1;
         return num < 10 ? `0${num}` : `${num}`;
     });
+
+    const visibleUsers = users.filter((user) => {
+        const query = recipientSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [user.fullName, user.email]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(query));
+    });
+
+    const getUserInitials = (user) => {
+        const label = user.fullName || user.email || '';
+        const parts = label.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+        }
+        return label.slice(0, 2).toUpperCase() || 'U';
+    };
 
     useEffect(() => {
         let active = true;
@@ -104,6 +125,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     description,
                     selectedRecipients,
                     {
+                        drawingStatus,
                         onUploadProgress: (event) => {
                             if (!event.total) {
                                 return;
@@ -185,7 +207,18 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                     </button>
                 </div>
                 <form className="document-upload-form" onSubmit={handleSubmit}>
-                    <div className="upload-form-grid">
+                    <label className={`upload-file-drop${essDesignFile ? ' has-file' : ''}`}>
+                        <input
+                            type="file"
+                            accept=".pdf"
+                            onChange={(e) => setEssDesignFile(e.target.files[0] || null)}
+                        />
+                        <span className="upload-file-kicker">PDF file</span>
+                        <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
+                        {essDesignFile && <span className="upload-selected-file">Selected</span>}
+                    </label>
+
+                    <div className="upload-meta-grid">
                         <label className="upload-field">
                             <span>Revision</span>
                             <select
@@ -201,15 +234,19 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             </select>
                         </label>
 
-                        <label className={`upload-file-drop${essDesignFile ? ' has-file' : ''}`}>
-                            <input
-                                type="file"
-                                accept=".pdf"
-                                onChange={(e) => setEssDesignFile(e.target.files[0] || null)}
-                            />
-                            <span className="upload-file-kicker">PDF file</span>
-                            <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
-                            {essDesignFile && <span className="upload-selected-file">Selected</span>}
+                        <label className="upload-field">
+                            <span>Status</span>
+                            <select
+                                value={drawingStatus}
+                                onChange={(e) => setDrawingStatus(e.target.value)}
+                                required
+                            >
+                                {DRAWING_STATUS_OPTIONS.map(status => (
+                                    <option key={status} value={status}>
+                                        {status}
+                                    </option>
+                                ))}
+                            </select>
                         </label>
                     </div>
 
@@ -233,13 +270,21 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                                 </span>
                             )}
                         </div>
+                        <div className="upload-user-search">
+                            <input
+                                type="search"
+                                value={recipientSearch}
+                                onChange={(e) => setRecipientSearch(e.target.value)}
+                                placeholder="Search users"
+                            />
+                        </div>
                         <div className="recipient-selection upload-recipient-list">
                             {recipientsLoading ? (
                                 <div className="recipient-loading">Loading users...</div>
-                            ) : users.length === 0 ? (
+                            ) : visibleUsers.length === 0 ? (
                                 <div className="recipient-loading">No users available</div>
                             ) : (
-                                users.map(user => (
+                                visibleUsers.map(user => (
                                     <label key={user.id} className="recipient-checkbox">
                                         <input
                                             type="checkbox"
@@ -252,6 +297,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                                                 }
                                             }}
                                         />
+                                        <span className="recipient-avatar" aria-hidden="true">{getUserInitials(user)}</span>
                                         <span>
                                             <strong>{user.fullName || user.email}</strong>
                                             <small>{user.email}</small>

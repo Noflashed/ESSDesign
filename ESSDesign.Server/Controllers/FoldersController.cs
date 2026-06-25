@@ -209,7 +209,8 @@ namespace ESSDesign.Server.Controllers
                     request.EssDesignIssue,
                     request.ThirdPartyDesign,
                     request.Description,
-                    actingUserId
+                    actingUserId,
+                    request.DrawingStatus
                 );
 
                 if (request.RecipientIds != null && request.RecipientIds.Any())
@@ -407,7 +408,8 @@ namespace ESSDesign.Server.Controllers
                     request.EssDesignIssue,
                     request.ThirdPartyDesign,
                     request.Description,
-                    actingUserId);
+                    actingUserId,
+                    request.DrawingStatus);
 
                 if (request.RecipientIds != null && request.RecipientIds.Any())
                 {

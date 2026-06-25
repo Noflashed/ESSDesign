@@ -3982,6 +3982,7 @@ export const foldersAPI = {
         formData.append('FolderId', folderId);
         formData.append('RevisionNumber', revisionNumber);
         if (user?.id) formData.append('UserId', user.id);
+        if (options.drawingStatus) formData.append('DrawingStatus', options.drawingStatus);
         if (essDesignFile) formData.append('EssDesignIssue', essDesignFile);
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
         if (description) formData.append('Description', description);
@@ -4046,6 +4047,7 @@ export const foldersAPI = {
         const user = authAPI.getCurrentUser();
         const formData = new FormData();
         if (user?.id) formData.append('UserId', user.id);
+        if (options.drawingStatus) formData.append('DrawingStatus', options.drawingStatus);
         if (essDesignFile) formData.append('EssDesignIssue', essDesignFile);
         if (thirdPartyFile) formData.append('ThirdPartyDesign', thirdPartyFile);
         if (description) formData.append('Description', description);

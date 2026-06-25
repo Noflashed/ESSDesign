@@ -160,6 +160,14 @@ const formatCompactRevisionNumber = (revisionNumber) => {
     return `Rev ${String(revisionNumber).padStart(2, '0')}`;
 };
 
+const DRAWING_STATUS_LABELS = new Set(['Construction', 'Preliminary', 'Concept', 'As-Built']);
+
+const getDrawingStatus = (item) => (
+    DRAWING_STATUS_LABELS.has(item?.drawingStatus) ? item.drawingStatus : 'Construction'
+);
+
+const getDrawingStatusClass = (item) => getDrawingStatus(item).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
 const getItemDisplayName = (item) => (
     item?.isDocument
         ? (item.essDesignIssueName || 'Document')
@@ -350,7 +358,7 @@ const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
 });
 
 // Default column widths as fractions (must match grid-template-columns order after icon)
-const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.9, owner: 1, modified: 1.2, size: 0.8 };
+const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.75, status: 0.95, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 176;
 const MIN_COL_WIDTH_FR = 0.2;
@@ -380,6 +388,7 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
         ? [
             `minmax(0, ${normalized.name}fr)`,
             `minmax(0, ${normalized.revision}fr)`,
+            `minmax(0, ${normalized.status}fr)`,
             `minmax(0, ${normalized.owner}fr)`,
             `minmax(0, ${normalized.modified}fr)`,
             `minmax(0, ${normalized.size}fr)`
@@ -596,7 +605,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     // Column resize handlers
     const colKeys = showRevisionColumn
-        ? ['name', 'revision', 'owner', 'modified', 'size']
+        ? ['name', 'revision', 'status', 'owner', 'modified', 'size']
         : ['name', 'owner', 'modified', 'size'];
 
     const handleResizeStart = useCallback((e, colIndex) => {
@@ -1305,9 +1314,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     aValue = a.isDocument ? (a.revisionNumber || 0) : 0;
                     bValue = b.isDocument ? (b.revisionNumber || 0) : 0;
                     break;
+                case 'status':
+                    aValue = a.isDocument ? getDrawingStatus(a) : '';
+                    bValue = b.isDocument ? getDrawingStatus(b) : '';
+                    break;
                 case 'owner':
-                    aValue = a.ownerName || (a.userId ? a.userId.slice(0, 8) : 'Unknown');
-                    bValue = b.ownerName || (b.userId ? b.userId.slice(0, 8) : 'Unknown');
+                    aValue = getOwnerLabel(a);
+                    bValue = getOwnerLabel(b);
                     break;
                 case 'modified':
                     aValue = new Date(a.updatedAt || a.createdAt).getTime();
@@ -1535,6 +1548,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
                                             </div>
                                         )}
+                                        {showRevisionColumn && (
+                                            <div
+                                                className={`list-header-cell sortable ${sortField === 'status' ? 'active' : ''}`}
+                                                onClick={() => handleSort('status')}
+                                                data-col-key="status"
+                                            >
+                                                <span>Status</span>
+                                                {sortField === 'status' && (
+                                                    <SortArrowIcon direction={sortDirection} />
+                                                )}
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
+                                            </div>
+                                        )}
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'owner' ? 'active' : ''}`}
                                             onClick={() => handleSort('owner')}
@@ -1544,7 +1570,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'owner' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 2 : 1)} onDoubleClick={handleResetColWidths} />
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 1)} onDoubleClick={handleResetColWidths} />
                                         </div>
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
@@ -1555,7 +1581,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'modified' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 2)} onDoubleClick={handleResetColWidths} />
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 4 : 2)} onDoubleClick={handleResetColWidths} />
                                         </div>
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
@@ -1643,6 +1669,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                             <>
                                                                 <div className="document-card-badges">
                                                                     <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
+                                                                    <span className={`drawing-status-chip ${getDrawingStatusClass(item)}`}>{getDrawingStatus(item)}</span>
                                                                     {isLatest && <span className="status-chip latest">Latest</span>}
                                                                 </div>
                                                                 <div className="document-card-meta">
@@ -1709,6 +1736,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                     <span className="revision-chip">{formatCompactRevisionNumber(item.revisionNumber)}</span>
                                                                     {isLatest && <span className="status-chip latest">Latest</span>}
                                                                 </>
+                                                            ) : '-'}
+                                                        </div>
+                                                    )}
+                                                    {showRevisionColumn && (
+                                                        <div className="list-item-status">
+                                                            {item.isDocument ? (
+                                                                <span className={`drawing-status-chip ${getDrawingStatusClass(item)}`}>{getDrawingStatus(item)}</span>
                                                             ) : '-'}
                                                         </div>
                                                     )}
@@ -1812,6 +1846,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 {Number(selectedPreviewItem.revisionNumber) === latestRevisionNumber && latestRevisionNumber > 0 && (
                                                     <span className="status-chip latest">Latest</span>
                                                 )}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>Status</dt>
+                                            <dd>
+                                                <span className={`drawing-status-chip ${getDrawingStatusClass(selectedPreviewItem)}`}>{getDrawingStatus(selectedPreviewItem)}</span>
                                             </dd>
                                         </div>
                                         <div>

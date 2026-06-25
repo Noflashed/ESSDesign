@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { foldersAPI } from '../services/api';
-import { loadNotificationRecipients } from './UploadDocumentModal';
+import { DRAWING_STATUS_OPTIONS, loadNotificationRecipients } from './UploadDocumentModal';
 import { useToast } from './Toast';
 
 function ReplaceDocumentModal({ document, onClose, onSuccess }) {
     const { showToast, updateToast } = useToast();
     const [essDesignFile, setEssDesignFile] = useState(null);
+    const [drawingStatus, setDrawingStatus] = useState(document?.drawingStatus || 'Construction');
     const [description, setDescription] = useState(document?.description || '');
+    const [recipientSearch, setRecipientSearch] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState([]);
     const [recipientsLoading, setRecipientsLoading] = useState(true);
@@ -16,6 +18,23 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
         () => document?.essDesignIssueName || `Revision ${document?.revisionNumber || '00'}`,
         [document]
     );
+
+    const visibleUsers = users.filter((user) => {
+        const query = recipientSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [user.fullName, user.email]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(query));
+    });
+
+    const getUserInitials = (user) => {
+        const label = user.fullName || user.email || '';
+        const parts = label.trim().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+        }
+        return label.slice(0, 2).toUpperCase() || 'U';
+    };
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -65,6 +84,7 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                     description,
                     selectedRecipients,
                     {
+                        drawingStatus,
                         onUploadProgress: (event) => {
                             if (!event.total) {
                                 return;
@@ -157,6 +177,23 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                         {essDesignFile && <span className="upload-selected-file">Selected</span>}
                     </label>
 
+                    <div className="upload-meta-grid single">
+                        <label className="upload-field">
+                            <span>Status</span>
+                            <select
+                                value={drawingStatus}
+                                onChange={(e) => setDrawingStatus(e.target.value)}
+                                required
+                            >
+                                {DRAWING_STATUS_OPTIONS.map(status => (
+                                    <option key={status} value={status}>
+                                        {status}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+
                     <label className="upload-field">
                         <span>Change Notes</span>
                         <textarea
@@ -177,13 +214,21 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                                 </span>
                             )}
                         </div>
+                        <div className="upload-user-search">
+                            <input
+                                type="search"
+                                value={recipientSearch}
+                                onChange={(e) => setRecipientSearch(e.target.value)}
+                                placeholder="Search users"
+                            />
+                        </div>
                         <div className="recipient-selection upload-recipient-list">
                             {recipientsLoading ? (
                                 <div className="recipient-loading">Loading users...</div>
-                            ) : users.length === 0 ? (
+                            ) : visibleUsers.length === 0 ? (
                                 <div className="recipient-loading">No users available</div>
                             ) : (
-                                users.map(user => (
+                                visibleUsers.map(user => (
                                     <label key={user.id} className="recipient-checkbox">
                                         <input
                                             type="checkbox"
@@ -196,6 +241,7 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                                                 }
                                             }}
                                         />
+                                        <span className="recipient-avatar" aria-hidden="true">{getUserInitials(user)}</span>
                                         <span>
                                             <strong>{user.fullName || user.email}</strong>
                                             <small>{user.email}</small>
