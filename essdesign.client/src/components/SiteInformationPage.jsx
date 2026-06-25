@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
+import { Archive, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
@@ -31,6 +31,7 @@ export default function SiteInformationPage() {
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
     const [selectedInfoProject, setSelectedInfoProject] = useState(null);
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
+    const [projectMenu, setProjectMenu] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
@@ -64,6 +65,28 @@ export default function SiteInformationPage() {
         window.addEventListener('click', closeMenu);
         return () => window.removeEventListener('click', closeMenu);
     }, [columnFilterMenu]);
+
+    useEffect(() => {
+        if (!projectMenu) {
+            return undefined;
+        }
+
+        const closeMenu = () => setProjectMenu(null);
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') {
+                closeMenu();
+            }
+        };
+
+        window.addEventListener('click', closeMenu);
+        window.addEventListener('keydown', closeOnEscape);
+        window.addEventListener('scroll', closeMenu, true);
+        return () => {
+            window.removeEventListener('click', closeMenu);
+            window.removeEventListener('keydown', closeOnEscape);
+            window.removeEventListener('scroll', closeMenu, true);
+        };
+    }, [projectMenu]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
@@ -259,6 +282,37 @@ export default function SiteInformationPage() {
         }
     };
 
+    const getProjectMenuPosition = (x, y) => {
+        const menuWidth = 224;
+        const menuHeight = 146;
+        const margin = 12;
+        return {
+            x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - menuWidth - margin)),
+            y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - menuHeight - margin))
+        };
+    };
+
+    const openProjectMenuFromButton = (event, project) => {
+        event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const position = getProjectMenuPosition(rect.right - 224, rect.bottom + 6);
+        setProjectMenu({ project, ...position });
+    };
+
+    const openProjectMenuFromRow = (event, project) => {
+        event.preventDefault();
+        const position = getProjectMenuPosition(event.clientX, event.clientY);
+        setProjectMenu({ project, ...position });
+    };
+
+    const runProjectMenuAction = (action) => {
+        const activeProject = projectMenu?.project;
+        setProjectMenu(null);
+        if (activeProject) {
+            action(activeProject);
+        }
+    };
+
     const removeBuilder = async (builder) => {
         if (!builder) {
             return;
@@ -402,6 +456,7 @@ export default function SiteInformationPage() {
                                             key={`${project.builder.id}-${project.id}`}
                                             className={`site-registry-data-row${selectedInfoProject?.id === project.id ? ' selected' : ''}`}
                                             onClick={() => openProjectInfo(project)}
+                                            onContextMenu={event => openProjectMenuFromRow(event, project)}
                                             onKeyDown={event => {
                                                 if (event.key === 'Enter' || event.key === ' ') {
                                                     event.preventDefault();
@@ -421,30 +476,16 @@ export default function SiteInformationPage() {
                                                     {project.archived ? 'Archived' : 'Active'}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <div className="site-registry-table-actions">
-                                                    <button className="site-registry-action-btn edit" onClick={event => {
-                                                        event.stopPropagation();
-                                                        openEditProject(project.builder.id, project);
-                                                    }}>
-                                                        <Pencil size={14} strokeWidth={2.4} />
-                                                        <span>Edit</span>
-                                                    </button>
-                                                    <button className="site-registry-action-btn archive" onClick={event => {
-                                                        event.stopPropagation();
-                                                        toggleArchiveProject(project.builder.id, project);
-                                                    }}>
-                                                        <Archive size={14} strokeWidth={2.2} />
-                                                        <span>{project.archived ? 'Unarchive' : 'Archive'}</span>
-                                                    </button>
-                                                    <button className="site-registry-action-btn delete" onClick={event => {
-                                                        event.stopPropagation();
-                                                        removeProject(project.builder.id, project.id);
-                                                    }}>
-                                                        <Trash2 size={14} strokeWidth={2.2} />
-                                                        <span>Delete</span>
-                                                    </button>
-                                                </div>
+                                            <td className="site-registry-actions-cell">
+                                                <button
+                                                    type="button"
+                                                    className="site-registry-row-menu-btn"
+                                                    onClick={event => openProjectMenuFromButton(event, project)}
+                                                    aria-label={`Open actions for ${project.name}`}
+                                                    title="More actions"
+                                                >
+                                                    <MoreVertical size={16} strokeWidth={2.3} aria-hidden="true" />
+                                                </button>
                                             </td>
                                         </tr>
                                     ))}
@@ -454,6 +495,45 @@ export default function SiteInformationPage() {
                     </section>
                 )}
             </div>
+
+            {projectMenu ? (
+                <div
+                    className="site-registry-context-menu"
+                    style={{ top: projectMenu.y, left: projectMenu.x }}
+                    onClick={event => event.stopPropagation()}
+                    role="menu"
+                    aria-label="Project actions"
+                >
+                    <button
+                        type="button"
+                        className="site-registry-context-menu-item"
+                        onClick={() => runProjectMenuAction(project => openEditProject(project.builder.id, project))}
+                        role="menuitem"
+                    >
+                        <Pencil size={15} strokeWidth={2.3} aria-hidden="true" />
+                        <span>Edit</span>
+                    </button>
+                    <button
+                        type="button"
+                        className="site-registry-context-menu-item"
+                        onClick={() => runProjectMenuAction(project => toggleArchiveProject(project.builder.id, project))}
+                        role="menuitem"
+                    >
+                        <Archive size={15} strokeWidth={2.2} aria-hidden="true" />
+                        <span>{projectMenu.project.archived ? 'Unarchive' : 'Archive'}</span>
+                    </button>
+                    <div className="site-registry-context-menu-divider" role="separator"></div>
+                    <button
+                        type="button"
+                        className="site-registry-context-menu-item danger"
+                        onClick={() => runProjectMenuAction(project => removeProject(project.builder.id, project.id))}
+                        role="menuitem"
+                    >
+                        <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                        <span>Delete</span>
+                    </button>
+                </div>
+            ) : null}
 
             {selectedInfoProject && (
                 <div className="module-modal-backdrop" onClick={closeProjectInfo}>
