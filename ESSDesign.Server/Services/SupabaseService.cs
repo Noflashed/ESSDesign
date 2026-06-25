@@ -1052,7 +1052,8 @@ namespace ESSDesign.Server.Services
                 Id = document.Id,
                 FolderId = document.FolderId,
                 RevisionNumber = document.RevisionNumber,
-                DrawingStatus = document.DrawingStatus,
+                DrawingStatus = InferDrawingStatusFromFileName(document.EssDesignIssueName ?? document.ThirdPartyDesignName)
+                    ?? document.DrawingStatus,
                 Description = document.Description,
                 EssDesignIssuePath = document.EssDesignIssuePath,
                 EssDesignIssueName = document.EssDesignIssueName,
@@ -1079,6 +1080,21 @@ namespace ESSDesign.Server.Services
                 "As-Built" => "As-Built",
                 _ => "Construction"
             };
+        }
+
+        private static string? InferDrawingStatusFromFileName(string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return null;
+            }
+
+            var upperName = fileName.ToUpperInvariant();
+            if (upperName.Contains("(ASB)")) return "As-Built";
+            if (upperName.Contains("(PRE)")) return "Preliminary";
+            if (upperName.Contains("(CON)")) return "Construction";
+            if (upperName.Contains("(CPT)") || upperName.Contains("(CONCEPT)")) return "Concept";
+            return null;
         }
 
         public async Task<DocumentResponse> GetDocumentByIdAsync(Guid documentId)

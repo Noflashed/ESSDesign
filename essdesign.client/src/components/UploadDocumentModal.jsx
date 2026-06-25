@@ -1,8 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { foldersAPI, usersAPI } from '../services/api';
+import { foldersAPI, resolveProfileImageUrl, usersAPI } from '../services/api';
 import { useToast } from './Toast';
 
 export const DRAWING_STATUS_OPTIONS = ['Construction', 'Preliminary', 'Concept', 'As-Built'];
+
+export const inferDrawingStatusFromFileName = (fileName) => {
+    const upperName = (fileName || '').toUpperCase();
+    if (upperName.includes('(ASB)')) return 'As-Built';
+    if (upperName.includes('(PRE)')) return 'Preliminary';
+    if (upperName.includes('(CON)')) return 'Construction';
+    if (upperName.includes('(CPT)') || upperName.includes('(CONCEPT)')) return 'Concept';
+    return '';
+};
+
+const UploadDocumentIcon = () => (
+    <span className="upload-document-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+            <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9A2.5 2.5 0 0 0 19 18.5V8l-5-5Z" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M12 16V9.5m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    </span>
+);
+
+const getUserInitials = (user) => {
+    const label = user.fullName || user.email || '';
+    const parts = label.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return label.slice(0, 2).toUpperCase() || 'U';
+};
+
+const getUserAvatarLookupId = (user) => user.employeeId || user.EmployeeId || user.id;
+
+const getUserRoleLabel = (user) => (
+    user.employeeTitle
+    || user.EmployeeTitle
+    || (user.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : '')
+);
+
+export function RecipientAvatar({ user, avatarUrls }) {
+    const lookupId = getUserAvatarLookupId(user);
+    const avatarUrl = user.avatarUrl || user.AvatarUrl || avatarUrls?.[lookupId] || '';
+    return (
+        <span className={`recipient-avatar${avatarUrl ? ' has-image' : ''}`} aria-hidden="true">
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : getUserInitials(user)}
+        </span>
+    );
+}
 
 let notificationRecipientsCache = null;
 let notificationRecipientsPromise = null;
@@ -39,6 +85,7 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
     const [recipientSearch, setRecipientSearch] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState(() => notificationRecipientsCache || []);
+    const [avatarUrls, setAvatarUrls] = useState({});
     const [recipientsLoading, setRecipientsLoading] = useState(() => !notificationRecipientsCache);
     const [uploading, setUploading] = useState(false);
 
@@ -54,15 +101,6 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
             .filter(Boolean)
             .some((value) => value.toLowerCase().includes(query));
     });
-
-    const getUserInitials = (user) => {
-        const label = user.fullName || user.email || '';
-        const parts = label.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-        }
-        return label.slice(0, 2).toUpperCase() || 'U';
-    };
 
     useEffect(() => {
         let active = true;
@@ -87,6 +125,44 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
             active = false;
         };
     }, []);
+
+    useEffect(() => {
+        let active = true;
+        const missingUsers = users.filter((user) => {
+            const lookupId = getUserAvatarLookupId(user);
+            return lookupId && !(lookupId in avatarUrls) && !(user.avatarUrl || user.AvatarUrl);
+        });
+
+        if (missingUsers.length === 0) {
+            return undefined;
+        }
+
+        Promise.all(missingUsers.map(async (user) => {
+            const lookupId = getUserAvatarLookupId(user);
+            const avatarUrl = await resolveProfileImageUrl(lookupId).catch(() => null);
+            return [lookupId, avatarUrl || ''];
+        })).then((entries) => {
+            if (!active) return;
+            setAvatarUrls((current) => {
+                const next = { ...current };
+                entries.forEach(([lookupId, avatarUrl]) => {
+                    if (lookupId) next[lookupId] = avatarUrl;
+                });
+                return next;
+            });
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [avatarUrls, users]);
+
+    useEffect(() => {
+        const inferredStatus = inferDrawingStatusFromFileName(essDesignFile?.name);
+        if (inferredStatus) {
+            setDrawingStatus(inferredStatus);
+        }
+    }, [essDesignFile]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -213,9 +289,13 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             accept=".pdf"
                             onChange={(e) => setEssDesignFile(e.target.files[0] || null)}
                         />
-                        <span className="upload-file-kicker">PDF file</span>
-                        <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
-                        {essDesignFile && <span className="upload-selected-file">Selected</span>}
+                        <span className="upload-file-drop-content">
+                            <UploadDocumentIcon />
+                            <span>
+                                <strong>{essDesignFile ? essDesignFile.name : 'Choose ESS Design PDF'}</strong>
+                                <span className="upload-file-kicker">PDF file</span>
+                            </span>
+                        </span>
                     </label>
 
                     <div className="upload-meta-grid">
@@ -271,6 +351,12 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                             )}
                         </div>
                         <div className="upload-user-search">
+                            <span aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                                    <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                            </span>
                             <input
                                 type="search"
                                 value={recipientSearch}
@@ -297,11 +383,12 @@ function UploadDocumentModal({ folderId, onClose, onSuccess }) {
                                                 }
                                             }}
                                         />
-                                        <span className="recipient-avatar" aria-hidden="true">{getUserInitials(user)}</span>
+                                        <RecipientAvatar user={user} avatarUrls={avatarUrls} />
                                         <span>
                                             <strong>{user.fullName || user.email}</strong>
                                             <small>{user.email}</small>
                                         </span>
+                                        <span className="recipient-role">{getUserRoleLabel(user)}</span>
                                     </label>
                                 ))
                             )}

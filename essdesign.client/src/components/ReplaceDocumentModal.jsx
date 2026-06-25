@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { foldersAPI } from '../services/api';
-import { DRAWING_STATUS_OPTIONS, loadNotificationRecipients } from './UploadDocumentModal';
+import { foldersAPI, resolveProfileImageUrl } from '../services/api';
+import {
+    DRAWING_STATUS_OPTIONS,
+    RecipientAvatar,
+    inferDrawingStatusFromFileName,
+    loadNotificationRecipients
+} from './UploadDocumentModal';
 import { useToast } from './Toast';
 
 function ReplaceDocumentModal({ document, onClose, onSuccess }) {
@@ -11,6 +16,7 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
     const [recipientSearch, setRecipientSearch] = useState('');
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [users, setUsers] = useState([]);
+    const [avatarUrls, setAvatarUrls] = useState({});
     const [recipientsLoading, setRecipientsLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
 
@@ -27,14 +33,13 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
             .some((value) => value.toLowerCase().includes(query));
     });
 
-    const getUserInitials = (user) => {
-        const label = user.fullName || user.email || '';
-        const parts = label.trim().split(/\s+/).filter(Boolean);
-        if (parts.length >= 2) {
-            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-        }
-        return label.slice(0, 2).toUpperCase() || 'U';
-    };
+    const getUserRoleLabel = (user) => (
+        user.employeeTitle
+        || user.EmployeeTitle
+        || (user.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : '')
+    );
+
+    const getUserAvatarLookupId = (user) => user.employeeId || user.EmployeeId || user.id;
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -50,6 +55,44 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
 
         fetchUsers();
     }, []);
+
+    useEffect(() => {
+        let active = true;
+        const missingUsers = users.filter((user) => {
+            const lookupId = getUserAvatarLookupId(user);
+            return lookupId && !(lookupId in avatarUrls) && !(user.avatarUrl || user.AvatarUrl);
+        });
+
+        if (missingUsers.length === 0) {
+            return undefined;
+        }
+
+        Promise.all(missingUsers.map(async (user) => {
+            const lookupId = getUserAvatarLookupId(user);
+            const avatarUrl = await resolveProfileImageUrl(lookupId).catch(() => null);
+            return [lookupId, avatarUrl || ''];
+        })).then((entries) => {
+            if (!active) return;
+            setAvatarUrls((current) => {
+                const next = { ...current };
+                entries.forEach(([lookupId, avatarUrl]) => {
+                    if (lookupId) next[lookupId] = avatarUrl;
+                });
+                return next;
+            });
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [avatarUrls, users]);
+
+    useEffect(() => {
+        const inferredStatus = inferDrawingStatusFromFileName(essDesignFile?.name);
+        if (inferredStatus) {
+            setDrawingStatus(inferredStatus);
+        }
+    }, [essDesignFile]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -241,11 +284,12 @@ function ReplaceDocumentModal({ document, onClose, onSuccess }) {
                                                 }
                                             }}
                                         />
-                                        <span className="recipient-avatar" aria-hidden="true">{getUserInitials(user)}</span>
+                                        <RecipientAvatar user={user} avatarUrls={avatarUrls} />
                                         <span>
                                             <strong>{user.fullName || user.email}</strong>
                                             <small>{user.email}</small>
                                         </span>
+                                        <span className="recipient-role">{getUserRoleLabel(user)}</span>
                                     </label>
                                 ))
                             )}

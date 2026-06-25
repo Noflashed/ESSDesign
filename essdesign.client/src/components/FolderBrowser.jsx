@@ -162,8 +162,19 @@ const formatCompactRevisionNumber = (revisionNumber) => {
 
 const DRAWING_STATUS_LABELS = new Set(['Construction', 'Preliminary', 'Concept', 'As-Built']);
 
+const inferDrawingStatusFromDocumentName = (item) => {
+    const upperName = (item?.essDesignIssueName || item?.thirdPartyDesignName || '').toUpperCase();
+    if (upperName.includes('(ASB)')) return 'As-Built';
+    if (upperName.includes('(PRE)')) return 'Preliminary';
+    if (upperName.includes('(CON)')) return 'Construction';
+    if (upperName.includes('(CPT)') || upperName.includes('(CONCEPT)')) return 'Concept';
+    return '';
+};
+
 const getDrawingStatus = (item) => (
-    DRAWING_STATUS_LABELS.has(item?.drawingStatus) ? item.drawingStatus : 'Construction'
+    DRAWING_STATUS_LABELS.has(item?.drawingStatus)
+        ? item.drawingStatus
+        : (inferDrawingStatusFromDocumentName(item) || 'Construction')
 );
 
 const getDrawingStatusClass = (item) => getDrawingStatus(item).toLowerCase().replace(/[^a-z0-9]+/g, '-');
