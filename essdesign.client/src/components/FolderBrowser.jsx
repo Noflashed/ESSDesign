@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { foldersAPI, authAPI, usersAPI } from '../services/api';
+import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from '../services/api';
 import UploadDocumentModal from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
@@ -182,6 +182,85 @@ const getOwnerInitials = (item) => {
 
     return cleanLabel.slice(0, 2).toUpperCase();
 };
+
+const ownerAvatarUrlCache = new Map();
+let ownerEmployeeRowsPromise = null;
+
+const getOwnerEmployeeRows = () => {
+    if (!ownerEmployeeRowsPromise) {
+        ownerEmployeeRowsPromise = rosteringAPI.getEmployees().catch(() => []);
+    }
+    return ownerEmployeeRowsPromise;
+};
+
+const normalizeOwnerName = (value) => (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+const resolveOwnerAvatarUrl = async (item) => {
+    const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
+    const directUrl = await resolveProfileImageUrl(ownerId);
+    if (directUrl) return directUrl;
+
+    const ownerName = normalizeOwnerName(item?.ownerName || item?.OwnerName);
+    const employees = await getOwnerEmployeeRows();
+    const linkedEmployee = employees.find((employee) => (
+        (ownerId && String(employee.linkedAuthUserId || employee.linked_auth_user_id || '').toLowerCase() === String(ownerId).toLowerCase())
+        || (ownerName && normalizeOwnerName(`${employee.firstName || ''} ${employee.lastName || ''}`) === ownerName)
+    ));
+
+    return linkedEmployee?.id ? resolveProfileImageUrl(linkedEmployee.id) : null;
+};
+
+function OwnerAvatar({ item }) {
+    const ownerId = item?.userId || item?.UserId || item?.ownerId || item?.OwnerId || '';
+    const initials = getOwnerInitials(item);
+    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarUrlCache.get(ownerId) || '');
+
+    useEffect(() => {
+        let active = true;
+
+        if (!ownerId) {
+            setAvatarUrl('');
+            return undefined;
+        }
+
+        const cachedUrl = ownerAvatarUrlCache.get(ownerId);
+        if (cachedUrl !== undefined) {
+            setAvatarUrl(cachedUrl);
+            return undefined;
+        }
+
+        resolveOwnerAvatarUrl(item)
+            .then((url) => {
+                if (!active) return;
+                ownerAvatarUrlCache.set(ownerId, url || '');
+                setAvatarUrl(url || '');
+            })
+            .catch(() => {
+                if (!active) return;
+                ownerAvatarUrlCache.set(ownerId, '');
+                setAvatarUrl('');
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [item, ownerId]);
+
+    return (
+        <span className={`owner-avatar${avatarUrl ? ' has-image' : ''}`}>
+            {avatarUrl ? (
+                <img
+                    src={avatarUrl}
+                    alt=""
+                    onError={() => {
+                        ownerAvatarUrlCache.set(ownerId, '');
+                        setAvatarUrl('');
+                    }}
+                />
+            ) : initials}
+        </span>
+    );
+}
 
 const getFolderItemCount = (item) => {
     const subFolderCount = Array.isArray(item?.subFolders)
@@ -1493,7 +1572,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                     {item.essDesignIssuePath && item.thirdPartyDesignPath && <span className="status-chip complete">Complete</span>}
                                                                 </div>
                                                                 <div className="document-card-meta">
-                                                                    <span className="owner-avatar">{getOwnerInitials(item)}</span>
+                                                                    <OwnerAvatar item={item} />
                                                                     <span>{getOwnerLabel(item)}</span>
                                                                     <span>{formatDate(item.updatedAt || item.createdAt)}</span>
                                                                 </div>
@@ -1571,7 +1650,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                         </div>
                                                     )}
                                                     <div className="list-item-owner">
-                                                        <span className="owner-avatar">{getOwnerInitials(item)}</span>
+                                                        <OwnerAvatar item={item} />
                                                     </div>
                                                     <div className="list-item-modified">
                                                         {formatDate(item.updatedAt || item.createdAt)}
@@ -1692,7 +1771,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 )}
                                 <div>
                                     <dt>Owner</dt>
-                                    <dd><span className="owner-avatar">{getOwnerInitials(selectedPreviewItem)}</span>{getOwnerLabel(selectedPreviewItem)}</dd>
+                                    <dd><OwnerAvatar item={selectedPreviewItem} />{getOwnerLabel(selectedPreviewItem)}</dd>
                                 </div>
                                 <div>
                                     <dt>Modified</dt>
