@@ -251,6 +251,11 @@
     padding-left: 10px;
 }
 
+.list-item-owner {
+    gap: 8px;
+    min-width: 0;
+}
+
 .list-item-actions {
     display: flex;
     gap: 8px;
