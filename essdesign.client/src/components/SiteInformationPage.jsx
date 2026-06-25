@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Pencil, Search, Trash2 } from 'lucide-react';
+import { Archive, Home, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
@@ -91,6 +91,9 @@ export default function SiteInformationPage() {
     }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
 
     const hasStatusFilter = statusFilter !== 'all';
+    const totalProjects = builders.reduce((count, builder) => count + builder.projects.length, 0);
+    const archivedProjects = builders.reduce((count, builder) => count + builder.projects.filter(project => project.archived).length, 0);
+    const activeProjects = totalProjects - archivedProjects;
 
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
@@ -285,6 +288,20 @@ export default function SiteInformationPage() {
     return (
         <div className="module-page">
             <div className="module-shell site-registry-shell">
+                <div className="site-registry-page-header">
+                    <div className="site-registry-breadcrumbs">
+                        <Home size={16} strokeWidth={2} aria-hidden="true" />
+                        <span>Home</span>
+                        <span>/</span>
+                        <strong>Site Registry</strong>
+                    </div>
+                    <h1>Site Registry</h1>
+                    <div className="site-registry-stats" aria-label="Site registry summary">
+                        <span>Projects <strong>{totalProjects}</strong></span>
+                        <span>Builders <strong>{builders.length}</strong></span>
+                        <span>Active / Archived <strong>{activeProjects} / {archivedProjects}</strong></span>
+                    </div>
+                </div>
                 {error ? <div className="module-error">{error}</div> : null}
 
                 {loading ? (
@@ -313,8 +330,14 @@ export default function SiteInformationPage() {
                                 <button className="module-secondary-btn compact site-registry-edit-builder" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
                             ) : null}
                             <div className="site-registry-toolbar-actions">
-                                <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>Add Builder</button>
-                                <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>Add Project</button>
+                                <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>
+                                    <UserPlus size={15} strokeWidth={2.2} aria-hidden="true" />
+                                    <span>Add Builder</span>
+                                </button>
+                                <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>
+                                    <PlusCircle size={15} strokeWidth={2.2} aria-hidden="true" />
+                                    <span>Add Project</span>
+                                </button>
                             </div>
                         </div>
 
@@ -322,6 +345,9 @@ export default function SiteInformationPage() {
                             <table className="site-registry-table">
                                 <thead>
                                     <tr>
+                                        <th className="site-registry-select-col">
+                                            <span className="site-registry-row-check" aria-hidden="true"></span>
+                                        </th>
                                         <th>Project</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${selectedBuilderId ? 'filtered' : ''} ${columnFilterMenu === 'builder' ? 'open' : ''}`}>
@@ -381,7 +407,7 @@ export default function SiteInformationPage() {
                                 <tbody>
                                     {visibleProjects.length === 0 ? (
                                         <tr>
-                                            <td colSpan="5" className="site-registry-empty-cell">
+                                            <td colSpan="6" className="site-registry-empty-cell">
                                                 {builders.length === 0
                                                     ? 'No builders created yet.'
                                                     : showArchived
@@ -392,7 +418,7 @@ export default function SiteInformationPage() {
                                     ) : visibleProjects.map(project => (
                                         <tr
                                             key={`${project.builder.id}-${project.id}`}
-                                            className="site-registry-data-row"
+                                            className={`site-registry-data-row${selectedInfoProject?.id === project.id ? ' selected' : ''}`}
                                             onClick={() => openProjectInfo(project)}
                                             onKeyDown={event => {
                                                 if (event.key === 'Enter' || event.key === ' ') {
@@ -402,6 +428,9 @@ export default function SiteInformationPage() {
                                             }}
                                             tabIndex={0}
                                         >
+                                            <td className="site-registry-select-col">
+                                                <span className={`site-registry-row-check${selectedInfoProject?.id === project.id ? ' selected' : ''}`} aria-hidden="true"></span>
+                                            </td>
                                             <td>{project.name}</td>
                                             <td>{project.builder.name}</td>
                                             <td>{project.siteLocation || 'Not set'}</td>
@@ -475,80 +504,91 @@ export default function SiteInformationPage() {
 
             {showProjectModal && (
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>
-                    <div className="module-modal compact" onClick={e => e.stopPropagation()}>
+                    <div className="module-modal compact site-registry-project-modal" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
                             <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
                             <button className="nav-drawer-close" onClick={closeProjectModal}>x</button>
                         </div>
-                        <form className="module-form" onSubmit={saveProject}>
-                            <div className="module-field">
-                                <label>Builder</label>
-                                <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({ ...prev, builderId: e.target.value }))}>
-                                    <option value="">Select builder</option>
-                                    {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="module-field">
-                                <label>Project</label>
-                                <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Crown Sydney Hotel Resort" />
-                            </div>
-                            <div className="module-field">
-                                <label>Site Location</label>
-                                <div className="site-registry-address-autocomplete transport-address-autocomplete">
-                                    <input
-                                        value={projectForm.siteLocation}
-                                        onChange={e => setProjectForm(prev => ({
-                                            ...prev,
-                                            siteLocation: e.target.value,
-                                            siteLocationSourceId: '',
-                                        }))}
-                                        placeholder="1 Barangaroo Ave, Barangaroo NSW 2000"
-                                        autoComplete="off"
-                                    />
-                                    {(siteAddressLoading || siteAddressSuggestions.length > 0) ? (
-                                        <div className="site-registry-address-suggestions transport-address-suggestions" role="listbox">
-                                            {siteAddressSuggestions.map(suggestion => (
-                                                <button
-                                                    key={suggestion.id}
-                                                    type="button"
-                                                    className="site-registry-address-suggestion transport-address-suggestion"
-                                                    onClick={() => {
-                                                        setProjectForm(prev => ({
-                                                            ...prev,
-                                                            siteLocation: suggestion.address,
-                                                            siteLocationSourceId: suggestion.id,
-                                                        }));
-                                                        setSiteAddressSuggestions([]);
-                                                        setSiteAddressLoading(false);
-                                                    }}
-                                                    role="option"
-                                                >
-                                                    <strong>{suggestion.address}</strong>
-                                                    <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
-                                                </button>
-                                            ))}
-                                            {siteAddressLoading ? <div className="site-registry-address-suggestion transport-address-suggestion loading">Searching addresses...</div> : null}
-                                        </div>
+                        <form className="module-form site-registry-project-form" onSubmit={saveProject}>
+                            <div className="site-registry-project-form-fields">
+                                <div className="module-field">
+                                    <label>Builder <span aria-hidden="true">*</span></label>
+                                    <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({ ...prev, builderId: e.target.value }))}>
+                                        <option value="">Select a builder</option>
+                                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="module-field">
+                                    <label>Project <span aria-hidden="true">*</span></label>
+                                    <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Enter project name" />
+                                </div>
+                                <div className="module-field">
+                                    <label>Site Location <span aria-hidden="true">*</span></label>
+                                    <div className="site-registry-address-autocomplete transport-address-autocomplete">
+                                        <input
+                                            value={projectForm.siteLocation}
+                                            onChange={e => setProjectForm(prev => ({
+                                                ...prev,
+                                                siteLocation: e.target.value,
+                                                siteLocationSourceId: '',
+                                            }))}
+                                            placeholder="Type to search for an address..."
+                                            autoComplete="off"
+                                        />
+                                        {(siteAddressLoading || siteAddressSuggestions.length > 0) ? (
+                                            <div className="site-registry-address-suggestions transport-address-suggestions" role="listbox">
+                                                {siteAddressSuggestions.map(suggestion => (
+                                                    <button
+                                                        key={suggestion.id}
+                                                        type="button"
+                                                        className="site-registry-address-suggestion transport-address-suggestion"
+                                                        onClick={() => {
+                                                            setProjectForm(prev => ({
+                                                                ...prev,
+                                                                siteLocation: suggestion.address,
+                                                                siteLocationSourceId: suggestion.id,
+                                                            }));
+                                                            setSiteAddressSuggestions([]);
+                                                            setSiteAddressLoading(false);
+                                                        }}
+                                                        role="option"
+                                                    >
+                                                        <strong>{suggestion.address}</strong>
+                                                        <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                                                    </button>
+                                                ))}
+                                                {siteAddressLoading ? <div className="site-registry-address-suggestion transport-address-suggestion loading">Searching addresses...</div> : null}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
+                                        <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
                                     ) : null}
                                 </div>
-                                {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
-                                    <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
-                                ) : null}
                             </div>
-                            {projectForm.siteLocation.trim() && projectForm.siteLocationSourceId ? (
-                                <div className="site-registry-map-preview">
-                                    <div className="site-registry-map-preview-label">Map Preview</div>
+                            <div className="site-registry-map-preview">
+                                <div className="site-registry-map-preview-label">Map Preview</div>
+                                {projectForm.siteLocation.trim() && projectForm.siteLocationSourceId ? (
                                     <iframe
                                         title="Site location preview"
                                         src={mapPreviewUrl(projectForm.siteLocation.trim())}
                                         loading="lazy"
                                         referrerPolicy="no-referrer-when-downgrade"
                                     />
-                                </div>
-                            ) : null}
-                            <button type="submit" className="module-primary-btn" disabled={saving || Boolean(projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId)}>
-                                {saving ? 'Saving...' : 'Save Project'}
-                            </button>
+                                ) : (
+                                    <div className="site-registry-map-placeholder">
+                                        Select a validated address to preview the site location.
+                                    </div>
+                                )}
+                            </div>
+                            <div className="module-form-actions site-registry-project-actions">
+                                <button type="button" className="module-secondary-btn" onClick={closeProjectModal} disabled={saving}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="module-primary-btn" disabled={saving || Boolean(projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId)}>
+                                    {saving ? 'Saving...' : 'Save Project'}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
