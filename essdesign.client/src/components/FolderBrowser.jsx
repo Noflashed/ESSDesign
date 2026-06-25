@@ -333,10 +333,10 @@ function OwnerAvatar({ item }) {
 const getFolderItemCount = (item) => {
     const subFolderCount = Array.isArray(item?.subFolders)
         ? item.subFolders.length
-        : (item?.subFolderCount || item?.SubFolderCount || 0);
+        : (item?.subFolderCount ?? item?.SubFolderCount ?? item?.sub_folder_count ?? 0);
     const documentCount = Array.isArray(item?.documents)
         ? item.documents.length
-        : (item?.documentCount || item?.DocumentCount || 0);
+        : (item?.documentCount ?? item?.DocumentCount ?? item?.document_count ?? 0);
     const totalCount = subFolderCount + documentCount;
 
     if (totalCount === 0) return 'No items';
@@ -349,6 +349,29 @@ const getFolderItemCount = (item) => {
     }
 
     return parts.join(' / ');
+};
+
+const logFolderCountDebug = (items, source) => {
+    if (localStorage.getItem('essDebugFolderCounts') !== '1') {
+        return;
+    }
+
+    console.table((items || [])
+        .filter(item => !item?.isDocument)
+        .map(item => ({
+            source,
+            name: item.name,
+            id: item.id,
+            subFolderCount: item.subFolderCount,
+            SubFolderCount: item.SubFolderCount,
+            sub_folder_count: item.sub_folder_count,
+            documentCount: item.documentCount,
+            DocumentCount: item.DocumentCount,
+            document_count: item.document_count,
+            subFoldersLength: Array.isArray(item.subFolders) ? item.subFolders.length : undefined,
+            documentsLength: Array.isArray(item.documents) ? item.documents.length : undefined,
+            display: getFolderItemCount(item)
+        })));
 };
 
 const getSearchResultName = (result) => (
@@ -793,6 +816,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         const cached = cacheRef.current.get(cacheKey);
 
         if (cached && (Date.now() - cached.timestamp < 60000)) {
+            logFolderCountDebug(cached.data, `client-cache:${cacheKey}`);
             setFolders(cached.data);
             setBreadcrumbs(cached.breadcrumbs || []);
             return;
@@ -802,6 +826,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         try {
             if (currentFolder === null) {
                 const data = await foldersAPI.getRootFolders();
+                logFolderCountDebug(data, 'api:root');
                 setFolders(data);
                 setBreadcrumbs([]);
 
@@ -817,6 +842,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 ]);
 
                 const folderItems = [...data.subFolders, ...data.documents.map(d => ({ ...d, isDocument: true }))];
+                logFolderCountDebug(folderItems, `api:folder:${currentFolder}`);
                 setFolders(folderItems);
                 setBreadcrumbs(crumbs);
 

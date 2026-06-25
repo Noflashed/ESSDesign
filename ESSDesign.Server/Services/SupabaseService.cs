@@ -109,6 +109,7 @@ namespace ESSDesign.Server.Services
                 if (_rootFoldersCache != null && _rootFoldersCacheExpiry > DateTime.UtcNow)
                 {
                     _logger.LogInformation("Cache hit for root folders");
+                    await PopulateFolderItemCountsAsync(_rootFoldersCache);
                     return _rootFoldersCache;
                 }
 
@@ -145,6 +146,7 @@ namespace ESSDesign.Server.Services
                     if (cached.Expiry > DateTime.UtcNow)
                     {
                         _logger.LogInformation("Cache hit for folder {FolderId}", folderId);
+                        await PopulateFolderItemCountsAsync(cached.Data.SubFolders);
                         return cached.Data;
                     }
 
