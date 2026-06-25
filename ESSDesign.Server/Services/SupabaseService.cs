@@ -3,6 +3,7 @@ using ESSDesign.Server.Models;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
@@ -33,6 +34,18 @@ namespace ESSDesign.Server.Services
             public bool LeadingHand { get; set; }
             public Guid? LinkedAuthUserId { get; set; }
             public DateTime? VerifiedAt { get; set; }
+        }
+
+        private sealed class FolderCountRow
+        {
+            [JsonPropertyName("parent_folder_id")]
+            public Guid? ParentFolderId { get; set; }
+        }
+
+        private sealed class DocumentFolderRow
+        {
+            [JsonPropertyName("folder_id")]
+            public Guid FolderId { get; set; }
         }
 
         private sealed class AuthAdminUser
@@ -1060,24 +1073,20 @@ namespace ESSDesign.Server.Services
                 .Distinct()
                 .ToList();
 
-            var subfoldersTask = _supabase
-                .From<Folder>()
-                .Filter("parent_folder_id", Postgrest.Constants.Operator.In, folderIds)
-                .Get();
-
-            var documentsTask = _supabase
-                .From<DesignDocument>()
-                .Filter("folder_id", Postgrest.Constants.Operator.In, folderIds)
-                .Get();
+            var inFilter = Uri.EscapeDataString($"in.({string.Join(",", folderIds.Select(folderId => folderId.ToString("D")))})");
+            var subfoldersTask = GetRestRowsAsync<FolderCountRow>(
+                $"folders?select=parent_folder_id&parent_folder_id={inFilter}");
+            var documentsTask = GetRestRowsAsync<DocumentFolderRow>(
+                $"design_documents?select=folder_id&folder_id={inFilter}");
 
             await Task.WhenAll(subfoldersTask, documentsTask);
 
-            var subfolderCounts = (await subfoldersTask).Models
+            var subfolderCounts = (await subfoldersTask)
                 .Where(folder => folder.ParentFolderId.HasValue)
                 .GroupBy(folder => folder.ParentFolderId!.Value)
                 .ToDictionary(group => group.Key, group => group.Count());
 
-            var documentCounts = (await documentsTask).Models
+            var documentCounts = (await documentsTask)
                 .GroupBy(document => document.FolderId)
                 .ToDictionary(group => group.Key, group => group.Count());
 
