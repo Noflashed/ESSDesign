@@ -362,9 +362,15 @@ export default function SiteInformationPage() {
                                 </span>
                                 <span>Show Archived</span>
                             </label>
-                            {selectedBuilder ? (
-                                <button className="module-secondary-btn compact site-registry-edit-builder" onClick={() => openEditBuilder(selectedBuilder)}>Edit Builder</button>
-                            ) : null}
+                            <button
+                                className="module-secondary-btn compact site-registry-edit-builder"
+                                onClick={() => selectedBuilder && openEditBuilder(selectedBuilder)}
+                                disabled={!selectedBuilder}
+                                aria-hidden={!selectedBuilder}
+                                tabIndex={selectedBuilder ? 0 : -1}
+                            >
+                                Edit Builder
+                            </button>
                             <div className="site-registry-toolbar-actions">
                                 <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>
                                     <UserPlus size={15} strokeWidth={2.2} aria-hidden="true" />

@@ -923,6 +923,11 @@ body {
     min-width: 104px;
 }
 
+.site-registry-edit-builder:disabled {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .site-registry-toolbar-actions {
     display: flex;
     align-items: center;
@@ -932,6 +937,7 @@ body {
 
 .site-registry-table-wrap {
     width: 100%;
+    min-height: 560px;
     overflow-x: auto;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -6831,6 +6837,7 @@ button.stat-card {
 }
 
 .site-registry-table-wrap {
+    min-height: 560px;
     overflow: visible;
     border: 1px solid #dbe5f4;
     border-radius: 7px;
