@@ -331,12 +331,14 @@ function OwnerAvatar({ item }) {
 }
 
 const getFolderItemCount = (item) => {
-    const subFolderCount = Array.isArray(item?.subFolders)
-        ? item.subFolders.length
-        : (item?.subFolderCount ?? item?.SubFolderCount ?? item?.sub_folder_count ?? 0);
-    const documentCount = Array.isArray(item?.documents)
-        ? item.documents.length
-        : (item?.documentCount ?? item?.DocumentCount ?? item?.document_count ?? 0);
+    const subFolderCount = item?.subFolderCount
+        ?? item?.SubFolderCount
+        ?? item?.sub_folder_count
+        ?? (Array.isArray(item?.subFolders) ? item.subFolders.length : 0);
+    const documentCount = item?.documentCount
+        ?? item?.DocumentCount
+        ?? item?.document_count
+        ?? (Array.isArray(item?.documents) ? item.documents.length : 0);
     const totalCount = subFolderCount + documentCount;
 
     if (totalCount === 0) return 'No items';
