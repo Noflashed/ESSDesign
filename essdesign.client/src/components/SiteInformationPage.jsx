@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Home, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
+import { Archive, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
 function emptyProjectForm(initialBuilderId = '') {
@@ -91,10 +91,6 @@ export default function SiteInformationPage() {
     }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
 
     const hasStatusFilter = statusFilter !== 'all';
-    const totalProjects = builders.reduce((count, builder) => count + builder.projects.length, 0);
-    const archivedProjects = builders.reduce((count, builder) => count + builder.projects.filter(project => project.archived).length, 0);
-    const activeProjects = totalProjects - archivedProjects;
-
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
         setSiteAddressSuggestions([]);
@@ -286,21 +282,10 @@ export default function SiteInformationPage() {
     };
 
     return (
-        <div className="module-page">
+        <div className="module-page site-registry-page">
             <div className="module-shell site-registry-shell">
                 <div className="site-registry-page-header">
-                    <div className="site-registry-breadcrumbs">
-                        <Home size={16} strokeWidth={2} aria-hidden="true" />
-                        <span>Home</span>
-                        <span>/</span>
-                        <strong>Site Registry</strong>
-                    </div>
                     <h1>Site Registry</h1>
-                    <div className="site-registry-stats" aria-label="Site registry summary">
-                        <span>Projects <strong>{totalProjects}</strong></span>
-                        <span>Builders <strong>{builders.length}</strong></span>
-                        <span>Active / Archived <strong>{activeProjects} / {archivedProjects}</strong></span>
-                    </div>
                 </div>
                 {error ? <div className="module-error">{error}</div> : null}
 
