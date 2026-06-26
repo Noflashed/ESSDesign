@@ -15,6 +15,9 @@ function emptyProjectForm(initialBuilderId = '') {
         projectName: '',
         siteLocation: '',
         siteLocationSourceId: '',
+        projectManagerEmployeeId: '',
+        siteSupervisorEmployeeId: '',
+        inductedEmployeeIds: [],
         editingProjectId: null
     };
 }
@@ -87,6 +90,18 @@ function employeeRole(employee) {
     return employee?.leadingHand ? 'Leading Hand' : 'Employee';
 }
 
+function employeeMatchesSearch(employee, query) {
+    if (!query) {
+        return true;
+    }
+    return [
+        employeeName(employee),
+        employeeRole(employee),
+        employee?.email || '',
+        employee?.phoneNumber || ''
+    ].join(' ').toLowerCase().includes(query);
+}
+
 function formatProjectDate(value) {
     if (!value) return '-';
     const date = new Date(value);
@@ -110,6 +125,7 @@ export default function SiteInformationPage() {
     const [showBuilderModal, setShowBuilderModal] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
     const [projectForm, setProjectForm] = useState(emptyProjectForm());
+    const [projectEmployeeSearch, setProjectEmployeeSearch] = useState('');
     const [builderForm, setBuilderForm] = useState(emptyBuilderForm);
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
@@ -249,8 +265,25 @@ export default function SiteInformationPage() {
     }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
 
     const hasStatusFilter = statusFilter !== 'all';
+    const employeeById = useMemo(() => new Map(employees.map(employee => [employee.id, employee])), [employees]);
+    const sortedEmployees = useMemo(
+        () => [...employees].sort((left, right) => employeeName(left).localeCompare(employeeName(right))),
+        [employees]
+    );
+    const filteredProjectFormEmployees = useMemo(() => {
+        const query = projectEmployeeSearch.trim().toLowerCase();
+        return sortedEmployees.filter(employee => employeeMatchesSearch(employee, query));
+    }, [projectEmployeeSearch, sortedEmployees]);
+
     const getProjectEmployees = (project) => {
         const siteKey = projectSiteKey(project);
+        const savedIds = Array.isArray(project?.inductedEmployeeIds) ? project.inductedEmployeeIds : null;
+        if (savedIds) {
+            return savedIds
+                .map(employeeId => employeeById.get(employeeId))
+                .filter(Boolean)
+                .sort((left, right) => employeeName(left).localeCompare(employeeName(right)));
+        }
         if (!siteKey) {
             return [];
         }
@@ -277,18 +310,19 @@ export default function SiteInformationPage() {
         if (project?.projectManager) {
             return project.projectManager;
         }
-        return null;
+        return employeeById.get(project?.projectManagerEmployeeId) || null;
     };
 
     const getSiteSupervisor = (project) => {
         if (project?.siteSupervisor) {
             return project.siteSupervisor;
         }
-        return getProjectEmployees(project).find(employee => employee.leadingHand) || null;
+        return employeeById.get(project?.siteSupervisorEmployeeId) || getProjectEmployees(project).find(employee => employee.leadingHand) || null;
     };
 
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
+        setProjectEmployeeSearch('');
         setSiteAddressSuggestions([]);
         setSiteAddressLoading(false);
         setShowProjectModal(true);
@@ -300,8 +334,14 @@ export default function SiteInformationPage() {
             projectName: project.name,
             siteLocation: project.siteLocation || '',
             siteLocationSourceId: project.siteLocation ? 'existing' : '',
+            projectManagerEmployeeId: project.projectManagerEmployeeId || '',
+            siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || '',
+            inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
+                ? project.inductedEmployeeIds
+                : getProjectEmployees(project).map(employee => employee.id),
             editingProjectId: project.id
         });
+        setProjectEmployeeSearch('');
         setSiteAddressSuggestions([]);
         setSiteAddressLoading(false);
         setShowProjectModal(true);
@@ -309,8 +349,24 @@ export default function SiteInformationPage() {
 
     const closeProjectModal = () => {
         setShowProjectModal(false);
+        setProjectEmployeeSearch('');
         setSiteAddressSuggestions([]);
         setSiteAddressLoading(false);
+    };
+
+    const toggleProjectInductedEmployee = (employeeId) => {
+        setProjectForm(prev => {
+            const existingIds = new Set(prev.inductedEmployeeIds || []);
+            if (existingIds.has(employeeId)) {
+                existingIds.delete(employeeId);
+            } else {
+                existingIds.add(employeeId);
+            }
+            return {
+                ...prev,
+                inductedEmployeeIds: Array.from(existingIds)
+            };
+        });
     };
 
     const openCreateBuilder = () => {
@@ -369,10 +425,25 @@ export default function SiteInformationPage() {
                 throw new Error('Select a valid suggested site address before saving.');
             }
             const nextBuilders = projectForm.editingProjectId
-                ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation)
-                : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation);
+                ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
+                    projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
+                    siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
+                    inductedEmployeeIds: projectForm.inductedEmployeeIds
+                })
+                : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation, {
+                    projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
+                    siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
+                    inductedEmployeeIds: projectForm.inductedEmployeeIds
+                });
             setBuilders(nextBuilders);
             setSelectedBuilderId(projectForm.builderId);
+            if (projectForm.editingProjectId) {
+                const updatedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
+                const updatedProject = updatedBuilder?.projects.find(project => project.id === projectForm.editingProjectId);
+                if (updatedProject && projectSiteKey(selectedInfoProject) === `${projectForm.builderId}:${projectForm.editingProjectId}`) {
+                    setSelectedInfoProject({ ...updatedProject, builder: updatedBuilder });
+                }
+            }
             closeProjectModal();
         } catch (err) {
             setError(err.message || 'Could not save project');
@@ -926,6 +997,71 @@ export default function SiteInformationPage() {
                                     {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
                                         <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
                                     ) : null}
+                                </div>
+                                <div className="site-registry-personnel-grid">
+                                    <div className="module-field">
+                                        <label>Project Manager</label>
+                                        <select
+                                            value={projectForm.projectManagerEmployeeId}
+                                            onChange={e => setProjectForm(prev => ({ ...prev, projectManagerEmployeeId: e.target.value }))}
+                                        >
+                                            <option value="">Not assigned</option>
+                                            {sortedEmployees.map(employee => (
+                                                <option key={employee.id} value={employee.id}>{employeeName(employee)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="module-field">
+                                        <label>Site Supervisor</label>
+                                        <select
+                                            value={projectForm.siteSupervisorEmployeeId}
+                                            onChange={e => setProjectForm(prev => ({ ...prev, siteSupervisorEmployeeId: e.target.value }))}
+                                        >
+                                            <option value="">Not assigned</option>
+                                            {sortedEmployees.map(employee => (
+                                                <option key={employee.id} value={employee.id}>{employeeName(employee)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="module-field site-registry-inducted-editor">
+                                    <div className="site-registry-inducted-editor-head">
+                                        <label>Inducted Employees</label>
+                                        <span>{projectForm.inductedEmployeeIds.length} selected</span>
+                                    </div>
+                                    <label className="site-registry-inducted-search site-registry-inducted-editor-search">
+                                        <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+                                        <input
+                                            type="search"
+                                            value={projectEmployeeSearch}
+                                            onChange={event => setProjectEmployeeSearch(event.target.value)}
+                                            placeholder="Search employees..."
+                                            aria-label="Search employees to induct"
+                                        />
+                                    </label>
+                                    <div className="site-registry-inducted-editor-list">
+                                        {employeesLoading ? (
+                                            <div className="site-registry-detail-empty">Loading employees...</div>
+                                        ) : filteredProjectFormEmployees.length === 0 ? (
+                                            <div className="site-registry-detail-empty">No employees match this search.</div>
+                                        ) : filteredProjectFormEmployees.map(employee => {
+                                            const checked = projectForm.inductedEmployeeIds.includes(employee.id);
+                                            return (
+                                                <label key={employee.id} className="site-registry-inducted-option">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleProjectInductedEmployee(employee.id)}
+                                                    />
+                                                    <EmployeeAvatar employee={employee} />
+                                                    <span>
+                                                        <strong>{employeeName(employee)}</strong>
+                                                        <small>{employee.email || employee.phoneNumber || employeeRole(employee)}</small>
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                             <div className="site-registry-map-preview">

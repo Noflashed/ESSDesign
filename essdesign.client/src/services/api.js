@@ -612,6 +612,13 @@ function parseSafetyProjects(raw) {
                                 archived: Boolean(project.archived),
                                 archivedAt: project.archivedAt || null,
                                 siteLocation: (project.siteLocation || '').trim(),
+                                projectManagerEmployeeId: project.projectManagerEmployeeId || project.project_manager_employee_id || '',
+                                siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || project.site_supervisor_employee_id || '',
+                                inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
+                                    ? project.inductedEmployeeIds.filter(Boolean)
+                                    : Array.isArray(project.inducted_employee_ids)
+                                        ? project.inducted_employee_ids.filter(Boolean)
+                                        : null,
                                 createdAt: project.createdAt || nowIso(),
                                 updatedAt: project.updatedAt || nowIso()
                             }))
@@ -1110,7 +1117,7 @@ export const safetyProjectsAPI = {
         return builders;
     },
 
-    createProject: async (builderId, projectName, siteLocation = '') => {
+    createProject: async (builderId, projectName, siteLocation = '', options = {}) => {
         const cleanProject = projectName.trim();
         const cleanLocation = siteLocation.trim();
         if (!builderId) {
@@ -1138,6 +1145,11 @@ export const safetyProjectsAPI = {
             archived: false,
             archivedAt: null,
             siteLocation: cleanLocation,
+            projectManagerEmployeeId: options.projectManagerEmployeeId || '',
+            siteSupervisorEmployeeId: options.siteSupervisorEmployeeId || '',
+            inductedEmployeeIds: Array.isArray(options.inductedEmployeeIds)
+                ? Array.from(new Set(options.inductedEmployeeIds.filter(Boolean)))
+                : [],
             createdAt: timestamp,
             updatedAt: timestamp
         });
@@ -1183,7 +1195,7 @@ export const safetyProjectsAPI = {
 
     resolveBuilderLogoUrl,
 
-    renameProject: async (builderId, projectId, nextName, siteLocation = '') => {
+    renameProject: async (builderId, projectId, nextName, siteLocation = '', options = {}) => {
         const clean = nextName.trim();
         const cleanLocation = siteLocation.trim();
         if (!clean) {
@@ -1204,6 +1216,17 @@ export const safetyProjectsAPI = {
         }
         project.name = clean;
         project.siteLocation = cleanLocation;
+        if (Object.prototype.hasOwnProperty.call(options, 'projectManagerEmployeeId')) {
+            project.projectManagerEmployeeId = options.projectManagerEmployeeId || '';
+        }
+        if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorEmployeeId')) {
+            project.siteSupervisorEmployeeId = options.siteSupervisorEmployeeId || '';
+        }
+        if (Object.prototype.hasOwnProperty.call(options, 'inductedEmployeeIds')) {
+            project.inductedEmployeeIds = Array.isArray(options.inductedEmployeeIds)
+                ? Array.from(new Set(options.inductedEmployeeIds.filter(Boolean)))
+                : [];
+        }
         project.updatedAt = nowIso();
         builder.projects.sort((a, b) => a.name.localeCompare(b.name));
         builder.updatedAt = nowIso();
