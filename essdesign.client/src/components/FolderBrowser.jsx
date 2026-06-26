@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from '../services/api';
+import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl, safetyProjectsAPI, SAFETY_PROJECTS_CHANGED_EVENT } from '../services/api';
 import UploadDocumentModal, { RecipientAvatar, hydrateNotificationRecipients, prefetchNotificationRecipients } from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
@@ -414,6 +414,7 @@ const LIST_COLUMN_MIN_WIDTHS = {
 };
 const CONTEXT_MENU_WIDTH = 224;
 const CONTEXT_MENU_MARGIN = 12;
+const normalizeBuilderFolderName = (value) => String(value || '').trim().toLowerCase();
 
 const sanitizeColWidths = (value) => {
     const next = { ...DEFAULT_COL_WIDTHS };
@@ -432,9 +433,10 @@ const sanitizeColWidths = (value) => {
     return next;
 };
 
-const buildGridTemplateColumns = (widths, includeRevision) => {
+const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
+    const logoColumns = includeBuilderLogo ? ['56px'] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -451,7 +453,7 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
             columnTrack('size')
         ];
 
-    return ['40px', ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
+    return ['40px', ...logoColumns, ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
 const pdfThumbnailCache = new Map();
@@ -572,10 +574,23 @@ function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 
     );
 }
 
+function BuilderFolderLogo({ logoUrl }) {
+    return (
+        <span className={`builder-folder-logo${logoUrl ? ' has-logo' : ''}`} aria-hidden="true">
+            {logoUrl ? (
+                <img src={logoUrl} alt="" loading="eager" decoding="async" />
+            ) : (
+                <FolderIcon size={20} />
+            )}
+        </span>
+    );
+}
+
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
+    const [builderLogos, setBuilderLogos] = useState(() => new Map());
     const [breadcrumbs, setBreadcrumbs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -650,9 +665,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, []);
 
     const showRevisionColumn = folders.some(item => item.isDocument);
+    const showBuilderLogoColumn = currentFolder === null;
 
     // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
-    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn);
+    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn, showBuilderLogoColumn);
 
     // Column resize handlers
     const colKeys = showRevisionColumn
@@ -796,6 +812,36 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     useEffect(() => {
         loadCurrentFolder();
     }, [currentFolder]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadBuilderLogos = async () => {
+            try {
+                const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true });
+                if (cancelled) {
+                    return;
+                }
+                const nextLogos = new Map();
+                builders.forEach(builder => {
+                    if (builder?.name && builder.logoUrl) {
+                        nextLogos.set(normalizeBuilderFolderName(builder.name), builder.logoUrl);
+                    }
+                });
+                setBuilderLogos(nextLogos);
+            } catch (error) {
+                console.error('Failed to load builder logos for ESS Design:', error);
+            }
+        };
+
+        loadBuilderLogos();
+        window.addEventListener(SAFETY_PROJECTS_CHANGED_EVENT, loadBuilderLogos);
+
+        return () => {
+            cancelled = true;
+            window.removeEventListener(SAFETY_PROJECTS_CHANGED_EVENT, loadBuilderLogos);
+        };
+    }, []);
 
     // Save view mode preference
     useEffect(() => {
@@ -1593,6 +1639,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 {viewMode === 'list' && (
                                     <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
                                         <div className="list-header-icon"></div>
+                                        {showBuilderLogoColumn && (
+                                            <div className="list-header-builder-logo">
+                                                Logo
+                                            </div>
+                                        )}
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
                                             onClick={() => handleSort('name')}
@@ -1794,6 +1845,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                             {isSelected && <CheckCircleIcon size={11} />}
                                                         </span>
                                                     </div>
+                                                    {showBuilderLogoColumn && (
+                                                        <div className="list-item-builder-logo">
+                                                            {!item.isDocument ? (
+                                                                <BuilderFolderLogo
+                                                                    logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
+                                                                />
+                                                            ) : null}
+                                                        </div>
+                                                    )}
                                                     <div className="list-item-name">
                                                         {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
                                                         <span>{getItemDisplayName(item)}</span>

@@ -582,6 +582,7 @@ function parseSafetyProjects(raw) {
                 .map(item => ({
                     id: item.id || makeId(),
                     name: item.name.trim(),
+                    logoUrl: item.logoUrl || item.logo_url || '',
                     projects: [],
                     createdAt: item.createdAt || nowIso(),
                     updatedAt: item.updatedAt || nowIso()
@@ -597,6 +598,7 @@ function parseSafetyProjects(raw) {
                 .map(builder => ({
                     id: builder.id || makeId(),
                     name: builder.name.trim(),
+                    logoUrl: builder.logoUrl || builder.logo_url || '',
                     projects: Array.isArray(builder.projects)
                         ? builder.projects
                             .filter(project => project && typeof project.name === 'string')
@@ -1010,6 +1012,7 @@ export const safetyProjectsAPI = {
             builders.push({
                 id: makeId(),
                 name: cleanBuilder,
+                logoUrl: '',
                 projects: [{
                     id: makeId(),
                     name: cleanProject,
@@ -1028,11 +1031,12 @@ export const safetyProjectsAPI = {
         return builders;
     },
 
-    createBuilder: async (builderName) => {
+    createBuilder: async (builderName, options = {}) => {
         const cleanBuilder = builderName.trim();
         if (!cleanBuilder) {
             throw new Error('Builder name is required');
         }
+        const logoUrl = typeof options.logoUrl === 'string' ? options.logoUrl : '';
 
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
@@ -1044,6 +1048,7 @@ export const safetyProjectsAPI = {
         builders.push({
             id: makeId(),
             name: cleanBuilder,
+            logoUrl,
             projects: [],
             createdAt: timestamp,
             updatedAt: timestamp
@@ -1090,7 +1095,7 @@ export const safetyProjectsAPI = {
         return builders;
     },
 
-    renameBuilder: async (builderId, nextName) => {
+    renameBuilder: async (builderId, nextName, options = {}) => {
         const clean = nextName.trim();
         if (!clean) {
             throw new Error('Builder name is required');
@@ -1105,6 +1110,11 @@ export const safetyProjectsAPI = {
             throw new Error('A builder with that name already exists');
         }
         target.name = clean;
+        if (options.removeLogo) {
+            target.logoUrl = '';
+        } else if (Object.prototype.hasOwnProperty.call(options, 'logoUrl')) {
+            target.logoUrl = typeof options.logoUrl === 'string' ? options.logoUrl : '';
+        }
         target.updatedAt = nowIso();
         builders.sort((a, b) => a.name.localeCompare(b.name));
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });

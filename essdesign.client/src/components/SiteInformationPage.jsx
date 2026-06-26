@@ -24,6 +24,46 @@ function mapPreviewUrl(location) {
     return `https://www.google.com/maps?q=${encodeURIComponent(location)}&output=embed`;
 }
 
+function emptyBuilderForm() {
+    return {
+        id: null,
+        name: '',
+        logoUrl: '',
+        logoPreviewUrl: '',
+        logoFile: null,
+        removeLogo: false
+    };
+}
+
+function builderToForm(builder) {
+    return {
+        id: builder?.id || null,
+        name: builder?.name || '',
+        logoUrl: builder?.logoUrl || '',
+        logoPreviewUrl: builder?.logoUrl || '',
+        logoFile: null,
+        removeLogo: false
+    };
+}
+
+function readImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(reader.error || new Error('Could not read builder logo'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function BuilderLogoMark({ builder, selected = false, header = false }) {
+    const logoUrl = builder?.logoUrl || '';
+    return (
+        <span className={`site-registry-row-location${selected ? ' selected' : ''}${header ? ' header' : ''}${logoUrl ? ' has-logo' : ''}`} aria-hidden="true">
+            {logoUrl ? <img src={logoUrl} alt="" loading="eager" decoding="async" /> : <SiteRegistryLocationIcon size={header ? 16 : 17} />}
+        </span>
+    );
+}
+
 export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -33,7 +73,7 @@ export default function SiteInformationPage() {
     const [showBuilderModal, setShowBuilderModal] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
     const [projectForm, setProjectForm] = useState(emptyProjectForm());
-    const [builderForm, setBuilderForm] = useState({ id: null, name: '' });
+    const [builderForm, setBuilderForm] = useState(emptyBuilderForm);
     const [siteAddressSuggestions, setSiteAddressSuggestions] = useState([]);
     const [siteAddressLoading, setSiteAddressLoading] = useState(false);
     const [selectedInfoProject, setSelectedInfoProject] = useState(null);
@@ -148,13 +188,50 @@ export default function SiteInformationPage() {
     };
 
     const openCreateBuilder = () => {
-        setBuilderForm({ id: null, name: '' });
+        setBuilderForm(emptyBuilderForm());
         setShowBuilderModal(true);
     };
 
-    const openEditBuilder = (builder) => {
-        setBuilderForm({ id: builder.id, name: builder.name });
-        setShowBuilderModal(true);
+    const handleBuilderSelectionChange = (event) => {
+        const builderId = event.target.value;
+        if (!builderId) {
+            setBuilderForm(emptyBuilderForm());
+            return;
+        }
+        const builder = builders.find(item => item.id === builderId);
+        setBuilderForm(builderToForm(builder));
+    };
+
+    const handleBuilderLogoChange = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            return;
+        }
+        if (!file.type.startsWith('image/')) {
+            setError('Builder logo must be an image file.');
+            event.target.value = '';
+            return;
+        }
+        if (file.size > 1_500_000) {
+            setError('Builder logo must be smaller than 1.5 MB.');
+            event.target.value = '';
+            return;
+        }
+
+        readImageFileAsDataUrl(file)
+            .then(previewUrl => {
+                setBuilderForm(prev => ({
+                    ...prev,
+                    logoFile: file,
+                    logoPreviewUrl: previewUrl,
+                    removeLogo: false
+                }));
+                setError('');
+            })
+            .catch(() => {
+                setError('Could not load builder logo preview.');
+                event.target.value = '';
+            });
     };
 
     const saveProject = async (event) => {
@@ -225,9 +302,17 @@ export default function SiteInformationPage() {
         setSaving(true);
         setError('');
         try {
+            const logoUrl = builderForm.logoFile
+                ? await readImageFileAsDataUrl(builderForm.logoFile)
+                : builderForm.removeLogo
+                    ? ''
+                    : builderForm.logoUrl;
             const nextBuilders = builderForm.id
-                ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name)
-                : await safetyProjectsAPI.createBuilder(builderForm.name);
+                ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name, {
+                    logoUrl,
+                    removeLogo: builderForm.removeLogo
+                })
+                : await safetyProjectsAPI.createBuilder(builderForm.name, { logoUrl });
             setBuilders(nextBuilders);
             setSelectedBuilderId(builderForm.id || nextBuilders.find(builder => builder.name.toLowerCase() === builderForm.name.trim().toLowerCase())?.id || '');
             setShowBuilderModal(false);
@@ -369,19 +454,10 @@ export default function SiteInformationPage() {
                                 </span>
                                 <span>Show Archived</span>
                             </label>
-                            <button
-                                className="module-secondary-btn compact site-registry-edit-builder"
-                                onClick={() => selectedBuilder && openEditBuilder(selectedBuilder)}
-                                disabled={!selectedBuilder}
-                                aria-hidden={!selectedBuilder}
-                                tabIndex={selectedBuilder ? 0 : -1}
-                            >
-                                Edit Builder
-                            </button>
                             <div className="site-registry-toolbar-actions">
                                 <button className="module-secondary-btn compact site-registry-outline-action" onClick={openCreateBuilder}>
                                     <UserPlus size={15} strokeWidth={2.2} aria-hidden="true" />
-                                    <span>Add Builder</span>
+                                    <span>Add/Edit Builder</span>
                                 </button>
                                 <button className="module-primary-btn compact site-registry-primary-action" onClick={openCreateProject}>
                                     <PlusCircle size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -395,9 +471,7 @@ export default function SiteInformationPage() {
                                 <thead>
                                     <tr>
                                         <th className="site-registry-select-col">
-                                            <span className="site-registry-row-location header" aria-hidden="true">
-                                                <SiteRegistryLocationIcon size={16} />
-                                            </span>
+                                            <BuilderLogoMark header />
                                         </th>
                                         <th>Project</th>
                                         <th>
@@ -481,9 +555,7 @@ export default function SiteInformationPage() {
                                             tabIndex={0}
                                         >
                                             <td className="site-registry-select-col">
-                                                <span className={`site-registry-row-location${selectedInfoProject?.id === project.id ? ' selected' : ''}`} aria-hidden="true">
-                                                    <SiteRegistryLocationIcon size={17} />
-                                                </span>
+                                                <BuilderLogoMark builder={project.builder} selected={selectedInfoProject?.id === project.id} />
                                             </td>
                                             <td>{project.name}</td>
                                             <td>{project.builder.name}</td>
@@ -675,19 +747,65 @@ export default function SiteInformationPage() {
 
             {showBuilderModal && (
                 <div className="module-modal-backdrop" onClick={() => setShowBuilderModal(false)}>
-                    <div className="module-modal compact" onClick={e => e.stopPropagation()}>
+                    <div className="module-modal compact site-registry-builder-modal" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
-                            <h3>{builderForm.id ? 'Edit Builder' : 'Add Builder'}</h3>
+                            <h3>Add/Edit Builder</h3>
                             <button className="nav-drawer-close" onClick={() => setShowBuilderModal(false)}>x</button>
                         </div>
-                        <form className="module-form" onSubmit={saveBuilder}>
+                        <form className="module-form site-registry-builder-form" onSubmit={saveBuilder}>
+                            <div className="module-field">
+                                <label>Builder</label>
+                                <select value={builderForm.id || ''} onChange={handleBuilderSelectionChange}>
+                                    <option value="">Add new builder</option>
+                                    {builders.map(builder => (
+                                        <option key={builder.id} value={builder.id}>{builder.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <div className="module-field">
                                 <label>Builder Name</label>
                                 <input value={builderForm.name} onChange={e => setBuilderForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Built" />
                             </div>
-                            <button type="submit" className="module-primary-btn" disabled={saving}>
-                                {saving ? 'Saving...' : 'Save Builder'}
-                            </button>
+                            <div className="module-field">
+                                <label>Builder Logo</label>
+                                <label className="site-registry-logo-upload">
+                                    <span className={`site-registry-logo-preview${builderForm.logoPreviewUrl && !builderForm.removeLogo ? ' has-logo' : ''}`}>
+                                        {builderForm.logoPreviewUrl && !builderForm.removeLogo ? (
+                                            <img src={builderForm.logoPreviewUrl} alt="" />
+                                        ) : (
+                                            <SiteRegistryLocationIcon size={24} />
+                                        )}
+                                    </span>
+                                    <span className="site-registry-logo-upload-copy">
+                                        <strong>Upload builder logo</strong>
+                                        <small>PNG, JPG, WEBP or SVG up to 1.5 MB</small>
+                                    </span>
+                                    <input type="file" accept="image/*" onChange={handleBuilderLogoChange} />
+                                </label>
+                                {builderForm.logoPreviewUrl && !builderForm.removeLogo ? (
+                                    <button
+                                        type="button"
+                                        className="site-registry-logo-remove"
+                                        onClick={() => setBuilderForm(prev => ({
+                                            ...prev,
+                                            logoFile: null,
+                                            logoPreviewUrl: '',
+                                            logoUrl: '',
+                                            removeLogo: true
+                                        }))}
+                                    >
+                                        Remove logo
+                                    </button>
+                                ) : null}
+                            </div>
+                            <div className="site-registry-builder-actions">
+                                <button type="button" className="module-secondary-btn" onClick={() => setShowBuilderModal(false)} disabled={saving}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="module-primary-btn" disabled={saving}>
+                                    {saving ? 'Saving...' : 'Save Builder'}
+                                </button>
+                            </div>
                             {builderForm.id ? (
                                 <button type="button" className="module-danger-btn" onClick={() => removeBuilder(builders.find(builder => builder.id === builderForm.id))}>
                                     Delete Builder
