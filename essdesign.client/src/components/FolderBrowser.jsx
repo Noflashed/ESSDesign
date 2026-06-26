@@ -400,13 +400,12 @@ const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
 });
 
 // Default column widths as fractions (must match grid-template-columns order after icon)
-const DEFAULT_COL_WIDTHS = { name: 1.5, logo: 0.55, revision: 0.75, status: 0.95, owner: 1, modified: 1.2, size: 0.8 };
+const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.75, status: 0.95, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 176;
 const MIN_COL_WIDTH_FR = 0.2;
 const LIST_COLUMN_MIN_WIDTHS = {
     name: 0,
-    logo: 72,
     revision: 112,
     status: 116,
     owner: 0,
@@ -437,7 +436,7 @@ const sanitizeColWidths = (value) => {
 const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
-    const logoColumns = includeBuilderLogo ? [columnTrack('logo')] : [];
+    const logoColumns = includeBuilderLogo ? ['88px'] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -675,8 +674,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     // Column resize handlers
     const colKeys = showRevisionColumn
-        ? ['name', ...(showRootBuilderLogos ? ['logo'] : []), 'revision', 'status', 'owner', 'modified', 'size']
-        : ['name', ...(showRootBuilderLogos ? ['logo'] : []), 'owner', 'modified', 'size'];
+        ? ['name', 'revision', 'status', 'owner', 'modified', 'size']
+        : ['name', 'owner', 'modified', 'size'];
 
     const handleResizeStart = useCallback((e, colIndex) => {
         e.preventDefault();
@@ -1658,12 +1657,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'name' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('name'))} onDoubleClick={handleResetColWidths} />
+                                            {!showRootBuilderLogos && (
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('name'))} onDoubleClick={handleResetColWidths} />
+                                            )}
                                         </div>
                                         {showRootBuilderLogos && (
-                                            <div className="list-header-builder-logo" data-col-key="logo">
+                                            <div className="list-header-builder-logo">
                                                 <span>Logo</span>
-                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('logo'))} onDoubleClick={handleResetColWidths} />
                                             </div>
                                         )}
                                         {showRevisionColumn && (
