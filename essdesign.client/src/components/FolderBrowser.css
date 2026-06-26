@@ -222,17 +222,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: #64748b;
     flex: 0 0 auto;
 }
 
 .builder-folder-logo.has-logo {
     overflow: hidden;
-    padding: 3px;
-    background: #ffffff;
+    padding: 0;
+    background: transparent;
 }
 
 .builder-folder-logo img {

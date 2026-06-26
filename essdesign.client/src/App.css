@@ -7482,6 +7482,7 @@ button.stat-card {
     grid-template-rows: 40px minmax(0, 1fr);
     align-content: start;
     gap: 24px;
+    background: #ffffff;
 }
 
 .site-registry-toolbar {
@@ -7589,6 +7590,13 @@ button.stat-card {
     min-width: 1080px;
     border-collapse: separate;
     border-spacing: 0;
+    background: #ffffff;
+}
+
+.site-registry-table thead,
+.site-registry-table tbody,
+.site-registry-table tr {
+    background: #ffffff;
 }
 
 .site-registry-table th,
