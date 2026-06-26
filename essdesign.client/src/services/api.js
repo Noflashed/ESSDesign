@@ -612,6 +612,8 @@ function parseSafetyProjects(raw) {
                                 archived: Boolean(project.archived),
                                 archivedAt: project.archivedAt || null,
                                 siteLocation: (project.siteLocation || '').trim(),
+                                projectManagerUserId: project.projectManagerUserId || project.project_manager_user_id || '',
+                                siteSupervisorUserId: project.siteSupervisorUserId || project.site_supervisor_user_id || '',
                                 projectManagerEmployeeId: project.projectManagerEmployeeId || project.project_manager_employee_id || '',
                                 siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || project.site_supervisor_employee_id || '',
                                 inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
@@ -1145,6 +1147,8 @@ export const safetyProjectsAPI = {
             archived: false,
             archivedAt: null,
             siteLocation: cleanLocation,
+            projectManagerUserId: options.projectManagerUserId || '',
+            siteSupervisorUserId: options.siteSupervisorUserId || '',
             projectManagerEmployeeId: options.projectManagerEmployeeId || '',
             siteSupervisorEmployeeId: options.siteSupervisorEmployeeId || '',
             inductedEmployeeIds: Array.isArray(options.inductedEmployeeIds)
@@ -1216,6 +1220,12 @@ export const safetyProjectsAPI = {
         }
         project.name = clean;
         project.siteLocation = cleanLocation;
+        if (Object.prototype.hasOwnProperty.call(options, 'projectManagerUserId')) {
+            project.projectManagerUserId = options.projectManagerUserId || '';
+        }
+        if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorUserId')) {
+            project.siteSupervisorUserId = options.siteSupervisorUserId || '';
+        }
         if (Object.prototype.hasOwnProperty.call(options, 'projectManagerEmployeeId')) {
             project.projectManagerEmployeeId = options.projectManagerEmployeeId || '';
         }

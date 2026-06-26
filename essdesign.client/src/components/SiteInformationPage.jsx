@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
-import { analysisAPI, rosteringAPI, safetyProjectsAPI } from '../services/api';
+import { analysisAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -15,6 +15,8 @@ function emptyProjectForm(initialBuilderId = '') {
         projectName: '',
         siteLocation: '',
         siteLocationSourceId: '',
+        projectManagerUserId: '',
+        siteSupervisorUserId: '',
         projectManagerEmployeeId: '',
         siteSupervisorEmployeeId: '',
         inductedEmployeeIds: [],
@@ -90,6 +92,40 @@ function employeeRole(employee) {
     return employee?.leadingHand ? 'Leading Hand' : 'Employee';
 }
 
+function roleLabel(role) {
+    switch (role) {
+        case 'project_manager': return 'Project Manager';
+        case 'site_supervisor': return 'Site Supervisor';
+        case 'leading_hand': return 'Leading Hand';
+        case 'general_scaffolder': return 'Scaffolder';
+        case 'admin': return 'Admin';
+        case 'viewer': return 'Viewer';
+        default: return 'Employee';
+    }
+}
+
+function appUserName(user) {
+    return user?.fullName || user?.name || user?.email || 'Unnamed user';
+}
+
+function appUserInitials(user) {
+    const name = appUserName(user);
+    const parts = name.split(/\s+/).filter(Boolean);
+    return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2)).toUpperCase();
+}
+
+function personDisplayName(person) {
+    return person?.fullName || person?.name || employeeName(person);
+}
+
+function personEmail(person) {
+    return person?.email || 'No email recorded';
+}
+
+function personPhone(person) {
+    return person?.phoneNumber || 'No phone recorded';
+}
+
 function employeeMatchesSearch(employee, query) {
     if (!query) {
         return true;
@@ -113,11 +149,49 @@ function EmployeeAvatar({ employee }) {
     return <span className="site-registry-employee-avatar" aria-hidden="true">{employeeInitials(employee)}</span>;
 }
 
+function UserAvatar({ user }) {
+    return <span className="site-registry-employee-avatar" aria-hidden="true">{appUserInitials(user)}</span>;
+}
+
+function RoleUserSelect({ label, helper, role, value, options, onChange }) {
+    const selectedUser = options.find(user => user.id === value) || null;
+    return (
+        <div className="site-registry-role-select">
+            <div className="site-registry-role-select-label">
+                <label>{label}</label>
+                <span>{helper}</span>
+            </div>
+            <div className={`site-registry-role-select-control${selectedUser ? ' has-user' : ''}`}>
+                {selectedUser ? (
+                    <>
+                        <UserAvatar user={selectedUser} />
+                        <span className="site-registry-role-select-person">
+                            <strong>{appUserName(selectedUser)}</strong>
+                            <small>{selectedUser.email || 'No email recorded'}</small>
+                        </span>
+                        <span className={`site-registry-role-pill ${role}`}>{roleLabel(role)}</span>
+                    </>
+                ) : (
+                    <span className="site-registry-role-empty">Not assigned</span>
+                )}
+                <select value={value} onChange={event => onChange(event.target.value)} aria-label={label}>
+                    <option value="">Not assigned</option>
+                    {options.map(user => (
+                        <option key={user.id} value={user.id}>{appUserName(user)}</option>
+                    ))}
+                </select>
+                <ChevronDown size={15} strokeWidth={2.3} aria-hidden="true" />
+            </div>
+        </div>
+    );
+}
+
 export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
     const [employees, setEmployees] = useState([]);
+    const [appUsers, setAppUsers] = useState([]);
     const [employeesLoading, setEmployeesLoading] = useState(false);
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
@@ -158,15 +232,20 @@ export default function SiteInformationPage() {
     useEffect(() => {
         let active = true;
         setEmployeesLoading(true);
-        rosteringAPI.getEmployees()
-            .then(rows => {
+        Promise.all([
+            rosteringAPI.getEmployees(),
+            usersAPI.getAllUsers()
+        ])
+            .then(([employeeRows, userRows]) => {
                 if (active) {
-                    setEmployees(rows);
+                    setEmployees(employeeRows);
+                    setAppUsers(Array.isArray(userRows) ? userRows : []);
                 }
             })
             .catch(() => {
                 if (active) {
                     setEmployees([]);
+                    setAppUsers([]);
                 }
             })
             .finally(() => {
@@ -266,6 +345,18 @@ export default function SiteInformationPage() {
 
     const hasStatusFilter = statusFilter !== 'all';
     const employeeById = useMemo(() => new Map(employees.map(employee => [employee.id, employee])), [employees]);
+    const appUserById = useMemo(() => new Map(appUsers.map(user => [user.id, user])), [appUsers]);
+    const employeeByAuthUserId = useMemo(
+        () => new Map(employees.filter(employee => employee.linkedAuthUserId).map(employee => [employee.linkedAuthUserId, employee])),
+        [employees]
+    );
+    const roleUsers = useMemo(() => {
+        const byName = (left, right) => appUserName(left).localeCompare(appUserName(right));
+        return {
+            projectManagers: appUsers.filter(user => user.role === 'project_manager').sort(byName),
+            siteSupervisors: appUsers.filter(user => user.role === 'site_supervisor').sort(byName)
+        };
+    }, [appUsers]);
     const sortedEmployees = useMemo(
         () => [...employees].sort((left, right) => employeeName(left).localeCompare(employeeName(right))),
         [employees]
@@ -310,14 +401,14 @@ export default function SiteInformationPage() {
         if (project?.projectManager) {
             return project.projectManager;
         }
-        return employeeById.get(project?.projectManagerEmployeeId) || null;
+        return appUserById.get(project?.projectManagerUserId) || employeeById.get(project?.projectManagerEmployeeId) || null;
     };
 
     const getSiteSupervisor = (project) => {
         if (project?.siteSupervisor) {
             return project.siteSupervisor;
         }
-        return employeeById.get(project?.siteSupervisorEmployeeId) || getProjectEmployees(project).find(employee => employee.leadingHand) || null;
+        return appUserById.get(project?.siteSupervisorUserId) || employeeById.get(project?.siteSupervisorEmployeeId) || getProjectEmployees(project).find(employee => employee.leadingHand) || null;
     };
 
     const openCreateProject = () => {
@@ -329,11 +420,15 @@ export default function SiteInformationPage() {
     };
 
     const openEditProject = (builderId, project) => {
+        const managerEmployee = employeeById.get(project.projectManagerEmployeeId);
+        const supervisorEmployee = employeeById.get(project.siteSupervisorEmployeeId);
         setProjectForm({
             builderId,
             projectName: project.name,
             siteLocation: project.siteLocation || '',
             siteLocationSourceId: project.siteLocation ? 'existing' : '',
+            projectManagerUserId: project.projectManagerUserId || managerEmployee?.linkedAuthUserId || '',
+            siteSupervisorUserId: project.siteSupervisorUserId || supervisorEmployee?.linkedAuthUserId || '',
             projectManagerEmployeeId: project.projectManagerEmployeeId || '',
             siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || '',
             inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
@@ -426,11 +521,15 @@ export default function SiteInformationPage() {
             }
             const nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
+                    projectManagerUserId: projectForm.projectManagerUserId,
+                    siteSupervisorUserId: projectForm.siteSupervisorUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     inductedEmployeeIds: projectForm.inductedEmployeeIds
                 })
                 : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation, {
+                    projectManagerUserId: projectForm.projectManagerUserId,
+                    siteSupervisorUserId: projectForm.siteSupervisorUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     inductedEmployeeIds: projectForm.inductedEmployeeIds
@@ -485,7 +584,7 @@ export default function SiteInformationPage() {
                         setSiteAddressLoading(false);
                     }
                 });
-        }, 250);
+        }, 80);
 
         setSiteAddressLoading(true);
         return () => {
@@ -857,8 +956,8 @@ export default function SiteInformationPage() {
                                                                             <span>Project Manager</span>
                                                                             {projectManager ? (
                                                                                 <>
-                                                                                    <strong>{projectManager.name || employeeName(projectManager)}</strong>
-                                                                                    <small><Mail size={13} aria-hidden="true" /> {projectManager.email || 'No email recorded'}</small>
+                                                                                    <strong>{personDisplayName(projectManager)}</strong>
+                                                                                    <small><Mail size={13} aria-hidden="true" /> {personEmail(projectManager)}</small>
                                                                                 </>
                                                                             ) : (
                                                                                 <strong>Not assigned</strong>
@@ -868,8 +967,8 @@ export default function SiteInformationPage() {
                                                                             <span>Site Supervisor</span>
                                                                             {siteSupervisor ? (
                                                                                 <>
-                                                                                    <strong>{employeeName(siteSupervisor)}</strong>
-                                                                                    <small><Phone size={13} aria-hidden="true" /> {siteSupervisor.phoneNumber || 'No phone recorded'}</small>
+                                                                                    <strong>{personDisplayName(siteSupervisor)}</strong>
+                                                                                    <small><Phone size={13} aria-hidden="true" /> {personPhone(siteSupervisor)}</small>
                                                                                 </>
                                                                             ) : (
                                                                                 <strong>Not assigned</strong>
@@ -939,92 +1038,109 @@ export default function SiteInformationPage() {
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>
                     <div className="module-modal compact site-registry-project-modal" onClick={e => e.stopPropagation()}>
                         <div className="module-modal-header">
-                            <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
+                            <div>
+                                <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
+                                <p>Update site details, assigned roles, and inducted employees.</p>
+                            </div>
                             <button className="nav-drawer-close" onClick={closeProjectModal}>x</button>
                         </div>
                         <form className="module-form site-registry-project-form" onSubmit={saveProject}>
-                            <div className="site-registry-project-form-fields">
-                                <div className="module-field">
-                                    <label>Builder <span aria-hidden="true">*</span></label>
-                                    <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({ ...prev, builderId: e.target.value }))}>
-                                        <option value="">Select a builder</option>
-                                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                                    </select>
-                                </div>
-                                <div className="module-field">
-                                    <label>Project <span aria-hidden="true">*</span></label>
-                                    <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Enter project name" />
-                                </div>
-                                <div className="module-field">
-                                    <label>Site Location <span aria-hidden="true">*</span></label>
-                                    <div className="site-registry-address-autocomplete transport-address-autocomplete">
-                                        <input
-                                            value={projectForm.siteLocation}
-                                            onChange={e => setProjectForm(prev => ({
-                                                ...prev,
-                                                siteLocation: e.target.value,
-                                                siteLocationSourceId: '',
-                                            }))}
-                                            placeholder="Type to search for an address..."
-                                            autoComplete="off"
-                                        />
-                                        {(siteAddressLoading || siteAddressSuggestions.length > 0) ? (
-                                            <div className="site-registry-address-suggestions transport-address-suggestions" role="listbox">
-                                                {siteAddressSuggestions.map(suggestion => (
-                                                    <button
-                                                        key={suggestion.id}
-                                                        type="button"
-                                                        className="site-registry-address-suggestion transport-address-suggestion"
-                                                        onClick={() => {
-                                                            setProjectForm(prev => ({
-                                                                ...prev,
-                                                                siteLocation: suggestion.address,
-                                                                siteLocationSourceId: suggestion.id,
-                                                            }));
-                                                            setSiteAddressSuggestions([]);
-                                                            setSiteAddressLoading(false);
-                                                        }}
-                                                        role="option"
-                                                    >
-                                                        <strong>{suggestion.address}</strong>
-                                                        <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
-                                                    </button>
-                                                ))}
-                                                {siteAddressLoading ? <div className="site-registry-address-suggestion transport-address-suggestion loading">Searching addresses...</div> : null}
+                            <div className="site-registry-project-form-body">
+                                <section className="site-registry-form-section">
+                                    <div className="site-registry-form-section-head">
+                                        <h4>Project Details</h4>
+                                    </div>
+                                    <div className="site-registry-project-details-grid">
+                                        <div className="module-field">
+                                            <label>Builder <span aria-hidden="true">*</span></label>
+                                            <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({ ...prev, builderId: e.target.value }))}>
+                                                <option value="">Select a builder</option>
+                                                {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="module-field">
+                                            <label>Project <span aria-hidden="true">*</span></label>
+                                            <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Enter project name" />
+                                        </div>
+                                        <div className="module-field site-registry-project-location-field">
+                                            <label>Site Location <span aria-hidden="true">*</span></label>
+                                            <div className="site-registry-address-autocomplete transport-address-autocomplete">
+                                                <input
+                                                    value={projectForm.siteLocation}
+                                                    onChange={e => setProjectForm(prev => ({
+                                                        ...prev,
+                                                        siteLocation: e.target.value,
+                                                        siteLocationSourceId: '',
+                                                    }))}
+                                                    placeholder="Type to search for an address..."
+                                                    autoComplete="off"
+                                                />
+                                                {(siteAddressLoading || siteAddressSuggestions.length > 0) ? (
+                                                    <div className="site-registry-address-suggestions transport-address-suggestions" role="listbox">
+                                                        {siteAddressSuggestions.map(suggestion => (
+                                                            <button
+                                                                key={suggestion.id}
+                                                                type="button"
+                                                                className="site-registry-address-suggestion transport-address-suggestion"
+                                                                onClick={() => {
+                                                                    setProjectForm(prev => ({
+                                                                        ...prev,
+                                                                        siteLocation: suggestion.address,
+                                                                        siteLocationSourceId: suggestion.id,
+                                                                    }));
+                                                                    setSiteAddressSuggestions([]);
+                                                                    setSiteAddressLoading(false);
+                                                                }}
+                                                                role="option"
+                                                            >
+                                                                <strong>{suggestion.address}</strong>
+                                                                <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                                                            </button>
+                                                        ))}
+                                                        {siteAddressLoading ? <div className="site-registry-address-suggestion transport-address-suggestion loading">Searching addresses...</div> : null}
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                        ) : null}
+                                            {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
+                                                <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
+                                            ) : null}
+                                        </div>
                                     </div>
-                                    {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
-                                        <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
-                                    ) : null}
-                                </div>
-                                <div className="site-registry-personnel-grid">
-                                    <div className="module-field">
-                                        <label>Project Manager</label>
-                                        <select
-                                            value={projectForm.projectManagerEmployeeId}
-                                            onChange={e => setProjectForm(prev => ({ ...prev, projectManagerEmployeeId: e.target.value }))}
-                                        >
-                                            <option value="">Not assigned</option>
-                                            {sortedEmployees.map(employee => (
-                                                <option key={employee.id} value={employee.id}>{employeeName(employee)}</option>
-                                            ))}
-                                        </select>
+                                </section>
+
+                                <section className="site-registry-form-section">
+                                    <div className="site-registry-form-section-head">
+                                        <h4>Site Roles</h4>
                                     </div>
-                                    <div className="module-field">
-                                        <label>Site Supervisor</label>
-                                        <select
-                                            value={projectForm.siteSupervisorEmployeeId}
-                                            onChange={e => setProjectForm(prev => ({ ...prev, siteSupervisorEmployeeId: e.target.value }))}
-                                        >
-                                            <option value="">Not assigned</option>
-                                            {sortedEmployees.map(employee => (
-                                                <option key={employee.id} value={employee.id}>{employeeName(employee)}</option>
-                                            ))}
-                                        </select>
+                                    <div className="site-registry-personnel-grid">
+                                        <RoleUserSelect
+                                            label="Project Manager"
+                                            helper="Only Project Manager users appear here"
+                                            role="project_manager"
+                                            value={projectForm.projectManagerUserId}
+                                            options={roleUsers.projectManagers}
+                                            onChange={(value) => setProjectForm(prev => ({
+                                                ...prev,
+                                                projectManagerUserId: value,
+                                                projectManagerEmployeeId: employeeByAuthUserId.get(value)?.id || ''
+                                            }))}
+                                        />
+                                        <RoleUserSelect
+                                            label="Site Supervisor"
+                                            helper="Only Site Supervisor users appear here"
+                                            role="site_supervisor"
+                                            value={projectForm.siteSupervisorUserId}
+                                            options={roleUsers.siteSupervisors}
+                                            onChange={(value) => setProjectForm(prev => ({
+                                                ...prev,
+                                                siteSupervisorUserId: value,
+                                                siteSupervisorEmployeeId: employeeByAuthUserId.get(value)?.id || ''
+                                            }))}
+                                        />
                                     </div>
-                                </div>
-                                <div className="module-field site-registry-inducted-editor">
+                                </section>
+
+                                <section className="site-registry-form-section site-registry-form-section-last">
                                     <div className="site-registry-inducted-editor-head">
                                         <label>Inducted Employees</label>
                                         <span>{projectForm.inductedEmployeeIds.length} selected</span>
@@ -1058,26 +1174,12 @@ export default function SiteInformationPage() {
                                                         <strong>{employeeName(employee)}</strong>
                                                         <small>{employee.email || employee.phoneNumber || employeeRole(employee)}</small>
                                                     </span>
+                                                    <span className="site-registry-inducted-option-role">{employeeRole(employee)}</span>
                                                 </label>
                                             );
                                         })}
                                     </div>
-                                </div>
-                            </div>
-                            <div className="site-registry-map-preview">
-                                <div className="site-registry-map-preview-label">Map Preview</div>
-                                {projectForm.siteLocation.trim() && projectForm.siteLocationSourceId ? (
-                                    <iframe
-                                        title="Site location preview"
-                                        src={mapPreviewUrl(projectForm.siteLocation.trim())}
-                                        loading="lazy"
-                                        referrerPolicy="no-referrer-when-downgrade"
-                                    />
-                                ) : (
-                                    <div className="site-registry-map-placeholder">
-                                        Select a validated address to preview the site location.
-                                    </div>
-                                )}
+                                </section>
                             </div>
                             <div className="module-form-actions site-registry-project-actions">
                                 <button type="button" className="module-secondary-btn" onClick={closeProjectModal} disabled={saving}>
