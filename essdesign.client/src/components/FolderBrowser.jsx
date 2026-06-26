@@ -1758,7 +1758,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                             }}
                                                                             className="file-btn"
                                                                         >
-                                                                            <FileTextIcon size={13} /> ESS Design
+                                                                            <FileTextIcon size={13} /> Open
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1836,7 +1836,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                                         }}
                                                                         className="file-btn-small"
                                                                     >
-                                                                        ESS Design <CheckCircleIcon />
+                                                                        Open <CheckCircleIcon />
                                                                     </button>
                                                                 ) : (
                                                                     <div className="file-btn-placeholder"></div>
@@ -1946,7 +1946,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         <div className="details-file-list">
                                             {selectedPreviewItem.essDesignIssuePath && (
                                                 <button type="button" onClick={() => handleViewPDF(selectedPreviewItem, 'ess')}>
-                                                    <FileTextIcon size={14} /> ESS Design <CheckCircleIcon />
+                                                    <FileTextIcon size={14} /> Open <CheckCircleIcon />
                                                 </button>
                                             )}
                                         </div>

@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, safetyProjectsAPI } from '../services/api';
 
+const SiteRegistryLocationIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+        <circle cx="12" cy="9" r="2.5" />
+    </svg>
+);
+
 function emptyProjectForm(initialBuilderId = '') {
     return {
         builderId: initialBuilderId,
@@ -388,7 +395,9 @@ export default function SiteInformationPage() {
                                 <thead>
                                     <tr>
                                         <th className="site-registry-select-col">
-                                            <span className="site-registry-row-check" aria-hidden="true"></span>
+                                            <span className="site-registry-row-location header" aria-hidden="true">
+                                                <SiteRegistryLocationIcon size={16} />
+                                            </span>
                                         </th>
                                         <th>Project</th>
                                         <th>
@@ -472,7 +481,9 @@ export default function SiteInformationPage() {
                                             tabIndex={0}
                                         >
                                             <td className="site-registry-select-col">
-                                                <span className={`site-registry-row-check${selectedInfoProject?.id === project.id ? ' selected' : ''}`} aria-hidden="true"></span>
+                                                <span className={`site-registry-row-location${selectedInfoProject?.id === project.id ? ' selected' : ''}`} aria-hidden="true">
+                                                    <SiteRegistryLocationIcon size={17} />
+                                                </span>
                                             </td>
                                             <td>{project.name}</td>
                                             <td>{project.builder.name}</td>

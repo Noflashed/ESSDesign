@@ -7658,29 +7658,30 @@ button.stat-card {
     text-align: center !important;
 }
 
-.site-registry-row-check {
-    width: 16px;
-    height: 16px;
+.site-registry-row-location {
+    width: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #cbd5e1;
-    border-radius: 3px;
-    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
 }
 
-.site-registry-row-check.selected {
-    border-color: #0b57d0;
-    background: #0b57d0;
+.site-registry-row-location.header {
+    width: 24px;
+    height: 24px;
+    border-color: transparent;
+    background: transparent;
+    color: #94a3b8;
 }
 
-.site-registry-row-check.selected::after {
-    content: "";
-    width: 7px;
-    height: 4px;
-    border-left: 2px solid #ffffff;
-    border-bottom: 2px solid #ffffff;
-    transform: rotate(-45deg) translate(1px, -1px);
+.site-registry-row-location.selected {
+    border-color: #bfdbfe;
+    background: #dbeafe;
+    color: #0b57d0;
 }
 
 .site-registry-data-row {
