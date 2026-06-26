@@ -32,6 +32,8 @@ const getUserInitials = (user) => {
     return label.slice(0, 2).toUpperCase() || 'U';
 };
 
+export const isTruckDeviceUser = (user) => String(user?.role || '').toLowerCase().startsWith('truck_ess');
+
 const getUserAvatarLookupId = (user) => user.employeeId || user.EmployeeId || user.id;
 
 const getUserRoleLabel = (user) => (
@@ -70,8 +72,8 @@ const resolveNotificationRecipientAvatar = async (user) => {
     return avatarUrl || '';
 };
 
-const hydrateNotificationRecipients = async (userList) => {
-    const users = Array.isArray(userList) ? userList : [];
+export const hydrateNotificationRecipients = async (userList) => {
+    const users = Array.isArray(userList) ? userList.filter(user => !isTruckDeviceUser(user)) : [];
     return Promise.all(users.map(async (user) => ({
         ...user,
         resolvedAvatarUrl: await resolveNotificationRecipientAvatar(user)

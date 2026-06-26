@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from '../services/api';
-import UploadDocumentModal, { RecipientAvatar, prefetchNotificationRecipients } from './UploadDocumentModal';
+import UploadDocumentModal, { RecipientAvatar, hydrateNotificationRecipients, prefetchNotificationRecipients } from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
@@ -1111,7 +1111,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setLoadingShareUsers(true);
         try {
             const userList = await usersAPI.getAllUsers();
-            setShareUsers(userList);
+            const hydratedUsers = await hydrateNotificationRecipients(userList);
+            setShareUsers(hydratedUsers);
         } catch (error) {
             console.error('Failed to fetch users for sharing:', error);
             showToast('Failed to load users', 'error');
