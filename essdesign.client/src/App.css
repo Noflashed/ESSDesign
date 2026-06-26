@@ -8284,7 +8284,7 @@ button.stat-card {
 }
 
 .site-registry-project-modal {
-    width: min(820px, calc(100vw - 32px));
+    width: min(1040px, calc(100vw - 32px));
     max-height: min(760px, calc(100vh - 48px));
     padding: 0;
     overflow: hidden;
