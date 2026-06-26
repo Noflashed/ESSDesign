@@ -29,18 +29,20 @@ function emptyBuilderForm() {
         id: null,
         name: '',
         logoUrl: '',
+        logoPath: '',
         logoPreviewUrl: '',
         logoFile: null,
         removeLogo: false
     };
 }
 
-function builderToForm(builder) {
+function builderToForm(builder, resolvedLogoUrl = '') {
     return {
         id: builder?.id || null,
         name: builder?.name || '',
         logoUrl: builder?.logoUrl || '',
-        logoPreviewUrl: builder?.logoUrl || '',
+        logoPath: builder?.logoPath || '',
+        logoPreviewUrl: resolvedLogoUrl || builder?.logoUrl || '',
         logoFile: null,
         removeLogo: false
     };
@@ -55,8 +57,8 @@ function readImageFileAsDataUrl(file) {
     });
 }
 
-function BuilderLogoMark({ builder, selected = false, header = false }) {
-    const logoUrl = builder?.logoUrl || '';
+function BuilderLogoMark({ builder, logoSrc = '', selected = false, header = false }) {
+    const logoUrl = logoSrc || builder?.logoUrl || '';
     return (
         <span className={`site-registry-row-location${selected ? ' selected' : ''}${header ? ' header' : ''}${logoUrl ? ' has-logo' : ''}`} aria-hidden="true">
             {logoUrl ? <img src={logoUrl} alt="" loading="eager" decoding="async" /> : <SiteRegistryLocationIcon size={header ? 16 : 17} />}
@@ -68,6 +70,7 @@ export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
+    const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [showProjectModal, setShowProjectModal] = useState(false);
     const [showBuilderModal, setShowBuilderModal] = useState(false);
@@ -100,6 +103,31 @@ export default function SiteInformationPage() {
     useEffect(() => {
         loadBuilders().catch(() => {});
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadBuilderLogoUrls = async () => {
+            const entries = await Promise.all(
+                builders.map(async builder => {
+                    try {
+                        const url = await safetyProjectsAPI.resolveBuilderLogoUrl(builder);
+                        return [builder.id, url || ''];
+                    } catch {
+                        return [builder.id, builder.logoUrl || ''];
+                    }
+                })
+            );
+            if (!cancelled) {
+                setBuilderLogoUrls(new Map(entries));
+            }
+        };
+
+        loadBuilderLogoUrls();
+        return () => {
+            cancelled = true;
+        };
+    }, [builders]);
 
     useEffect(() => {
         if (!columnFilterMenu) {
@@ -199,7 +227,7 @@ export default function SiteInformationPage() {
             return;
         }
         const builder = builders.find(item => item.id === builderId);
-        setBuilderForm(builderToForm(builder));
+        setBuilderForm(builderToForm(builder, builderLogoUrls.get(builderId)));
     };
 
     const handleBuilderLogoChange = (event) => {
@@ -302,17 +330,13 @@ export default function SiteInformationPage() {
         setSaving(true);
         setError('');
         try {
-            const logoUrl = builderForm.logoFile
-                ? await readImageFileAsDataUrl(builderForm.logoFile)
-                : builderForm.removeLogo
-                    ? ''
-                    : builderForm.logoUrl;
+            const logoOptions = {
+                removeLogo: builderForm.removeLogo,
+                ...(builderForm.logoFile ? { logoFile: builderForm.logoFile } : {})
+            };
             const nextBuilders = builderForm.id
-                ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name, {
-                    logoUrl,
-                    removeLogo: builderForm.removeLogo
-                })
-                : await safetyProjectsAPI.createBuilder(builderForm.name, { logoUrl });
+                ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name, logoOptions)
+                : await safetyProjectsAPI.createBuilder(builderForm.name, logoOptions);
             setBuilders(nextBuilders);
             setSelectedBuilderId(builderForm.id || nextBuilders.find(builder => builder.name.toLowerCase() === builderForm.name.trim().toLowerCase())?.id || '');
             setShowBuilderModal(false);
@@ -555,7 +579,11 @@ export default function SiteInformationPage() {
                                             tabIndex={0}
                                         >
                                             <td className="site-registry-select-col">
-                                                <BuilderLogoMark builder={project.builder} selected={selectedInfoProject?.id === project.id} />
+                                                <BuilderLogoMark
+                                                    builder={project.builder}
+                                                    logoSrc={builderLogoUrls.get(project.builder.id)}
+                                                    selected={selectedInfoProject?.id === project.id}
+                                                />
                                             </td>
                                             <td>{project.name}</td>
                                             <td>{project.builder.name}</td>
@@ -791,6 +819,7 @@ export default function SiteInformationPage() {
                                             logoFile: null,
                                             logoPreviewUrl: '',
                                             logoUrl: '',
+                                            logoPath: '',
                                             removeLogo: true
                                         }))}
                                     >

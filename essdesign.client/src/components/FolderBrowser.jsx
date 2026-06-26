@@ -822,12 +822,20 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 if (cancelled) {
                     return;
                 }
-                const nextLogos = new Map();
-                builders.forEach(builder => {
-                    if (builder?.name && builder.logoUrl) {
-                        nextLogos.set(normalizeBuilderFolderName(builder.name), builder.logoUrl);
-                    }
-                });
+                const entries = await Promise.all(
+                    builders.map(async builder => {
+                        if (!builder?.name) {
+                            return null;
+                        }
+                        try {
+                            const url = await safetyProjectsAPI.resolveBuilderLogoUrl(builder);
+                            return url ? [normalizeBuilderFolderName(builder.name), url] : null;
+                        } catch {
+                            return builder.logoUrl ? [normalizeBuilderFolderName(builder.name), builder.logoUrl] : null;
+                        }
+                    })
+                );
+                const nextLogos = new Map(entries.filter(Boolean));
                 setBuilderLogos(nextLogos);
             } catch (error) {
                 console.error('Failed to load builder logos for ESS Design:', error);

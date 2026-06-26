@@ -313,6 +313,7 @@ const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
 const SAFETY_PROJECTS_PATH = 'projects.json';
+const BUILDER_LOGOS_PREFIX = 'builder-logos';
 
 const currentSupabaseBearer = () => localStorage.getItem('access_token') || SUPABASE_ANON_KEY;
 
@@ -335,6 +336,7 @@ const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const safetyProjectsObjectUrl = () => `${SUPABASE_URL}/storage/v1/object/${SAFETY_BUCKET}/${SAFETY_PROJECTS_PATH}`;
 const safetyProjectsObjectUpsertUrl = () => `${safetyProjectsObjectUrl()}?upsert=true`;
 const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFETY_BUCKET}`;
+const builderLogoUrlCache = new Map();
 
 export const MATERIAL_ORDER_REQUESTS_CHANGED_EVENT = 'ess-material-order-requests-changed';
 export const SAFETY_PROJECTS_CHANGED_EVENT = 'ess-safety-projects-changed';
@@ -583,6 +585,7 @@ function parseSafetyProjects(raw) {
                     id: item.id || makeId(),
                     name: item.name.trim(),
                     logoUrl: item.logoUrl || item.logo_url || '',
+                    logoPath: item.logoPath || item.logo_path || '',
                     projects: [],
                     createdAt: item.createdAt || nowIso(),
                     updatedAt: item.updatedAt || nowIso()
@@ -599,6 +602,7 @@ function parseSafetyProjects(raw) {
                     id: builder.id || makeId(),
                     name: builder.name.trim(),
                     logoUrl: builder.logoUrl || builder.logo_url || '',
+                    logoPath: builder.logoPath || builder.logo_path || '',
                     projects: Array.isArray(builder.projects)
                         ? builder.projects
                             .filter(project => project && typeof project.name === 'string')
@@ -631,6 +635,51 @@ function cloneSafetyBuilders(builders, { includeArchived = true } = {}) {
             .filter(project => includeArchived || !project.archived)
             .map(project => ({ ...project }))
     }));
+}
+
+const sanitizeStorageFileName = (value, fallback = 'logo') => {
+    const clean = String(value || '')
+        .trim()
+        .replace(/[^a-z0-9._-]+/gi, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
+    return clean || fallback;
+};
+
+async function uploadBuilderLogoFile(builderId, file) {
+    if (!builderId || !file) {
+        return '';
+    }
+
+    const fileName = sanitizeStorageFileName(file.name || 'logo');
+    const objectPath = `${BUILDER_LOGOS_PREFIX}/${builderId}/${Date.now()}-${fileName}`;
+    await uploadStorageObject(objectPath, file, file.type || 'application/octet-stream');
+    builderLogoUrlCache.delete(objectPath);
+    return objectPath;
+}
+
+async function resolveBuilderLogoUrl(builder, { expiresIn = 86400 } = {}) {
+    if (!builder) {
+        return '';
+    }
+
+    const legacyLogoUrl = builder.logoUrl || builder.logo_url || '';
+    const logoPath = builder.logoPath || builder.logo_path || '';
+    if (!logoPath) {
+        return legacyLogoUrl;
+    }
+
+    const cached = builderLogoUrlCache.get(logoPath);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.url;
+    }
+
+    const url = await signedStorageUrl(logoPath, expiresIn);
+    builderLogoUrlCache.set(logoPath, {
+        url,
+        expiresAt: Date.now() + Math.max(60, expiresIn - 300) * 1000
+    });
+    return url;
 }
 
 async function saveSafetyProjectsDocument(doc) {
@@ -1013,6 +1062,7 @@ export const safetyProjectsAPI = {
                 id: makeId(),
                 name: cleanBuilder,
                 logoUrl: '',
+                logoPath: '',
                 projects: [{
                     id: makeId(),
                     name: cleanProject,
@@ -1036,7 +1086,6 @@ export const safetyProjectsAPI = {
         if (!cleanBuilder) {
             throw new Error('Builder name is required');
         }
-        const logoUrl = typeof options.logoUrl === 'string' ? options.logoUrl : '';
 
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
@@ -1045,10 +1094,13 @@ export const safetyProjectsAPI = {
         }
 
         const timestamp = nowIso();
+        const builderId = makeId();
+        const logoPath = options.logoFile ? await uploadBuilderLogoFile(builderId, options.logoFile) : '';
         builders.push({
-            id: makeId(),
+            id: builderId,
             name: cleanBuilder,
-            logoUrl,
+            logoUrl: '',
+            logoPath,
             projects: [],
             createdAt: timestamp,
             updatedAt: timestamp
@@ -1112,14 +1164,24 @@ export const safetyProjectsAPI = {
         target.name = clean;
         if (options.removeLogo) {
             target.logoUrl = '';
+            target.logoPath = '';
+        } else if (options.logoFile) {
+            target.logoUrl = '';
+            target.logoPath = await uploadBuilderLogoFile(builderId, options.logoFile);
         } else if (Object.prototype.hasOwnProperty.call(options, 'logoUrl')) {
             target.logoUrl = typeof options.logoUrl === 'string' ? options.logoUrl : '';
+            target.logoPath = '';
+        } else if (Object.prototype.hasOwnProperty.call(options, 'logoPath')) {
+            target.logoUrl = '';
+            target.logoPath = typeof options.logoPath === 'string' ? options.logoPath : '';
         }
         target.updatedAt = nowIso();
         builders.sort((a, b) => a.name.localeCompare(b.name));
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
     },
+
+    resolveBuilderLogoUrl,
 
     renameProject: async (builderId, projectId, nextName, siteLocation = '') => {
         const clean = nextName.trim();
