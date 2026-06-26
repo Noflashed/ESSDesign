@@ -2203,10 +2203,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         <strong>{getItemDisplayName(shareTarget)}</strong>
                                         <small>
                                             {shareTarget.isDocument
-                                                ? `${formatRevisionNumber(shareTarget.revisionNumber)} · ${getDrawingStatus(shareTarget)} · ${formatFileSize(shareTarget.totalFileSize)}`
+                                                ? [formatRevisionNumber(shareTarget.revisionNumber), getDrawingStatus(shareTarget), formatFileSize(shareTarget.totalFileSize)].join(' - ')
                                                 : `${shareTarget.fileCount ?? 'No'} item${shareTarget.fileCount === 1 ? '' : 's'}`}
                                         </small>
-                                        <small>{currentFolderPath.map(folder => folder.name).join(' / ') || 'Home'}</small>
+                                        <small>{breadcrumbs.map(folder => folder.name).join(' / ') || 'Home'}</small>
                                     </div>
                                     {shareTarget.isDocument ? (
                                         <div className="share-document-badges">
