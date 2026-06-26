@@ -1662,7 +1662,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             )}
                                         </div>
                                         {showRootBuilderLogos && (
-                                            <div className="list-header-builder-logo">Logo</div>
+                                            <div className="list-header-builder-logo">
+                                                <span>Logo</span>
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
+                                            </div>
                                         )}
                                         {showRevisionColumn && (
                                             <div
