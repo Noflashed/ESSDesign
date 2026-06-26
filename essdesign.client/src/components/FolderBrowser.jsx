@@ -13,6 +13,13 @@ const FolderIcon = ({ size = 20, color = 'currentColor' }) => (
     </svg>
 );
 
+const SiteLocationIcon = ({ size = 20, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+        <circle cx="12" cy="9" r="2.5" />
+    </svg>
+);
+
 const DocumentIcon = ({ size = 20, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2Z" fill="#EA4335" fillOpacity="0.9"/>
@@ -672,6 +679,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     const showRevisionColumn = folders.some(item => item.isDocument);
     const showRootBuilderLogos = currentFolder === null;
+    const showSiteLocationIcons = breadcrumbs.length === 1;
 
     // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
     const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn, showRootBuilderLogos);
@@ -1867,7 +1875,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
                                                     <div className="list-item-name">
-                                                        {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
+                                                        {item.isDocument ? (
+                                                            <DocumentIcon size={20} />
+                                                        ) : showSiteLocationIcons ? (
+                                                            <SiteLocationIcon size={20} color="#334155" />
+                                                        ) : (
+                                                            <FolderIcon size={20} />
+                                                        )}
                                                         <span>{getItemDisplayName(item)}</span>
                                                     </div>
                                                     {showRootBuilderLogos && (
