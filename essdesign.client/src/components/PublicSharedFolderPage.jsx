@@ -102,11 +102,6 @@ function OwnerAvatar({ item }) {
     );
 }
 
-const countDocumentsRecursive = (folder) => {
-    if (!folder) return 0;
-    return (folder.documents?.length || 0) + (folder.subFolders || []).reduce((total, child) => total + countDocumentsRecursive(child), 0);
-};
-
 const countImmediateItems = (folder) => (folder?.subFolders?.length || 0) + (folder?.documents?.length || 0);
 
 const buildFolderMap = (root) => {
@@ -137,7 +132,6 @@ export default function PublicSharedFolderPage({ folderId, token }) {
     const folderMap = useMemo(() => buildFolderMap(folder), [folder]);
     const currentFolder = folderMap.get(currentFolderId) || folder;
     const breadcrumbs = currentFolder?.path || [];
-    const totalDocuments = useMemo(() => countDocumentsRecursive(folder), [folder]);
 
     const visibleItems = useMemo(() => {
         const folders = (currentFolder?.subFolders || []).map(item => ({ ...item, isFolder: true }));
@@ -204,7 +198,12 @@ export default function PublicSharedFolderPage({ folderId, token }) {
     if (loading) {
         return (
             <main className="public-share-page public-share-page-state">
-                <div className="public-share-loading">Loading design files...</div>
+                <div className="loading-screen">
+                    <div className="loading-brandmark" aria-label="Loading design files">
+                        <div className="loading-ring" />
+                        <img className="loading-logo" src={LOGO_URL} alt="ErectSafe Scaffolding" />
+                    </div>
+                </div>
             </main>
         );
     }
@@ -225,10 +224,6 @@ export default function PublicSharedFolderPage({ folderId, token }) {
         <main className={`public-share-page ess-public-docs${selectedDocument ? ' has-details' : ''}`}>
             <header className="public-docs-topbar">
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" />
-                <div className="public-docs-heading">
-                    <strong>{currentFolder?.name || 'Shared design files'}</strong>
-                    <span>{totalDocuments === 1 ? '1 shared PDF' : `${totalDocuments} shared PDFs`} available</span>
-                </div>
             </header>
 
             <section className="public-docs-shell">
@@ -258,51 +253,51 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                             <span>Actions</span>
                         </div>
                         <div className="public-docs-table-body">
-                                {visibleItems.map(item => (
-                                    <div
-                                        key={`${item.isFolder ? 'folder' : 'document'}-${item.id}`}
-                                        tabIndex={0}
-                                        className={`public-docs-row${selectedDocument?.id === item.id ? ' selected' : ''}`}
-                                        onClick={() => item.isFolder ? navigateToFolder(item.id) : setSelectedDocument(item)}
-                                        onDoubleClick={() => item.isDocument && openDocument(item)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                                item.isFolder ? navigateToFolder(item.id) : openDocument(item);
-                                            }
-                                        }}
-                                        role="row"
-                                    >
-                                        <span className={`public-docs-name ${item.isFolder ? 'folder' : 'document'}`}>
-                                            {item.isFolder ? <FolderIcon /> : <DocumentIcon />}
-                                            <strong>{item.isFolder ? item.name : getDocumentName(item)}</strong>
-                                        </span>
-                                        <span>{item.isDocument ? formatRevision(item.revisionNumber) : '-'}</span>
-                                        <span>{item.isDocument ? <em>{getDocumentStatus(item)}</em> : '-'}</span>
-                                        <span className="public-docs-owner">
-                                            <OwnerAvatar item={item} />
-                                            {item.ownerName || '-'}
-                                        </span>
-                                        <span>{formatDate(item.updatedAt)}</span>
-                                        <span>{item.isDocument ? formatFileSize(item.totalFileSize) : formatFileSize(item.fileSize)}</span>
-                                        <span>{item.isFolder ? `${countImmediateItems(item)} item${countImmediateItems(item) === 1 ? '' : 's'}` : '-'}</span>
-                                        <span className="public-docs-actions">
-                                            {item.isDocument ? (
-                                                <a href={foldersAPI.resolvePublicFileUrl(item.essDesignUrl || item.thirdPartyDesignUrl || '')} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
-                                                    <OpenIcon />
-                                                    Open
-                                                </a>
-                                            ) : (
-                                                <span>Open folder</span>
-                                            )}
-                                        </span>
-                                    </div>
-                                ))}
-                                {visibleItems.length === 0 && (
-                                    <div className="public-docs-empty">
-                                        <strong>No shared files here</strong>
-                                        <span>This folder is currently empty.</span>
-                                    </div>
-                                )}
+                            {visibleItems.map(item => (
+                                <div
+                                    key={`${item.isFolder ? 'folder' : 'document'}-${item.id}`}
+                                    tabIndex={0}
+                                    className={`public-docs-row${selectedDocument?.id === item.id ? ' selected' : ''}`}
+                                    onClick={() => item.isFolder ? navigateToFolder(item.id) : setSelectedDocument(item)}
+                                    onDoubleClick={() => item.isDocument && openDocument(item)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            item.isFolder ? navigateToFolder(item.id) : openDocument(item);
+                                        }
+                                    }}
+                                    role="row"
+                                >
+                                    <span className={`public-docs-name ${item.isFolder ? 'folder' : 'document'}`}>
+                                        {item.isFolder ? <FolderIcon /> : <DocumentIcon />}
+                                        <span>{item.isFolder ? item.name : getDocumentName(item)}</span>
+                                    </span>
+                                    <span>{item.isDocument ? formatRevision(item.revisionNumber) : ''}</span>
+                                    <span>{item.isDocument ? <em>{getDocumentStatus(item)}</em> : ''}</span>
+                                    <span className="public-docs-owner">
+                                        <OwnerAvatar item={item} />
+                                        {item.ownerName || '-'}
+                                    </span>
+                                    <span>{formatDate(item.updatedAt)}</span>
+                                    <span>{item.isDocument ? formatFileSize(item.totalFileSize) : formatFileSize(item.fileSize)}</span>
+                                    <span>{item.isFolder ? `${countImmediateItems(item)} item${countImmediateItems(item) === 1 ? '' : 's'}` : ''}</span>
+                                    <span className="public-docs-actions">
+                                        {item.isDocument ? (
+                                            <a href={foldersAPI.resolvePublicFileUrl(item.essDesignUrl || item.thirdPartyDesignUrl || '')} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+                                                <OpenIcon />
+                                                Open
+                                            </a>
+                                        ) : (
+                                            <span>Open folder</span>
+                                        )}
+                                    </span>
+                                </div>
+                            ))}
+                            {visibleItems.length === 0 && (
+                                <div className="public-docs-empty">
+                                    <strong>No shared files here</strong>
+                                    <span>This folder is currently empty.</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
