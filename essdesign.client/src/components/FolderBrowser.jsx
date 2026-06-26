@@ -433,9 +433,10 @@ const sanitizeColWidths = (value) => {
     return next;
 };
 
-const buildGridTemplateColumns = (widths, includeRevision) => {
+const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
+    const logoColumns = includeBuilderLogo ? ['64px'] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -452,7 +453,7 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
             columnTrack('size')
         ];
 
-    return [...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
+    return [...logoColumns, ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
 const pdfThumbnailCache = new Map();
@@ -667,7 +668,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const showRootBuilderLogos = currentFolder === null;
 
     // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
-    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn);
+    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn, showRootBuilderLogos);
 
     // Column resize handlers
     const colKeys = showRevisionColumn
@@ -1645,6 +1646,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             <>
                                 {viewMode === 'list' && (
                                     <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
+                                        {showRootBuilderLogos && (
+                                            <div className="list-header-builder-logo">Logo</div>
+                                        )}
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
                                             onClick={() => handleSort('name')}
@@ -1841,14 +1845,18 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                                     onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
+                                                    {showRootBuilderLogos && (
+                                                        <div className="list-item-builder-logo">
+                                                            {!item.isDocument ? (
+                                                                <BuilderFolderLogo
+                                                                    logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
+                                                                />
+                                                            ) : null}
+                                                        </div>
+                                                    )}
                                                     <div className="list-item-name">
                                                         {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
                                                         <span>{getItemDisplayName(item)}</span>
-                                                        {showRootBuilderLogos && !item.isDocument ? (
-                                                            <BuilderFolderLogo
-                                                                logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
-                                                            />
-                                                        ) : null}
                                                     </div>
                                                     {showRevisionColumn && (
                                                         <div className="list-item-revision">
