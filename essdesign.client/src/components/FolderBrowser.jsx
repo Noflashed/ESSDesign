@@ -456,7 +456,7 @@ const buildGridTemplateColumns = (widths, includeRevision) => {
 
 const pdfThumbnailCache = new Map();
 
-function PdfPageThumbnail({ documentItem }) {
+function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 }) {
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const [thumbnailStatus, setThumbnailStatus] = useState('loading');
 
@@ -478,7 +478,7 @@ function PdfPageThumbnail({ documentItem }) {
                 return;
             }
 
-            const cacheKey = `${documentItem.id}-${preferredType}-${documentItem.updatedAt || documentItem.createdAt || ''}`;
+            const cacheKey = `${documentItem.id}-${preferredType}-${targetWidth}-${jpegQuality}-${documentItem.updatedAt || documentItem.createdAt || ''}`;
             const cachedThumbnail = pdfThumbnailCache.get(cacheKey);
             if (cachedThumbnail) {
                 setThumbnailUrl(cachedThumbnail);
@@ -517,7 +517,6 @@ function PdfPageThumbnail({ documentItem }) {
                 const pageNumber = Math.min(2, loadedPdf.numPages || 1);
                 const page = await loadedPdf.getPage(pageNumber);
                 const initialViewport = page.getViewport({ scale: 1 });
-                const targetWidth = 280;
                 const scale = targetWidth / initialViewport.width;
                 const viewport = page.getViewport({ scale });
                 const canvas = document.createElement('canvas');
@@ -529,7 +528,7 @@ function PdfPageThumbnail({ documentItem }) {
                 await page.render({ canvasContext: context, viewport }).promise;
 
                 if (!cancelled) {
-                    const previewDataUrl = canvas.toDataURL('image/jpeg', 0.58);
+                    const previewDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
                     pdfThumbnailCache.set(cacheKey, previewDataUrl);
                     setThumbnailUrl(previewDataUrl);
                     setThumbnailStatus('ready');
@@ -557,7 +556,7 @@ function PdfPageThumbnail({ documentItem }) {
                 loadedPdf = null;
             }
         };
-    }, [documentItem]);
+    }, [documentItem, jpegQuality, targetWidth]);
 
     return (
         <div className="pdf-page-thumbnail" aria-label="Low quality preview of PDF page 2">
@@ -2195,7 +2194,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 <div className="share-document-summary">
                                     <div className="share-document-icon">
                                         {shareTarget.isDocument ? (
-                                            <PdfPageThumbnail documentItem={shareTarget} />
+                                            <PdfPageThumbnail documentItem={shareTarget} targetWidth={120} jpegQuality={0.34} />
                                         ) : (
                                             <FolderIcon size={46} color="#5f6368" />
                                         )}
@@ -2207,7 +2206,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 ? [formatRevisionNumber(shareTarget.revisionNumber), getDrawingStatus(shareTarget), formatFileSize(shareTarget.totalFileSize)].join(' - ')
                                                 : `${shareTarget.fileCount ?? 'No'} item${shareTarget.fileCount === 1 ? '' : 's'}`}
                                         </small>
-                                        <small>{breadcrumbs.map(folder => folder.name).join(' / ') || 'Home'}</small>
                                     </div>
                                 </div>
                             </div>

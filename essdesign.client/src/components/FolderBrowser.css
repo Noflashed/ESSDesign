@@ -1314,11 +1314,11 @@
 }
 
 .share-document-summary {
-    min-height: 112px;
+    min-height: 132px;
     display: grid;
-    grid-template-columns: 84px minmax(0, 1fr);
+    grid-template-columns: 132px minmax(0, 1fr);
     align-items: center;
-    gap: 22px;
+    gap: 24px;
     padding: 18px 28px;
     border: 1px solid #dbe5f4;
     border-radius: 8px;
@@ -1327,8 +1327,8 @@
 
 .share-document-icon {
     position: relative;
-    width: 84px;
-    height: 68px;
+    width: 132px;
+    height: 96px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1348,14 +1348,14 @@
 }
 
 .share-document-icon .pdf-page-thumbnail img {
-    opacity: 0.9;
-    filter: grayscale(0.18) contrast(0.92);
+    opacity: 0.88;
+    filter: grayscale(0.2) contrast(0.9);
 }
 
 .share-document-copy {
     min-width: 0;
     display: grid;
-    gap: 8px;
+    gap: 10px;
 }
 
 .share-document-copy strong,
