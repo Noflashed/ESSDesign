@@ -437,10 +437,13 @@ const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = 
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
     const logoColumns = includeBuilderLogo ? ['88px'] : [];
+    const logoSpacerColumns = includeBuilderLogo ? ['minmax(112px, 0.45fr)'] : [];
+    const nameColumn = includeBuilderLogo ? `minmax(260px, ${Math.min(normalized.name, 1.1)}fr)` : columnTrack('name');
     const dynamicColumns = includeRevision
         ? [
-            columnTrack('name'),
+            nameColumn,
             ...logoColumns,
+            ...logoSpacerColumns,
             columnTrack('revision'),
             columnTrack('status'),
             columnTrack('owner'),
@@ -448,8 +451,9 @@ const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = 
             columnTrack('size')
         ]
         : [
-            columnTrack('name'),
+            nameColumn,
             ...logoColumns,
+            ...logoSpacerColumns,
             columnTrack('owner'),
             columnTrack('modified'),
             columnTrack('size')
@@ -677,7 +681,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         ? ['name', 'revision', 'status', 'owner', 'modified', 'size']
         : ['name', 'owner', 'modified', 'size'];
 
-    const handleResizeStart = useCallback((e, colIndex) => {
+    const handleResizeColumnsStart = useCallback((e, leftKey, rightKey) => {
         e.preventDefault();
         e.stopPropagation();
 
@@ -690,11 +694,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
             pixelWidths[el.dataset.colKey] = el.getBoundingClientRect().width;
         });
 
-        const leftKey = colKeys[colIndex];
-        const rightKey = colKeys[colIndex + 1];
+        if (!leftKey || !rightKey) return;
+
         const startX = e.clientX;
         const startLeftPx = pixelWidths[leftKey];
         const startRightPx = pixelWidths[rightKey];
+        if (!Number.isFinite(startLeftPx) || !Number.isFinite(startRightPx)) return;
+
         const totalPx = startLeftPx + startRightPx;
         const startLeftFr = colWidths[leftKey];
         const startRightFr = colWidths[rightKey];
@@ -738,7 +744,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         document.addEventListener('mouseup', handleMouseUp);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
-    }, [colWidths, colKeys]);
+    }, [colWidths]);
+
+    const handleResizeStart = useCallback((e, colIndex) => {
+        handleResizeColumnsStart(e, colKeys[colIndex], colKeys[colIndex + 1]);
+    }, [colKeys, handleResizeColumnsStart]);
 
     const handleResetColWidths = useCallback(() => {
         setColWidths({ ...DEFAULT_COL_WIDTHS });
@@ -1666,6 +1676,11 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 <span>Logo</span>
                                             </div>
                                         )}
+                                        {showRootBuilderLogos && (
+                                            <div className="list-header-logo-spacer">
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeColumnsStart(e, 'name', 'owner')} onDoubleClick={handleResetColWidths} />
+                                            </div>
+                                        )}
                                         {showRevisionColumn && (
                                             <div
                                                 className={`list-header-cell sortable ${sortField === 'revision' ? 'active' : ''}`}
@@ -1859,6 +1874,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                         <div className="list-item-builder-logo">
                                                             {!item.isDocument ? <BuilderFolderLogo logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))} /> : null}
                                                         </div>
+                                                    )}
+                                                    {showRootBuilderLogos && (
+                                                        <div className="list-item-logo-spacer" />
                                                     )}
                                                     {showRevisionColumn && (
                                                         <div className="list-item-revision">

@@ -171,6 +171,12 @@
     position: relative;
 }
 
+.list-header-logo-spacer,
+.list-item-logo-spacer {
+    min-width: 0;
+    position: relative;
+}
+
 /* Column resize handle */
 .col-resize-handle {
     position: absolute;
