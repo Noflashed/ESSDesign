@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
-import { analysisAPI, safetyProjectsAPI } from '../services/api';
+import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
+import { analysisAPI, rosteringAPI, safetyProjectsAPI } from '../services/api';
 
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -66,10 +66,44 @@ function BuilderLogoMark({ builder, logoSrc = '', selected = false, header = fal
     );
 }
 
+function projectSiteKey(project) {
+    return project?.builder?.id && project?.id ? `${project.builder.id}:${project.id}` : '';
+}
+
+function employeeName(employee) {
+    if (typeof employee === 'string') {
+        return employee.trim() || 'Unnamed employee';
+    }
+    return `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim() || employee?.email || 'Unnamed employee';
+}
+
+function employeeInitials(employee) {
+    const name = employeeName(employee);
+    const parts = name.split(/\s+/).filter(Boolean);
+    return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2)).toUpperCase();
+}
+
+function employeeRole(employee) {
+    return employee?.leadingHand ? 'Leading Hand' : 'Employee';
+}
+
+function formatProjectDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function EmployeeAvatar({ employee }) {
+    return <span className="site-registry-employee-avatar" aria-hidden="true">{employeeInitials(employee)}</span>;
+}
+
 export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
+    const [employees, setEmployees] = useState([]);
+    const [employeesLoading, setEmployeesLoading] = useState(false);
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [showProjectModal, setShowProjectModal] = useState(false);
@@ -83,6 +117,7 @@ export default function SiteInformationPage() {
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [projectMenu, setProjectMenu] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [inductedSearch, setInductedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [error, setError] = useState('');
 
@@ -102,6 +137,31 @@ export default function SiteInformationPage() {
 
     useEffect(() => {
         loadBuilders().catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        setEmployeesLoading(true);
+        rosteringAPI.getEmployees()
+            .then(rows => {
+                if (active) {
+                    setEmployees(rows);
+                }
+            })
+            .catch(() => {
+                if (active) {
+                    setEmployees([]);
+                }
+            })
+            .finally(() => {
+                if (active) {
+                    setEmployeesLoading(false);
+                }
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -189,6 +249,44 @@ export default function SiteInformationPage() {
     }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
 
     const hasStatusFilter = statusFilter !== 'all';
+    const getProjectEmployees = (project) => {
+        const siteKey = projectSiteKey(project);
+        if (!siteKey) {
+            return [];
+        }
+        return employees
+            .filter(employee => Array.isArray(employee.preferredSiteIds) && employee.preferredSiteIds.includes(siteKey))
+            .sort((left, right) => employeeName(left).localeCompare(employeeName(right)));
+    };
+
+    const getFilteredProjectEmployees = (project) => {
+        const query = inductedSearch.trim().toLowerCase();
+        const projectEmployees = getProjectEmployees(project);
+        if (!query) {
+            return projectEmployees;
+        }
+        return projectEmployees.filter(employee => [
+            employeeName(employee),
+            employeeRole(employee),
+            employee.email || '',
+            employee.phoneNumber || ''
+        ].join(' ').toLowerCase().includes(query));
+    };
+
+    const getProjectManager = (project) => {
+        if (project?.projectManager) {
+            return project.projectManager;
+        }
+        return null;
+    };
+
+    const getSiteSupervisor = (project) => {
+        if (project?.siteSupervisor) {
+            return project.siteSupervisor;
+        }
+        return getProjectEmployees(project).find(employee => employee.leadingHand) || null;
+    };
+
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
         setSiteAddressSuggestions([]);
@@ -361,11 +459,8 @@ export default function SiteInformationPage() {
     };
 
     const openProjectInfo = (project) => {
-        setSelectedInfoProject(project);
-    };
-
-    const closeProjectInfo = () => {
-        setSelectedInfoProject(null);
+        setSelectedInfoProject(prev => projectSiteKey(prev) === projectSiteKey(project) ? null : project);
+        setInductedSearch('');
     };
 
     const selectBuilderFilter = (builderId) => {
@@ -564,48 +659,165 @@ export default function SiteInformationPage() {
                                                         : 'No active projects found.'}
                                             </td>
                                         </tr>
-                                    ) : visibleProjects.map(project => (
-                                        <tr
-                                            key={`${project.builder.id}-${project.id}`}
-                                            className={`site-registry-data-row${selectedInfoProject?.id === project.id ? ' selected' : ''}`}
-                                            onClick={() => openProjectInfo(project)}
-                                            onContextMenu={event => openProjectMenuFromRow(event, project)}
-                                            onKeyDown={event => {
-                                                if (event.key === 'Enter' || event.key === ' ') {
-                                                    event.preventDefault();
-                                                    openProjectInfo(project);
-                                                }
-                                            }}
-                                            tabIndex={0}
-                                        >
-                                            <td className="site-registry-select-col">
-                                                <BuilderLogoMark
-                                                    builder={project.builder}
-                                                    logoSrc={builderLogoUrls.get(project.builder.id)}
-                                                    selected={selectedInfoProject?.id === project.id}
-                                                />
-                                            </td>
-                                            <td>{project.name}</td>
-                                            <td>{project.builder.name}</td>
-                                            <td>{project.siteLocation || 'Not set'}</td>
-                                            <td>
-                                                <span className={`site-registry-status ${project.archived ? 'archived' : 'active'}`}>
-                                                    {project.archived ? 'Archived' : 'Active'}
-                                                </span>
-                                            </td>
-                                            <td className="site-registry-actions-cell">
-                                                <button
-                                                    type="button"
-                                                    className="site-registry-row-menu-btn"
-                                                    onClick={event => openProjectMenuFromButton(event, project)}
-                                                    aria-label={`Open actions for ${project.name}`}
-                                                    title="More actions"
+                                    ) : visibleProjects.map(project => {
+                                        const rowKey = projectSiteKey(project);
+                                        const isExpanded = projectSiteKey(selectedInfoProject) === rowKey;
+                                        const projectEmployees = isExpanded ? getProjectEmployees(project) : [];
+                                        const filteredProjectEmployees = isExpanded ? getFilteredProjectEmployees(project) : [];
+                                        const projectManager = isExpanded ? getProjectManager(project) : null;
+                                        const siteSupervisor = isExpanded ? getSiteSupervisor(project) : null;
+
+                                        return (
+                                            <React.Fragment key={rowKey}>
+                                                <tr
+                                                    className={`site-registry-data-row${isExpanded ? ' selected' : ''}`}
+                                                    onClick={() => openProjectInfo(project)}
+                                                    onContextMenu={event => openProjectMenuFromRow(event, project)}
+                                                    onKeyDown={event => {
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault();
+                                                            openProjectInfo(project);
+                                                        }
+                                                    }}
+                                                    tabIndex={0}
+                                                    aria-expanded={isExpanded}
                                                 >
-                                                    <MoreVertical size={16} strokeWidth={2.3} aria-hidden="true" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                    <td className="site-registry-select-col">
+                                                        <BuilderLogoMark
+                                                            builder={project.builder}
+                                                            logoSrc={builderLogoUrls.get(project.builder.id)}
+                                                            selected={isExpanded}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <div className="site-registry-project-cell">
+                                                            <button
+                                                                type="button"
+                                                                className="site-registry-expand-btn"
+                                                                onClick={event => {
+                                                                    event.stopPropagation();
+                                                                    openProjectInfo(project);
+                                                                }}
+                                                                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${project.name}`}
+                                                            >
+                                                                {isExpanded ? <ChevronDown size={16} strokeWidth={2.3} aria-hidden="true" /> : <ChevronRight size={16} strokeWidth={2.3} aria-hidden="true" />}
+                                                            </button>
+                                                            <span>{project.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>{project.builder.name}</td>
+                                                    <td>{project.siteLocation || 'Not set'}</td>
+                                                    <td>
+                                                        <span className={`site-registry-status ${project.archived ? 'archived' : 'active'}`}>
+                                                            {project.archived ? 'Archived' : 'Active'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="site-registry-actions-cell">
+                                                        <button
+                                                            type="button"
+                                                            className="site-registry-row-menu-btn"
+                                                            onClick={event => openProjectMenuFromButton(event, project)}
+                                                            aria-label={`Open actions for ${project.name}`}
+                                                            title="More actions"
+                                                        >
+                                                            <MoreVertical size={16} strokeWidth={2.3} aria-hidden="true" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {isExpanded ? (
+                                                    <tr className="site-registry-detail-row">
+                                                        <td colSpan="6">
+                                                            <div className="site-registry-detail-panel">
+                                                                <section className="site-registry-inducted-panel">
+                                                                    <div className="site-registry-detail-heading">
+                                                                        <div>
+                                                                            <h4>Inducted Employees</h4>
+                                                                            <span>{employeesLoading ? 'Loading employees...' : `${projectEmployees.length} linked to this site`}</span>
+                                                                        </div>
+                                                                        <label className="site-registry-inducted-search">
+                                                                            <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+                                                                            <input
+                                                                                type="search"
+                                                                                value={inductedSearch}
+                                                                                onChange={event => setInductedSearch(event.target.value)}
+                                                                                onClick={event => event.stopPropagation()}
+                                                                                placeholder="Search inducted employees..."
+                                                                                aria-label="Search inducted employees"
+                                                                            />
+                                                                        </label>
+                                                                    </div>
+                                                                    <div className="site-registry-employee-list">
+                                                                        {employeesLoading ? (
+                                                                            <div className="site-registry-detail-empty">Loading inducted employees...</div>
+                                                                        ) : filteredProjectEmployees.length === 0 ? (
+                                                                            <div className="site-registry-detail-empty">
+                                                                                {projectEmployees.length === 0 ? 'No inducted employees are linked to this site yet.' : 'No inducted employees match this search.'}
+                                                                            </div>
+                                                                        ) : filteredProjectEmployees.map(employee => (
+                                                                            <div className="site-registry-employee-row" key={employee.id}>
+                                                                                <EmployeeAvatar employee={employee} />
+                                                                                <div className="site-registry-employee-main">
+                                                                                    <strong>{employeeName(employee)}</strong>
+                                                                                    <span>{employee.email || 'No email recorded'}</span>
+                                                                                </div>
+                                                                                <span className="site-registry-employee-role">{employeeRole(employee)}</span>
+                                                                                <span className="site-registry-employee-date">{formatProjectDate(employee.verifiedAt || employee.updatedAt)}</span>
+                                                                                <span className="site-registry-employee-status">Inducted</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </section>
+                                                                <aside className="site-registry-site-panel">
+                                                                    <section className="site-registry-map-detail">
+                                                                        <div className="site-registry-side-heading">Site Location Map</div>
+                                                                        {project.siteLocation ? (
+                                                                            <iframe
+                                                                                title={`${project.name} map preview`}
+                                                                                src={mapPreviewUrl(project.siteLocation)}
+                                                                                loading="lazy"
+                                                                                referrerPolicy="no-referrer-when-downgrade"
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="site-registry-map-placeholder compact">No site location set.</div>
+                                                                        )}
+                                                                    </section>
+                                                                    <section className="site-registry-contact-grid">
+                                                                        <div className="site-registry-contact-card">
+                                                                            <span>Project Manager</span>
+                                                                            {projectManager ? (
+                                                                                <>
+                                                                                    <strong>{projectManager.name || employeeName(projectManager)}</strong>
+                                                                                    <small><Mail size={13} aria-hidden="true" /> {projectManager.email || 'No email recorded'}</small>
+                                                                                </>
+                                                                            ) : (
+                                                                                <strong>Not assigned</strong>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="site-registry-contact-card">
+                                                                            <span>Site Supervisor</span>
+                                                                            {siteSupervisor ? (
+                                                                                <>
+                                                                                    <strong>{employeeName(siteSupervisor)}</strong>
+                                                                                    <small><Phone size={13} aria-hidden="true" /> {siteSupervisor.phoneNumber || 'No phone recorded'}</small>
+                                                                                </>
+                                                                            ) : (
+                                                                                <strong>Not assigned</strong>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="site-registry-contact-card wide">
+                                                                            <span>Address</span>
+                                                                            <strong>{project.siteLocation || 'Not set'}</strong>
+                                                                            <small>Last updated {formatProjectDate(project.updatedAt)}</small>
+                                                                        </div>
+                                                                    </section>
+                                                                </aside>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : null}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -651,35 +863,6 @@ export default function SiteInformationPage() {
                     </button>
                 </div>
             ) : null}
-
-            {selectedInfoProject && (
-                <div className="module-modal-backdrop" onClick={closeProjectInfo}>
-                    <div className="module-modal compact site-registry-info-modal" onClick={e => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>Site Information</h3>
-                            <button className="nav-drawer-close" onClick={closeProjectInfo}>x</button>
-                        </div>
-                        <div className="site-registry-info-list">
-                            <div className="site-registry-info-row">
-                                <span>Project</span>
-                                <strong>{selectedInfoProject.name}</strong>
-                            </div>
-                            <div className="site-registry-info-row">
-                                <span>Builder</span>
-                                <strong>{selectedInfoProject.builder.name}</strong>
-                            </div>
-                            <div className="site-registry-info-row">
-                                <span>Site Location</span>
-                                <strong>{selectedInfoProject.siteLocation || 'Not set'}</strong>
-                            </div>
-                            <div className="site-registry-info-row">
-                                <span>Status</span>
-                                <strong>{selectedInfoProject.archived ? 'Archived' : 'Active'}</strong>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {showProjectModal && (
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>
