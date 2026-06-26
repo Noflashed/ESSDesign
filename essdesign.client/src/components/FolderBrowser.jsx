@@ -433,10 +433,9 @@ const sanitizeColWidths = (value) => {
     return next;
 };
 
-const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
+const buildGridTemplateColumns = (widths, includeRevision) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
-    const logoColumns = includeBuilderLogo ? ['56px'] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -453,7 +452,7 @@ const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = 
             columnTrack('size')
         ];
 
-    return ['40px', ...logoColumns, ...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
+    return [...dynamicColumns, `${LIST_ACTIONS_WIDTH_PX}px`].join(' ');
 };
 
 const pdfThumbnailCache = new Map();
@@ -665,10 +664,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, []);
 
     const showRevisionColumn = folders.some(item => item.isDocument);
-    const showBuilderLogoColumn = currentFolder === null;
+    const showRootBuilderLogos = currentFolder === null;
 
     // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
-    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn, showBuilderLogoColumn);
+    const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn);
 
     // Column resize handlers
     const colKeys = showRevisionColumn
@@ -1646,12 +1645,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             <>
                                 {viewMode === 'list' && (
                                     <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
-                                        <div className="list-header-icon"></div>
-                                        {showBuilderLogoColumn && (
-                                            <div className="list-header-builder-logo">
-                                                Logo
-                                            </div>
-                                        )}
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
                                             onClick={() => handleSort('name')}
@@ -1848,23 +1841,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                                     onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
-                                                    <div className="list-item-icon">
-                                                        <span className={`row-select-mark${isSelected ? ' selected' : ''}`}>
-                                                            {isSelected && <CheckCircleIcon size={11} />}
-                                                        </span>
-                                                    </div>
-                                                    {showBuilderLogoColumn && (
-                                                        <div className="list-item-builder-logo">
-                                                            {!item.isDocument ? (
-                                                                <BuilderFolderLogo
-                                                                    logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
-                                                                />
-                                                            ) : null}
-                                                        </div>
-                                                    )}
                                                     <div className="list-item-name">
                                                         {item.isDocument ? <DocumentIcon size={20} /> : <FolderIcon size={20} />}
                                                         <span>{getItemDisplayName(item)}</span>
+                                                        {showRootBuilderLogos && !item.isDocument ? (
+                                                            <BuilderFolderLogo
+                                                                logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
+                                                            />
+                                                        ) : null}
                                                     </div>
                                                     {showRevisionColumn && (
                                                         <div className="list-item-revision">

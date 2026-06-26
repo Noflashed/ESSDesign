@@ -7685,10 +7685,19 @@ button.stat-card {
 }
 
 .site-registry-row-location.has-logo {
+    width: 44px;
+    height: 34px;
     overflow: hidden;
-    padding: 2px;
-    background: #ffffff;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
     color: transparent;
+}
+
+.site-registry-row-location.has-logo.selected {
+    border-color: transparent;
+    background: transparent;
 }
 
 .site-registry-row-location.has-logo img {
@@ -7696,7 +7705,7 @@ button.stat-card {
     height: 100%;
     display: block;
     object-fit: contain;
-    border-radius: 5px;
+    border-radius: 0;
 }
 
 .site-registry-builder-modal {
