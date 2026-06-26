@@ -1657,7 +1657,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'name' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
+                                            {!showRootBuilderLogos && (
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
+                                            )}
                                         </div>
                                         {showRootBuilderLogos && (
                                             <div className="list-header-builder-logo">Logo</div>
