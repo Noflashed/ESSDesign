@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from '../services/api';
-import UploadDocumentModal, { prefetchNotificationRecipients } from './UploadDocumentModal';
+import UploadDocumentModal, { RecipientAvatar, prefetchNotificationRecipients } from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
 import { useToast } from './Toast';
@@ -183,6 +183,12 @@ const getItemDisplayName = (item) => (
     item?.isDocument
         ? (item.essDesignIssueName || 'Document')
         : (item?.name || 'Folder')
+);
+
+const getShareUserRoleLabel = (user) => (
+    user?.employeeTitle
+    || user?.EmployeeTitle
+    || (user?.role ? user.role.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) : '')
 );
 
 const getOwnerLabel = (item) => (
@@ -585,6 +591,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [externalShareRecipients, setExternalShareRecipients] = useState([]);
     const [externalShareInput, setExternalShareInput] = useState('');
     const [externalShareMessage, setExternalShareMessage] = useState('');
+    const [shareUserSearch, setShareUserSearch] = useState('');
     const [loadingShareUsers, setLoadingShareUsers] = useState(false);
     const [sharingDocument, setSharingDocument] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -1094,6 +1101,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setExternalShareRecipients([]);
         setExternalShareInput('');
         setExternalShareMessage('');
+        setShareUserSearch('');
         setShowShareModal(true);
 
         if (shareUsers.length > 0) {
@@ -1119,6 +1127,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 : [...prev, userId]
         ));
     };
+
+    const visibleShareUsers = useMemo(() => {
+        const query = shareUserSearch.trim().toLowerCase();
+        if (!query) {
+            return shareUsers;
+        }
+
+        return shareUsers.filter(user => (
+            [user.fullName, user.email]
+                .filter(Boolean)
+                .some(value => value.toLowerCase().includes(query))
+        ));
+    }, [shareUsers, shareUserSearch]);
 
     const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const pendingExternalEmails = externalShareInput
@@ -2141,23 +2162,93 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     setExternalShareRecipients([]);
                     setExternalShareInput('');
                     setExternalShareMessage('');
+                    setShareUserSearch('');
                 }}>
-                    <div className="modal share-modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>{shareTarget.isDocument ? 'Share PDF' : 'Share Folder'}</h3>
-                        <p className="share-modal-subtitle">
-                            Send <strong>{shareTarget.isDocument
-                                ? (shareTarget.essDesignIssueName || formatRevisionNumber(shareTarget.revisionNumber))
-                                : shareTarget.name}</strong> by email.
-                        </p>
-                        <div className="share-section">
-                            <div className="share-section-title">ESS Design users</div>
+                    <div className="modal upload-modal document-upload-modal share-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="document-upload-header">
+                            <div>
+                                <h3>{shareTarget.isDocument ? 'Share PDF' : 'Share Folder'}</h3>
+                                <p>Send this ESS Design {shareTarget.isDocument ? 'document' : 'folder'} to internal or external recipients</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="document-upload-close"
+                                onClick={() => {
+                                    setShowShareModal(false);
+                                    setShareTarget(null);
+                                    setSelectedShareRecipients([]);
+                                    setExternalShareRecipients([]);
+                                    setExternalShareInput('');
+                                    setExternalShareMessage('');
+                                    setShareUserSearch('');
+                                }}
+                                disabled={sharingDocument}
+                                aria-label="Close"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <div className="share-document-form">
+                            <div className="share-document-summary-field">
+                                <span>{shareTarget.isDocument ? 'Document' : 'Folder'}</span>
+                                <div className="share-document-summary">
+                                    <div className="share-document-icon">
+                                        {shareTarget.isDocument ? (
+                                            <DocumentIcon size={42} />
+                                        ) : (
+                                            <FolderIcon size={46} color="#5f6368" />
+                                        )}
+                                    </div>
+                                    <div className="share-document-copy">
+                                        <strong>{getItemDisplayName(shareTarget)}</strong>
+                                        <small>
+                                            {shareTarget.isDocument
+                                                ? `${formatRevisionNumber(shareTarget.revisionNumber)} · ${getDrawingStatus(shareTarget)} · ${formatFileSize(shareTarget.totalFileSize)}`
+                                                : `${shareTarget.fileCount ?? 'No'} item${shareTarget.fileCount === 1 ? '' : 's'}`}
+                                        </small>
+                                        <small>{currentFolderPath.map(folder => folder.name).join(' / ') || 'Home'}</small>
+                                    </div>
+                                    {shareTarget.isDocument ? (
+                                        <div className="share-document-badges">
+                                            {shareTarget.isLatestRevision ? <span className="share-state-chip latest">Latest</span> : null}
+                                            <span className="share-state-chip">Shared</span>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </div>
+                        <div className="share-section share-users-field">
+                            <div className="upload-field-row">
+                                <span>ESS Design users</span>
+                                {selectedShareRecipients.length > 0 && (
+                                    <span className="recipients-count">
+                                        {selectedShareRecipients.length} selected
+                                    </span>
+                                )}
+                            </div>
+                            <div className="upload-user-search">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                                        <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                </span>
+                                <input
+                                    type="search"
+                                    value={shareUserSearch}
+                                    onChange={(e) => setShareUserSearch(e.target.value)}
+                                    placeholder="Search users"
+                                    disabled={sharingDocument}
+                                />
+                            </div>
                             <div className="share-user-list">
                                 {loadingShareUsers ? (
                                     <div className="share-empty-state">Loading users...</div>
                                 ) : shareUsers.length === 0 ? (
                                     <div className="share-empty-state">No users available to share with.</div>
+                                ) : visibleShareUsers.length === 0 ? (
+                                    <div className="share-empty-state">No users match your search.</div>
                                 ) : (
-                                    shareUsers.map(user => (
+                                    visibleShareUsers.map(user => (
                                         <label key={user.id} className="share-user-row">
                                             <input
                                                 type="checkbox"
@@ -2165,15 +2256,19 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 onChange={() => handleToggleShareRecipient(user.id)}
                                                 disabled={sharingDocument}
                                             />
-                                            <span className="share-user-name">{user.fullName || user.email}</span>
-                                            <span className="share-user-email">{user.email}</span>
+                                            <RecipientAvatar user={user} />
+                                            <span className="share-user-identity">
+                                                <span className="share-user-name">{user.fullName || user.email}</span>
+                                                <span className="share-user-email">{user.email}</span>
+                                            </span>
+                                            <span className="share-user-role">{getShareUserRoleLabel(user)}</span>
                                         </label>
                                     ))
                                 )}
                             </div>
                         </div>
-                        <div className="share-section">
-                            <label className="share-section-title" htmlFor="external-share-emails">External users</label>
+                        <div className="share-section share-external-field">
+                            <label className="share-section-title" htmlFor="external-share-emails">External recipients</label>
                             <div className={`share-recipient-box${invalidExternalInput ? ' invalid' : ''}`}>
                                 {externalShareRecipients.map(email => (
                                     <span key={email} className="share-recipient-chip">
@@ -2185,7 +2280,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             disabled={sharingDocument}
                                             aria-label={`Remove ${email}`}
                                         >
-                                            Ã—
+                                            &times;
                                         </button>
                                     </span>
                                 ))}
@@ -2196,14 +2291,14 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     onChange={(e) => setExternalShareInput(e.target.value)}
                                     onKeyDown={handleExternalInputKeyDown}
                                     onBlur={() => commitExternalRecipients(externalShareInput)}
-                                    placeholder={externalShareRecipients.length === 0 ? 'Type an email and press Enter' : 'Add another email'}
+                                    placeholder="Type an email and press Enter"
                                     disabled={sharingDocument}
                                 />
                             </div>
                             <div className="share-helper-text">
                                 {shareTarget.isDocument
-                                    ? 'External recipients will receive direct PDF links and do not need an ESS Design account.'
-                                    : 'External recipients will receive a direct folder link and do not need an ESS Design account.'}
+                                    ? 'External recipients receive a direct PDF link and do not need an ESS Design account.'
+                                    : 'External recipients receive a direct folder link and do not need an ESS Design account.'}
                             </div>
                             {invalidExternalInput && (
                                 <div className="share-error-text">
@@ -2211,25 +2306,23 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 </div>
                             )}
                         </div>
-                        <div className="share-section">
+                        <div className="share-section share-message-field">
                             <label className="share-section-title" htmlFor="external-share-message">Optional message for external users</label>
                             <textarea
                                 id="external-share-message"
                                 className="share-external-input"
                                 value={externalShareMessage}
                                 onChange={(e) => setExternalShareMessage(e.target.value)}
-                                placeholder="Add a brief greeting or context for external recipients"
-                                rows={4}
+                                placeholder="Please review the attached revision for the Level 12 coordination meeting."
+                                rows={3}
                                 disabled={sharingDocument}
                             />
-                            <div className="share-helper-text">
-                                This note appears above the usual ESS Design share email and is only sent to external recipients.
+                        </div>
+                        </div>
+                        <div className="modal-actions upload-modal-actions share-modal-actions">
+                            <div className="share-selection-summary">
+                                {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length} external recipient{externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length === 1 ? '' : 's'} added
                             </div>
-                        </div>
-                        <div className="share-selection-summary">
-                            {selectedShareRecipients.length} internal user{selectedShareRecipients.length === 1 ? '' : 's'} selected, {externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length} external recipient{externalShareRecipients.length + pendingExternalEmails.filter(isValidEmail).length === 1 ? '' : 's'} added
-                        </div>
-                        <div className="modal-actions">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2239,6 +2332,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                     setExternalShareRecipients([]);
                                     setExternalShareInput('');
                                     setExternalShareMessage('');
+                                    setShareUserSearch('');
                                 }}
                                 disabled={sharingDocument}
                             >

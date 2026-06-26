@@ -1272,6 +1272,372 @@
     color: var(--text-secondary);
 }
 
+.share-modal.document-upload-modal {
+    width: min(768px, calc(100vw - 32px));
+    height: min(908px, calc(100vh - 48px));
+    max-height: calc(100vh - 48px);
+    font-family: "Google Sans", "Segoe UI", Arial, sans-serif;
+}
+
+.share-modal .document-upload-header {
+    padding: 22px 34px 18px;
+}
+
+.share-document-form {
+    display: grid;
+    grid-template-rows: auto minmax(0, 316px) auto auto;
+    gap: 22px;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 20px 34px 0;
+    overflow: hidden;
+}
+
+.share-document-summary-field,
+.share-users-field,
+.share-external-field,
+.share-message-field {
+    min-width: 0;
+    margin: 0;
+}
+
+.share-document-summary-field > span,
+.share-modal .share-section-title,
+.share-modal .upload-field-row > span:first-child,
+.share-message-field > span {
+    display: block;
+    margin: 0 0 8px;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.share-document-summary {
+    min-height: 112px;
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr) 104px;
+    align-items: center;
+    gap: 22px;
+    padding: 18px 44px 18px 28px;
+    border: 1px solid #dbe5f4;
+    border-radius: 8px;
+    background: #f8fbff;
+}
+
+.share-document-icon {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d8e2f1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #5f6368;
+}
+
+.share-document-icon svg {
+    display: block;
+}
+
+.share-document-copy {
+    min-width: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.share-document-copy strong,
+.share-document-copy small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-document-copy strong {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.share-document-copy small {
+    color: #48617f;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.share-document-badges {
+    display: grid;
+    gap: 8px;
+    justify-items: stretch;
+}
+
+.share-state-chip {
+    min-width: 92px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.share-state-chip.latest {
+    border-color: #86d7a1;
+    background: #f0fdf4;
+    color: #188034;
+}
+
+.share-users-field {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 8px;
+    overflow: hidden;
+}
+
+.share-users-field .upload-field-row {
+    margin: 0;
+}
+
+.share-users-field .recipients-count {
+    margin: 0;
+    color: #48617f;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.share-modal .share-user-list {
+    height: 250px;
+    max-height: none;
+    overflow-y: auto;
+    border: 1px solid #dbe5f4;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.share-modal .share-user-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+.share-modal .share-user-list::-webkit-scrollbar-track {
+    background: #f4f7fb;
+    border-radius: 999px;
+}
+
+.share-modal .share-user-list::-webkit-scrollbar-thumb {
+    border: 2px solid #f4f7fb;
+    border-radius: 999px;
+    background: #9fb3d8;
+}
+
+.share-modal .share-user-row {
+    min-height: 50px;
+    display: grid;
+    grid-template-columns: 18px 30px minmax(0, 1fr) minmax(132px, auto);
+    align-items: center;
+    gap: 9px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.share-modal .share-user-row:last-child {
+    border-bottom: 0;
+}
+
+.share-modal .share-user-row:hover {
+    background: #f8fbff;
+}
+
+.share-modal .share-user-row input[type="checkbox"] {
+    margin: 0;
+}
+
+.share-modal .share-user-row .recipient-avatar {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1e3a8a;
+    font-size: 11px;
+    font-weight: 800;
+    overflow: hidden;
+}
+
+.share-modal .recipient-avatar.has-image {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: transparent;
+}
+
+.share-modal .recipient-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.share-user-identity {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.share-modal .share-user-name,
+.share-modal .share-user-email {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-modal .share-user-name {
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.share-modal .share-user-email,
+.share-modal .share-user-role {
+    color: #52637d;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.share-modal .share-user-role {
+    justify-self: end;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.share-modal .share-empty-state {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.share-external-field {
+    display: grid;
+    gap: 8px;
+}
+
+.share-modal .share-recipient-box {
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 1px solid #d8e2f1;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.share-modal .share-recipient-box:focus-within {
+    border-color: #8fb0ed;
+    box-shadow: 0 0 0 2px rgba(11, 87, 208, 0.08);
+}
+
+.share-modal .share-recipient-chip {
+    min-height: 28px;
+    padding: 0 10px 0 12px;
+    border-color: #c7d7fe;
+    background: #eef4ff;
+    color: #174ea6;
+    font-size: 12px;
+}
+
+.share-modal .share-recipient-chip-remove {
+    width: 16px;
+    height: 16px;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: #174ea6;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.share-modal .share-recipient-input {
+    min-width: 220px;
+    color: #0f172a;
+    font-size: 13px;
+}
+
+.share-modal .share-helper-text,
+.share-modal .share-error-text {
+    margin: 8px 0 0;
+    font-size: 13px;
+}
+
+.share-modal .share-helper-text {
+    color: #52637d;
+}
+
+.share-message-field {
+    display: grid;
+    gap: 8px;
+}
+
+.share-modal .share-external-input {
+    width: 100%;
+    min-height: 74px;
+    margin: 0;
+    padding: 14px;
+    border: 1px solid #d8e2f1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    font-family: "Google Sans", "Segoe UI", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    resize: none;
+    outline: none;
+}
+
+.share-modal .share-external-input:focus {
+    border-color: #8fb0ed;
+    box-shadow: 0 0 0 2px rgba(11, 87, 208, 0.08);
+}
+
+.share-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0;
+    padding: 16px 34px 14px;
+}
+
+.share-modal-actions .share-selection-summary {
+    margin: 0 auto 0 0;
+    color: #48617f;
+    font-size: 13px;
+}
+
+.share-modal-actions button {
+    min-width: 86px;
+}
+
+.share-modal-actions button:last-child {
+    min-width: 120px;
+    background: #0b57d0;
+    color: #ffffff;
+}
+
 /* Professional document library surface */
 .module-page:has(.folder-browser) {
     height: 100%;
