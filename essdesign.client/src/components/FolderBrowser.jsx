@@ -400,12 +400,13 @@ const REVISION_OPTIONS = Array.from({ length: 20 }, (_, index) => {
 });
 
 // Default column widths as fractions (must match grid-template-columns order after icon)
-const DEFAULT_COL_WIDTHS = { name: 1.5, revision: 0.75, status: 0.95, owner: 1, modified: 1.2, size: 0.8 };
+const DEFAULT_COL_WIDTHS = { name: 1.5, logo: 0.55, revision: 0.75, status: 0.95, owner: 1, modified: 1.2, size: 0.8 };
 const MIN_COL_WIDTH_PX = 60;
 const LIST_ACTIONS_WIDTH_PX = 176;
 const MIN_COL_WIDTH_FR = 0.2;
 const LIST_COLUMN_MIN_WIDTHS = {
     name: 0,
+    logo: 72,
     revision: 112,
     status: 116,
     owner: 0,
@@ -436,7 +437,7 @@ const sanitizeColWidths = (value) => {
 const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
-    const logoColumns = includeBuilderLogo ? ['88px'] : [];
+    const logoColumns = includeBuilderLogo ? [columnTrack('logo')] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -674,8 +675,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     // Column resize handlers
     const colKeys = showRevisionColumn
-        ? ['name', 'revision', 'status', 'owner', 'modified', 'size']
-        : ['name', 'owner', 'modified', 'size'];
+        ? ['name', ...(showRootBuilderLogos ? ['logo'] : []), 'revision', 'status', 'owner', 'modified', 'size']
+        : ['name', ...(showRootBuilderLogos ? ['logo'] : []), 'owner', 'modified', 'size'];
 
     const handleResizeStart = useCallback((e, colIndex) => {
         e.preventDefault();
@@ -738,7 +739,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         document.addEventListener('mouseup', handleMouseUp);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
-    }, [colWidths]);
+    }, [colWidths, colKeys]);
 
     const handleResetColWidths = useCallback(() => {
         setColWidths({ ...DEFAULT_COL_WIDTHS });
@@ -1657,13 +1658,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'name' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            {!showRootBuilderLogos && (
-                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 0)} onDoubleClick={handleResetColWidths} />
-                                            )}
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('name'))} onDoubleClick={handleResetColWidths} />
                                         </div>
                                         {showRootBuilderLogos && (
-                                            <div className="list-header-builder-logo">
+                                            <div className="list-header-builder-logo" data-col-key="logo">
                                                 <span>Logo</span>
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('logo'))} onDoubleClick={handleResetColWidths} />
                                             </div>
                                         )}
                                         {showRevisionColumn && (
@@ -1676,7 +1676,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 {sortField === 'revision' && (
                                                     <SortArrowIcon direction={sortDirection} />
                                                 )}
-                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 1)} onDoubleClick={handleResetColWidths} />
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('revision'))} onDoubleClick={handleResetColWidths} />
                                             </div>
                                         )}
                                         {showRevisionColumn && (
@@ -1689,7 +1689,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                 {sortField === 'status' && (
                                                     <SortArrowIcon direction={sortDirection} />
                                                 )}
-                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, 2)} onDoubleClick={handleResetColWidths} />
+                                                <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('status'))} onDoubleClick={handleResetColWidths} />
                                             </div>
                                         )}
                                         <div
@@ -1701,7 +1701,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'owner' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 3 : 1)} onDoubleClick={handleResetColWidths} />
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('owner'))} onDoubleClick={handleResetColWidths} />
                                         </div>
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'modified' ? 'active' : ''}`}
@@ -1712,7 +1712,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                             {sortField === 'modified' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
-                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, showRevisionColumn ? 4 : 2)} onDoubleClick={handleResetColWidths} />
+                                            <div className="col-resize-handle" onMouseDown={(e) => handleResizeStart(e, colKeys.indexOf('modified'))} onDoubleClick={handleResetColWidths} />
                                         </div>
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'size' ? 'active' : ''}`}
