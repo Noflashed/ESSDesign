@@ -1185,24 +1185,58 @@ namespace ESSDesign.Server.Services
         public async Task<FolderShareTree> GetFolderShareTreeAsync(Guid folderId)
         {
             var folder = await GetFolderByIdAsync(folderId);
+            var userIds = folder.Documents
+                .Select(document => document.UserId)
+                .Concat(folder.SubFolders.Select(subfolder => subfolder.UserId))
+                .Append(folder.UserId)
+                .Where(userId => !string.IsNullOrWhiteSpace(userId))
+                .Select(userId => userId!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var userNames = await GetUserNamesAsync(userIds);
+            userNames.TryGetValue(folder.UserId ?? string.Empty, out var folderOwnerName);
+
             var tree = new FolderShareTree
             {
                 Id = folder.Id,
                 Name = folder.Name,
+                ParentFolderId = folder.ParentFolderId,
+                UserId = folder.UserId,
+                OwnerName = folderOwnerName,
+                CreatedAt = folder.CreatedAt,
+                UpdatedAt = folder.UpdatedAt,
+                FileSize = folder.FileSize,
+                SubFolderCount = folder.SubFolderCount,
+                DocumentCount = folder.DocumentCount,
                 Documents = folder.Documents
-                    .Select(document => new FolderShareDocument
+                    .Select(document =>
                     {
-                        Id = document.Id,
-                        FolderId = document.FolderId,
-                        DisplayName = document.EssDesignIssueName
-                            ?? document.ThirdPartyDesignName
-                            ?? $"Revision {document.RevisionNumber}",
-                        RevisionNumber = document.RevisionNumber,
-                        Description = document.Description,
-                        HasEssDesign = !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
-                        HasThirdPartyDesign = !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
-                        EssDesignIssueName = document.EssDesignIssueName,
-                        ThirdPartyDesignName = document.ThirdPartyDesignName
+                        userNames.TryGetValue(document.UserId ?? string.Empty, out var ownerName);
+                        return new FolderShareDocument
+                        {
+                            Id = document.Id,
+                            FolderId = document.FolderId,
+                            DisplayName = document.EssDesignIssueName
+                                ?? document.ThirdPartyDesignName
+                                ?? $"Revision {document.RevisionNumber}",
+                            RevisionNumber = document.RevisionNumber,
+                            Description = document.Description,
+                            HasEssDesign = !string.IsNullOrWhiteSpace(document.EssDesignIssuePath),
+                            HasThirdPartyDesign = !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath),
+                            EssDesignIssueName = document.EssDesignIssueName,
+                            ThirdPartyDesignName = document.ThirdPartyDesignName,
+                            DrawingStatus = InferDrawingStatusFromFileName(document.EssDesignIssueName ?? document.ThirdPartyDesignName)
+                                ?? document.DrawingStatus,
+                            EssDesignFileSize = document.EssDesignFileSize,
+                            ThirdPartyDesignFileSize = document.ThirdPartyDesignFileSize,
+                            TotalFileSize = ((document.EssDesignFileSize ?? 0) + (document.ThirdPartyDesignFileSize ?? 0)) > 0
+                                ? (document.EssDesignFileSize ?? 0) + (document.ThirdPartyDesignFileSize ?? 0)
+                                : null,
+                            UserId = document.UserId,
+                            OwnerName = ownerName,
+                            CreatedAt = document.CreatedAt,
+                            UpdatedAt = document.UpdatedAt
+                        };
                     })
                     .ToList()
             };

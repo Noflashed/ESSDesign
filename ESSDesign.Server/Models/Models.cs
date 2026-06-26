@@ -465,6 +465,14 @@ namespace ESSDesign.Server.Models
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public Guid? ParentFolderId { get; set; }
+        public string? UserId { get; set; }
+        public string? OwnerName { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public long? FileSize { get; set; }
+        public int SubFolderCount { get; set; }
+        public int DocumentCount { get; set; }
         public List<FolderShareTree> SubFolders { get; set; } = new();
         public List<FolderShareDocument> Documents { get; set; } = new();
     }
@@ -482,6 +490,14 @@ namespace ESSDesign.Server.Models
         public string? ThirdPartyDesignName { get; set; }
         public string? EssDesignUrl { get; set; }
         public string? ThirdPartyDesignUrl { get; set; }
+        public string? DrawingStatus { get; set; }
+        public long? EssDesignFileSize { get; set; }
+        public long? ThirdPartyDesignFileSize { get; set; }
+        public long? TotalFileSize { get; set; }
+        public string? UserId { get; set; }
+        public string? OwnerName { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 
     public class SearchResult
