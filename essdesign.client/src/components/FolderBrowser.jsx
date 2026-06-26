@@ -2195,7 +2195,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                 <div className="share-document-summary">
                                     <div className="share-document-icon">
                                         {shareTarget.isDocument ? (
-                                            <DocumentIcon size={42} />
+                                            <PdfPageThumbnail documentItem={shareTarget} />
                                         ) : (
                                             <FolderIcon size={46} color="#5f6368" />
                                         )}
@@ -2209,12 +2209,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         </small>
                                         <small>{breadcrumbs.map(folder => folder.name).join(' / ') || 'Home'}</small>
                                     </div>
-                                    {shareTarget.isDocument ? (
-                                        <div className="share-document-badges">
-                                            {shareTarget.isLatestRevision ? <span className="share-state-chip latest">Latest</span> : null}
-                                            <span className="share-state-chip">Shared</span>
-                                        </div>
-                                    ) : null}
                                 </div>
                             </div>
                         <div className="share-section share-users-field">

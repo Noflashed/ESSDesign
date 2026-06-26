@@ -1316,10 +1316,10 @@
 .share-document-summary {
     min-height: 112px;
     display: grid;
-    grid-template-columns: 68px minmax(0, 1fr) 104px;
+    grid-template-columns: 84px minmax(0, 1fr);
     align-items: center;
     gap: 22px;
-    padding: 18px 44px 18px 28px;
+    padding: 18px 28px;
     border: 1px solid #dbe5f4;
     border-radius: 8px;
     background: #f8fbff;
@@ -1327,7 +1327,7 @@
 
 .share-document-icon {
     position: relative;
-    width: 68px;
+    width: 84px;
     height: 68px;
     display: inline-flex;
     align-items: center;
@@ -1340,6 +1340,16 @@
 
 .share-document-icon svg {
     display: block;
+}
+
+.share-document-icon .pdf-page-thumbnail {
+    position: absolute;
+    inset: 0;
+}
+
+.share-document-icon .pdf-page-thumbnail img {
+    opacity: 0.9;
+    filter: grayscale(0.18) contrast(0.92);
 }
 
 .share-document-copy {
@@ -1367,32 +1377,6 @@
     color: #48617f;
     font-size: 13px;
     font-weight: 500;
-}
-
-.share-document-badges {
-    display: grid;
-    gap: 8px;
-    justify-items: stretch;
-}
-
-.share-state-chip {
-    min-width: 92px;
-    min-height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #cbd5e1;
-    border-radius: 7px;
-    background: #ffffff;
-    color: #334155;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.share-state-chip.latest {
-    border-color: #86d7a1;
-    background: #f0fdf4;
-    color: #188034;
 }
 
 .share-users-field {
