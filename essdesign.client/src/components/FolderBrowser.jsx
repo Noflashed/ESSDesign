@@ -436,7 +436,7 @@ const sanitizeColWidths = (value) => {
 const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = false) => {
     const normalized = sanitizeColWidths(widths);
     const columnTrack = (key) => `minmax(${LIST_COLUMN_MIN_WIDTHS[key]}px, ${normalized[key]}fr)`;
-    const logoColumns = includeBuilderLogo ? ['64px'] : [];
+    const logoColumns = includeBuilderLogo ? ['88px'] : [];
     const dynamicColumns = includeRevision
         ? [
             columnTrack('name'),
@@ -577,13 +577,13 @@ function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 
 }
 
 function BuilderFolderLogo({ logoUrl }) {
+    if (!logoUrl) {
+        return null;
+    }
+
     return (
-        <span className={`builder-folder-logo${logoUrl ? ' has-logo' : ''}`} aria-hidden="true">
-            {logoUrl ? (
-                <img src={logoUrl} alt="" loading="eager" decoding="async" />
-            ) : (
-                <FolderIcon size={20} />
-            )}
+        <span className="builder-folder-logo has-logo" aria-hidden="true">
+            <img src={logoUrl} alt="" loading="eager" decoding="async" />
         </span>
     );
 }
@@ -1853,11 +1853,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                                     </div>
                                                     {showRootBuilderLogos && (
                                                         <div className="list-item-builder-logo">
-                                                            {!item.isDocument ? (
-                                                                <BuilderFolderLogo
-                                                                    logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))}
-                                                                />
-                                                            ) : null}
+                                                            {!item.isDocument ? <BuilderFolderLogo logoUrl={builderLogos.get(normalizeBuilderFolderName(item.name))} /> : null}
                                                         </div>
                                                     )}
                                                     {showRevisionColumn && (
