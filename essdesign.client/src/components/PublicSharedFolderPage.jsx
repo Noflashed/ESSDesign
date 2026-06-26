@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { foldersAPI } from '../services/api';
+import { foldersAPI, resolveProfileImageUrl } from '../services/api';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
@@ -13,29 +13,6 @@ const DocumentIcon = ({ size = 20 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" fill="currentColor" />
         <path d="M14 2v6h6" fill="#f87171" />
-    </svg>
-);
-
-const SearchIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.35-4.35" />
-    </svg>
-);
-
-const GridIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-    </svg>
-);
-
-const ListIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M8 6h13M8 12h13M8 18h13" />
-        <path d="M3 6h.01M3 12h.01M3 18h.01" />
     </svg>
 );
 
@@ -84,6 +61,47 @@ const getOwnerInitials = (name) => {
     return name.slice(0, 2).toUpperCase();
 };
 
+const ownerAvatarCache = new Map();
+
+function OwnerAvatar({ item }) {
+    const ownerId = item?.userId || '';
+    const [avatarUrl, setAvatarUrl] = useState(() => ownerAvatarCache.get(ownerId) || '');
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!ownerId) {
+            setAvatarUrl('');
+            return undefined;
+        }
+
+        if (ownerAvatarCache.has(ownerId)) {
+            setAvatarUrl(ownerAvatarCache.get(ownerId) || '');
+            return undefined;
+        }
+
+        resolveProfileImageUrl(ownerId)
+            .then((url) => {
+                ownerAvatarCache.set(ownerId, url || '');
+                if (!cancelled) setAvatarUrl(url || '');
+            })
+            .catch(() => {
+                ownerAvatarCache.set(ownerId, '');
+                if (!cancelled) setAvatarUrl('');
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [ownerId]);
+
+    return (
+        <b className={avatarUrl ? 'has-image' : ''}>
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : getOwnerInitials(item?.ownerName)}
+        </b>
+    );
+}
+
 const countDocumentsRecursive = (folder) => {
     if (!folder) return 0;
     return (folder.documents?.length || 0) + (folder.subFolders || []).reduce((total, child) => total + countDocumentsRecursive(child), 0);
@@ -109,20 +127,10 @@ const buildFolderMap = (root) => {
     return map;
 };
 
-const flattenFolders = (folder) => {
-    if (!folder) return [];
-    return [
-        folder,
-        ...(folder.subFolders || []).flatMap(flattenFolders)
-    ];
-};
-
 export default function PublicSharedFolderPage({ folderId, token }) {
     const [folder, setFolder] = useState(null);
     const [currentFolderId, setCurrentFolderId] = useState(folderId);
     const [selectedDocument, setSelectedDocument] = useState(null);
-    const [viewMode, setViewMode] = useState('list');
-    const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -130,30 +138,12 @@ export default function PublicSharedFolderPage({ folderId, token }) {
     const currentFolder = folderMap.get(currentFolderId) || folder;
     const breadcrumbs = currentFolder?.path || [];
     const totalDocuments = useMemo(() => countDocumentsRecursive(folder), [folder]);
-    const allFolders = useMemo(() => flattenFolders(folder), [folder]);
 
     const visibleItems = useMemo(() => {
         const folders = (currentFolder?.subFolders || []).map(item => ({ ...item, isFolder: true }));
         const documents = (currentFolder?.documents || []).map(item => ({ ...item, isDocument: true }));
-        const items = [...folders, ...documents];
-        const query = searchTerm.trim().toLowerCase();
-
-        if (!query) return items;
-
-        return items.filter(item => {
-            const name = item.isDocument ? getDocumentName(item) : item.name;
-            return name?.toLowerCase().includes(query);
-        });
-    }, [currentFolder, searchTerm]);
-
-    const suggestedFolders = useMemo(() => {
-        const query = searchTerm.trim().toLowerCase();
-        if (query.length < 2) return [];
-
-        return allFolders
-            .filter(item => item.id !== currentFolder?.id && item.name?.toLowerCase().includes(query))
-            .slice(0, 6);
-    }, [allFolders, currentFolder?.id, searchTerm]);
+        return [...folders, ...documents];
+    }, [currentFolder]);
 
     useEffect(() => {
         let cancelled = false;
@@ -186,11 +176,9 @@ export default function PublicSharedFolderPage({ folderId, token }) {
         };
 
         loadFolder(true);
-        const intervalId = window.setInterval(() => loadFolder(false), 60000);
 
         return () => {
             cancelled = true;
-            window.clearInterval(intervalId);
         };
     }, [folderId, token]);
 
@@ -211,7 +199,6 @@ export default function PublicSharedFolderPage({ folderId, token }) {
     const navigateToFolder = (targetFolderId) => {
         setCurrentFolderId(targetFolderId);
         setSelectedDocument(null);
-        setSearchTerm('');
     };
 
     if (loading) {
@@ -238,25 +225,9 @@ export default function PublicSharedFolderPage({ folderId, token }) {
         <main className={`public-share-page ess-public-docs${selectedDocument ? ' has-details' : ''}`}>
             <header className="public-docs-topbar">
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" />
-                <div className="public-docs-search">
-                    <SearchIcon />
-                    <input
-                        type="search"
-                        value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
-                        placeholder="Search in this folder"
-                    />
-                    {suggestedFolders.length > 0 && (
-                        <div className="public-docs-suggestions">
-                            {suggestedFolders.map(item => (
-                                <button key={item.id} type="button" onClick={() => navigateToFolder(item.id)}>
-                                    <span><FolderIcon size={18} /></span>
-                                    <strong>{item.name}</strong>
-                                    <small>{countImmediateItems(item)} item{countImmediateItems(item) === 1 ? '' : 's'}</small>
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                <div className="public-docs-heading">
+                    <strong>{currentFolder?.name || 'Shared design files'}</strong>
+                    <span>{totalDocuments === 1 ? '1 shared PDF' : `${totalDocuments} shared PDFs`} available</span>
                 </div>
             </header>
 
@@ -273,36 +244,20 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                                 </React.Fragment>
                             ))}
                         </nav>
-
-                        <div className="public-docs-title-row">
-                            <div>
-                                <h1>{currentFolder?.name || 'Shared design files'}</h1>
-                                <p>{totalDocuments === 1 ? '1 shared PDF' : `${totalDocuments} shared PDFs`} available</p>
-                            </div>
-                            <div className="public-docs-view-toggle" aria-label="View mode">
-                                <button type="button" className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} aria-label="List view">
-                                    <ListIcon />
-                                </button>
-                                <button type="button" className={viewMode === 'grid' ? 'active' : ''} onClick={() => setViewMode('grid')} aria-label="Grid view">
-                                    <GridIcon />
-                                </button>
-                            </div>
-                        </div>
                     </div>
 
-                    {viewMode === 'list' ? (
-                        <div className="public-docs-table" role="table" aria-label="Shared ESS Design files">
-                            <div className="public-docs-table-head" role="row">
-                                <span>Name</span>
-                                <span>Revision</span>
-                                <span>Status</span>
-                                <span>Owner</span>
-                                <span>Modified</span>
-                                <span>Size</span>
-                                <span>Files</span>
-                                <span>Actions</span>
-                            </div>
-                            <div className="public-docs-table-body">
+                    <div className="public-docs-table" role="table" aria-label="Shared ESS Design files">
+                        <div className="public-docs-table-head" role="row">
+                            <span>Name</span>
+                            <span>Revision</span>
+                            <span>Status</span>
+                            <span>Owner</span>
+                            <span>Modified</span>
+                            <span>Size</span>
+                            <span>Files</span>
+                            <span>Actions</span>
+                        </div>
+                        <div className="public-docs-table-body">
                                 {visibleItems.map(item => (
                                     <div
                                         key={`${item.isFolder ? 'folder' : 'document'}-${item.id}`}
@@ -324,7 +279,7 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                                         <span>{item.isDocument ? formatRevision(item.revisionNumber) : '-'}</span>
                                         <span>{item.isDocument ? <em>{getDocumentStatus(item)}</em> : '-'}</span>
                                         <span className="public-docs-owner">
-                                            <b>{getOwnerInitials(item.ownerName)}</b>
+                                            <OwnerAvatar item={item} />
                                             {item.ownerName || '-'}
                                         </span>
                                         <span>{formatDate(item.updatedAt)}</span>
@@ -345,30 +300,11 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                                 {visibleItems.length === 0 && (
                                     <div className="public-docs-empty">
                                         <strong>No shared files here</strong>
-                                        <span>{searchTerm ? 'No folders or PDFs match this search.' : 'This folder is currently empty.'}</span>
+                                        <span>This folder is currently empty.</span>
                                     </div>
                                 )}
-                            </div>
                         </div>
-                    ) : (
-                        <div className="public-docs-grid">
-                            {visibleItems.map(item => (
-                                <button
-                                    key={`${item.isFolder ? 'folder' : 'document'}-${item.id}`}
-                                    type="button"
-                                    className={`public-docs-card${item.isDocument ? ' document' : ' folder'}${selectedDocument?.id === item.id ? ' selected' : ''}`}
-                                    onClick={() => item.isFolder ? navigateToFolder(item.id) : setSelectedDocument(item)}
-                                    onDoubleClick={() => item.isDocument && openDocument(item)}
-                                >
-                                    <span className="public-docs-card-art">
-                                        {item.isFolder ? <FolderIcon size={72} /> : <DocumentIcon size={72} />}
-                                    </span>
-                                    <strong>{item.isFolder ? item.name : getDocumentName(item)}</strong>
-                                    <small>{item.isFolder ? `${countImmediateItems(item)} item${countImmediateItems(item) === 1 ? '' : 's'}` : `${formatRevision(item.revisionNumber)} - ${getDocumentStatus(item)}`}</small>
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    </div>
                 </div>
 
                 {selectedDocument && (
@@ -378,7 +314,7 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                                 <h2>{getDocumentName(selectedDocument)}</h2>
                                 <p>{formatRevision(selectedDocument.revisionNumber)} - {getDocumentStatus(selectedDocument)}</p>
                             </div>
-                            <button type="button" onClick={() => setSelectedDocument(null)} aria-label="Close details">×</button>
+                            <button type="button" onClick={() => setSelectedDocument(null)} aria-label="Close details">x</button>
                         </div>
                         <div className="public-docs-preview">
                             <DocumentIcon size={80} />
@@ -388,7 +324,7 @@ export default function PublicSharedFolderPage({ folderId, token }) {
                             <div><dt>Revision</dt><dd>{formatRevision(selectedDocument.revisionNumber)}</dd></div>
                             <div><dt>Status</dt><dd>{getDocumentStatus(selectedDocument)}</dd></div>
                             <div><dt>File Size</dt><dd>{formatFileSize(selectedDocument.totalFileSize)}</dd></div>
-                            <div><dt>Owner</dt><dd>{selectedDocument.ownerName || '-'}</dd></div>
+                            <div><dt>Owner</dt><dd className="public-docs-owner-detail"><OwnerAvatar item={selectedDocument} />{selectedDocument.ownerName || '-'}</dd></div>
                             <div><dt>Modified</dt><dd>{formatDate(selectedDocument.updatedAt)}</dd></div>
                         </dl>
                         {selectedDocument.description && (

@@ -292,7 +292,7 @@ body {
 .public-docs-topbar {
     height: 72px;
     display: grid;
-    grid-template-columns: 220px minmax(320px, 620px) 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
     align-items: center;
     gap: 24px;
     padding: 0 28px;
@@ -304,6 +304,31 @@ body {
     width: 98px;
     height: 48px;
     object-fit: contain;
+}
+
+.public-docs-heading {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.public-docs-heading strong,
+.public-docs-heading span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.public-docs-heading strong {
+    color: var(--doc-text);
+    font-size: 17px;
+    font-weight: 760;
+    line-height: 1.25;
+}
+
+.public-docs-heading span {
+    color: var(--doc-muted);
+    font-size: 12px;
 }
 
 .public-docs-search {
@@ -417,8 +442,8 @@ body {
 
 .public-docs-toolbar {
     display: grid;
-    gap: 18px;
-    padding: 22px 28px 18px;
+    gap: 0;
+    padding: 16px 28px 14px;
     border-bottom: 1px solid var(--doc-border);
 }
 
@@ -629,6 +654,19 @@ body {
     color: #0b57d0;
     font-size: 11px;
     font-weight: 800;
+    overflow: hidden;
+}
+
+.public-docs-owner b.has-image {
+    background: #ffffff;
+    color: transparent;
+}
+
+.public-docs-owner b img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .public-docs-actions {
@@ -838,6 +876,40 @@ body {
     color: var(--doc-text);
     font-size: 12px;
     overflow-wrap: anywhere;
+}
+
+.public-docs-owner-detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.public-docs-owner-detail b {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 26px;
+    border-radius: 50%;
+    border: 1px solid #bfdbfe;
+    background: #dbeafe;
+    color: #0b57d0;
+    font-size: 11px;
+    font-weight: 800;
+    overflow: hidden;
+}
+
+.public-docs-owner-detail b.has-image {
+    background: #ffffff;
+    color: transparent;
+}
+
+.public-docs-owner-detail b img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .public-docs-details section {
