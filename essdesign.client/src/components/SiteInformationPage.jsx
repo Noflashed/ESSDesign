@@ -541,7 +541,6 @@ export default function SiteInformationPage() {
                     inductedEmployeeIds: inductedWorkerIds
                 });
             setBuilders(nextBuilders);
-            setSelectedBuilderId(projectForm.builderId);
             if (projectForm.editingProjectId) {
                 const updatedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
                 const updatedProject = updatedBuilder?.projects.find(project => project.id === projectForm.editingProjectId);
