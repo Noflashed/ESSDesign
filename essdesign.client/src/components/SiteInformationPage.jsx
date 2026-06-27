@@ -154,14 +154,33 @@ function UserAvatar({ user }) {
 }
 
 function RoleUserSelect({ label, helper, role, value, options, onChange }) {
+    const [open, setOpen] = useState(false);
     const selectedUser = options.find(user => user.id === value) || null;
+    const chooseUser = (nextValue) => {
+        onChange(nextValue);
+        setOpen(false);
+    };
+
     return (
-        <div className="site-registry-role-select">
+        <div
+            className={`site-registry-role-select${open ? ' open' : ''}`}
+            onBlur={event => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setOpen(false);
+                }
+            }}
+        >
             <div className="site-registry-role-select-label">
                 <label>{label}</label>
                 <span>{helper}</span>
             </div>
-            <div className={`site-registry-role-select-control${selectedUser ? ' has-user' : ''}`}>
+            <button
+                type="button"
+                className={`site-registry-role-select-control${selectedUser ? ' has-user' : ''}`}
+                onClick={() => setOpen(prev => !prev)}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
                 {selectedUser ? (
                     <>
                         <UserAvatar user={selectedUser} />
@@ -174,14 +193,43 @@ function RoleUserSelect({ label, helper, role, value, options, onChange }) {
                 ) : (
                     <span className="site-registry-role-empty">Not assigned</span>
                 )}
-                <select value={value} onChange={event => onChange(event.target.value)} aria-label={label}>
-                    <option value="">Not assigned</option>
-                    {options.map(user => (
-                        <option key={user.id} value={user.id}>{appUserName(user)}</option>
-                    ))}
-                </select>
-                <ChevronDown size={15} strokeWidth={2.3} aria-hidden="true" />
-            </div>
+                <ChevronDown className="site-registry-role-chevron" size={15} strokeWidth={2.3} aria-hidden="true" />
+            </button>
+            {open ? (
+                <div className="site-registry-role-menu" role="listbox" aria-label={label}>
+                    <button
+                        type="button"
+                        className={`site-registry-role-menu-option empty${!selectedUser ? ' selected' : ''}`}
+                        onClick={() => chooseUser('')}
+                        role="option"
+                        aria-selected={!selectedUser}
+                    >
+                        <span className="site-registry-role-menu-empty">Not assigned</span>
+                    </button>
+                    {options.length === 0 ? (
+                        <div className="site-registry-role-menu-note">No matching users found.</div>
+                    ) : options.map(user => {
+                        const isSelected = user.id === value;
+                        return (
+                            <button
+                                key={user.id}
+                                type="button"
+                                className={`site-registry-role-menu-option${isSelected ? ' selected' : ''}`}
+                                onClick={() => chooseUser(user.id)}
+                                role="option"
+                                aria-selected={isSelected}
+                            >
+                                <UserAvatar user={user} />
+                                <span className="site-registry-role-menu-person">
+                                    <strong>{appUserName(user)}</strong>
+                                    <small>{user.email || 'No email recorded'}</small>
+                                </span>
+                                <span className={`site-registry-role-pill ${role}`}>{roleLabel(role)}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
         </div>
     );
 }

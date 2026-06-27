@@ -8465,6 +8465,7 @@ button.stat-card {
 }
 
 .site-registry-role-select {
+    position: relative;
     min-width: 0;
     display: grid;
     gap: 8px;
@@ -8499,25 +8500,30 @@ button.stat-card {
     border-radius: 7px;
     background: #ffffff;
     color: #0f172a;
+    text-align: left;
     box-shadow: 0 1px 1px rgba(15, 23, 42, 0.03);
+    cursor: pointer;
 }
 
-.site-registry-role-select-control:focus-within {
+.site-registry-role-select-control:hover {
+    border-color: #94a3b8;
+    background: #f8fbff;
+}
+
+.site-registry-role-select-control:focus-visible,
+.site-registry-role-select.open .site-registry-role-select-control {
     border-color: #2563eb;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    outline: none;
 }
 
-.site-registry-role-select-control > svg {
+.site-registry-role-chevron {
     color: #64748b;
+    transition: transform 140ms ease;
 }
 
-.site-registry-role-select-control select {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
+.site-registry-role-select.open .site-registry-role-chevron {
+    transform: rotate(180deg);
 }
 
 .site-registry-role-empty {
@@ -8525,6 +8531,83 @@ button.stat-card {
     color: #64748b;
     font-size: 13px;
     font-weight: 500;
+}
+
+.site-registry-role-menu {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    max-height: 258px;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
+}
+
+.site-registry-role-menu-option {
+    width: 100%;
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #0f172a;
+    text-align: left;
+    cursor: pointer;
+}
+
+.site-registry-role-menu-option:hover,
+.site-registry-role-menu-option.selected {
+    background: #eff6ff;
+}
+
+.site-registry-role-menu-option.empty {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.site-registry-role-menu-empty,
+.site-registry-role-menu-note {
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.site-registry-role-menu-note {
+    padding: 10px 9px;
+}
+
+.site-registry-role-menu-person {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.site-registry-role-menu-person strong {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-role-menu-person small {
+    overflow: hidden;
+    color: #52637d;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .site-registry-role-select-person {
