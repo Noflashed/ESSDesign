@@ -8002,12 +8002,24 @@ button.stat-card {
 }
 
 .site-registry-employee-main span,
-.site-registry-employee-role,
 .site-registry-employee-date {
     overflow: hidden;
     color: #52637d;
     font-size: 12px;
     font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-employee-role {
+    justify-self: start;
+    overflow: hidden;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: #52637d;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -8548,8 +8560,7 @@ button.stat-card {
     white-space: nowrap;
 }
 
-.site-registry-role-pill.project_manager,
-.site-registry-inducted-option-role {
+.site-registry-role-pill.project_manager {
     background: #dbeafe;
     color: #1d4ed8;
 }
@@ -8557,6 +8568,18 @@ button.stat-card {
 .site-registry-role-pill.site_supervisor {
     background: #dcfce7;
     color: #15803d;
+}
+
+.site-registry-employee-role.general_scaffolder,
+.site-registry-inducted-option-role.general_scaffolder {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.site-registry-employee-role.leading_hand,
+.site-registry-inducted-option-role.leading_hand {
+    background: #fef3c7;
+    color: #b45309;
 }
 
 .site-registry-inducted-editor {

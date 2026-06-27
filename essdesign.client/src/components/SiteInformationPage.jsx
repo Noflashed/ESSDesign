@@ -88,8 +88,8 @@ function employeeInitials(employee) {
     return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2)).toUpperCase();
 }
 
-function employeeRole(employee) {
-    return employee?.leadingHand ? 'Leading Hand' : 'Employee';
+function employeeFallbackRoleKey(employee) {
+    return employee?.leadingHand ? 'leading_hand' : 'general_scaffolder';
 }
 
 function roleLabel(role) {
@@ -126,13 +126,13 @@ function personPhone(person) {
     return person?.phoneNumber || 'No phone recorded';
 }
 
-function employeeMatchesSearch(employee, query) {
+function employeeMatchesSearchText(employee, roleText, query) {
     if (!query) {
         return true;
     }
     return [
         employeeName(employee),
-        employeeRole(employee),
+        roleText,
         employee?.email || '',
         employee?.phoneNumber || ''
     ].join(' ').toLowerCase().includes(query);
@@ -357,14 +357,19 @@ export default function SiteInformationPage() {
             siteSupervisors: appUsers.filter(user => user.role === 'site_supervisor').sort(byName)
         };
     }, [appUsers]);
+    const getEmployeeRoleKey = (employee) => appUserById.get(employee?.linkedAuthUserId)?.role || employeeFallbackRoleKey(employee);
+    const getEmployeeRoleLabel = (employee) => roleLabel(getEmployeeRoleKey(employee));
+    const isInductableWorker = (employee) => ['general_scaffolder', 'leading_hand'].includes(getEmployeeRoleKey(employee));
     const sortedEmployees = useMemo(
         () => [...employees].sort((left, right) => employeeName(left).localeCompare(employeeName(right))),
         [employees]
     );
     const filteredProjectFormEmployees = useMemo(() => {
         const query = projectEmployeeSearch.trim().toLowerCase();
-        return sortedEmployees.filter(employee => employeeMatchesSearch(employee, query));
-    }, [projectEmployeeSearch, sortedEmployees]);
+        return sortedEmployees
+            .filter(isInductableWorker)
+            .filter(employee => employeeMatchesSearchText(employee, getEmployeeRoleLabel(employee), query));
+    }, [appUserById, projectEmployeeSearch, sortedEmployees]);
 
     const getProjectEmployees = (project) => {
         const siteKey = projectSiteKey(project);
@@ -389,12 +394,7 @@ export default function SiteInformationPage() {
         if (!query) {
             return projectEmployees;
         }
-        return projectEmployees.filter(employee => [
-            employeeName(employee),
-            employeeRole(employee),
-            employee.email || '',
-            employee.phoneNumber || ''
-        ].join(' ').toLowerCase().includes(query));
+        return projectEmployees.filter(employee => employeeMatchesSearchText(employee, getEmployeeRoleLabel(employee), query));
     };
 
     const getProjectManager = (project) => {
@@ -422,6 +422,9 @@ export default function SiteInformationPage() {
     const openEditProject = (builderId, project) => {
         const managerEmployee = employeeById.get(project.projectManagerEmployeeId);
         const supervisorEmployee = employeeById.get(project.siteSupervisorEmployeeId);
+        const existingInductedEmployees = Array.isArray(project.inductedEmployeeIds)
+            ? project.inductedEmployeeIds.map(employeeId => employeeById.get(employeeId)).filter(Boolean)
+            : getProjectEmployees(project);
         setProjectForm({
             builderId,
             projectName: project.name,
@@ -431,9 +434,7 @@ export default function SiteInformationPage() {
             siteSupervisorUserId: project.siteSupervisorUserId || supervisorEmployee?.linkedAuthUserId || '',
             projectManagerEmployeeId: project.projectManagerEmployeeId || '',
             siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || '',
-            inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
-                ? project.inductedEmployeeIds
-                : getProjectEmployees(project).map(employee => employee.id),
+            inductedEmployeeIds: existingInductedEmployees.filter(isInductableWorker).map(employee => employee.id),
             editingProjectId: project.id
         });
         setProjectEmployeeSearch('');
@@ -519,20 +520,25 @@ export default function SiteInformationPage() {
             if (projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId) {
                 throw new Error('Select a valid suggested site address before saving.');
             }
+            const inductedWorkerIds = (projectForm.inductedEmployeeIds || [])
+                .filter(employeeId => {
+                    const employee = employeeById.get(employeeId);
+                    return employee && isInductableWorker(employee);
+                });
             const nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
                     siteSupervisorUserId: projectForm.siteSupervisorUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
-                    inductedEmployeeIds: projectForm.inductedEmployeeIds
+                    inductedEmployeeIds: inductedWorkerIds
                 })
                 : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
                     siteSupervisorUserId: projectForm.siteSupervisorUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
-                    inductedEmployeeIds: projectForm.inductedEmployeeIds
+                    inductedEmployeeIds: inductedWorkerIds
                 });
             setBuilders(nextBuilders);
             setSelectedBuilderId(projectForm.builderId);
@@ -901,7 +907,7 @@ export default function SiteInformationPage() {
                                                                 <section className="site-registry-inducted-panel">
                                                                     <div className="site-registry-detail-heading">
                                                                         <div>
-                                                                            <h4>Inducted Employees</h4>
+                                                                            <h4>Inducted Workers</h4>
                                                                             <span>{employeesLoading ? 'Loading employees...' : `${projectEmployees.length} linked to this site`}</span>
                                                                         </div>
                                                                         <label className="site-registry-inducted-search">
@@ -930,7 +936,7 @@ export default function SiteInformationPage() {
                                                                                     <strong>{employeeName(employee)}</strong>
                                                                                     <span>{employee.email || 'No email recorded'}</span>
                                                                                 </div>
-                                                                                <span className="site-registry-employee-role">{employeeRole(employee)}</span>
+                                                                                <span className={`site-registry-employee-role ${getEmployeeRoleKey(employee)}`}>{getEmployeeRoleLabel(employee)}</span>
                                                                                 <span className="site-registry-employee-date">{formatProjectDate(employee.verifiedAt || employee.updatedAt)}</span>
                                                                                 <span className="site-registry-employee-status">Inducted</span>
                                                                             </div>
@@ -1166,9 +1172,9 @@ export default function SiteInformationPage() {
                                                     <EmployeeAvatar employee={employee} />
                                                     <span>
                                                         <strong>{employeeName(employee)}</strong>
-                                                        <small>{employee.email || employee.phoneNumber || employeeRole(employee)}</small>
+                                                        <small>{employee.email || employee.phoneNumber || getEmployeeRoleLabel(employee)}</small>
                                                     </span>
-                                                    <span className="site-registry-inducted-option-role">{employeeRole(employee)}</span>
+                                                    <span className={`site-registry-inducted-option-role ${getEmployeeRoleKey(employee)}`}>{getEmployeeRoleLabel(employee)}</span>
                                                 </label>
                                             );
                                         })}
