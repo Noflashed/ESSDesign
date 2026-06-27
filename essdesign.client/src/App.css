@@ -8594,7 +8594,7 @@ button.stat-card {
     overflow: hidden;
     color: #0f172a;
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 500;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -8620,7 +8620,7 @@ button.stat-card {
     overflow: hidden;
     color: #0f172a;
     font-size: 13px;
-    font-weight: 650;
+    font-weight: 500;
     line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
