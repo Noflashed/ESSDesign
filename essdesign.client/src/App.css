@@ -8283,7 +8283,7 @@ button.stat-card {
     }
 }
 
-.site-registry-project-modal {
+.module-modal.compact.site-registry-project-modal {
     width: min(1180px, calc(100vw - 32px));
     max-height: min(760px, calc(100vh - 48px));
     padding: 0;
