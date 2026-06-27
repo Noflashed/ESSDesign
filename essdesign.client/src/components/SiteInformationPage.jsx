@@ -1037,13 +1037,7 @@ export default function SiteInformationPage() {
             {showProjectModal && (
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>
                     <div className="module-modal compact site-registry-project-modal" onClick={e => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <div>
-                                <h3>{projectForm.editingProjectId ? 'Edit Project' : 'Add Project'}</h3>
-                                <p>Update site details, assigned roles, and inducted employees.</p>
-                            </div>
-                            <button className="nav-drawer-close" onClick={closeProjectModal}>x</button>
-                        </div>
+                        <button type="button" className="site-registry-project-close" onClick={closeProjectModal} aria-label="Close project form">x</button>
                         <form className="module-form site-registry-project-form" onSubmit={saveProject}>
                             <div className="site-registry-project-form-body">
                                 <section className="site-registry-form-section">
@@ -1142,7 +1136,7 @@ export default function SiteInformationPage() {
 
                                 <section className="site-registry-form-section site-registry-form-section-last">
                                     <div className="site-registry-inducted-editor-head">
-                                        <label>Inducted Employees</label>
+                                        <label>Inducted Workers</label>
                                         <span>{projectForm.inductedEmployeeIds.length} selected</span>
                                     </div>
                                     <label className="site-registry-inducted-search site-registry-inducted-editor-search">
