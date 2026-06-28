@@ -317,23 +317,31 @@ export default function SiteInformationPage() {
     useEffect(() => {
         let cancelled = false;
 
-        const loadBuilderLogoUrls = async () => {
-            const entries = await Promise.all(
-                builders.map(async builder => {
-                    try {
-                        const url = await safetyProjectsAPI.resolveBuilderLogoUrl(builder);
-                        return [builder.id, url || ''];
-                    } catch {
-                        return [builder.id, builder.logoUrl || ''];
+        setBuilderLogoUrls(prev => {
+            const next = new Map();
+            builders.forEach(builder => {
+                next.set(builder.id, prev.get(builder.id) || builder.logoUrl || '');
+            });
+            return next;
+        });
+
+        builders.forEach(builder => {
+            safetyProjectsAPI.resolveBuilderLogoUrl(builder)
+                .then(url => {
+                    if (!cancelled) {
+                        setBuilderLogoUrls(prev => {
+                            if (prev.get(builder.id) === (url || '')) {
+                                return prev;
+                            }
+                            const next = new Map(prev);
+                            next.set(builder.id, url || '');
+                            return next;
+                        });
                     }
                 })
-            );
-            if (!cancelled) {
-                setBuilderLogoUrls(new Map(entries));
-            }
-        };
+                .catch(() => {});
+        });
 
-        loadBuilderLogoUrls();
         return () => {
             cancelled = true;
         };

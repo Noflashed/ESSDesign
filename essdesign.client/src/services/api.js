@@ -337,6 +337,7 @@ const safetyProjectsObjectUrl = () => `${SUPABASE_URL}/storage/v1/object/${SAFET
 const safetyProjectsObjectUpsertUrl = () => `${safetyProjectsObjectUrl()}?upsert=true`;
 const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFETY_BUCKET}`;
 const builderLogoUrlCache = new Map();
+const BUILDER_LOGO_URL_CACHE_KEY = 'ess-builder-logo-url-cache-v1';
 
 export const MATERIAL_ORDER_REQUESTS_CHANGED_EVENT = 'ess-material-order-requests-changed';
 export const SAFETY_PROJECTS_CHANGED_EVENT = 'ess-safety-projects-changed';
@@ -666,7 +667,51 @@ async function uploadBuilderLogoFile(builderId, file) {
     const objectPath = `${BUILDER_LOGOS_PREFIX}/${builderId}/${Date.now()}-${fileName}`;
     await uploadStorageObject(objectPath, file, file.type || 'application/octet-stream');
     builderLogoUrlCache.delete(objectPath);
+    forgetPersistedBuilderLogoUrl(objectPath);
     return objectPath;
+}
+
+function readPersistedBuilderLogoUrl(logoPath) {
+    if (typeof window === 'undefined' || !logoPath) {
+        return '';
+    }
+    try {
+        const cache = JSON.parse(window.localStorage.getItem(BUILDER_LOGO_URL_CACHE_KEY) || '{}');
+        const cached = cache?.[logoPath];
+        if (!cached?.url || !cached?.expiresAt || cached.expiresAt <= Date.now()) {
+            return '';
+        }
+        builderLogoUrlCache.set(logoPath, cached);
+        return cached.url;
+    } catch {
+        return '';
+    }
+}
+
+function persistBuilderLogoUrl(logoPath, value) {
+    if (typeof window === 'undefined' || !logoPath || !value?.url) {
+        return;
+    }
+    try {
+        const cache = JSON.parse(window.localStorage.getItem(BUILDER_LOGO_URL_CACHE_KEY) || '{}');
+        cache[logoPath] = value;
+        window.localStorage.setItem(BUILDER_LOGO_URL_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // In-memory cache still applies for this session.
+    }
+}
+
+function forgetPersistedBuilderLogoUrl(logoPath) {
+    if (typeof window === 'undefined' || !logoPath) {
+        return;
+    }
+    try {
+        const cache = JSON.parse(window.localStorage.getItem(BUILDER_LOGO_URL_CACHE_KEY) || '{}');
+        delete cache[logoPath];
+        window.localStorage.setItem(BUILDER_LOGO_URL_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+        // Best effort only.
+    }
 }
 
 async function resolveBuilderLogoUrl(builder, { expiresIn = 86400 } = {}) {
@@ -685,11 +730,18 @@ async function resolveBuilderLogoUrl(builder, { expiresIn = 86400 } = {}) {
         return cached.url;
     }
 
+    const persistedUrl = readPersistedBuilderLogoUrl(logoPath);
+    if (persistedUrl) {
+        return persistedUrl;
+    }
+
     const url = await signedStorageUrl(logoPath, expiresIn);
-    builderLogoUrlCache.set(logoPath, {
+    const cacheEntry = {
         url,
         expiresAt: Date.now() + Math.max(60, expiresIn - 300) * 1000
-    });
+    };
+    builderLogoUrlCache.set(logoPath, cacheEntry);
+    persistBuilderLogoUrl(logoPath, cacheEntry);
     return url;
 }
 
