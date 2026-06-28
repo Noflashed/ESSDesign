@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
-import { analysisAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
+import { analysisAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -152,16 +152,42 @@ function EmployeeAvatar({ employee }) {
 }
 
 function UserAvatar({ user }) {
-    return <span className="site-registry-employee-avatar" aria-hidden="true">{appUserInitials(user)}</span>;
+    const avatarUrl = user?.avatarUrl || '';
+    return (
+        <span className={`site-registry-employee-avatar${avatarUrl ? ' has-image' : ''}`} aria-hidden="true">
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : appUserInitials(user)}
+        </span>
+    );
 }
 
 function roleOptionValue(user) {
     return user?.value || user?.id || '';
 }
 
-function RoleUserSelect({ label, helper, role, value, options, onChange }) {
+function getRoleAvatarLookupId(user) {
+    if (!user) {
+        return '';
+    }
+    if (user.employeeId || user.EmployeeId) {
+        return user.employeeId || user.EmployeeId;
+    }
+    if (user.authUserId) {
+        return user.authUserId;
+    }
+    const id = user.id || '';
+    return String(id).startsWith('employee:') ? '' : id;
+}
+
+function withRoleAvatar(user, avatarUrls) {
+    const lookupId = getRoleAvatarLookupId(user);
+    return lookupId && avatarUrls?.[lookupId] ? { ...user, avatarUrl: avatarUrls[lookupId] } : user;
+}
+
+const roleAvatarUrlCache = new Map();
+
+function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onChange }) {
     const [open, setOpen] = useState(false);
-    const selectedUser = options.find(user => roleOptionValue(user) === value) || null;
+    const selectedUser = withRoleAvatar(options.find(user => roleOptionValue(user) === value) || null, avatarUrls);
     const chooseUser = (nextValue, option = null) => {
         onChange(nextValue, option);
         setOpen(false);
@@ -189,12 +215,12 @@ function RoleUserSelect({ label, helper, role, value, options, onChange }) {
             >
                 {selectedUser ? (
                     <>
-                        <UserAvatar user={selectedUser} />
                         <span className="site-registry-role-select-person">
                             <strong>{appUserName(selectedUser)}</strong>
                             <small>{selectedUser.email || 'No email recorded'}</small>
                         </span>
                         <span className={`site-registry-role-pill ${role}`}>{roleLabel(role)}</span>
+                        <UserAvatar user={selectedUser} />
                     </>
                 ) : (
                     <span className="site-registry-role-empty">Not assigned</span>
@@ -215,6 +241,7 @@ function RoleUserSelect({ label, helper, role, value, options, onChange }) {
                     {options.length === 0 ? (
                         <div className="site-registry-role-menu-note">No matching users found.</div>
                     ) : options.map(user => {
+                        const hydratedUser = withRoleAvatar(user, avatarUrls);
                         const optionValue = roleOptionValue(user);
                         const isSelected = optionValue === value;
                         return (
@@ -226,12 +253,12 @@ function RoleUserSelect({ label, helper, role, value, options, onChange }) {
                                 role="option"
                                 aria-selected={isSelected}
                             >
-                                <UserAvatar user={user} />
                                 <span className="site-registry-role-menu-person">
-                                    <strong>{appUserName(user)}</strong>
-                                    <small>{user.email || 'No email recorded'}</small>
+                                    <strong>{appUserName(hydratedUser)}</strong>
+                                    <small>{hydratedUser.email || 'No email recorded'}</small>
                                 </span>
                                 <span className={`site-registry-role-pill ${role}`}>{roleLabel(role)}</span>
+                                <UserAvatar user={hydratedUser} />
                             </button>
                         );
                     })}
@@ -249,6 +276,7 @@ export default function SiteInformationPage() {
     const [appUsers, setAppUsers] = useState([]);
     const [employeesLoading, setEmployeesLoading] = useState(false);
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
+    const [roleAvatarUrls, setRoleAvatarUrls] = useState(() => ({}));
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [showProjectModal, setShowProjectModal] = useState(false);
     const [showBuilderModal, setShowBuilderModal] = useState(false);
@@ -453,6 +481,48 @@ export default function SiteInformationPage() {
             leadingHands: Array.from(leadingHandOptions.values()).sort(byName)
         };
     }, [appUserById, appUsers, employeeByAuthUserId, employees]);
+
+    useEffect(() => {
+        if (!showProjectModal) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        const roleOptions = [
+            ...roleUsers.projectManagers,
+            ...roleUsers.siteSupervisors,
+            ...roleUsers.leadingHands
+        ];
+        const lookupIds = Array.from(new Set(roleOptions.map(getRoleAvatarLookupId).filter(Boolean)));
+
+        lookupIds.forEach(lookupId => {
+            if (roleAvatarUrls[lookupId]) {
+                return;
+            }
+            const cached = roleAvatarUrlCache.get(lookupId);
+            if (cached !== undefined) {
+                if (cached) {
+                    setRoleAvatarUrls(prev => prev[lookupId] ? prev : { ...prev, [lookupId]: cached });
+                }
+                return;
+            }
+            resolveProfileImageUrl(lookupId)
+                .then(url => {
+                    roleAvatarUrlCache.set(lookupId, url || '');
+                    if (!cancelled && url) {
+                        setRoleAvatarUrls(prev => prev[lookupId] ? prev : { ...prev, [lookupId]: url });
+                    }
+                })
+                .catch(() => {
+                    roleAvatarUrlCache.set(lookupId, '');
+                });
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [roleAvatarUrls, roleUsers, showProjectModal]);
+
     const getEmployeeRoleKey = (employee) => appUserById.get(employee?.linkedAuthUserId)?.role || employeeFallbackRoleKey(employee);
     const getEmployeeRoleLabel = (employee) => roleLabel(getEmployeeRoleKey(employee));
     const isInductableWorker = (employee) => ['general_scaffolder', 'leading_hand'].includes(getEmployeeRoleKey(employee));
@@ -956,7 +1026,7 @@ export default function SiteInformationPage() {
                                         return (
                                             <React.Fragment key={rowKey}>
                                                 <tr
-                                                    className={`site-registry-data-row${isExpanded ? ' selected' : ''}`}
+                                                    className={`site-registry-data-row${isExpanded ? ' selected' : ''}${project.archived ? ' archived' : ''}`}
                                                     onClick={() => openProjectInfo(project)}
                                                     onContextMenu={event => openProjectMenuFromRow(event, project)}
                                                     onKeyDown={event => {
@@ -1240,6 +1310,7 @@ export default function SiteInformationPage() {
                                             role="project_manager"
                                             value={projectForm.projectManagerUserId}
                                             options={roleUsers.projectManagers}
+                                            avatarUrls={roleAvatarUrls}
                                             onChange={(value) => setProjectForm(prev => ({
                                                 ...prev,
                                                 projectManagerUserId: value,
@@ -1252,6 +1323,7 @@ export default function SiteInformationPage() {
                                             role="site_supervisor"
                                             value={projectForm.siteSupervisorUserId}
                                             options={roleUsers.siteSupervisors}
+                                            avatarUrls={roleAvatarUrls}
                                             onChange={(value) => setProjectForm(prev => ({
                                                 ...prev,
                                                 siteSupervisorUserId: value,
@@ -1264,6 +1336,7 @@ export default function SiteInformationPage() {
                                             role="leading_hand"
                                             value={projectForm.leadingHandUserId || (projectForm.leadingHandEmployeeId ? `employee:${projectForm.leadingHandEmployeeId}` : '')}
                                             options={roleUsers.leadingHands}
+                                            avatarUrls={roleAvatarUrls}
                                             onChange={(value, option) => {
                                                 const selectedEmployeeId = option?.employeeId || employeeByAuthUserId.get(value)?.id || '';
                                                 setProjectForm(prev => ({
