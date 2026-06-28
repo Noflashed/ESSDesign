@@ -155,11 +155,15 @@ function UserAvatar({ user }) {
     return <span className="site-registry-employee-avatar" aria-hidden="true">{appUserInitials(user)}</span>;
 }
 
+function roleOptionValue(user) {
+    return user?.value || user?.id || '';
+}
+
 function RoleUserSelect({ label, helper, role, value, options, onChange }) {
     const [open, setOpen] = useState(false);
-    const selectedUser = options.find(user => user.id === value) || null;
-    const chooseUser = (nextValue) => {
-        onChange(nextValue);
+    const selectedUser = options.find(user => roleOptionValue(user) === value) || null;
+    const chooseUser = (nextValue, option = null) => {
+        onChange(nextValue, option);
         setOpen(false);
     };
 
@@ -211,13 +215,14 @@ function RoleUserSelect({ label, helper, role, value, options, onChange }) {
                     {options.length === 0 ? (
                         <div className="site-registry-role-menu-note">No matching users found.</div>
                     ) : options.map(user => {
-                        const isSelected = user.id === value;
+                        const optionValue = roleOptionValue(user);
+                        const isSelected = optionValue === value;
                         return (
                             <button
-                                key={user.id}
+                                key={optionValue}
                                 type="button"
                                 className={`site-registry-role-menu-option${isSelected ? ' selected' : ''}`}
-                                onClick={() => chooseUser(user.id)}
+                                onClick={() => chooseUser(optionValue, user)}
                                 role="option"
                                 aria-selected={isSelected}
                             >
@@ -402,12 +407,44 @@ export default function SiteInformationPage() {
     );
     const roleUsers = useMemo(() => {
         const byName = (left, right) => appUserName(left).localeCompare(appUserName(right));
+        const leadingHandOptions = new Map();
+        employees.forEach(employee => {
+            const appUser = employee.linkedAuthUserId ? appUserById.get(employee.linkedAuthUserId) : null;
+            const effectiveRole = appUser?.role || employeeFallbackRoleKey(employee);
+            if (effectiveRole !== 'leading_hand') {
+                return;
+            }
+            const optionValue = appUser?.id || `employee:${employee.id}`;
+            leadingHandOptions.set(optionValue, {
+                ...(appUser || {}),
+                id: optionValue,
+                value: optionValue,
+                authUserId: appUser?.id || '',
+                employeeId: employee.id,
+                fullName: appUserName(appUser) !== 'Unnamed user' ? appUserName(appUser) : employeeName(employee),
+                email: appUser?.email || employee.email || '',
+                phoneNumber: appUser?.phoneNumber || employee.phoneNumber || '',
+                role: 'leading_hand'
+            });
+        });
+        appUsers
+            .filter(user => user.role === 'leading_hand')
+            .forEach(user => {
+                if (!leadingHandOptions.has(user.id)) {
+                    leadingHandOptions.set(user.id, {
+                        ...user,
+                        value: user.id,
+                        authUserId: user.id,
+                        employeeId: employeeByAuthUserId.get(user.id)?.id || ''
+                    });
+                }
+            });
         return {
             projectManagers: appUsers.filter(user => user.role === 'project_manager').sort(byName),
             siteSupervisors: appUsers.filter(user => user.role === 'site_supervisor').sort(byName),
-            leadingHands: appUsers.filter(user => user.role === 'leading_hand').sort(byName)
+            leadingHands: Array.from(leadingHandOptions.values()).sort(byName)
         };
-    }, [appUsers]);
+    }, [appUserById, appUsers, employeeByAuthUserId, employees]);
     const getEmployeeRoleKey = (employee) => appUserById.get(employee?.linkedAuthUserId)?.role || employeeFallbackRoleKey(employee);
     const getEmployeeRoleLabel = (employee) => roleLabel(getEmployeeRoleKey(employee));
     const isInductableWorker = (employee) => ['general_scaffolder', 'leading_hand'].includes(getEmployeeRoleKey(employee));
@@ -1217,13 +1254,16 @@ export default function SiteInformationPage() {
                                             label="Leading Hand"
                                             helper="Only Leading Hand users appear here"
                                             role="leading_hand"
-                                            value={projectForm.leadingHandUserId}
+                                            value={projectForm.leadingHandUserId || (projectForm.leadingHandEmployeeId ? `employee:${projectForm.leadingHandEmployeeId}` : '')}
                                             options={roleUsers.leadingHands}
-                                            onChange={(value) => setProjectForm(prev => ({
-                                                ...prev,
-                                                leadingHandUserId: value,
-                                                leadingHandEmployeeId: employeeByAuthUserId.get(value)?.id || ''
-                                            }))}
+                                            onChange={(value, option) => {
+                                                const selectedEmployeeId = option?.employeeId || employeeByAuthUserId.get(value)?.id || '';
+                                                setProjectForm(prev => ({
+                                                    ...prev,
+                                                    leadingHandUserId: option?.authUserId || (!value.startsWith('employee:') ? value : ''),
+                                                    leadingHandEmployeeId: selectedEmployeeId
+                                                }));
+                                            }}
                                         />
                                     </div>
                                 </section>
