@@ -8460,8 +8460,8 @@ button.stat-card {
 
 .site-registry-personnel-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 28px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
 }
 
 .site-registry-role-select {
@@ -8655,6 +8655,11 @@ button.stat-card {
 .site-registry-role-pill.site_supervisor {
     background: #dcfce7;
     color: #15803d;
+}
+
+.site-registry-role-pill.leading_hand {
+    background: #fef3c7;
+    color: #b45309;
 }
 
 .site-registry-employee-role.general_scaffolder,

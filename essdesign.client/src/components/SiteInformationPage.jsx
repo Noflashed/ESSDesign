@@ -17,8 +17,10 @@ function emptyProjectForm(initialBuilderId = '') {
         siteLocationSourceId: '',
         projectManagerUserId: '',
         siteSupervisorUserId: '',
+        leadingHandUserId: '',
         projectManagerEmployeeId: '',
         siteSupervisorEmployeeId: '',
+        leadingHandEmployeeId: '',
         inductedEmployeeIds: [],
         editingProjectId: null
     };
@@ -402,7 +404,8 @@ export default function SiteInformationPage() {
         const byName = (left, right) => appUserName(left).localeCompare(appUserName(right));
         return {
             projectManagers: appUsers.filter(user => user.role === 'project_manager').sort(byName),
-            siteSupervisors: appUsers.filter(user => user.role === 'site_supervisor').sort(byName)
+            siteSupervisors: appUsers.filter(user => user.role === 'site_supervisor').sort(byName),
+            leadingHands: appUsers.filter(user => user.role === 'leading_hand').sort(byName)
         };
     }, [appUsers]);
     const getEmployeeRoleKey = (employee) => appUserById.get(employee?.linkedAuthUserId)?.role || employeeFallbackRoleKey(employee);
@@ -459,6 +462,13 @@ export default function SiteInformationPage() {
         return appUserById.get(project?.siteSupervisorUserId) || employeeById.get(project?.siteSupervisorEmployeeId) || getProjectEmployees(project).find(employee => employee.leadingHand) || null;
     };
 
+    const getLeadingHand = (project) => {
+        if (project?.leadingHand) {
+            return project.leadingHand;
+        }
+        return appUserById.get(project?.leadingHandUserId) || employeeById.get(project?.leadingHandEmployeeId) || null;
+    };
+
     const openCreateProject = () => {
         setProjectForm(emptyProjectForm(selectedBuilder?.id || builders[0]?.id || ''));
         setProjectEmployeeSearch('');
@@ -470,6 +480,7 @@ export default function SiteInformationPage() {
     const openEditProject = (builderId, project) => {
         const managerEmployee = employeeById.get(project.projectManagerEmployeeId);
         const supervisorEmployee = employeeById.get(project.siteSupervisorEmployeeId);
+        const leadingHandEmployee = employeeById.get(project.leadingHandEmployeeId);
         const existingInductedEmployees = Array.isArray(project.inductedEmployeeIds)
             ? project.inductedEmployeeIds.map(employeeId => employeeById.get(employeeId)).filter(Boolean)
             : getProjectEmployees(project);
@@ -480,8 +491,10 @@ export default function SiteInformationPage() {
             siteLocationSourceId: project.siteLocation ? 'existing' : '',
             projectManagerUserId: project.projectManagerUserId || managerEmployee?.linkedAuthUserId || '',
             siteSupervisorUserId: project.siteSupervisorUserId || supervisorEmployee?.linkedAuthUserId || '',
+            leadingHandUserId: project.leadingHandUserId || leadingHandEmployee?.linkedAuthUserId || '',
             projectManagerEmployeeId: project.projectManagerEmployeeId || '',
             siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || '',
+            leadingHandEmployeeId: project.leadingHandEmployeeId || '',
             inductedEmployeeIds: existingInductedEmployees.filter(isInductableWorker).map(employee => employee.id),
             editingProjectId: project.id
         });
@@ -577,15 +590,19 @@ export default function SiteInformationPage() {
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
                     siteSupervisorUserId: projectForm.siteSupervisorUserId,
+                    leadingHandUserId: projectForm.leadingHandUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
+                    leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
                     inductedEmployeeIds: inductedWorkerIds
                 })
                 : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
                     siteSupervisorUserId: projectForm.siteSupervisorUserId,
+                    leadingHandUserId: projectForm.leadingHandUserId,
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
+                    leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
                     inductedEmployeeIds: inductedWorkerIds
                 });
             setBuilders(nextBuilders);
@@ -889,6 +906,7 @@ export default function SiteInformationPage() {
                                         const filteredProjectEmployees = isExpanded ? getFilteredProjectEmployees(project) : [];
                                         const projectManager = isExpanded ? getProjectManager(project) : null;
                                         const siteSupervisor = isExpanded ? getSiteSupervisor(project) : null;
+                                        const leadingHand = isExpanded ? getLeadingHand(project) : null;
 
                                         return (
                                             <React.Fragment key={rowKey}>
@@ -1022,6 +1040,17 @@ export default function SiteInformationPage() {
                                                                                 <>
                                                                                     <strong>{personDisplayName(siteSupervisor)}</strong>
                                                                                     <small><Phone size={13} aria-hidden="true" /> {personPhone(siteSupervisor)}</small>
+                                                                                </>
+                                                                            ) : (
+                                                                                <strong>Not assigned</strong>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="site-registry-contact-card">
+                                                                            <span>Leading Hand</span>
+                                                                            {leadingHand ? (
+                                                                                <>
+                                                                                    <strong>{personDisplayName(leadingHand)}</strong>
+                                                                                    <small><Phone size={13} aria-hidden="true" /> {personPhone(leadingHand)}</small>
                                                                                 </>
                                                                             ) : (
                                                                                 <strong>Not assigned</strong>
@@ -1182,6 +1211,18 @@ export default function SiteInformationPage() {
                                                 ...prev,
                                                 siteSupervisorUserId: value,
                                                 siteSupervisorEmployeeId: employeeByAuthUserId.get(value)?.id || ''
+                                            }))}
+                                        />
+                                        <RoleUserSelect
+                                            label="Leading Hand"
+                                            helper="Only Leading Hand users appear here"
+                                            role="leading_hand"
+                                            value={projectForm.leadingHandUserId}
+                                            options={roleUsers.leadingHands}
+                                            onChange={(value) => setProjectForm(prev => ({
+                                                ...prev,
+                                                leadingHandUserId: value,
+                                                leadingHandEmployeeId: employeeByAuthUserId.get(value)?.id || ''
                                             }))}
                                         />
                                     </div>

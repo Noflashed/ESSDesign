@@ -614,8 +614,10 @@ function parseSafetyProjects(raw) {
                                 siteLocation: (project.siteLocation || '').trim(),
                                 projectManagerUserId: project.projectManagerUserId || project.project_manager_user_id || '',
                                 siteSupervisorUserId: project.siteSupervisorUserId || project.site_supervisor_user_id || '',
+                                leadingHandUserId: project.leadingHandUserId || project.leading_hand_user_id || '',
                                 projectManagerEmployeeId: project.projectManagerEmployeeId || project.project_manager_employee_id || '',
                                 siteSupervisorEmployeeId: project.siteSupervisorEmployeeId || project.site_supervisor_employee_id || '',
+                                leadingHandEmployeeId: project.leadingHandEmployeeId || project.leading_hand_employee_id || '',
                                 inductedEmployeeIds: Array.isArray(project.inductedEmployeeIds)
                                     ? project.inductedEmployeeIds.filter(Boolean)
                                     : Array.isArray(project.inducted_employee_ids)
@@ -1149,8 +1151,10 @@ export const safetyProjectsAPI = {
             siteLocation: cleanLocation,
             projectManagerUserId: options.projectManagerUserId || '',
             siteSupervisorUserId: options.siteSupervisorUserId || '',
+            leadingHandUserId: options.leadingHandUserId || '',
             projectManagerEmployeeId: options.projectManagerEmployeeId || '',
             siteSupervisorEmployeeId: options.siteSupervisorEmployeeId || '',
+            leadingHandEmployeeId: options.leadingHandEmployeeId || '',
             inductedEmployeeIds: Array.isArray(options.inductedEmployeeIds)
                 ? Array.from(new Set(options.inductedEmployeeIds.filter(Boolean)))
                 : [],
@@ -1226,11 +1230,17 @@ export const safetyProjectsAPI = {
         if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorUserId')) {
             project.siteSupervisorUserId = options.siteSupervisorUserId || '';
         }
+        if (Object.prototype.hasOwnProperty.call(options, 'leadingHandUserId')) {
+            project.leadingHandUserId = options.leadingHandUserId || '';
+        }
         if (Object.prototype.hasOwnProperty.call(options, 'projectManagerEmployeeId')) {
             project.projectManagerEmployeeId = options.projectManagerEmployeeId || '';
         }
         if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorEmployeeId')) {
             project.siteSupervisorEmployeeId = options.siteSupervisorEmployeeId || '';
+        }
+        if (Object.prototype.hasOwnProperty.call(options, 'leadingHandEmployeeId')) {
+            project.leadingHandEmployeeId = options.leadingHandEmployeeId || '';
         }
         if (Object.prototype.hasOwnProperty.call(options, 'inductedEmployeeIds')) {
             project.inductedEmployeeIds = Array.isArray(options.inductedEmployeeIds)
