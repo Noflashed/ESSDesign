@@ -697,14 +697,16 @@ function App() {
         : [
             { key: 'design', label: 'ESS Design' },
             { key: 'site-information', label: 'Site Registry' },
-            { key: 'safety', label: 'ESS Safety' },
+            ...(showRosteringAndEmployees ? [{ key: 'employees', label: 'Employees' }] : []),
             ...(hasTransportSuiteAccess
                 ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
                 : [{ key: 'material-ordering-new', label: 'New Materials List' }]),
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
-                { key: 'employees', label: 'Employees' },
-            ] : []),
+                { key: 'safety', label: 'ESS Safety' },
+            ] : [
+                { key: 'safety', label: 'ESS Safety' },
+            ]),
             ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
     const showHeaderSearch = false;
