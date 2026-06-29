@@ -19,6 +19,7 @@ import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
+import MaterialOrderingPage from './components/MaterialOrderingPage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
@@ -188,6 +189,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 }
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
+const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
 const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'settings']);
 
@@ -770,6 +772,8 @@ function App() {
             ? (transportPages.has(page) ? page : 'truck-schedule')
             : isTransportManagement
             ? (transportPages.has(page) ? page : 'truck-schedule')
+            : (!hasTransportSuiteAccess && transportPages.has(page) && !MATERIAL_ORDERING_PAGE_KEYS.has(page))
+            ? 'material-ordering-new'
             : page;
         setCurrentPage(resolvedPage);
         setSafetyContext(nextSafetyContext);
@@ -788,7 +792,7 @@ function App() {
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
+    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
 
     useEffect(() => {
         checkAuth();
@@ -1336,6 +1340,8 @@ function App() {
         const pageFromUrl = urlParams.get('page') || fallbackPage;
         const resolvedPageFromUrl = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
             ? 'landing'
+            : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(pageFromUrl) && !MATERIAL_ORDERING_PAGE_KEYS.has(pageFromUrl))
+            ? 'material-ordering-new'
             : pageFromUrl;
         const builderFromUrl = urlParams.get('builder');
         const projectFromUrl = urlParams.get('project');
@@ -1367,6 +1373,8 @@ function App() {
             const page = e.state?.page ?? fallbackPage;
             const resolvedPage = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
                 ? 'landing'
+                : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(page) && !MATERIAL_ORDERING_PAGE_KEYS.has(page))
+                ? 'material-ordering-new'
                 : page;
             const nextSafetyContext = e.state?.safetyContext ?? { builder: null, project: null };
             const nextEmployeeContext = e.state?.employeeContext ?? { leadingHand: null };
@@ -1380,7 +1388,7 @@ function App() {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [buildAppUrl, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -1395,7 +1403,8 @@ function App() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-    const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
+    const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage)
+        && (hasTransportSuiteAccess || !MATERIAL_ORDERING_PAGE_KEYS.has(currentPage));
     const isAdmin = user?.role === 'admin';
     const canManageEssDesign = isAdmin || isScaffoldDesigner;
     const isIntegratedSidebarPage = isAuthenticated && !isTransportPage && DESIGN_PAGE_KEYS.has(currentPage);
@@ -1562,6 +1571,14 @@ function App() {
                     onBack={() => window.history.back()}
                 />
             );
+        }
+        if (MATERIAL_ORDERING_PAGE_KEYS.has(currentPage) && !hasTransportSuiteAccess) {
+            const materialOrderingView = currentPage === 'material-ordering-active'
+                ? 'active'
+                : currentPage === 'material-ordering-archived'
+                ? 'archived'
+                : 'form';
+            return <MaterialOrderingPage user={user} view={materialOrderingView} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
         }
         if (TRANSPORT_PAGE_KEYS.has(currentPage)) {
             return <TransportSuitePage user={user} currentPage={currentPage} onNavigate={(page) => applyPageState(page, { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onExit={() => applyPageState(isEmployeePortalRole ? 'employee-home' : 'landing', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onLogout={handleLogout} />;
