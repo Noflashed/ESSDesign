@@ -342,6 +342,8 @@ When a user asks to "take me to", "open", "view", "show" or "link" a document, c
 
 Write in plain, natural chat language. No markdown formatting, no bold, no bullet dashes, no tables, no headings. Use natural sentences. Be concise and direct.
 
+The ESS yard / depot is at 130 Gilba Road, Girraween NSW 2145 (coordinates -33.8122, 150.9354). When a user says "the yard", "the depot", or "our yard", they mean this address.
+
 If a question is genuinely outside the ESS app (weather, news, etc.), politely say so and offer to help with something ESS-related instead.
 """;
 
@@ -536,6 +538,11 @@ If a question is genuinely outside the ESS app (weather, news, etc.), politely s
                     ("limit", "integer", "Maximum results to return (default 10)"))),
             Fn("find_anything", "Broad keyword search across employees, job-sites, designs, and deliveries. Use this when you are not sure which category the user is asking about.",
                 Params(("query", "string", "Search keywords"))),
+            Fn("find_sites_near", "Find job-sites closest to a given location, ranked by straight-line distance. Use this for questions like 'what site is closest to the yard', 'nearest site to Parramatta', etc.",
+                Params(
+                    ("location", "string", "The reference location. Use 'yard' or 'depot' for the ESS yard at Girraween, or provide any Sydney address or suburb."),
+                    ("limit", "integer", "Maximum number of sites to return (default 10)"),
+                    ("include_archived", "boolean", "Include archived sites (default false)"))),
         };
 
         private static object Fn(string name, string description, object parameters) =>
@@ -585,6 +592,7 @@ If a question is genuinely outside the ESS app (weather, news, etc.), politely s
                 "get_site_health_report" => await Tool_GetSiteHealthReport(args, ct),
                 "get_recent_designs" => await Tool_GetRecentDesigns(args, ct),
                 "find_anything" => await Tool_FindAnything(args, ct),
+                "find_sites_near" => await Tool_FindSitesNear(args, ct),
                 _ => JsonSerializer.Serialize(new { error = $"Unknown tool: {name}" }, _jsonOptions),
             };
         }
@@ -1393,6 +1401,123 @@ If a question is genuinely outside the ESS app (weather, news, etc.), politely s
                 designs = designMatches,
                 tip = "Call more specific tools (get_site_details, search_designs, get_employee_details) for complete information on any of these results.",
             }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_FindSitesNear(JsonElement args, CancellationToken ct)
+        {
+            var locationQuery = TryGetString(args, "location") ?? string.Empty;
+            var limit = TryGetInt(args, "limit") ?? 10;
+            var includeArchived = args.TryGetProperty("include_archived", out var iaProp) && iaProp.ValueKind == JsonValueKind.True;
+
+            const double YardLat = -33.8122;
+            const double YardLon = 150.9354;
+
+            double refLat, refLon;
+            string refLabel;
+
+            var isYard = string.IsNullOrWhiteSpace(locationQuery)
+                || locationQuery.Equals("yard", StringComparison.OrdinalIgnoreCase)
+                || locationQuery.Equals("depot", StringComparison.OrdinalIgnoreCase)
+                || locationQuery.Contains("gilba", StringComparison.OrdinalIgnoreCase)
+                || locationQuery.Contains("girraween", StringComparison.OrdinalIgnoreCase);
+
+            if (isYard)
+            {
+                refLat = YardLat;
+                refLon = YardLon;
+                refLabel = "the ESS yard (130 Gilba Road, Girraween)";
+            }
+            else
+            {
+                var coords = await NominatimGeocodeAsync(locationQuery, ct);
+                if (coords == null)
+                    return JsonSerializer.Serialize(new { error = $"Could not geocode location: '{locationQuery}'. Try a more specific Sydney address or suburb." }, _jsonOptions);
+                refLat = coords.Value.Lat;
+                refLon = coords.Value.Lon;
+                refLabel = locationQuery;
+            }
+
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            if (!includeArchived)
+                jobsites = jobsites.Where(j => !j.Archived).ToList();
+
+            var withDistance = new List<(JobsiteContextRow Site, double DistanceKm, string? GeocodedAddress)>();
+
+            var geocodeTasks = jobsites
+                .Where(j => !string.IsNullOrWhiteSpace(j.SiteLocation))
+                .Select(async j =>
+                {
+                    var coords = await NominatimGeocodeAsync(j.SiteLocation!, ct);
+                    return (Site: j, Coords: coords);
+                });
+
+            var geocoded = await Task.WhenAll(geocodeTasks);
+
+            foreach (var (site, coords) in geocoded)
+            {
+                if (coords == null) continue;
+                var km = HaversineKm(refLat, refLon, coords.Value.Lat, coords.Value.Lon);
+                withDistance.Add((site, km, site.SiteLocation));
+            }
+
+            var results = withDistance
+                .OrderBy(x => x.DistanceKm)
+                .Take(limit)
+                .Select(x => new
+                {
+                    rank = withDistance.OrderBy(y => y.DistanceKm).ToList().IndexOf(x) + 1,
+                    site = x.Site.Name,
+                    builder = x.Site.BuilderName,
+                    address = x.GeocodedAddress,
+                    distanceKm = Math.Round(x.DistanceKm, 1),
+                    distanceLabel = x.DistanceKm < 1 ? $"{(int)(x.DistanceKm * 1000)} m" : $"{x.DistanceKm:F1} km",
+                    archived = x.Site.Archived,
+                })
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                referencePoint = refLabel,
+                count = results.Count,
+                sites = results,
+            }, _jsonOptions);
+        }
+
+        private static double HaversineKm(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371.0;
+            var dLat = (lat2 - lat1) * Math.PI / 180.0;
+            var dLon = (lon2 - lon1) * Math.PI / 180.0;
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                  + Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0)
+                  * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        }
+
+        private async Task<(double Lat, double Lon)?> NominatimGeocodeAsync(string address, CancellationToken ct)
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=au&q={Uri.EscapeDataString(address)}";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("User-Agent", "ESSDesignApp/1.0 (nathanb@erectsafe.com.au)");
+                using var response = await client.SendAsync(request, ct);
+                if (!response.IsSuccessStatusCode) return null;
+                var json = await response.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(json);
+                var results = doc.RootElement;
+                if (results.ValueKind != JsonValueKind.Array || results.GetArrayLength() == 0) return null;
+                var first = results[0];
+                if (!first.TryGetProperty("lat", out var latEl) || !first.TryGetProperty("lon", out var lonEl)) return null;
+                if (!double.TryParse(latEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var lat)) return null;
+                if (!double.TryParse(lonEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var lon)) return null;
+                return (lat, lon);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // ── Shared Helpers ────────────────────────────────────────────────────
