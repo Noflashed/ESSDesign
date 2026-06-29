@@ -9,6 +9,42 @@ const STARTER_PROMPTS = [
     'Find the latest design for a job-site or scaffold.',
 ];
 
+const FLOATING_ASSISTANT_POSITION_KEY = 'ess-admin-assistant-position';
+const FLOATING_ASSISTANT_SIZE = 48;
+const FLOATING_ASSISTANT_PADDING = 12;
+
+function clampAssistantPosition(position) {
+    if (!position || typeof window === 'undefined') return null;
+
+    const maxLeft = Math.max(FLOATING_ASSISTANT_PADDING, window.innerWidth - FLOATING_ASSISTANT_SIZE - FLOATING_ASSISTANT_PADDING);
+    const maxTop = Math.max(FLOATING_ASSISTANT_PADDING, window.innerHeight - FLOATING_ASSISTANT_SIZE - FLOATING_ASSISTANT_PADDING);
+
+    return {
+        left: Math.min(
+            Math.max(FLOATING_ASSISTANT_PADDING, position.left),
+            maxLeft
+        ),
+        top: Math.min(
+            Math.max(FLOATING_ASSISTANT_PADDING, position.top),
+            maxTop
+        )
+    };
+}
+
+function loadAssistantPosition() {
+    if (typeof window === 'undefined') return null;
+
+    try {
+        const saved = window.localStorage.getItem(FLOATING_ASSISTANT_POSITION_KEY);
+        if (!saved) return null;
+        const parsed = JSON.parse(saved);
+        if (!Number.isFinite(parsed?.left) || !Number.isFinite(parsed?.top)) return null;
+        return clampAssistantPosition(parsed);
+    } catch {
+        return null;
+    }
+}
+
 function AssistantAvatar({ role = 'assistant' }) {
     const isUser = role === 'user';
     const Icon = isUser ? User : Bot;
@@ -22,6 +58,8 @@ function AssistantAvatar({ role = 'assistant' }) {
 
 export default function AdminAssistantChat({ sidebarOpen }) {
     const [open, setOpen] = useState(false);
+    const [orbPosition, setOrbPosition] = useState(loadAssistantPosition);
+    const [draggingOrb, setDraggingOrb] = useState(false);
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
@@ -32,12 +70,30 @@ export default function AdminAssistantChat({ sidebarOpen }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const scrollRef = useRef(null);
+    const dragRef = useRef(null);
 
     useEffect(() => {
         if (open && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages, open]);
+
+    useEffect(() => {
+        if (!orbPosition) return undefined;
+
+        const keepInView = () => {
+            setOrbPosition(current => {
+                const nextPosition = clampAssistantPosition(current);
+                if (!nextPosition) return current;
+                if (nextPosition.left === current.left && nextPosition.top === current.top) return current;
+                window.localStorage.setItem(FLOATING_ASSISTANT_POSITION_KEY, JSON.stringify(nextPosition));
+                return nextPosition;
+            });
+        };
+
+        window.addEventListener('resize', keepInView);
+        return () => window.removeEventListener('resize', keepInView);
+    }, [orbPosition]);
 
     const sendMessage = async (messageText = input) => {
         const text = messageText.trim();
@@ -78,8 +134,87 @@ export default function AdminAssistantChat({ sidebarOpen }) {
         }
     };
 
+    const handleOrbPointerDown = (event) => {
+        if (event.button !== 0) return;
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        dragRef.current = {
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            startLeft: rect.left,
+            startTop: rect.top,
+            moved: false,
+            suppressClick: false
+        };
+
+        const handlePointerMove = (moveEvent) => {
+            const dragState = dragRef.current;
+            if (!dragState) return;
+
+            const deltaX = moveEvent.clientX - dragState.startClientX;
+            const deltaY = moveEvent.clientY - dragState.startClientY;
+            const movedFarEnough = Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3;
+            if (movedFarEnough) {
+                dragState.moved = true;
+                dragState.suppressClick = true;
+                setDraggingOrb(true);
+            }
+
+            if (!dragState.moved) return;
+
+            const nextPosition = clampAssistantPosition({
+                left: dragState.startLeft + deltaX,
+                top: dragState.startTop + deltaY
+            });
+
+            if (nextPosition) {
+                setOrbPosition(nextPosition);
+            }
+        };
+
+        const handlePointerUp = (upEvent) => {
+            const dragState = dragRef.current;
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            setDraggingOrb(false);
+
+            if (dragState?.moved && typeof window !== 'undefined') {
+                const nextPosition = clampAssistantPosition({
+                    left: dragState.startLeft + (upEvent.clientX - dragState.startClientX),
+                    top: dragState.startTop + (upEvent.clientY - dragState.startClientY)
+                });
+                if (nextPosition) {
+                    setOrbPosition(nextPosition);
+                    window.localStorage.setItem(FLOATING_ASSISTANT_POSITION_KEY, JSON.stringify(nextPosition));
+                }
+            }
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const handleOrbClick = () => {
+        if (dragRef.current?.suppressClick) {
+            dragRef.current = null;
+            return;
+        }
+
+        setOpen(prev => !prev);
+        dragRef.current = null;
+    };
+
+    const assistantStyle = orbPosition
+        ? { position: 'fixed', left: `${orbPosition.left}px`, top: `${orbPosition.top}px`, right: 'auto', bottom: 'auto' }
+        : undefined;
+    const panelOpensRight = orbPosition && typeof window !== 'undefined' && orbPosition.left < 420;
+    const panelOpensDown = orbPosition && orbPosition.top < 360;
+
     return (
-        <div className={`admin-assistant${open ? ' open' : ''}${sidebarOpen ? '' : ' collapsed-sidebar'}`}>
+        <div
+            className={`admin-assistant${open ? ' open' : ''}${sidebarOpen ? '' : ' collapsed-sidebar'}${draggingOrb ? ' dragging-orb' : ''}${panelOpensRight ? ' panel-opens-right' : ''}${panelOpensDown ? ' panel-opens-down' : ''}`}
+            style={assistantStyle}
+        >
             {open ? (
                 <section className="admin-assistant-panel" aria-label="ESS admin assistant">
                     <div className="admin-assistant-head">
@@ -166,7 +301,8 @@ export default function AdminAssistantChat({ sidebarOpen }) {
             <button
                 type="button"
                 className="admin-assistant-orb"
-                onClick={() => setOpen(prev => !prev)}
+                onPointerDown={handleOrbPointerDown}
+                onClick={handleOrbClick}
                 title="ESS Admin Assistant"
                 aria-label="Open ESS admin assistant"
             >
