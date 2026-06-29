@@ -370,7 +370,7 @@ namespace ESSDesign.Server.Services
                 };
             }
 
-            var context = await BuildContextAsync(cleanQuestion, cancellationToken);
+            var context = await BuildContextAsync(cleanQuestion, history, cancellationToken);
             var directTruckLocationResult = await TryBuildDirectTruckLocationResultAsync(cleanQuestion, context, cancellationToken);
             if (directTruckLocationResult != null)
             {
@@ -1190,11 +1190,12 @@ ESS context JSON:
             };
         }
 
-        private async Task<AdminAssistantContext> BuildContextAsync(string question, CancellationToken cancellationToken)
+        private async Task<AdminAssistantContext> BuildContextAsync(string question, IReadOnlyList<ChatMessage>? history, CancellationToken cancellationToken)
         {
             var today = GetSydneyToday();
             var sources = new List<string>();
-            var shouldSearchDesigns = IsDesignLookupQuestion(question);
+            var isFollowUpNavigation = IsFollowUpNavigationRequest(question, history);
+            var shouldSearchDesigns = isFollowUpNavigation || IsDesignLookupQuestion(question);
 
             var employeesTask = GetRestRowsAsync<JsonElement>(
                 "ess_rostering_employees?select=id,first_name,last_name,email,leading_hand,verified_at,preferred_site_1,preferred_site_2,preferred_site_3",
@@ -1308,6 +1309,23 @@ ESS context JSON:
                 Links = search.Links,
                 Sources = sources,
             };
+        }
+
+        private static bool IsFollowUpNavigationRequest(string question, IReadOnlyList<ChatMessage>? history)
+        {
+            var normalized = NormalizeSearchText(question);
+            var navigationPhrases = new[]
+            {
+                "take me to it", "take me to", "open it", "show me", "show it", "go to it",
+                "link to it", "view it", "open that", "show that", "navigate to it", "get it",
+            };
+            if (!navigationPhrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+            var lastAssistantMessage = history?
+                .LastOrDefault(m => m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase))?.Content ?? string.Empty;
+            return IsDesignLookupQuestion(lastAssistantMessage);
         }
 
         private static bool IsDesignLookupQuestion(string question)
@@ -2465,8 +2483,13 @@ ESS context JSON:
             }
             var wantsMultipleLinks = WantsMultipleDesignLinks(question);
             var responseLimit = wantsMultipleLinks ? 8 : 1;
-            var wantsFolderLink = NormalizeSearchText(question).Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("folder");
-            var preferThirdPartyDesign = NormalizeSearchText(question).Contains("third party", StringComparison.OrdinalIgnoreCase);
+            var normalizedQuestion = NormalizeSearchText(question);
+            var wantsLatest = normalizedQuestion.Contains("latest", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("newest", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("most recent", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("recent", StringComparison.OrdinalIgnoreCase);
+            var wantsFolderLink = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("folder");
+            var preferThirdPartyDesign = normalizedQuestion.Contains("third party", StringComparison.OrdinalIgnoreCase);
             var foldersById = folders
                 .Select(folder => new { Id = TryGetString(folder, "id"), Folder = folder })
                 .Where(item => !string.IsNullOrWhiteSpace(item.Id))
@@ -2567,12 +2590,18 @@ ESS context JSON:
                 });
             }
 
-            var rankedCandidates = candidates
-                .OrderByDescending(candidate => candidate.Score)
-                .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                .ThenByDescending(candidate => candidate.RevisionSort)
-                .ThenByDescending(candidate => candidate.UpdatedAt)
-                .ToList();
+            var rankedCandidates = wantsLatest
+                ? candidates
+                    .OrderByDescending(candidate => candidate.UpdatedAt)
+                    .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                    .ThenByDescending(candidate => candidate.RevisionSort)
+                    .ToList()
+                : candidates
+                    .OrderByDescending(candidate => candidate.Score)
+                    .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                    .ThenByDescending(candidate => candidate.RevisionSort)
+                    .ThenByDescending(candidate => candidate.UpdatedAt)
+                    .ToList();
             var ranked = rankedCandidates
                 .Take(12)
                 .ToList();
