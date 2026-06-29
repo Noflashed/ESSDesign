@@ -225,7 +225,27 @@ function getSharedFolderLinkFromUrl() {
     return { folderId, token };
 }
 
-function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings, isAdmin }) {
+function NavSidebar({
+    open,
+    onToggle,
+    navItems,
+    currentPage,
+    onNavigate,
+    onGoSettings,
+    logoUrl,
+    userDisplayName,
+    userEmail,
+    userTitle,
+    userAvatarUrl,
+    userInitials,
+    onAvatarError,
+    showUserMenu,
+    onToggleUserMenu,
+    userMenuRef,
+    isAdmin,
+    onInviteUser,
+    onLogout,
+}) {
     const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
 
     const toggleGroup = (key) => {
@@ -234,6 +254,19 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
 
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
+            <div className="app-nav-sidebar-brand">
+                <button
+                    type="button"
+                    className="app-nav-sidebar-brand-button"
+                    onClick={() => onNavigate('landing')}
+                    title="Home"
+                    aria-label="Go to home"
+                >
+                    <img src={logoUrl} alt="ErectSafe Scaffolding" className="app-nav-sidebar-logo" />
+                    {open && <span className="app-nav-sidebar-brand-name">ESS</span>}
+                </button>
+            </div>
+
             <button
                 className="app-nav-sidebar-toggle"
                 onClick={onToggle}
@@ -288,7 +321,6 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
 
             <div className="app-nav-sidebar-bottom">
                 <div className="app-nav-sidebar-divider" />
-                {isAdmin ? <AdminAssistantChat sidebarOpen={open} /> : null}
                 <button
                     className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
                     onClick={onGoSettings}
@@ -297,6 +329,60 @@ function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSet
                     <span className="app-nav-sidebar-icon"><SettingsIcon size={18} /></span>
                     {open && <span className="app-nav-sidebar-label">Settings</span>}
                 </button>
+                <div className="app-nav-sidebar-profile" ref={userMenuRef}>
+                    <button
+                        type="button"
+                        className="app-nav-sidebar-profile-button"
+                        onClick={onToggleUserMenu}
+                        title="Open user menu"
+                        aria-label="Open user menu"
+                        aria-expanded={showUserMenu}
+                    >
+                        <span className="app-nav-sidebar-profile-avatar" aria-hidden="true">
+                            {userAvatarUrl ? (
+                                <img src={userAvatarUrl} alt="" referrerPolicy="no-referrer" onError={onAvatarError} />
+                            ) : (
+                                userInitials
+                            )}
+                            <span className="app-nav-sidebar-profile-status" />
+                        </span>
+                        {open ? (
+                            <>
+                                <span className="app-nav-sidebar-profile-copy">
+                                    <strong>{userDisplayName}</strong>
+                                    <span>{userEmail || userTitle}</span>
+                                </span>
+                                <span className="app-nav-sidebar-profile-caret" aria-hidden="true">⌄</span>
+                            </>
+                        ) : null}
+                    </button>
+                    {showUserMenu && (
+                        <div className="user-menu-dropdown app-nav-sidebar-user-menu">
+                            <div className="user-menu-summary">
+                                <div className="user-menu-avatar" aria-hidden="true">
+                                    {userAvatarUrl ? (
+                                        <img src={userAvatarUrl} alt={userDisplayName} className="profile-avatar-image" referrerPolicy="no-referrer" onError={onAvatarError} />
+                                    ) : (
+                                        userInitials
+                                    )}
+                                </div>
+                                <div className="user-menu-details">
+                                    <div className="user-name">{userDisplayName}</div>
+                                    <div className="user-email">{userEmail}</div>
+                                    <div className="user-title">{userTitle}</div>
+                                </div>
+                            </div>
+                            {isAdmin && (
+                                <button className="user-menu-action" onClick={onInviteUser}>
+                                    Invite user
+                                </button>
+                            )}
+                            <button className="logout-button" onClick={onLogout}>
+                                Logout
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </aside>
     );
@@ -548,6 +634,8 @@ function App() {
     useEffect(() => {
         if (currentPage === 'landing') {
             setNavSidebarOpen(false);
+        } else if (DESIGN_PAGE_KEYS.has(currentPage) && !TRANSPORT_PAGE_KEYS.has(currentPage)) {
+            setNavSidebarOpen(true);
         }
     }, [currentPage]);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
@@ -1272,6 +1360,7 @@ function App() {
     const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage);
     const isAdmin = user?.role === 'admin';
     const canManageEssDesign = isAdmin || isScaffoldDesigner;
+    const isIntegratedSidebarPage = isAuthenticated && !isTransportPage && DESIGN_PAGE_KEYS.has(currentPage);
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = getRoleDisplayName(user?.role);
     const userInitials = user?.fullName
@@ -1586,7 +1675,7 @@ function App() {
 
     return (
         <ToastProvider>
-            <div className="App">
+            <div className={`App${isIntegratedSidebarPage ? ` app-integrated-sidebar-shell ${navSidebarOpen ? 'sidebar-expanded' : 'sidebar-collapsed'}` : ''}`}>
             {!isTransportPage ? (
             <header className="app-header">
                 <div className="header-left">
@@ -1689,6 +1778,7 @@ function App() {
                     <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
                         <ThemeIcon theme={theme} size={18} />
                     </button>
+                    {!isIntegratedSidebarPage && (
                     <div className="user-menu" ref={userMenuRef}>
                         <button
                             className="profile-button"
@@ -1730,6 +1820,7 @@ function App() {
                             </div>
                         )}
                     </div>
+                    )}
                 </div>
             </header>
             ) : null}
@@ -1753,7 +1844,19 @@ function App() {
                                 setShowUserMenu(false);
                                 applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
+                            logoUrl={LOGO_URL}
+                            userDisplayName={userDisplayName}
+                            userEmail={user?.email}
+                            userTitle={userTitle}
+                            userAvatarUrl={userAvatarUrl}
+                            userInitials={userInitials}
+                            onAvatarError={handleAvatarImageError}
+                            showUserMenu={showUserMenu}
+                            onToggleUserMenu={() => setShowUserMenu((prev) => !prev)}
+                            userMenuRef={userMenuRef}
                             isAdmin={isAdmin}
+                            onInviteUser={openInviteModal}
+                            onLogout={handleLogout}
                         />
                         <div className="app-page-content">
                             {renderCurrentPage()}
@@ -1763,6 +1866,12 @@ function App() {
             ) : (
                 renderCurrentPage()
             )}
+
+            {isAdmin && !isTransportPage ? (
+                <div className="app-ai-assistant-floating">
+                    <AdminAssistantChat sidebarOpen={false} />
+                </div>
+            ) : null}
 
             {showInviteModal && (
                 <div className="invite-modal-overlay" onClick={closeInviteModal}>
