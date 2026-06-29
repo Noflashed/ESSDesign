@@ -28,6 +28,8 @@ import './App.css';
 // Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const SIDEBAR_LOGO_COMPACT_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/ESS%20LOGO%20%28P1%29.png';
+const SIDEBAR_LOGO_EXPANDED_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/ESS%20LOGO%20%28P2%29.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 const getAuthViewFromUrl = () => {
@@ -232,7 +234,6 @@ function NavSidebar({
     currentPage,
     onNavigate,
     onGoSettings,
-    logoUrl,
     userDisplayName,
     userEmail,
     userTitle,
@@ -255,17 +256,19 @@ function NavSidebar({
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
             <div className="app-nav-sidebar-brand">
-                {open ? (
-                    <button
-                        type="button"
-                        className="app-nav-sidebar-brand-button"
-                        onClick={() => onNavigate('landing')}
-                        title="Home"
-                        aria-label="Go to home"
-                    >
-                        <img src={logoUrl} alt="ErectSafe Scaffolding" className="app-nav-sidebar-logo" />
-                    </button>
-                ) : null}
+                <button
+                    type="button"
+                    className="app-nav-sidebar-brand-button"
+                    onClick={() => onNavigate('landing')}
+                    title="Home"
+                    aria-label="Go to home"
+                >
+                    <img
+                        src={open ? SIDEBAR_LOGO_EXPANDED_URL : SIDEBAR_LOGO_COMPACT_URL}
+                        alt="ErectSafe Scaffolding"
+                        className="app-nav-sidebar-logo"
+                    />
+                </button>
                 <button
                     className="app-nav-sidebar-toggle"
                     onClick={onToggle}
@@ -1838,7 +1841,6 @@ function App() {
                                 setShowUserMenu(false);
                                 applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
-                            logoUrl={LOGO_URL}
                             userDisplayName={userDisplayName}
                             userEmail={user?.email}
                             userTitle={userTitle}
