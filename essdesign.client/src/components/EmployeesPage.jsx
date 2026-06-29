@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, UserPlus } from 'lucide-react';
+import { Info, Plus, Search, UserPlus } from 'lucide-react';
 import { authAPI, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -276,6 +276,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [showTruckDeviceModal, setShowTruckDeviceModal] = useState(false);
     const [truckDeviceForm, setTruckDeviceForm] = useState(emptyTruckDeviceForm());
     const [selectedInfoEntry, setSelectedInfoEntry] = useState(null);
+    const [employeeMenu, setEmployeeMenu] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -318,6 +319,28 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         window.addEventListener('click', closeMenu);
         return () => window.removeEventListener('click', closeMenu);
     }, [columnFilterMenu]);
+
+    useEffect(() => {
+        if (!employeeMenu) {
+            return undefined;
+        }
+
+        const closeMenu = () => setEmployeeMenu(null);
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                closeMenu();
+            }
+        };
+
+        window.addEventListener('click', closeMenu);
+        window.addEventListener('keydown', closeOnEscape);
+        window.addEventListener('scroll', closeMenu, true);
+        return () => {
+            window.removeEventListener('click', closeMenu);
+            window.removeEventListener('keydown', closeOnEscape);
+            window.removeEventListener('scroll', closeMenu, true);
+        };
+    }, [employeeMenu]);
 
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
@@ -393,6 +416,52 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, [mergedEntries, search, roleFilter, accountFilter]);
 
     const pagedEntries = filteredEntries;
+
+    const toggleEmployeeDetails = (entry) => {
+        setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry);
+    };
+
+    const openEmployeeMenu = (event, entry) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const menuWidth = 224;
+        const menuHeight = entry.leadingHand && entry.type === 'employee' ? 206 : 160;
+        const viewportPadding = 12;
+        const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
+        const y = Math.min(event.clientY, window.innerHeight - menuHeight - viewportPadding);
+
+        setColumnFilterMenu('');
+        setEmployeeMenu({
+            entry,
+            x: Math.max(viewportPadding, x),
+            y: Math.max(viewportPadding, y)
+        });
+    };
+
+    const editEntry = (entry) => {
+        if (entry.type === 'employee') {
+            openEmployeeEditor(entry.employee, entry.role);
+        } else {
+            openAppUserEditor(entry.appUser);
+        }
+    };
+
+    const deleteEntry = (entry) => {
+        if (entry.type === 'employee') {
+            setEmployeePendingDelete(entry.employee);
+        } else {
+            setAppUserPendingDelete(entry.appUser);
+        }
+    };
+
+    const runEmployeeMenuAction = (action) => {
+        const entry = employeeMenu?.entry;
+        setEmployeeMenu(null);
+        if (entry) {
+            action(entry);
+        }
+    };
 
     const openEmployeeEditor = (employee, effectiveRole) => {
         const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
@@ -711,11 +780,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             <React.Fragment key={entry.key}>
                                                 <tr
                                                     className={`employees-data-row ${isExpanded ? 'selected' : ''}`}
-                                                    onClick={() => setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry)}
+                                                    onClick={() => toggleEmployeeDetails(entry)}
+                                                    onContextMenu={(event) => openEmployeeMenu(event, entry)}
                                                     onKeyDown={(event) => {
                                                         if (event.key === 'Enter' || event.key === ' ') {
                                                             event.preventDefault();
-                                                            setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry);
+                                                            toggleEmployeeDetails(entry);
                                                         }
                                                     }}
                                                     aria-expanded={isExpanded}
@@ -754,8 +824,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                 title={`Edit ${entry.displayName}`}
                                                                 onClick={(event) => {
                                                                     event.stopPropagation();
-                                                                    if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
-                                                                    else openAppUserEditor(entry.appUser);
+                                                                    editEntry(entry);
                                                                 }}
                                                             >
                                                                 <EditIcon />
@@ -765,8 +834,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                 title={`Delete ${entry.displayName}`}
                                                                 onClick={(event) => {
                                                                     event.stopPropagation();
-                                                                    if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
-                                                                    else setAppUserPendingDelete(entry.appUser);
+                                                                    deleteEntry(entry);
                                                                 }}
                                                             >
                                                                 <DeleteIcon />
@@ -832,6 +900,56 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     )}
                 </div>
             </div>
+
+            {employeeMenu ? (
+                <div
+                    className="employees-context-menu"
+                    style={{ top: employeeMenu.y, left: employeeMenu.x }}
+                    onClick={(event) => event.stopPropagation()}
+                    role="menu"
+                    aria-label="Employee actions"
+                >
+                    <button
+                        type="button"
+                        className="employees-context-menu-item"
+                        onClick={() => runEmployeeMenuAction(toggleEmployeeDetails)}
+                        role="menuitem"
+                    >
+                        <Info size={15} strokeWidth={2.3} aria-hidden="true" />
+                        <span>{selectedInfoEntry?.key === employeeMenu.entry.key ? 'Hide Details' : 'Open Details'}</span>
+                    </button>
+                    {employeeMenu.entry.leadingHand && employeeMenu.entry.type === 'employee' ? (
+                        <button
+                            type="button"
+                            className="employees-context-menu-item"
+                            onClick={() => runEmployeeMenuAction((entry) => onOpenLeadingHandRelationships?.(entry.employee))}
+                            role="menuitem"
+                        >
+                            <TreeIcon />
+                            <span>Relationships</span>
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        className="employees-context-menu-item"
+                        onClick={() => runEmployeeMenuAction(editEntry)}
+                        role="menuitem"
+                    >
+                        <EditIcon />
+                        <span>Edit</span>
+                    </button>
+                    <div className="employees-context-menu-divider" role="separator"></div>
+                    <button
+                        type="button"
+                        className="employees-context-menu-item danger"
+                        onClick={() => runEmployeeMenuAction(deleteEntry)}
+                        role="menuitem"
+                    >
+                        <DeleteIcon />
+                        <span>Delete</span>
+                    </button>
+                </div>
+            ) : null}
 
             {showModal && (
                 <div className="module-modal-backdrop employee-form-backdrop" onClick={() => setShowModal(false)}>

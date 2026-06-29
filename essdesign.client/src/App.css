@@ -15484,6 +15484,76 @@ button.stat-card {
     height: 15px;
 }
 
+.employees-page .employees-context-menu {
+    position: fixed;
+    width: 224px;
+    z-index: 1000;
+    padding: 6px;
+    border: 1px solid rgba(203, 213, 225, 0.82);
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16), 0 4px 14px rgba(15, 23, 42, 0.08);
+    color: #0f172a;
+    animation: contextMenuIn 120ms ease-out;
+}
+
+.employees-page .employees-context-menu-item {
+    width: 100%;
+    min-height: 38px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #172033;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-align: left;
+    cursor: pointer;
+    transition: background 130ms ease, color 130ms ease, transform 130ms ease;
+}
+
+.employees-page .employees-context-menu-item svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    color: #64748b;
+}
+
+.employees-page .employees-context-menu-item:hover,
+.employees-page .employees-context-menu-item:focus-visible {
+    background: #f1f5f9;
+    color: #0f172a;
+    outline: none;
+}
+
+.employees-page .employees-context-menu-item:active {
+    transform: translateY(1px);
+}
+
+.employees-page .employees-context-menu-item.danger {
+    color: #b42318;
+}
+
+.employees-page .employees-context-menu-item.danger svg {
+    color: #dc2626;
+}
+
+.employees-page .employees-context-menu-item.danger:hover,
+.employees-page .employees-context-menu-item.danger:focus-visible {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.employees-page .employees-context-menu-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: #e2e8f0;
+}
+
 .employees-page .employees-table-footer {
     min-height: 54px;
     display: flex;
