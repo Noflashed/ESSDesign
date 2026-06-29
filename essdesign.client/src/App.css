@@ -5461,19 +5461,37 @@ body {
 }
 
 .app-ai-assistant-floating .admin-assistant-orb {
-    width: 54px;
-    min-height: 54px;
-    height: 54px;
+    width: 48px;
+    min-height: 48px;
+    height: 48px;
     padding: 0;
     border-radius: 50%;
     grid-template-columns: 1fr;
     place-items: center;
-    border: 1px solid rgba(244, 124, 32, 0.34);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: transform 160ms ease, filter 160ms ease;
 }
 
 .app-ai-assistant-floating .admin-assistant-orb-icon {
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #f47c20, #df6410);
+    box-shadow: 0 10px 22px rgba(244, 124, 32, 0.32);
+    transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.app-ai-assistant-floating .admin-assistant-orb:hover,
+.app-ai-assistant-floating .admin-assistant-orb:focus-visible {
+    transform: translateY(-2px);
+    outline: none;
+}
+
+.app-ai-assistant-floating .admin-assistant-orb:hover .admin-assistant-orb-icon,
+.app-ai-assistant-floating .admin-assistant-orb:focus-visible .admin-assistant-orb-icon {
+    transform: scale(1.08) rotate(5deg);
+    box-shadow: 0 16px 30px rgba(244, 124, 32, 0.38);
 }
 
 .app-ai-assistant-floating .admin-assistant-panel {
@@ -5827,8 +5845,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
     .admin-assistant-spin-icon,
-    .admin-assistant-typing i {
+    .admin-assistant-typing i,
+    .app-ai-assistant-floating .admin-assistant-orb,
+    .app-ai-assistant-floating .admin-assistant-orb-icon {
         animation: none;
+        transition: none;
     }
 }
 
