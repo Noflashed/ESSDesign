@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, UserPlus } from 'lucide-react';
-import { authAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
+import { authAPI, rosteringAPI, usersAPI } from '../services/api';
 
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
@@ -28,10 +28,6 @@ function emptyAppUserForm() {
 
 function emptyTruckDeviceForm() {
     return { deviceId: '', fullName: '', password: '', role: 'truck_ess01' };
-}
-
-function normalizePreferredSiteIds(siteIds) {
-    return siteIds.filter(Boolean).slice(0, 3);
 }
 
 function getRoleLabel(role) {
@@ -264,7 +260,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [inviteMessage, setInviteMessage] = useState('');
     const [employees, setEmployees] = useState([]);
     const [appUsers, setAppUsers] = useState([]);
-    const [sites, setSites] = useState([]);
     const [search, setSearch] = useState('');
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -284,18 +279,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     useEffect(() => {
         let active = true;
         (async () => {
-            return Promise.all([safetyProjectsAPI.getBuilders(), rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
+            return Promise.all([rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
         })()
-            .then(([builders, employeeRows, userRows]) => {
+            .then(([employeeRows, userRows]) => {
                 if (!active) return;
-                const flattenedSites = builders.flatMap((builder) =>
-                    builder.projects.map((project) => ({
-                        id: `${builder.id}:${project.id}`,
-                        label: `${builder.name} - ${project.name}`,
-                        shortLabel: project.name
-                    }))
-                );
-                setSites(flattenedSites);
                 setEmployees(employeeRows);
                 setAppUsers(userRows || []);
             })
@@ -436,14 +423,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setError('');
         setInviteMessage('');
         setShowTruckDeviceModal(true);
-    };
-
-    const updatePreferredSite = (index, siteId) => {
-        setForm((prev) => {
-            const next = [...prev.preferredSiteIds];
-            next[index] = siteId || '';
-            return { ...prev, preferredSiteIds: normalizePreferredSiteIds(next) };
-        });
     };
 
     const saveEmployee = async (event, { inviteAfterSave = false } = {}) => {
@@ -900,30 +879,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     </select>
                                 </div>
                             </div>
-                            {(form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder') ? (
-                                <div className="employee-preferences-grid">
-                                    {[0, 1, 2].map((index) => (
-                                        <div key={index} className="module-field">
-                                            <label>Preferred Site {index + 1}</label>
-                                            <select
-                                                value={form.preferredSiteIds[index] || ''}
-                                                onChange={(e) => updatePreferredSite(index, e.target.value)}
-                                            >
-                                                <option value="">Select active job site</option>
-                                                {sites.map((site) => (
-                                                    <option
-                                                        key={site.id}
-                                                        value={site.id}
-                                                        disabled={form.preferredSiteIds.includes(site.id) && form.preferredSiteIds[index] !== site.id}
-                                                    >
-                                                        {site.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : null}
                             {form.id && form.selectedRole === 'leading_hand' ? (
                                 <button
                                     type="button"
