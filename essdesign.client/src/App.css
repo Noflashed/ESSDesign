@@ -4834,6 +4834,10 @@ body {
     padding-top: 0;
 }
 
+.app-integrated-sidebar-shell .web-landing-page {
+    min-height: 100vh;
+}
+
 .app-nav-sidebar {
     --app-nav-bg: #ffffff;
     --app-nav-panel: #f8f8f7;
@@ -4868,7 +4872,7 @@ body {
     padding: 18px 14px 12px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .app-nav-sidebar-brand-button {
@@ -4882,7 +4886,7 @@ body {
     color: var(--app-nav-text);
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     cursor: pointer;
     text-align: left;
     transition: opacity 0.16s ease;
@@ -4906,7 +4910,7 @@ body {
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand-button {
     min-height: 56px;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 0;
 }
 
