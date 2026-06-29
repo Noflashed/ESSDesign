@@ -23,8 +23,8 @@ import {
     scheduleStatusLabel,
     TRANSPORT_STATUS_COLOR_PREF_EVENT,
 } from './transport/transportUtils';
+import LoadingBrandmark from './LoadingBrandmark';
 
-const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const MATERIAL_ORDER_REFRESH_MS = 30000;
 
 function todayDate() {
@@ -1723,10 +1723,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         return (
             <div className="ts2-page material-ordering-transport-page material-ordering-page-loading">
                 <div className="material-ordering-page-loader" role="status" aria-label="Loading schedule management">
-                    <div className="loading-brandmark" aria-hidden="true">
-                        <div className="loading-ring"></div>
-                        <img src={ESS_LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
-                    </div>
+                    <LoadingBrandmark label="Loading schedule management" />
                 </div>
             </div>
         );

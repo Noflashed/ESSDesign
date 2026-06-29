@@ -47,6 +47,7 @@ import {
   TRANSPORT_STATUS_COLOR_PREF_EVENT,
   formatDateKey,
 } from './transport/transportUtils';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const SCALE_MODES = {
   standard: { label: 'Hourly', pxPerHour: 150, tickMinutes: 60, labelEveryMinutes: 60 },
@@ -56,7 +57,6 @@ const SCALE_MODES = {
 };
 const SCALE_ORDER = ['standard', 'detailed', 'fine', 'ultraFine'];
 const LIVE_REFRESH_MS = 15000;
-const ESS_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const LANE_META_WIDTH = 154;
 const TRACK_GUTTER = 14;
 const TRACK_OFFSET = LANE_META_WIDTH + TRACK_GUTTER;
@@ -6527,10 +6527,7 @@ export default function TruckSchedulePage({ user, onNavigate }) {
     return (
       <div className="ts2-page transport-dynamic-reference transport-schedule-page-loading">
         <div className="material-ordering-page-loader" role="status" aria-label="Loading dynamic schedule">
-          <div className="loading-brandmark" aria-hidden="true">
-            <div className="loading-ring"></div>
-            <img src={ESS_LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
-          </div>
+          <LoadingBrandmark label="Loading dynamic schedule" />
         </div>
       </div>
     );

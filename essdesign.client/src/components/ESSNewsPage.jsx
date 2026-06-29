@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Image as ImageIcon, Pencil, PlayCircle, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 function formatNewsDate(value) {
     if (!value) return 'Not set';
@@ -219,7 +220,7 @@ export default function ESSNewsPage() {
     const isEditing = Boolean(composer.id);
 
     if (loading) {
-        return <div className="module-page"><div className="module-empty">Loading news...</div></div>;
+        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading news" /></div></div>;
     }
 
     return (

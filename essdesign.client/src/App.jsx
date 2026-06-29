@@ -20,6 +20,7 @@ import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
 import MaterialOrderingPage from './components/MaterialOrderingPage';
+import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
@@ -1641,10 +1642,7 @@ function App() {
     if (loading) {
         return (
             <div className="loading-screen">
-                <div className="loading-brandmark" aria-hidden="true">
-                    <div className="loading-ring"></div>
-                    <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="loading-logo" />
-                </div>
+                <LoadingBrandmark label="Loading ESS Design" />
             </div>
         );
     }

@@ -6,6 +6,7 @@ import {
   formatDistance,
   formatDuration,
 } from './transport/transportUtils';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const FUEL_LITRES_PER_100KM = 22;
 const TRAFFIC_IDLE_LITRES_PER_MINUTE = 0.035;
@@ -1330,7 +1331,7 @@ export default function TransportTripsPage() {
             <span>{loading ? '...' : filteredTrips.length} trips</span>
           </div>
           {loading ? (
-            <div className="transport-trips-empty">Loading completed trips...</div>
+            <div className="transport-trips-empty"><LoadingBrandmark label="Loading completed trips" /></div>
           ) : filteredTrips.length ? (
             filteredTrips.map(trip => (
               <TripListCard

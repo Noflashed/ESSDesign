@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI, safetyProjectsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const BOARD_SIZE = 20000;
 const BOARD_CENTER = BOARD_SIZE / 2;
@@ -307,7 +308,7 @@ export default function RosteringTreePage({ planDate, onBack }) {
     };
 
     if (loading) {
-        return <div className="lh-board-page"><div className="lh-board-empty">Loading rostering tree...</div></div>;
+        return <div className="lh-board-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading rostering tree" /></div></div>;
     }
 
     return (

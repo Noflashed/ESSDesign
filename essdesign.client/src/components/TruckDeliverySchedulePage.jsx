@@ -30,6 +30,7 @@ import {
   scheduleStatusLabel,
   TRANSPORT_STATUS_COLOR_PREF_EVENT,
 } from './transport/transportUtils';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const LIVE_REFRESH_MS = 15000;
 
@@ -366,8 +367,7 @@ export default function TruckDeliverySchedulePage({ user }) {
 
       {loading ? (
         <div className="transport-placeholder-card">
-          <span className="transport-placeholder-eyebrow">Delivery Schedule</span>
-          <h2>Loading assigned deliveries…</h2>
+          <div className="page-loading-brandmark compact"><LoadingBrandmark label="Loading assigned deliveries" /></div>
         </div>
       ) : groupedEvents.length === 0 ? (
         <div className="transport-placeholder-card">

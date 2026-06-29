@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { safetyFilesAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 export default function WebSafetySwmsPage({ builder, project, onBack }) {
     const [loading, setLoading] = useState(true);
@@ -72,7 +73,7 @@ export default function WebSafetySwmsPage({ builder, project, onBack }) {
                     </div>
                     {error ? <div className="module-error">{error}</div> : null}
                     {loading ? (
-                        <div className="module-empty-inline">Loading SWMS files...</div>
+                        <div className="page-loading-brandmark compact"><LoadingBrandmark label="Loading SWMS files" /></div>
                     ) : files.length === 0 ? (
                         <div className="module-empty-inline">No SWMS PDFs uploaded for this site yet.</div>
                     ) : (

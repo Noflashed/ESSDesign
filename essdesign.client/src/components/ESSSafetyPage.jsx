@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { safetyProjectsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [loading, setLoading] = useState(true);
@@ -52,7 +53,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     }, [selectedBuilder, selectedProjectId]);
 
     if (loading) {
-        return <div className="module-page"><div className="module-empty">Loading safety data...</div></div>;
+        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading safety data" /></div></div>;
     }
 
     return (

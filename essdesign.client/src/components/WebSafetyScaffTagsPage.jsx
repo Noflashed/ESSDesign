@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { scaffTagsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [loading, setLoading] = useState(true);
@@ -95,7 +96,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                     <section className="module-card">
                         <div className="module-card-title">Shared Scaffold Inspection Forms</div>
                         {loading ? (
-                            <div className="module-empty-inline">Loading scaff-tags...</div>
+                            <div className="page-loading-brandmark compact"><LoadingBrandmark label="Loading scaff-tags" /></div>
                         ) : items.length === 0 ? (
                             <div className="module-empty-inline">No scaffold tags created for this site yet.</div>
                         ) : (

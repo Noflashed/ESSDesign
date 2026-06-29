@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rosteringAPI, safetyProjectsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 function todayDateString() {
     return new Date().toISOString().slice(0, 10);
@@ -316,7 +317,7 @@ export default function ESSRosteringPage({ user, onViewTree }) {
     }, [planDate, currentSnapshot, saving]);
 
     if (loading) {
-        return <div className="module-page"><div className="module-empty">Loading rostering data...</div></div>;
+        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading rostering data" /></div></div>;
     }
 
     const openDatePicker = () => {

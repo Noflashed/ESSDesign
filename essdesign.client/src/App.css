@@ -1022,6 +1022,24 @@ body {
     display: block;
 }
 
+.page-loading-brandmark {
+    min-height: calc(100vh - 32px);
+    display: grid;
+    place-items: center;
+    background: #f8fafc;
+}
+
+.module-card .page-loading-brandmark,
+.module-shell > .page-loading-brandmark {
+    min-height: 360px;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.page-loading-brandmark.compact {
+    min-height: 220px;
+}
+
 @keyframes spin {
     0% {
         transform: rotate(0deg);

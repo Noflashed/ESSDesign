@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { foldersAPI, resolveProfileImageUrl } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
@@ -199,10 +200,7 @@ export default function PublicSharedFolderPage({ folderId, token }) {
         return (
             <main className="public-share-page public-share-page-state">
                 <div className="loading-screen">
-                    <div className="loading-brandmark" aria-label="Loading design files">
-                        <div className="loading-ring" />
-                        <img className="loading-logo" src={LOGO_URL} alt="ErectSafe Scaffolding" />
-                    </div>
+                    <LoadingBrandmark label="Loading design files" />
                 </div>
             </main>
         );

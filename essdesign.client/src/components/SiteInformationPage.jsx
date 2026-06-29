@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -907,7 +908,7 @@ export default function SiteInformationPage() {
                 {error ? <div className="module-error">{error}</div> : null}
 
                 {loading ? (
-                    <div className="module-empty">Loading site information...</div>
+                    <div className="page-loading-brandmark"><LoadingBrandmark label="Loading site information" /></div>
                 ) : (
                     <section className="site-registry-table-section">
                         <div className="site-registry-toolbar">

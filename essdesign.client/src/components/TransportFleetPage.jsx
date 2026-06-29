@@ -4,6 +4,7 @@ import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react
 import 'leaflet/dist/leaflet.css';
 import { truckLiveLocationsAPI } from '../services/api';
 import { TRUCK_LANES } from './transport/transportUtils';
+import LoadingBrandmark from './LoadingBrandmark';
 
 const FLEET_REFRESH_MS = 3 * 1000;
 const FLEET_HIDDEN_REFRESH_MS = 30 * 1000;
@@ -839,7 +840,7 @@ export default function TransportFleetPage() {
       ) : null}
 
       {loading ? (
-        <div className="fleet-live-loading">Loading live fleet...</div>
+        <div className="fleet-live-loading"><LoadingBrandmark label="Loading live fleet" /></div>
       ) : null}
 
       {refreshing ? <div className="fleet-live-refreshing">Refreshing</div> : null}
