@@ -354,6 +354,11 @@ namespace ESSDesign.Server.Services
                 throw new InvalidOperationException("Question is required.");
             }
 
+            if (TryBuildDirectDateResult(cleanQuestion, out var directDateResult))
+            {
+                return directDateResult;
+            }
+
             if (IsVagueDesignLookupQuestion(cleanQuestion))
             {
                 return new ChatResult
@@ -379,7 +384,9 @@ namespace ESSDesign.Server.Services
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return BuildFallbackResult(cleanQuestion, context);
+                return BuildUnavailableModelResult(
+                    context,
+                    "The AI model is not connected because OpenAI:ApiKey is not configured on the server.");
             }
 
             var model = _configuration["OpenAI:AdminAssistantModel"]
@@ -475,7 +482,9 @@ ESS context JSON:
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Admin assistant OpenAI request failed: {StatusCode} {Body}", response.StatusCode, body);
-                return BuildFallbackResult(cleanQuestion, context);
+                return BuildUnavailableModelResult(
+                    context,
+                    "The AI model request failed, so I cannot provide a full AI answer right now.");
             }
 
             using var document = JsonDocument.Parse(body);
@@ -506,6 +515,43 @@ ESS context JSON:
             var withoutEmphasis = Regex.Replace(withoutBareUrls, @"(?<!\*)\*{1,3}([^*\r\n][^*\r\n]*?)\*{1,3}(?!\*)", "$1");
             withoutEmphasis = Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1");
             return withoutEmphasis;
+        }
+
+        private static bool TryBuildDirectDateResult(string question, out ChatResult result)
+        {
+            result = new ChatResult();
+            var normalized = NormalizeSearchText(question);
+            var asksForDate =
+                Regex.IsMatch(normalized, @"\b(?:what|whats|what s)\s+(?:is\s+)?(?:todays|today s|the\s+current|the)?\s*date\b", RegexOptions.IgnoreCase) ||
+                Regex.IsMatch(normalized, @"\b(?:what|whats|what s)\s+day\s+is\s+it\b", RegexOptions.IgnoreCase) ||
+                Regex.IsMatch(normalized, @"\b(?:todays|today s|current)\s+date\b", RegexOptions.IgnoreCase) ||
+                string.Equals(normalized, "date", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "todays date", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "today s date", StringComparison.OrdinalIgnoreCase);
+
+            if (!asksForDate)
+            {
+                return false;
+            }
+
+            var operationalWords = new[]
+            {
+                "delivery", "deliveries", "truck", "trucks", "transport", "material", "order", "orders",
+                "schedule", "scheduled", "roster", "rostering", "employee", "employees", "jobsite", "site"
+            };
+            if (operationalWords.Any(word => normalized.Contains(word, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            var today = GetSydneyToday();
+            result = new ChatResult
+            {
+                Reply = $"Today is {today.ToDateTime(TimeOnly.MinValue).ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture)}.",
+                Links = new List<AdminAssistantLink>(),
+                Sources = new List<string> { "system-date-australia-sydney" },
+            };
+            return true;
         }
 
         private async Task<ChatResult?> TryBuildDirectTruckLocationResultAsync(
@@ -738,15 +784,7 @@ ESS context JSON:
                 normalized.Contains("employees", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("roster", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("rostering", StringComparison.OrdinalIgnoreCase);
-            var isTransportQuestion = hasTransportWords ||
-                (hasScheduleWords && !hasWorkforceWords && (
-                    normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("tomorrow", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("yesterday", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("board", StringComparison.OrdinalIgnoreCase) ||
-                    normalized.Contains("run", StringComparison.OrdinalIgnoreCase)
-                ));
+            var isTransportQuestion = hasTransportWords && !hasWorkforceWords;
             var isScheduleQuestion = hasScheduleWords;
 
             if (!isTransportQuestion || !isScheduleQuestion)
@@ -2632,40 +2670,11 @@ ESS context JSON:
             }
         }
 
-        private ChatResult BuildFallbackResult(string question, AdminAssistantContext context)
+        private ChatResult BuildUnavailableModelResult(AdminAssistantContext context, string reason)
         {
-            var reply = new StringBuilder();
-            reply.AppendLine("I can access the ESS admin context, but the OpenAI API key is not configured, so I am giving the best direct summary from the available data.");
-            reply.AppendLine();
-            reply.AppendLine($"Question interpreted as: {question}");
-            reply.AppendLine($"Today: {context.Today}");
-            reply.AppendLine($"Dataset catalogue: {JsonSerializer.Serialize(context.DatasetCatalogue, _jsonOptions)}");
-            reply.AppendLine($"Employees: {JsonSerializer.Serialize(context.EmployeeSummary, _jsonOptions)}");
-            reply.AppendLine($"Users: {JsonSerializer.Serialize(context.UserSummary, _jsonOptions)}");
-            reply.AppendLine($"Roster: {JsonSerializer.Serialize(context.RosterSummary, _jsonOptions)}");
-            reply.AppendLine($"Transport: {JsonSerializer.Serialize(context.TransportSummary, _jsonOptions)}");
-            reply.AppendLine($"Jobsites: {JsonSerializer.Serialize(context.JobsiteSummary, _jsonOptions)}");
-            reply.AppendLine($"Design catalogue: {JsonSerializer.Serialize(context.DesignCatalogue, _jsonOptions)}");
-            reply.AppendLine($"Notifications: {JsonSerializer.Serialize(context.NotificationSummary, _jsonOptions)}");
-            reply.AppendLine($"Focused matches: {JsonSerializer.Serialize(context.FocusedMatches, _jsonOptions)}");
-            reply.AppendLine($"Live app context: {JsonSerializer.Serialize(context.LiveAppContext, _jsonOptions)}");
-            if (context.DesignSearchMatches.Count > 0)
-            {
-                reply.AppendLine($"Design matches: {JsonSerializer.Serialize(context.DesignSearchMatches.Take(5), _jsonOptions)}");
-            }
-            if (context.Links.Count > 0)
-            {
-                reply.AppendLine();
-                reply.AppendLine("Best available links:");
-                foreach (var link in context.Links)
-                {
-                    reply.AppendLine($"- {link.Label}: {link.Url}");
-                }
-            }
-
             return new ChatResult
             {
-                Reply = reply.ToString().Trim(),
+                Reply = $"{reason} I can load the ESS app context, but I cannot reason over it conversationally until the model connection is available.",
                 Links = context.Links,
                 Sources = context.Sources,
             };
