@@ -640,25 +640,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 <Search size={18} />
                                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
                             </div>
-                            <label className={`employees-filter-control ${roleFilter !== 'all' ? 'active' : ''}`}>
-                                <span>Role</span>
-                                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                                    <option value="all">All Roles</option>
-                                    {roleFilterOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className={`employees-filter-control ${accountFilter !== 'all' ? 'active' : ''}`}>
-                                <span>Account</span>
-                                <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
-                                    <option value="all">All Statuses</option>
-                                    <option value="verified">Verified</option>
-                                    <option value="app">App Account</option>
-                                    <option value="invited">Invite Sent</option>
-                                    <option value="unlinked">Not Linked</option>
-                                </select>
-                            </label>
                         </div>
                     </div>
                     <div className="module-form-actions">
@@ -728,72 +709,131 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 <tbody>
                                     {pagedEntries.map((entry) => {
                                         const status = getAccountStatus(entry);
+                                        const isExpanded = selectedInfoEntry?.key === entry.key;
                                         return (
-                                            <tr
-                                                key={entry.key}
-                                                className={`employees-data-row ${selectedInfoEntry?.key === entry.key ? 'selected' : ''}`}
-                                                onClick={() => setSelectedInfoEntry(entry)}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === 'Enter' || event.key === ' ') {
-                                                        event.preventDefault();
-                                                        setSelectedInfoEntry(entry);
-                                                    }
-                                                }}
-                                                tabIndex={0}
-                                            >
-                                                <td>
-                                                    <div className="employees-identity-cell">
-                                                        <EmployeeAvatar entry={entry} />
-                                                        <strong>{entry.displayName}</strong>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>
-                                                        {getRoleLabel(entry.role)}
-                                                    </span>
-                                                </td>
-                                                <td>{entry.displayPhone || '-'}</td>
-                                                <td>{entry.displayEmail || '-'}</td>
-                                                <td>
-                                                    <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
-                                                </td>
-                                                <td>
-                                                    <div className="employees-table-actions">
-                                                        {entry.leadingHand && entry.type === 'employee' ? (
+                                            <React.Fragment key={entry.key}>
+                                                <tr
+                                                    className={`employees-data-row ${isExpanded ? 'selected' : ''}`}
+                                                    onClick={() => setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry)}
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault();
+                                                            setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry);
+                                                        }
+                                                    }}
+                                                    aria-expanded={isExpanded}
+                                                    tabIndex={0}
+                                                >
+                                                    <td>
+                                                        <div className="employees-identity-cell">
+                                                            <EmployeeAvatar entry={entry} />
+                                                            <strong>{entry.displayName}</strong>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>
+                                                            {getRoleLabel(entry.role)}
+                                                        </span>
+                                                    </td>
+                                                    <td>{entry.displayPhone || '-'}</td>
+                                                    <td>{entry.displayEmail || '-'}</td>
+                                                    <td>
+                                                        <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <div className="employees-table-actions">
+                                                            {entry.leadingHand && entry.type === 'employee' ? (
+                                                                <EmployeeActionButton
+                                                                    title={`Open leading hand relationships for ${entry.displayName}`}
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation();
+                                                                        onOpenLeadingHandRelationships?.(entry.employee);
+                                                                    }}
+                                                                >
+                                                                    <TreeIcon />
+                                                                </EmployeeActionButton>
+                                                            ) : null}
                                                             <EmployeeActionButton
-                                                                title={`Open leading hand relationships for ${entry.displayName}`}
+                                                                title={`Edit ${entry.displayName}`}
                                                                 onClick={(event) => {
                                                                     event.stopPropagation();
-                                                                    onOpenLeadingHandRelationships?.(entry.employee);
+                                                                    if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
+                                                                    else openAppUserEditor(entry.appUser);
                                                                 }}
                                                             >
-                                                                <TreeIcon />
+                                                                <EditIcon />
                                                             </EmployeeActionButton>
-                                                        ) : null}
-                                                        <EmployeeActionButton
-                                                            title={`Edit ${entry.displayName}`}
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                if (entry.type === 'employee') openEmployeeEditor(entry.employee, entry.role);
-                                                                else openAppUserEditor(entry.appUser);
-                                                            }}
-                                                        >
-                                                            <EditIcon />
-                                                        </EmployeeActionButton>
-                                                        <EmployeeActionButton
-                                                            danger
-                                                            title={`Delete ${entry.displayName}`}
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
-                                                                else setAppUserPendingDelete(entry.appUser);
-                                                            }}
-                                                        >
-                                                            <DeleteIcon />
-                                                        </EmployeeActionButton>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                            <EmployeeActionButton
+                                                                danger
+                                                                title={`Delete ${entry.displayName}`}
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    if (entry.type === 'employee') setEmployeePendingDelete(entry.employee);
+                                                                    else setAppUserPendingDelete(entry.appUser);
+                                                                }}
+                                                            >
+                                                                <DeleteIcon />
+                                                            </EmployeeActionButton>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {isExpanded ? (
+                                                    <tr className="employees-info-dropdown-row">
+                                                        <td colSpan={6}>
+                                                            <div className="employees-info-dropdown-panel">
+                                                                <div className="employees-info-list">
+                                                                    <div className="employees-info-row">
+                                                                        <span>Full Name</span>
+                                                                        <strong>{entry.displayName}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Role</span>
+                                                                        <strong><span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>{getRoleLabel(entry.role)}</span></strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Phone Number</span>
+                                                                        <strong>{entry.displayPhone || '-'}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Email</span>
+                                                                        <strong>{entry.displayEmail || '-'}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Account Status</span>
+                                                                        <strong><span className={`employees-account-pill ${status.className}`}>{status.label}</span></strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Linked App Account</span>
+                                                                        <strong>{entry.appUser ? `Yes (${entry.appUser.email})` : 'No'}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Invite Sent</span>
+                                                                        <strong>{formatEmployeeDate(entry.employee?.inviteSentAt)}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Verified On</span>
+                                                                        <strong>{formatEmployeeDate(entry.employee?.verifiedAt)}</strong>
+                                                                    </div>
+                                                                    <div className="employees-info-row">
+                                                                        <span>Leading Hand</span>
+                                                                        <strong>
+                                                                            {entry.leadingHand ? (
+                                                                                <span className="employees-info-check"><CheckCircleIcon /> Yes</span>
+                                                                            ) : 'No'}
+                                                                        </strong>
+                                                                    </div>
+                                                                    <div className="employees-info-summary">
+                                                                        <span>Relationship Summary</span>
+                                                                        <strong>{entry.leadingHand ? 'View relationships from the actions menu.' : 'No leading hand relationships.'}</strong>
+                                                                        {entry.leadingHand ? <small>View full relationships tree from the actions menu.</small> : null}
+                                                                    </div>
+                                                                </div>
+                                                                <button type="button" className="employees-info-close" onClick={() => setSelectedInfoEntry(null)}>Close</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : null}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </tbody>
@@ -805,67 +845,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     )}
                 </div>
             </div>
-
-            {selectedInfoEntry && (
-                <div className="module-modal-backdrop" onClick={() => setSelectedInfoEntry(null)}>
-                    <div className="module-modal compact employees-info-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>Employee Information</h3>
-                            <button className="nav-drawer-close" onClick={() => setSelectedInfoEntry(null)}>×</button>
-                        </div>
-                        <div className="employees-info-list">
-                            <div className="employees-info-row">
-                                <span>Full Name</span>
-                                <strong>{selectedInfoEntry.displayName}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Role</span>
-                                <strong><span className={`employees-role-pill ${getRolePillClass(selectedInfoEntry.role)}`}>{getRoleLabel(selectedInfoEntry.role)}</span></strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Phone Number</span>
-                                <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Email</span>
-                                <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Account Status</span>
-                                <strong><span className={`employees-account-pill ${getAccountStatus(selectedInfoEntry).className}`}>{getAccountStatus(selectedInfoEntry).label}</span></strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Linked App Account</span>
-                                <strong>{selectedInfoEntry.appUser ? `Yes (${selectedInfoEntry.appUser.email})` : 'No'}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Invite Sent</span>
-                                <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Verified On</span>
-                                <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
-                            </div>
-                            <div className="employees-info-row">
-                                <span>Leading Hand</span>
-                                <strong>
-                                    {selectedInfoEntry.leadingHand ? (
-                                        <span className="employees-info-check"><CheckCircleIcon /> Yes</span>
-                                    ) : 'No'}
-                                </strong>
-                            </div>
-                            <div className="employees-info-summary">
-                                <span>Relationship Summary</span>
-                                <strong>{selectedInfoEntry.leadingHand ? 'View relationships from the actions menu.' : 'No leading hand relationships.'}</strong>
-                                {selectedInfoEntry.leadingHand ? <small>View full relationships tree from the actions menu.</small> : null}
-                            </div>
-                        </div>
-                        <div className="module-form-actions">
-                            <button type="button" className="module-secondary-btn compact" onClick={() => setSelectedInfoEntry(null)}>Close</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {showModal && (
                 <div className="module-modal-backdrop" onClick={() => setShowModal(false)}>

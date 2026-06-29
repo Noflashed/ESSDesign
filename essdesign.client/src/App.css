@@ -14941,11 +14941,11 @@ button.stat-card {
 
 .employees-page .employees-table-wrap {
     width: 100%;
-    height: min(680px, calc(100vh - 160px));
-    min-height: 560px;
+    height: auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: visible;
     border: 0;
     border-radius: 7px;
     background: #ffffff;
@@ -15059,6 +15059,60 @@ button.stat-card {
 
 .employees-page .employees-data-row.selected td:last-child {
     box-shadow: inset -1px 0 0 #3b82f6, inset 0 1px 0 #3b82f6, inset 0 -1px 0 #3b82f6;
+}
+
+.employees-page .employees-info-dropdown-row td {
+    width: auto;
+    height: auto;
+    padding: 0;
+    border-bottom: 1px solid #dbe5f4;
+    background: #f8fbff;
+    text-align: left;
+}
+
+.employees-page .employees-info-dropdown-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+    padding: 18px 20px 20px;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    box-shadow: inset 0 1px 0 #dbeafe;
+}
+
+.employees-page .employees-info-dropdown-panel .employees-info-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 24px;
+}
+
+.employees-page .employees-info-dropdown-panel .employees-info-row,
+.employees-page .employees-info-dropdown-panel .employees-info-summary {
+    min-width: 0;
+}
+
+.employees-page .employees-info-dropdown-panel .employees-info-summary {
+    grid-column: 1 / -1;
+    padding-top: 4px;
+}
+
+.employees-page .employees-info-close {
+    min-height: 34px;
+    padding: 0 13px;
+    border: 1px solid #dbe5f4;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.employees-page .employees-info-close:hover,
+.employees-page .employees-info-close:focus-visible {
+    border-color: #0b57d0;
+    color: #0b57d0;
+    outline: none;
 }
 
 .employees-page .employees-identity-cell {
@@ -15372,11 +15426,11 @@ button.stat-card {
 }
 
 .employees-page .employees-toolbar-copy {
-    flex: 1;
+    flex: 0 1 auto;
 }
 
 .employees-page .employees-search-row {
-    width: 100%;
+    width: min(360px, 36vw);
     min-width: 0;
     display: flex;
     align-items: center;
@@ -15385,8 +15439,8 @@ button.stat-card {
 }
 
 .employees-page .employees-search-field {
-    width: min(420px, 100%);
-    flex: 1 1 320px;
+    width: 100%;
+    flex: 0 0 auto;
 }
 
 .employees-page .employees-search-field input {
@@ -15394,41 +15448,6 @@ button.stat-card {
     border-color: #e2e8f0;
     border-radius: 6px;
     background: #ffffff;
-}
-
-.employees-filter-control {
-    height: 44px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px 0 14px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    background: #ffffff;
-    color: #111827;
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.employees-filter-control.active {
-    border-color: rgba(11, 87, 208, 0.35);
-    background: #e8f0fe;
-    color: #0b57d0;
-}
-
-.employees-filter-control span {
-    color: inherit;
-}
-
-.employees-filter-control select {
-    min-width: 126px;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
 }
 
 .employees-page .employees-toolbar .module-form-actions {
@@ -15479,8 +15498,9 @@ button.stat-card {
 }
 
 .employees-page .employees-table-wrap {
-    height: calc(100vh - 82px);
+    height: auto;
     min-height: 0;
+    overflow: visible;
     border-radius: 0;
     box-shadow: none;
     border: 0;
@@ -15521,12 +15541,28 @@ button.stat-card {
         padding: 16px 18px;
     }
 
+    .employees-page .employees-search-row {
+        width: min(360px, 100%);
+    }
+
     .employees-page .employees-toolbar .module-form-actions {
         margin-left: 0;
     }
 
     .employees-page .employees-table-wrap {
-        height: calc(100vh - 156px);
+        height: auto;
+    }
+
+    .employees-page .employees-info-dropdown-panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .employees-page .employees-info-dropdown-panel .employees-info-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .employees-page .employees-info-close {
+        justify-self: start;
     }
 }
 
