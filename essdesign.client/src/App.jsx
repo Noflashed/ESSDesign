@@ -100,6 +100,13 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
+const SidebarSearchIcon = ({ size = 16, color = 'currentColor' }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-3.8-3.8" />
+    </svg>
+);
+
 const HomeNavIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
@@ -239,10 +246,36 @@ function NavSidebar({
     onLogout,
 }) {
     const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
+    const [navSearchQuery, setNavSearchQuery] = useState('');
 
     const toggleGroup = (key) => {
         setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
     };
+
+    const visibleNavItems = useMemo(() => {
+        const query = navSearchQuery.trim().toLowerCase();
+
+        if (!query) {
+            return navItems;
+        }
+
+        return navItems
+            .map((item) => {
+                const children = Array.isArray(item.children) ? item.children : [];
+                const matchingChildren = children.filter((child) => child.label.toLowerCase().includes(query));
+                const itemMatches = item.label.toLowerCase().includes(query);
+
+                if (!itemMatches && matchingChildren.length === 0) {
+                    return null;
+                }
+
+                return {
+                    ...item,
+                    children: itemMatches ? children : matchingChildren,
+                };
+            })
+            .filter(Boolean);
+    }, [navItems, navSearchQuery]);
 
     return (
         <aside className="app-nav-sidebar">
@@ -262,10 +295,21 @@ function NavSidebar({
                 </button>
             </div>
 
+            <div className="app-nav-sidebar-search">
+                <SidebarSearchIcon size={16} />
+                <input
+                    type="search"
+                    value={navSearchQuery}
+                    onChange={(event) => setNavSearchQuery(event.target.value)}
+                    placeholder="Search"
+                    aria-label="Search navigation"
+                />
+            </div>
+
             <nav className="app-nav-sidebar-nav">
-                {navItems.map(item => {
+                {visibleNavItems.map(item => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-                    const expanded = expandedKeys[item.key];
+                    const expanded = navSearchQuery.trim() ? true : expandedKeys[item.key];
                     return (
                         <div key={item.key} className={`app-nav-sidebar-group${isPageActive(item.key, currentPage) ? ' active' : ''}`}>
                             <button
@@ -314,7 +358,14 @@ function NavSidebar({
             </nav>
 
             <div className="app-nav-sidebar-bottom">
-                <div className="app-nav-sidebar-divider" />
+                <button
+                    type="button"
+                    className={`app-nav-sidebar-admin-link${currentPage === 'settings' ? ' active' : ''}`}
+                    onClick={onGoSettings}
+                >
+                    <span className="app-nav-sidebar-icon"><SettingsIcon size={17} /></span>
+                    <span>Administration</span>
+                </button>
                 <div className="app-nav-sidebar-profile" ref={userMenuRef}>
                     <button
                         type="button"
