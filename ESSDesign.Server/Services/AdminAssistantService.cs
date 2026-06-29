@@ -276,6 +276,7 @@ namespace ESSDesign.Server.Services
             public string? Email { get; set; }
             public bool LeadingHand { get; set; }
             public bool Verified { get; set; }
+            public string? AppRole { get; set; }
             public List<string> PreferredSites { get; set; } = new();
             public int Score { get; set; }
             public List<string> MatchedTerms { get; set; } = new();
@@ -1264,7 +1265,7 @@ ESS context JSON:
             var materialRequestsDoc = materialRequestsTask.Result;
             var search = await SearchDesignMatchesAsync(question, folders, documents, shouldSearchDesigns, cancellationToken);
             var truckLiveLocations = BuildTruckLiveLocations(truckLiveLocationRows);
-            var employeeDirectory = BuildEmployeeDirectory(employees);
+            var employeeDirectory = BuildEmployeeDirectory(employees, userNames, userRoles);
             var jobsiteDirectory = BuildJobsiteDirectory(projectsDoc, employeeDirectory);
 
             var roster = BuildRosterSummary(planRows, today);
@@ -1416,22 +1417,39 @@ ESS context JSON:
                    (words.Contains("revisions") || words.Contains("versions") || words.Contains("drawings") || words.Contains("files"));
         }
 
-        private List<EmployeeContextRow> BuildEmployeeDirectory(IReadOnlyList<JsonElement> employees)
+        private List<EmployeeContextRow> BuildEmployeeDirectory(
+            IReadOnlyList<JsonElement> employees,
+            IReadOnlyList<JsonElement> userNames,
+            IReadOnlyList<JsonElement> userRoles)
         {
+            var rolesByUserId = userRoles
+                .Select(row => new { UserId = TryGetString(row, "user_id"), Role = TryGetString(row, "role") })
+                .Where(row => !string.IsNullOrWhiteSpace(row.UserId))
+                .ToDictionary(row => row.UserId!, row => row.Role, StringComparer.OrdinalIgnoreCase);
+
+            var userIdByEmail = userNames
+                .Select(row => new { Id = TryGetString(row, "id"), Email = TryGetString(row, "email") })
+                .Where(row => !string.IsNullOrWhiteSpace(row.Id) && !string.IsNullOrWhiteSpace(row.Email))
+                .ToDictionary(row => row.Email!, row => row.Id!, StringComparer.OrdinalIgnoreCase);
+
             return employees
                 .Select(row =>
                 {
                     var firstName = TryGetString(row, "first_name") ?? string.Empty;
                     var lastName = TryGetString(row, "last_name") ?? string.Empty;
+                    var email = TryGetString(row, "email");
+                    var userId = !string.IsNullOrWhiteSpace(email) && userIdByEmail.TryGetValue(email, out var uid) ? uid : null;
+                    var appRole = !string.IsNullOrWhiteSpace(userId) && rolesByUserId.TryGetValue(userId, out var role) ? role : null;
                     return new EmployeeContextRow
                     {
                         Id = TryGetString(row, "id"),
                         FirstName = firstName,
                         LastName = lastName,
                         FullName = $"{firstName} {lastName}".Trim(),
-                        Email = TryGetString(row, "email"),
+                        Email = email,
                         LeadingHand = TryGetBool(row, "leading_hand"),
                         Verified = TryGetString(row, "verified_at") != null,
+                        AppRole = appRole,
                         PreferredSites = new[]
                             {
                                 TryGetString(row, "preferred_site_1"),
@@ -1738,6 +1756,7 @@ ESS context JSON:
                         employee.FullName,
                         employee.Email,
                         employee.LeadingHand,
+                        employee.AppRole,
                         employee.Verified,
                         employee.PreferredSites,
                     })
@@ -1763,6 +1782,7 @@ ESS context JSON:
                                 employee.FullName,
                                 employee.Email,
                                 employee.LeadingHand,
+                                employee.AppRole,
                                 employee.Verified,
                             }).ToList(),
                         })
@@ -1801,6 +1821,7 @@ ESS context JSON:
                     match.employee.FullName,
                     match.employee.Email,
                     match.employee.LeadingHand,
+                    match.employee.AppRole,
                     match.employee.Verified,
                     match.employee.PreferredSites,
                 })
@@ -2094,6 +2115,7 @@ ESS context JSON:
                         employee.FullName,
                         employee.Email,
                         employee.LeadingHand,
+                        employee.AppRole,
                         employee.Verified,
                     }).ToList()
                     : null,
