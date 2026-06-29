@@ -1540,30 +1540,49 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                 <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
                     <div className="document-items-panel">
                         <div className="document-table-toolbar">
-                            <div className="document-path-row" aria-label="Folder path">
-                                <button
-                                    type="button"
-                                    className="breadcrumb-home"
-                                    onClick={() => handleBreadcrumbClick(null)}
-                                    title="Home"
-                                >
-                                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
-                                        <path d="M9 21V12h6v9" />
-                                    </svg>
-                                </button>
-                                <button type="button" className="path-crumb" onClick={() => handleBreadcrumbClick(null)}>
-                                    Home
-                                </button>
-                                {breadcrumbs.map((crumb) => (
-                                    <React.Fragment key={crumb.id}>
-                                        <span className="path-separator">/</span>
-                                        <button type="button" className="path-crumb" onClick={() => handleBreadcrumbClick(crumb.id)}>
-                                            {crumb.name}
+                            <nav className="document-path-row" aria-label="Folder path">
+                                <ol className="contained-breadcrumbs">
+                                    <li className="contained-breadcrumb-item">
+                                        <button
+                                            type="button"
+                                            className="contained-breadcrumb-link contained-breadcrumb-home"
+                                            onClick={() => handleBreadcrumbClick(null)}
+                                            title="ESS Design home"
+                                            aria-label="ESS Design home"
+                                        >
+                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+                                                <path d="M9 21V12h6v9" />
+                                            </svg>
                                         </button>
-                                    </React.Fragment>
-                                ))}
-                            </div>
+                                    </li>
+                                    <li className="contained-breadcrumb-item">
+                                        <button
+                                            type="button"
+                                            className={`contained-breadcrumb-link ${breadcrumbs.length === 0 ? 'is-current' : ''}`}
+                                            onClick={() => handleBreadcrumbClick(null)}
+                                            aria-current={breadcrumbs.length === 0 ? 'page' : undefined}
+                                        >
+                                            <span>ESS Design</span>
+                                        </button>
+                                    </li>
+                                    {breadcrumbs.map((crumb, index) => {
+                                        const isCurrentCrumb = index === breadcrumbs.length - 1;
+                                        return (
+                                            <li className="contained-breadcrumb-item" key={crumb.id}>
+                                                <button
+                                                    type="button"
+                                                    className={`contained-breadcrumb-link ${isCurrentCrumb ? 'is-current' : ''}`}
+                                                    onClick={() => handleBreadcrumbClick(crumb.id)}
+                                                    aria-current={isCurrentCrumb ? 'page' : undefined}
+                                                >
+                                                    <span>{crumb.name}</span>
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ol>
+                            </nav>
                             <div className="browser-toolbar document-toolbar">
                                 <label className="document-search">
                                     <span className="sr-only">Search documents</span>

@@ -1748,50 +1748,102 @@
 
 .document-path-row {
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--doc-muted);
-    font-size: 13px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-.breadcrumb-home,
-.path-crumb {
+.document-path-row::-webkit-scrollbar {
+    display: none;
+}
+
+.contained-breadcrumbs {
+    display: inline-flex;
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+    height: 42px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid #d8dee8;
+    border-radius: 7px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.contained-breadcrumb-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.contained-breadcrumb-item:not(:last-child) {
+    margin-right: 18px;
+}
+
+.contained-breadcrumb-item:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    right: -14px;
+    z-index: 2;
+    width: 28px;
+    height: 28px;
+    border-top: 1px solid #d8dee8;
+    border-right: 1px solid #d8dee8;
+    background: #ffffff;
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+.contained-breadcrumb-link {
+    position: relative;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    background: transparent;
-    color: inherit;
-}
-
-.breadcrumb-home {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border-radius: 8px;
-    color: #475569;
-}
-
-.path-crumb {
     min-width: 0;
-    max-width: 190px;
-    padding: 4px 6px;
-    border-radius: 7px;
+    height: 100%;
+    max-width: 220px;
+    padding: 0 16px;
+    border: 0;
+    background: transparent;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: color 0.18s ease, background 0.18s ease;
+}
+
+.contained-breadcrumb-link span {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
 }
 
-.breadcrumb-home:hover,
-.path-crumb:hover {
-    background: var(--doc-hover);
-    color: var(--doc-primary);
+.contained-breadcrumb-home {
+    width: 56px;
+    padding: 0;
+    color: #667085;
 }
 
-.path-separator {
-    color: #94a3b8;
+.contained-breadcrumb-link:hover {
+    color: #0f172a;
+    background: #f8fafc;
+}
+
+.contained-breadcrumb-link.is-current {
+    color: #111827;
+    font-weight: 700;
+}
+
+.contained-breadcrumb-link.is-current:hover {
+    background: transparent;
 }
 
 .document-search {
