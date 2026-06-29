@@ -4821,7 +4821,7 @@ body {
 
 .app-integrated-sidebar-shell .app-content-wrapper {
     min-height: 100vh;
-    margin-top: -62px;
+    margin-top: 0;
 }
 
 .app-integrated-sidebar-shell .app-nav-sidebar {
@@ -4831,7 +4831,7 @@ body {
 }
 
 .app-integrated-sidebar-shell .app-page-content {
-    padding-top: 62px;
+    padding-top: 0;
 }
 
 .app-nav-sidebar {

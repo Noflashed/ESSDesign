@@ -1701,7 +1701,7 @@ function App() {
     return (
         <ToastProvider>
             <div className={`App${isIntegratedSidebarPage ? ` app-integrated-sidebar-shell ${navSidebarOpen ? 'sidebar-expanded' : 'sidebar-collapsed'}` : ''}`}>
-            {!isTransportPage ? (
+            {!isTransportPage && !isIntegratedSidebarPage ? (
             <header className="app-header">
                 <div className="header-left">
                     <button
