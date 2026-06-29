@@ -20,6 +20,7 @@ import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
+import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
 import './App.css';
@@ -99,6 +100,12 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
+const SidebarToggleIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
+    </svg>
+);
 const HomeNavIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
@@ -161,7 +168,6 @@ const NewsNavIcon = ({ size = 18 }) => (
     </svg>
 );
 const NAV_PAGE_ICONS = {
-    'landing': HomeNavIcon,
     'employee-home': HomeNavIcon,
     'design': DesignNavIcon,
     'site-information': MapNavIcon,
@@ -219,74 +225,28 @@ function getSharedFolderLinkFromUrl() {
     return { folderId, token };
 }
 
-function NavSidebar({
-    open,
-    navItems,
-    currentPage,
-    onNavigate,
-    onGoSettings,
-    userDisplayName,
-    userEmail,
-    userTitle,
-    userAvatarUrl,
-    userInitials,
-    onAvatarError,
-}) {
+function NavSidebar({ open, onToggle, navItems, currentPage, onNavigate, onGoSettings, isAdmin }) {
     const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
-    const [navSearch, setNavSearch] = useState('');
 
     const toggleGroup = (key) => {
         setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const normalizedSearch = navSearch.trim().toLowerCase();
-    const displayLabelForNavItem = (item) => {
-        if (item.key === 'truck-schedule') return 'Transport';
-        if (item.key === 'rostering') return 'Calendar';
-        if (item.key === 'ess-news') return 'Documents';
-        return item.label;
-    };
-    const primaryNavItems = useMemo(() => ([
-        { key: 'landing', label: 'Dashboard', standalone: true },
-        ...navItems,
-    ].filter((item) => {
-        if (!normalizedSearch) return true;
-        return displayLabelForNavItem(item).toLowerCase().includes(normalizedSearch);
-    })), [navItems, normalizedSearch]);
-
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
-            <div className="app-nav-sidebar-brand">
-                <button
-                    type="button"
-                    className="app-nav-sidebar-brand-button"
-                    onClick={() => onNavigate('landing')}
-                    aria-label="Go to dashboard"
-                >
-                    <span className="app-nav-sidebar-brand-mark" aria-hidden="true">E</span>
-                    <span className="app-nav-sidebar-brand-name">ESS</span>
-                </button>
-            </div>
-
-            <label className="app-nav-sidebar-search">
-                <span className="sr-only">Search navigation</span>
-                <input
-                    type="search"
-                    value={navSearch}
-                    onChange={(event) => setNavSearch(event.target.value)}
-                    placeholder="Pretraga"
-                />
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
-                </svg>
-            </label>
+            <button
+                className="app-nav-sidebar-toggle"
+                onClick={onToggle}
+                title={open ? 'Collapse sidebar' : 'Expand sidebar'}
+                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+                <SidebarToggleIcon size={18} />
+            </button>
 
             <nav className="app-nav-sidebar-nav">
-                {primaryNavItems.map(item => {
+                {navItems.map(item => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                     const expanded = expandedKeys[item.key];
-                    const label = displayLabelForNavItem(item);
                     return (
                         <div key={item.key} className={`app-nav-sidebar-group${isPageActive(item.key, currentPage) ? ' active' : ''}`}>
                             <button
@@ -295,7 +255,7 @@ function NavSidebar({
                                 title={!open ? item.label : undefined}
                             >
                                 <span className="app-nav-sidebar-icon"><NavPageIcon pageKey={item.key} size={18} /></span>
-                                {open && <span className="app-nav-sidebar-label">{label}</span>}
+                                {open && <span className="app-nav-sidebar-label">{item.label}</span>}
                             </button>
                             {open && hasChildren ? (
                                 <button
@@ -328,31 +288,15 @@ function NavSidebar({
 
             <div className="app-nav-sidebar-bottom">
                 <div className="app-nav-sidebar-divider" />
+                {isAdmin ? <AdminAssistantChat sidebarOpen={open} /> : null}
                 <button
                     className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
                     onClick={onGoSettings}
                     title={!open ? 'Settings' : undefined}
                 >
                     <span className="app-nav-sidebar-icon"><SettingsIcon size={18} /></span>
-                    {open && <span className="app-nav-sidebar-label">Administration</span>}
+                    {open && <span className="app-nav-sidebar-label">Settings</span>}
                 </button>
-                {open ? (
-                    <div className="app-nav-sidebar-profile">
-                        <span className="app-nav-sidebar-profile-avatar" aria-hidden="true">
-                            {userAvatarUrl ? (
-                                <img src={userAvatarUrl} alt="" referrerPolicy="no-referrer" onError={onAvatarError} />
-                            ) : (
-                                userInitials
-                            )}
-                            <span className="app-nav-sidebar-profile-status" />
-                        </span>
-                        <span className="app-nav-sidebar-profile-copy">
-                            <strong>{userDisplayName}</strong>
-                            <span>{userEmail || userTitle}</span>
-                        </span>
-                        <span className="app-nav-sidebar-profile-caret" aria-hidden="true">⌄</span>
-                    </div>
-                ) : null}
             </div>
         </aside>
     );
@@ -583,7 +527,7 @@ function App() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [navSidebarOpen, setNavSidebarOpen] = useState(true);
+    const [navSidebarOpen, setNavSidebarOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
     const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
@@ -604,8 +548,6 @@ function App() {
     useEffect(() => {
         if (currentPage === 'landing') {
             setNavSidebarOpen(false);
-        } else if (DESIGN_PAGE_KEYS.has(currentPage) && !TRANSPORT_PAGE_KEYS.has(currentPage)) {
-            setNavSidebarOpen(true);
         }
     }, [currentPage]);
     const [safetyContext, setSafetyContext] = useState({ builder: null, project: null });
@@ -1644,7 +1586,7 @@ function App() {
 
     return (
         <ToastProvider>
-            <div className={`App${!isTransportPage && DESIGN_PAGE_KEYS.has(currentPage) ? ' app-sidebar-visual-shell' : ''}`}>
+            <div className="App">
             {!isTransportPage ? (
             <header className="app-header">
                 <div className="header-left">
@@ -1801,6 +1743,7 @@ function App() {
                     <div className="app-content-wrapper">
                         <NavSidebar
                             open={navSidebarOpen}
+                            onToggle={() => setNavSidebarOpen(prev => !prev)}
                             navItems={allowedNavItems}
                             currentPage={currentPage}
                             onNavigate={(page) => {
@@ -1810,12 +1753,7 @@ function App() {
                                 setShowUserMenu(false);
                                 applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
-                            userDisplayName={userDisplayName}
-                            userEmail={user?.email}
-                            userTitle={userTitle}
-                            userAvatarUrl={userAvatarUrl}
-                            userInitials={userInitials}
-                            onAvatarError={handleAvatarImageError}
+                            isAdmin={isAdmin}
                         />
                         <div className="app-page-content">
                             {renderCurrentPage()}
