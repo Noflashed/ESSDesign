@@ -1513,7 +1513,7 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return <WebLandingPage onOpenDirectory={() => setNavSidebarOpen(true)} />;
+            return <WebLandingPage />;
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
@@ -1703,7 +1703,7 @@ function App() {
                         </button>
                     </div>
                 </header>
-                <WebLandingPage onOpenDirectory={() => setShowNavDrawer(true)} />
+                <WebLandingPage />
             </div>
         );
     }

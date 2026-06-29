@@ -26,7 +26,7 @@ function cacheBackdropUrl(url) {
     }
 }
 
-export default function WebLandingPage({ onOpenDirectory }) {
+export default function WebLandingPage() {
     const [backdropUrl, setBackdropUrl] = useState(() => readCachedBackdropUrl());
 
     useEffect(() => {
@@ -59,9 +59,6 @@ export default function WebLandingPage({ onOpenDirectory }) {
 
             <div className="web-landing-content">
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo" loading="eager" decoding="async" fetchPriority="high" />
-                <button type="button" className="web-landing-button" onClick={onOpenDirectory}>
-                    Open Directory
-                </button>
             </div>
         </section>
     );
