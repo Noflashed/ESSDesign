@@ -4896,8 +4896,17 @@ body {
     opacity: 0.78;
 }
 
+.app-nav-sidebar-logo-pair {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
 .app-nav-sidebar-logo {
-    width: min(188px, 100%);
+    width: 96px;
     height: 58px;
     object-fit: contain;
     object-position: left center;
@@ -4917,7 +4926,7 @@ body {
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-logo {
-    width: min(188px, 100%);
+    width: 96px;
     height: 58px;
 }
 

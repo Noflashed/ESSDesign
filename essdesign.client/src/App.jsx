@@ -29,6 +29,7 @@ import './App.css';
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const SIDEBAR_LOGO_URL = '/ESS_logo_clean.svg';
+const MALOO_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 const getAuthViewFromUrl = () => {
@@ -288,11 +289,18 @@ function NavSidebar({
                     title="Home"
                     aria-label="Go to home"
                 >
-                    <img
-                        src={SIDEBAR_LOGO_URL}
-                        alt="ErectSafe Scaffolding"
-                        className="app-nav-sidebar-logo"
-                    />
+                    <span className="app-nav-sidebar-logo-pair">
+                        <img
+                            src={SIDEBAR_LOGO_URL}
+                            alt="ErectSafe Scaffolding"
+                            className="app-nav-sidebar-logo"
+                        />
+                        <img
+                            src={MALOO_LOGO_URL}
+                            alt="Maloo"
+                            className="app-nav-sidebar-logo"
+                        />
+                    </span>
                 </button>
             </div>
 
