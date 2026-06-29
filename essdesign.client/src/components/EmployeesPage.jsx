@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, UserPlus } from 'lucide-react';
 import { authAPI, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
@@ -271,6 +271,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [accountFilter, setAccountFilter] = useState('all');
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyEmployeeForm());
+    const [employeeFullNameInput, setEmployeeFullNameInput] = useState('');
     const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
     const [saveAndInvite, setSaveAndInvite] = useState(false);
     const [showAppUserModal, setShowAppUserModal] = useState(false);
@@ -420,6 +421,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setError('');
         setInviteMessage('');
         setSaveAndInvite(false);
+        setEmployeeFullNameInput(`${employee.firstName || ''} ${employee.lastName || ''}`.trim());
         setShowModal(true);
     };
 
@@ -630,6 +632,21 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         }
     };
 
+    const updateEmployeeFullName = (value) => {
+        setEmployeeFullNameInput(value);
+        setForm((prev) => {
+            const parts = value.trim().split(/\s+/).filter(Boolean);
+            if (parts.length === 0) {
+                return { ...prev, firstName: '', lastName: '' };
+            }
+            return {
+                ...prev,
+                firstName: parts[0],
+                lastName: parts.slice(1).join(' ')
+            };
+        });
+    };
+
     return (
         <div className="module-page employees-page">
             <div className="module-shell employees-shell">
@@ -647,7 +664,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <TreeIcon />
                             Add Truck Device
                         </button>
-                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
+                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
                             <Plus size={18} />
                             Add Employee
                         </button>
@@ -837,59 +854,57 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             </div>
 
             {showModal && (
-                <div className="module-modal-backdrop" onClick={() => setShowModal(false)}>
-                    <div className="module-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>{form.id ? 'Edit Employee' : 'Add Employee'}</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowModal(false)}>×</button>
-                        </div>
-                        <form className="module-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: saveAndInvite })}>
-                            <div className="module-grid module-grid-two">
-                                <div className="module-field">
-                                    <label>First Name</label>
-                                    <input value={form.firstName} onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))} />
-                                </div>
-                                <div className="module-field">
-                                    <label>Last Name</label>
-                                    <input value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} />
-                                </div>
+                <div className="module-modal-backdrop employee-form-backdrop" onClick={() => setShowModal(false)}>
+                    <div className="module-modal employee-form-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="employee-form-header">
+                            <button type="button" className="employee-form-close" onClick={() => setShowModal(false)}>×</button>
+                            <div className="employee-form-icon" aria-hidden="true">
+                                <UserPlus size={24} />
                             </div>
-                            <div className="module-grid module-grid-two">
-                                <div className="module-field">
-                                    <label>Phone Number</label>
-                                    <input value={form.phoneNumber} onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))} />
-                                </div>
-                                <div className="module-field">
-                                    <label>Email Address</label>
-                                    <input
-                                        type="email"
-                                        value={form.email}
-                                        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                                        placeholder="employee@company.com"
-                                    />
-                                </div>
+                            <h3>{form.id ? 'Edit Employee' : 'Add Employee'}</h3>
+                            <p>Complete the form below to {form.id ? 'update this employee.' : 'add a new employee.'}</p>
+                        </div>
+                        <form className="module-form employee-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: saveAndInvite })}>
+                            <div className="module-field">
+                                <label>Full name</label>
+                                <input value={employeeFullNameInput} onChange={(e) => updateEmployeeFullName(e.target.value)} placeholder="Employee name" />
                             </div>
                             <div className="module-field">
-                                <label>Role</label>
-                                <select
-                                    value={form.selectedRole}
-                                    onChange={(e) => setForm((prev) => ({ ...prev, selectedRole: e.target.value }))}
-                                >
-                                    <option value="general_scaffolder">Scaffolder</option>
-                                    <option value="leading_hand">Leading Hand</option>
-                                    <option value="scaffold_designer">Scaffold Designer</option>
-                                    <option value="site_supervisor">Site Supervisor</option>
-                                    <option value="project_manager">Project Manager</option>
-                                    <option value="transport_management">Transport Management</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="viewer">Viewer</option>
-                                </select>
+                                <label>Email</label>
+                                <input
+                                    type="email"
+                                    value={form.email}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                                    placeholder="employee@company.com"
+                                />
+                            </div>
+                            <div className="employee-form-grid">
+                                <div className="module-field">
+                                    <label>Phone Number</label>
+                                    <input value={form.phoneNumber} onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))} placeholder="0400 000 000" />
+                                </div>
+                                <div className="module-field">
+                                    <label>Designation</label>
+                                    <select
+                                        value={form.selectedRole}
+                                        onChange={(e) => setForm((prev) => ({ ...prev, selectedRole: e.target.value }))}
+                                    >
+                                        <option value="general_scaffolder">Scaffolder</option>
+                                        <option value="leading_hand">Leading Hand</option>
+                                        <option value="scaffold_designer">Scaffold Designer</option>
+                                        <option value="site_supervisor">Site Supervisor</option>
+                                        <option value="project_manager">Project Manager</option>
+                                        <option value="transport_management">Transport Management</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="viewer">Viewer</option>
+                                    </select>
+                                </div>
                             </div>
                             {(form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder') ? (
                                 <div className="employee-preferences-grid">
                                     {[0, 1, 2].map((index) => (
                                         <div key={index} className="module-field">
-                                            <label>{index + 1}</label>
+                                            <label>Preferred Site {index + 1}</label>
                                             <select
                                                 value={form.preferredSiteIds[index] || ''}
                                                 onChange={(e) => updatePreferredSite(index, e.target.value)}

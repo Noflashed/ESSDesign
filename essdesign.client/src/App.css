@@ -3114,6 +3114,212 @@ body {
     line-height: 1;
 }
 
+.employees-page .employee-form-backdrop {
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 70px 22px 24px;
+    background: rgba(17, 24, 39, 0.54);
+}
+
+.employees-page .employee-form-modal {
+    position: relative;
+    width: min(430px, calc(100vw - 32px));
+    max-height: calc(100vh - 96px);
+    overflow: auto;
+    padding: 24px 18px 16px;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
+    color: #111827;
+}
+
+.employees-page .employee-form-header {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-top: 6px;
+    text-align: center;
+}
+
+.employees-page .employee-form-close {
+    position: absolute;
+    top: -8px;
+    right: -3px;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.employees-page .employee-form-close:hover,
+.employees-page .employee-form-close:focus-visible {
+    background: #f3f4f6;
+    outline: none;
+}
+
+.employees-page .employee-form-icon {
+    width: 52px;
+    height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 7px solid #eef4ff;
+    border-radius: 50%;
+    background: #dbeafe;
+    color: #2563eb;
+    box-shadow: 0 0 0 8px rgba(219, 234, 254, 0.35);
+}
+
+.employees-page .employee-form-header h3 {
+    margin: 8px 0 0;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.employees-page .employee-form-header p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.employees-page .employee-form {
+    gap: 10px;
+}
+
+.employees-page .employee-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.employees-page .employee-form .module-field {
+    gap: 4px;
+}
+
+.employees-page .employee-form .module-field label {
+    color: #111827;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.employees-page .employee-form .module-field input,
+.employees-page .employee-form .module-field select {
+    min-height: 34px;
+    padding: 0 10px;
+    border-color: #d7dce5;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 400;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.employees-page .employee-form .module-field input:focus,
+.employees-page .employee-form .module-field select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.employees-page .employee-form .employee-preferences-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.employees-page .employee-form .employee-preferences-grid .module-field:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+.employees-page .employee-form .employee-account-link-panel {
+    gap: 10px;
+    margin-top: 2px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #f9fafb;
+}
+
+.employees-page .employee-form .employee-account-link-title {
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.employees-page .employee-form .employee-account-link-sub {
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.employees-page .employee-form .module-error,
+.employees-page .employee-form .module-success {
+    padding: 9px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.employees-page .employee-form .module-form-actions {
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.employees-page .employee-form .module-primary-btn,
+.employees-page .employee-form .module-secondary-btn {
+    min-height: 34px;
+    padding: 0 13px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.employees-page .employee-form .module-primary-btn {
+    background: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
+}
+
+.employees-page .employee-form .module-secondary-btn {
+    border: 1px solid #d7dce5;
+    background: #ffffff;
+    color: #334155;
+}
+
+@media (max-width: 820px) {
+    .employees-page .employee-form-backdrop {
+        justify-content: center;
+        padding: 58px 14px 18px;
+    }
+
+    .employees-page .employee-form-modal {
+        max-height: calc(100vh - 76px);
+    }
+
+    .employees-page .employee-form-grid,
+    .employees-page .employee-form .employee-preferences-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .employees-page .employee-form .employee-preferences-grid .module-field:last-child:nth-child(odd) {
+        grid-column: auto;
+    }
+}
+
 .employees-info-list {
     gap: 12px;
 }
