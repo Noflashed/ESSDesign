@@ -255,25 +255,26 @@ function NavSidebar({
     return (
         <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
             <div className="app-nav-sidebar-brand">
+                {open ? (
+                    <button
+                        type="button"
+                        className="app-nav-sidebar-brand-button"
+                        onClick={() => onNavigate('landing')}
+                        title="Home"
+                        aria-label="Go to home"
+                    >
+                        <img src={logoUrl} alt="ErectSafe Scaffolding" className="app-nav-sidebar-logo" />
+                    </button>
+                ) : null}
                 <button
-                    type="button"
-                    className="app-nav-sidebar-brand-button"
-                    onClick={() => onNavigate('landing')}
-                    title="Home"
-                    aria-label="Go to home"
+                    className="app-nav-sidebar-toggle"
+                    onClick={onToggle}
+                    title={open ? 'Collapse sidebar' : 'Expand sidebar'}
+                    aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
                 >
-                    <img src={logoUrl} alt="ErectSafe Scaffolding" className="app-nav-sidebar-logo" />
+                    <SidebarToggleIcon size={18} />
                 </button>
             </div>
-
-            <button
-                className="app-nav-sidebar-toggle"
-                onClick={onToggle}
-                title={open ? 'Collapse sidebar' : 'Expand sidebar'}
-                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-                <SidebarToggleIcon size={18} />
-            </button>
 
             <nav className="app-nav-sidebar-nav">
                 {navItems.map(item => {

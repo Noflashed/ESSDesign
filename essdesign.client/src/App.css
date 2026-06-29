@@ -4853,16 +4853,19 @@ body {
 
 .app-nav-sidebar-brand {
     min-height: 74px;
-    padding: 12px 16px 10px;
-    display: flex;
+    padding: 12px 12px 10px 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px;
     align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .app-nav-sidebar-brand-button {
     width: 100%;
     min-width: 0;
-    min-height: 42px;
-    padding: 0 6px;
+    min-height: 48px;
+    padding: 0;
     border: none;
     border-radius: 8px;
     background: transparent;
@@ -4879,7 +4882,7 @@ body {
 }
 
 .app-nav-sidebar-logo {
-    width: 150px;
+    width: 154px;
     height: 48px;
     object-fit: contain;
     flex-shrink: 0;
@@ -4888,12 +4891,12 @@ body {
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand {
     min-height: 62px;
     padding: 10px 7px 8px;
-    justify-content: center;
+    grid-template-columns: 1fr;
+    justify-items: center;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand-button {
-    justify-content: center;
-    padding: 0;
+    display: none;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-logo {
@@ -4904,24 +4907,27 @@ body {
 .app-nav-sidebar-toggle {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    padding: 10px 14px 10px 18px;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
     border: none;
-    border-bottom: 1px solid var(--border-color);
+    border-radius: 8px;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
-    width: 100%;
-    margin-bottom: 6px;
     transition: color 0.15s;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-toggle {
     justify-content: center;
-    padding: 10px 14px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
 }
 
 .app-nav-sidebar-toggle:hover {
+    background: var(--hover-bg);
     color: var(--text-primary);
 }
 
@@ -4929,7 +4935,7 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 4px 8px;
+    padding: 10px 8px 4px;
     gap: 2px;
     overflow-y: auto;
 }
