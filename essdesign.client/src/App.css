@@ -15104,6 +15104,12 @@ button.stat-card {
     overflow: visible;
 }
 
+.employees-page .employees-loading {
+    min-height: calc(100vh - 116px);
+    border-radius: 0;
+    background: #ffffff;
+}
+
 .employees-page .employees-table-wrap {
     width: 100%;
     height: auto;

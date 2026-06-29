@@ -656,7 +656,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         <div className="module-error">{error}</div>
                     ) : null}
                     {loading ? (
-                        <div className="page-loading-brandmark compact"><LoadingBrandmark label="Loading employees" /></div>
+                        <div className="employees-loading page-loading-brandmark"><LoadingBrandmark label="Loading employees" /></div>
                     ) : filteredEntries.length === 0 ? (
                         <div className="module-empty-inline">No employees found.</div>
                     ) : (
