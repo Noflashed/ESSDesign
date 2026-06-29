@@ -807,10 +807,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                         <strong>{entry.appUser ? `Yes (${entry.appUser.email})` : 'No'}</strong>
                                                                     </div>
                                                                     <div className="employees-info-row">
-                                                                        <span>Invite Sent</span>
-                                                                        <strong>{formatEmployeeDate(entry.employee?.inviteSentAt)}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
                                                                         <span>Verified On</span>
                                                                         <strong>{formatEmployeeDate(entry.employee?.verifiedAt)}</strong>
                                                                     </div>
@@ -821,11 +817,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                                 <span className="employees-info-check"><CheckCircleIcon /> Yes</span>
                                                                             ) : 'No'}
                                                                         </strong>
-                                                                    </div>
-                                                                    <div className="employees-info-summary">
-                                                                        <span>Relationship Summary</span>
-                                                                        <strong>{entry.leadingHand ? 'View relationships from the actions menu.' : 'No leading hand relationships.'}</strong>
-                                                                        {entry.leadingHand ? <small>View full relationships tree from the actions menu.</small> : null}
                                                                     </div>
                                                                 </div>
                                                                 <button type="button" className="employees-info-close" onClick={() => setSelectedInfoEntry(null)}>Close</button>

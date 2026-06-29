@@ -3148,33 +3148,6 @@ body {
     height: 18px;
 }
 
-.employees-info-summary {
-    display: grid;
-    grid-template-columns: 128px minmax(0, 1fr);
-    gap: 8px 14px;
-    margin-top: 6px;
-    padding-top: 16px;
-    border-top: 1px solid #dfe4ed;
-}
-
-.employees-info-summary span {
-    color: #64748b;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.employees-info-summary strong {
-    color: #0f172a;
-    font-size: 14px;
-    font-weight: 700;
-}
-
-.employees-info-summary small {
-    grid-column: 2;
-    color: #64748b;
-    font-size: 12px;
-}
-
 .lh-board-page {
     background: #121214;
     height: calc(100vh - 77px);
@@ -15058,18 +15031,11 @@ button.stat-card {
     gap: 12px 24px;
 }
 
-.employees-page .employees-info-dropdown-panel .employees-info-row,
-.employees-page .employees-info-dropdown-panel .employees-info-summary {
+.employees-page .employees-info-dropdown-panel .employees-info-row {
     min-width: 0;
 }
 
-.employees-page .employees-info-dropdown-panel .employees-info-summary {
-    grid-column: 1 / -1;
-    padding-top: 4px;
-}
-
-.employees-page .employees-info-dropdown-panel .employees-info-row,
-.employees-page .employees-info-dropdown-panel .employees-info-summary {
+.employees-page .employees-info-dropdown-panel .employees-info-row {
     color: #26354f;
     font-size: 13px;
     font-weight: 500;
@@ -15077,19 +15043,11 @@ button.stat-card {
 }
 
 .employees-page .employees-info-dropdown-panel .employees-info-row span:first-child,
-.employees-page .employees-info-dropdown-panel .employees-info-summary span,
-.employees-page .employees-info-dropdown-panel .employees-info-row strong,
-.employees-page .employees-info-dropdown-panel .employees-info-summary strong {
+.employees-page .employees-info-dropdown-panel .employees-info-row strong {
     color: inherit;
     font-size: inherit;
     font-weight: inherit;
     line-height: inherit;
-}
-
-.employees-page .employees-info-dropdown-panel .employees-info-summary small {
-    color: #526173;
-    font-size: 12px;
-    font-weight: 500;
 }
 
 .employees-page .employees-info-close {
