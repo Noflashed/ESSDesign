@@ -298,7 +298,7 @@ function NavSidebar({
                         <img
                             src={MALOO_LOGO_URL}
                             alt="Maloo"
-                            className="app-nav-sidebar-logo"
+                            className="app-nav-sidebar-logo app-nav-sidebar-logo-maloo"
                         />
                     </span>
                 </button>

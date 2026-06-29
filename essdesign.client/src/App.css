@@ -4914,6 +4914,11 @@ body {
     flex-shrink: 0;
 }
 
+.app-nav-sidebar-logo-maloo {
+    width: 104px;
+    height: 62px;
+}
+
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand {
     min-height: 86px;
     padding: 18px 14px 12px;
@@ -4928,6 +4933,11 @@ body {
 .app-nav-sidebar.collapsed .app-nav-sidebar-logo {
     width: 96px;
     height: 58px;
+}
+
+.app-nav-sidebar.collapsed .app-nav-sidebar-logo-maloo {
+    width: 104px;
+    height: 62px;
 }
 
 .app-nav-sidebar-search {
