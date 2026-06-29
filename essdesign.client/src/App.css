@@ -3768,6 +3768,21 @@ body {
     max-width: 1440px;
 }
 
+.app-page-content .material-ordering-page-loading {
+    display: grid;
+    place-items: center;
+    min-height: calc(100vh - 32px);
+    background: #f8fafc;
+}
+
+.app-page-content .material-ordering-page-loader {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 164px;
+    height: 164px;
+}
+
 .material-ordering-home-shell {
     max-width: 1360px;
     display: grid;
