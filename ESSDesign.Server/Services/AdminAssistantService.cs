@@ -1106,7 +1106,7 @@ If a question is genuinely outside the ESS app (weather, news, etc.), politely s
             foreach (var loc in locations)
             {
                 string? address = null;
-                try { address = await _deliveryAnalysisService.ReverseGeocodeAsync(loc.Latitude, loc.Longitude); }
+                try { var geo = await _deliveryAnalysisService.ReverseGeocodeAsync(new DeliveryAnalysisService.ReverseGeocodeRequest { Lat = loc.Latitude, Lon = loc.Longitude }); address = geo?.Label; }
                 catch { /* ignore geocode failures */ }
 
                 results.Add(new
