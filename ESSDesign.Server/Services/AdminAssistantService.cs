@@ -332,14 +332,24 @@ You have tools — use them to look up real data before answering. Never make up
 When someone wants to open or view a design document, call get_design_link and tell them to use the link below. Never paste raw URLs in your reply.
 
 HOW TO TALK:
-- Sound like a real person, not a template. Never start two messages the same way.
+- Sound like a real person, not a template. Every response should feel fresh.
 - Vary your sentence structure constantly. Some answers short, some longer. Mix it up.
-- Never use bullet points, dashes, bold text, tables, or markdown of any kind. Just natural conversation.
-- Don't open with "Sure!", "Of course!", "Great question!", "Absolutely!" or any filler affirmation.
-- Don't close with "Let me know if you need anything else!" or similar robotic sign-offs.
-- Be direct and informative. If you know the answer, just say it.
-- Use casual Aussie-friendly language where appropriate — keep it relaxed but professional.
-- React naturally to what you find. If something is interesting or unexpected, say so.
+- Never use bullet points, dashes, bold text, numbered lists, tables, or markdown. Just natural flowing sentences.
+- Never open with "Sure!", "Of course!", "Great question!", "Absolutely!", "No worries!" or any filler affirmation.
+- Never close with "Let me know if you need anything else!", "Just give me a shout!", "Anything else I can help with?" or any robotic sign-off. Just stop talking when you've answered the question.
+- Be direct. If you know the answer, say it. Don't pad it out.
+- Use casual Aussie-friendly language where it feels natural — relaxed but professional.
+- React naturally to what you find. If something is surprising or notable, say so.
+
+WHEN SOMEONE ISN'T FOUND:
+- Phone numbers and mobile numbers are NOT stored in ESS. If asked for a phone number, say that clearly — don't say you can't find the person.
+- If an employee search returns suggestions (similar names), say something like "I couldn't find [name] exactly — did you mean [suggestion]?"
+- If someone isn't in the employee roster but they're described as an admin, manager, or office user, check get_user_roles — they may be a user account without a field employee profile.
+- The current user ({currentUser.FullName}, {currentUser.Email}) is always in the system even if not in the employee roster.
+
+WHEN THINGS GO WRONG:
+- If a tool returns an error, try a different approach rather than giving up. For delivery details, use the ID from get_active_deliveries results.
+- Never tell the user you're "looking into it" or "hang tight" and then just repeat the same info — actually try again differently.
 """;
 
             var messages = new List<object> { new { role = "system", content = systemPrompt } };
@@ -622,7 +632,7 @@ HOW TO TALK:
 
             var filtered = employees.AsEnumerable();
             if (!string.IsNullOrWhiteSpace(nameFilter))
-                filtered = filtered.Where(e => e.FullName.Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                filtered = filtered.Where(e => FuzzyNameMatch(e.FullName, nameFilter) > 0
                     || (e.Email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(roleFilter))
                 filtered = filtered.Where(e => string.Equals(e.AppRole, roleFilter, StringComparison.OrdinalIgnoreCase)
@@ -651,13 +661,30 @@ HOW TO TALK:
             var employees = await FetchEmployeeDirectoryAsync(ct);
             var jobsites = await FetchJobsiteDirectoryAsync(ct);
 
-            var employee = employees.FirstOrDefault(e =>
-                e.FullName.Equals(name, StringComparison.OrdinalIgnoreCase)) ??
-                employees.FirstOrDefault(e =>
-                e.FullName.Contains(name, StringComparison.OrdinalIgnoreCase));
+            var employee = employees
+                .Select(e => (Employee: e, Score: FuzzyNameMatch(e.FullName, name)))
+                .Where(x => x.Score > 0)
+                .OrderByDescending(x => x.Score)
+                .Select(x => x.Employee)
+                .FirstOrDefault();
 
             if (employee == null)
-                return JsonSerializer.Serialize(new { error = $"No employee found matching '{name}'" }, _jsonOptions);
+            {
+                // Return closest partial name matches so the AI can suggest them
+                var suggestions = employees
+                    .Select(e => (Name: e.FullName, Score: FuzzyNameMatch(e.FullName, name, partial: true)))
+                    .Where(x => x.Score > 0)
+                    .OrderByDescending(x => x.Score)
+                    .Take(3)
+                    .Select(x => x.Name)
+                    .ToList();
+                return JsonSerializer.Serialize(new
+                {
+                    error = $"No employee found matching '{name}'",
+                    note = "Phone numbers are not stored in ESS. If the user is an admin or manager rather than a field employee, try get_user_roles instead.",
+                    suggestions = suggestions.Count > 0 ? suggestions : null,
+                }, _jsonOptions);
+            }
 
             var inductedSites = jobsites
                 .Where(j => j.InductedEmployees.Any(e => e.Id == employee.Id || e.FullName.Equals(employee.FullName, StringComparison.OrdinalIgnoreCase)))
@@ -798,8 +825,12 @@ HOW TO TALK:
             var employees = await FetchEmployeeDirectoryAsync(ct);
             var jobsites = await FetchJobsiteDirectoryAsync(ct);
 
-            var employee = employees.FirstOrDefault(e => e.FullName.Equals(employeeName, StringComparison.OrdinalIgnoreCase))
-                ?? employees.FirstOrDefault(e => e.FullName.Contains(employeeName, StringComparison.OrdinalIgnoreCase));
+            var employee = employees
+                .Select(e => (Employee: e, Score: FuzzyNameMatch(e.FullName, employeeName)))
+                .Where(x => x.Score > 0)
+                .OrderByDescending(x => x.Score)
+                .Select(x => x.Employee)
+                .FirstOrDefault();
 
             if (employee == null)
                 return JsonSerializer.Serialize(new { error = $"No employee found matching '{employeeName}'" }, _jsonOptions);
@@ -1741,6 +1772,47 @@ HOW TO TALK:
                 _logger.LogInformation(ex, "Unable to create assistant download link for {DocumentId}", documentId);
                 return null;
             }
+        }
+
+        // Returns a match score > 0 if the query words all appear (even fuzzily) in the full name.
+        // partial: true allows single-token first-word-only matches for suggestion lists.
+        private static int FuzzyNameMatch(string fullName, string query, bool partial = false)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return 1;
+            var nameTokens = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var queryTokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            // Exact contains of full query
+            if (fullName.Contains(query, StringComparison.OrdinalIgnoreCase)) return 100;
+
+            int matchedTokens = 0;
+            foreach (var qt in queryTokens)
+            {
+                // A query token matches if any name token starts with it or contains it (min 3 chars)
+                bool found = nameTokens.Any(nt =>
+                    nt.StartsWith(qt, StringComparison.OrdinalIgnoreCase) ||
+                    (qt.Length >= 3 && nt.Contains(qt, StringComparison.OrdinalIgnoreCase)) ||
+                    (qt.Length >= 4 && LevenshteinDistance(nt.ToLowerInvariant(), qt.ToLowerInvariant()) <= 1));
+                if (found) matchedTokens++;
+            }
+
+            if (matchedTokens == queryTokens.Length) return 50 + matchedTokens * 10;
+            if (partial && matchedTokens > 0) return matchedTokens * 5;
+            return 0;
+        }
+
+        private static int LevenshteinDistance(string a, string b)
+        {
+            if (a.Length == 0) return b.Length;
+            if (b.Length == 0) return a.Length;
+            var d = new int[a.Length + 1, b.Length + 1];
+            for (var i = 0; i <= a.Length; i++) d[i, 0] = i;
+            for (var j = 0; j <= b.Length; j++) d[0, j] = j;
+            for (var i = 1; i <= a.Length; i++)
+                for (var j = 1; j <= b.Length; j++)
+                    d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                        d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            return d[a.Length, b.Length];
         }
 
         private static string CleanAssistantReply(string? reply)
