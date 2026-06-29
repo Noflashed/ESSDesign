@@ -28,8 +28,6 @@ import './App.css';
 // Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
-const SIDEBAR_LOGO_COMPACT_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/ESS%20LOGO%20%28P1%29.png';
-const SIDEBAR_LOGO_EXPANDED_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/ESS%20LOGO%20%28P2%29.png';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 const getAuthViewFromUrl = () => {
@@ -102,12 +100,6 @@ const SettingsIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
-const SidebarToggleIcon = ({ size = 18 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="M9 3v18" />
-    </svg>
-);
 const HomeNavIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
@@ -229,7 +221,6 @@ function getSharedFolderLinkFromUrl() {
 
 function NavSidebar({
     open,
-    onToggle,
     navItems,
     currentPage,
     onNavigate,
@@ -254,7 +245,7 @@ function NavSidebar({
     };
 
     return (
-        <aside className={`app-nav-sidebar${open ? '' : ' collapsed'}`}>
+        <aside className="app-nav-sidebar">
             <div className="app-nav-sidebar-brand">
                 <button
                     type="button"
@@ -264,18 +255,10 @@ function NavSidebar({
                     aria-label="Go to home"
                 >
                     <img
-                        src={open ? SIDEBAR_LOGO_EXPANDED_URL : SIDEBAR_LOGO_COMPACT_URL}
+                        src={LOGO_URL}
                         alt="ErectSafe Scaffolding"
                         className="app-nav-sidebar-logo"
                     />
-                </button>
-                <button
-                    className="app-nav-sidebar-toggle"
-                    onClick={onToggle}
-                    title={open ? 'Collapse sidebar' : 'Expand sidebar'}
-                    aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-                >
-                    <SidebarToggleIcon size={18} />
                 </button>
             </div>
 
@@ -616,7 +599,7 @@ function App() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [navSidebarOpen, setNavSidebarOpen] = useState(false);
+    const [navSidebarOpen, setNavSidebarOpen] = useState(true);
     const [inviteEmail, setInviteEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
     const [inviteFirstName, setInviteFirstName] = useState(() => new URLSearchParams(window.location.search).get('firstName') || '');
     const [inviteLastName, setInviteLastName] = useState(() => new URLSearchParams(window.location.search).get('lastName') || '');
@@ -635,9 +618,7 @@ function App() {
     const avatarDebugEnabled = useMemo(() => isAvatarDebugEnabled(), []);
 
     useEffect(() => {
-        if (currentPage === 'landing') {
-            setNavSidebarOpen(false);
-        } else if (DESIGN_PAGE_KEYS.has(currentPage) && !TRANSPORT_PAGE_KEYS.has(currentPage)) {
+        if (DESIGN_PAGE_KEYS.has(currentPage) && !TRANSPORT_PAGE_KEYS.has(currentPage)) {
             setNavSidebarOpen(true);
         }
     }, [currentPage]);
@@ -1830,8 +1811,7 @@ function App() {
                 ) : (
                     <div className="app-content-wrapper">
                         <NavSidebar
-                            open={navSidebarOpen}
-                            onToggle={() => setNavSidebarOpen(prev => !prev)}
+                            open={true}
                             navItems={allowedNavItems}
                             currentPage={currentPage}
                             onNavigate={(page) => {
