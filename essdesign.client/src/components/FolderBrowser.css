@@ -678,6 +678,12 @@
     color: var(--text-secondary);
 }
 
+.folder-browser-loading {
+    min-height: min(560px, calc(100vh - 210px));
+    padding: 0;
+    border-radius: 8px;
+}
+
 .spinner-small {
     border: 2px solid rgba(246, 114, 0, 0.18);
     border-top: 2px solid #f67200;

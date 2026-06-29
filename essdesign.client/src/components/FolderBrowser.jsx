@@ -3,6 +3,7 @@ import { foldersAPI, authAPI, usersAPI, rosteringAPI, resolveProfileImageUrl, sa
 import UploadDocumentModal, { RecipientAvatar, hydrateNotificationRecipients, prefetchNotificationRecipients } from './UploadDocumentModal';
 import ReplaceDocumentModal from './ReplaceDocumentModal';
 import PDFViewer from './PDFViewer';
+import LoadingBrandmark from './LoadingBrandmark';
 import { useToast } from './Toast';
 import './FolderBrowser.css';
 
@@ -1658,9 +1659,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                             </div>
                         </div>
                         {loading ? (
-                            <div className="loading">
-                                <div className="spinner-small"></div>
-                                Loading...
+                            <div className="folder-browser-loading page-loading-brandmark">
+                                <LoadingBrandmark label="Loading ESS Design" />
                             </div>
                         ) : (
                             <>

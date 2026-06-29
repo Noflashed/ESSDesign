@@ -1023,6 +1023,7 @@ body {
 }
 
 .page-loading-brandmark {
+    width: 100%;
     min-height: calc(100vh - 32px);
     display: grid;
     place-items: center;
@@ -1031,13 +1032,13 @@ body {
 
 .module-card .page-loading-brandmark,
 .module-shell > .page-loading-brandmark {
-    min-height: 360px;
+    min-height: min(560px, calc(100vh - 180px));
     border-radius: 8px;
     background: #ffffff;
 }
 
 .page-loading-brandmark.compact {
-    min-height: 220px;
+    min-height: 320px;
 }
 
 @keyframes spin {
