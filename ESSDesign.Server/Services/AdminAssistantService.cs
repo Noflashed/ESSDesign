@@ -9,6 +9,8 @@ namespace ESSDesign.Server.Services
 {
     public sealed class AdminAssistantService
     {
+        // ── Public data contracts ────────────────────────────────────────────
+
         public sealed class ChatMessage
         {
             public string Role { get; set; } = string.Empty;
@@ -29,74 +31,75 @@ namespace ESSDesign.Server.Services
             public string Type { get; set; } = string.Empty;
         }
 
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
-        private readonly SupabaseService _supabaseService;
-        private readonly DeliveryAnalysisService _deliveryAnalysisService;
-        private readonly ILogger<AdminAssistantService> _logger;
-        private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+        // ── Private data types ───────────────────────────────────────────────
+
+        private sealed class EmployeeContextRow
+        {
+            public string? Id { get; set; }
+            public string FirstName { get; set; } = string.Empty;
+            public string LastName { get; set; } = string.Empty;
+            public string FullName { get; set; } = string.Empty;
+            public string? Email { get; set; }
+            public bool LeadingHand { get; set; }
+            public bool Verified { get; set; }
+            public string? AppRole { get; set; }
+            public List<string> PreferredSites { get; set; } = new();
+        }
+
+        private sealed class JobsiteContextRow
+        {
+            public string? Id { get; set; }
+            public string? BuilderId { get; set; }
+            public string BuilderName { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+            public string? SiteLocation { get; set; }
+            public bool Archived { get; set; }
+            public string SiteKey { get; set; } = string.Empty;
+            public string InductionSource { get; set; } = "explicit";
+            public List<string> InductedEmployeeIds { get; set; } = new();
+            public List<EmployeeContextRow> InductedEmployees { get; set; } = new();
+        }
+
+        private sealed class TruckLiveLocationContext
+        {
+            public string TruckId { get; set; } = string.Empty;
+            public string TruckLabel { get; set; } = string.Empty;
+            public string RoleName { get; set; } = string.Empty;
+            public string? DriverUserId { get; set; }
+            public string? DeliveryRequestId { get; set; }
+            public double Latitude { get; set; }
+            public double Longitude { get; set; }
+            public double? AccuracyM { get; set; }
+            public double? HeadingDeg { get; set; }
+            public double? SpeedMps { get; set; }
+            public double? BatteryPercent { get; set; }
+            public string Status { get; set; } = string.Empty;
+            public string RecordedAt { get; set; } = string.Empty;
+            public string UpdatedAt { get; set; } = string.Empty;
+            public int AgeMinutes { get; set; }
+            public bool IsStale { get; set; }
+            public bool IsOffline { get; set; }
+            public string Freshness { get; set; } = string.Empty;
+            public string StatusLabel { get; set; } = string.Empty;
+            public string Coordinates { get; set; } = string.Empty;
+            public string MapUrl { get; set; } = string.Empty;
+        }
+
+        // ── Constants ────────────────────────────────────────────────────────
 
         private const string SafetyBucket = "project-information";
         private const string SafetyProjectsPath = "projects.json";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
         private const string MaterialRequestsTable = "ess_material_order_requests";
         private const string TruckLiveLocationsTable = "ess_truck_live_locations";
+
         private static readonly (string TruckId, string Label, string RoleName, string Number)[] KnownTruckLanes =
         {
             ("truck-1", "ESS01", "truck_ess01", "1"),
             ("truck-2", "ESS02", "truck_ess02", "2"),
             ("truck-3", "ESS03", "truck_ess03", "3"),
         };
-        private static readonly HashSet<string> VagueDesignLookupWords = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "a",
-            "an",
-            "and",
-            "any",
-            "available",
-            "can",
-            "design",
-            "designs",
-            "document",
-            "documents",
-            "download",
-            "file",
-            "files",
-            "find",
-            "for",
-            "get",
-            "give",
-            "job",
-            "jobsite",
-            "jobsites",
-            "latest",
-            "link",
-            "look",
-            "looking",
-            "newest",
-            "of",
-            "or",
-            "pdf",
-            "please",
-            "recent",
-            "revision",
-            "revisions",
-            "scaffold",
-            "scaffolds",
-            "scaffolding",
-            "search",
-            "show",
-            "site",
-            "specific",
-            "the",
-            "to",
-            "up",
-            "want",
-            "we",
-            "what",
-            "which",
-            "you",
-        };
+
         private static readonly Dictionary<string, (string Label, string Spec)> MaterialOrderQuantityLabels = new(StringComparer.OrdinalIgnoreCase)
         {
             ["r09_left_qty"] = ("STANDARDS", "3.0M"),
@@ -251,83 +254,14 @@ namespace ESSDesign.Server.Services
             ["r60_middle_qty"] = ("STAIR DOOR", ""),
         };
 
-        private sealed class ScoredDesignCandidate
-        {
-            public Guid? DocumentId { get; set; }
-            public string? FolderId { get; set; }
-            public string CandidateType { get; set; } = "document";
-            public string Name { get; set; } = string.Empty;
-            public string Path { get; set; } = string.Empty;
-            public string RevisionNumber { get; set; } = string.Empty;
-            public int RevisionSort { get; set; }
-            public DateTime UpdatedAt { get; set; } = DateTime.MinValue;
-            public bool HasEssDesign { get; set; }
-            public bool HasThirdPartyDesign { get; set; }
-            public int Score { get; set; }
-            public List<string> MatchedTerms { get; set; } = new();
-        }
+        // ── Fields and constructor ────────────────────────────────────────────
 
-        private sealed class EmployeeContextRow
-        {
-            public string? Id { get; set; }
-            public string FirstName { get; set; } = string.Empty;
-            public string LastName { get; set; } = string.Empty;
-            public string FullName { get; set; } = string.Empty;
-            public string? Email { get; set; }
-            public bool LeadingHand { get; set; }
-            public bool Verified { get; set; }
-            public string? AppRole { get; set; }
-            public List<string> PreferredSites { get; set; } = new();
-            public int Score { get; set; }
-            public List<string> MatchedTerms { get; set; } = new();
-        }
-
-        private sealed class JobsiteContextRow
-        {
-            public string? Id { get; set; }
-            public string? BuilderId { get; set; }
-            public string BuilderName { get; set; } = string.Empty;
-            public string Name { get; set; } = string.Empty;
-            public string? SiteLocation { get; set; }
-            public bool Archived { get; set; }
-            public string SiteKey { get; set; } = string.Empty;
-            public string InductionSource { get; set; } = "explicit";
-            public List<string> InductedEmployeeIds { get; set; } = new();
-            public List<EmployeeContextRow> InductedEmployees { get; set; } = new();
-            public int Score { get; set; }
-            public List<string> MatchedTerms { get; set; } = new();
-        }
-
-        private sealed class DesignSearchData
-        {
-            public List<object> Matches { get; set; } = new();
-            public List<AdminAssistantLink> Links { get; set; } = new();
-        }
-
-        private sealed class TruckLiveLocationContext
-        {
-            public string TruckId { get; set; } = string.Empty;
-            public string TruckLabel { get; set; } = string.Empty;
-            public string RoleName { get; set; } = string.Empty;
-            public string? DriverUserId { get; set; }
-            public string? DeliveryRequestId { get; set; }
-            public double Latitude { get; set; }
-            public double Longitude { get; set; }
-            public double? AccuracyM { get; set; }
-            public double? HeadingDeg { get; set; }
-            public double? SpeedMps { get; set; }
-            public double? BatteryPercent { get; set; }
-            public string Status { get; set; } = string.Empty;
-            public string RecordedAt { get; set; } = string.Empty;
-            public string UpdatedAt { get; set; } = string.Empty;
-            public int AgeMinutes { get; set; }
-            public bool IsStale { get; set; }
-            public bool IsOffline { get; set; }
-            public string Freshness { get; set; } = string.Empty;
-            public string StatusLabel { get; set; } = string.Empty;
-            public string Coordinates { get; set; } = string.Empty;
-            public string MapUrl { get; set; } = string.Empty;
-        }
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
+        private readonly SupabaseService _supabaseService;
+        private readonly DeliveryAnalysisService _deliveryAnalysisService;
+        private readonly ILogger<AdminAssistantService> _logger;
+        private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
 
         public AdminAssistantService(
             IHttpClientFactory httpClientFactory,
@@ -343,6 +277,8 @@ namespace ESSDesign.Server.Services
             _logger = logger;
         }
 
+        // ── Public API ────────────────────────────────────────────────────────
+
         public async Task<ChatResult> AskAsync(
             string question,
             IReadOnlyList<ChatMessage>? history,
@@ -351,376 +287,1349 @@ namespace ESSDesign.Server.Services
         {
             var cleanQuestion = (question ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(cleanQuestion))
-            {
                 throw new InvalidOperationException("Question is required.");
-            }
-
-            if (TryBuildDirectDateResult(cleanQuestion, out var directDateResult))
-            {
-                return directDateResult;
-            }
-
-            if (IsVagueDesignLookupQuestion(cleanQuestion))
-            {
-                return new ChatResult
-                {
-                    Reply = "Which jobsite and scaffold should I look for?",
-                    Links = new List<AdminAssistantLink>(),
-                    Sources = new List<string>(),
-                };
-            }
-
-            var context = await BuildContextAsync(cleanQuestion, history, cancellationToken);
-            var directTruckLocationResult = await TryBuildDirectTruckLocationResultAsync(cleanQuestion, context, cancellationToken);
-            if (directTruckLocationResult != null)
-            {
-                return directTruckLocationResult;
-            }
-
-            if (TryBuildDirectTransportScheduleResult(cleanQuestion, context, out var directTransportResult))
-            {
-                return directTransportResult;
-            }
 
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                return BuildUnavailableModelResult(
-                    context,
-                    "The AI model is not connected because OpenAI:ApiKey is not configured on the server.");
-            }
+                return new ChatResult
+                {
+                    Reply = "The AI model is not connected because OpenAI:ApiKey is not configured on the server.",
+                    Links = new List<AdminAssistantLink>(),
+                    Sources = new List<string>(),
+                };
 
             var model = _configuration["OpenAI:AdminAssistantModel"]
                 ?? _configuration["OpenAI:Model"]
-                ?? "gpt-4.1-mini";
+                ?? "gpt-4o-mini";
+
+            return await RunAgentLoopAsync(cleanQuestion, history, currentUser, apiKey, model, cancellationToken);
+        }
+
+        // ── Agent Loop ────────────────────────────────────────────────────────
+
+        private async Task<ChatResult> RunAgentLoopAsync(
+            string question,
+            IReadOnlyList<ChatMessage>? history,
+            UserInfo currentUser,
+            string apiKey,
+            string model,
+            CancellationToken cancellationToken)
+        {
+            var today = GetSydneyToday();
+            var collectedLinks = new List<AdminAssistantLink>();
+
+            var systemPrompt = $"""
+You are the ESS Design admin assistant — a knowledgeable, helpful assistant for users of the ESS Design scaffolding management web application. You behave like an experienced human colleague who knows the app and all its data inside out.
+
+ESS Design manages scaffolding projects across Sydney, Australia. It tracks:
+- Job-sites and builders (project registry)
+- Employees, their site inductions, and app roles
+- Scaffolding design documents (PDFs with revisions)
+- Daily rosters and scheduling
+- Material delivery orders and truck dispatching
+- Live GPS truck locations
+- User accounts and permissions
+- Notifications
+
+Today is {today:dddd, MMMM d, yyyy} (Sydney time).
+Current user: {currentUser.FullName} ({currentUser.Email})
+
+You have tools to query live data from the ESS database. ALWAYS use your tools to look up live data before answering. Never guess, estimate, or fabricate names, addresses, dates, document titles, or any other live data. If you are unsure, call a tool.
+
+You may call multiple tools in sequence or in parallel thinking. Chain tool calls as needed to build a complete answer. For example: search for a site, then get its inducted employees, then check its designs — all in one response flow.
+
+When a user asks to "take me to", "open", "view", "show" or "link" a document, call get_design_link to generate a clickable link. Say something like "I found it — click the link below to view it." Never include raw URLs in your text.
+
+Write in plain, natural chat language. No markdown formatting, no bold, no bullet dashes, no tables, no headings. Use natural sentences. Be concise and direct.
+
+If a question is genuinely outside the ESS app (weather, news, etc.), politely say so and offer to help with something ESS-related instead.
+""";
+
+            var messages = new List<object> { new { role = "system", content = systemPrompt } };
+
+            foreach (var msg in (history ?? Array.Empty<ChatMessage>()).TakeLast(10))
+            {
+                if (!string.IsNullOrWhiteSpace(msg.Content))
+                    messages.Add(new { role = msg.Role.ToLowerInvariant() == "assistant" ? "assistant" : "user", content = msg.Content });
+            }
+
+            messages.Add(new { role = "user", content = question });
+
             var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(35);
+            client.Timeout = TimeSpan.FromSeconds(120);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            var messages = new List<object>
+            for (var iteration = 0; iteration < 10; iteration++)
             {
-                new
+                var payload = new
                 {
-                    role = "system",
-                    content = """
-You are the ESS Design admin assistant for admin users. Think like a skilled, practical human problem-solver who understands the ESS Design app.
+                    model,
+                    temperature = 0.2,
+                    messages = messages.ToArray(),
+                    tools = GetToolDefinitions(),
+                    tool_choice = "auto",
+                };
 
-Use the supplied ESS context as the source of truth for live operational facts such as counts, schedules, rosters, users, job-sites, file records, and URLs. Do not fabricate live data, URLs, people, files, or schedules.
-
-For proximity and distance questions, each job-site record includes a siteLocation field which is the physical address of the site. The name field is just a label and must never be used for geographic reasoning. Use only the siteLocation field and your knowledge of Australian geography and Sydney suburbs to determine which job-site is physically closest to the location the user names. Reason through the actual suburb locations and distances before answering — do not match on name text.
-The ESS context is a live app-data graph, not a narrow answer template. Start with focusedMatches for the user's likely target records, then use liveAppContext for the full current entity graph and relationships, then use the detailed summaries for rosters, transport, documents, notifications, and counts. Do not assume a record is missing unless you have checked focusedMatches, liveAppContext, and the relevant full directory/list in the context.
-
-Think of liveAppContext as the backend toolbox output for this turn:
-- liveAppContext.employees is the current employee directory.
-- liveAppContext.jobsites is the current Site Registry project/job-site list.
-- liveAppContext.relationships.jobsiteInductions is the current mapping of job-sites to inducted employees.
-- focusedMatches contains the records most likely related to the user's wording.
-
-When the user asks about who is inducted, assigned, linked, working on, or associated with a job-site, use focusedMatches.jobsites and liveAppContext.relationships.jobsiteInductions. If one job-site is a clear best match, answer from that record. If multiple job-sites are plausible, name the closest matches and ask which one they mean. If there are no inducted employees, say that the job-site currently has no inducted employees recorded and mention whether the data came from explicit Site Registry inductions or the legacy preferred-site fallback.
-
-Your goal is to always provide a thoughtful, useful answer:
-- Interpret the user's intent, even when the wording is vague, misspelled, incomplete, or conversational.
-- Make reasonable assumptions and answer the most likely question first.
-- Break complex questions into smaller parts and address each part.
-- If exact certainty is not possible, give the best supported answer and clearly label the assumption.
-- Offer the closest matches, useful next steps, or alternative interpretations instead of ending with "I can't answer."
-- Ask a follow-up question only when it is truly required to proceed. If a follow-up would help but is not required, answer first and then mention what extra detail would improve the result.
-
-For design-file questions, use ranked designSearchMatches and links as the answer source before the broader design catalogue. If the user asks a broad question such as "find the latest design" without naming a jobsite, scaffold, builder, project, or other specific identifier, ask which jobsite and scaffold they want instead of listing recent designs. Treat "latest" as a request for one document only: provide the single newest/highest-confidence match, mention its revision if available, and do not list older revisions. Only list multiple revisions when the user explicitly asks for all revisions, revision history, previous versions, or available versions. If there is no exact match but related folders/documents exist, answer with one "best match" or "closest match", explain why it appears relevant, and include any available link.
-The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
-
-For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
-
-For job-site questions, use focusedMatches.jobsites first, then jobsiteSummary.projectMatches, then liveAppContext.jobsites. Each job-site record includes builder, site location, archived status, induction source, inducted employee count, and inductedEmployees. Use those fields directly.
-
-For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
-
-For material order and delivery schedule questions, use transportSummary.currentScheduleToday, currentSchedule, requestMatches, activeRequests, and archivedRequests. Treat a request as scheduled only when isOnSchedule is true. Do not call archived requests active; use lifecycleStatus and isArchived/isActiveQueue exactly as supplied. Requests with scheduleRemovedAt are no longer on the schedule even if old scheduledDate fields still exist. If the user asks for a specific date and no isOnSchedule rows match that date, say there are no scheduled deliveries for that date; never invent or shift deliveries from another date. Each request may include requestedMaterials with item names, specs, and quantities; list those materials when the user asks what was requested or what is in a material list/order.
-
-For live truck location questions, use transportSummary.currentTruckLocations. These are GPS tracking pings from ess_truck_live_locations, not schedule guesses. Always include the truck label, the best available address or coordinates, and how fresh/stale the ping is. If a ping is stale or offline, say so plainly.
-
-Write like a natural chat message, not a report. Do not use Markdown emphasis markers such as **bold**, ***bold italic***, underscores, tables, headings, or code fences. Plain sentences and short bullet-like lines are fine, but avoid decorative formatting.
-
-Be concise, direct, and specific. Avoid generic refusal language and avoid repeating that the answer is "not available in the provided context" unless there is genuinely no related ESS data at all.
-"""
-                },
-            };
-
-            foreach (var item in (history ?? Array.Empty<ChatMessage>()).TakeLast(8))
-            {
-                var role = item.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
-                var content = (item.Content ?? string.Empty).Trim();
-                if (!string.IsNullOrWhiteSpace(content))
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
                 {
-                    messages.Add(new { role, content });
+                    Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json"),
+                };
+
+                using var response = await client.SendAsync(httpRequest, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("OpenAI agent request failed: {StatusCode} {Body}", response.StatusCode, body);
+                    return new ChatResult
+                    {
+                        Reply = "The AI model request failed. Please try again in a moment.",
+                        Links = collectedLinks,
+                        Sources = new List<string>(),
+                    };
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var choice = doc.RootElement.GetProperty("choices")[0];
+                var finishReason = choice.GetProperty("finish_reason").GetString();
+                var message = choice.GetProperty("message");
+                var content = message.TryGetProperty("content", out var contentProp) && contentProp.ValueKind != JsonValueKind.Null
+                    ? contentProp.GetString()
+                    : null;
+
+                var hasToolCalls = message.TryGetProperty("tool_calls", out var toolCallsProp)
+                    && toolCallsProp.ValueKind == JsonValueKind.Array
+                    && toolCallsProp.GetArrayLength() > 0;
+
+                if (finishReason == "stop" || !hasToolCalls)
+                {
+                    return new ChatResult
+                    {
+                        Reply = CleanAssistantReply(content),
+                        Links = collectedLinks,
+                        Sources = new List<string>(),
+                    };
+                }
+
+                // Reconstruct assistant message with tool_calls for the conversation
+                var toolCallItems = toolCallsProp.EnumerateArray().Select(tc => new
+                {
+                    id = tc.GetProperty("id").GetString() ?? string.Empty,
+                    type = "function",
+                    function = new
+                    {
+                        name = tc.GetProperty("function").GetProperty("name").GetString() ?? string.Empty,
+                        arguments = tc.GetProperty("function").GetProperty("arguments").GetString() ?? "{}",
+                    }
+                }).ToArray();
+
+                messages.Add(new { role = "assistant", content, tool_calls = toolCallItems });
+
+                // Execute each tool call and append results
+                foreach (var toolCall in toolCallsProp.EnumerateArray())
+                {
+                    var toolCallId = toolCall.GetProperty("id").GetString() ?? string.Empty;
+                    var functionName = toolCall.GetProperty("function").GetProperty("name").GetString() ?? string.Empty;
+                    var argumentsJson = toolCall.GetProperty("function").GetProperty("arguments").GetString() ?? "{}";
+
+                    JsonElement args;
+                    try { args = JsonDocument.Parse(argumentsJson).RootElement; }
+                    catch { args = JsonDocument.Parse("{}").RootElement; }
+
+                    string toolResult;
+                    try
+                    {
+                        toolResult = await ExecuteToolAsync(functionName, args, collectedLinks, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Tool execution failed: {ToolName}", functionName);
+                        toolResult = JsonSerializer.Serialize(new { error = $"Tool execution failed: {ex.Message}" }, _jsonOptions);
+                    }
+
+                    messages.Add(new { role = "tool", tool_call_id = toolCallId, content = toolResult });
                 }
             }
 
-            messages.Add(new
-            {
-                role = "user",
-                content = $"""
-Admin user: {currentUser.FullName} ({currentUser.Email})
-Question: {cleanQuestion}
-
-ESS context JSON:
-{JsonSerializer.Serialize(BuildModelContext(context), _jsonOptions)}
-"""
-            });
-
-            var payload = new
-            {
-                model,
-                temperature = 0.15,
-                messages = messages.ToArray()
-            };
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions")
-            {
-                Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json")
-            };
-
-            using var response = await client.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Admin assistant OpenAI request failed: {StatusCode} {Body}", response.StatusCode, body);
-                return BuildUnavailableModelResult(
-                    context,
-                    "The AI model request failed, so I cannot provide a full AI answer right now.");
-            }
-
-            using var document = JsonDocument.Parse(body);
-            var reply = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-            var cleanReply = CleanAssistantReply(reply);
-
             return new ChatResult
             {
-                Reply = string.IsNullOrWhiteSpace(cleanReply) ? "I could not form a useful answer from the current ESS context." : cleanReply.Trim(),
-                Links = context.Links,
-                Sources = context.Sources,
+                Reply = "I was unable to complete the request. Please try rephrasing your question.",
+                Links = collectedLinks,
+                Sources = new List<string>(),
             };
+        }
+
+        // ── Tool Definitions ──────────────────────────────────────────────────
+
+        private static object[] GetToolDefinitions() => new object[]
+        {
+            Fn("get_current_date", "Get today's date and time in Sydney, Australia.", new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+            Fn("search_employees", "Search and list employees by name, role, or status. Use this to find employees, check who is a leading hand, check verification status, or list all employees.",
+                Params(
+                    ("name", "string", "Partial or full name to search for. Leave empty to list all."),
+                    ("role", "string", "Filter by app role: admin, scaffold_designer, site_supervisor, project_manager, leading_hand, general_scaffolder, transport_management, viewer"),
+                    ("leading_hand", "boolean", "If true, return only leading hands"),
+                    ("verified", "boolean", "If true, return only verified employees"),
+                    ("limit", "integer", "Maximum number of results to return (default 50)"))),
+            Fn("get_employee_details", "Get full details about a specific employee including their app role, induction sites, and roster status.",
+                Params(("employee_name", "string", "The name of the employee to look up"))),
+            Fn("get_jobsites", "Search and list job-sites (scaffolding projects). Use this to find sites by name, builder, or location.",
+                Params(
+                    ("name", "string", "Partial or full site name to search for"),
+                    ("builder", "string", "Filter by builder/company name"),
+                    ("location", "string", "Filter by suburb or address"),
+                    ("archived", "boolean", "If true return archived sites, if false return active sites only. Leave unset for all."),
+                    ("limit", "integer", "Maximum results (default 30)"))),
+            Fn("get_site_details", "Get full details about a specific job-site including inducted employees, builder, and location.",
+                Params(("site_name", "string", "The name of the job-site to look up"))),
+            Fn("get_builder_sites", "Get all job-sites for a specific builder/company.",
+                Params(("builder_name", "string", "The builder or company name"))),
+            Fn("get_inducted_employees_for_site", "Get the list of employees inducted at a specific job-site.",
+                Params(("site_name", "string", "The name of the job-site"))),
+            Fn("get_employee_inductions", "Get all job-sites that a specific employee is inducted on.",
+                Params(("employee_name", "string", "The name of the employee"))),
+            Fn("search_designs", "Search for scaffolding design documents by job-site name, scaffold type, folder name, or any keyword. Returns document names, folder paths, revision numbers, and document IDs for link generation.",
+                Params(
+                    ("query", "string", "Search terms: site name, scaffold description, builder, or filename"),
+                    ("sort_by", "string", "How to sort results: 'relevance' (default) or 'date' (newest first)"))),
+            Fn("get_latest_design", "Find the most recently uploaded design document, optionally filtered to a specific site or topic.",
+                Params(("query", "string", "Optional: filter to a specific site, scaffold type, or builder"))),
+            Fn("get_design_revisions", "Get all design revisions for a specific scaffold or folder — use when the user wants revision history or all versions.",
+                Params(("query", "string", "Site name, scaffold name, or folder path to find revisions for"))),
+            Fn("get_design_link", "Generate a clickable download link for a specific design document. Call this when the user wants to open, view, or access a document. Pass the document_id from search_designs results.",
+                Params(
+                    ("document_id", "string", "The document ID (UUID) from search_designs results"),
+                    ("type", "string", "Document type: 'ess' for ESS Design Issue, 'third_party' for third-party design. Default is 'ess'."))),
+            Fn("get_folder_contents", "List all design documents inside a specific folder by folder path or name.",
+                Params(("folder_path", "string", "The folder path or name to list contents of"))),
+            Fn("get_roster", "Get the roster/schedule showing which employees are planned to work on a given date or date range.",
+                Params(
+                    ("date", "string", "Date in yyyy-MM-dd format. Defaults to today."),
+                    ("days", "integer", "Number of days ahead to return (default 1, max 14)"))),
+            Fn("get_deliveries", "Get material delivery orders scheduled for a specific date or date range.",
+                Params(
+                    ("date", "string", "Date in yyyy-MM-dd format. Defaults to today."),
+                    ("days", "integer", "Number of days ahead to include (default 1, max 14)"),
+                    ("include_archived", "boolean", "Include completed/archived deliveries (default false)"))),
+            Fn("get_delivery_detail", "Get full details of a specific material delivery order including all materials requested.",
+                Params(("request_id", "string", "The delivery request ID"))),
+            Fn("get_active_deliveries", "Get all currently active (unarchived) material delivery orders, including scheduled and unscheduled ones.",
+                Params(
+                    ("scheduled_only", "boolean", "If true, return only orders that are currently on the schedule"))),
+            Fn("get_truck_locations", "Get live GPS locations for ESS trucks. Returns current position, speed, status, and last ping time.",
+                Params(("truck", "string", "Specific truck to query: ESS01, ESS02, ESS03, or leave empty for all trucks"))),
+            Fn("get_notifications", "Get recent app notifications sent to users.",
+                Params(
+                    ("user_name", "string", "Filter to a specific user's notifications"),
+                    ("limit", "integer", "Number of notifications to return (default 20, max 100)"))),
+            Fn("get_user_roles", "Get user accounts and their app roles (admin, manager, viewer, etc.).",
+                Params(
+                    ("role", "string", "Filter by role: admin, scaffold_designer, site_supervisor, project_manager, leading_hand, general_scaffolder, transport_management, viewer"),
+                    ("name", "string", "Filter by user name"))),
+            Fn("get_app_stats", "Get overall statistics for the ESS app: counts of employees, job-sites, designs, deliveries, and users.",
+                new { type = "object", properties = new { }, required = Array.Empty<string>() }),
+            Fn("get_site_health_report", "Get a comprehensive overview of a job-site: builder, location, inducted employees, recent designs, and delivery history.",
+                Params(("site_name", "string", "The name of the job-site"))),
+            Fn("get_recent_designs", "Get the most recently uploaded or updated design documents.",
+                Params(
+                    ("days", "integer", "How many days back to look (default 30)"),
+                    ("limit", "integer", "Maximum results to return (default 10)"))),
+            Fn("find_anything", "Broad keyword search across employees, job-sites, designs, and deliveries. Use this when you are not sure which category the user is asking about.",
+                Params(("query", "string", "Search keywords"))),
+        };
+
+        private static object Fn(string name, string description, object parameters) =>
+            new { type = "function", function = new { name, description, parameters } };
+
+        private static object Params(params (string name, string type, string description)[] props) =>
+            new
+            {
+                type = "object",
+                properties = props.ToDictionary(
+                    p => p.name,
+                    p => (object)new { type = p.type, description = p.description }),
+                required = Array.Empty<string>(),
+            };
+
+        // ── Tool Dispatcher ───────────────────────────────────────────────────
+
+        private async Task<string> ExecuteToolAsync(
+            string name,
+            JsonElement args,
+            List<AdminAssistantLink> links,
+            CancellationToken ct)
+        {
+            return name switch
+            {
+                "get_current_date" => await Tool_GetCurrentDate(ct),
+                "search_employees" => await Tool_SearchEmployees(args, ct),
+                "get_employee_details" => await Tool_GetEmployeeDetails(args, ct),
+                "get_jobsites" => await Tool_GetJobsites(args, ct),
+                "get_site_details" => await Tool_GetSiteDetails(args, ct),
+                "get_builder_sites" => await Tool_GetBuilderSites(args, ct),
+                "get_inducted_employees_for_site" => await Tool_GetInductedEmployeesForSite(args, ct),
+                "get_employee_inductions" => await Tool_GetEmployeeInductions(args, ct),
+                "search_designs" => await Tool_SearchDesigns(args, ct),
+                "get_latest_design" => await Tool_GetLatestDesign(args, ct),
+                "get_design_revisions" => await Tool_GetDesignRevisions(args, ct),
+                "get_design_link" => await Tool_GetDesignLink(args, links, ct),
+                "get_folder_contents" => await Tool_GetFolderContents(args, ct),
+                "get_roster" => await Tool_GetRoster(args, ct),
+                "get_deliveries" => await Tool_GetDeliveries(args, ct),
+                "get_delivery_detail" => await Tool_GetDeliveryDetail(args, ct),
+                "get_active_deliveries" => await Tool_GetActiveDeliveries(args, ct),
+                "get_truck_locations" => await Tool_GetTruckLocations(args, ct),
+                "get_notifications" => await Tool_GetNotifications(args, ct),
+                "get_user_roles" => await Tool_GetUserRoles(args, ct),
+                "get_app_stats" => await Tool_GetAppStats(ct),
+                "get_site_health_report" => await Tool_GetSiteHealthReport(args, ct),
+                "get_recent_designs" => await Tool_GetRecentDesigns(args, ct),
+                "find_anything" => await Tool_FindAnything(args, ct),
+                _ => JsonSerializer.Serialize(new { error = $"Unknown tool: {name}" }, _jsonOptions),
+            };
+        }
+
+        // ── Tool Implementations ──────────────────────────────────────────────
+
+        private Task<string> Tool_GetCurrentDate(CancellationToken ct)
+        {
+            var today = GetSydneyToday();
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetSydneyTimeZone());
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                date = today.ToString("yyyy-MM-dd"),
+                dayOfWeek = today.DayOfWeek.ToString(),
+                formattedDate = today.ToString("dddd, MMMM d, yyyy"),
+                time = now.ToString("h:mm tt", CultureInfo.InvariantCulture),
+                timeZone = "Australia/Sydney",
+            }, _jsonOptions));
+        }
+
+        private async Task<string> Tool_SearchEmployees(JsonElement args, CancellationToken ct)
+        {
+            var nameFilter = TryGetString(args, "name");
+            var roleFilter = TryGetString(args, "role");
+            var leadingHandFilter = args.TryGetProperty("leading_hand", out var lhProp) && lhProp.ValueKind == JsonValueKind.True ? true :
+                                    args.TryGetProperty("leading_hand", out var lhProp2) && lhProp2.ValueKind == JsonValueKind.False ? false : (bool?)null;
+            var verifiedFilter = args.TryGetProperty("verified", out var vProp) && vProp.ValueKind == JsonValueKind.True ? true :
+                                 args.TryGetProperty("verified", out var vProp2) && vProp2.ValueKind == JsonValueKind.False ? false : (bool?)null;
+            var limit = TryGetInt(args, "limit") ?? 50;
+
+            var employees = await FetchEmployeeDirectoryAsync(ct);
+
+            var filtered = employees.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+                filtered = filtered.Where(e => e.FullName.Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.Email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(roleFilter))
+                filtered = filtered.Where(e => string.Equals(e.AppRole, roleFilter, StringComparison.OrdinalIgnoreCase)
+                    || (roleFilter.Equals("leading_hand", StringComparison.OrdinalIgnoreCase) && e.LeadingHand));
+            if (leadingHandFilter.HasValue)
+                filtered = filtered.Where(e => e.LeadingHand == leadingHandFilter.Value);
+            if (verifiedFilter.HasValue)
+                filtered = filtered.Where(e => e.Verified == verifiedFilter.Value);
+
+            var results = filtered.Take(limit).Select(e => new
+            {
+                e.Id,
+                e.FullName,
+                e.Email,
+                siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                appRole = e.AppRole ?? AppRoles.Viewer,
+                e.Verified,
+            }).ToList();
+
+            return JsonSerializer.Serialize(new { count = results.Count, employees = results }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetEmployeeDetails(JsonElement args, CancellationToken ct)
+        {
+            var name = TryGetString(args, "employee_name") ?? string.Empty;
+            var employees = await FetchEmployeeDirectoryAsync(ct);
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var employee = employees.FirstOrDefault(e =>
+                e.FullName.Equals(name, StringComparison.OrdinalIgnoreCase)) ??
+                employees.FirstOrDefault(e =>
+                e.FullName.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+            if (employee == null)
+                return JsonSerializer.Serialize(new { error = $"No employee found matching '{name}'" }, _jsonOptions);
+
+            var inductedSites = jobsites
+                .Where(j => j.InductedEmployees.Any(e => e.Id == employee.Id || e.FullName.Equals(employee.FullName, StringComparison.OrdinalIgnoreCase)))
+                .Select(j => new { j.Name, j.BuilderName, j.SiteLocation, j.Archived })
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                employee.Id,
+                employee.FullName,
+                employee.Email,
+                siteRole = employee.LeadingHand ? "Leading Hand" : "Scaffolder",
+                appRole = employee.AppRole ?? AppRoles.Viewer,
+                employee.Verified,
+                inductedSiteCount = inductedSites.Count,
+                inductedSites,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetJobsites(JsonElement args, CancellationToken ct)
+        {
+            var nameFilter = TryGetString(args, "name");
+            var builderFilter = TryGetString(args, "builder");
+            var locationFilter = TryGetString(args, "location");
+            var archivedFilter = args.TryGetProperty("archived", out var aProp) && aProp.ValueKind == JsonValueKind.True ? true :
+                                 args.TryGetProperty("archived", out var aProp2) && aProp2.ValueKind == JsonValueKind.False ? false : (bool?)null;
+            var limit = TryGetInt(args, "limit") ?? 30;
+
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var filtered = jobsites.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+                filtered = filtered.Where(j => j.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(builderFilter))
+                filtered = filtered.Where(j => j.BuilderName.Contains(builderFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(locationFilter))
+                filtered = filtered.Where(j => (j.SiteLocation ?? string.Empty).Contains(locationFilter, StringComparison.OrdinalIgnoreCase)
+                    || j.Name.Contains(locationFilter, StringComparison.OrdinalIgnoreCase));
+            if (archivedFilter.HasValue)
+                filtered = filtered.Where(j => j.Archived == archivedFilter.Value);
+
+            var results = filtered.Take(limit).Select(j => new
+            {
+                j.Id,
+                j.Name,
+                builder = j.BuilderName,
+                siteLocation = j.SiteLocation,
+                j.Archived,
+                inductedEmployeeCount = j.InductedEmployees.Count,
+            }).ToList();
+
+            return JsonSerializer.Serialize(new { count = results.Count, jobsites = results }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetSiteDetails(JsonElement args, CancellationToken ct)
+        {
+            var name = TryGetString(args, "site_name") ?? string.Empty;
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var site = jobsites.FirstOrDefault(j => j.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                ?? jobsites.FirstOrDefault(j => j.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+
+            if (site == null)
+                return JsonSerializer.Serialize(new { error = $"No job-site found matching '{name}'" }, _jsonOptions);
+
+            return JsonSerializer.Serialize(new
+            {
+                site.Id,
+                site.Name,
+                builder = site.BuilderName,
+                siteLocation = site.SiteLocation,
+                site.Archived,
+                site.SiteKey,
+                site.InductionSource,
+                inductedEmployeeCount = site.InductedEmployees.Count,
+                inductedEmployees = site.InductedEmployees.Select(e => new
+                {
+                    e.FullName,
+                    e.Email,
+                    siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                    appRole = e.AppRole ?? AppRoles.Viewer,
+                    e.Verified,
+                }).ToList(),
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetBuilderSites(JsonElement args, CancellationToken ct)
+        {
+            var builderName = TryGetString(args, "builder_name") ?? string.Empty;
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var sites = jobsites
+                .Where(j => j.BuilderName.Contains(builderName, StringComparison.OrdinalIgnoreCase))
+                .Select(j => new
+                {
+                    j.Name,
+                    siteLocation = j.SiteLocation,
+                    j.Archived,
+                    inductedEmployeeCount = j.InductedEmployees.Count,
+                }).ToList();
+
+            return JsonSerializer.Serialize(new { builder = builderName, count = sites.Count, sites }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetInductedEmployeesForSite(JsonElement args, CancellationToken ct)
+        {
+            var siteName = TryGetString(args, "site_name") ?? string.Empty;
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var site = jobsites.FirstOrDefault(j => j.Name.Equals(siteName, StringComparison.OrdinalIgnoreCase))
+                ?? jobsites.FirstOrDefault(j => j.Name.Contains(siteName, StringComparison.OrdinalIgnoreCase));
+
+            if (site == null)
+                return JsonSerializer.Serialize(new { error = $"No job-site found matching '{siteName}'" }, _jsonOptions);
+
+            var employees = site.InductedEmployees.Select(e => new
+            {
+                e.FullName,
+                e.Email,
+                siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                appRole = e.AppRole ?? AppRoles.Viewer,
+                e.Verified,
+            }).ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                site = site.Name,
+                builder = site.BuilderName,
+                inductionSource = site.InductionSource,
+                count = employees.Count,
+                employees,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetEmployeeInductions(JsonElement args, CancellationToken ct)
+        {
+            var employeeName = TryGetString(args, "employee_name") ?? string.Empty;
+            var employees = await FetchEmployeeDirectoryAsync(ct);
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+
+            var employee = employees.FirstOrDefault(e => e.FullName.Equals(employeeName, StringComparison.OrdinalIgnoreCase))
+                ?? employees.FirstOrDefault(e => e.FullName.Contains(employeeName, StringComparison.OrdinalIgnoreCase));
+
+            if (employee == null)
+                return JsonSerializer.Serialize(new { error = $"No employee found matching '{employeeName}'" }, _jsonOptions);
+
+            var sites = jobsites
+                .Where(j => j.InductedEmployees.Any(e => e.Id == employee.Id
+                    || e.FullName.Equals(employee.FullName, StringComparison.OrdinalIgnoreCase)))
+                .Select(j => new { j.Name, builder = j.BuilderName, j.SiteLocation, j.Archived })
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                employee = employee.FullName,
+                inductedSiteCount = sites.Count,
+                sites,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_SearchDesigns(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            var sortBy = TryGetString(args, "sort_by") ?? "relevance";
+
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+            return SearchDesignDocuments(query, folders, documents, sortBy, limit: 10, includeIds: true);
+        }
+
+        private async Task<string> Tool_GetLatestDesign(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+            return SearchDesignDocuments(query, folders, documents, "date", limit: 1, includeIds: true);
+        }
+
+        private async Task<string> Tool_GetDesignRevisions(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+            return SearchDesignDocuments(query, folders, documents, "relevance", limit: 20, includeIds: true, allRevisions: true);
+        }
+
+        private async Task<string> Tool_GetDesignLink(JsonElement args, List<AdminAssistantLink> links, CancellationToken ct)
+        {
+            var documentIdStr = TryGetString(args, "document_id") ?? string.Empty;
+            var type = TryGetString(args, "type") ?? "ess";
+
+            if (!Guid.TryParse(documentIdStr, out var documentId))
+                return JsonSerializer.Serialize(new { error = "Invalid document_id — must be a UUID." }, _jsonOptions);
+
+            var info = await TryGetDownloadInfoAsync(documentId, type, ct);
+            if (info == null)
+            {
+                // Try the other type
+                var otherType = type == "ess" ? "third_party" : "ess";
+                info = await TryGetDownloadInfoAsync(documentId, otherType, ct);
+                if (info != null) type = otherType;
+            }
+
+            if (info == null)
+                return JsonSerializer.Serialize(new { error = "Could not generate a download link for this document. It may not have a file attached." }, _jsonOptions);
+
+            links.Add(new AdminAssistantLink
+            {
+                Label = "Click here to view",
+                Url = info.Url,
+                Type = type == "ess" ? "ess-design" : "third-party-design",
+            });
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                fileName = info.FileName,
+                type,
+                message = "Link generated successfully. Tell the user to click the link below to view the document.",
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetFolderContents(JsonElement args, CancellationToken ct)
+        {
+            var folderPath = TryGetString(args, "folder_path") ?? string.Empty;
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+
+            var folderPaths = BuildFolderPaths(folders);
+            var matchingFolderIds = folderPaths
+                .Where(kv => kv.Value.Contains(folderPath, StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var docs = documents
+                .Where(d => matchingFolderIds.Contains(TryGetString(d, "folder_id") ?? string.Empty))
+                .Select(d =>
+                {
+                    var folderId = TryGetString(d, "folder_id") ?? string.Empty;
+                    return new
+                    {
+                        documentId = TryGetString(d, "id"),
+                        name = TryGetString(d, "ess_design_issue_name") ?? TryGetString(d, "third_party_design_name") ?? "Unnamed",
+                        revision = TryGetString(d, "revision_number"),
+                        description = TryGetString(d, "description"),
+                        updatedAt = TryGetString(d, "updated_at"),
+                        folderPath = folderPaths.TryGetValue(folderId, out var fp) ? fp : string.Empty,
+                        hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "ess_design_issue_path")),
+                        hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "third_party_design_path")),
+                    };
+                })
+                .OrderByDescending(d => d.updatedAt)
+                .Take(30)
+                .ToList();
+
+            return JsonSerializer.Serialize(new { folderPath, count = docs.Count, documents = docs }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetRoster(JsonElement args, CancellationToken ct)
+        {
+            var dateStr = TryGetString(args, "date");
+            var days = TryGetInt(args, "days") ?? 1;
+            if (days < 1) days = 1;
+            if (days > 14) days = 14;
+
+            var today = GetSydneyToday();
+            var startDate = string.IsNullOrWhiteSpace(dateStr) ? today : DateOnly.TryParse(dateStr, out var parsed) ? parsed : today;
+
+            var planRows = await GetRestRowsAsync<JsonElement>(
+                "ess_rostering_plans?select=*&order=plan_date.desc&limit=365", ct);
+
+            var results = new List<object>();
+            for (var i = 0; i < days; i++)
+            {
+                var date = startDate.AddDays(i);
+                var dateKey = date.ToString("yyyy-MM-dd");
+                var plan = planRows.FirstOrDefault(p => TryGetStringAny(p, "plan_date", "planDate") == dateKey);
+
+                if (plan.ValueKind == JsonValueKind.Undefined)
+                {
+                    results.Add(new { date = dateKey, hasRoster = false, note = "No roster plan created for this date." });
+                    continue;
+                }
+
+                results.Add(new
+                {
+                    date = dateKey,
+                    hasRoster = true,
+                    planId = TryGetString(plan, "id"),
+                    data = plan,
+                });
+            }
+
+            return JsonSerializer.Serialize(new { requestedFrom = startDate.ToString("yyyy-MM-dd"), days, roster = results }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetDeliveries(JsonElement args, CancellationToken ct)
+        {
+            var dateStr = TryGetString(args, "date");
+            var days = TryGetInt(args, "days") ?? 1;
+            if (days < 1) days = 1;
+            if (days > 14) days = 14;
+            var includeArchived = args.TryGetProperty("include_archived", out var iaProp) && iaProp.ValueKind == JsonValueKind.True;
+
+            var today = GetSydneyToday();
+            var startDate = string.IsNullOrWhiteSpace(dateStr) ? today : DateOnly.TryParse(dateStr, out var parsed) ? parsed : today;
+
+            var requestRows = await GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+
+            var dates = Enumerable.Range(0, days).Select(i => startDate.AddDays(i).ToString("yyyy-MM-dd")).ToHashSet();
+
+            var deliveries = requestRows
+                .Where(r =>
+                {
+                    var scheduledDate = NormalizeDateOnlyString(TryGetStringAny(r, "scheduledDate", "scheduled_date"));
+                    var scheduleRemovedAt = TryGetStringAny(r, "scheduleRemovedAt", "schedule_removed_at");
+                    var archivedAt = TryGetStringAny(r, "archivedAt", "archived_at");
+                    var isOnSchedule = !string.IsNullOrWhiteSpace(scheduledDate) && string.IsNullOrWhiteSpace(scheduleRemovedAt);
+                    if (!isOnSchedule) return false;
+                    if (!includeArchived && !string.IsNullOrWhiteSpace(archivedAt)) return false;
+                    return dates.Contains(scheduledDate ?? string.Empty);
+                })
+                .Select(r =>
+                {
+                    var scheduledDate = NormalizeDateOnlyString(TryGetStringAny(r, "scheduledDate", "scheduled_date"));
+                    var hour = TryGetIntAny(r, "scheduledHour", "scheduled_hour");
+                    var minute = TryGetIntAny(r, "scheduledMinute", "scheduled_minute");
+                    return new
+                    {
+                        id = TryGetString(r, "id"),
+                        builder = TryGetStringAny(r, "builderName", "builder_name"),
+                        site = TryGetStringAny(r, "projectName", "project_name"),
+                        scheduledDate,
+                        scheduledTime = hour != null ? $"{hour:00}:{minute ?? 0:00}" : null,
+                        truck = TryGetStringAny(r, "scheduledTruckLabel", "scheduled_truck_label"),
+                        status = TryGetStringAny(r, "deliveryStatus", "delivery_status") ?? "scheduled",
+                        archived = !string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at")),
+                        materials = BuildRequestedMaterials(r).Count + " material lines",
+                    };
+                })
+                .OrderBy(d => d.scheduledDate)
+                .ThenBy(d => d.scheduledTime)
+                .Take(100)
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                from = startDate.ToString("yyyy-MM-dd"),
+                days,
+                count = deliveries.Count,
+                deliveries,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetDeliveryDetail(JsonElement args, CancellationToken ct)
+        {
+            var requestId = TryGetString(args, "request_id") ?? string.Empty;
+            var requestRows = await GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+
+            var request = requestRows.FirstOrDefault(r => string.Equals(TryGetString(r, "id"), requestId, StringComparison.OrdinalIgnoreCase));
+            if (request.ValueKind == JsonValueKind.Undefined)
+                return JsonSerializer.Serialize(new { error = $"No delivery request found with id '{requestId}'" }, _jsonOptions);
+
+            var materials = BuildRequestedMaterials(request);
+            var scheduledDate = NormalizeDateOnlyString(TryGetStringAny(request, "scheduledDate", "scheduled_date"));
+            var hour = TryGetIntAny(request, "scheduledHour", "scheduled_hour");
+            var minute = TryGetIntAny(request, "scheduledMinute", "scheduled_minute");
+            var scheduleRemovedAt = TryGetStringAny(request, "scheduleRemovedAt", "schedule_removed_at");
+            var isOnSchedule = !string.IsNullOrWhiteSpace(scheduledDate) && string.IsNullOrWhiteSpace(scheduleRemovedAt);
+
+            return JsonSerializer.Serialize(new
+            {
+                id = TryGetString(request, "id"),
+                builder = TryGetStringAny(request, "builderName", "builder_name"),
+                site = TryGetStringAny(request, "projectName", "project_name"),
+                requestedBy = TryGetStringAny(request, "requestedByName", "requested_by_name"),
+                submittedAt = TryGetStringAny(request, "submittedAt", "submitted_at"),
+                isOnSchedule,
+                scheduledDate = isOnSchedule ? scheduledDate : null,
+                scheduledTime = isOnSchedule && hour != null ? $"{hour:00}:{minute ?? 0:00}" : null,
+                truck = isOnSchedule ? TryGetStringAny(request, "scheduledTruckLabel", "scheduled_truck_label") : null,
+                archived = !string.IsNullOrWhiteSpace(TryGetStringAny(request, "archivedAt", "archived_at")),
+                scheduleRemovedAt,
+                scaffoldingSystem = TryGetMaterialMeta(request, "__scaffoldingSystem"),
+                details = TryGetMaterialMeta(request, "__details") ?? TryGetString(request, "details"),
+                notes = TryGetString(request, "notes"),
+                materialCount = materials.Count,
+                materials,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetActiveDeliveries(JsonElement args, CancellationToken ct)
+        {
+            var scheduledOnly = args.TryGetProperty("scheduled_only", out var soProp) && soProp.ValueKind == JsonValueKind.True;
+
+            var requestRows = await GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+
+            var active = requestRows
+                .Where(r => string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at")))
+                .Where(r =>
+                {
+                    if (!scheduledOnly) return true;
+                    var scheduledDate = NormalizeDateOnlyString(TryGetStringAny(r, "scheduledDate", "scheduled_date"));
+                    var scheduleRemovedAt = TryGetStringAny(r, "scheduleRemovedAt", "schedule_removed_at");
+                    return !string.IsNullOrWhiteSpace(scheduledDate) && string.IsNullOrWhiteSpace(scheduleRemovedAt);
+                })
+                .Select(r =>
+                {
+                    var scheduledDate = NormalizeDateOnlyString(TryGetStringAny(r, "scheduledDate", "scheduled_date"));
+                    var scheduleRemovedAt = TryGetStringAny(r, "scheduleRemovedAt", "schedule_removed_at");
+                    var hour = TryGetIntAny(r, "scheduledHour", "scheduled_hour");
+                    var minute = TryGetIntAny(r, "scheduledMinute", "scheduled_minute");
+                    var isOnSchedule = !string.IsNullOrWhiteSpace(scheduledDate) && string.IsNullOrWhiteSpace(scheduleRemovedAt);
+                    return new
+                    {
+                        id = TryGetString(r, "id"),
+                        builder = TryGetStringAny(r, "builderName", "builder_name"),
+                        site = TryGetStringAny(r, "projectName", "project_name"),
+                        isOnSchedule,
+                        scheduledDate = isOnSchedule ? scheduledDate : null,
+                        scheduledTime = isOnSchedule && hour != null ? $"{hour:00}:{minute ?? 0:00}" : null,
+                        truck = isOnSchedule ? TryGetStringAny(r, "scheduledTruckLabel", "scheduled_truck_label") : null,
+                        status = TryGetStringAny(r, "deliveryStatus", "delivery_status") ?? (isOnSchedule ? "scheduled" : "pending"),
+                    };
+                })
+                .OrderBy(r => r.scheduledDate ?? "9999")
+                .ThenBy(r => r.scheduledTime ?? "99:99")
+                .Take(100)
+                .ToList();
+
+            return JsonSerializer.Serialize(new { count = active.Count, deliveries = active }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetTruckLocations(JsonElement args, CancellationToken ct)
+        {
+            var truckFilter = TryGetString(args, "truck");
+
+            var rows = await GetRestRowsAsync<JsonElement>(
+                $"{TruckLiveLocationsTable}?select=truck_id,truck_label,role_name,driver_user_id,delivery_request_id,latitude,longitude,accuracy_m,heading_deg,speed_mps,battery_percent,status,recorded_at,updated_at&order=recorded_at.desc&limit=24",
+                ct);
+
+            var locations = BuildTruckLiveLocations(rows);
+
+            if (!string.IsNullOrWhiteSpace(truckFilter) && !truckFilter.Equals("all", StringComparison.OrdinalIgnoreCase))
+                locations = locations.Where(l =>
+                    l.TruckLabel.Contains(truckFilter, StringComparison.OrdinalIgnoreCase) ||
+                    l.TruckId.Contains(truckFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var results = new List<object>();
+            foreach (var loc in locations)
+            {
+                string? address = null;
+                try { address = await _deliveryAnalysisService.ReverseGeocodeAsync(loc.Latitude, loc.Longitude); }
+                catch { /* ignore geocode failures */ }
+
+                results.Add(new
+                {
+                    truck = loc.TruckLabel,
+                    status = loc.StatusLabel,
+                    location = address ?? loc.Coordinates,
+                    coordinates = loc.Coordinates,
+                    mapUrl = loc.MapUrl,
+                    lastPing = loc.Freshness,
+                    lastPingTime = FormatSydneyDateTime(loc.RecordedAt),
+                    speed = loc.SpeedMps.HasValue ? $"{Math.Round(loc.SpeedMps.Value * 3.6):F0} km/h" : null,
+                    battery = loc.BatteryPercent.HasValue ? $"{loc.BatteryPercent.Value:F0}%" : null,
+                    isStale = loc.IsStale,
+                    isOffline = loc.IsOffline,
+                    driverUserId = loc.DriverUserId,
+                    deliveryRequestId = loc.DeliveryRequestId,
+                });
+            }
+
+            return JsonSerializer.Serialize(new { count = results.Count, trucks = results }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetNotifications(JsonElement args, CancellationToken ct)
+        {
+            var userNameFilter = TryGetString(args, "user_name");
+            var limit = Math.Min(TryGetInt(args, "limit") ?? 20, 100);
+
+            var notificationRows = await GetRestRowsAsync<JsonElement>(
+                "user_notifications?select=id,user_id,title,message,type,folder_id,document_id,read,created_at,updated_at&order=created_at.desc&limit=250",
+                ct);
+
+            IEnumerable<JsonElement> filtered = notificationRows;
+
+            if (!string.IsNullOrWhiteSpace(userNameFilter))
+            {
+                var userNames = await GetRestRowsAsync<JsonElement>(
+                    "user_names?select=id,email,full_name&order=full_name.asc&limit=1000", ct);
+                var matchedUserIds = userNames
+                    .Where(u => (TryGetString(u, "full_name") ?? string.Empty).Contains(userNameFilter, StringComparison.OrdinalIgnoreCase)
+                        || (TryGetString(u, "email") ?? string.Empty).Contains(userNameFilter, StringComparison.OrdinalIgnoreCase))
+                    .Select(u => TryGetString(u, "id"))
+                    .Where(id => id != null)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                filtered = filtered.Where(n => matchedUserIds.Contains(TryGetString(n, "user_id") ?? string.Empty));
+            }
+
+            var notifications = filtered.Take(limit).Select(n => new
+            {
+                id = TryGetString(n, "id"),
+                userId = TryGetString(n, "user_id"),
+                title = TryGetString(n, "title"),
+                message = TryGetString(n, "message"),
+                type = TryGetString(n, "type"),
+                read = TryGetBool(n, "read"),
+                createdAt = TryGetString(n, "created_at"),
+            }).ToList();
+
+            return JsonSerializer.Serialize(new { count = notifications.Count, notifications }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetUserRoles(JsonElement args, CancellationToken ct)
+        {
+            var roleFilter = TryGetString(args, "role");
+            var nameFilter = TryGetString(args, "name");
+
+            var userNames = await GetRestRowsAsync<JsonElement>(
+                "user_names?select=id,email,full_name,phone_number&order=full_name.asc&limit=1000", ct);
+            var userRoles = await GetRestRowsAsync<JsonElement>(
+                "user_roles?select=user_id,role,updated_at&limit=1000", ct);
+
+            var rolesByUserId = userRoles
+                .Select(r => new { UserId = TryGetString(r, "user_id"), Role = TryGetString(r, "role") })
+                .Where(r => r.UserId != null)
+                .ToDictionary(r => r.UserId!, r => r.Role ?? AppRoles.Viewer, StringComparer.OrdinalIgnoreCase);
+
+            var users = userNames.Select(u =>
+            {
+                var id = TryGetString(u, "id") ?? string.Empty;
+                var role = rolesByUserId.TryGetValue(id, out var r) ? r : AppRoles.Viewer;
+                return new { id, fullName = TryGetString(u, "full_name"), email = TryGetString(u, "email"), role };
+            }).AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(roleFilter))
+                users = users.Where(u => string.Equals(u.role, roleFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+                users = users.Where(u => (u.fullName ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+
+            var results = users.ToList();
+            return JsonSerializer.Serialize(new { count = results.Count, users = results }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetAppStats(CancellationToken ct)
+        {
+            var employeesTask = GetRestRowsAsync<JsonElement>(
+                "ess_rostering_employees?select=id,verified_at&limit=5000", ct);
+            var userNamesTask = GetRestRowsAsync<JsonElement>(
+                "user_names?select=id&limit=1000", ct);
+            var foldersTask = GetRestRowsAsync<JsonElement>(
+                "folders?select=id&limit=5000", ct);
+            var documentsTask = GetRestRowsAsync<JsonElement>(
+                "design_documents?select=id,updated_at&limit=5000", ct);
+            var requestsTask = GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=id,archived_at&limit=5000", ct);
+            var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, ct);
+
+            await Task.WhenAll(employeesTask, userNamesTask, foldersTask, documentsTask, requestsTask, projectsTask);
+
+            var employees = employeesTask.Result;
+            var projects = projectsTask.Result;
+
+            return JsonSerializer.Serialize(new
+            {
+                employees = new
+                {
+                    total = employees.Count,
+                    verified = employees.Count(e => !string.IsNullOrWhiteSpace(TryGetString(e, "verified_at"))),
+                    unverified = employees.Count(e => string.IsNullOrWhiteSpace(TryGetString(e, "verified_at"))),
+                },
+                jobsites = new
+                {
+                    total = CountProjects(projects, null),
+                    active = CountProjects(projects, false),
+                    archived = CountProjects(projects, true),
+                },
+                designDocuments = new
+                {
+                    totalFolders = foldersTask.Result.Count,
+                    totalDocuments = documentsTask.Result.Count,
+                },
+                deliveries = new
+                {
+                    total = requestsTask.Result.Count,
+                    active = requestsTask.Result.Count(r => string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at"))),
+                    archived = requestsTask.Result.Count(r => !string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at"))),
+                },
+                users = new
+                {
+                    total = userNamesTask.Result.Count,
+                },
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetSiteHealthReport(JsonElement args, CancellationToken ct)
+        {
+            var siteName = TryGetString(args, "site_name") ?? string.Empty;
+
+            var jobsitesTask = FetchJobsiteDirectoryAsync(ct);
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+            var requestRows = await GetRestRowsAsync<JsonElement>(
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+            var jobsites = await jobsitesTask;
+
+            var site = jobsites.FirstOrDefault(j => j.Name.Equals(siteName, StringComparison.OrdinalIgnoreCase))
+                ?? jobsites.FirstOrDefault(j => j.Name.Contains(siteName, StringComparison.OrdinalIgnoreCase));
+
+            if (site == null)
+                return JsonSerializer.Serialize(new { error = $"No job-site found matching '{siteName}'" }, _jsonOptions);
+
+            var designSearch = SearchDesignDocuments(site.Name, folders, documents, "date", limit: 5, includeIds: true);
+            var siteDeliveries = requestRows
+                .Where(r => (TryGetStringAny(r, "projectName", "project_name") ?? string.Empty)
+                    .Contains(site.Name, StringComparison.OrdinalIgnoreCase)
+                    || (TryGetStringAny(r, "builderName", "builder_name") ?? string.Empty)
+                    .Contains(site.BuilderName, StringComparison.OrdinalIgnoreCase))
+                .Select(r => new
+                {
+                    id = TryGetString(r, "id"),
+                    scheduledDate = NormalizeDateOnlyString(TryGetStringAny(r, "scheduledDate", "scheduled_date")),
+                    archived = !string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at")),
+                    status = TryGetStringAny(r, "deliveryStatus", "delivery_status") ?? "pending",
+                })
+                .Take(20)
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                site = new
+                {
+                    site.Name,
+                    builder = site.BuilderName,
+                    siteLocation = site.SiteLocation,
+                    site.Archived,
+                },
+                inductedEmployees = new
+                {
+                    count = site.InductedEmployees.Count,
+                    employees = site.InductedEmployees.Select(e => new
+                    {
+                        e.FullName,
+                        siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                        e.Verified,
+                    }).ToList(),
+                },
+                recentDesigns = JsonDocument.Parse(designSearch).RootElement,
+                deliveries = new { count = siteDeliveries.Count, recent = siteDeliveries },
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetRecentDesigns(JsonElement args, CancellationToken ct)
+        {
+            var days = TryGetInt(args, "days") ?? 30;
+            var limit = Math.Min(TryGetInt(args, "limit") ?? 10, 50);
+            var cutoff = DateTime.UtcNow.AddDays(-days);
+
+            var (folders, documents) = await FetchDesignDataAsync(ct);
+            var folderPaths = BuildFolderPaths(folders);
+
+            var recent = documents
+                .Where(d => TryGetDate(d, "updated_at") >= cutoff || TryGetDate(d, "created_at") >= cutoff)
+                .Select(d =>
+                {
+                    var folderId = TryGetString(d, "folder_id") ?? string.Empty;
+                    return new
+                    {
+                        documentId = TryGetString(d, "id"),
+                        name = TryGetString(d, "ess_design_issue_name") ?? TryGetString(d, "third_party_design_name") ?? "Unnamed",
+                        revision = TryGetString(d, "revision_number"),
+                        description = TryGetString(d, "description"),
+                        updatedAt = TryGetString(d, "updated_at"),
+                        folderPath = folderPaths.TryGetValue(folderId, out var fp) ? fp : string.Empty,
+                        hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "ess_design_issue_path")),
+                        hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "third_party_design_path")),
+                    };
+                })
+                .OrderByDescending(d => d.updatedAt)
+                .Take(limit)
+                .ToList();
+
+            return JsonSerializer.Serialize(new { days, count = recent.Count, designs = recent }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_FindAnything(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(query))
+                return JsonSerializer.Serialize(new { error = "Query is required." }, _jsonOptions);
+
+            var tokens = BuildBroadSearchTokens(query);
+            var employees = await FetchEmployeeDirectoryAsync(ct);
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            var (_, documents) = await FetchDesignDataAsync(ct);
+
+            var employeeMatches = employees
+                .Where(e => tokens.Any(t =>
+                    e.FullName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    (e.Email ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase)))
+                .Take(5)
+                .Select(e => new { type = "employee", name = e.FullName, e.Email, role = e.AppRole ?? AppRoles.Viewer })
+                .Cast<object>().ToList();
+
+            var siteMatches = jobsites
+                .Where(j => tokens.Any(t =>
+                    j.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    j.BuilderName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    (j.SiteLocation ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase)))
+                .Take(5)
+                .Select(j => new { type = "jobsite", name = j.Name, builder = j.BuilderName, j.Archived })
+                .Cast<object>().ToList();
+
+            var designMatches = documents
+                .Where(d => tokens.Any(t =>
+                    (TryGetString(d, "ess_design_issue_name") ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    (TryGetString(d, "third_party_design_name") ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    (TryGetString(d, "description") ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase)))
+                .Take(5)
+                .Select(d => new
+                {
+                    type = "design",
+                    documentId = TryGetString(d, "id"),
+                    name = TryGetString(d, "ess_design_issue_name") ?? TryGetString(d, "third_party_design_name"),
+                    revision = TryGetString(d, "revision_number"),
+                    updatedAt = TryGetString(d, "updated_at"),
+                })
+                .Cast<object>().ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                query,
+                employees = employeeMatches,
+                jobsites = siteMatches,
+                designs = designMatches,
+                tip = "Call more specific tools (get_site_details, search_designs, get_employee_details) for complete information on any of these results.",
+            }, _jsonOptions);
+        }
+
+        // ── Shared Helpers ────────────────────────────────────────────────────
+
+        private async Task<List<EmployeeContextRow>> FetchEmployeeDirectoryAsync(CancellationToken ct)
+        {
+            var employeesTask = GetRestRowsAsync<JsonElement>(
+                "ess_rostering_employees?select=id,first_name,last_name,email,leading_hand,verified_at,preferred_site_1,preferred_site_2,preferred_site_3", ct);
+            var userNamesTask = GetRestRowsAsync<JsonElement>(
+                "user_names?select=id,email,full_name&order=full_name.asc&limit=1000", ct);
+            var userRolesTask = GetRestRowsAsync<JsonElement>(
+                "user_roles?select=user_id,role&limit=1000", ct);
+
+            await Task.WhenAll(employeesTask, userNamesTask, userRolesTask);
+            return BuildEmployeeDirectory(employeesTask.Result, userNamesTask.Result, userRolesTask.Result);
+        }
+
+        private async Task<List<JobsiteContextRow>> FetchJobsiteDirectoryAsync(CancellationToken ct)
+        {
+            var employees = await FetchEmployeeDirectoryAsync(ct);
+            var projectsDoc = await ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, ct);
+            return BuildJobsiteDirectory(projectsDoc, employees);
+        }
+
+        private async Task<(List<JsonElement> folders, List<JsonElement> documents)> FetchDesignDataAsync(CancellationToken ct)
+        {
+            var foldersTask = GetRestRowsAsync<JsonElement>(
+                "folders?select=id,name,parent_folder_id,user_id,total_file_size,created_at,updated_at&limit=5000", ct);
+            var documentsTask = GetRestRowsAsync<JsonElement>(
+                "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=5000",
+                ct);
+            await Task.WhenAll(foldersTask, documentsTask);
+            return (foldersTask.Result, documentsTask.Result);
+        }
+
+        private string SearchDesignDocuments(
+            string query,
+            List<JsonElement> folders,
+            List<JsonElement> documents,
+            string sortBy,
+            int limit,
+            bool includeIds,
+            bool allRevisions = false)
+        {
+            var folderPaths = BuildFolderPaths(folders);
+            var tokens = BuildSearchTokens(query);
+
+            var candidates = documents.Select(d =>
+            {
+                var folderId = TryGetString(d, "folder_id") ?? string.Empty;
+                var path = folderPaths.TryGetValue(folderId, out var fp) ? fp : string.Empty;
+                var essName = TryGetString(d, "ess_design_issue_name") ?? string.Empty;
+                var thirdName = TryGetString(d, "third_party_design_name") ?? string.Empty;
+                var description = TryGetString(d, "description") ?? string.Empty;
+                var revision = TryGetString(d, "revision_number") ?? string.Empty;
+                var candidateText = $"{path} {essName} {thirdName} {description} {revision}";
+                var score = tokens.Count > 0 ? ScoreSearchCandidate(candidateText, tokens, out _) : 1;
+                return new
+                {
+                    documentId = TryGetString(d, "id"),
+                    name = string.IsNullOrWhiteSpace(essName) ? thirdName : essName,
+                    thirdPartyName = thirdName,
+                    folderPath = path,
+                    folderId,
+                    revision,
+                    description,
+                    updatedAt = TryGetString(d, "updated_at") ?? TryGetString(d, "created_at") ?? string.Empty,
+                    hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "ess_design_issue_path")),
+                    hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "third_party_design_path")),
+                    score,
+                };
+            })
+            .Where(c => tokens.Count == 0 || c.score > 0)
+            .ToList();
+
+            IEnumerable<dynamic> sorted = sortBy == "date"
+                ? candidates.OrderByDescending(c => c.updatedAt)
+                : candidates.OrderByDescending(c => c.score).ThenByDescending(c => c.updatedAt);
+
+            if (!allRevisions && tokens.Count > 0)
+            {
+                // Group by folder and take best per folder to avoid listing all revisions
+                sorted = sorted
+                    .GroupBy(c => (string)c.folderId)
+                    .SelectMany(g => g.Take(1))
+                    .OrderByDescending(c => sortBy == "date" ? c.updatedAt : c.score.ToString());
+            }
+
+            var results = sorted.Take(limit).ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                query,
+                count = results.Count,
+                designs = results.Select(c => (object)new
+                {
+                    documentId = includeIds ? c.documentId : null,
+                    name = c.name,
+                    revision = c.revision,
+                    description = c.description,
+                    folderPath = c.folderPath,
+                    updatedAt = c.updatedAt,
+                    hasEssDesign = c.hasEssDesign,
+                    hasThirdPartyDesign = c.hasThirdPartyDesign,
+                }).ToList(),
+            }, _jsonOptions);
+        }
+
+        private static List<EmployeeContextRow> BuildEmployeeDirectory(
+            IReadOnlyList<JsonElement> employees,
+            IReadOnlyList<JsonElement> userNames,
+            IReadOnlyList<JsonElement> userRoles)
+        {
+            var rolesByUserId = userRoles
+                .Select(r => new { UserId = TryGetString(r, "user_id"), Role = TryGetString(r, "role") })
+                .Where(r => r.UserId != null)
+                .ToDictionary(r => r.UserId!, r => r.Role, StringComparer.OrdinalIgnoreCase);
+
+            var userIdByEmail = userNames
+                .Select(u => new { Id = TryGetString(u, "id"), Email = TryGetString(u, "email") })
+                .Where(u => u.Id != null && u.Email != null)
+                .ToDictionary(u => u.Email!, u => u.Id!, StringComparer.OrdinalIgnoreCase);
+
+            return employees
+                .Select(row =>
+                {
+                    var firstName = TryGetString(row, "first_name") ?? string.Empty;
+                    var lastName = TryGetString(row, "last_name") ?? string.Empty;
+                    var email = TryGetString(row, "email");
+                    var userId = email != null && userIdByEmail.TryGetValue(email, out var uid) ? uid : null;
+                    var appRole = userId != null && rolesByUserId.TryGetValue(userId, out var role) ? role : null;
+
+                    return new EmployeeContextRow
+                    {
+                        Id = TryGetString(row, "id"),
+                        FirstName = firstName,
+                        LastName = lastName,
+                        FullName = $"{firstName} {lastName}".Trim(),
+                        Email = email,
+                        LeadingHand = TryGetBool(row, "leading_hand"),
+                        Verified = TryGetString(row, "verified_at") != null,
+                        AppRole = appRole,
+                        PreferredSites = new[]
+                        {
+                            TryGetString(row, "preferred_site_1"),
+                            TryGetString(row, "preferred_site_2"),
+                            TryGetString(row, "preferred_site_3"),
+                        }
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Select(s => s!)
+                        .ToList(),
+                    };
+                })
+                .Where(e => !string.IsNullOrWhiteSpace(e.FullName) || !string.IsNullOrWhiteSpace(e.Email))
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
+                .ToList();
+        }
+
+        private static List<JobsiteContextRow> BuildJobsiteDirectory(
+            JsonDocument? projectsDoc,
+            IReadOnlyList<EmployeeContextRow> employeeDirectory)
+        {
+            var jobsites = new List<JobsiteContextRow>();
+            var employeesById = employeeDirectory
+                .Where(e => !string.IsNullOrWhiteSpace(e.Id))
+                .ToDictionary(e => e.Id!, e => e, StringComparer.OrdinalIgnoreCase);
+
+            if (projectsDoc?.RootElement.TryGetProperty("builders", out var builders) != true
+                || builders.ValueKind != JsonValueKind.Array)
+                return jobsites;
+
+            foreach (var builder in builders.EnumerateArray())
+            {
+                var builderName = TryGetString(builder, "name") ?? "Unknown builder";
+                var builderId = TryGetString(builder, "id");
+                if (!builder.TryGetProperty("projects", out var projects) || projects.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var project in projects.EnumerateArray())
+                {
+                    var projectId = TryGetString(project, "id");
+                    var siteKey = builderId != null && projectId != null ? $"{builderId}:{projectId}" : string.Empty;
+                    var hasExplicitInductions = HasStringArray(project, "inductedEmployeeIds") || HasStringArray(project, "inducted_employee_ids");
+                    var inductedIds = TryGetStringArrayAny(project, "inductedEmployeeIds", "inducted_employee_ids")
+                        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                    var inductedEmployees = hasExplicitInductions
+                        ? inductedIds
+                            .Select(id => employeesById.TryGetValue(id, out var e) ? e : null)
+                            .Where(e => e != null).Select(e => e!)
+                            .OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList()
+                        : employeeDirectory
+                            .Where(e => !string.IsNullOrWhiteSpace(siteKey) && e.PreferredSites.Contains(siteKey, StringComparer.OrdinalIgnoreCase))
+                            .OrderBy(e => e.LastName).ThenBy(e => e.FirstName).ToList();
+
+                    jobsites.Add(new JobsiteContextRow
+                    {
+                        Id = projectId,
+                        Name = TryGetString(project, "name") ?? string.Empty,
+                        BuilderId = builderId,
+                        BuilderName = builderName,
+                        SiteLocation = TryGetString(project, "siteLocation"),
+                        Archived = TryGetBool(project, "archived"),
+                        SiteKey = siteKey,
+                        InductionSource = hasExplicitInductions ? "explicit-inductedEmployeeIds" : "legacy-employee-preferred-site",
+                        InductedEmployeeIds = hasExplicitInductions
+                            ? inductedIds
+                            : inductedEmployees.Select(e => e.Id ?? string.Empty).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+                        InductedEmployees = inductedEmployees,
+                    });
+                }
+            }
+
+            return jobsites.OrderBy(j => j.Archived).ThenBy(j => j.BuilderName).ThenBy(j => j.Name).ToList();
+        }
+
+        private async Task<FileDownloadInfo?> TryGetDownloadInfoAsync(Guid documentId, string type, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "Unable to create assistant download link for {DocumentId}", documentId);
+                return null;
+            }
         }
 
         private static string CleanAssistantReply(string? reply)
         {
-            if (string.IsNullOrWhiteSpace(reply))
-            {
-                return string.Empty;
-            }
-
+            if (string.IsNullOrWhiteSpace(reply)) return string.Empty;
             var withoutMarkdownUrls = Regex.Replace(reply, @"\[([^\]]+)\]\(https?://[^\s)]+\)", "$1");
             var withoutBareUrls = Regex.Replace(withoutMarkdownUrls, @"https?://\S+", "the link below");
             var withoutEmphasis = Regex.Replace(withoutBareUrls, @"(?<!\*)\*{1,3}([^*\r\n][^*\r\n]*?)\*{1,3}(?!\*)", "$1");
-            withoutEmphasis = Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1");
-            return withoutEmphasis;
-        }
-
-        private static bool TryBuildDirectDateResult(string question, out ChatResult result)
-        {
-            result = new ChatResult();
-            var normalized = NormalizeSearchText(question);
-            var asksForDate =
-                Regex.IsMatch(normalized, @"\b(?:what|whats|what s)\s+(?:is\s+)?(?:todays|today s|the\s+current|the)?\s*date\b", RegexOptions.IgnoreCase) ||
-                Regex.IsMatch(normalized, @"\b(?:what|whats|what s)\s+day\s+is\s+it\b", RegexOptions.IgnoreCase) ||
-                Regex.IsMatch(normalized, @"\b(?:todays|today s|current)\s+date\b", RegexOptions.IgnoreCase) ||
-                string.Equals(normalized, "date", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalized, "todays date", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalized, "today s date", StringComparison.OrdinalIgnoreCase);
-
-            if (!asksForDate)
-            {
-                return false;
-            }
-
-            var operationalWords = new[]
-            {
-                "delivery", "deliveries", "truck", "trucks", "transport", "material", "order", "orders",
-                "schedule", "scheduled", "roster", "rostering", "employee", "employees", "jobsite", "site"
-            };
-            if (operationalWords.Any(word => normalized.Contains(word, StringComparison.OrdinalIgnoreCase)))
-            {
-                return false;
-            }
-
-            var today = GetSydneyToday();
-            result = new ChatResult
-            {
-                Reply = $"Today is {today.ToDateTime(TimeOnly.MinValue).ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture)}.",
-                Links = new List<AdminAssistantLink>(),
-                Sources = new List<string> { "system-date-australia-sydney" },
-            };
-            return true;
-        }
-
-        private async Task<ChatResult?> TryBuildDirectTruckLocationResultAsync(
-            string question,
-            AdminAssistantContext context,
-            CancellationToken cancellationToken)
-        {
-            var normalized = NormalizeSearchText(question);
-            if (!IsTruckLocationQuestion(normalized))
-            {
-                return null;
-            }
-
-            var locations = context.TruckLiveLocations;
-            if (locations.Count == 0)
-            {
-                return new ChatResult
-                {
-                    Reply = "I checked live truck tracking, but there are no current GPS pings available yet.",
-                    Links = context.Links,
-                    Sources = context.Sources,
-                };
-            }
-
-            var requestedLocations = ResolveRequestedTruckLocations(normalized, locations);
-            if (requestedLocations.Count == 0)
-            {
-                return new ChatResult
-                {
-                    Reply = "Which truck do you want the current location for? I can check ESS01, ESS02, or ESS03.",
-                    Links = context.Links,
-                    Sources = context.Sources,
-                };
-            }
-
-            var lines = new List<string>();
-            var mapLinks = new List<AdminAssistantLink>();
-            foreach (var location in requestedLocations)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var address = await TryResolveTruckAddressAsync(location);
-                var position = !string.IsNullOrWhiteSpace(address)
-                    ? address
-                    : location.Coordinates;
-                var speed = location.SpeedMps.HasValue
-                    ? $"{Math.Round(location.SpeedMps.Value * 3.6):F0} km/h"
-                    : "speed unknown";
-                var freshness = string.IsNullOrWhiteSpace(location.Freshness)
-                    ? FormatTruckLocationAge(location.AgeMinutes)
-                    : location.Freshness;
-                var recordedAt = FormatSydneyDateTime(location.RecordedAt);
-                var staleNote = location.IsOffline
-                    ? " This is an offline/stale position, not a live moving ping."
-                    : location.IsStale
-                        ? " This ping is stale, so treat it as the last known position."
-                        : string.Empty;
-
-                lines.Add($"{location.TruckLabel} is at {position}. Last GPS ping: {freshness}{(string.IsNullOrWhiteSpace(recordedAt) ? string.Empty : $" ({recordedAt})")}. Status: {location.StatusLabel}; {speed}.{staleNote}");
-                mapLinks.Add(new AdminAssistantLink
-                {
-                    Label = $"Open {location.TruckLabel} on map",
-                    Url = location.MapUrl,
-                    Type = "map",
-                });
-            }
-
-            return new ChatResult
-            {
-                Reply = $"{string.Join("\n", lines)}\n\nSource: live truck tracking.",
-                Links = mapLinks.Concat(context.Links).ToList(),
-                Sources = context.Sources,
-            };
-        }
-
-        private async Task<string?> TryResolveTruckAddressAsync(TruckLiveLocationContext location)
-        {
-            try
-            {
-                var resolved = await _deliveryAnalysisService.ReverseGeocodeAsync(new DeliveryAnalysisService.ReverseGeocodeRequest
-                {
-                    Lat = location.Latitude,
-                    Lon = location.Longitude,
-                });
-                return string.IsNullOrWhiteSpace(resolved?.Label)
-                    ? resolved?.Address
-                    : resolved.Label;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Unable to reverse geocode live truck location for {TruckLabel}", location.TruckLabel);
-                return null;
-            }
-        }
-
-        private static bool IsTruckLocationQuestion(string normalizedQuestion)
-        {
-            var hasTruckReference = normalizedQuestion.Contains("truck", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
-                KnownTruckLanes.Any(lane => TruckAliasAppears(normalizedQuestion, lane));
-            var hasLocationIntent = normalizedQuestion.Contains("where", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("location", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("located", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("position", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("gps", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("tracking", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("track", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("live", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("current", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("currently", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("now", StringComparison.OrdinalIgnoreCase);
-
-            return hasTruckReference && hasLocationIntent;
-        }
-
-        private static List<TruckLiveLocationContext> ResolveRequestedTruckLocations(
-            string normalizedQuestion,
-            IReadOnlyList<TruckLiveLocationContext> locations)
-        {
-            var requested = locations
-                .Where(location => TruckLocationMatchesQuestion(normalizedQuestion, location))
-                .ToList();
-            if (requested.Count > 0)
-            {
-                return requested;
-            }
-
-            var asksForAll = normalizedQuestion.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("all trucks", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("each truck", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("fleet", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("everyone", StringComparison.OrdinalIgnoreCase);
-            if (asksForAll || locations.Count == 1)
-            {
-                return locations.ToList();
-            }
-
-            return new List<TruckLiveLocationContext>();
-        }
-
-        private static bool TruckLocationMatchesQuestion(string normalizedQuestion, TruckLiveLocationContext location)
-        {
-            var compactQuestion = Regex.Replace(normalizedQuestion, @"\s+", string.Empty);
-            var label = string.IsNullOrWhiteSpace(location.TruckLabel)
-                ? ResolveKnownTruckLabel(location.TruckId, location.RoleName)
-                : location.TruckLabel;
-            var labelCompact = Regex.Replace(NormalizeSearchText(label), @"\s+", string.Empty);
-            var idCompact = Regex.Replace(NormalizeSearchText(location.TruckId), @"\s+", string.Empty);
-            var roleCompact = Regex.Replace(NormalizeSearchText(location.RoleName), @"\s+", string.Empty);
-
-            if ((!string.IsNullOrWhiteSpace(labelCompact) && compactQuestion.Contains(labelCompact, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(idCompact) && compactQuestion.Contains(idCompact, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(roleCompact) && compactQuestion.Contains(roleCompact, StringComparison.OrdinalIgnoreCase)))
-            {
-                return true;
-            }
-
-            var number = ResolveTruckNumber(location.TruckId, location.TruckLabel, location.RoleName);
-            return !string.IsNullOrWhiteSpace(number) &&
-                Regex.IsMatch(normalizedQuestion, $@"\b(?:ess|truck)\s*0?{Regex.Escape(number)}\b", RegexOptions.IgnoreCase);
-        }
-
-        private static bool TruckAliasAppears(string normalizedQuestion, (string TruckId, string Label, string RoleName, string Number) lane)
-        {
-            return Regex.IsMatch(normalizedQuestion, $@"\b(?:ess|truck)\s*0?{Regex.Escape(lane.Number)}\b", RegexOptions.IgnoreCase) ||
-                normalizedQuestion.Contains(NormalizeSearchText(lane.TruckId), StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains(NormalizeSearchText(lane.RoleName), StringComparison.OrdinalIgnoreCase);
+            return Regex.Replace(withoutEmphasis, @"(?<!_)_{1,3}([^_\r\n][^_\r\n]*?)_{1,3}(?!_)", "$1").Trim();
         }
 
         private static string FormatTruckLocationAge(int ageMinutes)
@@ -738,1406 +1647,9 @@ ESS context JSON:
         private static string FormatSydneyDateTime(string value)
         {
             if (!DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var recordedAt))
-            {
                 return string.Empty;
-            }
-
             var local = TimeZoneInfo.ConvertTime(recordedAt, GetSydneyTimeZone());
             return local.ToString("d MMM h:mm tt", CultureInfo.InvariantCulture);
-        }
-
-        private static bool TryBuildDirectTransportScheduleResult(
-            string question,
-            AdminAssistantContext context,
-            out ChatResult result)
-        {
-            result = new ChatResult();
-            var normalized = NormalizeSearchText(question);
-            var hasTransportWords =
-                normalized.Contains("truck", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("trucks", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("delivery", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("deliveries", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("transport", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("material order", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("material orders", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("order", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("orders", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("schedule board", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("dynamic schedule", StringComparison.OrdinalIgnoreCase);
-            var hasScheduleWords =
-                normalized.Contains("schedule", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("scheduled", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("schedules", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("booked", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("booking", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("run", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("runs", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("tomorrow", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("yesterday", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("current", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("today", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("now", StringComparison.OrdinalIgnoreCase);
-            var hasWorkforceWords =
-                normalized.Contains("men", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("manpower", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("worker", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("workers", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("employee", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("employees", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("roster", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Contains("rostering", StringComparison.OrdinalIgnoreCase);
-            var isTransportQuestion = hasTransportWords && !hasWorkforceWords;
-            var isScheduleQuestion = hasScheduleWords;
-
-            if (!isTransportQuestion || !isScheduleQuestion)
-            {
-                return false;
-            }
-
-            var requestedDate = ResolveRequestedScheduleDate(normalized, context.Today);
-            var includeArchivedScheduleRows = WantsHistoricalTransportRows(normalized);
-            var scheduleRows = GetScheduledRowsForDate(context.TransportSummary, requestedDate, includeArchivedScheduleRows);
-            var archivedRowsForDate = includeArchivedScheduleRows
-                ? new List<object>()
-                : GetScheduledRowsForDate(context.TransportSummary, requestedDate, includeArchived: true)
-                    .Where(row => string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            var requestedScheduleMinutes = TryResolveRequestedScheduleMinutes(normalized);
-            var requestedScheduleTime = requestedScheduleMinutes == null
-                ? null
-                : $"{requestedScheduleMinutes.Value / 60:00}:{requestedScheduleMinutes.Value % 60:00}";
-            var rowsToReport = requestedScheduleTime != null
-                ? scheduleRows.Where(row => string.Equals(TryGetObjectProperty(row, "scheduledTime"), requestedScheduleTime, StringComparison.OrdinalIgnoreCase)).ToList()
-                : scheduleRows;
-            var dateLabel = FormatRelativeChatDate(requestedDate, context.Today);
-
-            var reply = new StringBuilder();
-            if (rowsToReport.Count > 0)
-            {
-                var truckCount = rowsToReport
-                    .Select(row => TryGetObjectProperty(row, "truck"))
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Count();
-                var deliveryNoun = rowsToReport.Count == 1 ? "delivery" : "deliveries";
-                var requestedScheduleLabel = requestedScheduleTime == null ? null : FormatChatTime(requestedScheduleTime);
-                reply.Append(requestedScheduleLabel != null
-                    ? $"Yes. I checked the live schedule board and can see {rowsToReport.Count} {deliveryNoun} scheduled at {requestedScheduleLabel} for {dateLabel}"
-                    : $"I checked the live schedule board. For {dateLabel}, there {(rowsToReport.Count == 1 ? "is" : "are")} {rowsToReport.Count} scheduled {deliveryNoun}");
-                if (truckCount > 0)
-                {
-                    reply.Append($" across {truckCount} truck");
-                    reply.Append(truckCount == 1 ? string.Empty : "s");
-                }
-                reply.AppendLine(".");
-                reply.AppendLine();
-
-                foreach (var row in rowsToReport.OrderBy(row => TryGetObjectProperty(row, "scheduledTime")))
-                {
-                    var time = FormatChatTime(TryGetObjectProperty(row, "scheduledTime"));
-                    var truck = TryGetObjectProperty(row, "truck") ?? "Unassigned truck";
-                    var builder = TryGetObjectProperty(row, "builderName");
-                    var project = TryGetObjectProperty(row, "projectName");
-                    var status = TryGetObjectProperty(row, "deliveryStatus") ?? "scheduled";
-                    var archived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase)
-                        ? " archived"
-                        : string.Empty;
-                    reply.AppendLine($"{time} - {truck} - {builder} / {project} ({status}{archived})");
-                }
-
-                result = new ChatResult
-                {
-                    Reply = $"{reply.ToString().Trim()}\n\nSource: live transport schedule.",
-                    Links = context.Links,
-                    Sources = context.Sources,
-                };
-                return true;
-            }
-
-            var requestedNoRowsLabel = requestedScheduleTime == null ? null : FormatChatTime(requestedScheduleTime);
-            reply.AppendLine(requestedNoRowsLabel != null
-                ? $"I checked the live schedule board and cannot see any active deliveries scheduled at {requestedNoRowsLabel} for {dateLabel}."
-                : $"I checked the live schedule board and cannot see any active deliveries scheduled for {dateLabel}.");
-
-            if (archivedRowsForDate.Count > 0)
-            {
-                reply.AppendLine();
-                reply.AppendLine($"There {(archivedRowsForDate.Count == 1 ? "is" : "are")} {archivedRowsForDate.Count} archived/completed transport record{(archivedRowsForDate.Count == 1 ? string.Empty : "s")} on that date, but I am not counting archived records as currently scheduled.");
-            }
-
-            result = new ChatResult
-            {
-                Reply = $"{reply.ToString().Trim()}\n\nSource: live transport schedule.",
-                Links = context.Links,
-                Sources = context.Sources,
-            };
-            return true;
-        }
-
-        private static bool WantsHistoricalTransportRows(string normalizedQuestion)
-        {
-            return normalizedQuestion.Contains("archived", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("archive", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("completed", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("complete", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("delivered", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("history", StringComparison.OrdinalIgnoreCase) ||
-                normalizedQuestion.Contains("historical", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int? TryResolveRequestedScheduleMinutes(string normalizedQuestion)
-        {
-            var amPmMatch = Regex.Match(normalizedQuestion, @"\b(?<hour>1[0-2]|0?[1-9])(?:\s+(?<minute>[0-5]\d))?\s*(?<period>am|pm)\b", RegexOptions.IgnoreCase);
-            if (amPmMatch.Success && int.TryParse(amPmMatch.Groups["hour"].Value, out var rawHour))
-            {
-                var minute = 0;
-                if (amPmMatch.Groups["minute"].Success)
-                {
-                    int.TryParse(amPmMatch.Groups["minute"].Value, out minute);
-                }
-
-                var hour = string.Equals(amPmMatch.Groups["period"].Value, "am", StringComparison.OrdinalIgnoreCase)
-                    ? rawHour == 12 ? 0 : rawHour
-                    : rawHour == 12 ? 12 : rawHour + 12;
-                return (hour * 60) + minute;
-            }
-
-            var twentyFourHourMatch = Regex.Match(normalizedQuestion, @"\b(?<hour>[01]?\d|2[0-3])\s+(?<minute>[0-5]\d)\b", RegexOptions.IgnoreCase);
-            if (twentyFourHourMatch.Success &&
-                int.TryParse(twentyFourHourMatch.Groups["hour"].Value, out var hour24) &&
-                int.TryParse(twentyFourHourMatch.Groups["minute"].Value, out var minute24))
-            {
-                return (hour24 * 60) + minute24;
-            }
-
-            return null;
-        }
-
-        private static string ResolveRequestedScheduleDate(string normalizedQuestion, string today)
-        {
-            if (!DateOnly.TryParse(today, out var todayDate))
-            {
-                todayDate = DateOnly.FromDateTime(DateTime.UtcNow);
-            }
-
-            if (normalizedQuestion.Contains("tomorrow", StringComparison.OrdinalIgnoreCase))
-            {
-                return AddDaysToDateString(today, 1);
-            }
-
-            if (normalizedQuestion.Contains("yesterday", StringComparison.OrdinalIgnoreCase))
-            {
-                return AddDaysToDateString(today, -1);
-            }
-
-            var explicitDate = TryResolveExplicitDate(normalizedQuestion, todayDate);
-            if (explicitDate != null)
-            {
-                return explicitDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            }
-
-            var weekdayDate = TryResolveWeekdayDate(normalizedQuestion, todayDate);
-            if (weekdayDate != null)
-            {
-                return weekdayDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            }
-
-            return today;
-        }
-
-        private static DateOnly? TryResolveExplicitDate(string normalizedQuestion, DateOnly today)
-        {
-            var monthNumbers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["jan"] = 1, ["january"] = 1,
-                ["feb"] = 2, ["february"] = 2,
-                ["mar"] = 3, ["march"] = 3,
-                ["apr"] = 4, ["april"] = 4,
-                ["may"] = 5,
-                ["jun"] = 6, ["june"] = 6,
-                ["jul"] = 7, ["july"] = 7,
-                ["aug"] = 8, ["august"] = 8,
-                ["sep"] = 9, ["sept"] = 9, ["september"] = 9,
-                ["oct"] = 10, ["october"] = 10,
-                ["nov"] = 11, ["november"] = 11,
-                ["dec"] = 12, ["december"] = 12,
-            };
-
-            var numericMatch = Regex.Match(normalizedQuestion, @"\b(?<day>[0-3]?\d)\s+(?<month>[0-1]?\d)(?:\s+(?<year>\d{2,4}))?\b");
-            if (numericMatch.Success &&
-                int.TryParse(numericMatch.Groups["day"].Value, out var numericDay) &&
-                int.TryParse(numericMatch.Groups["month"].Value, out var numericMonth))
-            {
-                var year = ResolveExplicitYear(numericMatch.Groups["year"].Value, today.Year);
-                if (TryCreateDate(year, numericMonth, numericDay, out var numericDate))
-                {
-                    return numericDate;
-                }
-            }
-
-            var words = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            for (var index = 0; index < words.Length; index++)
-            {
-                if (!int.TryParse(words[index], out var day) || index + 1 >= words.Length || !monthNumbers.TryGetValue(words[index + 1], out var month))
-                {
-                    continue;
-                }
-
-                var year = index + 2 < words.Length ? ResolveExplicitYear(words[index + 2], today.Year) : today.Year;
-                if (TryCreateDate(year, month, day, out var parsed))
-                {
-                    return parsed;
-                }
-            }
-
-            for (var index = 0; index < words.Length; index++)
-            {
-                if (!monthNumbers.TryGetValue(words[index], out var month) || index + 1 >= words.Length || !int.TryParse(words[index + 1], out var day))
-                {
-                    continue;
-                }
-
-                var year = index + 2 < words.Length ? ResolveExplicitYear(words[index + 2], today.Year) : today.Year;
-                if (TryCreateDate(year, month, day, out var parsed))
-                {
-                    return parsed;
-                }
-            }
-
-            return null;
-        }
-
-        private static int ResolveExplicitYear(string value, int fallbackYear)
-        {
-            if (!int.TryParse(value, out var year))
-            {
-                return fallbackYear;
-            }
-
-            return year < 100 ? 2000 + year : year;
-        }
-
-        private static bool TryCreateDate(int year, int month, int day, out DateOnly date)
-        {
-            try
-            {
-                date = new DateOnly(year, month, day);
-                return true;
-            }
-            catch
-            {
-                date = default;
-                return false;
-            }
-        }
-
-        private static DateOnly? TryResolveWeekdayDate(string normalizedQuestion, DateOnly today)
-        {
-            var weekdays = new Dictionary<string, DayOfWeek>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["monday"] = DayOfWeek.Monday,
-                ["mon"] = DayOfWeek.Monday,
-                ["tuesday"] = DayOfWeek.Tuesday,
-                ["tue"] = DayOfWeek.Tuesday,
-                ["wednesday"] = DayOfWeek.Wednesday,
-                ["wed"] = DayOfWeek.Wednesday,
-                ["thursday"] = DayOfWeek.Thursday,
-                ["thu"] = DayOfWeek.Thursday,
-                ["friday"] = DayOfWeek.Friday,
-                ["fri"] = DayOfWeek.Friday,
-                ["saturday"] = DayOfWeek.Saturday,
-                ["sat"] = DayOfWeek.Saturday,
-                ["sunday"] = DayOfWeek.Sunday,
-                ["sun"] = DayOfWeek.Sunday,
-            };
-
-            var words = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            for (var index = 0; index < words.Length; index++)
-            {
-                if (!weekdays.TryGetValue(words[index], out var targetDay))
-                {
-                    continue;
-                }
-
-                var delta = ((int)targetDay - (int)today.DayOfWeek + 7) % 7;
-                var previousWord = index > 0 ? words[index - 1] : string.Empty;
-                if (string.Equals(previousWord, "last", StringComparison.OrdinalIgnoreCase))
-                {
-                    delta = delta == 0 ? -7 : delta - 7;
-                }
-                else if (delta == 0 && string.Equals(previousWord, "next", StringComparison.OrdinalIgnoreCase))
-                {
-                    delta = 7;
-                }
-
-                return today.AddDays(delta);
-            }
-
-            return null;
-        }
-
-        private static string AddDaysToDateString(string date, int days)
-        {
-            return DateOnly.TryParse(date, out var parsed)
-                ? parsed.AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                : date;
-        }
-
-        private static string FormatRelativeChatDate(string date, string today)
-        {
-            var formattedDate = FormatChatDate(date);
-            if (!DateOnly.TryParse(date, out var requested) || !DateOnly.TryParse(today, out var current))
-            {
-                return formattedDate;
-            }
-
-            if (requested == current)
-            {
-                return $"today, {formattedDate}";
-            }
-
-            if (requested == current.AddDays(1))
-            {
-                return $"tomorrow, {formattedDate}";
-            }
-
-            if (requested == current.AddDays(-1))
-            {
-                return $"yesterday, {formattedDate}";
-            }
-
-            return formattedDate;
-        }
-
-        private static List<object> GetScheduledRowsForDate(object transportSummary, string date, bool includeArchived)
-        {
-            var rowsById = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            foreach (var collectionName in new[] { "currentScheduleToday", "scheduledToday", "currentSchedule", "activeRequests" })
-            {
-                foreach (var row in GetObjectListProperty(transportSummary, collectionName))
-                {
-                    var isOnSchedule = string.Equals(TryGetObjectProperty(row, "isOnSchedule"), "True", StringComparison.OrdinalIgnoreCase);
-                    var scheduledDate = TryGetObjectProperty(row, "scheduledDate") ?? TryGetObjectProperty(row, "rawScheduledDate");
-                    if (!isOnSchedule || !string.Equals(scheduledDate, date, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var isArchived = string.Equals(TryGetObjectProperty(row, "isArchived"), "True", StringComparison.OrdinalIgnoreCase);
-                    if (isArchived && !includeArchived)
-                    {
-                        continue;
-                    }
-
-                    var id = TryGetObjectProperty(row, "id");
-                    rowsById[string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N") : id] = row;
-                }
-            }
-
-            return rowsById.Values
-                .OrderBy(row => TryGetObjectProperty(row, "scheduledTime") ?? TryGetObjectProperty(row, "rawScheduledTime"))
-                .ToList();
-        }
-
-        private static List<object> GetObjectListProperty(object source, string propertyName)
-        {
-            var value = source.GetType().GetProperty(propertyName)?.GetValue(source);
-            return value is IEnumerable<object> rows ? rows.ToList() : new List<object>();
-        }
-
-        private static string FormatChatDate(string? value)
-        {
-            return DateTime.TryParse(value, out var parsed)
-                ? parsed.ToString("MMMM d, yyyy")
-                : value ?? string.Empty;
-        }
-
-        private static string FormatChatTime(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return "Unscheduled";
-            }
-
-            return TimeSpan.TryParse(value, out var parsed)
-                ? DateTime.Today.Add(parsed).ToString("h:mm tt")
-                : value;
-        }
-
-        private object BuildModelContext(AdminAssistantContext context)
-        {
-            return new
-            {
-                context.Today,
-                context.DatasetCatalogue,
-                context.EmployeeSummary,
-                context.UserSummary,
-                context.RosterSummary,
-                context.JobsiteSummary,
-                context.TransportSummary,
-                context.DesignCatalogue,
-                context.DesignSearchMatches,
-                context.NotificationSummary,
-                context.LiveAppContext,
-                context.FocusedMatches,
-                Links = context.Links.Select(link => new
-                {
-                    link.Label,
-                    link.Type,
-                }).ToList(),
-                context.Sources,
-            };
-        }
-
-        private async Task<AdminAssistantContext> BuildContextAsync(string question, IReadOnlyList<ChatMessage>? history, CancellationToken cancellationToken)
-        {
-            var today = GetSydneyToday();
-            var sources = new List<string>();
-            var isFollowUpNavigation = IsFollowUpNavigationRequest(question, history);
-            var shouldSearchDesigns = isFollowUpNavigation || IsDesignLookupQuestion(question);
-
-            var employeesTask = GetRestRowsAsync<JsonElement>(
-                "ess_rostering_employees?select=id,first_name,last_name,email,leading_hand,verified_at,preferred_site_1,preferred_site_2,preferred_site_3",
-                cancellationToken);
-            var plansTask = GetRestRowsAsync<JsonElement>(
-                "ess_rostering_plans?select=*&order=plan_date.desc&limit=365",
-                cancellationToken);
-            var userNamesTask = GetRestRowsAsync<JsonElement>(
-                "user_names?select=id,email,full_name,phone_number&order=full_name.asc&limit=1000",
-                cancellationToken);
-            var userRolesTask = GetRestRowsAsync<JsonElement>(
-                "user_roles?select=user_id,role,updated_at&limit=1000",
-                cancellationToken);
-            var notificationsTask = GetRestRowsAsync<JsonElement>(
-                "user_notifications?select=id,user_id,title,message,type,folder_id,document_id,read,created_at,updated_at&order=created_at.desc&limit=250",
-                cancellationToken);
-            var foldersTask = GetRestRowsAsync<JsonElement>(
-                "folders?select=id,name,parent_folder_id,user_id,total_file_size,created_at,updated_at&limit=5000",
-                cancellationToken);
-            var documentsTask = GetRestRowsAsync<JsonElement>(
-                "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=5000",
-                cancellationToken);
-            var materialRequestRowsTask = GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000",
-                cancellationToken);
-            var truckLiveLocationsTask = GetRestRowsAsync<JsonElement>(
-                $"{TruckLiveLocationsTable}?select=truck_id,truck_label,role_name,driver_user_id,delivery_request_id,latitude,longitude,accuracy_m,heading_deg,speed_mps,battery_percent,status,recorded_at,updated_at&order=recorded_at.desc&limit=24",
-                cancellationToken);
-            var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, cancellationToken);
-            var materialRequestsTask = ReadStorageJsonAsync(SafetyBucket, MaterialRequestsPath, cancellationToken);
-
-            await Task.WhenAll(
-                employeesTask,
-                plansTask,
-                userNamesTask,
-                userRolesTask,
-                notificationsTask,
-                foldersTask,
-                documentsTask,
-                materialRequestRowsTask,
-                truckLiveLocationsTask,
-                projectsTask,
-                materialRequestsTask);
-
-            sources.Add("ess_rostering_employees");
-            sources.Add("ess_rostering_plans");
-            sources.Add("user_names");
-            sources.Add("user_roles");
-            sources.Add("user_notifications");
-            sources.Add("project-information/projects.json");
-            sources.Add(materialRequestRowsTask.Result.Count > 0
-                ? "ess_material_order_requests"
-                : "project-information/material-order-requests/index.json");
-            sources.Add("ess_truck_live_locations");
-            sources.Add("folders");
-            sources.Add("design_documents");
-
-            var employees = employeesTask.Result;
-            var planRows = plansTask.Result;
-            var userNames = userNamesTask.Result;
-            var userRoles = userRolesTask.Result;
-            var notifications = notificationsTask.Result;
-            var folders = foldersTask.Result;
-            var documents = documentsTask.Result;
-            var projectsDoc = projectsTask.Result;
-            var materialRequestRows = materialRequestRowsTask.Result;
-            var truckLiveLocationRows = truckLiveLocationsTask.Result;
-            var materialRequestsDoc = materialRequestsTask.Result;
-            var search = await SearchDesignMatchesAsync(question, folders, documents, shouldSearchDesigns, cancellationToken);
-            var truckLiveLocations = BuildTruckLiveLocations(truckLiveLocationRows);
-            var employeeDirectory = BuildEmployeeDirectory(employees, userNames, userRoles);
-            var jobsiteDirectory = BuildJobsiteDirectory(projectsDoc, employeeDirectory);
-
-            var roster = BuildRosterSummary(planRows, today);
-            var jobsites = BuildJobsitesSummary(jobsiteDirectory, question);
-            var transport = BuildTransportSummary(materialRequestsDoc, materialRequestRows, truckLiveLocations, today, question);
-            var employeeSummary = BuildEmployeeSummary(employeeDirectory, question);
-            var userSummary = BuildUserSummary(userNames, userRoles, question);
-            var designCatalogue = BuildDesignCatalogue(folders, documents, question);
-            var notificationSummary = BuildNotificationSummary(notifications, question);
-            var focusedMatches = BuildFocusedAppMatches(question, employeeDirectory, jobsiteDirectory);
-            var liveAppContext = BuildLiveAppContext(employeeDirectory, jobsiteDirectory);
-            var datasetCatalogue = BuildDatasetCatalogue(
-                employees,
-                planRows,
-                userNames,
-                userRoles,
-                notifications,
-                projectsDoc,
-                materialRequestsDoc,
-                materialRequestRows,
-                truckLiveLocationRows,
-                folders,
-                documents);
-
-            return new AdminAssistantContext
-            {
-                Today = today.ToString("yyyy-MM-dd"),
-                DatasetCatalogue = datasetCatalogue,
-                EmployeeSummary = employeeSummary,
-                UserSummary = userSummary,
-                RosterSummary = roster,
-                JobsiteSummary = jobsites,
-                TransportSummary = transport,
-                TruckLiveLocations = truckLiveLocations,
-                DesignCatalogue = designCatalogue,
-                DesignSearchMatches = search.Matches,
-                NotificationSummary = notificationSummary,
-                LiveAppContext = liveAppContext,
-                FocusedMatches = focusedMatches,
-                Links = search.Links,
-                Sources = sources,
-            };
-        }
-
-        private static bool IsFollowUpNavigationRequest(string question, IReadOnlyList<ChatMessage>? history)
-        {
-            var normalized = NormalizeSearchText(question);
-            var navigationPhrases = new[]
-            {
-                "take me to it", "take me to", "open it", "show me", "show it", "go to it",
-                "link to it", "view it", "open that", "show that", "navigate to it", "get it",
-            };
-            if (!navigationPhrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
-            {
-                return false;
-            }
-            var lastAssistantMessage = history?
-                .LastOrDefault(m => m.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase))?.Content ?? string.Empty;
-            return IsDesignLookupQuestion(lastAssistantMessage);
-        }
-
-        private static bool IsDesignLookupQuestion(string question)
-        {
-            var normalized = NormalizeSearchText(question);
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return false;
-            }
-
-            var designPhrases = new[]
-            {
-                "design file",
-                "design files",
-                "design folder",
-                "design folders",
-                "design document",
-                "design documents",
-                "ess design",
-                "third party design",
-                "edge protection",
-                "loading platform",
-                "perimeter scaffold",
-                "internal scaffold",
-                "external scaffold",
-            };
-
-            if (designPhrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
-            {
-                return true;
-            }
-
-            var words = normalized
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var designWords = new[]
-            {
-                "design",
-                "designs",
-                "drawing",
-                "drawings",
-                "pdf",
-                "file",
-                "files",
-                "folder",
-                "folders",
-                "document",
-                "documents",
-                "revision",
-                "revisions",
-                "rev",
-                "scaffold",
-                "scaffolds",
-                "scaffolding",
-            };
-
-            return designWords.Any(words.Contains);
-        }
-
-        private static bool IsVagueDesignLookupQuestion(string question)
-        {
-            if (!IsDesignLookupQuestion(question))
-            {
-                return false;
-            }
-
-            var normalized = NormalizeSearchText(question);
-            var specificWords = normalized
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Where(word => word.Length > 1)
-                .Where(word => !VagueDesignLookupWords.Contains(word))
-                .ToList();
-
-            return specificWords.Count == 0;
-        }
-
-        private static bool WantsMultipleDesignLinks(string question)
-        {
-            var normalized = NormalizeSearchText(question);
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return false;
-            }
-
-            var phrases = new[]
-            {
-                "all revisions",
-                "all versions",
-                "available revisions",
-                "previous revisions",
-                "revision history",
-                "list revisions",
-                "show revisions",
-            };
-
-            if (phrases.Any(phrase => normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase)))
-            {
-                return true;
-            }
-
-            var words = normalized
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            return words.Contains("all") &&
-                   (words.Contains("revisions") || words.Contains("versions") || words.Contains("drawings") || words.Contains("files"));
-        }
-
-        private List<EmployeeContextRow> BuildEmployeeDirectory(
-            IReadOnlyList<JsonElement> employees,
-            IReadOnlyList<JsonElement> userNames,
-            IReadOnlyList<JsonElement> userRoles)
-        {
-            var rolesByUserId = userRoles
-                .Select(row => new { UserId = TryGetString(row, "user_id"), Role = TryGetString(row, "role") })
-                .Where(row => !string.IsNullOrWhiteSpace(row.UserId))
-                .ToDictionary(row => row.UserId!, row => row.Role, StringComparer.OrdinalIgnoreCase);
-
-            var userIdByEmail = userNames
-                .Select(row => new { Id = TryGetString(row, "id"), Email = TryGetString(row, "email") })
-                .Where(row => !string.IsNullOrWhiteSpace(row.Id) && !string.IsNullOrWhiteSpace(row.Email))
-                .ToDictionary(row => row.Email!, row => row.Id!, StringComparer.OrdinalIgnoreCase);
-
-            return employees
-                .Select(row =>
-                {
-                    var firstName = TryGetString(row, "first_name") ?? string.Empty;
-                    var lastName = TryGetString(row, "last_name") ?? string.Empty;
-                    var email = TryGetString(row, "email");
-                    var userId = !string.IsNullOrWhiteSpace(email) && userIdByEmail.TryGetValue(email, out var uid) ? uid : null;
-                    var appRole = !string.IsNullOrWhiteSpace(userId) && rolesByUserId.TryGetValue(userId, out var role) ? role : null;
-                    return new EmployeeContextRow
-                    {
-                        Id = TryGetString(row, "id"),
-                        FirstName = firstName,
-                        LastName = lastName,
-                        FullName = $"{firstName} {lastName}".Trim(),
-                        Email = email,
-                        LeadingHand = TryGetBool(row, "leading_hand"),
-                        Verified = TryGetString(row, "verified_at") != null,
-                        AppRole = appRole,
-                        PreferredSites = new[]
-                            {
-                                TryGetString(row, "preferred_site_1"),
-                                TryGetString(row, "preferred_site_2"),
-                                TryGetString(row, "preferred_site_3"),
-                            }
-                            .Where(site => !string.IsNullOrWhiteSpace(site))
-                            .Select(site => site!)
-                            .ToList(),
-                    };
-                })
-                .Where(row => !string.IsNullOrWhiteSpace(row.FullName) || !string.IsNullOrWhiteSpace(row.Email))
-                .OrderBy(row => row.LastName)
-                .ThenBy(row => row.FirstName)
-                .ToList();
-        }
-
-        private object BuildEmployeeSummary(IReadOnlyList<EmployeeContextRow> directory, string question)
-        {
-            var lookupTokens = BuildEmployeeLookupTokens(question);
-            var matches = directory
-                .Select(row =>
-                {
-                    row.Score = ScoreEmployeeCandidate(row, lookupTokens, out var matchedTerms);
-                    row.MatchedTerms = matchedTerms;
-                    return row;
-                })
-                .Where(row => row.Score > 0)
-                .OrderByDescending(row => row.Score)
-                .ThenBy(row => row.LastName)
-                .ThenBy(row => row.FirstName)
-                .Take(8)
-                .Select(row => new
-                {
-                    row.Id,
-                    row.FullName,
-                    row.Email,
-                    row.LeadingHand,
-                    row.Verified,
-                    row.PreferredSites,
-                    row.Score,
-                    row.MatchedTerms,
-                })
-                .ToList();
-
-            return new
-            {
-                totalEmployees = directory.Count,
-                verifiedEmployees = directory.Count(row => row.Verified),
-                leadingHands = directory.Count(row => row.LeadingHand),
-                employeeMatches = matches,
-                employeeDirectory = directory
-                    .Take(1000)
-                    .Select(row => new
-                    {
-                        row.Id,
-                        row.FullName,
-                        row.Email,
-                        row.LeadingHand,
-                        row.Verified,
-                        row.PreferredSites,
-                    })
-                    .ToList(),
-            };
-        }
-
-        private static List<string> BuildEmployeeLookupTokens(string question)
-        {
-            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "do", "we", "have", "an", "a", "employee", "employees", "named", "name",
-                "called", "person", "worker", "staff", "member", "is", "there", "any",
-                "with", "the", "please", "can", "you", "find", "search", "look", "up",
-            };
-
-            return NormalizeSearchText(question)
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Where(word => word.Length > 1 && !stopWords.Contains(word))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(8)
-                .ToList();
-        }
-
-        private static int ScoreEmployeeCandidate(EmployeeContextRow employee, IReadOnlyList<string> tokens, out List<string> matchedTerms)
-        {
-            matchedTerms = new List<string>();
-            if (tokens.Count == 0)
-            {
-                return 0;
-            }
-
-            var firstName = NormalizeSearchText(employee.FirstName);
-            var lastName = NormalizeSearchText(employee.LastName);
-            var fullName = NormalizeSearchText(employee.FullName);
-            var email = NormalizeSearchText(employee.Email ?? string.Empty);
-            var score = 0;
-
-            foreach (var token in tokens)
-            {
-                var matched = false;
-                if (firstName.Equals(token, StringComparison.OrdinalIgnoreCase) ||
-                    lastName.Equals(token, StringComparison.OrdinalIgnoreCase))
-                {
-                    score += 40;
-                    matched = true;
-                }
-                else if (fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                         .Any(namePart => namePart.StartsWith(token, StringComparison.OrdinalIgnoreCase) ||
-                                          token.StartsWith(namePart, StringComparison.OrdinalIgnoreCase)))
-                {
-                    score += 24;
-                    matched = true;
-                }
-                else if (email.Contains(token, StringComparison.OrdinalIgnoreCase))
-                {
-                    score += 12;
-                    matched = true;
-                }
-
-                if (matched)
-                {
-                    matchedTerms.Add(token);
-                }
-            }
-
-            if (tokens.Count > 1 && matchedTerms.Count == tokens.Count)
-            {
-                score += 80;
-            }
-            else if (matchedTerms.Count > 0)
-            {
-                score += 10;
-            }
-
-            return score;
-        }
-
-        private object BuildUserSummary(IReadOnlyList<JsonElement> userRows, IReadOnlyList<JsonElement> roleRows, string question)
-        {
-            var rolesByUserId = roleRows
-                .Select(row => new { UserId = TryGetString(row, "user_id"), Role = TryGetString(row, "role"), UpdatedAt = TryGetString(row, "updated_at") })
-                .Where(row => !string.IsNullOrWhiteSpace(row.UserId))
-                .ToDictionary(row => row.UserId!, row => row, StringComparer.OrdinalIgnoreCase);
-
-            var users = userRows
-                .Select(row =>
-                {
-                    var id = TryGetString(row, "id");
-                    rolesByUserId.TryGetValue(id ?? string.Empty, out var role);
-                    return new
-                    {
-                        id,
-                        fullName = TryGetString(row, "full_name"),
-                        email = TryGetString(row, "email"),
-                        phoneNumber = TryGetString(row, "phone_number"),
-                        role = role?.Role ?? AppRoles.Viewer,
-                        roleUpdatedAt = role?.UpdatedAt,
-                    };
-                })
-                .Where(row => !string.IsNullOrWhiteSpace(row.fullName) || !string.IsNullOrWhiteSpace(row.email))
-                .OrderBy(row => row.fullName)
-                .Take(1000)
-                .ToList();
-
-            var searchableUsers = users.Select(user => new
-            {
-                source = "user",
-                title = user.fullName ?? user.email ?? "User",
-                summary = string.Join(" ", new[] { user.fullName, user.email, user.phoneNumber, user.role }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                data = user,
-            });
-
-            return new
-            {
-                totalUsers = users.Count,
-                roleCounts = users
-                    .GroupBy(user => user.role ?? AppRoles.Viewer, StringComparer.OrdinalIgnoreCase)
-                    .Select(group => new { role = group.Key, count = group.Count() })
-                    .OrderByDescending(group => group.count)
-                    .ToList(),
-                users,
-                userMatches = BuildQuestionMatches(question, searchableUsers, 12),
-            };
-        }
-
-        private object BuildDesignCatalogue(IReadOnlyList<JsonElement> folders, IReadOnlyList<JsonElement> documents, string question)
-        {
-            var folderPaths = BuildFolderPaths(folders);
-            var folderRecords = folders
-                .Select(folder =>
-                {
-                    var id = TryGetString(folder, "id");
-                    folderPaths.TryGetValue(id ?? string.Empty, out var path);
-                    return new
-                    {
-                        id,
-                        name = TryGetString(folder, "name"),
-                        parentFolderId = TryGetString(folder, "parent_folder_id"),
-                        path = path ?? TryGetString(folder, "name"),
-                        updatedAt = TryGetString(folder, "updated_at"),
-                    };
-                })
-                .Where(row => !string.IsNullOrWhiteSpace(row.id))
-                .ToList();
-
-            var documentRecords = documents
-                .Select(document =>
-                {
-                    var folderId = TryGetString(document, "folder_id");
-                    folderPaths.TryGetValue(folderId ?? string.Empty, out var folderPath);
-                    return new
-                    {
-                        id = TryGetString(document, "id"),
-                        folderId,
-                        folderPath,
-                        revisionNumber = TryGetString(document, "revision_number"),
-                        description = TryGetString(document, "description"),
-                        essDesignIssueName = TryGetString(document, "ess_design_issue_name"),
-                        thirdPartyDesignName = TryGetString(document, "third_party_design_name"),
-                        hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(document, "ess_design_issue_path")),
-                        hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(document, "third_party_design_path")),
-                        updatedAt = TryGetString(document, "updated_at"),
-                    };
-                })
-                .Where(row => !string.IsNullOrWhiteSpace(row.id))
-                .ToList();
-
-            var searchableDesigns = folderRecords.Select(folder => new
-                {
-                    source = "design-folder",
-                    title = folder.path ?? folder.name ?? "Design folder",
-                    summary = string.Join(" ", new[] { folder.name, folder.path }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                    data = (object)folder,
-                })
-                .Concat(documentRecords.Select(document => new
-                {
-                    source = "design-document",
-                    title = document.essDesignIssueName ?? document.thirdPartyDesignName ?? document.folderPath ?? "Design document",
-                    summary = string.Join(" ", new[]
-                    {
-                        document.folderPath,
-                        document.revisionNumber,
-                        document.description,
-                        document.essDesignIssueName,
-                        document.thirdPartyDesignName,
-                    }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                    data = (object)document,
-                }));
-
-            return new
-            {
-                folderCount = folderRecords.Count,
-                documentCount = documentRecords.Count,
-                folders = folderRecords.Take(1000).ToList(),
-                documents = documentRecords.Take(1000).ToList(),
-                designMatches = BuildQuestionMatches(question, searchableDesigns, 12),
-            };
-        }
-
-        private object BuildNotificationSummary(IReadOnlyList<JsonElement> notifications, string question)
-        {
-            var rows = notifications
-                .Select(row => new
-                {
-                    id = TryGetString(row, "id"),
-                    userId = TryGetString(row, "user_id"),
-                    title = TryGetString(row, "title"),
-                    message = TryGetString(row, "message"),
-                    type = TryGetString(row, "type"),
-                    read = TryGetBool(row, "read"),
-                    folderId = TryGetString(row, "folder_id"),
-                    documentId = TryGetString(row, "document_id"),
-                    createdAt = TryGetString(row, "created_at"),
-                })
-                .ToList();
-
-            var searchableNotifications = rows.Select(row => new
-            {
-                source = "notification",
-                title = row.title ?? "Notification",
-                summary = string.Join(" ", new[] { row.title, row.message, row.type, row.createdAt }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                data = row,
-            });
-
-            return new
-            {
-                recentNotificationCount = rows.Count,
-                unreadNotificationCount = rows.Count(row => !row.read),
-                recentNotifications = rows.Take(100).ToList(),
-                notificationMatches = BuildQuestionMatches(question, searchableNotifications, 8),
-            };
-        }
-
-        private object BuildLiveAppContext(IReadOnlyList<EmployeeContextRow> employees, IReadOnlyList<JobsiteContextRow> jobsites)
-        {
-            return new
-            {
-                description = "Live ESS app entity graph built at request time. This is the current source of truth for entity relationships.",
-                employees = employees
-                    .Take(1000)
-                    .Select(employee => new
-                    {
-                        employee.Id,
-                        employee.FullName,
-                        employee.Email,
-                        employee.LeadingHand,
-                        employee.AppRole,
-                        employee.Verified,
-                        employee.PreferredSites,
-                    })
-                    .ToList(),
-                jobsites = jobsites
-                    .Take(1000)
-                    .Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true))
-                    .ToList(),
-                relationships = new
-                {
-                    jobsiteInductions = jobsites
-                        .Where(jobsite => jobsite.InductedEmployees.Count > 0)
-                        .Take(1000)
-                        .Select(jobsite => new
-                        {
-                            jobsite.SiteKey,
-                            jobsite.BuilderName,
-                            jobsite.Name,
-                            jobsite.InductionSource,
-                            employees = jobsite.InductedEmployees.Select(employee => new
-                            {
-                                employee.Id,
-                                employee.FullName,
-                                employee.Email,
-                                employee.LeadingHand,
-                                employee.AppRole,
-                                employee.Verified,
-                            }).ToList(),
-                        })
-                        .ToList(),
-                },
-            };
-        }
-
-        private object BuildFocusedAppMatches(
-            string question,
-            IReadOnlyList<EmployeeContextRow> employees,
-            IReadOnlyList<JobsiteContextRow> jobsites)
-        {
-            var tokens = BuildBroadSearchTokens(question);
-            var employeeMatches = employees
-                .Select(employee =>
-                {
-                    var searchable = string.Join(" ", new[]
-                    {
-                        employee.FullName,
-                        employee.Email,
-                        employee.LeadingHand ? "leading hand" : "scaffolder",
-                        employee.Verified ? "verified" : "not verified",
-                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
-                    var score = ScoreSearchCandidate(searchable, tokens, out var matchedTerms);
-                    return new { employee, score, matchedTerms };
-                })
-                .Where(match => match.score > 0)
-                .OrderByDescending(match => match.score)
-                .Take(12)
-                .Select(match => new
-                {
-                    match.score,
-                    match.matchedTerms,
-                    match.employee.Id,
-                    match.employee.FullName,
-                    match.employee.Email,
-                    match.employee.LeadingHand,
-                    match.employee.AppRole,
-                    match.employee.Verified,
-                    match.employee.PreferredSites,
-                })
-                .ToList();
-
-            var jobsiteMatches = jobsites
-                .Select(jobsite =>
-                {
-                    var searchable = string.Join(" ", new[]
-                    {
-                        jobsite.BuilderName,
-                        jobsite.Name,
-                        jobsite.SiteLocation,
-                        jobsite.Archived ? "archived" : "active",
-                        string.Join(" ", jobsite.InductedEmployees.Select(employee => employee.FullName)),
-                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
-                    var score = ScoreSearchCandidate(searchable, tokens, out var matchedTerms);
-                    return new { jobsite, score, matchedTerms };
-                })
-                .Where(match => match.score > 0)
-                .OrderByDescending(match => match.score)
-                .Take(12)
-                .Select(match => new
-                {
-                    match.score,
-                    match.matchedTerms,
-                    data = BuildJobsiteModelRow(match.jobsite, includeInductedEmployees: true),
-                })
-                .ToList();
-
-            return new
-            {
-                description = "Question-focused live records. Prefer these first, then fall back to liveAppContext and the broader summaries.",
-                employees = employeeMatches,
-                jobsites = jobsiteMatches,
-            };
-        }
-
-        private object BuildDatasetCatalogue(
-            IReadOnlyList<JsonElement> employees,
-            IReadOnlyList<JsonElement> planRows,
-            IReadOnlyList<JsonElement> userNames,
-            IReadOnlyList<JsonElement> userRoles,
-            IReadOnlyList<JsonElement> notifications,
-            JsonDocument? projectsDoc,
-            JsonDocument? materialRequestsDoc,
-            IReadOnlyList<JsonElement> materialRequestRows,
-            IReadOnlyList<JsonElement> truckLiveLocations,
-            IReadOnlyList<JsonElement> folders,
-            IReadOnlyList<JsonElement> documents)
-        {
-            var projectCount = CountProjects(projectsDoc, archived: null);
-            var activeProjectCount = CountProjects(projectsDoc, archived: false);
-            var archivedProjectCount = CountProjects(projectsDoc, archived: true);
-            var hasMaterialRequestRows = materialRequestRows.Count > 0;
-            var materialRequestCount = hasMaterialRequestRows
-                ? materialRequestRows.Count
-                : CountStorageRows(materialRequestsDoc, "requests", includeArchived: true);
-            var activeMaterialRequestCount = hasMaterialRequestRows
-                ? CountMaterialRequestRows(materialRequestRows, includeArchived: false)
-                : CountStorageRows(materialRequestsDoc, "requests", includeArchived: false);
-
-            return new
-            {
-                description = "Loaded ESS web-app data available to answer admin questions. Use these sources before saying data is missing.",
-                sources = new[]
-                {
-                    new { name = "ess_rostering_employees", rows = employees.Count, coverage = "employee directory, emails, leading hand flags, verification, preferred sites" },
-                    new { name = "ess_rostering_plans", rows = planRows.Count, coverage = "roster plans and required men by site by date" },
-                    new { name = "user_names", rows = userNames.Count, coverage = "web-app users and contact details" },
-                    new { name = "user_roles", rows = userRoles.Count, coverage = "web-app user roles and permissions" },
-                    new { name = "user_notifications", rows = notifications.Count, coverage = "recent app notifications" },
-                    new { name = "project-information/projects.json", rows = projectCount, coverage = $"{activeProjectCount} active projects, {archivedProjectCount} archived projects" },
-                    new { name = hasMaterialRequestRows ? "ess_material_order_requests" : "project-information/material-order-requests/index.json", rows = materialRequestCount, coverage = $"{activeMaterialRequestCount} active material/transport requests" },
-                    new { name = "ess_truck_live_locations", rows = truckLiveLocations.Count, coverage = "latest live GPS tracking ping per truck: coordinates, speed, status, battery, and recorded time" },
-                    new { name = "folders", rows = folders.Count, coverage = "design folder hierarchy" },
-                    new { name = "design_documents", rows = documents.Count, coverage = "design document revisions and file metadata" },
-                },
-            };
-        }
-
-        private object BuildRosterSummary(IReadOnlyList<JsonElement> planRows, DateOnly today)
-        {
-            var todayKey = today.ToString("yyyy-MM-dd");
-            var planRow = planRows.FirstOrDefault(row => string.Equals(TryGetString(row, "plan_date"), todayKey, StringComparison.OrdinalIgnoreCase));
-            var indexedPlans = planRows
-                .Where(row => row.ValueKind == JsonValueKind.Object)
-                .Select(row =>
-                {
-                    var activeSiteIds = TryGetStringArray(row, "active_site_ids");
-                    var requiredBySite = TryGetObject(row, "required_men_by_site");
-                    var scheduledMen = activeSiteIds.Sum(siteId => TryGetSiteRequiredMen(requiredBySite, siteId));
-                    return new
-                    {
-                        date = TryGetString(row, "plan_date"),
-                        scheduledMen,
-                        activeSiteCount = activeSiteIds.Count,
-                        activeSiteIds,
-                        updatedAt = TryGetString(row, "updated_at"),
-                    };
-                })
-                .Where(row => !string.IsNullOrWhiteSpace(row.date))
-                .OrderByDescending(row => row.date)
-                .Take(120)
-                .ToList();
-
-            if (planRow.ValueKind != JsonValueKind.Object)
-            {
-                return new
-                {
-                    date = todayKey,
-                    hasPlan = false,
-                    scheduledMen = 0,
-                    activeSiteCount = 0,
-                    sites = Array.Empty<object>(),
-                    availablePlans = indexedPlans,
-                };
-            }
-
-            var activeSiteIds = TryGetStringArray(planRow, "active_site_ids");
-            var requiredBySite = TryGetObject(planRow, "required_men_by_site");
-            var siteCounts = new List<object>();
-            var total = 0;
-
-            foreach (var siteId in activeSiteIds)
-            {
-                var required = TryGetSiteRequiredMen(requiredBySite, siteId);
-                total += Math.Max(0, required);
-                siteCounts.Add(new { siteId, requiredMen = required });
-            }
-
-            return new
-            {
-                date = todayKey,
-                hasPlan = true,
-                scheduledMen = total,
-                activeSiteCount = activeSiteIds.Count,
-                sites = siteCounts,
-                updatedAt = TryGetString(planRow, "updated_at"),
-                availablePlans = indexedPlans,
-            };
-        }
-
-        private List<JobsiteContextRow> BuildJobsiteDirectory(JsonDocument? projectsDoc, IReadOnlyList<EmployeeContextRow> employeeDirectory)
-        {
-            var jobsites = new List<JobsiteContextRow>();
-            var employeesById = employeeDirectory
-                .Where(employee => !string.IsNullOrWhiteSpace(employee.Id))
-                .ToDictionary(employee => employee.Id!, employee => employee, StringComparer.OrdinalIgnoreCase);
-
-            if (projectsDoc?.RootElement.TryGetProperty("builders", out var builderRows) == true &&
-                builderRows.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var builder in builderRows.EnumerateArray())
-                {
-                    var builderName = TryGetString(builder, "name") ?? "Unknown builder";
-                    var builderId = TryGetString(builder, "id");
-                    if (builder.TryGetProperty("projects", out var projects) && projects.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var project in projects.EnumerateArray())
-                        {
-                            var archived = TryGetBool(project, "archived");
-                            var projectName = TryGetString(project, "name") ?? string.Empty;
-                            var projectId = TryGetString(project, "id");
-                            var siteLocation = TryGetString(project, "siteLocation");
-                            var siteKey = !string.IsNullOrWhiteSpace(builderId) && !string.IsNullOrWhiteSpace(projectId)
-                                ? $"{builderId}:{projectId}"
-                                : string.Empty;
-                            var hasExplicitInductions = HasStringArray(project, "inductedEmployeeIds") || HasStringArray(project, "inducted_employee_ids");
-                            var inductedIds = TryGetStringArrayAny(project, "inductedEmployeeIds", "inducted_employee_ids")
-                                .Distinct(StringComparer.OrdinalIgnoreCase)
-                                .ToList();
-                            var inductedEmployees = hasExplicitInductions
-                                ? inductedIds
-                                    .Select(id => employeesById.TryGetValue(id, out var employee) ? employee : null)
-                                    .Where(employee => employee != null)
-                                    .Select(employee => employee!)
-                                    .OrderBy(employee => employee.LastName)
-                                    .ThenBy(employee => employee.FirstName)
-                                    .ToList()
-                                : employeeDirectory
-                                    .Where(employee => !string.IsNullOrWhiteSpace(siteKey) && employee.PreferredSites.Contains(siteKey, StringComparer.OrdinalIgnoreCase))
-                                    .OrderBy(employee => employee.LastName)
-                                    .ThenBy(employee => employee.FirstName)
-                                    .ToList();
-
-                            jobsites.Add(new JobsiteContextRow
-                            {
-                                Id = projectId,
-                                Name = projectName,
-                                BuilderId = builderId,
-                                BuilderName = builderName,
-                                SiteLocation = siteLocation,
-                                Archived = archived,
-                                SiteKey = siteKey,
-                                InductionSource = hasExplicitInductions ? "explicit-inductedEmployeeIds" : "legacy-employee-preferred-site",
-                                InductedEmployeeIds = hasExplicitInductions
-                                    ? inductedIds
-                                    : inductedEmployees.Select(employee => employee.Id ?? string.Empty).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
-                                InductedEmployees = inductedEmployees,
-                            });
-                        }
-                    }
-                }
-            }
-
-            return jobsites
-                .OrderBy(jobsite => jobsite.Archived)
-                .ThenBy(jobsite => jobsite.BuilderName)
-                .ThenBy(jobsite => jobsite.Name)
-                .ToList();
-        }
-
-        private object BuildJobsitesSummary(IReadOnlyList<JobsiteContextRow> jobsites, string question)
-        {
-            var searchableProjects = jobsites.Select(jobsite => new
-            {
-                source = "project",
-                title = $"{jobsite.BuilderName} / {jobsite.Name}",
-                summary = string.Join(" ", new[]
-                {
-                    jobsite.BuilderName,
-                    jobsite.Name,
-                    jobsite.SiteLocation,
-                    jobsite.Archived ? "archived" : "active",
-                    string.Join(" ", jobsite.InductedEmployees.Select(employee => employee.FullName)),
-                }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                data = BuildJobsiteModelRow(jobsite, includeInductedEmployees: true),
-            }).ToList();
-
-            var projectMatches = searchableProjects
-                .Select(item =>
-                {
-                    var score = ScoreSearchCandidate(item.summary, BuildBroadSearchTokens(question), out var matchedTerms);
-                    return new { item, score, matchedTerms };
-                })
-                .Where(match => match.score > 0)
-                .OrderByDescending(match => match.score)
-                .Take(12)
-                .Select(match => new
-                {
-                    match.score,
-                    match.matchedTerms,
-                    match.item.source,
-                    match.item.title,
-                    match.item.data,
-                })
-                .ToList();
-
-            var activeJobsites = jobsites.Where(jobsite => !jobsite.Archived).ToList();
-            var builders = activeJobsites
-                .GroupBy(jobsite => jobsite.BuilderName)
-                .Select(group => new
-                {
-                    builder = group.Key,
-                    activeProjects = group
-                        .Take(25)
-                        .Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true))
-                        .ToList(),
-                })
-                .Take(40)
-                .ToList();
-
-            return new
-            {
-                activeJobsiteCount = activeJobsites.Count,
-                archivedJobsiteCount = jobsites.Count(jobsite => jobsite.Archived),
-                builders,
-                allProjects = jobsites.Take(1000).Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true)).ToList(),
-                projectMatches,
-            };
-        }
-
-        private static object BuildJobsiteModelRow(JobsiteContextRow jobsite, bool includeInductedEmployees)
-        {
-            return new
-            {
-                id = jobsite.Id,
-                name = jobsite.Name,
-                builder = jobsite.BuilderName,
-                builderId = jobsite.BuilderId,
-                siteLocation = jobsite.SiteLocation,
-                archived = jobsite.Archived,
-                siteKey = jobsite.SiteKey,
-                inductionSource = jobsite.InductionSource,
-                inductedEmployeeCount = jobsite.InductedEmployees.Count,
-                inductedEmployees = includeInductedEmployees
-                    ? jobsite.InductedEmployees.Select(employee => new
-                    {
-                        employee.Id,
-                        employee.FullName,
-                        employee.Email,
-                        employee.LeadingHand,
-                        employee.AppRole,
-                        employee.Verified,
-                    }).ToList()
-                    : null,
-            };
         }
 
         private static List<TruckLiveLocationContext> BuildTruckLiveLocations(IReadOnlyList<JsonElement> rows)
@@ -2149,10 +1661,7 @@ ESS context JSON:
             {
                 var latitude = TryGetDoubleAny(row, "latitude", "lat");
                 var longitude = TryGetDoubleAny(row, "longitude", "lon", "lng");
-                if (latitude == null || longitude == null)
-                {
-                    continue;
-                }
+                if (latitude == null || longitude == null) continue;
 
                 var truckId = TryGetStringAny(row, "truck_id", "truckId") ?? string.Empty;
                 var roleName = TryGetStringAny(row, "role_name", "roleName") ?? string.Empty;
@@ -2161,13 +1670,9 @@ ESS context JSON:
                     ? ResolveKnownTruckLabel(truckId, roleName)
                     : truckLabel.Trim();
                 if (string.IsNullOrWhiteSpace(truckLabel))
-                {
-                    truckLabel = !string.IsNullOrWhiteSpace(roleName)
-                        ? roleName.Replace('_', ' ')
-                        : !string.IsNullOrWhiteSpace(truckId)
-                            ? truckId
-                            : "Truck";
-                }
+                    truckLabel = !string.IsNullOrWhiteSpace(roleName) ? roleName.Replace('_', ' ')
+                        : !string.IsNullOrWhiteSpace(truckId) ? truckId : "Truck";
+
                 var recordedAt = TryParseDateTimeOffset(TryGetStringAny(row, "recorded_at", "recordedAt"))
                     ?? TryParseDateTimeOffset(TryGetStringAny(row, "updated_at", "updatedAt"))
                     ?? now;
@@ -2175,6 +1680,7 @@ ESS context JSON:
                 var ageMinutes = Math.Max(0, (int)Math.Round((now - recordedAt.ToUniversalTime()).TotalMinutes, MidpointRounding.AwayFromZero));
                 var speedMps = TryGetDoubleAny(row, "speed_mps", "speedMps");
                 var statusLabel = BuildTruckLocationStatusLabel(TryGetString(row, "status"), speedMps, ageMinutes);
+
                 var context = new TruckLiveLocationContext
                 {
                     TruckId = truckId,
@@ -2200,43 +1706,33 @@ ESS context JSON:
                     MapUrl = FormattableString.Invariant($"https://www.google.com/maps/search/?api=1&query={latitude.Value:F6},{longitude.Value:F6}"),
                 };
 
-                var key = string.IsNullOrWhiteSpace(context.TruckId)
-                    ? context.TruckLabel
-                    : context.TruckId;
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    key = context.RoleName;
-                }
-
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    continue;
-                }
+                var key = !string.IsNullOrWhiteSpace(context.TruckId) ? context.TruckId
+                    : !string.IsNullOrWhiteSpace(context.TruckLabel) ? context.TruckLabel
+                    : context.RoleName;
+                if (string.IsNullOrWhiteSpace(key)) continue;
 
                 if (!latestByTruck.TryGetValue(key, out var existing) ||
                     string.CompareOrdinal(context.RecordedAt, existing.RecordedAt) > 0)
-                {
                     latestByTruck[key] = context;
-                }
             }
 
             return latestByTruck.Values
-                .OrderBy(location => ResolveKnownTruckSort(location.TruckId, location.TruckLabel, location.RoleName))
-                .ThenBy(location => location.TruckLabel)
+                .OrderBy(l => ResolveKnownTruckSort(l.TruckId, l.TruckLabel, l.RoleName))
+                .ThenBy(l => l.TruckLabel)
                 .ToList();
         }
 
         private static string BuildTruckLocationStatusLabel(string? status, double? speedMps, int ageMinutes)
         {
-            var explicitStatus = (status ?? string.Empty).Trim().ToLowerInvariant();
+            var s = (status ?? string.Empty).Trim().ToLowerInvariant();
             if (ageMinutes > 10) return "GPS offline";
             if (ageMinutes > 2) return "GPS stale";
-            if (explicitStatus.Contains("stationary", StringComparison.OrdinalIgnoreCase)) return "Stationary";
-            if (explicitStatus.Contains("return", StringComparison.OrdinalIgnoreCase)) return "Returning to yard";
-            if (explicitStatus.Contains("route", StringComparison.OrdinalIgnoreCase) || explicitStatus.Contains("transit", StringComparison.OrdinalIgnoreCase)) return "On route";
-            if (explicitStatus == "idle") return "Idle";
+            if (s.Contains("stationary")) return "Stationary";
+            if (s.Contains("return")) return "Returning to yard";
+            if (s.Contains("route") || s.Contains("transit")) return "On route";
+            if (s == "idle") return "Idle";
             if (speedMps.HasValue && speedMps.Value * 3.6 > 5) return "Moving";
-            if (!string.IsNullOrWhiteSpace(status)) return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(explicitStatus.Replace('-', ' '));
+            if (!string.IsNullOrWhiteSpace(status)) return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s.Replace('-', ' '));
             return "Idle";
         }
 
@@ -2248,17 +1744,6 @@ ESS context JSON:
             return string.IsNullOrWhiteSpace(known.Label) ? truckId : known.Label;
         }
 
-        private static string ResolveTruckNumber(string truckId, string truckLabel, string roleName)
-        {
-            var known = KnownTruckLanes.FirstOrDefault(lane =>
-                string.Equals(lane.TruckId, truckId, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(lane.Label, truckLabel, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(lane.RoleName, roleName, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrWhiteSpace(known.Number)) return known.Number;
-            var match = Regex.Match($"{truckId} {truckLabel} {roleName}", @"\d+");
-            return match.Success ? match.Value.TrimStart('0') : string.Empty;
-        }
-
         private static int ResolveKnownTruckSort(string truckId, string truckLabel, string roleName)
         {
             var index = Array.FindIndex(KnownTruckLanes, lane =>
@@ -2268,470 +1753,7 @@ ESS context JSON:
             return index < 0 ? 999 : index;
         }
 
-        private object BuildTransportSummary(
-            JsonDocument? requestsDoc,
-            IReadOnlyList<JsonElement> requestRows,
-            IReadOnlyList<TruckLiveLocationContext> truckLiveLocations,
-            DateOnly today,
-            string question)
-        {
-            var todayKey = today.ToString("yyyy-MM-dd");
-            var todayRequests = new List<object>();
-            var activeTodayRequests = new List<object>();
-            var archivedTodayRequests = new List<object>();
-            var currentSchedule = new List<object>();
-            var sevenAmRequests = new List<object>();
-            var allActiveRequests = new List<object>();
-            var allArchivedRequests = new List<object>();
-            var unscheduledActiveRequests = new List<object>();
-            var searchableRequests = new List<object>();
-            var activeRequests = 0;
-            var archivedRequests = 0;
-            var requestItems = requestRows.Count > 0
-                ? requestRows
-                : requestsDoc?.RootElement.TryGetProperty("requests", out var requests) == true && requests.ValueKind == JsonValueKind.Array
-                    ? requests.EnumerateArray().ToList()
-                    : new List<JsonElement>();
-
-            foreach (var item in requestItems)
-            {
-                var scheduledAtIso = TryGetStringAny(item, "scheduledAtIso", "scheduled_at_iso");
-                var hour = TryGetIntAny(item, "scheduledHour", "scheduled_hour");
-                var minute = TryGetIntAny(item, "scheduledMinute", "scheduled_minute");
-                var scheduledDate = TryGetStringAny(item, "scheduledDate", "scheduled_date");
-                if ((string.IsNullOrWhiteSpace(scheduledDate) || hour == null || minute == null) &&
-                    DateTime.TryParse(scheduledAtIso, out var parsedScheduledAt))
-                {
-                    scheduledDate = string.IsNullOrWhiteSpace(scheduledDate) ? parsedScheduledAt.ToString("yyyy-MM-dd") : scheduledDate;
-                    hour ??= parsedScheduledAt.Hour;
-                    minute ??= parsedScheduledAt.Minute;
-                }
-
-                scheduledDate = NormalizeDateOnlyString(scheduledDate);
-                var archivedAt = TryGetStringAny(item, "archivedAt", "archived_at");
-                var scheduleRemovedAt = TryGetStringAny(item, "scheduleRemovedAt", "schedule_removed_at");
-                var deliveryStatus = TryGetStringAny(item, "deliveryStatus", "delivery_status");
-                var isArchived = !string.IsNullOrWhiteSpace(archivedAt);
-                var isOnSchedule = !string.IsNullOrWhiteSpace(scheduledDate)
-                    && hour != null
-                    && minute != null
-                    && string.IsNullOrWhiteSpace(scheduleRemovedAt);
-                var isActiveQueue = !isArchived;
-                var lifecycleStatus = isArchived
-                    ? string.IsNullOrWhiteSpace(scheduleRemovedAt) ? "archived_completed_on_schedule" : "archived_removed_from_schedule"
-                    : "active";
-                var scheduleStatus = isOnSchedule ? "scheduled" : "not_scheduled";
-                var truck = TryGetStringAny(item, "scheduledTruckLabel", "scheduled_truck_label", "truckLabel", "truck_label", "scheduledTruckId", "scheduled_truck_id", "truckId", "truck_id");
-                var requestedMaterials = BuildRequestedMaterials(item);
-                var materialSummary = string.Join(
-                    " ",
-                    requestedMaterials.Select(material => string.Join(" ", new[]
-                    {
-                        TryGetObjectProperty(material, "quantity"),
-                        TryGetObjectProperty(material, "label"),
-                        TryGetObjectProperty(material, "spec"),
-                    }.Where(value => !string.IsNullOrWhiteSpace(value)))));
-                var row = new
-                {
-                    id = TryGetString(item, "id"),
-                    sourceOrderId = TryGetStringAny(item, "sourceOrderId", "source_order_id"),
-                    routeType = TryGetStringAny(item, "routeType", "route_type"),
-                    builderName = TryGetStringAny(item, "builderName", "builder_name"),
-                    projectName = TryGetStringAny(item, "projectName", "project_name"),
-                    requestedByName = TryGetStringAny(item, "requestedByName", "requested_by_name"),
-                    requestedByEmail = TryGetStringAny(item, "requestedByEmail", "requested_by_email"),
-                    orderDate = NormalizeDateOnlyString(TryGetStringAny(item, "orderDate", "order_date")),
-                    submittedAt = TryGetStringAny(item, "submittedAt", "submitted_at"),
-                    scheduledDate = isOnSchedule ? scheduledDate : null,
-                    scheduledTime = isOnSchedule ? $"{hour:00}:{minute ?? 0:00}" : null,
-                    rawScheduledDate = scheduledDate,
-                    rawScheduledTime = hour == null ? null : $"{hour:00}:{minute ?? 0:00}",
-                    scheduledAtIso,
-                    scheduleRemovedAt,
-                    truck = isOnSchedule ? truck : null,
-                    rawTruck = truck,
-                    deliveryStatus = deliveryStatus ?? (isOnSchedule ? "scheduled" : "pending"),
-                    archivedAt,
-                    isOnSchedule,
-                    isActiveQueue,
-                    isArchived,
-                    lifecycleStatus,
-                    scheduleStatus,
-                    scaffoldingSystem = TryGetMaterialMeta(item, "__scaffoldingSystem") ?? TryGetStringAny(item, "scaffoldingSystem", "scaffolding_system"),
-                    details = TryGetMaterialMeta(item, "__details") ?? TryGetString(item, "details"),
-                    notes = TryGetString(item, "notes"),
-                    requestedMaterials,
-                };
-                searchableRequests.Add(new
-                {
-                    source = "material-request",
-                    title = $"{row.builderName} / {row.projectName}",
-                    summary = string.Join(" ", new[]
-                    {
-                        row.builderName,
-                        row.projectName,
-                        row.requestedByName,
-                        row.requestedByEmail,
-                        row.orderDate,
-                        row.submittedAt,
-                        row.scheduleStatus,
-                        row.lifecycleStatus,
-                        row.isOnSchedule ? "currently on schedule" : "not on schedule",
-                        row.isArchived ? "archived" : "active queue",
-                        row.scheduleRemovedAt != null ? "removed from schedule" : null,
-                        row.scheduledDate,
-                        row.scheduledTime,
-                        row.truck,
-                        row.deliveryStatus,
-                        row.scaffoldingSystem,
-                        row.details,
-                        row.notes,
-                        materialSummary,
-                    }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                    data = row,
-                });
-
-                if (isArchived)
-                {
-                    archivedRequests += 1;
-                    allArchivedRequests.Add(row);
-                }
-                else
-                {
-                    activeRequests += 1;
-                    allActiveRequests.Add(row);
-                    if (!isOnSchedule)
-                    {
-                        unscheduledActiveRequests.Add(row);
-                    }
-                }
-
-                if (!isOnSchedule)
-                {
-                    continue;
-                }
-
-                currentSchedule.Add(row);
-                if (scheduledDate != todayKey)
-                {
-                    continue;
-                }
-
-                todayRequests.Add(row);
-                if (isArchived)
-                {
-                    archivedTodayRequests.Add(row);
-                }
-                else
-                {
-                    activeTodayRequests.Add(row);
-                }
-                if (hour == 7 && (minute ?? 0) == 0)
-                {
-                    sevenAmRequests.Add(row);
-                }
-            }
-
-            return new
-            {
-                dataSource = requestRows.Count > 0 ? "ess_material_order_requests" : "project-information/material-order-requests/index.json",
-                activeMaterialRequests = activeRequests,
-                archivedMaterialRequests = archivedRequests,
-                liveTruckLocationCount = truckLiveLocations.Count,
-                staleTruckLocationCount = truckLiveLocations.Count(location => location.IsStale || location.IsOffline),
-                currentTruckLocations = truckLiveLocations,
-                scheduledTodayCount = todayRequests.Count,
-                activeScheduledTodayCount = activeTodayRequests.Count,
-                archivedScheduledTodayCount = archivedTodayRequests.Count,
-                sevenAmTodayCount = sevenAmRequests.Count,
-                sevenAmToday = sevenAmRequests,
-                scheduledToday = todayRequests
-                    .OrderBy(row => TryGetObjectProperty(row, "scheduledTime"))
-                    .Take(80)
-                    .ToList(),
-                currentScheduleToday = todayRequests
-                    .OrderBy(row => TryGetObjectProperty(row, "scheduledTime"))
-                    .Take(80)
-                    .ToList(),
-                currentSchedule = currentSchedule
-                    .OrderBy(row => TryGetObjectProperty(row, "scheduledDate"))
-                    .ThenBy(row => TryGetObjectProperty(row, "scheduledTime"))
-                    .Take(500)
-                    .ToList(),
-                activeRequests = allActiveRequests
-                    .OrderBy(row => TryGetObjectProperty(row, "rawScheduledDate") ?? "9999-12-31")
-                    .ThenBy(row => TryGetObjectProperty(row, "rawScheduledTime") ?? "99:99")
-                    .Take(500)
-                    .ToList(),
-                archivedRequests = allArchivedRequests.Take(250).ToList(),
-                unscheduledActiveRequests = unscheduledActiveRequests.Take(250).ToList(),
-                requestMatches = BuildQuestionMatches(question, searchableRequests, 12),
-            };
-        }
-
-        private async Task<DesignSearchData> SearchDesignMatchesAsync(
-            string question,
-            IReadOnlyList<JsonElement> folders,
-            IReadOnlyList<JsonElement> documents,
-            bool includeLinks,
-            CancellationToken cancellationToken)
-        {
-            var tokens = BuildSearchTokens(question);
-            if (tokens.Count == 0)
-            {
-                return new DesignSearchData();
-            }
-            var wantsMultipleLinks = WantsMultipleDesignLinks(question);
-            var responseLimit = wantsMultipleLinks ? 8 : 1;
-            var normalizedQuestion = NormalizeSearchText(question);
-            var wantsLatest = normalizedQuestion.Contains("latest", StringComparison.OrdinalIgnoreCase)
-                || normalizedQuestion.Contains("newest", StringComparison.OrdinalIgnoreCase)
-                || normalizedQuestion.Contains("most recent", StringComparison.OrdinalIgnoreCase)
-                || normalizedQuestion.Contains("recent", StringComparison.OrdinalIgnoreCase);
-            var wantsFolderLink = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("folder");
-            var preferThirdPartyDesign = normalizedQuestion.Contains("third party", StringComparison.OrdinalIgnoreCase);
-            var foldersById = folders
-                .Select(folder => new { Id = TryGetString(folder, "id"), Folder = folder })
-                .Where(item => !string.IsNullOrWhiteSpace(item.Id))
-                .ToDictionary(item => item.Id!, item => item.Folder, StringComparer.OrdinalIgnoreCase);
-            var pathCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            string BuildFolderPath(string? folderId, HashSet<string>? seen = null)
-            {
-                if (string.IsNullOrWhiteSpace(folderId) || !foldersById.TryGetValue(folderId, out var folder))
-                {
-                    return string.Empty;
-                }
-
-                if (pathCache.TryGetValue(folderId, out var cachedPath))
-                {
-                    return cachedPath;
-                }
-
-                seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                if (!seen.Add(folderId))
-                {
-                    return TryGetString(folder, "name") ?? string.Empty;
-                }
-
-                var name = TryGetString(folder, "name") ?? string.Empty;
-                var parentId = TryGetString(folder, "parent_folder_id");
-                var parentPath = BuildFolderPath(parentId, seen);
-                var path = string.IsNullOrWhiteSpace(parentPath) ? name : $"{parentPath} / {name}";
-                pathCache[folderId] = path;
-                return path;
-            }
-
-            var candidates = new List<ScoredDesignCandidate>();
-
-            foreach (var folder in folders)
-            {
-                var folderId = TryGetString(folder, "id");
-                var folderPath = BuildFolderPath(folderId);
-                var score = ScoreSearchCandidate(folderPath, tokens, out var matchedTerms);
-                if (score <= 0)
-                {
-                    continue;
-                }
-
-                candidates.Add(new ScoredDesignCandidate
-                {
-                    FolderId = folderId,
-                    CandidateType = "folder",
-                    Name = TryGetString(folder, "name") ?? folderPath,
-                    Path = folderPath,
-                    UpdatedAt = TryGetDate(folder, "updated_at"),
-                    Score = score,
-                    MatchedTerms = matchedTerms,
-                });
-            }
-
-            foreach (var document in documents)
-            {
-                var folderId = TryGetString(document, "folder_id");
-                var folderPath = BuildFolderPath(folderId);
-                var revision = TryGetString(document, "revision_number") ?? string.Empty;
-                var essPath = TryGetString(document, "ess_design_issue_path");
-                var essName = TryGetString(document, "ess_design_issue_name");
-                var thirdPartyPath = TryGetString(document, "third_party_design_path");
-                var thirdPartyName = TryGetString(document, "third_party_design_name");
-                var description = TryGetString(document, "description");
-                var candidateText = string.Join(
-                    " ",
-                    new[]
-                    {
-                        folderPath,
-                        revision,
-                        essName,
-                        thirdPartyName,
-                        description,
-                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
-                var score = ScoreSearchCandidate(candidateText, tokens, out var matchedTerms);
-                var minimumMatchedTerms = tokens.Count <= 1 ? 1 : Math.Min(2, tokens.Count);
-                if (score <= 0 || matchedTerms.Count < minimumMatchedTerms)
-                {
-                    continue;
-                }
-
-                candidates.Add(new ScoredDesignCandidate
-                {
-                    DocumentId = Guid.TryParse(TryGetString(document, "id"), out var documentId) ? documentId : null,
-                    FolderId = folderId,
-                    CandidateType = "document",
-                    Name = essName ?? thirdPartyName ?? $"Revision {revision}",
-                    Path = folderPath,
-                    RevisionNumber = revision,
-                    RevisionSort = ParseRevisionSort(revision),
-                    UpdatedAt = TryGetDate(document, "updated_at", TryGetDate(document, "created_at")),
-                    HasEssDesign = !string.IsNullOrWhiteSpace(essPath),
-                    HasThirdPartyDesign = !string.IsNullOrWhiteSpace(thirdPartyPath),
-                    Score = score,
-                    MatchedTerms = matchedTerms,
-                });
-            }
-
-            var rankedCandidates = wantsLatest
-                ? candidates
-                    .OrderByDescending(candidate => candidate.UpdatedAt)
-                    .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                    .ThenByDescending(candidate => candidate.RevisionSort)
-                    .ToList()
-                : candidates
-                    .OrderByDescending(candidate => candidate.Score)
-                    .ThenBy(candidate => candidate.CandidateType.Equals("document", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                    .ThenByDescending(candidate => candidate.RevisionSort)
-                    .ThenByDescending(candidate => candidate.UpdatedAt)
-                    .ToList();
-            var ranked = rankedCandidates
-                .Take(12)
-                .ToList();
-            var matches = new List<object>();
-            var links = new List<AdminAssistantLink>();
-            var topPath = rankedCandidates.FirstOrDefault()?.Path;
-            var responseCandidates = wantsMultipleLinks && !string.IsNullOrWhiteSpace(topPath)
-                ? rankedCandidates.Where(candidate => candidate.Path.Equals(topPath, StringComparison.OrdinalIgnoreCase)).Take(responseLimit).ToList()
-                : wantsMultipleLinks
-                    ? rankedCandidates.Take(responseLimit).ToList()
-                    : rankedCandidates.Take(responseLimit).ToList();
-
-            foreach (var candidate in responseCandidates)
-            {
-                matches.Add(new
-                {
-                    candidate.CandidateType,
-                    candidate.Name,
-                    candidate.Path,
-                    candidate.FolderId,
-                    candidate.RevisionNumber,
-                    candidate.UpdatedAt,
-                    candidate.Score,
-                    candidate.MatchedTerms,
-                    candidate.HasEssDesign,
-                    candidate.HasThirdPartyDesign,
-                });
-
-                if (includeLinks && !wantsFolderLink && candidate.DocumentId is Guid documentId && links.Count < responseLimit)
-                {
-                    var preferredTypes = preferThirdPartyDesign
-                        ? new[] { "third-party", "ess" }
-                        : new[] { "ess", "third-party" };
-
-                    foreach (var type in preferredTypes)
-                    {
-                        if (links.Count >= responseLimit)
-                        {
-                            break;
-                        }
-
-                        if (type == "ess" && candidate.HasEssDesign)
-                        {
-                            var info = await TryGetDownloadInfoAsync(documentId, "ess", cancellationToken);
-                            if (info != null)
-                            {
-                                links.Add(new AdminAssistantLink
-                                {
-                                    Label = wantsMultipleLinks ? $"ESS revision {candidate.RevisionNumber}" : "Click here to view",
-                                    Url = info.Url,
-                                    Type = "ess-design",
-                                });
-                            }
-                        }
-
-                        if (type == "third-party" && candidate.HasThirdPartyDesign)
-                        {
-                            var info = await TryGetDownloadInfoAsync(documentId, "third-party", cancellationToken);
-                            if (info != null)
-                            {
-                                links.Add(new AdminAssistantLink
-                                {
-                                    Label = wantsMultipleLinks ? $"Third-party revision {candidate.RevisionNumber}" : "Click here to view",
-                                    Url = info.Url,
-                                    Type = "third-party-design",
-                                });
-                            }
-                        }
-
-                        if (!wantsMultipleLinks && links.Count > 0)
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                if (includeLinks &&
-                    !string.IsNullOrWhiteSpace(candidate.FolderId) &&
-                    links.Count == 0)
-                {
-                    links.Add(new AdminAssistantLink
-                    {
-                        Label = "Click here to view",
-                        Url = $"/?page=design&folder={Uri.EscapeDataString(candidate.FolderId)}",
-                        Type = "design-folder",
-                    });
-                }
-            }
-
-            if (matches.Count == 0)
-            {
-                var fallbackQuery = string.Join(" ", tokens.Take(4));
-                var fallbackResults = await _supabaseService.SearchAsync(fallbackQuery);
-                foreach (var result in fallbackResults.Take(5))
-                {
-                    matches.Add(new
-                    {
-                        CandidateType = "folder-rpc",
-                        result.Name,
-                        result.Path,
-                        result.DocumentCount,
-                    });
-                }
-            }
-
-            return new DesignSearchData { Matches = matches, Links = links };
-        }
-
-        private async Task<FileDownloadInfo?> TryGetDownloadInfoAsync(Guid documentId, string type, CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogInformation(ex, "Unable to create assistant download link for {DocumentId}", documentId);
-                return null;
-            }
-        }
-
-        private ChatResult BuildUnavailableModelResult(AdminAssistantContext context, string reason)
-        {
-            return new ChatResult
-            {
-                Reply = $"{reason} I can load the ESS app context, but I cannot reason over it conversationally until the model connection is available.",
-                Links = context.Links,
-                Sources = context.Sources,
-            };
-        }
+        // ── Utility methods ───────────────────────────────────────────────────
 
         private async Task<List<T>> GetRestRowsAsync<T>(string relativePath, CancellationToken cancellationToken)
         {
@@ -2741,9 +1763,7 @@ ESS context JSON:
                 ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(supabaseUrl) || string.IsNullOrWhiteSpace(supabaseKey))
-            {
                 return new List<T>();
-            }
 
             var client = _httpClientFactory.CreateClient();
             var url = $"{supabaseUrl.TrimEnd('/')}/rest/v1/{relativePath}";
@@ -2754,9 +1774,7 @@ ESS context JSON:
             using var response = await client.SendAsync(request, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
-            {
                 return new List<T>();
-            }
 
             return JsonSerializer.Deserialize<List<T>>(body, _jsonOptions) ?? new List<T>();
         }
@@ -2769,9 +1787,7 @@ ESS context JSON:
                 ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(supabaseUrl) || string.IsNullOrWhiteSpace(supabaseKey))
-            {
                 return null;
-            }
 
             var client = _httpClientFactory.CreateClient();
             var url = $"{supabaseUrl.TrimEnd('/')}/storage/v1/object/{bucket}/{path}";
@@ -2780,10 +1796,7 @@ ESS context JSON:
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", supabaseKey);
 
             using var response = await client.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
+            if (!response.IsSuccessStatusCode) return null;
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
@@ -2791,60 +1804,56 @@ ESS context JSON:
 
         private static DateOnly GetSydneyToday()
         {
-            try
-            {
-                return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetSydneyTimeZone()));
-            }
-            catch
-            {
-                return DateOnly.FromDateTime(DateTime.UtcNow);
-            }
+            try { return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetSydneyTimeZone())); }
+            catch { return DateOnly.FromDateTime(DateTime.UtcNow); }
         }
 
         private static TimeZoneInfo GetSydneyTimeZone()
         {
-            try
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
-            }
-            catch
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney");
-            }
+            try { return TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time"); }
+            catch { return TimeZoneInfo.FindSystemTimeZoneById("Australia/Sydney"); }
         }
 
         private static List<string> BuildSearchTokens(string question)
         {
-            var cleaned = NormalizeSearchText(question);
-
             var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "can", "you", "please", "provide", "link", "access", "specific", "design", "file",
                 "files", "latest", "newest", "recent", "revision", "revisions", "pdf", "download",
                 "the", "for", "with", "from", "have", "any", "how", "many", "today", "currently",
-                "show", "find", "get", "give", "need", "want", "looking", "available", "provide",
+                "show", "find", "get", "give", "need", "want", "looking", "available",
             };
-
-            return cleaned
+            return NormalizeSearchText(question)
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(word => word.Trim().ToLowerInvariant())
-                .Where(word => word.Length > 1 && !stopWords.Contains(word))
+                .Where(w => w.Length > 1 && !stopWords.Contains(w))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(12)
+                .ToList();
+        }
+
+        private static List<string> BuildBroadSearchTokens(string question)
+        {
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "a", "an", "and", "any", "are", "as", "at", "be", "can", "could", "do", "does",
+                "for", "from", "give", "have", "how", "i", "in", "is", "it", "me", "named",
+                "of", "on", "or", "please", "show", "the", "there", "this", "today", "to",
+                "we", "what", "when", "where", "who", "with", "you",
+            };
+            return NormalizeSearchText(question)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 1 && !stopWords.Contains(w))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
                 .ToList();
         }
 
         private static int ScoreSearchCandidate(string candidateText, IReadOnlyList<string> tokens, out List<string> matchedTerms)
         {
             matchedTerms = new List<string>();
-            if (string.IsNullOrWhiteSpace(candidateText) || tokens.Count == 0)
-            {
-                return 0;
-            }
-
+            if (string.IsNullOrWhiteSpace(candidateText) || tokens.Count == 0) return 0;
             var normalized = NormalizeSearchText(candidateText);
             var score = 0;
-
             foreach (var token in tokens)
             {
                 if (normalized.Contains(token, StringComparison.OrdinalIgnoreCase))
@@ -2853,44 +1862,51 @@ ESS context JSON:
                     score += token.Length >= 4 ? 12 : 8;
                 }
             }
-
-            for (var index = 0; index < tokens.Count - 1; index += 1)
+            for (var i = 0; i < tokens.Count - 1; i++)
             {
-                var phrase = $"{tokens[index]} {tokens[index + 1]}";
-                if (normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase))
-                {
+                if (normalized.Contains($"{tokens[i]} {tokens[i + 1]}", StringComparison.OrdinalIgnoreCase))
                     score += 20;
-                }
             }
-
-            for (var index = 0; index < tokens.Count - 2; index += 1)
+            for (var i = 0; i < tokens.Count - 2; i++)
             {
-                var phrase = $"{tokens[index]} {tokens[index + 1]} {tokens[index + 2]}";
-                if (normalized.Contains(phrase, StringComparison.OrdinalIgnoreCase))
-                {
+                if (normalized.Contains($"{tokens[i]} {tokens[i + 1]} {tokens[i + 2]}", StringComparison.OrdinalIgnoreCase))
                     score += 35;
-                }
             }
-
-            if (matchedTerms.Count == tokens.Count)
-            {
-                score += 80;
-            }
-            else if (tokens.Count > 2 && matchedTerms.Count >= Math.Ceiling(tokens.Count * 0.6))
-            {
-                score += 35;
-            }
-
+            if (matchedTerms.Count == tokens.Count) score += 80;
+            else if (tokens.Count > 2 && matchedTerms.Count >= (int)Math.Ceiling(tokens.Count * 0.6)) score += 35;
             return score;
         }
 
         private static string NormalizeSearchText(string value)
         {
-            var chars = value
-                .ToLowerInvariant()
-                .Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ')
-                .ToArray();
+            var chars = value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ').ToArray();
             return string.Join(" ", new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private static Dictionary<string, string> BuildFolderPaths(IReadOnlyList<JsonElement> folders)
+        {
+            var foldersById = folders
+                .Select(f => new { Id = TryGetString(f, "id"), Folder = f })
+                .Where(f => f.Id != null)
+                .ToDictionary(f => f.Id!, f => f.Folder, StringComparer.OrdinalIgnoreCase);
+            var pathCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string BuildPath(string? folderId, HashSet<string>? seen = null)
+            {
+                if (string.IsNullOrWhiteSpace(folderId) || !foldersById.TryGetValue(folderId, out var folder))
+                    return string.Empty;
+                if (pathCache.TryGetValue(folderId, out var cached)) return cached;
+                seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!seen.Add(folderId)) return TryGetString(folder, "name") ?? string.Empty;
+                var name = TryGetString(folder, "name") ?? string.Empty;
+                var parentPath = BuildPath(TryGetString(folder, "parent_folder_id"), seen);
+                var path = string.IsNullOrWhiteSpace(parentPath) ? name : $"{parentPath} / {name}";
+                pathCache[folderId] = path;
+                return path;
+            }
+
+            foreach (var id in foldersById.Keys) BuildPath(id);
+            return pathCache;
         }
 
         private static DateTime TryGetDate(JsonElement element, string propertyName, DateTime fallback = default)
@@ -2905,208 +1921,55 @@ ESS context JSON:
             return int.TryParse(digits, out var parsed) ? parsed : 0;
         }
 
-        private List<object> BuildQuestionMatches(string question, IEnumerable<object> records, int limit)
+        private static string? NormalizeDateOnlyString(string? value)
         {
-            var tokens = BuildBroadSearchTokens(question);
-            if (tokens.Count == 0)
-            {
-                return new List<object>();
-            }
-
-            return records
-                .Select(record =>
-                {
-                    var json = JsonSerializer.Serialize(record, _jsonOptions);
-                    var score = ScoreSearchCandidate(json, tokens, out var matchedTerms);
-                    return new { record, score, matchedTerms };
-                })
-                .Where(item => item.score > 0)
-                .OrderByDescending(item => item.score)
-                .Take(limit)
-                .Select(item => new
-                {
-                    item.score,
-                    item.matchedTerms,
-                    item.record,
-                })
-                .Cast<object>()
-                .ToList();
-        }
-
-        private static List<string> BuildBroadSearchTokens(string question)
-        {
-            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "a", "an", "and", "any", "are", "as", "at", "be", "can", "could", "do", "does",
-                "for", "from", "give", "have", "how", "i", "in", "is", "it", "me", "named",
-                "of", "on", "or", "please", "show", "the", "there", "this", "today", "to",
-                "we", "what", "when", "where", "who", "with", "you",
-            };
-
-            return NormalizeSearchText(question)
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Where(word => word.Length > 1 && !stopWords.Contains(word))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(16)
-                .ToList();
-        }
-
-        private static Dictionary<string, string> BuildFolderPaths(IReadOnlyList<JsonElement> folders)
-        {
-            var foldersById = folders
-                .Select(folder => new { Id = TryGetString(folder, "id"), Folder = folder })
-                .Where(item => !string.IsNullOrWhiteSpace(item.Id))
-                .ToDictionary(item => item.Id!, item => item.Folder, StringComparer.OrdinalIgnoreCase);
-            var pathCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            string BuildPath(string? folderId, HashSet<string>? seen = null)
-            {
-                if (string.IsNullOrWhiteSpace(folderId) || !foldersById.TryGetValue(folderId, out var folder))
-                {
-                    return string.Empty;
-                }
-
-                if (pathCache.TryGetValue(folderId, out var cachedPath))
-                {
-                    return cachedPath;
-                }
-
-                seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                if (!seen.Add(folderId))
-                {
-                    return TryGetString(folder, "name") ?? string.Empty;
-                }
-
-                var name = TryGetString(folder, "name") ?? string.Empty;
-                var parentId = TryGetString(folder, "parent_folder_id");
-                var parentPath = BuildPath(parentId, seen);
-                var path = string.IsNullOrWhiteSpace(parentPath) ? name : $"{parentPath} / {name}";
-                pathCache[folderId] = path;
-                return path;
-            }
-
-            foreach (var id in foldersById.Keys)
-            {
-                BuildPath(id);
-            }
-
-            return pathCache;
-        }
-
-        private static int TryGetSiteRequiredMen(JsonElement requiredBySite, string siteId)
-        {
-            if (requiredBySite.ValueKind == JsonValueKind.Object &&
-                requiredBySite.TryGetProperty(siteId, out var requiredElement) &&
-                requiredElement.TryGetInt32(out var parsed))
-            {
-                return parsed;
-            }
-
-            return 0;
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var trimmed = value.Trim();
+            if (trimmed.Length >= 10 && Regex.IsMatch(trimmed[..10], @"^\d{4}-\d{2}-\d{2}$"))
+                return trimmed[..10];
+            return DateTime.TryParse(trimmed, out var parsed) ? parsed.ToString("yyyy-MM-dd") : trimmed;
         }
 
         private static int CountProjects(JsonDocument? projectsDoc, bool? archived)
         {
-            if (projectsDoc?.RootElement.TryGetProperty("builders", out var builders) != true ||
-                builders.ValueKind != JsonValueKind.Array)
-            {
+            if (projectsDoc?.RootElement.TryGetProperty("builders", out var builders) != true
+                || builders.ValueKind != JsonValueKind.Array)
                 return 0;
-            }
-
             var count = 0;
             foreach (var builder in builders.EnumerateArray())
             {
-                if (!builder.TryGetProperty("projects", out var projects) || projects.ValueKind != JsonValueKind.Array)
-                {
-                    continue;
-                }
-
+                if (!builder.TryGetProperty("projects", out var projects) || projects.ValueKind != JsonValueKind.Array) continue;
                 foreach (var project in projects.EnumerateArray())
                 {
                     var isArchived = TryGetBool(project, "archived");
-                    if (archived == null || archived.Value == isArchived)
-                    {
-                        count += 1;
-                    }
+                    if (archived == null || archived.Value == isArchived) count++;
                 }
             }
-
             return count;
-        }
-
-        private static int CountStorageRows(JsonDocument? document, string propertyName, bool includeArchived)
-        {
-            if (document?.RootElement.TryGetProperty(propertyName, out var rows) != true ||
-                rows.ValueKind != JsonValueKind.Array)
-            {
-                return 0;
-            }
-
-            return rows.EnumerateArray()
-                .Count(row => includeArchived || string.IsNullOrWhiteSpace(TryGetString(row, "archivedAt")));
-        }
-
-        private static int CountMaterialRequestRows(IReadOnlyList<JsonElement> rows, bool includeArchived)
-        {
-            return rows.Count(row => includeArchived || string.IsNullOrWhiteSpace(TryGetStringAny(row, "archivedAt", "archived_at")));
-        }
-
-        private static string? NormalizeDateOnlyString(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return null;
-            }
-
-            var trimmed = value.Trim();
-            if (trimmed.Length >= 10 && Regex.IsMatch(trimmed[..10], @"^\d{4}-\d{2}-\d{2}$"))
-            {
-                return trimmed[..10];
-            }
-
-            return DateTime.TryParse(trimmed, out var parsed)
-                ? parsed.ToString("yyyy-MM-dd")
-                : trimmed;
         }
 
         private static List<object> BuildRequestedMaterials(JsonElement request)
         {
             var values = TryGetObject(request, "itemValues");
-            if (values.ValueKind != JsonValueKind.Object)
-            {
-                values = TryGetObject(request, "item_values");
-            }
-
-            if (values.ValueKind != JsonValueKind.Object)
-            {
-                return new List<object>();
-            }
+            if (values.ValueKind != JsonValueKind.Object) values = TryGetObject(request, "item_values");
+            if (values.ValueKind != JsonValueKind.Object) return new List<object>();
 
             return values.EnumerateObject()
-                .Where(property => !property.Name.StartsWith("__", StringComparison.OrdinalIgnoreCase))
-                .Select(property =>
+                .Where(p => !p.Name.StartsWith("__", StringComparison.OrdinalIgnoreCase))
+                .Select(p =>
                 {
-                    var quantity = TryReadMaterialQuantity(property.Value);
-                    if (string.IsNullOrWhiteSpace(quantity))
+                    var quantity = TryReadMaterialQuantity(p.Value);
+                    if (string.IsNullOrWhiteSpace(quantity)) return null;
+                    var hasKnown = MaterialOrderQuantityLabels.TryGetValue(p.Name, out var known);
+                    return (object)new
                     {
-                        return null;
-                    }
-
-                    var hasKnownLabel = MaterialOrderQuantityLabels.TryGetValue(property.Name, out var known);
-                    var fallbackLabel = property.Name
-                        .Replace("_qty", "", StringComparison.OrdinalIgnoreCase)
-                        .Replace("_", " ", StringComparison.OrdinalIgnoreCase)
-                        .Trim();
-
-                    return new
-                    {
-                        key = property.Name,
-                        label = hasKnownLabel ? known.Label : fallbackLabel,
-                        spec = hasKnownLabel ? known.Spec : string.Empty,
+                        key = p.Name,
+                        label = hasKnown ? known.Label : p.Name.Replace("_qty", "").Replace("_", " ").Trim(),
+                        spec = hasKnown ? known.Spec : string.Empty,
                         quantity,
                     };
                 })
-                .Where(item => item != null)
+                .Where(m => m != null)
                 .Cast<object>()
                 .Take(120)
                 .ToList();
@@ -3115,14 +1978,10 @@ ESS context JSON:
         private static string? TryGetMaterialMeta(JsonElement request, string propertyName)
         {
             var values = TryGetObject(request, "itemValues");
-            if (values.ValueKind != JsonValueKind.Object)
-            {
-                values = TryGetObject(request, "item_values");
-            }
-
-            return values.ValueKind == JsonValueKind.Object &&
-                   values.TryGetProperty(propertyName, out var value) &&
-                   value.ValueKind != JsonValueKind.Null
+            if (values.ValueKind != JsonValueKind.Object) values = TryGetObject(request, "item_values");
+            return values.ValueKind == JsonValueKind.Object
+                && values.TryGetProperty(propertyName, out var value)
+                && value.ValueKind != JsonValueKind.Null
                 ? value.ToString()
                 : null;
         }
@@ -3130,196 +1989,96 @@ ESS context JSON:
         private static string? TryReadMaterialQuantity(JsonElement value)
         {
             if (value.ValueKind == JsonValueKind.Number)
-            {
-                return value.TryGetDecimal(out var numericQuantity) && numericQuantity > 0
-                    ? numericQuantity.ToString("0.##")
-                    : null;
-            }
-
+                return value.TryGetDecimal(out var q) && q > 0 ? q.ToString("0.##") : null;
             var text = value.ToString().Trim();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return null;
-            }
-
-            return decimal.TryParse(text, out var parsedQuantity) && parsedQuantity <= 0 ? null : text;
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            return decimal.TryParse(text, out var p) && p <= 0 ? null : text;
         }
 
-        private static string? TryGetObjectProperty(object value, string propertyName)
-        {
-            return value.GetType().GetProperty(propertyName)?.GetValue(value)?.ToString();
-        }
+        private static string? TryGetObjectProperty(object value, string propertyName) =>
+            value.GetType().GetProperty(propertyName)?.GetValue(value)?.ToString();
 
-        private static JsonElement TryGetObject(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var value)
-                ? value
-                : default;
-        }
+        private static JsonElement TryGetObject(JsonElement element, string propertyName) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var value)
+                ? value : default;
 
-        private static string? TryGetString(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object &&
-                   element.TryGetProperty(propertyName, out var value) &&
-                   value.ValueKind != JsonValueKind.Null
-                ? value.ToString()
-                : null;
-        }
+        private static string? TryGetString(JsonElement element, string propertyName) =>
+            element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(propertyName, out var value)
+            && value.ValueKind != JsonValueKind.Null
+                ? value.ToString() : null;
 
         private static string? TryGetStringAny(JsonElement element, params string[] propertyNames)
         {
-            foreach (var propertyName in propertyNames)
+            foreach (var name in propertyNames)
             {
-                var value = TryGetString(element, propertyName);
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
+                var v = TryGetString(element, name);
+                if (!string.IsNullOrWhiteSpace(v)) return v;
             }
-
             return null;
         }
 
         private static int? TryGetInt(JsonElement element, string propertyName)
         {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
-            {
-                return parsed;
-            }
-
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value)) return null;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed)) return parsed;
             return int.TryParse(value.ToString(), out parsed) ? parsed : null;
         }
 
         private static int? TryGetIntAny(JsonElement element, params string[] propertyNames)
         {
-            foreach (var propertyName in propertyNames)
-            {
-                var value = TryGetInt(element, propertyName);
-                if (value != null)
-                {
-                    return value;
-                }
-            }
-
+            foreach (var name in propertyNames) { var v = TryGetInt(element, name); if (v != null) return v; }
             return null;
         }
 
         private static double? TryGetDouble(JsonElement element, string propertyName)
         {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var parsed))
-            {
-                return parsed;
-            }
-
-            return double.TryParse(value.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)
-                ? parsed
-                : null;
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value)) return null;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var parsed)) return parsed;
+            return double.TryParse(value.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) ? parsed : null;
         }
 
         private static double? TryGetDoubleAny(JsonElement element, params string[] propertyNames)
         {
-            foreach (var propertyName in propertyNames)
-            {
-                var value = TryGetDouble(element, propertyName);
-                if (value != null)
-                {
-                    return value;
-                }
-            }
-
+            foreach (var name in propertyNames) { var v = TryGetDouble(element, name); if (v != null) return v; }
             return null;
         }
 
-        private static DateTimeOffset? TryParseDateTimeOffset(string? value)
-        {
-            return DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var parsed)
-                ? parsed
-                : null;
-        }
+        private static DateTimeOffset? TryParseDateTimeOffset(string? value) =>
+            DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+                ? parsed : null;
 
         private static bool TryGetBool(JsonElement element, string propertyName)
         {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return false;
-            }
-
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value)) return false;
             return value.ValueKind switch
             {
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
-                JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+                JsonValueKind.String => bool.TryParse(value.GetString(), out var p) && p,
                 _ => false,
             };
         }
 
         private static List<string> TryGetStringArray(JsonElement element, string propertyName)
         {
-            if (element.ValueKind != JsonValueKind.Object ||
-                !element.TryGetProperty(propertyName, out var value) ||
-                value.ValueKind != JsonValueKind.Array)
-            {
+            if (element.ValueKind != JsonValueKind.Object
+                || !element.TryGetProperty(propertyName, out var value)
+                || value.ValueKind != JsonValueKind.Array)
                 return new List<string>();
-            }
-
-            return value.EnumerateArray()
-                .Select(item => item.ToString())
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .ToList();
+            return value.EnumerateArray().Select(i => i.ToString()).Where(i => !string.IsNullOrWhiteSpace(i)).ToList();
         }
 
         private static List<string> TryGetStringArrayAny(JsonElement element, params string[] propertyNames)
         {
-            foreach (var propertyName in propertyNames)
-            {
-                var values = TryGetStringArray(element, propertyName);
-                if (values.Count > 0)
-                {
-                    return values;
-                }
-            }
-
+            foreach (var name in propertyNames) { var v = TryGetStringArray(element, name); if (v.Count > 0) return v; }
             return new List<string>();
         }
 
-        private static bool HasStringArray(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object &&
-                   element.TryGetProperty(propertyName, out var value) &&
-                   value.ValueKind == JsonValueKind.Array;
-        }
-
-        private sealed class AdminAssistantContext
-        {
-            public string Today { get; set; } = string.Empty;
-            public object DatasetCatalogue { get; set; } = new();
-            public object EmployeeSummary { get; set; } = new();
-            public object UserSummary { get; set; } = new();
-            public object RosterSummary { get; set; } = new();
-            public object JobsiteSummary { get; set; } = new();
-            public object TransportSummary { get; set; } = new();
-            public List<TruckLiveLocationContext> TruckLiveLocations { get; set; } = new();
-            public object DesignCatalogue { get; set; } = new();
-            public List<object> DesignSearchMatches { get; set; } = new();
-            public object NotificationSummary { get; set; } = new();
-            public object LiveAppContext { get; set; } = new();
-            public object FocusedMatches { get; set; } = new();
-            public List<AdminAssistantLink> Links { get; set; } = new();
-            public List<string> Sources { get; set; } = new();
-        }
+        private static bool HasStringArray(JsonElement element, string propertyName) =>
+            element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(propertyName, out var value)
+            && value.ValueKind == JsonValueKind.Array;
     }
 }
