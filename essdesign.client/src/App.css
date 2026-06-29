@@ -4864,16 +4864,17 @@ body {
 }
 
 .app-nav-sidebar-brand {
-    min-height: 64px;
-    padding: 14px 18px 10px;
+    min-height: 86px;
+    padding: 18px 14px 12px;
     display: flex;
     align-items: center;
+    justify-content: center;
 }
 
 .app-nav-sidebar-brand-button {
-    width: auto;
+    width: 100%;
     min-width: 0;
-    min-height: 38px;
+    min-height: 56px;
     padding: 0;
     border: 0;
     border-radius: 6px;
@@ -4881,7 +4882,7 @@ body {
     color: var(--app-nav-text);
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     cursor: pointer;
     text-align: left;
     transition: opacity 0.16s ease;
@@ -4892,33 +4893,33 @@ body {
 }
 
 .app-nav-sidebar-logo {
-    width: 126px;
-    height: 38px;
+    width: min(188px, 100%);
+    height: 58px;
     object-fit: contain;
     flex-shrink: 0;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand {
-    min-height: 64px;
-    padding: 14px 18px 10px;
+    min-height: 86px;
+    padding: 18px 14px 12px;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand-button {
-    min-height: 38px;
-    justify-content: flex-start;
+    min-height: 56px;
+    justify-content: center;
     padding: 0;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-logo {
-    width: 126px;
-    height: 38px;
+    width: min(188px, 100%);
+    height: 58px;
 }
 
 .app-nav-sidebar-search {
     position: relative;
     display: flex;
     align-items: center;
-    margin: 4px 12px 14px;
+    margin: 0 12px 14px;
     color: #111827;
 }
 
@@ -5116,29 +5117,6 @@ body {
 
 .app-nav-sidebar-divider {
     display: none;
-}
-
-.app-nav-sidebar-admin-link {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    width: 100%;
-    min-height: 38px;
-    padding: 9px 10px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #111827;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 520;
-    text-align: left;
-    cursor: pointer;
-}
-
-.app-nav-sidebar-admin-link:hover,
-.app-nav-sidebar-admin-link.active {
-    background: var(--app-nav-active-bg);
 }
 
 .app-nav-sidebar-profile {

@@ -28,6 +28,7 @@ import './App.css';
 // Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const SIDEBAR_LOGO_URL = '/ESS_logo_clean.svg';
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 
 const getAuthViewFromUrl = () => {
@@ -288,7 +289,7 @@ function NavSidebar({
                     aria-label="Go to home"
                 >
                     <img
-                        src={LOGO_URL}
+                        src={SIDEBAR_LOGO_URL}
                         alt="ErectSafe Scaffolding"
                         className="app-nav-sidebar-logo"
                     />
@@ -358,14 +359,6 @@ function NavSidebar({
             </nav>
 
             <div className="app-nav-sidebar-bottom">
-                <button
-                    type="button"
-                    className={`app-nav-sidebar-admin-link${currentPage === 'settings' ? ' active' : ''}`}
-                    onClick={onGoSettings}
-                >
-                    <span className="app-nav-sidebar-icon"><SettingsIcon size={17} /></span>
-                    <span>Administration</span>
-                </button>
                 <div className="app-nav-sidebar-profile" ref={userMenuRef}>
                     <button
                         type="button"
