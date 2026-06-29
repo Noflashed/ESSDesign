@@ -15050,25 +15050,6 @@ button.stat-card {
     line-height: inherit;
 }
 
-.employees-page .employees-info-close {
-    min-height: 34px;
-    padding: 0 13px;
-    border: 1px solid #dbe5f4;
-    border-radius: 5px;
-    background: #ffffff;
-    color: #334155;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-}
-
-.employees-page .employees-info-close:hover,
-.employees-page .employees-info-close:focus-visible {
-    border-color: #cbd5e1;
-    color: #0f172a;
-    outline: none;
-}
-
 .employees-page .employees-identity-cell {
     display: flex;
     align-items: center;
@@ -15515,9 +15496,6 @@ button.stat-card {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .employees-page .employees-info-close {
-        justify-self: start;
-    }
 }
 
 @media (max-width: 860px) {

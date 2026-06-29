@@ -819,7 +819,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                         </strong>
                                                                     </div>
                                                                 </div>
-                                                                <button type="button" className="employees-info-close" onClick={() => setSelectedInfoEntry(null)}>Close</button>
                                                             </div>
                                                         </td>
                                                     </tr>
