@@ -281,6 +281,22 @@ namespace ESSDesign.Server.Services
             public List<string> MatchedTerms { get; set; } = new();
         }
 
+        private sealed class JobsiteContextRow
+        {
+            public string? Id { get; set; }
+            public string? BuilderId { get; set; }
+            public string BuilderName { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+            public string? SiteLocation { get; set; }
+            public bool Archived { get; set; }
+            public string SiteKey { get; set; } = string.Empty;
+            public string InductionSource { get; set; } = "explicit";
+            public List<string> InductedEmployeeIds { get; set; } = new();
+            public List<EmployeeContextRow> InductedEmployees { get; set; } = new();
+            public int Score { get; set; }
+            public List<string> MatchedTerms { get; set; } = new();
+        }
+
         private sealed class DesignSearchData
         {
             public List<object> Matches { get; set; } = new();
@@ -366,7 +382,9 @@ namespace ESSDesign.Server.Services
                 return BuildFallbackResult(cleanQuestion, context);
             }
 
-            var model = _configuration["OpenAI:Model"] ?? "gpt-4.1-mini";
+            var model = _configuration["OpenAI:AdminAssistantModel"]
+                ?? _configuration["OpenAI:Model"]
+                ?? "gpt-4.1-mini";
             var client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(35);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -380,7 +398,15 @@ namespace ESSDesign.Server.Services
 You are the ESS Design admin assistant for admin users. Think like a skilled, practical human problem-solver who understands the ESS Design app.
 
 Use the supplied ESS context as the source of truth for live operational facts such as counts, schedules, rosters, users, job-sites, file records, and URLs. Do not fabricate live data, URLs, people, files, or schedules.
-The ESS context is a broad app snapshot, not a narrow answer template. Start with datasetCatalogue to understand what data was loaded, then use the detailed sections and their match lists to answer confidently. Do not assume a record is missing unless you have checked the relevant full directory/list in the context.
+The ESS context is a live app-data graph, not a narrow answer template. Start with focusedMatches for the user's likely target records, then use liveAppContext for the full current entity graph and relationships, then use the detailed summaries for rosters, transport, documents, notifications, and counts. Do not assume a record is missing unless you have checked focusedMatches, liveAppContext, and the relevant full directory/list in the context.
+
+Think of liveAppContext as the backend toolbox output for this turn:
+- liveAppContext.employees is the current employee directory.
+- liveAppContext.jobsites is the current Site Registry project/job-site list.
+- liveAppContext.relationships.jobsiteInductions is the current mapping of job-sites to inducted employees.
+- focusedMatches contains the records most likely related to the user's wording.
+
+When the user asks about who is inducted, assigned, linked, working on, or associated with a job-site, use focusedMatches.jobsites and liveAppContext.relationships.jobsiteInductions. If one job-site is a clear best match, answer from that record. If multiple job-sites are plausible, name the closest matches and ask which one they mean. If there are no inducted employees, say that the job-site currently has no inducted employees recorded and mention whether the data came from explicit Site Registry inductions or the legacy preferred-site fallback.
 
 Your goal is to always provide a thoughtful, useful answer:
 - Interpret the user's intent, even when the wording is vague, misspelled, incomplete, or conversational.
@@ -394,6 +420,8 @@ For design-file questions, use ranked designSearchMatches and links as the answe
 The app renders links separately below your message. Never paste raw URLs or markdown links in your written answer. For a single design drawing, say something like "I found the best match. Click here to view it." and let the link button carry the URL.
 
 For employee questions, use employeeSummary.employeeMatches first, then employeeSummary.employeeDirectory. Do not conclude that an employee does not exist from counts or samples. If there is a close name match, say yes and include the matched full name.
+
+For job-site questions, use focusedMatches.jobsites first, then jobsiteSummary.projectMatches, then liveAppContext.jobsites. Each job-site record includes builder, site location, archived status, induction source, inducted employee count, and inductedEmployees. Use those fields directly.
 
 For counts or schedules, give the exact number from context when present. If the context only supports a partial answer, state the partial answer and what data would be needed for certainty.
 
@@ -1110,6 +1138,8 @@ ESS context JSON:
                 context.DesignCatalogue,
                 context.DesignSearchMatches,
                 context.NotificationSummary,
+                context.LiveAppContext,
+                context.FocusedMatches,
                 Links = context.Links.Select(link => new
                 {
                     link.Label,
@@ -1194,14 +1224,18 @@ ESS context JSON:
             var materialRequestsDoc = materialRequestsTask.Result;
             var search = await SearchDesignMatchesAsync(question, folders, documents, shouldSearchDesigns, cancellationToken);
             var truckLiveLocations = BuildTruckLiveLocations(truckLiveLocationRows);
+            var employeeDirectory = BuildEmployeeDirectory(employees);
+            var jobsiteDirectory = BuildJobsiteDirectory(projectsDoc, employeeDirectory);
 
             var roster = BuildRosterSummary(planRows, today);
-            var jobsites = BuildJobsitesSummary(projectsDoc, question);
+            var jobsites = BuildJobsitesSummary(jobsiteDirectory, question);
             var transport = BuildTransportSummary(materialRequestsDoc, materialRequestRows, truckLiveLocations, today, question);
-            var employeeSummary = BuildEmployeeSummary(employees, question);
+            var employeeSummary = BuildEmployeeSummary(employeeDirectory, question);
             var userSummary = BuildUserSummary(userNames, userRoles, question);
             var designCatalogue = BuildDesignCatalogue(folders, documents, question);
             var notificationSummary = BuildNotificationSummary(notifications, question);
+            var focusedMatches = BuildFocusedAppMatches(question, employeeDirectory, jobsiteDirectory);
+            var liveAppContext = BuildLiveAppContext(employeeDirectory, jobsiteDirectory);
             var datasetCatalogue = BuildDatasetCatalogue(
                 employees,
                 planRows,
@@ -1228,6 +1262,8 @@ ESS context JSON:
                 DesignCatalogue = designCatalogue,
                 DesignSearchMatches = search.Matches,
                 NotificationSummary = notificationSummary,
+                LiveAppContext = liveAppContext,
+                FocusedMatches = focusedMatches,
                 Links = search.Links,
                 Sources = sources,
             };
@@ -1340,9 +1376,9 @@ ESS context JSON:
                    (words.Contains("revisions") || words.Contains("versions") || words.Contains("drawings") || words.Contains("files"));
         }
 
-        private object BuildEmployeeSummary(IReadOnlyList<JsonElement> employees, string question)
+        private List<EmployeeContextRow> BuildEmployeeDirectory(IReadOnlyList<JsonElement> employees)
         {
-            var directory = employees
+            return employees
                 .Select(row =>
                 {
                     var firstName = TryGetString(row, "first_name") ?? string.Empty;
@@ -1371,7 +1407,10 @@ ESS context JSON:
                 .OrderBy(row => row.LastName)
                 .ThenBy(row => row.FirstName)
                 .ToList();
+        }
 
+        private object BuildEmployeeSummary(IReadOnlyList<EmployeeContextRow> directory, string question)
+        {
             var lookupTokens = BuildEmployeeLookupTokens(question);
             var matches = directory
                 .Select(row =>
@@ -1400,12 +1439,12 @@ ESS context JSON:
 
             return new
             {
-                totalEmployees = employees.Count,
+                totalEmployees = directory.Count,
                 verifiedEmployees = directory.Count(row => row.Verified),
                 leadingHands = directory.Count(row => row.LeadingHand),
                 employeeMatches = matches,
                 employeeDirectory = directory
-                    .Take(250)
+                    .Take(1000)
                     .Select(row => new
                     {
                         row.Id,
@@ -1413,6 +1452,7 @@ ESS context JSON:
                         row.Email,
                         row.LeadingHand,
                         row.Verified,
+                        row.PreferredSites,
                     })
                     .ToList(),
             };
@@ -1645,6 +1685,120 @@ ESS context JSON:
             };
         }
 
+        private object BuildLiveAppContext(IReadOnlyList<EmployeeContextRow> employees, IReadOnlyList<JobsiteContextRow> jobsites)
+        {
+            return new
+            {
+                description = "Live ESS app entity graph built at request time. This is the current source of truth for entity relationships.",
+                employees = employees
+                    .Take(1000)
+                    .Select(employee => new
+                    {
+                        employee.Id,
+                        employee.FullName,
+                        employee.Email,
+                        employee.LeadingHand,
+                        employee.Verified,
+                        employee.PreferredSites,
+                    })
+                    .ToList(),
+                jobsites = jobsites
+                    .Take(1000)
+                    .Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true))
+                    .ToList(),
+                relationships = new
+                {
+                    jobsiteInductions = jobsites
+                        .Where(jobsite => jobsite.InductedEmployees.Count > 0)
+                        .Take(1000)
+                        .Select(jobsite => new
+                        {
+                            jobsite.SiteKey,
+                            jobsite.BuilderName,
+                            jobsite.Name,
+                            jobsite.InductionSource,
+                            employees = jobsite.InductedEmployees.Select(employee => new
+                            {
+                                employee.Id,
+                                employee.FullName,
+                                employee.Email,
+                                employee.LeadingHand,
+                                employee.Verified,
+                            }).ToList(),
+                        })
+                        .ToList(),
+                },
+            };
+        }
+
+        private object BuildFocusedAppMatches(
+            string question,
+            IReadOnlyList<EmployeeContextRow> employees,
+            IReadOnlyList<JobsiteContextRow> jobsites)
+        {
+            var tokens = BuildBroadSearchTokens(question);
+            var employeeMatches = employees
+                .Select(employee =>
+                {
+                    var searchable = string.Join(" ", new[]
+                    {
+                        employee.FullName,
+                        employee.Email,
+                        employee.LeadingHand ? "leading hand" : "scaffolder",
+                        employee.Verified ? "verified" : "not verified",
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                    var score = ScoreSearchCandidate(searchable, tokens, out var matchedTerms);
+                    return new { employee, score, matchedTerms };
+                })
+                .Where(match => match.score > 0)
+                .OrderByDescending(match => match.score)
+                .Take(12)
+                .Select(match => new
+                {
+                    match.score,
+                    match.matchedTerms,
+                    match.employee.Id,
+                    match.employee.FullName,
+                    match.employee.Email,
+                    match.employee.LeadingHand,
+                    match.employee.Verified,
+                    match.employee.PreferredSites,
+                })
+                .ToList();
+
+            var jobsiteMatches = jobsites
+                .Select(jobsite =>
+                {
+                    var searchable = string.Join(" ", new[]
+                    {
+                        jobsite.BuilderName,
+                        jobsite.Name,
+                        jobsite.SiteLocation,
+                        jobsite.Archived ? "archived" : "active",
+                        string.Join(" ", jobsite.InductedEmployees.Select(employee => employee.FullName)),
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                    var score = ScoreSearchCandidate(searchable, tokens, out var matchedTerms);
+                    return new { jobsite, score, matchedTerms };
+                })
+                .Where(match => match.score > 0)
+                .OrderByDescending(match => match.score)
+                .Take(12)
+                .Select(match => new
+                {
+                    match.score,
+                    match.matchedTerms,
+                    data = BuildJobsiteModelRow(match.jobsite, includeInductedEmployees: true),
+                })
+                .ToList();
+
+            return new
+            {
+                description = "Question-focused live records. Prefer these first, then fall back to liveAppContext and the broader summaries.",
+                employees = employeeMatches,
+                jobsites = jobsiteMatches,
+            };
+        }
+
         private object BuildDatasetCatalogue(
             IReadOnlyList<JsonElement> employees,
             IReadOnlyList<JsonElement> planRows,
@@ -1750,13 +1904,12 @@ ESS context JSON:
             };
         }
 
-        private object BuildJobsitesSummary(JsonDocument? projectsDoc, string question)
+        private List<JobsiteContextRow> BuildJobsiteDirectory(JsonDocument? projectsDoc, IReadOnlyList<EmployeeContextRow> employeeDirectory)
         {
-            var builders = new List<object>();
-            var allProjects = new List<object>();
-            var searchableProjects = new List<object>();
-            var activeCount = 0;
-            var archivedCount = 0;
+            var jobsites = new List<JobsiteContextRow>();
+            var employeesById = employeeDirectory
+                .Where(employee => !string.IsNullOrWhiteSpace(employee.Id))
+                .ToDictionary(employee => employee.Id!, employee => employee, StringComparer.OrdinalIgnoreCase);
 
             if (projectsDoc?.RootElement.TryGetProperty("builders", out var builderRows) == true &&
                 builderRows.ValueKind == JsonValueKind.Array)
@@ -1765,58 +1918,145 @@ ESS context JSON:
                 {
                     var builderName = TryGetString(builder, "name") ?? "Unknown builder";
                     var builderId = TryGetString(builder, "id");
-                    var activeProjects = new List<object>();
                     if (builder.TryGetProperty("projects", out var projects) && projects.ValueKind == JsonValueKind.Array)
                     {
                         foreach (var project in projects.EnumerateArray())
                         {
                             var archived = TryGetBool(project, "archived");
-                            var projectName = TryGetString(project, "name");
+                            var projectName = TryGetString(project, "name") ?? string.Empty;
                             var projectId = TryGetString(project, "id");
                             var siteLocation = TryGetString(project, "siteLocation");
-                            var projectRow = new
+                            var siteKey = !string.IsNullOrWhiteSpace(builderId) && !string.IsNullOrWhiteSpace(projectId)
+                                ? $"{builderId}:{projectId}"
+                                : string.Empty;
+                            var hasExplicitInductions = HasStringArray(project, "inductedEmployeeIds") || HasStringArray(project, "inducted_employee_ids");
+                            var inductedIds = TryGetStringArrayAny(project, "inductedEmployeeIds", "inducted_employee_ids")
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            var inductedEmployees = hasExplicitInductions
+                                ? inductedIds
+                                    .Select(id => employeesById.TryGetValue(id, out var employee) ? employee : null)
+                                    .Where(employee => employee != null)
+                                    .Select(employee => employee!)
+                                    .OrderBy(employee => employee.LastName)
+                                    .ThenBy(employee => employee.FirstName)
+                                    .ToList()
+                                : employeeDirectory
+                                    .Where(employee => !string.IsNullOrWhiteSpace(siteKey) && employee.PreferredSites.Contains(siteKey, StringComparer.OrdinalIgnoreCase))
+                                    .OrderBy(employee => employee.LastName)
+                                    .ThenBy(employee => employee.FirstName)
+                                    .ToList();
+
+                            jobsites.Add(new JobsiteContextRow
                             {
-                                id = projectId,
-                                name = projectName,
-                                builder = builderName,
-                                builderId,
-                                siteLocation,
-                                archived,
-                            };
-                            allProjects.Add(projectRow);
-                            searchableProjects.Add(new
-                            {
-                                source = "project",
-                                title = $"{builderName} / {projectName}",
-                                summary = string.Join(" ", new[] { builderName, projectName, siteLocation, archived ? "archived" : "active" }.Where(value => !string.IsNullOrWhiteSpace(value))),
-                                data = projectRow,
+                                Id = projectId,
+                                Name = projectName,
+                                BuilderId = builderId,
+                                BuilderName = builderName,
+                                SiteLocation = siteLocation,
+                                Archived = archived,
+                                SiteKey = siteKey,
+                                InductionSource = hasExplicitInductions ? "explicit-inductedEmployeeIds" : "legacy-employee-preferred-site",
+                                InductedEmployeeIds = hasExplicitInductions
+                                    ? inductedIds
+                                    : inductedEmployees.Select(employee => employee.Id ?? string.Empty).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
+                                InductedEmployees = inductedEmployees,
                             });
-
-                            if (archived)
-                            {
-                                archivedCount += 1;
-                                continue;
-                            }
-
-                            activeCount += 1;
-                            activeProjects.Add(projectRow);
                         }
-                    }
-
-                    if (activeProjects.Count > 0)
-                    {
-                        builders.Add(new { builder = builderName, activeProjects = activeProjects.Take(12).ToList() });
                     }
                 }
             }
 
+            return jobsites
+                .OrderBy(jobsite => jobsite.Archived)
+                .ThenBy(jobsite => jobsite.BuilderName)
+                .ThenBy(jobsite => jobsite.Name)
+                .ToList();
+        }
+
+        private object BuildJobsitesSummary(IReadOnlyList<JobsiteContextRow> jobsites, string question)
+        {
+            var searchableProjects = jobsites.Select(jobsite => new
+            {
+                source = "project",
+                title = $"{jobsite.BuilderName} / {jobsite.Name}",
+                summary = string.Join(" ", new[]
+                {
+                    jobsite.BuilderName,
+                    jobsite.Name,
+                    jobsite.SiteLocation,
+                    jobsite.Archived ? "archived" : "active",
+                    string.Join(" ", jobsite.InductedEmployees.Select(employee => employee.FullName)),
+                }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                data = BuildJobsiteModelRow(jobsite, includeInductedEmployees: true),
+            }).ToList();
+
+            var projectMatches = searchableProjects
+                .Select(item =>
+                {
+                    var score = ScoreSearchCandidate(item.summary, BuildBroadSearchTokens(question), out var matchedTerms);
+                    return new { item, score, matchedTerms };
+                })
+                .Where(match => match.score > 0)
+                .OrderByDescending(match => match.score)
+                .Take(12)
+                .Select(match => new
+                {
+                    match.score,
+                    match.matchedTerms,
+                    match.item.source,
+                    match.item.title,
+                    match.item.data,
+                })
+                .ToList();
+
+            var activeJobsites = jobsites.Where(jobsite => !jobsite.Archived).ToList();
+            var builders = activeJobsites
+                .GroupBy(jobsite => jobsite.BuilderName)
+                .Select(group => new
+                {
+                    builder = group.Key,
+                    activeProjects = group
+                        .Take(25)
+                        .Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true))
+                        .ToList(),
+                })
+                .Take(40)
+                .ToList();
+
             return new
             {
-                activeJobsiteCount = activeCount,
-                archivedJobsiteCount = archivedCount,
-                builders = builders.Take(20).ToList(),
-                allProjects = allProjects.Take(500).ToList(),
-                projectMatches = BuildQuestionMatches(question, searchableProjects, 12),
+                activeJobsiteCount = activeJobsites.Count,
+                archivedJobsiteCount = jobsites.Count(jobsite => jobsite.Archived),
+                builders,
+                allProjects = jobsites.Take(1000).Select(jobsite => BuildJobsiteModelRow(jobsite, includeInductedEmployees: true)).ToList(),
+                projectMatches,
+            };
+        }
+
+        private static object BuildJobsiteModelRow(JobsiteContextRow jobsite, bool includeInductedEmployees)
+        {
+            return new
+            {
+                id = jobsite.Id,
+                name = jobsite.Name,
+                builder = jobsite.BuilderName,
+                builderId = jobsite.BuilderId,
+                siteLocation = jobsite.SiteLocation,
+                archived = jobsite.Archived,
+                siteKey = jobsite.SiteKey,
+                inductionSource = jobsite.InductionSource,
+                inductedEmployeeCount = jobsite.InductedEmployees.Count,
+                inductedEmployees = includeInductedEmployees
+                    ? jobsite.InductedEmployees.Select(employee => new
+                    {
+                        employee.Id,
+                        employee.FullName,
+                        employee.Email,
+                        employee.LeadingHand,
+                        employee.Verified,
+                    }).ToList()
+                    : null,
             };
         }
 
@@ -2407,6 +2647,8 @@ ESS context JSON:
             reply.AppendLine($"Jobsites: {JsonSerializer.Serialize(context.JobsiteSummary, _jsonOptions)}");
             reply.AppendLine($"Design catalogue: {JsonSerializer.Serialize(context.DesignCatalogue, _jsonOptions)}");
             reply.AppendLine($"Notifications: {JsonSerializer.Serialize(context.NotificationSummary, _jsonOptions)}");
+            reply.AppendLine($"Focused matches: {JsonSerializer.Serialize(context.FocusedMatches, _jsonOptions)}");
+            reply.AppendLine($"Live app context: {JsonSerializer.Serialize(context.LiveAppContext, _jsonOptions)}");
             if (context.DesignSearchMatches.Count > 0)
             {
                 reply.AppendLine($"Design matches: {JsonSerializer.Serialize(context.DesignSearchMatches.Take(5), _jsonOptions)}");
@@ -2978,6 +3220,27 @@ ESS context JSON:
                 .ToList();
         }
 
+        private static List<string> TryGetStringArrayAny(JsonElement element, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                var values = TryGetStringArray(element, propertyName);
+                if (values.Count > 0)
+                {
+                    return values;
+                }
+            }
+
+            return new List<string>();
+        }
+
+        private static bool HasStringArray(JsonElement element, string propertyName)
+        {
+            return element.ValueKind == JsonValueKind.Object &&
+                   element.TryGetProperty(propertyName, out var value) &&
+                   value.ValueKind == JsonValueKind.Array;
+        }
+
         private sealed class AdminAssistantContext
         {
             public string Today { get; set; } = string.Empty;
@@ -2991,6 +3254,8 @@ ESS context JSON:
             public object DesignCatalogue { get; set; } = new();
             public List<object> DesignSearchMatches { get; set; } = new();
             public object NotificationSummary { get; set; } = new();
+            public object LiveAppContext { get; set; } = new();
+            public object FocusedMatches { get; set; } = new();
             public List<AdminAssistantLink> Links { get; set; } = new();
             public List<string> Sources { get; set; } = new();
         }
