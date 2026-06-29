@@ -269,7 +269,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [accountFilter, setAccountFilter] = useState('all');
-    const [currentPage, setCurrentPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyEmployeeForm());
     const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
@@ -404,19 +403,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         });
     }, [mergedEntries, search, roleFilter, accountFilter]);
 
-    const pageSize = 10;
-    const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
-    const safePage = Math.min(currentPage, totalPages);
-    const pagedEntries = useMemo(
-        () => filteredEntries.slice((safePage - 1) * pageSize, safePage * pageSize),
-        [filteredEntries, safePage]
-    );
-    const showingStart = filteredEntries.length === 0 ? 0 : ((safePage - 1) * pageSize) + 1;
-    const showingEnd = Math.min(safePage * pageSize, filteredEntries.length);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, roleFilter, accountFilter]);
+    const pagedEntries = filteredEntries;
 
     const openEmployeeEditor = (employee, effectiveRole) => {
         const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
@@ -648,12 +635,30 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             <div className="module-shell employees-shell">
                 <div className="employees-toolbar">
                     <div className="employees-toolbar-copy">
-                        <h2>Employee Directory</h2>
                         <div className="employees-search-row">
                             <div className="employees-search-field">
                                 <Search size={18} />
                                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
                             </div>
+                            <label className={`employees-filter-control ${roleFilter !== 'all' ? 'active' : ''}`}>
+                                <span>Role</span>
+                                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                                    <option value="all">All Roles</option>
+                                    {roleFilterOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className={`employees-filter-control ${accountFilter !== 'all' ? 'active' : ''}`}>
+                                <span>Account</span>
+                                <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+                                    <option value="all">All Statuses</option>
+                                    <option value="verified">Verified</option>
+                                    <option value="app">App Account</option>
+                                    <option value="invited">Invite Sent</option>
+                                    <option value="unlinked">Not Linked</option>
+                                </select>
+                            </label>
                         </div>
                     </div>
                     <div className="module-form-actions">
@@ -794,16 +799,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 </tbody>
                             </table>
                             <div className="employees-table-footer">
-                                <span>Showing {showingStart} to {showingEnd} of {filteredEntries.length} employees</span>
-                                <div className="employees-pagination">
-                                    <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safePage === 1}>{'<'}</button>
-                                    {Array.from({ length: totalPages }, (_, index) => index + 1).slice(0, 4).map((page) => (
-                                        <button key={page} type="button" className={safePage === page ? 'active' : ''} onClick={() => setCurrentPage(page)}>
-                                            {page}
-                                        </button>
-                                    ))}
-                                    <button type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safePage === totalPages}>{'>'}</button>
-                                </div>
+                                <span>{filteredEntries.length} employee{filteredEntries.length === 1 ? '' : 's'}</span>
                             </div>
                         </div>
                     )}
