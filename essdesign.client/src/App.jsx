@@ -263,7 +263,6 @@ function NavSidebar({
                     aria-label="Go to home"
                 >
                     <img src={logoUrl} alt="ErectSafe Scaffolding" className="app-nav-sidebar-logo" />
-                    {open && <span className="app-nav-sidebar-brand-name">ESS</span>}
                 </button>
             </div>
 
@@ -317,10 +316,6 @@ function NavSidebar({
                         </div>
                     );
                 })}
-            </nav>
-
-            <div className="app-nav-sidebar-bottom">
-                <div className="app-nav-sidebar-divider" />
                 <button
                     className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
                     onClick={onGoSettings}
@@ -329,6 +324,10 @@ function NavSidebar({
                     <span className="app-nav-sidebar-icon"><SettingsIcon size={18} /></span>
                     {open && <span className="app-nav-sidebar-label">Settings</span>}
                 </button>
+            </nav>
+
+            <div className="app-nav-sidebar-bottom">
+                <div className="app-nav-sidebar-divider" />
                 <div className="app-nav-sidebar-profile" ref={userMenuRef}>
                     <button
                         type="button"
@@ -1660,9 +1659,6 @@ function App() {
                                 handleSwitchToLogin();
                             }}
                         />
-                        <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
-                            <ThemeIcon theme={theme} size={18} />
-                        </button>
                         <button type="button" className="module-primary-btn compact" onClick={handleSwitchToLogin}>
                             Sign In
                         </button>
@@ -1775,9 +1771,6 @@ function App() {
                             <SettingsIcon size={18} />
                         </button>
                     )}
-                    <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle theme">
-                        <ThemeIcon theme={theme} size={18} />
-                    </button>
                     {!isIntegratedSidebarPage && (
                     <div className="user-menu" ref={userMenuRef}>
                         <button

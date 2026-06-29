@@ -4856,7 +4856,6 @@ body {
     padding: 10px 12px 8px;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid var(--border-color);
 }
 
 .app-nav-sidebar-brand-button {
@@ -4884,14 +4883,6 @@ body {
     height: 34px;
     object-fit: contain;
     flex-shrink: 0;
-}
-
-.app-nav-sidebar-brand-name {
-    color: var(--text-primary);
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: 0;
 }
 
 .app-nav-sidebar.collapsed .app-nav-sidebar-brand {

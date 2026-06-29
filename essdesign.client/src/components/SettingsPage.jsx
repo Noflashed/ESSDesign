@@ -16,7 +16,7 @@ function getRoleDisplayName(role) {
     }
 }
 
-export default function SettingsPage({ user, onToggleTheme, theme }) {
+export default function SettingsPage({ user }) {
     const displayName = user?.fullName || user?.email || 'User';
     const displayRole = getRoleDisplayName(user?.role);
 
@@ -26,35 +26,8 @@ export default function SettingsPage({ user, onToggleTheme, theme }) {
                 <section className="settings-content">
                     <div className="settings-section-header">
                         <div className="settings-section-kicker">General settings</div>
-                        <h1>Choose how ESS Design looks and feels</h1>
+                        <h1>Account settings</h1>
                         <p>Signed in as {user?.email || 'Not available'}</p>
-                    </div>
-
-                    <div className="settings-divider" />
-
-                    <div className="settings-row">
-                        <div className="settings-row-label">
-                            <h2>Appearance</h2>
-                            <p>Choose your preferred interface mode.</p>
-                        </div>
-                        <div className="settings-row-control">
-                            <div className="settings-theme-toggle">
-                                <button
-                                    type="button"
-                                    className={`settings-theme-option ${theme === 'light' ? 'active' : ''}`}
-                                    onClick={() => onToggleTheme('light')}
-                                >
-                                    Light
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`settings-theme-option ${theme === 'dark' ? 'active' : ''}`}
-                                    onClick={() => onToggleTheme('dark')}
-                                >
-                                    Dark
-                                </button>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="settings-divider" />
