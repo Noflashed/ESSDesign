@@ -36,10 +36,26 @@ namespace ESSDesign.Server.Services
         private sealed class EmployeeContextRow
         {
             public string? Id { get; set; }
+            public string? UserId { get; set; }
             public string FirstName { get; set; } = string.Empty;
             public string LastName { get; set; } = string.Empty;
             public string FullName { get; set; } = string.Empty;
             public string? Email { get; set; }
+            public string? PhoneNumber { get; set; }
+            public string? PreferredName { get; set; }
+            public string? DateOfBirth { get; set; }
+            public string? Gender { get; set; }
+            public string? PersonalAddress { get; set; }
+            public string? AddressStreet { get; set; }
+            public string? AddressCity { get; set; }
+            public string? AddressState { get; set; }
+            public string? AddressPostalCode { get; set; }
+            public string? AddressCountry { get; set; }
+            public string? EmergencyContactName { get; set; }
+            public string? EmergencyRelationship { get; set; }
+            public string? EmergencyPhoneNumber { get; set; }
+            public string? EmergencyEmail { get; set; }
+            public string? EmergencyAddress { get; set; }
             public bool LeadingHand { get; set; }
             public bool Verified { get; set; }
             public string? AppRole { get; set; }
@@ -322,6 +338,7 @@ namespace ESSDesign.Server.Services
 You are Cori, the ESS Design assistant. You work at Erect Safe Scaffolding and know the business inside out — the sites, the crew, the trucks, the designs, everything. You talk like a real person who works here, not a customer service bot.
 
 Today is {today:dddd, MMMM d, yyyy}. The person you're talking to is {currentUser.FullName}.
+Current user profile: {FormatUserProfileForPrompt(currentUser)}
 
 ESS Design runs scaffolding projects across Sydney. The app tracks job-sites, builders, employees, inductions, design documents (PDFs), rosters, material deliveries, live truck GPS, and user accounts.
 
@@ -342,7 +359,8 @@ HOW TO TALK:
 - React naturally to what you find. If something is surprising or notable, say so.
 
 WHEN SOMEONE ISN'T FOUND:
-- Phone numbers and mobile numbers are NOT stored in ESS. If asked for a phone number, say that clearly — don't say you can't find the person.
+- Phone numbers, email addresses, personal addresses, and emergency contact details may be stored in ESS profiles. Use search_employees, get_employee_details, or get_user_roles before answering questions about them.
+- Treat profile details as internal staff information. Only provide what the tools return, and don't invent missing phone numbers, addresses, dates of birth, or emergency contacts.
 - If an employee search returns suggestions (similar names), say something like "I couldn't find [name] exactly — did you mean [suggestion]?"
 - If someone isn't in the employee roster but they're described as an admin, manager, or office user, check get_user_roles — they may be a user account without a field employee profile.
 - The current user ({currentUser.FullName}, {currentUser.Email}) is always in the system even if not in the employee roster.
@@ -529,7 +547,7 @@ WHEN THINGS GO WRONG:
                 Params(
                     ("user_name", "string", "Filter to a specific user's notifications"),
                     ("limit", "integer", "Number of notifications to return (default 20, max 100)"))),
-            Fn("get_user_roles", "Get user accounts and their app roles (admin, manager, viewer, etc.).",
+            Fn("get_user_roles", "Get user accounts, app roles, and profile contact details including phone, address, and emergency contacts.",
                 Params(
                     ("role", "string", "Filter by role: admin, scaffold_designer, site_supervisor, project_manager, leading_hand, general_scaffolder, transport_management, viewer"),
                     ("name", "string", "Filter by user name"))),
@@ -618,6 +636,43 @@ WHEN THINGS GO WRONG:
             }, _jsonOptions));
         }
 
+        private static object BuildEmployeeProfileSummary(EmployeeContextRow employee) => new
+        {
+            employee.PhoneNumber,
+            employee.PreferredName,
+            employee.DateOfBirth,
+            employee.Gender,
+            address = new
+            {
+                employee.PersonalAddress,
+                employee.AddressStreet,
+                employee.AddressCity,
+                employee.AddressState,
+                employee.AddressPostalCode,
+                employee.AddressCountry,
+            },
+            emergencyContact = new
+            {
+                name = employee.EmergencyContactName,
+                relationship = employee.EmergencyRelationship,
+                phoneNumber = employee.EmergencyPhoneNumber,
+                email = employee.EmergencyEmail,
+                address = employee.EmergencyAddress,
+            },
+        };
+
+        private static string FormatUserProfileForPrompt(UserInfo user)
+        {
+            var parts = new List<string> { $"name={user.FullName}", $"email={user.Email}", $"role={user.Role}" };
+            if (!string.IsNullOrWhiteSpace(user.PhoneNumber)) parts.Add($"phone={user.PhoneNumber}");
+            if (!string.IsNullOrWhiteSpace(user.PreferredName)) parts.Add($"preferredName={user.PreferredName}");
+            if (!string.IsNullOrWhiteSpace(user.Gender)) parts.Add($"gender={user.Gender}");
+            if (user.DateOfBirth.HasValue) parts.Add($"dateOfBirth={user.DateOfBirth:yyyy-MM-dd}");
+            var address = string.Join(", ", new[] { user.AddressStreet, user.AddressCity, user.AddressState, user.AddressPostalCode, user.AddressCountry }.Where(p => !string.IsNullOrWhiteSpace(p)));
+            if (!string.IsNullOrWhiteSpace(address)) parts.Add($"address={address}");
+            if (!string.IsNullOrWhiteSpace(user.EmergencyContactName)) parts.Add($"emergencyContact={user.EmergencyContactName}");
+            return string.Join("; ", parts);
+        }
         private async Task<string> Tool_SearchEmployees(JsonElement args, CancellationToken ct)
         {
             var nameFilter = TryGetString(args, "name");
@@ -633,7 +688,11 @@ WHEN THINGS GO WRONG:
             var filtered = employees.AsEnumerable();
             if (!string.IsNullOrWhiteSpace(nameFilter))
                 filtered = filtered.Where(e => FuzzyNameMatch(e.FullName, nameFilter) > 0
-                    || (e.Email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+                    || (e.Email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.PhoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.AddressStreet ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.AddressCity ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.EmergencyContactName ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(roleFilter))
                 filtered = filtered.Where(e => string.Equals(e.AppRole, roleFilter, StringComparison.OrdinalIgnoreCase)
                     || (roleFilter.Equals("leading_hand", StringComparison.OrdinalIgnoreCase) && e.LeadingHand));
@@ -650,6 +709,7 @@ WHEN THINGS GO WRONG:
                 siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
                 appRole = e.AppRole ?? AppRoles.Viewer,
                 e.Verified,
+                profile = BuildEmployeeProfileSummary(e),
             }).ToList();
 
             return JsonSerializer.Serialize(new { count = results.Count, employees = results }, _jsonOptions);
@@ -681,7 +741,7 @@ WHEN THINGS GO WRONG:
                 return JsonSerializer.Serialize(new
                 {
                     error = $"No employee found matching '{name}'",
-                    note = "Phone numbers are not stored in ESS. If the user is an admin or manager rather than a field employee, try get_user_roles instead.",
+                    note = "If the person is an admin, manager, or office user rather than a field employee, try get_user_roles instead.",
                     suggestions = suggestions.Count > 0 ? suggestions : null,
                 }, _jsonOptions);
             }
@@ -699,6 +759,7 @@ WHEN THINGS GO WRONG:
                 siteRole = employee.LeadingHand ? "Leading Hand" : "Scaffolder",
                 appRole = employee.AppRole ?? AppRoles.Viewer,
                 employee.Verified,
+                profile = BuildEmployeeProfileSummary(employee),
                 inductedSiteCount = inductedSites.Count,
                 inductedSites,
             }, _jsonOptions);
@@ -1178,7 +1239,7 @@ WHEN THINGS GO WRONG:
             if (!string.IsNullOrWhiteSpace(userNameFilter))
             {
                 var userNames = await GetRestRowsAsync<JsonElement>(
-                    "user_names?select=id,email,full_name&order=full_name.asc&limit=1000", ct);
+                    "user_names?select=id,email,full_name,phone_number,preferred_name,date_of_birth,gender,personal_address,address_street,address_city,address_state,address_postal_code,address_country,emergency_contact_name,emergency_relationship,emergency_phone_number,emergency_email,emergency_address&order=full_name.asc&limit=1000", ct);
                 var matchedUserIds = userNames
                     .Where(u => (TryGetString(u, "full_name") ?? string.Empty).Contains(userNameFilter, StringComparison.OrdinalIgnoreCase)
                         || (TryGetString(u, "email") ?? string.Empty).Contains(userNameFilter, StringComparison.OrdinalIgnoreCase))
@@ -1209,7 +1270,7 @@ WHEN THINGS GO WRONG:
             var nameFilter = TryGetString(args, "name");
 
             var userNames = await GetRestRowsAsync<JsonElement>(
-                "user_names?select=id,email,full_name,phone_number&order=full_name.asc&limit=1000", ct);
+                "user_names?select=id,email,full_name,phone_number,preferred_name,date_of_birth,gender,personal_address,address_street,address_city,address_state,address_postal_code,address_country,emergency_contact_name,emergency_relationship,emergency_phone_number,emergency_email,emergency_address&order=full_name.asc&limit=1000", ct);
             var userRoles = await GetRestRowsAsync<JsonElement>(
                 "user_roles?select=user_id,role,updated_at&limit=1000", ct);
 
@@ -1222,14 +1283,48 @@ WHEN THINGS GO WRONG:
             {
                 var id = TryGetString(u, "id") ?? string.Empty;
                 var role = rolesByUserId.TryGetValue(id, out var r) ? r : AppRoles.Viewer;
-                return new { id, fullName = TryGetString(u, "full_name"), email = TryGetString(u, "email"), role };
+                return new
+                {
+                    id,
+                    fullName = TryGetString(u, "full_name"),
+                    email = TryGetString(u, "email"),
+                    role,
+                    profile = new
+                    {
+                        phoneNumber = TryGetString(u, "phone_number"),
+                        preferredName = TryGetString(u, "preferred_name"),
+                        dateOfBirth = TryGetString(u, "date_of_birth"),
+                        gender = TryGetString(u, "gender"),
+                        address = new
+                        {
+                            personalAddress = TryGetString(u, "personal_address"),
+                            street = TryGetString(u, "address_street"),
+                            city = TryGetString(u, "address_city"),
+                            state = TryGetString(u, "address_state"),
+                            postalCode = TryGetString(u, "address_postal_code"),
+                            country = TryGetString(u, "address_country"),
+                        },
+                        emergencyContact = new
+                        {
+                            name = TryGetString(u, "emergency_contact_name"),
+                            relationship = TryGetString(u, "emergency_relationship"),
+                            phoneNumber = TryGetString(u, "emergency_phone_number"),
+                            email = TryGetString(u, "emergency_email"),
+                            address = TryGetString(u, "emergency_address"),
+                        },
+                    },
+                };
             }).AsEnumerable();
 
             if (!string.IsNullOrWhiteSpace(roleFilter))
                 users = users.Where(u => string.Equals(u.role, roleFilter, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(nameFilter))
                 users = users.Where(u => (u.fullName ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
-                    || (u.email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+                    || (u.email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.phoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.address.street ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.address.city ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.emergencyContact.name ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
 
             var results = users.ToList();
             return JsonSerializer.Serialize(new { count = results.Count, users = results }, _jsonOptions);
@@ -1551,9 +1646,9 @@ WHEN THINGS GO WRONG:
         private async Task<List<EmployeeContextRow>> FetchEmployeeDirectoryAsync(CancellationToken ct)
         {
             var employeesTask = GetRestRowsAsync<JsonElement>(
-                "ess_rostering_employees?select=id,first_name,last_name,email,leading_hand,verified_at,preferred_site_1,preferred_site_2,preferred_site_3", ct);
+                "ess_rostering_employees?select=id,first_name,last_name,email,phone_number,leading_hand,linked_auth_user_id,verified_at,preferred_site_1,preferred_site_2,preferred_site_3", ct);
             var userNamesTask = GetRestRowsAsync<JsonElement>(
-                "user_names?select=id,email,full_name&order=full_name.asc&limit=1000", ct);
+                "user_names?select=id,email,full_name,phone_number,preferred_name,date_of_birth,gender,personal_address,address_street,address_city,address_state,address_postal_code,address_country,emergency_contact_name,emergency_relationship,emergency_phone_number,emergency_email,emergency_address&order=full_name.asc&limit=1000", ct);
             var userRolesTask = GetRestRowsAsync<JsonElement>(
                 "user_roles?select=user_id,role&limit=1000", ct);
 
@@ -1667,22 +1762,48 @@ WHEN THINGS GO WRONG:
                 .Where(u => u.Id != null && u.Email != null)
                 .ToDictionary(u => u.Email!, u => u.Id!, StringComparer.OrdinalIgnoreCase);
 
+            var profileByUserId = userNames
+                .Select(u => new { Id = TryGetString(u, "id"), Row = u })
+                .Where(u => u.Id != null)
+                .ToDictionary(u => u.Id!, u => u.Row, StringComparer.OrdinalIgnoreCase);
+
             return employees
                 .Select(row =>
                 {
                     var firstName = TryGetString(row, "first_name") ?? string.Empty;
                     var lastName = TryGetString(row, "last_name") ?? string.Empty;
                     var email = TryGetString(row, "email");
-                    var userId = email != null && userIdByEmail.TryGetValue(email, out var uid) ? uid : null;
+                    var linkedUserId = TryGetString(row, "linked_auth_user_id");
+                    var userId = !string.IsNullOrWhiteSpace(linkedUserId)
+                        ? linkedUserId
+                        : email != null && userIdByEmail.TryGetValue(email, out var uid) ? uid : null;
                     var appRole = userId != null && rolesByUserId.TryGetValue(userId, out var role) ? role : null;
+                    JsonElement profile = default;
+                    var hasProfile = userId != null && profileByUserId.TryGetValue(userId, out profile);
 
                     return new EmployeeContextRow
                     {
                         Id = TryGetString(row, "id"),
+                        UserId = userId,
                         FirstName = firstName,
                         LastName = lastName,
                         FullName = $"{firstName} {lastName}".Trim(),
-                        Email = email,
+                        Email = hasProfile ? TryGetString(profile, "email") ?? email : email,
+                        PhoneNumber = hasProfile ? TryGetString(profile, "phone_number") ?? TryGetString(row, "phone_number") : TryGetString(row, "phone_number"),
+                        PreferredName = hasProfile ? TryGetString(profile, "preferred_name") : null,
+                        DateOfBirth = hasProfile ? TryGetString(profile, "date_of_birth") : null,
+                        Gender = hasProfile ? TryGetString(profile, "gender") : null,
+                        PersonalAddress = hasProfile ? TryGetString(profile, "personal_address") : null,
+                        AddressStreet = hasProfile ? TryGetString(profile, "address_street") : null,
+                        AddressCity = hasProfile ? TryGetString(profile, "address_city") : null,
+                        AddressState = hasProfile ? TryGetString(profile, "address_state") : null,
+                        AddressPostalCode = hasProfile ? TryGetString(profile, "address_postal_code") : null,
+                        AddressCountry = hasProfile ? TryGetString(profile, "address_country") : null,
+                        EmergencyContactName = hasProfile ? TryGetString(profile, "emergency_contact_name") : null,
+                        EmergencyRelationship = hasProfile ? TryGetString(profile, "emergency_relationship") : null,
+                        EmergencyPhoneNumber = hasProfile ? TryGetString(profile, "emergency_phone_number") : null,
+                        EmergencyEmail = hasProfile ? TryGetString(profile, "emergency_email") : null,
+                        EmergencyAddress = hasProfile ? TryGetString(profile, "emergency_address") : null,
                         LeadingHand = TryGetBool(row, "leading_hand"),
                         Verified = TryGetString(row, "verified_at") != null,
                         AppRole = appRole,
