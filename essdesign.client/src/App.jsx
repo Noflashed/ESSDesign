@@ -17,7 +17,6 @@ import RosteringTreePage from './components/RosteringTreePage';
 import EmployeePortalPage from './components/EmployeePortalPage';
 import EmployeeProfilePage from './components/EmployeeProfilePage';
 import WebLandingPage from './components/WebLandingPage';
-import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
 import TransportSuitePage from './components/TransportSuitePage';
 import MaterialOrderingPage from './components/MaterialOrderingPage';
@@ -237,7 +236,6 @@ function NavSidebar({
     navItems,
     currentPage,
     onNavigate,
-    onGoSettings,
     userDisplayName,
     userEmail,
     userTitle,
@@ -361,14 +359,6 @@ function NavSidebar({
                         </div>
                     );
                 })}
-                <button
-                    className={`app-nav-sidebar-item app-nav-sidebar-settings${currentPage === 'settings' ? ' active' : ''}`}
-                    onClick={onGoSettings}
-                    title={!open ? 'Settings' : undefined}
-                >
-                    <span className="app-nav-sidebar-icon"><SettingsIcon size={18} /></span>
-                    {open && <span className="app-nav-sidebar-label">Settings</span>}
-                </button>
             </nav>
 
             <div className="app-nav-sidebar-bottom">
@@ -1542,17 +1532,7 @@ function App() {
             return <EmployeePortalPage user={user} />;
         }
 
-        if (currentPage === 'settings') {
-            return (
-                <SettingsPage
-                    user={user}
-                    onToggleTheme={(value) => applyTheme(value, true)}
-                    theme={theme}
-                />
-            );
-        }
-
-        if (currentPage === 'profile') {
+        if (currentPage === 'profile' || currentPage === 'settings') {
             return (
                 <EmployeeProfilePage
                     user={user}
@@ -1838,10 +1818,10 @@ function App() {
                             className="icon-action-button"
                             onClick={() => {
                                 setShowUserMenu(false);
-                                applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                                applyPageState('profile', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
-                            title="Open settings"
-                            aria-label="Open settings"
+                            title="Open profile"
+                            aria-label="Open profile"
                         >
                             <SettingsIcon size={18} />
                         </button>
@@ -1915,10 +1895,6 @@ function App() {
                             currentPage={currentPage}
                             onNavigate={(page) => {
                                 applyPageState(page, { builder: null, project: null }, { leadingHand: null });
-                            }}
-                            onGoSettings={() => {
-                                setShowUserMenu(false);
-                                applyPageState('settings', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
                             }}
                             userDisplayName={userDisplayName}
                             userEmail={user?.email}

@@ -71,17 +71,46 @@ function Field({ label, children, wide = false }) {
     );
 }
 
-function ToggleRow({ label, description, checked, onChange }) {
+function Panel({ title, editing, saving, changed, onEdit, onCancel, onSave, children, className = '' }) {
+    return (
+        <section className={`employee-profile-panel ${className}`.trim()}>
+            <div className="employee-profile-panel-head">
+                <h3>{title}</h3>
+                <div className="employee-profile-panel-actions">
+                    {editing ? (
+                        <>
+                            <button type="button" className="employee-profile-panel-secondary" onClick={onCancel} disabled={saving}>
+                                Cancel
+                            </button>
+                            <button type="button" className="employee-profile-panel-primary" onClick={onSave} disabled={!changed || saving}>
+                                {saving ? 'Saving...' : 'Save'}
+                            </button>
+                        </>
+                    ) : (
+                        <button type="button" className="employee-profile-panel-edit" onClick={onEdit}>
+                            Edit
+                        </button>
+                    )}
+                </div>
+            </div>
+            {children}
+        </section>
+    );
+}
+
+function ToggleRow({ label, description, checked, onChange, disabled = false }) {
     return (
         <label className="employee-profile-toggle-row">
             <span>
                 <strong>{label}</strong>
                 <small>{description}</small>
             </span>
-            <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+            <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
         </label>
     );
 }
+
+const SECTION_KEYS = ['personal', 'emergency', 'contact', 'notifications', 'address'];
 
 export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const photoInputRef = useRef(null);
@@ -93,9 +122,9 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         marketingUpdates: false
     });
     const [initialSnapshot, setInitialSnapshot] = useState('');
-    const [loadingPrefs, setLoadingPrefs] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [editingSections, setEditingSections] = useState(() => Object.fromEntries(SECTION_KEYS.map((key) => [key, false])));
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
 
@@ -123,17 +152,19 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             .catch(() => {
                 if (active) setInitialSnapshot(JSON.stringify({ form: buildForm(user), prefs }));
             })
-            .finally(() => {
-                if (active) setLoadingPrefs(false);
-            });
         return () => { active = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
     const fullName = useMemo(() => [form.firstName, form.lastName].filter(Boolean).join(' ').trim(), [form.firstName, form.lastName]);
     const roleLabel = getRoleDisplayName(user?.role);
-    const currentSnapshot = JSON.stringify({ form, prefs });
-    const hasChanges = currentSnapshot !== initialSnapshot;
+    const initialState = useMemo(() => {
+        try {
+            return initialSnapshot ? JSON.parse(initialSnapshot) : { form: buildForm(user), prefs };
+        } catch {
+            return { form: buildForm(user), prefs };
+        }
+    }, [initialSnapshot, user]);
     const initials = fullName
         ? fullName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
         : (user?.email?.[0]?.toUpperCase() || 'U');
@@ -150,16 +181,37 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         setError('');
     };
 
-    const cancelChanges = () => {
-        const snapshot = initialSnapshot ? JSON.parse(initialSnapshot) : { form: buildForm(user), prefs };
-        setForm(snapshot.form);
-        setPrefs(snapshot.prefs);
+    const setSectionEditing = (section, value) => {
+        setEditingSections((current) => ({ ...current, [section]: value }));
         setMessage('');
         setError('');
     };
 
-    const saveProfile = async (event) => {
-        event.preventDefault();
+    const cancelSection = (section) => {
+        setForm(initialState.form);
+        setPrefs(initialState.prefs);
+        setSectionEditing(section, false);
+    };
+
+    const sectionChanged = (section) => {
+        const previousForm = initialState.form || {};
+        const previousPrefs = initialState.prefs || {};
+        const changedFormKeys = {
+            personal: ['firstName', 'lastName', 'preferredName', 'dateOfBirth', 'gender'],
+            emergency: ['emergencyContactName', 'emergencyRelationship', 'emergencyPhoneNumber', 'emergencyEmail', 'emergencyAddress'],
+            contact: ['phoneNumber', 'email'],
+            address: ['personalAddress', 'addressStreet', 'addressCity', 'addressState', 'addressPostalCode', 'addressCountry']
+        };
+        const changedPrefKeys = {
+            notifications: ['emailNotifications', 'smsNotifications', 'systemAnnouncements', 'marketingUpdates']
+        };
+
+        return (changedFormKeys[section] || []).some((key) => form[key] !== previousForm[key])
+            || (changedPrefKeys[section] || []).some((key) => prefs[key] !== previousPrefs[key]);
+    };
+
+    const saveProfile = async (event, section = null) => {
+        event?.preventDefault?.();
         setSaving(true);
         setMessage('');
         setError('');
@@ -194,6 +246,11 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             const nextForm = buildForm(updatedUser);
             setForm(nextForm);
             setInitialSnapshot(JSON.stringify({ form: nextForm, prefs }));
+            if (section) {
+                setSectionEditing(section, false);
+            } else {
+                setEditingSections(Object.fromEntries(SECTION_KEYS.map((key) => [key, false])));
+            }
             setMessage('Profile updated successfully.');
         } catch (err) {
             setError(err.response?.data?.error || err.message || 'Unable to save profile.');
@@ -224,18 +281,6 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
 
     return (
         <form className="employee-profile-page" onSubmit={saveProfile}>
-            <div className="employee-profile-topbar">
-                <h1>My Profile</h1>
-                <div className="employee-profile-actions">
-                    <button type="button" className="employee-profile-secondary" onClick={cancelChanges} disabled={!hasChanges || saving}>
-                        Cancel
-                    </button>
-                    <button type="submit" className="employee-profile-primary" disabled={!hasChanges || saving || loadingPrefs}>
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </div>
-
             <section className="employee-profile-summary">
                 <div className="employee-profile-avatar-block">
                     <span className="employee-profile-avatar">
@@ -264,24 +309,30 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                 </div>
                 <dl className="employee-profile-meta">
                     <div><dt>Employee ID</dt><dd>{form.employeeId || '-'}</dd></div>
-                    <div><dt>Department</dt><dd>{roleLabel}</dd></div>
-                    <div><dt>Location</dt><dd>ESS Design</dd></div>
-                    <div><dt>Manager</dt><dd>{user?.role === 'admin' ? 'Company Admin' : 'Not assigned'}</dd></div>
+                    <div><dt>Position</dt><dd>{roleLabel}</dd></div>
                     <div><dt>Account Status</dt><dd><span className="employee-profile-status-dot" /> Active</dd></div>
                     <div><dt>Member Since</dt><dd>-</dd></div>
                 </dl>
             </section>
 
             <div className="employee-profile-grid">
-                <section className="employee-profile-panel">
-                    <h3>Personal Information</h3>
+                <div className="employee-profile-column">
+                <Panel
+                    title="Personal Information"
+                    editing={editingSections.personal}
+                    saving={saving}
+                    changed={sectionChanged('personal')}
+                    onEdit={() => setSectionEditing('personal', true)}
+                    onCancel={() => cancelSection('personal')}
+                    onSave={() => saveProfile(null, 'personal')}
+                >
                     <div className="employee-profile-form-grid">
-                        <Field label="First Name"><input value={form.firstName} onChange={(e) => updateForm('firstName', e.target.value)} /></Field>
-                        <Field label="Last Name"><input value={form.lastName} onChange={(e) => updateForm('lastName', e.target.value)} /></Field>
-                        <Field label="Date of Birth"><input type="date" value={form.dateOfBirth} onChange={(e) => updateForm('dateOfBirth', e.target.value)} /></Field>
+                        <Field label="First Name"><input value={form.firstName} disabled={!editingSections.personal} onChange={(e) => updateForm('firstName', e.target.value)} /></Field>
+                        <Field label="Last Name"><input value={form.lastName} disabled={!editingSections.personal} onChange={(e) => updateForm('lastName', e.target.value)} /></Field>
+                        <Field label="Date of Birth"><input type="date" value={form.dateOfBirth} disabled={!editingSections.personal} onChange={(e) => updateForm('dateOfBirth', e.target.value)} /></Field>
                         <Field label="Gender">
                             <span className="employee-profile-select-wrap">
-                                <select value={form.gender} onChange={(e) => updateForm('gender', e.target.value)}>
+                                <select value={form.gender} disabled={!editingSections.personal} onChange={(e) => updateForm('gender', e.target.value)}>
                                     <option value="">Not specified</option>
                                     <option value="Female">Female</option>
                                     <option value="Male">Male</option>
@@ -291,53 +342,85 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                                 <ChevronDown size={16} />
                             </span>
                         </Field>
-                        <Field label="Preferred Name (Optional)"><input value={form.preferredName} onChange={(e) => updateForm('preferredName', e.target.value)} /></Field>
+                        <Field label="Preferred Name (Optional)"><input value={form.preferredName} disabled={!editingSections.personal} onChange={(e) => updateForm('preferredName', e.target.value)} /></Field>
                         <Field label="Employee ID"><input value={form.employeeId} disabled /></Field>
                     </div>
-                </section>
+                </Panel>
 
-                <section className="employee-profile-panel">
-                    <h3>Emergency Contact</h3>
+                <Panel
+                    title="Contact Details"
+                    className="compact"
+                    editing={editingSections.contact}
+                    saving={saving}
+                    changed={sectionChanged('contact')}
+                    onEdit={() => setSectionEditing('contact', true)}
+                    onCancel={() => cancelSection('contact')}
+                    onSave={() => saveProfile(null, 'contact')}
+                >
                     <div className="employee-profile-form-grid">
-                        <Field label="Contact Name"><input value={form.emergencyContactName} onChange={(e) => updateForm('emergencyContactName', e.target.value)} /></Field>
-                        <Field label="Relationship"><input value={form.emergencyRelationship} onChange={(e) => updateForm('emergencyRelationship', e.target.value)} /></Field>
-                        <Field label="Phone Number"><input value={form.emergencyPhoneNumber} onChange={(e) => updateForm('emergencyPhoneNumber', e.target.value)} /></Field>
-                        <Field label="Email Address"><input type="email" value={form.emergencyEmail} onChange={(e) => updateForm('emergencyEmail', e.target.value)} /></Field>
-                        <Field label="Address" wide><input value={form.emergencyAddress} onChange={(e) => updateForm('emergencyAddress', e.target.value)} /></Field>
-                    </div>
-                </section>
-
-                <section className="employee-profile-panel compact">
-                    <h3>Contact Details</h3>
-                    <div className="employee-profile-form-grid">
-                        <Field label="Phone Number"><input value={form.phoneNumber} onChange={(e) => updateForm('phoneNumber', e.target.value)} /></Field>
-                        <Field label="Email Address"><input type="email" value={form.email} onChange={(e) => updateForm('email', e.target.value)} required /></Field>
+                        <Field label="Phone Number"><input value={form.phoneNumber} disabled={!editingSections.contact} onChange={(e) => updateForm('phoneNumber', e.target.value)} /></Field>
+                        <Field label="Email Address"><input type="email" value={form.email} disabled={!editingSections.contact} onChange={(e) => updateForm('email', e.target.value)} required /></Field>
                     </div>
                     <span className="employee-profile-inline-verified"><Check size={14} /> Verified</span>
-                </section>
+                </Panel>
 
-                <section className="employee-profile-panel">
-                    <h3>Notification Preferences</h3>
+                <Panel
+                    title="Address"
+                    editing={editingSections.address}
+                    saving={saving}
+                    changed={sectionChanged('address')}
+                    onEdit={() => setSectionEditing('address', true)}
+                    onCancel={() => cancelSection('address')}
+                    onSave={() => saveProfile(null, 'address')}
+                >
+                    <Field label="Personal Address" wide><input value={form.personalAddress} disabled={!editingSections.address} onChange={(e) => updateForm('personalAddress', e.target.value)} /></Field>
+                    <Field label="Street Address" wide><input value={form.addressStreet} disabled={!editingSections.address} onChange={(e) => updateForm('addressStreet', e.target.value)} /></Field>
+                    <div className="employee-profile-form-grid quarters">
+                        <Field label="City"><input value={form.addressCity} disabled={!editingSections.address} onChange={(e) => updateForm('addressCity', e.target.value)} /></Field>
+                        <Field label="State / Province"><input value={form.addressState} disabled={!editingSections.address} onChange={(e) => updateForm('addressState', e.target.value)} /></Field>
+                        <Field label="ZIP / Postal Code"><input value={form.addressPostalCode} disabled={!editingSections.address} onChange={(e) => updateForm('addressPostalCode', e.target.value)} /></Field>
+                        <Field label="Country"><input value={form.addressCountry} disabled={!editingSections.address} onChange={(e) => updateForm('addressCountry', e.target.value)} /></Field>
+                    </div>
+                </Panel>
+                </div>
+
+                <div className="employee-profile-column">
+                <Panel
+                    title="Emergency Contact"
+                    editing={editingSections.emergency}
+                    saving={saving}
+                    changed={sectionChanged('emergency')}
+                    onEdit={() => setSectionEditing('emergency', true)}
+                    onCancel={() => cancelSection('emergency')}
+                    onSave={() => saveProfile(null, 'emergency')}
+                >
+                    <div className="employee-profile-form-grid">
+                        <Field label="Contact Name"><input value={form.emergencyContactName} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyContactName', e.target.value)} /></Field>
+                        <Field label="Relationship"><input value={form.emergencyRelationship} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyRelationship', e.target.value)} /></Field>
+                        <Field label="Phone Number"><input value={form.emergencyPhoneNumber} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyPhoneNumber', e.target.value)} /></Field>
+                        <Field label="Email Address"><input type="email" value={form.emergencyEmail} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyEmail', e.target.value)} /></Field>
+                        <Field label="Address" wide><input value={form.emergencyAddress} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyAddress', e.target.value)} /></Field>
+                    </div>
+                </Panel>
+
+                <Panel
+                    title="Notification Preferences"
+                    editing={editingSections.notifications}
+                    saving={saving}
+                    changed={sectionChanged('notifications')}
+                    onEdit={() => setSectionEditing('notifications', true)}
+                    onCancel={() => cancelSection('notifications')}
+                    onSave={() => saveProfile(null, 'notifications')}
+                >
                     <p className="employee-profile-panel-copy">Choose how you would like to receive notifications from the system.</p>
                     <div className="employee-profile-toggle-list">
-                        <ToggleRow label="Email Notifications" description="Receive important updates and alerts via email." checked={prefs.emailNotifications} onChange={(value) => updatePrefs('emailNotifications', value)} />
-                        <ToggleRow label="SMS Notifications" description="Receive text messages for critical alerts and updates." checked={prefs.smsNotifications} onChange={(value) => updatePrefs('smsNotifications', value)} />
-                        <ToggleRow label="System Announcements" description="Receive announcements about updates and maintenance." checked={prefs.systemAnnouncements} onChange={(value) => updatePrefs('systemAnnouncements', value)} />
-                        <ToggleRow label="Marketing & Product Updates" description="Receive occasional updates about new features and improvements." checked={prefs.marketingUpdates} onChange={(value) => updatePrefs('marketingUpdates', value)} />
+                        <ToggleRow label="Email Notifications" description="Receive important updates and alerts via email." checked={prefs.emailNotifications} disabled={!editingSections.notifications} onChange={(value) => updatePrefs('emailNotifications', value)} />
+                        <ToggleRow label="SMS Notifications" description="Receive text messages for critical alerts and updates." checked={prefs.smsNotifications} disabled={!editingSections.notifications} onChange={(value) => updatePrefs('smsNotifications', value)} />
+                        <ToggleRow label="System Announcements" description="Receive announcements about updates and maintenance." checked={prefs.systemAnnouncements} disabled={!editingSections.notifications} onChange={(value) => updatePrefs('systemAnnouncements', value)} />
+                        <ToggleRow label="Marketing & Product Updates" description="Receive occasional updates about new features and improvements." checked={prefs.marketingUpdates} disabled={!editingSections.notifications} onChange={(value) => updatePrefs('marketingUpdates', value)} />
                     </div>
-                </section>
-
-                <section className="employee-profile-panel">
-                    <h3>Address</h3>
-                    <Field label="Personal Address" wide><input value={form.personalAddress} onChange={(e) => updateForm('personalAddress', e.target.value)} /></Field>
-                    <Field label="Street Address" wide><input value={form.addressStreet} onChange={(e) => updateForm('addressStreet', e.target.value)} /></Field>
-                    <div className="employee-profile-form-grid quarters">
-                        <Field label="City"><input value={form.addressCity} onChange={(e) => updateForm('addressCity', e.target.value)} /></Field>
-                        <Field label="State / Province"><input value={form.addressState} onChange={(e) => updateForm('addressState', e.target.value)} /></Field>
-                        <Field label="ZIP / Postal Code"><input value={form.addressPostalCode} onChange={(e) => updateForm('addressPostalCode', e.target.value)} /></Field>
-                        <Field label="Country"><input value={form.addressCountry} onChange={(e) => updateForm('addressCountry', e.target.value)} /></Field>
-                    </div>
-                </section>
+                </Panel>
+                </div>
             </div>
 
             {message ? <div className="employee-profile-toast success">{message}</div> : null}
