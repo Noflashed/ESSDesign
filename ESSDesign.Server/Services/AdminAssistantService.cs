@@ -752,7 +752,17 @@ WHEN THINGS GO WRONG:
                 profile = BuildEmployeeProfileSummary(e),
             }).ToList();
 
-            return JsonSerializer.Serialize(new { count = results.Count, employees = results }, _jsonOptions);
+            var suggestions = results.Count == 0 && !string.IsNullOrWhiteSpace(nameFilter)
+                ? employees
+                    .Select(e => new { e.FullName, Score = FuzzyNameMatch(e.FullName, nameFilter, partial: true) })
+                    .Where(x => x.Score > 0)
+                    .OrderByDescending(x => x.Score)
+                    .Take(5)
+                    .Select(x => x.FullName)
+                    .ToList()
+                : null;
+
+            return JsonSerializer.Serialize(new { count = results.Count, employees = results, suggestions }, _jsonOptions);
         }
 
         private async Task<string> Tool_GetEmployeeDetails(JsonElement args, CancellationToken ct)
@@ -1996,31 +2006,65 @@ WHEN THINGS GO WRONG:
             }
         }
 
-        // Returns a match score > 0 if the query words all appear (even fuzzily) in the full name.
-        // partial: true allows single-token first-word-only matches for suggestion lists.
+        // Returns a match score > 0 if the query words all appear, allowing practical name typos.
+        // partial: true is used for suggestion lists and allows close single-token matches.
         private static int FuzzyNameMatch(string fullName, string query, bool partial = false)
         {
             if (string.IsNullOrWhiteSpace(query)) return 1;
-            var nameTokens = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var queryTokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-            // Exact contains of full query
-            if (fullName.Contains(query, StringComparison.OrdinalIgnoreCase)) return 100;
+            var normalizedName = NormalizeNameForMatching(fullName);
+            var normalizedQuery = NormalizeNameForMatching(query);
+            if (string.IsNullOrWhiteSpace(normalizedName) || string.IsNullOrWhiteSpace(normalizedQuery)) return 0;
 
-            int matchedTokens = 0;
-            foreach (var qt in queryTokens)
+            if (normalizedName.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)) return 100;
+
+            var nameTokens = normalizedName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var queryTokens = normalizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var matchedTokens = 0;
+            var editPenalty = 0;
+
+            foreach (var queryToken in queryTokens)
             {
-                // A query token matches if any name token starts with it or contains it (min 3 chars)
-                bool found = nameTokens.Any(nt =>
-                    nt.StartsWith(qt, StringComparison.OrdinalIgnoreCase) ||
-                    (qt.Length >= 3 && nt.Contains(qt, StringComparison.OrdinalIgnoreCase)) ||
-                    (qt.Length >= 4 && LevenshteinDistance(nt.ToLowerInvariant(), qt.ToLowerInvariant()) <= 1));
-                if (found) matchedTokens++;
+                var bestDistance = nameTokens
+                    .Select(nameToken => GetNameTokenDistance(nameToken, queryToken))
+                    .Min();
+
+                if (bestDistance <= MaxNameTokenDistance(queryToken))
+                {
+                    matchedTokens++;
+                    editPenalty += bestDistance;
+                }
             }
 
-            if (matchedTokens == queryTokens.Length) return 50 + matchedTokens * 10;
-            if (partial && matchedTokens > 0) return matchedTokens * 5;
+            if (matchedTokens == queryTokens.Length)
+                return 80 + matchedTokens * 10 - editPenalty;
+
+            if (partial && matchedTokens > 0)
+                return matchedTokens * 10 - editPenalty;
+
             return 0;
+        }
+
+        private static string NormalizeNameForMatching(string value)
+        {
+            return Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9]+", " ").Trim();
+        }
+
+        private static int GetNameTokenDistance(string nameToken, string queryToken)
+        {
+            if (nameToken.StartsWith(queryToken, StringComparison.OrdinalIgnoreCase) ||
+                queryToken.StartsWith(nameToken, StringComparison.OrdinalIgnoreCase) ||
+                (queryToken.Length >= 3 && nameToken.Contains(queryToken, StringComparison.OrdinalIgnoreCase)))
+                return 0;
+
+            return LevenshteinDistance(nameToken, queryToken);
+        }
+
+        private static int MaxNameTokenDistance(string queryToken)
+        {
+            if (queryToken.Length <= 3) return 1;
+            if (queryToken.Length <= 6) return 2;
+            return 3;
         }
 
         private static int LevenshteinDistance(string a, string b)
