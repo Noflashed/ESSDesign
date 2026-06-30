@@ -74,6 +74,7 @@ namespace ESSDesign.Server.Services
         private readonly string _supabaseKey;
         private readonly string _bucketName = "design-pdfs";
         private readonly string _safetyBucketName = "project-information";
+        private readonly string _profileImagesBucketName = "profile-images";
         private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
         private const string BootstrapAdminUserId = "dccf9acd-cb29-4a64-8ded-8b58da6bca74";
 
@@ -1738,6 +1739,64 @@ namespace ESSDesign.Server.Services
             }
 
             return path;
+        }
+
+        public async Task<string> UploadProfileImageAsync(string userId, IFormFile file)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                throw new ArgumentException("User ID is required.", nameof(userId));
+            }
+
+            if (file == null || file.Length == 0)
+            {
+                throw new ArgumentException("Profile image file is required.", nameof(file));
+            }
+
+            var extension = Path.GetExtension(file.FileName)?.TrimStart('.').ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(extension) || !Regex.IsMatch(extension, "^[a-z0-9]+$"))
+            {
+                extension = "jpg";
+            }
+
+            var safeUserId = Regex.Replace(userId.Trim(), "[^a-zA-Z0-9_-]", "");
+            if (string.IsNullOrWhiteSpace(safeUserId))
+            {
+                throw new ArgumentException("User ID is invalid.", nameof(userId));
+            }
+
+            var objectPath = $"{safeUserId}/avatar.{extension}";
+            var escapedPath = string.Join(
+                "/",
+                objectPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/{Uri.EscapeDataString(_profileImagesBucketName)}/{escapedPath}?upsert=true";
+
+            var client = _httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Headers.Add("x-upsert", "true");
+
+            var stream = file.OpenReadStream();
+            var content = new StreamContent(stream);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse(
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+            request.Content = content;
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"Failed to upload profile image. Status: {(int)response.StatusCode}. Body: {errorBody}");
+            }
+
+            return $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/public/{_profileImagesBucketName}/{objectPath}";
         }
 
         private async Task DeleteFileAsync(string path)

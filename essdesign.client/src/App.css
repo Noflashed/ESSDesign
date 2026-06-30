@@ -16457,7 +16457,7 @@ button.stat-card {
 
 .employee-profile-summary-main {
     display: grid;
-    grid-template-columns: 126px minmax(280px, 420px) minmax(285px, 360px);
+    grid-template-columns: 126px minmax(280px, 520px);
     align-items: center;
     justify-content: start;
     gap: 22px;
@@ -16603,37 +16603,6 @@ button.stat-card {
     gap: 7px;
     color: #16a34a;
     font-size: 13px;
-    font-weight: 500;
-}
-
-.employee-profile-meta {
-    display: grid;
-    grid-template-columns: minmax(108px, 0.42fr) minmax(130px, 0.58fr);
-    gap: 8px 14px;
-    align-content: stretch;
-    margin: 0;
-    padding-left: 22px;
-    border-left: 1px solid #d9e1ec;
-}
-
-.employee-profile-meta div {
-    display: contents;
-}
-
-.employee-profile-meta dt,
-.employee-profile-meta dd {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.35;
-}
-
-.employee-profile-meta dt {
-    color: #526176;
-    font-weight: 500;
-}
-
-.employee-profile-meta dd {
-    color: #111827;
     font-weight: 500;
 }
 
@@ -16989,11 +16958,6 @@ button.stat-card {
         grid-template-columns: 1fr;
     }
 
-    .employee-profile-meta {
-        padding-left: 0;
-        border-left: 0;
-    }
-
     .employee-profile-summary-main {
         align-items: start;
     }
@@ -17036,10 +17000,6 @@ button.stat-card {
 
     .employee-profile-contact-chips span {
         width: 100%;
-    }
-
-    .employee-profile-meta {
-        grid-template-columns: minmax(92px, 0.4fr) minmax(0, 0.6fr);
     }
 
     .employee-profile-form-grid,

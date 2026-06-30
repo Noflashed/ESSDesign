@@ -167,6 +167,42 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("me/profile-image")]
+        [RequestSizeLimit(8 * 1024 * 1024)]
+        public async Task<ActionResult> UploadMyProfileImage([FromForm] IFormFile file)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { error = "Profile image file is required" });
+                }
+
+                if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "Profile image must be an image file" });
+                }
+
+                var profileImageUrl = await _supabaseService.UploadProfileImageAsync(currentUser.Id, file);
+                return Ok(new { profileImageUrl });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading current user profile image");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{userId}")]
         public async Task<ActionResult> DeleteUser(string userId)
         {

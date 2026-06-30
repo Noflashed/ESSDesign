@@ -4443,22 +4443,13 @@ export const usersAPI = {
             throw new Error('User and image file are required');
         }
         const extension = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-        const objectPath = `${userId}/avatar.${extension}`;
-        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${PROFILE_IMAGES_BUCKET}/${objectPath}?upsert=true`, {
-            method: 'POST',
-            headers: {
-                apikey: SUPABASE_ANON_KEY,
-                Authorization: `Bearer ${currentSupabaseBearer()}`,
-                'Content-Type': file.type || 'application/octet-stream'
-            },
-            body: file
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiClient.post('/users/me/profile-image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
         });
-        if (!response.ok) {
-            const details = await response.text();
-            throw new Error(details || 'Failed to upload profile photo');
-        }
         setCachedAvatarExt(userId, extension);
-        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath);
+        return response.data?.profileImageUrl || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
     },
 
     deleteUser: async (userId) => {

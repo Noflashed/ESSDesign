@@ -40,6 +40,20 @@ function formatPhoneNumber(value) {
     return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
 }
 
+function parseAddressFallback(address = '') {
+    const parts = String(address).split(',').map((part) => part.trim()).filter(Boolean);
+    const regionPart = parts.find((part) => /\b[A-Z]{2,3}\b\s+\d{4}\b/.test(part)) || '';
+    const regionMatch = regionPart.match(/\b([A-Z]{2,3})\b\s+(\d{4})\b/);
+
+    return {
+        street: parts[0] || address,
+        city: parts[1] || '',
+        state: regionMatch?.[1] || '',
+        postcode: regionMatch?.[2] || '',
+        country: parts.find((part) => /australia/i.test(part)) || 'Australia'
+    };
+}
+
 function buildForm(user) {
     const name = splitName(user?.fullName || '');
     const streetAddress = user?.addressStreet || user?.personalAddress || '';
@@ -132,6 +146,9 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const [addressSuggestions, setAddressSuggestions] = useState([]);
     const [addressLoading, setAddressLoading] = useState(false);
     const [selectedAddressSourceId, setSelectedAddressSourceId] = useState('');
+    const [emergencyAddressSuggestions, setEmergencyAddressSuggestions] = useState([]);
+    const [emergencyAddressLoading, setEmergencyAddressLoading] = useState(false);
+    const [selectedEmergencyAddressSourceId, setSelectedEmergencyAddressSourceId] = useState('');
     const [editingSections, setEditingSections] = useState(() => Object.fromEntries(SECTION_KEYS.map((key) => [key, false])));
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -182,6 +199,8 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                             id: `employee-address-${item.address || item.label || index}`,
                             label: item.label || item.address,
                             address: item.address || item.label,
+                            lat: item.lat,
+                            lon: item.lon,
                             source: 'TomTom'
                         }))
                         .filter((item) => item.address);
@@ -205,6 +224,50 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             window.clearTimeout(timer);
         };
     }, [editingSections.address, form.addressStreet, selectedAddressSourceId]);
+
+    useEffect(() => {
+        const query = form.emergencyAddress.trim();
+        if (!editingSections.emergency || selectedEmergencyAddressSourceId || query.length < 3) {
+            setEmergencyAddressSuggestions([]);
+            setEmergencyAddressLoading(false);
+            return undefined;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            setEmergencyAddressLoading(true);
+            analysisAPI.addressSuggestions(query, { signal: controller.signal })
+                .then((remoteResults) => {
+                    const suggestions = (Array.isArray(remoteResults) ? remoteResults : [])
+                        .map((item, index) => ({
+                            id: `employee-emergency-address-${item.address || item.label || index}`,
+                            label: item.label || item.address,
+                            address: item.address || item.label,
+                            lat: item.lat,
+                            lon: item.lon,
+                            source: 'TomTom'
+                        }))
+                        .filter((item) => item.address);
+                    setEmergencyAddressSuggestions(suggestions.slice(0, 6));
+                })
+                .catch((addressError) => {
+                    if (addressError?.name !== 'CanceledError' && addressError?.code !== 'ERR_CANCELED') {
+                        setEmergencyAddressSuggestions([]);
+                    }
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted) {
+                        setEmergencyAddressLoading(false);
+                    }
+                });
+        }, 120);
+
+        setEmergencyAddressLoading(true);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [editingSections.emergency, form.emergencyAddress, selectedEmergencyAddressSourceId]);
 
     const fullName = useMemo(() => [form.firstName, form.lastName].filter(Boolean).join(' ').trim(), [form.firstName, form.lastName]);
     const roleLabel = getRoleDisplayName(user?.role);
@@ -236,15 +299,49 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         setError('');
     };
 
-    const selectAddressSuggestion = (suggestion) => {
+    const selectAddressSuggestion = async (suggestion) => {
+        const fallback = parseAddressFallback(suggestion.address);
+        let details = null;
+        if (suggestion.lat != null && suggestion.lon != null) {
+            try {
+                details = await analysisAPI.reverseGeocode({ lat: suggestion.lat, lon: suggestion.lon });
+            } catch {
+                details = null;
+            }
+        }
+
+        const street = details?.street || fallback.street;
+        const city = details?.suburb || details?.municipality || fallback.city;
+        const state = details?.state || fallback.state;
+        const postcode = details?.postcode || fallback.postcode;
+        const country = fallback.country || form.addressCountry || 'Australia';
+
         setForm((current) => ({
             ...current,
-            addressStreet: suggestion.address,
-            personalAddress: suggestion.address
+            personalAddress: suggestion.address,
+            addressStreet: street,
+            addressCity: city,
+            addressState: state,
+            addressPostalCode: postcode,
+            addressCountry: country
         }));
         setSelectedAddressSourceId(suggestion.id);
         setAddressSuggestions([]);
         setAddressLoading(false);
+        setMessage('');
+        setError('');
+    };
+
+    const updateEmergencyAddress = (value) => {
+        setSelectedEmergencyAddressSourceId('');
+        updateForm('emergencyAddress', value);
+    };
+
+    const selectEmergencyAddressSuggestion = (suggestion) => {
+        setForm((current) => ({ ...current, emergencyAddress: suggestion.address }));
+        setSelectedEmergencyAddressSourceId(suggestion.id);
+        setEmergencyAddressSuggestions([]);
+        setEmergencyAddressLoading(false);
         setMessage('');
         setError('');
     };
@@ -261,6 +358,11 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             setAddressSuggestions([]);
             setAddressLoading(false);
             setSelectedAddressSourceId('');
+        }
+        if (section === 'emergency') {
+            setEmergencyAddressSuggestions([]);
+            setEmergencyAddressLoading(false);
+            setSelectedEmergencyAddressSourceId('');
         }
         setMessage('');
         setError('');
@@ -279,7 +381,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             personal: ['firstName', 'lastName', 'preferredName', 'dateOfBirth', 'gender'],
             emergency: ['emergencyContactName', 'emergencyRelationship', 'emergencyPhoneNumber', 'emergencyEmail', 'emergencyAddress'],
             contact: ['phoneNumber', 'email'],
-            address: ['addressStreet']
+            address: ['personalAddress', 'addressStreet', 'addressCity', 'addressState', 'addressPostalCode', 'addressCountry']
         };
         const changedPrefKeys = {
             notifications: ['emailNotifications', 'smsNotifications', 'systemAnnouncements', 'marketingUpdates']
@@ -303,7 +405,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                 phoneNumber: form.phoneNumber,
                 dateOfBirth: form.dateOfBirth || null,
                 gender: form.gender,
-                personalAddress: form.addressStreet,
+                personalAddress: form.personalAddress || form.addressStreet,
                 addressStreet: form.addressStreet,
                 addressCity: form.addressCity,
                 addressState: form.addressState,
@@ -396,12 +498,6 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                         </div>
                     </div>
 
-                    <dl className="employee-profile-meta">
-                        <div><dt>Employee ID</dt><dd>{form.employeeId || '-'}</dd></div>
-                        <div><dt>Position</dt><dd>{roleLabel}</dd></div>
-                        <div><dt>Account Status</dt><dd><span className="employee-profile-status-dot" /> Active</dd></div>
-                        <div><dt>Member Since</dt><dd>-</dd></div>
-                    </dl>
                 </div>
 
             </section>
@@ -495,6 +591,12 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                     <div className="employee-profile-address-hint">
                         Select a suggested address where possible.
                     </div>
+                    <div className="employee-profile-form-grid quarters">
+                        <Field label="City"><input value={form.addressCity} disabled={!editingSections.address} onChange={(e) => updateForm('addressCity', e.target.value)} /></Field>
+                        <Field label="State / Province"><input value={form.addressState} disabled={!editingSections.address} onChange={(e) => updateForm('addressState', e.target.value)} /></Field>
+                        <Field label="ZIP / Postal Code"><input value={form.addressPostalCode} disabled={!editingSections.address} onChange={(e) => updateForm('addressPostalCode', e.target.value)} /></Field>
+                        <Field label="Country"><input value={form.addressCountry} disabled={!editingSections.address} onChange={(e) => updateForm('addressCountry', e.target.value)} /></Field>
+                    </div>
                 </Panel>
                 </div>
 
@@ -513,7 +615,34 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                         <Field label="Relationship"><input value={form.emergencyRelationship} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyRelationship', e.target.value)} /></Field>
                         <Field label="Phone Number"><input value={form.emergencyPhoneNumber} disabled={!editingSections.emergency} onChange={(e) => updatePhoneField('emergencyPhoneNumber', e.target.value)} placeholder="0422 374 448" inputMode="numeric" /></Field>
                         <Field label="Email Address"><input type="email" value={form.emergencyEmail} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyEmail', e.target.value)} /></Field>
-                        <Field label="Address" wide><input value={form.emergencyAddress} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyAddress', e.target.value)} /></Field>
+                        <Field label="Address" wide>
+                            <div className="employee-profile-address-autocomplete">
+                                <input
+                                    value={form.emergencyAddress}
+                                    disabled={!editingSections.emergency}
+                                    onChange={(e) => updateEmergencyAddress(e.target.value)}
+                                    placeholder="Start typing an address..."
+                                    autoComplete="off"
+                                />
+                                {editingSections.emergency && (emergencyAddressLoading || emergencyAddressSuggestions.length > 0) ? (
+                                    <div className="employee-profile-address-suggestions" role="listbox">
+                                        {emergencyAddressSuggestions.map((suggestion) => (
+                                            <button
+                                                key={suggestion.id}
+                                                type="button"
+                                                className="employee-profile-address-suggestion"
+                                                onClick={() => selectEmergencyAddressSuggestion(suggestion)}
+                                                role="option"
+                                            >
+                                                <strong>{suggestion.address}</strong>
+                                                <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                                            </button>
+                                        ))}
+                                        {emergencyAddressLoading ? <div className="employee-profile-address-suggestion loading">Searching addresses...</div> : null}
+                                    </div>
+                                ) : null}
+                            </div>
+                        </Field>
                     </div>
                 </Panel>
 
