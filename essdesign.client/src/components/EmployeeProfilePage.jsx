@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Briefcase, CalendarDays, Check, ChevronDown, HeartPulse, IdCard, Mail, Phone, ShieldCheck } from 'lucide-react';
 import { preferencesAPI, usersAPI } from '../services/api';
 
 function getRoleDisplayName(role) {
@@ -282,37 +282,76 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
     return (
         <form className="employee-profile-page" onSubmit={saveProfile}>
             <section className="employee-profile-summary">
-                <div className="employee-profile-avatar-block">
-                    <span className="employee-profile-avatar">
-                        {user?.profileImageUrl ? <img src={user.profileImageUrl} alt="" /> : initials}
-                    </span>
-                    <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="employee-profile-photo-input"
-                        onChange={uploadProfilePhoto}
-                    />
-                    <button
-                        type="button"
-                        className="employee-profile-link"
-                        onClick={() => photoInputRef.current?.click()}
-                        disabled={uploadingPhoto}
-                    >
-                        {uploadingPhoto ? 'Uploading photo...' : 'Update profile photo'}
-                    </button>
+                <div className="employee-profile-summary-main">
+                    <div className="employee-profile-avatar-block">
+                        <span className="employee-profile-avatar">
+                            {user?.profileImageUrl ? <img src={user.profileImageUrl} alt="" /> : initials}
+                        </span>
+                        <input
+                            ref={photoInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="employee-profile-photo-input"
+                            onChange={uploadProfilePhoto}
+                        />
+                        <button
+                            type="button"
+                            className="employee-profile-link"
+                            onClick={() => photoInputRef.current?.click()}
+                            disabled={uploadingPhoto}
+                        >
+                            {uploadingPhoto ? 'Uploading photo...' : 'Update photo'}
+                        </button>
+                    </div>
+
+                    <div className="employee-profile-identity">
+                        <span className="employee-profile-kicker">Employee profile</span>
+                        <h2>{fullName || 'Your name'}</h2>
+                        <div className="employee-profile-title-row">
+                            <span><Briefcase size={15} /> {roleLabel}</span>
+                            <span className="employee-profile-verified"><Check size={15} /> Verified</span>
+                        </div>
+                        <div className="employee-profile-contact-chips">
+                            <span><Phone size={14} /> {form.phoneNumber || 'No phone saved'}</span>
+                            <span><Mail size={14} /> {form.email || 'No email saved'}</span>
+                        </div>
+                    </div>
+
+                    <dl className="employee-profile-meta">
+                        <div><dt>Employee ID</dt><dd>{form.employeeId || '-'}</dd></div>
+                        <div><dt>Position</dt><dd>{roleLabel}</dd></div>
+                        <div><dt>Account Status</dt><dd><span className="employee-profile-status-dot" /> Active</dd></div>
+                        <div><dt>Member Since</dt><dd>-</dd></div>
+                    </dl>
                 </div>
-                <div className="employee-profile-identity">
-                    <h2>{fullName || 'Your name'}</h2>
-                    <p>{roleLabel}</p>
-                    <span className="employee-profile-verified"><Check size={15} /> Verified</span>
+
+                <div className="employee-profile-quick-strip" aria-label="Profile summary">
+                    <div>
+                        <span><ShieldCheck size={15} /></span>
+                        <small>Profile status</small>
+                        <strong>Verified</strong>
+                    </div>
+                    <div>
+                        <span><Briefcase size={15} /></span>
+                        <small>Position</small>
+                        <strong>{roleLabel}</strong>
+                    </div>
+                    <div>
+                        <span><IdCard size={15} /></span>
+                        <small>Employee ID</small>
+                        <strong>{form.employeeId || '-'}</strong>
+                    </div>
+                    <div>
+                        <span><HeartPulse size={15} /></span>
+                        <small>Emergency contact</small>
+                        <strong>{form.emergencyContactName || 'Not set'}</strong>
+                    </div>
+                    <div>
+                        <span><CalendarDays size={15} /></span>
+                        <small>Member since</small>
+                        <strong>-</strong>
+                    </div>
                 </div>
-                <dl className="employee-profile-meta">
-                    <div><dt>Employee ID</dt><dd>{form.employeeId || '-'}</dd></div>
-                    <div><dt>Position</dt><dd>{roleLabel}</dd></div>
-                    <div><dt>Account Status</dt><dd><span className="employee-profile-status-dot" /> Active</dd></div>
-                    <div><dt>Member Since</dt><dd>-</dd></div>
-                </dl>
             </section>
 
             <div className="employee-profile-grid">

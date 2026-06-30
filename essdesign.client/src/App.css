@@ -16450,22 +16450,28 @@ button.stat-card {
 
 .employee-profile-summary {
     display: grid;
-    grid-template-columns: 150px 280px minmax(0, 1fr);
-    gap: 28px;
-    align-items: start;
-    padding: 22px 26px;
+    gap: 18px;
+    padding: 20px 22px 18px;
     margin-bottom: 18px;
+}
+
+.employee-profile-summary-main {
+    display: grid;
+    grid-template-columns: 126px minmax(280px, 1fr) minmax(320px, 0.92fr);
+    align-items: center;
+    gap: 24px;
 }
 
 .employee-profile-avatar-block {
     display: grid;
     justify-items: center;
-    gap: 10px;
+    align-content: center;
+    gap: 9px;
 }
 
 .employee-profile-avatar {
-    width: 118px;
-    height: 118px;
+    width: 104px;
+    height: 104px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -16473,8 +16479,9 @@ button.stat-card {
     border-radius: 50%;
     background: #e8eef7;
     color: #1e3a5f;
-    font-size: 32px;
+    font-size: 29px;
     font-weight: 600;
+    box-shadow: 0 0 0 1px #d7e1ee, 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
 .employee-profile-avatar img {
@@ -16484,13 +16491,20 @@ button.stat-card {
 }
 
 .employee-profile-link {
-    border: 0;
-    background: transparent;
-    color: #0b57d0;
-    font-size: 13px;
+    min-height: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #164a8b;
+    padding: 0 10px;
+    font-size: 12px;
     font-weight: 500;
-    text-decoration: underline;
     cursor: pointer;
+}
+
+.employee-profile-link:hover {
+    border-color: #9fb1c7;
+    background: #f8fafc;
 }
 
 .employee-profile-link:disabled {
@@ -16503,20 +16517,75 @@ button.stat-card {
 }
 
 .employee-profile-identity {
-    min-height: 118px;
     display: grid;
-    align-content: center;
-    gap: 9px;
-    padding-left: 26px;
-    border-left: 1px solid #d9e1ec;
+    gap: 10px;
+    min-width: 0;
 }
 
 .employee-profile-identity h2 {
     margin: 0;
     color: #0f172a;
-    font-size: 27px;
+    font-size: 28px;
     font-weight: 600;
     line-height: 1.15;
+}
+
+.employee-profile-kicker {
+    width: max-content;
+    border: 1px solid #d9e5f3;
+    border-radius: 999px;
+    background: #f7faff;
+    color: #516179;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.employee-profile-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.employee-profile-title-row span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.employee-profile-contact-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.employee-profile-contact-chips span {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    border: 1px solid #dde6f0;
+    border-radius: 999px;
+    background: #fbfdff;
+    color: #334155;
+    padding: 0 11px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.employee-profile-contact-chips svg,
+.employee-profile-title-row svg {
+    color: #516179;
+    flex: 0 0 auto;
 }
 
 .employee-profile-identity p {
@@ -16537,13 +16606,12 @@ button.stat-card {
 }
 
 .employee-profile-meta {
-    min-height: 118px;
     display: grid;
-    grid-template-columns: minmax(110px, 0.35fr) minmax(140px, 0.65fr);
-    gap: 10px 26px;
-    align-content: center;
+    grid-template-columns: minmax(118px, 0.44fr) minmax(145px, 0.56fr);
+    gap: 9px 18px;
+    align-content: stretch;
     margin: 0;
-    padding-left: 30px;
+    padding-left: 24px;
     border-left: 1px solid #d9e1ec;
 }
 
@@ -16575,6 +16643,59 @@ button.stat-card {
     margin-right: 7px;
     border-radius: 50%;
     background: #16a34a;
+}
+
+.employee-profile-quick-strip {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid #e1e8f0;
+    border-radius: 5px;
+    background: #e1e8f0;
+}
+
+.employee-profile-quick-strip div {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 9px;
+    row-gap: 2px;
+    align-items: center;
+    background: #fbfdff;
+    padding: 11px 13px;
+}
+
+.employee-profile-quick-strip span {
+    grid-row: 1 / 3;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef5ff;
+    color: #0b57d0;
+}
+
+.employee-profile-quick-strip small {
+    min-width: 0;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.employee-profile-quick-strip strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .employee-profile-grid {
@@ -16851,15 +16972,29 @@ button.stat-card {
 }
 
 @media (max-width: 1180px) {
-    .employee-profile-summary,
+    .employee-profile-summary-main,
     .employee-profile-grid {
         grid-template-columns: 1fr;
     }
 
-    .employee-profile-identity,
     .employee-profile-meta {
         padding-left: 0;
         border-left: 0;
+    }
+
+    .employee-profile-summary-main {
+        align-items: start;
+    }
+
+    .employee-profile-avatar-block {
+        justify-items: start;
+        grid-template-columns: auto auto;
+        justify-content: start;
+        align-items: center;
+    }
+
+    .employee-profile-quick-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -16871,6 +17006,32 @@ button.stat-card {
     .employee-profile-summary,
     .employee-profile-panel {
         padding: 16px;
+    }
+
+    .employee-profile-avatar-block {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .employee-profile-identity h2 {
+        font-size: 24px;
+    }
+
+    .employee-profile-contact-chips {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .employee-profile-contact-chips span {
+        width: 100%;
+    }
+
+    .employee-profile-meta {
+        grid-template-columns: minmax(92px, 0.4fr) minmax(0, 0.6fr);
+    }
+
+    .employee-profile-quick-strip {
+        grid-template-columns: 1fr;
     }
 
     .employee-profile-form-grid,
