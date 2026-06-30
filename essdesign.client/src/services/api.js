@@ -4430,6 +4430,37 @@ export const usersAPI = {
         return response.data;
     },
 
+    updateMyProfile: async (profile) => {
+        const response = await apiClient.put('/users/me', profile);
+        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
+        const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
+        localStorage.setItem('user', JSON.stringify(hydratedUser));
+        return hydratedUser;
+    },
+
+    uploadProfileImage: async (userId, file) => {
+        if (!userId || !file) {
+            throw new Error('User and image file are required');
+        }
+        const extension = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        const objectPath = `${userId}/avatar.${extension}`;
+        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${PROFILE_IMAGES_BUCKET}/${objectPath}?upsert=true`, {
+            method: 'POST',
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${currentSupabaseBearer()}`,
+                'Content-Type': file.type || 'application/octet-stream'
+            },
+            body: file
+        });
+        if (!response.ok) {
+            const details = await response.text();
+            throw new Error(details || 'Failed to upload profile photo');
+        }
+        setCachedAvatarExt(userId, extension);
+        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath);
+    },
+
     deleteUser: async (userId) => {
         const response = await apiClient.delete('/users/' + userId);
         return response.data;

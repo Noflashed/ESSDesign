@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
+using System.Net.Mail;
 
 namespace ESSDesign.Server.Controllers
 {
@@ -122,6 +123,50 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("me")]
+        public async Task<ActionResult<UserInfo>> UpdateMyProfile([FromBody] UpdateMyProfileRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.FullName))
+                {
+                    return BadRequest(new { error = "Full name is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Email) || !IsValidEmailAddress(request.Email))
+                {
+                    return BadRequest(new { error = "A valid email address is required" });
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.EmergencyEmail) && !IsValidEmailAddress(request.EmergencyEmail))
+                {
+                    return BadRequest(new { error = "Emergency contact email address is invalid" });
+                }
+
+                var updatedUser = await _supabaseService.UpdateMyProfileAsync(currentUser.Id, request);
+                return Ok(updatedUser);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating current user profile");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{userId}")]
         public async Task<ActionResult> DeleteUser(string userId)
         {
@@ -221,6 +266,19 @@ namespace ESSDesign.Server.Controllers
 
             var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
             return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        }
+
+        private static bool IsValidEmailAddress(string email)
+        {
+            try
+            {
+                _ = new MailAddress(email);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

@@ -82,6 +82,7 @@ namespace ESSDesign.Server.Controllers
                 var role = await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
 
                 var userInfo = BuildUserInfo(generatedLink, request.FullName, role);
+                await _supabaseService.EnrichUserInfoWithProfileAsync(userInfo);
                 await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(userInfo);
 
                 return Ok(new AuthResponse
@@ -130,6 +131,7 @@ namespace ESSDesign.Server.Controllers
                 await _supabaseService.SyncEmployeeLinkForUserAsync(session.User.Id, session.User.Email ?? signInEmail);
 
                 var userInfo = BuildUserInfo(session.User, fullName, role);
+                await _supabaseService.EnrichUserInfoWithProfileAsync(userInfo);
                 await _supabaseService.EnrichUserInfoWithEmployeeRoleAsync(userInfo);
 
                 return Ok(new AuthResponse

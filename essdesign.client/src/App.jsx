@@ -15,6 +15,7 @@ import SiteInformationPage from './components/SiteInformationPage';
 import LeadingHandRelationshipsPage from './components/LeadingHandRelationshipsPage';
 import RosteringTreePage from './components/RosteringTreePage';
 import EmployeePortalPage from './components/EmployeePortalPage';
+import EmployeeProfilePage from './components/EmployeeProfilePage';
 import WebLandingPage from './components/WebLandingPage';
 import SettingsPage from './components/SettingsPage';
 import ESSNewsPage from './components/ESSNewsPage';
@@ -191,8 +192,8 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
-const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'settings']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
+const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'profile', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
@@ -245,6 +246,7 @@ function NavSidebar({
     onAvatarError,
     showUserMenu,
     onToggleUserMenu,
+    onOpenProfile,
     userMenuRef,
     isAdmin,
     onInviteUser,
@@ -373,11 +375,11 @@ function NavSidebar({
                 <div className="app-nav-sidebar-profile" ref={userMenuRef}>
                     <button
                         type="button"
-                        className="app-nav-sidebar-profile-button"
-                        onClick={onToggleUserMenu}
-                        title="Open user menu"
-                        aria-label="Open user menu"
-                        aria-expanded={showUserMenu}
+                        className={`app-nav-sidebar-profile-button${currentPage === 'profile' ? ' active' : ''}`}
+                        onClick={onOpenProfile}
+                        title="Open profile"
+                        aria-label="Open profile"
+                        aria-expanded={false}
                     >
                         <span className="app-nav-sidebar-profile-avatar" aria-hidden="true">
                             {userAvatarUrl ? (
@@ -413,6 +415,9 @@ function NavSidebar({
                                     <div className="user-title">{userTitle}</div>
                                 </div>
                             </div>
+                            <button className="user-menu-action" onClick={onOpenProfile}>
+                                Open profile
+                            </button>
                             {isAdmin && (
                                 <button className="user-menu-action" onClick={onInviteUser}>
                                     Invite user
@@ -766,7 +771,7 @@ function App() {
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
         const transportPages = TRANSPORT_PAGE_KEYS;
         const resolvedPage = isEmployeePortalRole
-            ? (page === 'landing' || page === 'employee-home' || page === 'settings' ? page : 'employee-home')
+            ? (page === 'landing' || page === 'employee-home' || page === 'profile' || page === 'settings' ? page : 'employee-home')
             : isScaffoldDesigner
             ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'landing')
             : isTruckDeviceUser
@@ -1511,6 +1516,13 @@ function App() {
         setResolvedDisplayAvatarUrl('');
     }, [avatarCandidates, avatarDebugEnabled, avatarIndex, userAvatarUrl]);
 
+    const handleCurrentUserUpdated = useCallback((updatedUser) => {
+        if (!updatedUser) return;
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setAvatarProfileUser(null);
+    }, []);
+
     const handleDocumentClick = (document) => {
         if (document.essDesignIssuePath) {
             setPdfViewer({
@@ -1536,6 +1548,15 @@ function App() {
                     user={user}
                     onToggleTheme={(value) => applyTheme(value, true)}
                     theme={theme}
+                />
+            );
+        }
+
+        if (currentPage === 'profile') {
+            return (
+                <EmployeeProfilePage
+                    user={user}
+                    onUserUpdated={handleCurrentUserUpdated}
                 />
             );
         }
@@ -1856,6 +1877,15 @@ function App() {
                                         <div className="user-title">{userTitle}</div>
                                     </div>
                                 </div>
+                                <button
+                                    className="user-menu-action"
+                                    onClick={() => {
+                                        setShowUserMenu(false);
+                                        applyPageState('profile', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                                    }}
+                                >
+                                    Open profile
+                                </button>
                                 {isAdmin && (
                                     <button className="user-menu-action" onClick={openInviteModal}>
                                         Invite user
@@ -1898,6 +1928,10 @@ function App() {
                             onAvatarError={handleAvatarImageError}
                             showUserMenu={showUserMenu}
                             onToggleUserMenu={() => setShowUserMenu((prev) => !prev)}
+                            onOpenProfile={() => {
+                                setShowUserMenu(false);
+                                applyPageState('profile', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+                            }}
                             userMenuRef={userMenuRef}
                             isAdmin={isAdmin}
                             onInviteUser={openInviteModal}

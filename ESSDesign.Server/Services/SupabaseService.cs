@@ -487,20 +487,90 @@ namespace ESSDesign.Server.Services
 
             try
             {
-                var userName = new UserName
+                var payload = new[]
                 {
-                    Id = userGuid,
-                    Email = email,
-                    FullName = !string.IsNullOrWhiteSpace(fullName) ? fullName : email.Split('@')[0]
+                    new Dictionary<string, object?>
+                    {
+                        ["id"] = userGuid,
+                        ["email"] = email,
+                        ["full_name"] = !string.IsNullOrWhiteSpace(fullName) ? fullName.Trim() : email.Split('@')[0],
+                        ["updated_at"] = DateTime.UtcNow
+                    }
                 };
 
-                await _supabase.From<UserName>().Upsert(userName);
+                await PostRestRowsAsync<object>(
+                    "user_names?on_conflict=id",
+                    payload,
+                    "resolution=merge-duplicates");
                 _logger.LogInformation("Upserted user_names for {UserId}", userId);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to upsert user_names for {UserId}", userId);
             }
+        }
+
+        private const string UserProfileSelect =
+            "id,email,fullName:full_name,phoneNumber:phone_number,preferredName:preferred_name,dateOfBirth:date_of_birth,gender,personalAddress:personal_address,addressStreet:address_street,addressCity:address_city,addressState:address_state,addressPostalCode:address_postal_code,addressCountry:address_country,emergencyContactName:emergency_contact_name,emergencyRelationship:emergency_relationship,emergencyPhoneNumber:emergency_phone_number,emergencyEmail:emergency_email,emergencyAddress:emergency_address";
+
+        private static string? CleanOptional(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static string? CleanEmail(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+        }
+
+        private static void ApplyUserProfileFields(UserInfo target, UserInfo? profile)
+        {
+            if (target == null || profile == null)
+            {
+                return;
+            }
+
+            target.Email = string.IsNullOrWhiteSpace(profile.Email) ? target.Email : profile.Email;
+            target.FullName = string.IsNullOrWhiteSpace(profile.FullName) ? target.FullName : profile.FullName;
+            target.PhoneNumber = profile.PhoneNumber;
+            target.PreferredName = profile.PreferredName;
+            target.DateOfBirth = profile.DateOfBirth;
+            target.Gender = profile.Gender;
+            target.PersonalAddress = profile.PersonalAddress;
+            target.AddressStreet = profile.AddressStreet;
+            target.AddressCity = profile.AddressCity;
+            target.AddressState = profile.AddressState;
+            target.AddressPostalCode = profile.AddressPostalCode;
+            target.AddressCountry = profile.AddressCountry;
+            target.EmergencyContactName = profile.EmergencyContactName;
+            target.EmergencyRelationship = profile.EmergencyRelationship;
+            target.EmergencyPhoneNumber = profile.EmergencyPhoneNumber;
+            target.EmergencyEmail = profile.EmergencyEmail;
+            target.EmergencyAddress = profile.EmergencyAddress;
+        }
+
+        public async Task<UserInfo?> GetUserProfileRowAsync(string userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                return null;
+            }
+
+            var rows = await GetRestRowsAsync<UserInfo>(
+                $"user_names?select={Uri.EscapeDataString(UserProfileSelect)}&id=eq.{normalizedUserId}&limit=1");
+            return rows.FirstOrDefault();
+        }
+
+        public async Task EnrichUserInfoWithProfileAsync(UserInfo user)
+        {
+            if (user == null || string.IsNullOrWhiteSpace(user.Id))
+            {
+                return;
+            }
+
+            var profile = await GetUserProfileRowAsync(user.Id);
+            ApplyUserProfileFields(user, profile);
+            SanitizeUserForClient(user);
         }
 
         private static string NormalizeRole(string? role)
@@ -1988,7 +2058,11 @@ namespace ESSDesign.Server.Services
             Guid? selectedFolderId,
             string? theme,
             string? viewMode,
-            int? sidebarWidth)
+            int? sidebarWidth,
+            bool? emailNotifications = null,
+            bool? smsNotifications = null,
+            bool? systemAnnouncements = null,
+            bool? marketingUpdates = null)
         {
             try
             {
@@ -2002,6 +2076,10 @@ namespace ESSDesign.Server.Services
                     Theme = theme ?? existing?.Theme ?? "light",
                     ViewMode = viewMode ?? existing?.ViewMode ?? "grid",
                     SidebarWidth = sidebarWidth ?? existing?.SidebarWidth ?? 280,
+                    EmailNotifications = emailNotifications ?? existing?.EmailNotifications ?? true,
+                    SmsNotifications = smsNotifications ?? existing?.SmsNotifications ?? true,
+                    SystemAnnouncements = systemAnnouncements ?? existing?.SystemAnnouncements ?? true,
+                    MarketingUpdates = marketingUpdates ?? existing?.MarketingUpdates ?? false,
                     CreatedAt = existing?.CreatedAt ?? now,
                     UpdatedAt = now
                 };
@@ -2086,7 +2164,7 @@ namespace ESSDesign.Server.Services
             var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
             var role = await EnsureUserRoleAsync(id);
 
-            return new UserInfo
+            var userInfo = new UserInfo
             {
                 Id = id ?? string.Empty,
                 Email = ToPublicIdentifier(email),
@@ -2094,6 +2172,15 @@ namespace ESSDesign.Server.Services
                 AvatarUrl = avatarUrl,
                 Role = role
             };
+
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                var profile = await GetUserProfileRowAsync(id);
+                ApplyUserProfileFields(userInfo, profile);
+            }
+
+            SanitizeUserForClient(userInfo);
+            return userInfo;
         }
 
         public async Task<AuthResponse?> RefreshAuthSessionAsync(string refreshToken)
@@ -2299,6 +2386,138 @@ namespace ESSDesign.Server.Services
 
             var users = await GetUsersByIdsAsync(new[] { normalizedUserId });
             return users.FirstOrDefault() ?? throw new InvalidOperationException("User not found");
+        }
+
+        public async Task<UserInfo> UpdateMyProfileAsync(string userId, UpdateMyProfileRequest request)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var normalizedEmail = CleanEmail(request.Email);
+            var normalizedFullName = CleanOptional(request.FullName);
+            if (string.IsNullOrWhiteSpace(normalizedFullName))
+            {
+                normalizedFullName = normalizedEmail?.Split('@')[0] ?? "User";
+            }
+
+            await UpdateAuthUserProfileAsync(normalizedUserId, normalizedEmail, normalizedFullName);
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["id"] = Guid.Parse(normalizedUserId),
+                ["email"] = normalizedEmail,
+                ["full_name"] = normalizedFullName,
+                ["phone_number"] = CleanOptional(request.PhoneNumber),
+                ["preferred_name"] = CleanOptional(request.PreferredName),
+                ["date_of_birth"] = request.DateOfBirth?.Date,
+                ["gender"] = CleanOptional(request.Gender),
+                ["personal_address"] = CleanOptional(request.PersonalAddress),
+                ["address_street"] = CleanOptional(request.AddressStreet),
+                ["address_city"] = CleanOptional(request.AddressCity),
+                ["address_state"] = CleanOptional(request.AddressState),
+                ["address_postal_code"] = CleanOptional(request.AddressPostalCode),
+                ["address_country"] = CleanOptional(request.AddressCountry),
+                ["emergency_contact_name"] = CleanOptional(request.EmergencyContactName),
+                ["emergency_relationship"] = CleanOptional(request.EmergencyRelationship),
+                ["emergency_phone_number"] = CleanOptional(request.EmergencyPhoneNumber),
+                ["emergency_email"] = CleanEmail(request.EmergencyEmail),
+                ["emergency_address"] = CleanOptional(request.EmergencyAddress),
+                ["updated_at"] = DateTime.UtcNow
+            };
+
+            await PostRestRowsAsync<object>(
+                "user_names?on_conflict=id",
+                new[] { payload },
+                "resolution=merge-duplicates");
+
+            await SyncLinkedEmployeeProfileAsync(
+                normalizedUserId,
+                normalizedEmail,
+                normalizedFullName,
+                CleanOptional(request.PhoneNumber));
+
+            var profile = await GetUserProfileRowAsync(normalizedUserId)
+                ?? throw new InvalidOperationException("User profile not found");
+            profile.Role = await GetUserRoleAsync(normalizedUserId);
+            await EnrichUserInfoWithEmployeeRoleAsync(profile);
+            return profile;
+        }
+
+        private async Task UpdateAuthUserProfileAsync(string normalizedUserId, string? email, string? fullName)
+        {
+            if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
+            {
+                throw new InvalidOperationException("Supabase URL or key not configured.");
+            }
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["user_metadata"] = new Dictionary<string, object?>
+                {
+                    ["full_name"] = fullName
+                }
+            };
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                payload["email"] = email;
+                payload["email_confirm"] = true;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/admin/users/{Uri.EscapeDataString(normalizedUserId)}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Put, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Content = JsonContent.Create(payload);
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Supabase auth update failed with status {(int)response.StatusCode}: {body}");
+            }
+        }
+
+        private async Task SyncLinkedEmployeeProfileAsync(
+            string normalizedUserId,
+            string? email,
+            string? fullName,
+            string? phoneNumber)
+        {
+            var linkedEmployee = await GetLinkedEmployeeRoleInfoAsync(normalizedUserId, null);
+            if (linkedEmployee == null)
+            {
+                return;
+            }
+
+            var parts = (fullName ?? string.Empty)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var firstName = parts.FirstOrDefault();
+            var lastName = parts.Length > 1 ? string.Join(' ', parts.Skip(1)) : null;
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["email"] = email,
+                ["phone_number"] = phoneNumber,
+                ["updated_at"] = DateTime.UtcNow
+            };
+
+            if (!string.IsNullOrWhiteSpace(firstName))
+            {
+                payload["first_name"] = firstName;
+            }
+            if (!string.IsNullOrWhiteSpace(lastName))
+            {
+                payload["last_name"] = lastName;
+            }
+
+            await PatchRestRowsAsync<object>(
+                $"ess_rostering_employees?id=eq.{linkedEmployee.Id:D}",
+                payload);
         }
 
         public async Task DeleteAppUserAsync(string userId)

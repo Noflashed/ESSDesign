@@ -92,6 +92,18 @@ namespace ESSDesign.Server.Models
         [Column("sidebar_width")]
         public int SidebarWidth { get; set; } = 280;
 
+        [Column("email_notifications")]
+        public bool EmailNotifications { get; set; } = true;
+
+        [Column("sms_notifications")]
+        public bool SmsNotifications { get; set; } = true;
+
+        [Column("system_announcements")]
+        public bool SystemAnnouncements { get; set; } = true;
+
+        [Column("marketing_updates")]
+        public bool MarketingUpdates { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
@@ -113,6 +125,48 @@ namespace ESSDesign.Server.Models
 
         [Column("phone_number")]
         public string? PhoneNumber { get; set; }
+
+        [Column("preferred_name")]
+        public string? PreferredName { get; set; }
+
+        [Column("date_of_birth")]
+        public DateTime? DateOfBirth { get; set; }
+
+        [Column("gender")]
+        public string? Gender { get; set; }
+
+        [Column("personal_address")]
+        public string? PersonalAddress { get; set; }
+
+        [Column("address_street")]
+        public string? AddressStreet { get; set; }
+
+        [Column("address_city")]
+        public string? AddressCity { get; set; }
+
+        [Column("address_state")]
+        public string? AddressState { get; set; }
+
+        [Column("address_postal_code")]
+        public string? AddressPostalCode { get; set; }
+
+        [Column("address_country")]
+        public string? AddressCountry { get; set; }
+
+        [Column("emergency_contact_name")]
+        public string? EmergencyContactName { get; set; }
+
+        [Column("emergency_relationship")]
+        public string? EmergencyRelationship { get; set; }
+
+        [Column("emergency_phone_number")]
+        public string? EmergencyPhoneNumber { get; set; }
+
+        [Column("emergency_email")]
+        public string? EmergencyEmail { get; set; }
+
+        [Column("emergency_address")]
+        public string? EmergencyAddress { get; set; }
     }
 
     
@@ -301,6 +355,27 @@ namespace ESSDesign.Server.Models
         public string? PhoneNumber { get; set; }
     }
 
+    public class UpdateMyProfileRequest
+    {
+        public string? FullName { get; set; }
+        public string? PreferredName { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+        public string? PersonalAddress { get; set; }
+        public string? AddressStreet { get; set; }
+        public string? AddressCity { get; set; }
+        public string? AddressState { get; set; }
+        public string? AddressPostalCode { get; set; }
+        public string? AddressCountry { get; set; }
+        public string? EmergencyContactName { get; set; }
+        public string? EmergencyRelationship { get; set; }
+        public string? EmergencyPhoneNumber { get; set; }
+        public string? EmergencyEmail { get; set; }
+        public string? EmergencyAddress { get; set; }
+    }
+
     public class AuthResponse
     {
         public string AccessToken { get; set; } = string.Empty;
@@ -314,6 +389,20 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
+        public string? PreferredName { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+        public string? PersonalAddress { get; set; }
+        public string? AddressStreet { get; set; }
+        public string? AddressCity { get; set; }
+        public string? AddressState { get; set; }
+        public string? AddressPostalCode { get; set; }
+        public string? AddressCountry { get; set; }
+        public string? EmergencyContactName { get; set; }
+        public string? EmergencyRelationship { get; set; }
+        public string? EmergencyPhoneNumber { get; set; }
+        public string? EmergencyEmail { get; set; }
+        public string? EmergencyAddress { get; set; }
         public string? AvatarUrl { get; set; }
         public string Role { get; set; } = AppRoles.Viewer;
         public Guid? EmployeeId { get; set; }
@@ -521,6 +610,10 @@ namespace ESSDesign.Server.Models
         public string? Theme { get; set; }
         public string? ViewMode { get; set; }
         public int? SidebarWidth { get; set; }
+        public bool? EmailNotifications { get; set; }
+        public bool? SmsNotifications { get; set; }
+        public bool? SystemAnnouncements { get; set; }
+        public bool? MarketingUpdates { get; set; }
     }
 
     public class UserPreferencesResponse
@@ -530,6 +623,10 @@ namespace ESSDesign.Server.Models
         public string Theme { get; set; } = "light";
         public string ViewMode { get; set; } = "grid";
         public int SidebarWidth { get; set; } = 280;
+        public bool EmailNotifications { get; set; } = true;
+        public bool SmsNotifications { get; set; } = true;
+        public bool SystemAnnouncements { get; set; } = true;
+        public bool MarketingUpdates { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

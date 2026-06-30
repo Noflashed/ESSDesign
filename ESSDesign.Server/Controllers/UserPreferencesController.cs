@@ -68,6 +68,10 @@ namespace ESSDesign.Server.Controllers
                         Theme = "light",
                         ViewMode = "grid",
                         SidebarWidth = 280,
+                        EmailNotifications = true,
+                        SmsNotifications = true,
+                        SystemAnnouncements = true,
+                        MarketingUpdates = false,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     });
@@ -80,6 +84,10 @@ namespace ESSDesign.Server.Controllers
                     Theme = preferences.Theme,
                     ViewMode = preferences.ViewMode,
                     SidebarWidth = preferences.SidebarWidth,
+                    EmailNotifications = preferences.EmailNotifications,
+                    SmsNotifications = preferences.SmsNotifications,
+                    SystemAnnouncements = preferences.SystemAnnouncements,
+                    MarketingUpdates = preferences.MarketingUpdates,
                     CreatedAt = preferences.CreatedAt,
                     UpdatedAt = preferences.UpdatedAt
                 });
@@ -103,7 +111,11 @@ namespace ESSDesign.Server.Controllers
                     request.SelectedFolderId,
                     request.Theme,
                     request.ViewMode,
-                    request.SidebarWidth
+                    request.SidebarWidth,
+                    request.EmailNotifications,
+                    request.SmsNotifications,
+                    request.SystemAnnouncements,
+                    request.MarketingUpdates
                 );
 
                 return Ok(new UserPreferencesResponse
@@ -113,6 +125,10 @@ namespace ESSDesign.Server.Controllers
                     Theme = preferences.Theme,
                     ViewMode = preferences.ViewMode,
                     SidebarWidth = preferences.SidebarWidth,
+                    EmailNotifications = preferences.EmailNotifications,
+                    SmsNotifications = preferences.SmsNotifications,
+                    SystemAnnouncements = preferences.SystemAnnouncements,
+                    MarketingUpdates = preferences.MarketingUpdates,
                     CreatedAt = preferences.CreatedAt,
                     UpdatedAt = preferences.UpdatedAt
                 });
