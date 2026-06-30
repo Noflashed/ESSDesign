@@ -641,30 +641,52 @@ WHEN THINGS GO WRONG:
             }, _jsonOptions));
         }
 
-        private static object BuildEmployeeProfileSummary(EmployeeContextRow employee) => new
+        private static object BuildEmployeeProfileSummary(EmployeeContextRow employee)
         {
-            employee.PhoneNumber,
-            employee.PreferredName,
-            employee.DateOfBirth,
-            employee.Gender,
-            address = new
+            var emergencyContactDetails = FormatEmergencyContactDetails(
+                employee.EmergencyContactName,
+                employee.EmergencyRelationship,
+                employee.EmergencyPhoneNumber,
+                employee.EmergencyEmail,
+                employee.EmergencyAddress);
+
+            return new
             {
-                employee.PersonalAddress,
-                employee.AddressStreet,
-                employee.AddressCity,
-                employee.AddressState,
-                employee.AddressPostalCode,
-                employee.AddressCountry,
-            },
-            emergencyContact = new
-            {
-                name = employee.EmergencyContactName,
-                relationship = employee.EmergencyRelationship,
-                phoneNumber = employee.EmergencyPhoneNumber,
-                email = employee.EmergencyEmail,
-                address = employee.EmergencyAddress,
-            },
-        };
+                employee.PhoneNumber,
+                employee.PreferredName,
+                employee.DateOfBirth,
+                employee.Gender,
+                address = new
+                {
+                    employee.PersonalAddress,
+                    employee.AddressStreet,
+                    employee.AddressCity,
+                    employee.AddressState,
+                    employee.AddressPostalCode,
+                    employee.AddressCountry,
+                },
+                emergencyContactDetails,
+                emergencyContact = new
+                {
+                    name = employee.EmergencyContactName,
+                    relationship = employee.EmergencyRelationship,
+                    phoneNumber = employee.EmergencyPhoneNumber,
+                    email = employee.EmergencyEmail,
+                    address = employee.EmergencyAddress,
+                },
+            };
+        }
+
+        private static string? FormatEmergencyContactDetails(string? name, string? relationship, string? phoneNumber, string? email, string? address)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(name)) parts.Add($"name={name}");
+            if (!string.IsNullOrWhiteSpace(relationship)) parts.Add($"relationship={relationship}");
+            if (!string.IsNullOrWhiteSpace(phoneNumber)) parts.Add($"phone={phoneNumber}");
+            if (!string.IsNullOrWhiteSpace(email)) parts.Add($"email={email}");
+            if (!string.IsNullOrWhiteSpace(address)) parts.Add($"address={address}");
+            return parts.Count == 0 ? null : string.Join("; ", parts);
+        }
 
         private static string FormatUserProfileForPrompt(UserInfo user)
         {
@@ -675,7 +697,8 @@ WHEN THINGS GO WRONG:
             if (user.DateOfBirth.HasValue) parts.Add($"dateOfBirth={user.DateOfBirth:yyyy-MM-dd}");
             var address = string.Join(", ", new[] { user.AddressStreet, user.AddressCity, user.AddressState, user.AddressPostalCode, user.AddressCountry }.Where(p => !string.IsNullOrWhiteSpace(p)));
             if (!string.IsNullOrWhiteSpace(address)) parts.Add($"address={address}");
-            if (!string.IsNullOrWhiteSpace(user.EmergencyContactName)) parts.Add($"emergencyContact={user.EmergencyContactName}");
+            var emergencyContactDetails = FormatEmergencyContactDetails(user.EmergencyContactName, user.EmergencyRelationship, user.EmergencyPhoneNumber, user.EmergencyEmail, user.EmergencyAddress);
+            if (!string.IsNullOrWhiteSpace(emergencyContactDetails)) parts.Add($"emergencyContact={emergencyContactDetails}");
             return string.Join("; ", parts);
         }
         private async Task<string> Tool_SearchEmployees(JsonElement args, CancellationToken ct)
@@ -697,7 +720,11 @@ WHEN THINGS GO WRONG:
                     || (e.PhoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
                     || (e.AddressStreet ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
                     || (e.AddressCity ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
-                    || (e.EmergencyContactName ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+                    || (e.EmergencyContactName ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.EmergencyRelationship ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.EmergencyPhoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.EmergencyEmail ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (e.EmergencyAddress ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(roleFilter))
                 filtered = filtered.Where(e => string.Equals(e.AppRole, roleFilter, StringComparison.OrdinalIgnoreCase)
                     || (roleFilter.Equals("leading_hand", StringComparison.OrdinalIgnoreCase) && e.LeadingHand));
@@ -1309,6 +1336,12 @@ WHEN THINGS GO WRONG:
                             postalCode = TryGetString(u, "address_postal_code"),
                             country = TryGetString(u, "address_country"),
                         },
+                        emergencyContactDetails = FormatEmergencyContactDetails(
+                            TryGetString(u, "emergency_contact_name"),
+                            TryGetString(u, "emergency_relationship"),
+                            TryGetString(u, "emergency_phone_number"),
+                            TryGetString(u, "emergency_email"),
+                            TryGetString(u, "emergency_address")),
                         emergencyContact = new
                         {
                             name = TryGetString(u, "emergency_contact_name"),
@@ -1329,7 +1362,11 @@ WHEN THINGS GO WRONG:
                     || (u.profile.phoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
                     || (u.profile.address.street ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
                     || (u.profile.address.city ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
-                    || (u.profile.emergencyContact.name ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+                    || (u.profile.emergencyContact.name ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.emergencyContact.relationship ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.emergencyContact.phoneNumber ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.emergencyContact.email ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase)
+                    || (u.profile.emergencyContact.address ?? string.Empty).Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
 
             var results = users.ToList();
             return JsonSerializer.Serialize(new { count = results.Count, users = results }, _jsonOptions);
