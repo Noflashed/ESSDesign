@@ -56,6 +56,7 @@ namespace ESSDesign.Server.Services
             public string? EmergencyPhoneNumber { get; set; }
             public string? EmergencyEmail { get; set; }
             public string? EmergencyAddress { get; set; }
+            public bool IsRosterEmployee { get; set; } = true;
             public bool LeadingHand { get; set; }
             public bool Verified { get; set; }
             public string? AppRole { get; set; }
@@ -641,6 +642,13 @@ WHEN THINGS GO WRONG:
             }, _jsonOptions));
         }
 
+        private static string FormatDirectoryRole(EmployeeContextRow employee)
+        {
+            if (!employee.IsRosterEmployee)
+                return "User Account";
+
+            return employee.LeadingHand ? "Leading Hand" : "Scaffolder";
+        }
         private static object BuildEmployeeProfileSummary(EmployeeContextRow employee)
         {
             var emergencyContactDetails = FormatEmergencyContactDetails(
@@ -738,7 +746,7 @@ WHEN THINGS GO WRONG:
                 e.Id,
                 e.FullName,
                 e.Email,
-                siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                siteRole = FormatDirectoryRole(e),
                 appRole = e.AppRole ?? AppRoles.Viewer,
                 e.Verified,
                 profile = BuildEmployeeProfileSummary(e),
@@ -788,7 +796,7 @@ WHEN THINGS GO WRONG:
                 employee.Id,
                 employee.FullName,
                 employee.Email,
-                siteRole = employee.LeadingHand ? "Leading Hand" : "Scaffolder",
+                siteRole = FormatDirectoryRole(employee),
                 appRole = employee.AppRole ?? AppRoles.Viewer,
                 employee.Verified,
                 profile = BuildEmployeeProfileSummary(employee),
@@ -857,7 +865,7 @@ WHEN THINGS GO WRONG:
                 {
                     e.FullName,
                     e.Email,
-                    siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                    siteRole = FormatDirectoryRole(e),
                     appRole = e.AppRole ?? AppRoles.Viewer,
                     e.Verified,
                 }).ToList(),
@@ -897,7 +905,7 @@ WHEN THINGS GO WRONG:
             {
                 e.FullName,
                 e.Email,
-                siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                siteRole = FormatDirectoryRole(e),
                 appRole = e.AppRole ?? AppRoles.Viewer,
                 e.Verified,
             }).ToList();
@@ -1470,7 +1478,7 @@ WHEN THINGS GO WRONG:
                     employees = site.InductedEmployees.Select(e => new
                     {
                         e.FullName,
-                        siteRole = e.LeadingHand ? "Leading Hand" : "Scaffolder",
+                        siteRole = FormatDirectoryRole(e),
                         e.Verified,
                     }).ToList(),
                 },
@@ -1809,7 +1817,45 @@ WHEN THINGS GO WRONG:
                 .Where(u => u.Id != null)
                 .ToDictionary(u => u.Id!, u => u.Row, StringComparer.OrdinalIgnoreCase);
 
-            return employees
+            var usedUserIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            EmployeeContextRow BuildFromProfile(JsonElement profile, string? userId, string? fallbackEmail = null, bool isRosterEmployee = false)
+            {
+                var fullName = TryGetString(profile, "full_name") ?? string.Empty;
+                var names = fullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var role = userId != null && rolesByUserId.TryGetValue(userId, out var appRole) ? appRole : null;
+
+                return new EmployeeContextRow
+                {
+                    Id = null,
+                    UserId = userId,
+                    IsRosterEmployee = isRosterEmployee,
+                    FirstName = names.Length > 0 ? names[0] : fullName,
+                    LastName = names.Length > 1 ? names[1] : string.Empty,
+                    FullName = fullName,
+                    Email = TryGetString(profile, "email") ?? fallbackEmail,
+                    PhoneNumber = TryGetString(profile, "phone_number"),
+                    PreferredName = TryGetString(profile, "preferred_name"),
+                    DateOfBirth = TryGetString(profile, "date_of_birth"),
+                    Gender = TryGetString(profile, "gender"),
+                    PersonalAddress = TryGetString(profile, "personal_address"),
+                    AddressStreet = TryGetString(profile, "address_street"),
+                    AddressCity = TryGetString(profile, "address_city"),
+                    AddressState = TryGetString(profile, "address_state"),
+                    AddressPostalCode = TryGetString(profile, "address_postal_code"),
+                    AddressCountry = TryGetString(profile, "address_country"),
+                    EmergencyContactName = TryGetString(profile, "emergency_contact_name"),
+                    EmergencyRelationship = TryGetString(profile, "emergency_relationship"),
+                    EmergencyPhoneNumber = TryGetString(profile, "emergency_phone_number"),
+                    EmergencyEmail = TryGetString(profile, "emergency_email"),
+                    EmergencyAddress = TryGetString(profile, "emergency_address"),
+                    LeadingHand = false,
+                    Verified = false,
+                    AppRole = role,
+                };
+            }
+
+            var rosterRows = employees
                 .Select(row =>
                 {
                     var firstName = TryGetString(row, "first_name") ?? string.Empty;
@@ -1822,11 +1868,14 @@ WHEN THINGS GO WRONG:
                     var appRole = userId != null && rolesByUserId.TryGetValue(userId, out var role) ? role : null;
                     JsonElement profile = default;
                     var hasProfile = userId != null && profileByUserId.TryGetValue(userId, out profile);
+                    if (userId != null)
+                        usedUserIds.Add(userId);
 
                     return new EmployeeContextRow
                     {
                         Id = TryGetString(row, "id"),
                         UserId = userId,
+                        IsRosterEmployee = true,
                         FirstName = firstName,
                         LastName = lastName,
                         FullName = $"{firstName} {lastName}".Trim(),
@@ -1861,6 +1910,16 @@ WHEN THINGS GO WRONG:
                     };
                 })
                 .Where(e => !string.IsNullOrWhiteSpace(e.FullName) || !string.IsNullOrWhiteSpace(e.Email))
+                .ToList();
+
+            var profileOnlyRows = userNames
+                .Select(u => new { Id = TryGetString(u, "id"), Email = TryGetString(u, "email"), FullName = TryGetString(u, "full_name"), Row = u })
+                .Where(u => u.Id != null && !usedUserIds.Contains(u.Id) && (!string.IsNullOrWhiteSpace(u.FullName) || !string.IsNullOrWhiteSpace(u.Email)))
+                .Select(u => BuildFromProfile(u.Row, u.Id, u.Email))
+                .ToList();
+
+            return rosterRows
+                .Concat(profileOnlyRows)
                 .OrderBy(e => e.LastName)
                 .ThenBy(e => e.FirstName)
                 .ToList();
