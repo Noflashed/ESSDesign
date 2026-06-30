@@ -2500,7 +2500,6 @@ body {
     white-space: nowrap;
 }
 
-.employees-role-pill,
 .employees-account-pill {
     display: inline-flex;
     align-items: center;
@@ -2784,32 +2783,27 @@ body {
 
 .employees-table th:nth-child(1),
 .employees-table td:nth-child(1) {
-    width: 18%;
+    width: 24%;
 }
 
 .employees-table th:nth-child(2),
 .employees-table td:nth-child(2) {
-    width: 14%;
+    width: 18%;
 }
 
 .employees-table th:nth-child(3),
 .employees-table td:nth-child(3) {
-    width: 14%;
+    width: 28%;
 }
 
 .employees-table th:nth-child(4),
 .employees-table td:nth-child(4) {
-    width: 26%;
+    width: 15%;
 }
 
 .employees-table th:nth-child(5),
 .employees-table td:nth-child(5) {
-    width: 14%;
-}
-
-.employees-table th:nth-child(6),
-.employees-table td:nth-child(6) {
-    width: 14%;
+    width: 15%;
 }
 
 .employees-table td {
@@ -2955,23 +2949,42 @@ body {
     letter-spacing: 0;
 }
 
-.employees-table td:nth-child(3),
-.employees-table td:nth-child(4) {
+.employees-table td:nth-child(3) {
     color: #334155;
     font-weight: 500;
 }
 
-.employees-role-pill {
-    min-height: 24px;
-    border-radius: 4px;
-    padding: 0 9px;
-    border: 1px solid #bfdbfe;
-    background: #eff6ff;
-    color: #1d4ed8;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
+.employees-role-text {
+    color: #26354f;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.25;
     letter-spacing: 0;
+}
+
+.employees-contact-cell {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.employees-contact-cell span,
+.employees-contact-cell small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.employees-contact-cell span {
+    color: #26354f;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.employees-contact-cell small {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .employees-account-pill {
@@ -2979,24 +2992,6 @@ body {
     font-weight: 700;
     line-height: 1;
     letter-spacing: 0;
-}
-
-.employees-role-pill.employee-status-pill-lh {
-    border-color: #9ad6a4;
-    background: #e8f8e9;
-    color: #188034;
-}
-
-.employees-role-pill.employee-status-pill-admin {
-    border-color: #f5ca7a;
-    background: #fff5df;
-    color: #8a4f00;
-}
-
-.employees-role-pill.employee-status-pill-project {
-    border-color: #d8b4fe;
-    background: #f5edff;
-    color: #6d28d9;
 }
 
 .employees-leading-check {
@@ -3013,14 +3008,20 @@ body {
 }
 
 .employees-table-actions {
+    display: inline-flex;
+    align-items: center;
     justify-content: flex-end;
-    gap: 9px;
+    gap: 7px;
+    padding: 4px;
+    border: 1px solid #dbe6f4;
+    border-radius: 999px;
+    background: #f8fbff;
 }
 
 .employees-table-actions .employee-icon-btn {
     width: 34px;
     height: 34px;
-    border-radius: 5px;
+    border-radius: 999px;
     border-color: #bfdbfe;
     background: #fff;
 }
@@ -15210,32 +15211,27 @@ button.stat-card {
 
 .employees-page .employees-table th:nth-child(1),
 .employees-page .employees-table td:nth-child(1) {
-    width: 25%;
+    width: 24%;
 }
 
 .employees-page .employees-table th:nth-child(2),
 .employees-page .employees-table td:nth-child(2) {
-    width: 15%;
+    width: 18%;
 }
 
 .employees-page .employees-table th:nth-child(3),
 .employees-page .employees-table td:nth-child(3) {
-    width: 14%;
+    width: 28%;
 }
 
 .employees-page .employees-table th:nth-child(4),
 .employees-page .employees-table td:nth-child(4) {
-    width: 25%;
+    width: 16%;
 }
 
 .employees-page .employees-table th:nth-child(5),
 .employees-page .employees-table td:nth-child(5) {
-    width: 13%;
-}
-
-.employees-page .employees-table th:nth-child(6),
-.employees-page .employees-table td:nth-child(6) {
-    width: 8%;
+    width: 14%;
     text-align: right;
 }
 
@@ -15437,7 +15433,6 @@ button.stat-card {
     color: #0b57d0;
 }
 
-.employees-page .employees-role-pill,
 .employees-page .employees-account-pill {
     display: inline-flex;
     align-items: center;
@@ -15455,7 +15450,6 @@ button.stat-card {
     white-space: nowrap;
 }
 
-.employees-page .employees-role-pill.employee-status-pill-lh,
 .employees-page .employees-account-pill.verified,
 .employees-page .employees-account-pill.app {
     border-color: #9ad8ad;
@@ -15463,17 +15457,10 @@ button.stat-card {
     color: #137333;
 }
 
-.employees-page .employees-role-pill.employee-status-pill-admin,
 .employees-page .employees-account-pill.invited {
     border-color: #f0cd8e;
     background: #fff8e8;
     color: #8a4f00;
-}
-
-.employees-page .employees-role-pill.employee-status-pill-project {
-    border-color: #c7b7ff;
-    background: #f5f1ff;
-    color: #5b21b6;
 }
 
 .employees-page .employees-account-pill.unlinked {
@@ -15483,23 +15470,27 @@ button.stat-card {
 }
 
 .employees-page .employees-table-actions {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 7px;
     flex-wrap: nowrap;
+    padding: 4px;
+    border: 1px solid #dbe6f4;
+    border-radius: 999px;
+    background: #f8fbff;
 }
 
 .employees-page .employees-table-actions .employee-icon-btn {
-    width: 30px;
-    height: 30px;
-    min-height: 30px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
     padding: 0;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
+    border: 1px solid #d7e3f5;
+    border-radius: 999px;
+    background: #ffffff;
     color: #0b57d0;
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     transform: none;
 }
 

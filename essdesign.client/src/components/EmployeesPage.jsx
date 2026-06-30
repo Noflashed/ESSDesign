@@ -47,20 +47,6 @@ function getRoleLabel(role) {
     }
 }
 
-function getRolePillClass(role) {
-    switch (role) {
-        case 'admin':
-            return 'employee-status-pill-admin';
-        case 'project_manager':
-            return 'employee-status-pill-project';
-        case 'site_supervisor':
-        case 'leading_hand':
-            return 'employee-status-pill-lh';
-        default:
-            return 'employee-status-pill-neutral';
-    }
-}
-
 function getInitials(name = '') {
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return '??';
@@ -752,8 +738,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 ))}
                                             </EmployeeColumnFilter>
                                         </th>
-                                        <th>Phone</th>
-                                        <th>Email</th>
+                                        <th>Contact</th>
                                         <th>
                                             <EmployeeColumnFilter
                                                 label="Account Status"
@@ -798,12 +783,16 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                         </div>
                                                     </td>
                                                     <td>
-                                                        <span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>
+                                                        <span className="employees-role-text">
                                                             {getRoleLabel(entry.role)}
                                                         </span>
                                                     </td>
-                                                    <td>{entry.displayPhone || '-'}</td>
-                                                    <td>{entry.displayEmail || '-'}</td>
+                                                    <td>
+                                                        <div className="employees-contact-cell">
+                                                            <span>{entry.displayPhone || '-'}</span>
+                                                            <small>{entry.displayEmail || '-'}</small>
+                                                        </div>
+                                                    </td>
                                                     <td>
                                                         <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
                                                     </td>
@@ -844,7 +833,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 </tr>
                                                 {isExpanded ? (
                                                     <tr className="employees-info-dropdown-row">
-                                                        <td colSpan={6}>
+                                                        <td colSpan={5}>
                                                             <div className="employees-info-dropdown-panel">
                                                                 <div className="employees-info-list">
                                                                     <div className="employees-info-row">
@@ -853,7 +842,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                     </div>
                                                                     <div className="employees-info-row">
                                                                         <span>Role</span>
-                                                                        <strong><span className={`employees-role-pill ${getRolePillClass(entry.role)}`}>{getRoleLabel(entry.role)}</span></strong>
+                                                                        <strong><span className="employees-role-text">{getRoleLabel(entry.role)}</span></strong>
                                                                     </div>
                                                                     <div className="employees-info-row">
                                                                         <span>Phone Number</span>
