@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, CalendarDays, Check, ChevronDown, HeartPulse, IdCard, Mail, Phone, ShieldCheck } from 'lucide-react';
-import { preferencesAPI, usersAPI } from '../services/api';
+import { Briefcase, Check, ChevronDown, Mail, Phone } from 'lucide-react';
+import { analysisAPI, preferencesAPI, usersAPI } from '../services/api';
 
 function getRoleDisplayName(role) {
     switch (role) {
@@ -33,11 +33,16 @@ function formatInputDate(value) {
     return date.toISOString().slice(0, 10);
 }
 
+function formatPhoneNumber(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 10);
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+}
+
 function buildForm(user) {
     const name = splitName(user?.fullName || '');
-    const address = user?.personalAddress || [user?.addressStreet, user?.addressCity, user?.addressState, user?.addressPostalCode]
-        .filter(Boolean)
-        .join(', ');
+    const streetAddress = user?.addressStreet || user?.personalAddress || '';
 
     return {
         firstName: name.firstName,
@@ -46,17 +51,17 @@ function buildForm(user) {
         dateOfBirth: formatInputDate(user?.dateOfBirth),
         gender: user?.gender || '',
         employeeId: user?.employeeId || user?.id || '',
-        phoneNumber: user?.phoneNumber || user?.employeePhoneNumber || '',
+        phoneNumber: formatPhoneNumber(user?.phoneNumber || user?.employeePhoneNumber || ''),
         email: user?.email || '',
-        personalAddress: address || '',
-        addressStreet: user?.addressStreet || '',
+        personalAddress: streetAddress,
+        addressStreet: streetAddress,
         addressCity: user?.addressCity || '',
         addressState: user?.addressState || '',
         addressPostalCode: user?.addressPostalCode || '',
         addressCountry: user?.addressCountry || 'Australia',
         emergencyContactName: user?.emergencyContactName || '',
         emergencyRelationship: user?.emergencyRelationship || '',
-        emergencyPhoneNumber: user?.emergencyPhoneNumber || '',
+        emergencyPhoneNumber: formatPhoneNumber(user?.emergencyPhoneNumber || ''),
         emergencyEmail: user?.emergencyEmail || '',
         emergencyAddress: user?.emergencyAddress || ''
     };
@@ -124,6 +129,9 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const [initialSnapshot, setInitialSnapshot] = useState('');
     const [saving, setSaving] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [addressSuggestions, setAddressSuggestions] = useState([]);
+    const [addressLoading, setAddressLoading] = useState(false);
+    const [selectedAddressSourceId, setSelectedAddressSourceId] = useState('');
     const [editingSections, setEditingSections] = useState(() => Object.fromEntries(SECTION_KEYS.map((key) => [key, false])));
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -156,6 +164,48 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
+    useEffect(() => {
+        const query = form.addressStreet.trim();
+        if (!editingSections.address || selectedAddressSourceId || query.length < 3) {
+            setAddressSuggestions([]);
+            setAddressLoading(false);
+            return undefined;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            setAddressLoading(true);
+            analysisAPI.addressSuggestions(query, { signal: controller.signal })
+                .then((remoteResults) => {
+                    const suggestions = (Array.isArray(remoteResults) ? remoteResults : [])
+                        .map((item, index) => ({
+                            id: `employee-address-${item.address || item.label || index}`,
+                            label: item.label || item.address,
+                            address: item.address || item.label,
+                            source: 'TomTom'
+                        }))
+                        .filter((item) => item.address);
+                    setAddressSuggestions(suggestions.slice(0, 6));
+                })
+                .catch((addressError) => {
+                    if (addressError?.name !== 'CanceledError' && addressError?.code !== 'ERR_CANCELED') {
+                        setAddressSuggestions([]);
+                    }
+                })
+                .finally(() => {
+                    if (!controller.signal.aborted) {
+                        setAddressLoading(false);
+                    }
+                });
+        }, 120);
+
+        setAddressLoading(true);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [editingSections.address, form.addressStreet, selectedAddressSourceId]);
+
     const fullName = useMemo(() => [form.firstName, form.lastName].filter(Boolean).join(' ').trim(), [form.firstName, form.lastName]);
     const roleLabel = getRoleDisplayName(user?.role);
     const initialState = useMemo(() => {
@@ -175,6 +225,30 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         setError('');
     };
 
+    const updatePhoneField = (key, value) => {
+        updateForm(key, formatPhoneNumber(value));
+    };
+
+    const updateStreetAddress = (value) => {
+        setSelectedAddressSourceId('');
+        setForm((current) => ({ ...current, addressStreet: value, personalAddress: value }));
+        setMessage('');
+        setError('');
+    };
+
+    const selectAddressSuggestion = (suggestion) => {
+        setForm((current) => ({
+            ...current,
+            addressStreet: suggestion.address,
+            personalAddress: suggestion.address
+        }));
+        setSelectedAddressSourceId(suggestion.id);
+        setAddressSuggestions([]);
+        setAddressLoading(false);
+        setMessage('');
+        setError('');
+    };
+
     const updatePrefs = (key, value) => {
         setPrefs((current) => ({ ...current, [key]: value }));
         setMessage('');
@@ -183,6 +257,11 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
 
     const setSectionEditing = (section, value) => {
         setEditingSections((current) => ({ ...current, [section]: value }));
+        if (section === 'address') {
+            setAddressSuggestions([]);
+            setAddressLoading(false);
+            setSelectedAddressSourceId('');
+        }
         setMessage('');
         setError('');
     };
@@ -200,7 +279,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             personal: ['firstName', 'lastName', 'preferredName', 'dateOfBirth', 'gender'],
             emergency: ['emergencyContactName', 'emergencyRelationship', 'emergencyPhoneNumber', 'emergencyEmail', 'emergencyAddress'],
             contact: ['phoneNumber', 'email'],
-            address: ['personalAddress', 'addressStreet', 'addressCity', 'addressState', 'addressPostalCode', 'addressCountry']
+            address: ['addressStreet']
         };
         const changedPrefKeys = {
             notifications: ['emailNotifications', 'smsNotifications', 'systemAnnouncements', 'marketingUpdates']
@@ -224,7 +303,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                 phoneNumber: form.phoneNumber,
                 dateOfBirth: form.dateOfBirth || null,
                 gender: form.gender,
-                personalAddress: form.personalAddress,
+                personalAddress: form.addressStreet,
                 addressStreet: form.addressStreet,
                 addressCity: form.addressCity,
                 addressState: form.addressState,
@@ -325,33 +404,6 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                     </dl>
                 </div>
 
-                <div className="employee-profile-quick-strip" aria-label="Profile summary">
-                    <div>
-                        <span><ShieldCheck size={15} /></span>
-                        <small>Profile status</small>
-                        <strong>Verified</strong>
-                    </div>
-                    <div>
-                        <span><Briefcase size={15} /></span>
-                        <small>Position</small>
-                        <strong>{roleLabel}</strong>
-                    </div>
-                    <div>
-                        <span><IdCard size={15} /></span>
-                        <small>Employee ID</small>
-                        <strong>{form.employeeId || '-'}</strong>
-                    </div>
-                    <div>
-                        <span><HeartPulse size={15} /></span>
-                        <small>Emergency contact</small>
-                        <strong>{form.emergencyContactName || 'Not set'}</strong>
-                    </div>
-                    <div>
-                        <span><CalendarDays size={15} /></span>
-                        <small>Member since</small>
-                        <strong>-</strong>
-                    </div>
-                </div>
             </section>
 
             <div className="employee-profile-grid">
@@ -397,7 +449,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                     onSave={() => saveProfile(null, 'contact')}
                 >
                     <div className="employee-profile-form-grid">
-                        <Field label="Phone Number"><input value={form.phoneNumber} disabled={!editingSections.contact} onChange={(e) => updateForm('phoneNumber', e.target.value)} /></Field>
+                        <Field label="Phone Number"><input value={form.phoneNumber} disabled={!editingSections.contact} onChange={(e) => updatePhoneField('phoneNumber', e.target.value)} placeholder="0422 374 448" inputMode="numeric" /></Field>
                         <Field label="Email Address"><input type="email" value={form.email} disabled={!editingSections.contact} onChange={(e) => updateForm('email', e.target.value)} required /></Field>
                     </div>
                     <span className="employee-profile-inline-verified"><Check size={14} /> Verified</span>
@@ -412,13 +464,36 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                     onCancel={() => cancelSection('address')}
                     onSave={() => saveProfile(null, 'address')}
                 >
-                    <Field label="Personal Address" wide><input value={form.personalAddress} disabled={!editingSections.address} onChange={(e) => updateForm('personalAddress', e.target.value)} /></Field>
-                    <Field label="Street Address" wide><input value={form.addressStreet} disabled={!editingSections.address} onChange={(e) => updateForm('addressStreet', e.target.value)} /></Field>
-                    <div className="employee-profile-form-grid quarters">
-                        <Field label="City"><input value={form.addressCity} disabled={!editingSections.address} onChange={(e) => updateForm('addressCity', e.target.value)} /></Field>
-                        <Field label="State / Province"><input value={form.addressState} disabled={!editingSections.address} onChange={(e) => updateForm('addressState', e.target.value)} /></Field>
-                        <Field label="ZIP / Postal Code"><input value={form.addressPostalCode} disabled={!editingSections.address} onChange={(e) => updateForm('addressPostalCode', e.target.value)} /></Field>
-                        <Field label="Country"><input value={form.addressCountry} disabled={!editingSections.address} onChange={(e) => updateForm('addressCountry', e.target.value)} /></Field>
+                    <Field label="Street Address" wide>
+                        <div className="employee-profile-address-autocomplete">
+                            <input
+                                value={form.addressStreet}
+                                disabled={!editingSections.address}
+                                onChange={(e) => updateStreetAddress(e.target.value)}
+                                placeholder="Start typing an address..."
+                                autoComplete="off"
+                            />
+                            {editingSections.address && (addressLoading || addressSuggestions.length > 0) ? (
+                                <div className="employee-profile-address-suggestions" role="listbox">
+                                    {addressSuggestions.map((suggestion) => (
+                                        <button
+                                            key={suggestion.id}
+                                            type="button"
+                                            className="employee-profile-address-suggestion"
+                                            onClick={() => selectAddressSuggestion(suggestion)}
+                                            role="option"
+                                        >
+                                            <strong>{suggestion.address}</strong>
+                                            <span>{suggestion.source}{suggestion.label && suggestion.label !== suggestion.address ? ` - ${suggestion.label}` : ''}</span>
+                                        </button>
+                                    ))}
+                                    {addressLoading ? <div className="employee-profile-address-suggestion loading">Searching addresses...</div> : null}
+                                </div>
+                            ) : null}
+                        </div>
+                    </Field>
+                    <div className="employee-profile-address-hint">
+                        Select a suggested address where possible.
                     </div>
                 </Panel>
                 </div>
@@ -436,7 +511,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                     <div className="employee-profile-form-grid">
                         <Field label="Contact Name"><input value={form.emergencyContactName} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyContactName', e.target.value)} /></Field>
                         <Field label="Relationship"><input value={form.emergencyRelationship} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyRelationship', e.target.value)} /></Field>
-                        <Field label="Phone Number"><input value={form.emergencyPhoneNumber} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyPhoneNumber', e.target.value)} /></Field>
+                        <Field label="Phone Number"><input value={form.emergencyPhoneNumber} disabled={!editingSections.emergency} onChange={(e) => updatePhoneField('emergencyPhoneNumber', e.target.value)} placeholder="0422 374 448" inputMode="numeric" /></Field>
                         <Field label="Email Address"><input type="email" value={form.emergencyEmail} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyEmail', e.target.value)} /></Field>
                         <Field label="Address" wide><input value={form.emergencyAddress} disabled={!editingSections.emergency} onChange={(e) => updateForm('emergencyAddress', e.target.value)} /></Field>
                     </div>
