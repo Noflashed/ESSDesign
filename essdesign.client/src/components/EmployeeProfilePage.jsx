@@ -129,7 +129,7 @@ function ToggleRow({ label, description, checked, onChange, disabled = false }) 
     );
 }
 
-const SECTION_KEYS = ['personal', 'emergency', 'contact', 'notifications', 'address'];
+const SECTION_KEYS = ['personal', 'emergency', 'notifications', 'address'];
 
 export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const photoInputRef = useRef(null);
@@ -310,7 +310,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
             }
         }
 
-        const street = details?.street || fallback.street;
+        const street = /\d/.test(fallback.street) ? fallback.street : (details?.street || fallback.street);
         const city = details?.suburb || details?.municipality || fallback.city;
         const state = details?.state || fallback.state;
         const postcode = details?.postcode || fallback.postcode;
@@ -378,9 +378,8 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         const previousForm = initialState.form || {};
         const previousPrefs = initialState.prefs || {};
         const changedFormKeys = {
-            personal: ['firstName', 'lastName', 'preferredName', 'dateOfBirth', 'gender'],
+            personal: ['firstName', 'lastName', 'preferredName', 'dateOfBirth', 'gender', 'phoneNumber', 'email'],
             emergency: ['emergencyContactName', 'emergencyRelationship', 'emergencyPhoneNumber', 'emergencyEmail', 'emergencyAddress'],
-            contact: ['phoneNumber', 'email'],
             address: ['personalAddress', 'addressStreet', 'addressCity', 'addressState', 'addressPostalCode', 'addressCountry']
         };
         const changedPrefKeys = {
@@ -531,24 +530,9 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                         </Field>
                         <Field label="Preferred Name (Optional)"><input value={form.preferredName} disabled={!editingSections.personal} onChange={(e) => updateForm('preferredName', e.target.value)} /></Field>
                         <Field label="Employee ID"><input value={form.employeeId} disabled /></Field>
+                        <Field label="Phone Number"><input value={form.phoneNumber} disabled={!editingSections.personal} onChange={(e) => updatePhoneField('phoneNumber', e.target.value)} placeholder="0422 374 448" inputMode="numeric" /></Field>
+                        <Field label="Email Address"><input type="email" value={form.email} disabled={!editingSections.personal} onChange={(e) => updateForm('email', e.target.value)} required /></Field>
                     </div>
-                </Panel>
-
-                <Panel
-                    title="Contact Details"
-                    className="compact"
-                    editing={editingSections.contact}
-                    saving={saving}
-                    changed={sectionChanged('contact')}
-                    onEdit={() => setSectionEditing('contact', true)}
-                    onCancel={() => cancelSection('contact')}
-                    onSave={() => saveProfile(null, 'contact')}
-                >
-                    <div className="employee-profile-form-grid">
-                        <Field label="Phone Number"><input value={form.phoneNumber} disabled={!editingSections.contact} onChange={(e) => updatePhoneField('phoneNumber', e.target.value)} placeholder="0422 374 448" inputMode="numeric" /></Field>
-                        <Field label="Email Address"><input type="email" value={form.email} disabled={!editingSections.contact} onChange={(e) => updateForm('email', e.target.value)} required /></Field>
-                    </div>
-                    <span className="employee-profile-inline-verified"><Check size={14} /> Verified</span>
                 </Panel>
 
                 <Panel
