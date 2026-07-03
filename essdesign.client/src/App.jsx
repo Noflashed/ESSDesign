@@ -22,7 +22,6 @@ import TransportSuitePage from './components/TransportSuitePage';
 import MaterialOrderingPage from './components/MaterialOrderingPage';
 import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
-import AdminAssistantChat from './components/AdminAssistantChat';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
 import './App.css';
@@ -1525,7 +1524,7 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return <WebLandingPage />;
+            return <WebLandingPage showAssistant={isAdmin} />;
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
@@ -1921,12 +1920,6 @@ function App() {
             ) : (
                 renderCurrentPage()
             )}
-
-            {isAdmin && !isTransportPage ? (
-                <div className="app-ai-assistant-floating">
-                    <AdminAssistantChat sidebarOpen={false} />
-                </div>
-            ) : null}
 
             {showInviteModal && (
                 <div className="invite-modal-overlay" onClick={closeInviteModal}>
