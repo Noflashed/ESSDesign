@@ -1524,7 +1524,15 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return <WebLandingPage showAssistant={isAdmin} />;
+            return (
+                <WebLandingPage
+                    showAssistant={isAdmin}
+                    userAvatarUrl={userAvatarUrl}
+                    userInitials={userInitials}
+                    userDisplayName={userDisplayName}
+                    onUserAvatarError={handleAvatarImageError}
+                />
+            );
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {

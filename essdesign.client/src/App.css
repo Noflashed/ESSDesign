@@ -5504,12 +5504,23 @@ body {
     background: #102B5C;
     border-color: #102B5C;
     color: #fff;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
 }
 
 .admin-assistant-avatar svg {
     width: 16px;
     height: 16px;
     flex: 0 0 16px;
+}
+
+.admin-assistant-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .admin-assistant-spin-icon {
@@ -7242,6 +7253,17 @@ button.stat-card {
     background: #102B5C;
     border-color: #102B5C;
     color: #fff;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.admin-assistant-page-chat .admin-assistant-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
 }
 
 .admin-assistant-page-chat .admin-assistant-message {

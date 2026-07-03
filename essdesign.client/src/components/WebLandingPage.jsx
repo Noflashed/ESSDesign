@@ -27,7 +27,13 @@ function cacheBackdropUrl(url) {
     }
 }
 
-export default function WebLandingPage({ showAssistant = false }) {
+export default function WebLandingPage({
+    showAssistant = false,
+    userAvatarUrl = '',
+    userInitials = 'U',
+    userDisplayName = 'User',
+    onUserAvatarError,
+}) {
     const [backdropUrl, setBackdropUrl] = useState(() => readCachedBackdropUrl());
 
     useEffect(() => {
@@ -60,7 +66,14 @@ export default function WebLandingPage({ showAssistant = false }) {
 
             <div className="web-landing-content">
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo" loading="eager" decoding="async" fetchPriority="high" />
-                {showAssistant ? <AdminAssistantChat /> : null}
+                {showAssistant ? (
+                    <AdminAssistantChat
+                        userAvatarUrl={userAvatarUrl}
+                        userInitials={userInitials}
+                        userDisplayName={userDisplayName}
+                        onUserAvatarError={onUserAvatarError}
+                    />
+                ) : null}
             </div>
         </section>
     );

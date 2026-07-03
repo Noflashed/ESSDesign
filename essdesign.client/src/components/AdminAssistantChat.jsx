@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Loader2, Send, User } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { adminAssistantAPI } from '../services/api';
 
 const STARTER_PROMPTS = [
@@ -16,18 +16,33 @@ function wait(ms) {
     return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
-function AssistantAvatar({ role = 'assistant' }) {
+function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials = 'U', userDisplayName = 'User', onUserAvatarError }) {
     const isUser = role === 'user';
     if (!isUser) return null;
 
     return (
         <div className="admin-assistant-avatar user" aria-hidden="true">
-            <User size={16} />
+            {userAvatarUrl ? (
+                <img
+                    src={userAvatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={onUserAvatarError}
+                />
+            ) : (
+                <span>{userInitials || userDisplayName.slice(0, 2).toUpperCase()}</span>
+            )}
         </div>
     );
 }
 
-export default function AdminAssistantChat({ className = '' }) {
+export default function AdminAssistantChat({
+    className = '',
+    userAvatarUrl = '',
+    userInitials = 'U',
+    userDisplayName = 'User',
+    onUserAvatarError,
+}) {
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
@@ -132,7 +147,13 @@ export default function AdminAssistantChat({ className = '' }) {
             <div className="admin-assistant-page-messages" ref={scrollRef}>
                 {messages.map((message, index) => (
                     <div key={`${message.role}-${index}`} className={`admin-assistant-message-row ${message.role}`}>
-                        <AssistantAvatar role={message.role} />
+                        <AssistantAvatar
+                            role={message.role}
+                            userAvatarUrl={userAvatarUrl}
+                            userInitials={userInitials}
+                            userDisplayName={userDisplayName}
+                            onUserAvatarError={onUserAvatarError}
+                        />
                         <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}`}>
                             <p>
                                 {message.content}
@@ -152,7 +173,12 @@ export default function AdminAssistantChat({ className = '' }) {
                 ))}
                 {loading ? (
                     <div className="admin-assistant-message-row assistant">
-                        <AssistantAvatar />
+                        <AssistantAvatar
+                            userAvatarUrl={userAvatarUrl}
+                            userInitials={userInitials}
+                            userDisplayName={userDisplayName}
+                            onUserAvatarError={onUserAvatarError}
+                        />
                         <div className="admin-assistant-thinking" aria-label="AI is thinking" role="status">
                             <span aria-hidden="true" />
                         </div>
