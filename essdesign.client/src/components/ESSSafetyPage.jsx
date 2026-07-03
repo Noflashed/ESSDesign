@@ -439,7 +439,7 @@ function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoa
                     <h3>General details</h3>
                     <dl>
                         {details.map(([label, value]) => (
-                            <div key={label}>
+                            <div key={label} className={label === 'Document name' ? 'document-name' : ''}>
                                 <dt>{label}</dt>
                                 <dd>{value || '-'}</dd>
                             </div>
