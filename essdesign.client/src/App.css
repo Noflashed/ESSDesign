@@ -17092,6 +17092,11 @@ button.stat-card {
     min-width: 0;
 }
 
+.project-data-project-dropdown {
+    position: relative;
+    min-width: 0;
+}
+
 .project-data-builder-trigger {
     width: 100%;
     border: 1px solid #cfd7e2;
@@ -17101,7 +17106,31 @@ button.stat-card {
     font-weight: 500;
 }
 
+.project-data-project-trigger {
+    width: 100%;
+    border: 1px solid #cfd7e2;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.project-data-project-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
 .project-data-builder-trigger span:not(.project-data-builder-logo) {
+    min-width: 0;
+    overflow: hidden;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-data-project-trigger span {
     min-width: 0;
     overflow: hidden;
     color: #111827;
@@ -17145,6 +17174,21 @@ button.stat-card {
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
 }
 
+.project-data-project-menu {
+    position: absolute;
+    z-index: 70;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid #cfd7e2;
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+}
+
 .project-data-builder-option {
     width: 100%;
     min-height: 44px;
@@ -17164,7 +17208,39 @@ button.stat-card {
     cursor: pointer;
 }
 
+.project-data-project-option {
+    width: 100%;
+    min-height: 44px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #111827;
+    padding: 7px 9px;
+    text-align: left;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.project-data-project-option svg {
+    color: #334155;
+}
+
 .project-data-builder-option span:last-child {
+    overflow: hidden;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-data-project-option span:last-child {
     overflow: hidden;
     color: #111827;
     font-size: 14px;
@@ -17179,7 +17255,19 @@ button.stat-card {
     color: #111827;
 }
 
+.project-data-project-option:hover,
+.project-data-project-option.selected {
+    background: #fff3ea;
+    color: #111827;
+}
+
 .project-data-builder-option.empty {
+    display: flex;
+    cursor: default;
+    color: #64748b;
+}
+
+.project-data-project-option.empty {
     display: flex;
     cursor: default;
     color: #64748b;

@@ -253,6 +253,44 @@ function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, 
     );
 }
 
+function ProjectDropdown({ projects, selectedProject, open, onToggle, onSelect, disabled, dropdownRef }) {
+    return (
+        <div className="project-data-project-dropdown" ref={dropdownRef}>
+            <button
+                type="button"
+                className="project-data-select-shell project-data-project-trigger"
+                onClick={onToggle}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                disabled={disabled}
+            >
+                <HardHat size={19} />
+                <span>{selectedProject?.name || (disabled ? 'Select builder first' : 'No active projects')}</span>
+                <ChevronDown size={18} />
+            </button>
+            {open ? (
+                <div className="project-data-project-menu" role="listbox" aria-label="Project">
+                    {projects.length === 0 ? (
+                        <div className="project-data-project-option empty">No active projects</div>
+                    ) : projects.map(project => (
+                        <button
+                            key={project.id}
+                            type="button"
+                            className={`project-data-project-option${project.id === selectedProject?.id ? ' selected' : ''}`}
+                            onClick={() => onSelect(project.id)}
+                            role="option"
+                            aria-selected={project.id === selectedProject?.id}
+                        >
+                            <HardHat size={17} />
+                            <span>{project.name}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 function getPreviewDetails(doc, tab, builder, project) {
     const baseDetails = [
         ['Builder', builder?.name || '-'],
@@ -364,6 +402,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [builderLogoUrls, setBuilderLogoUrls] = useState({});
     const [builderDropdownOpen, setBuilderDropdownOpen] = useState(false);
+    const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
     const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
     const [documentsLoading, setDocumentsLoading] = useState(false);
     const [documents, setDocuments] = useState([]);
@@ -377,6 +416,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [error, setError] = useState('');
     const uploadInputRef = useRef(null);
     const builderDropdownRef = useRef(null);
+    const projectDropdownRef = useRef(null);
 
     useEffect(() => {
         let active = true;
@@ -431,16 +471,20 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     }, [builders]);
 
     useEffect(() => {
-        if (!builderDropdownOpen) return undefined;
+        if (!builderDropdownOpen && !projectDropdownOpen) return undefined;
 
         const handlePointerDown = (event) => {
             if (!builderDropdownRef.current?.contains(event.target)) {
                 setBuilderDropdownOpen(false);
             }
+            if (!projectDropdownRef.current?.contains(event.target)) {
+                setProjectDropdownOpen(false);
+            }
         };
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setBuilderDropdownOpen(false);
+                setProjectDropdownOpen(false);
             }
         };
 
@@ -450,7 +494,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [builderDropdownOpen]);
+    }, [builderDropdownOpen, projectDropdownOpen]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
@@ -476,8 +520,15 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const handleSelectBuilder = (builderId) => {
         setSelectedBuilderId(builderId);
         setBuilderDropdownOpen(false);
+        setProjectDropdownOpen(false);
         setPreviewOpen(false);
         setSelectedDocumentId('');
+    };
+
+    const handleSelectProject = (projectId) => {
+        setSelectedProjectId(projectId);
+        setProjectDropdownOpen(false);
+        closeDocumentPreview();
     };
 
     const loadDocuments = async () => {
@@ -694,28 +745,29 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                             selectedBuilder={selectedBuilder}
                             logoUrls={builderLogoUrls}
                             open={builderDropdownOpen}
-                            onToggle={() => setBuilderDropdownOpen(prev => !prev)}
+                            onToggle={() => {
+                                setBuilderDropdownOpen(prev => !prev);
+                                setProjectDropdownOpen(false);
+                            }}
                             onSelect={handleSelectBuilder}
                             dropdownRef={builderDropdownRef}
                         />
                     </label>
                     <label className="project-data-select-field">
                         <span>Project</span>
-                        <div className="project-data-select-shell">
-                            <HardHat size={19} />
-                            <select
-                                value={selectedProject?.id || ''}
-                                onChange={e => {
-                                    setSelectedProjectId(e.target.value);
-                                    closeDocumentPreview();
-                                }}
-                                disabled={!selectedBuilder}
-                            >
-                                {!selectedBuilder ? <option value="">Select builder</option> : null}
-                                {selectedBuilder?.projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                            </select>
-                            <ChevronDown size={18} />
-                        </div>
+                        <ProjectDropdown
+                            projects={selectedBuilder?.projects || []}
+                            selectedProject={selectedProject}
+                            open={projectDropdownOpen}
+                            onToggle={() => {
+                                if (!selectedBuilder) return;
+                                setProjectDropdownOpen(prev => !prev);
+                                setBuilderDropdownOpen(false);
+                            }}
+                            onSelect={handleSelectProject}
+                            disabled={!selectedBuilder}
+                            dropdownRef={projectDropdownRef}
+                        />
                     </label>
                 </section>
 
