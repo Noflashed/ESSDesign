@@ -320,6 +320,7 @@ function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoa
                                 src={previewSrc}
                                 title={`${doc.name} preview`}
                                 className="project-data-preview-frame"
+                                scrolling="no"
                             />
                             <button
                                 type="button"
