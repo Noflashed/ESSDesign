@@ -8,15 +8,10 @@ import {
     ExternalLink,
     FileCheck,
     FileText,
-    Filter,
     HardHat,
-    List,
     MoreVertical,
-    Plus,
-    Search,
     Shield,
     Tag,
-    Upload,
     Users,
     X
 } from 'lucide-react';
@@ -291,6 +286,67 @@ function ProjectDropdown({ projects, selectedProject, open, onToggle, onSelect, 
     );
 }
 
+function DataTypeDropdown({ tabs, activeTab, open, onToggle, onSelect, dropdownRef }) {
+    const ActiveIcon = activeTab.icon;
+    return (
+        <div className="project-data-kind-dropdown" ref={dropdownRef}>
+            <button
+                type="button"
+                className="project-data-select-shell project-data-kind-trigger"
+                onClick={onToggle}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
+                <ActiveIcon size={19} />
+                <span>{activeTab.label}</span>
+                <ChevronDown size={18} />
+            </button>
+            {open ? (
+                <div className="project-data-kind-menu" role="listbox" aria-label="Project data type">
+                    {tabs.map(tab => {
+                        const Icon = tab.icon;
+                        return (
+                            <button
+                                key={tab.key}
+                                type="button"
+                                className={`project-data-kind-option${tab.key === activeTab.key ? ' selected' : ''}`}
+                                onClick={() => onSelect(tab.key)}
+                                role="option"
+                                aria-selected={tab.key === activeTab.key}
+                            >
+                                <Icon size={17} />
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function TableHeaderFilter({ label, active, open, onToggle, children }) {
+    return (
+        <div className={`project-data-column-filter${active ? ' filtered' : ''}${open ? ' open' : ''}`}>
+            <button
+                type="button"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onToggle();
+                }}
+            >
+                <span>{label}</span>
+                <ChevronDown size={13} />
+            </button>
+            {open ? (
+                <div className="project-data-column-menu" onClick={event => event.stopPropagation()}>
+                    {children}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 function getPreviewDetails(doc, tab, builder, project) {
     const baseDetails = [
         ['Builder', builder?.name || '-'],
@@ -395,7 +451,7 @@ function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoa
     );
 }
 
-export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
+export default function ESSSafetyPage() {
     const [loading, setLoading] = useState(true);
     const [builders, setBuilders] = useState([]);
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
@@ -403,7 +459,11 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [builderLogoUrls, setBuilderLogoUrls] = useState({});
     const [builderDropdownOpen, setBuilderDropdownOpen] = useState(false);
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+    const [kindDropdownOpen, setKindDropdownOpen] = useState(false);
     const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
+    const [columnFilterMenu, setColumnFilterMenu] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [uploadedByFilter, setUploadedByFilter] = useState('all');
     const [documentsLoading, setDocumentsLoading] = useState(false);
     const [documents, setDocuments] = useState([]);
     const [selectedDocumentId, setSelectedDocumentId] = useState('');
@@ -411,12 +471,10 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [previewPdfUrl, setPreviewPdfUrl] = useState('');
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
-    const uploadInputRef = useRef(null);
     const builderDropdownRef = useRef(null);
     const projectDropdownRef = useRef(null);
+    const kindDropdownRef = useRef(null);
 
     useEffect(() => {
         let active = true;
@@ -471,7 +529,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     }, [builders]);
 
     useEffect(() => {
-        if (!builderDropdownOpen && !projectDropdownOpen) return undefined;
+        if (!builderDropdownOpen && !projectDropdownOpen && !kindDropdownOpen && !columnFilterMenu) return undefined;
 
         const handlePointerDown = (event) => {
             if (!builderDropdownRef.current?.contains(event.target)) {
@@ -480,11 +538,19 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             if (!projectDropdownRef.current?.contains(event.target)) {
                 setProjectDropdownOpen(false);
             }
+            if (!kindDropdownRef.current?.contains(event.target)) {
+                setKindDropdownOpen(false);
+            }
+            if (!event.target.closest?.('.project-data-column-filter')) {
+                setColumnFilterMenu('');
+            }
         };
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setBuilderDropdownOpen(false);
                 setProjectDropdownOpen(false);
+                setKindDropdownOpen(false);
+                setColumnFilterMenu('');
             }
         };
 
@@ -494,7 +560,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [builderDropdownOpen, projectDropdownOpen]);
+    }, [builderDropdownOpen, projectDropdownOpen, kindDropdownOpen, columnFilterMenu]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
@@ -521,6 +587,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         setSelectedBuilderId(builderId);
         setBuilderDropdownOpen(false);
         setProjectDropdownOpen(false);
+        setKindDropdownOpen(false);
         setPreviewOpen(false);
         setSelectedDocumentId('');
     };
@@ -528,6 +595,15 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const handleSelectProject = (projectId) => {
         setSelectedProjectId(projectId);
         setProjectDropdownOpen(false);
+        closeDocumentPreview();
+    };
+
+    const handleSelectKind = (tabKey) => {
+        setActiveTabKey(tabKey);
+        setKindDropdownOpen(false);
+        setStatusFilter('all');
+        setUploadedByFilter('all');
+        setColumnFilterMenu('');
         closeDocumentPreview();
     };
 
@@ -573,16 +649,25 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     );
 
     const filteredDocuments = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return documents;
         return documents.filter(document => (
-            document.name.toLowerCase().includes(query)
-            || document.ref.toLowerCase().includes(query)
-            || document.status.toLowerCase().includes(query)
-            || document.uploadedBy.toLowerCase().includes(query)
-            || document.location.toLowerCase().includes(query)
+            (statusFilter === 'all' || document.status === statusFilter)
+            && (uploadedByFilter === 'all' || document.uploadedBy === uploadedByFilter)
         ));
-    }, [documents, searchQuery]);
+    }, [documents, statusFilter, uploadedByFilter]);
+
+    const statusOptions = useMemo(
+        () => [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        [documents]
+    );
+
+    const uploadedByOptions = useMemo(
+        () => [...new Set(documents.map(document => document.uploadedBy).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        [documents]
+    );
+
+    const toggleColumnFilterMenu = (key) => {
+        setColumnFilterMenu(current => current === key ? '' : key);
+    };
 
     const openDocumentPreview = (documentId) => {
         setSelectedDocumentId(documentId);
@@ -594,37 +679,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         setSelectedDocumentId('');
         setPreviewPdfUrl('');
         setPreviewError('');
-    };
-
-    const handleUploadClick = () => {
-        if (!selectedBuilder || !selectedProject) return;
-        if (activeTab.key === 'scaff-tags') {
-            onOpenScaffTags(selectedBuilder, selectedProject);
-            return;
-        }
-        if (activeTab.key === 'handover-certificates') {
-            setError('Handover certificates are created in the iOS app and sync here.');
-            return;
-        }
-        uploadInputRef.current?.click();
-    };
-
-    const handleUploadPdf = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file || !selectedBuilder || !selectedProject) return;
-        if (activeTab.key === 'handover-certificates') return;
-
-        setUploading(true);
-        setError('');
-        try {
-            await safetyFilesAPI.uploadModulePdf(selectedBuilder.id, selectedProject.id, activeTab.storageKind, file);
-            await loadDocuments();
-        } catch (err) {
-            setError(err.message || 'Failed to upload PDF');
-        } finally {
-            setUploading(false);
-            event.target.value = '';
-        }
     };
 
     const resolveDocumentPdfUrl = async (doc) => {
@@ -721,15 +775,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         downloadDocumentPdf(document);
     };
 
-    const openDetailedPage = () => {
-        if (!selectedBuilder || !selectedProject) return;
-        if (activeTab.key === 'scaff-tags') {
-            onOpenScaffTags(selectedBuilder, selectedProject);
-        } else if (activeTab.key === 'swms') {
-            onOpenSwms(selectedBuilder, selectedProject);
-        }
-    };
-
     if (loading) {
         return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading project data" /></div></div>;
     }
@@ -748,6 +793,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                             onToggle={() => {
                                 setBuilderDropdownOpen(prev => !prev);
                                 setProjectDropdownOpen(false);
+                                setKindDropdownOpen(false);
                             }}
                             onSelect={handleSelectBuilder}
                             dropdownRef={builderDropdownRef}
@@ -763,10 +809,26 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                 if (!selectedBuilder) return;
                                 setProjectDropdownOpen(prev => !prev);
                                 setBuilderDropdownOpen(false);
+                                setKindDropdownOpen(false);
                             }}
                             onSelect={handleSelectProject}
                             disabled={!selectedBuilder}
                             dropdownRef={projectDropdownRef}
+                        />
+                    </label>
+                    <label className="project-data-select-field">
+                        <span>Document type</span>
+                        <DataTypeDropdown
+                            tabs={PROJECT_DATA_TABS}
+                            activeTab={activeTab}
+                            open={kindDropdownOpen}
+                            onToggle={() => {
+                                setKindDropdownOpen(prev => !prev);
+                                setBuilderDropdownOpen(false);
+                                setProjectDropdownOpen(false);
+                            }}
+                            onSelect={handleSelectKind}
+                            dropdownRef={kindDropdownRef}
                         />
                     </label>
                 </section>
@@ -775,73 +837,50 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
 
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
-                        <nav className="project-data-tabs" aria-label="Project data sections">
-                            {PROJECT_DATA_TABS.map(tab => {
-                                const Icon = tab.icon;
-                                const active = tab.key === activeTab.key;
-                                return (
-                                    <button
-                                        key={tab.key}
-                                        type="button"
-                                        className={active ? 'active' : ''}
-                                        onClick={() => setActiveTabKey(tab.key)}
-                                    >
-                                        <Icon size={19} />
-                                        <span>{tab.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-
-                        <div className="project-data-actions-row">
-                            <button
-                                type="button"
-                                className="project-data-upload-btn"
-                                onClick={handleUploadClick}
-                                disabled={!selectedBuilder || !selectedProject || uploading}
-                                title={activeTab.key === 'handover-certificates' ? 'Handover certificates are created in the iOS app and sync here.' : undefined}
-                            >
-                                {uploading ? <Upload size={17} /> : <Plus size={17} />}
-                                {uploading ? 'Uploading...' : 'Upload'}
-                            </button>
-                            <input ref={uploadInputRef} type="file" accept="application/pdf" hidden onChange={handleUploadPdf} />
-                            <button type="button" className="project-data-secondary-btn">
-                                <Users size={16} />
-                                Access
-                                <ChevronDown size={16} />
-                            </button>
-                            {activeTab.key === 'scaff-tags' || activeTab.key === 'swms' ? (
-                                <button type="button" className="project-data-secondary-btn" onClick={openDetailedPage}>
-                                    <ExternalLink size={16} />
-                                    Open page
-                                </button>
-                            ) : null}
-                            <div className="project-data-search">
-                                <Search size={17} />
-                                <input
-                                    type="search"
-                                    value={searchQuery}
-                                    onChange={e => setSearchQuery(e.target.value)}
-                                    placeholder="Search documents..."
-                                />
-                            </div>
-                            <button type="button" className="project-data-secondary-btn icon-left">
-                                <Filter size={16} />
-                                Filter
-                            </button>
-                            <button type="button" className="project-data-icon-btn" aria-label="List view" title="List view">
-                                <List size={18} />
-                            </button>
-                        </div>
-
                         <div className="project-data-table-card">
                             <div className="project-data-table-head">
                                 <span className="project-data-checkbox" aria-hidden="true" />
                                 <span>Document name</span>
                                 <span>{activeTab.refLabel}</span>
-                                <span>Status</span>
+                                <span>
+                                    <TableHeaderFilter
+                                        label="Status"
+                                        active={statusFilter !== 'all'}
+                                        open={columnFilterMenu === 'status'}
+                                        onToggle={() => toggleColumnFilterMenu('status')}
+                                    >
+                                        <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                            setStatusFilter('all');
+                                            setColumnFilterMenu('');
+                                        }}>All statuses</button>
+                                        {statusOptions.map(status => (
+                                            <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
+                                                setStatusFilter(status);
+                                                setColumnFilterMenu('');
+                                            }}>{status}</button>
+                                        ))}
+                                    </TableHeaderFilter>
+                                </span>
                                 <span>Uploaded</span>
-                                <span>Uploaded by</span>
+                                <span>
+                                    <TableHeaderFilter
+                                        label="Uploaded by"
+                                        active={uploadedByFilter !== 'all'}
+                                        open={columnFilterMenu === 'uploadedBy'}
+                                        onToggle={() => toggleColumnFilterMenu('uploadedBy')}
+                                    >
+                                        <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                            setUploadedByFilter('all');
+                                            setColumnFilterMenu('');
+                                        }}>All uploaders</button>
+                                        {uploadedByOptions.map(uploadedBy => (
+                                            <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
+                                                setUploadedByFilter(uploadedBy);
+                                                setColumnFilterMenu('');
+                                            }}>{uploadedBy}</button>
+                                        ))}
+                                    </TableHeaderFilter>
+                                </span>
                                 <span />
                             </div>
 
@@ -896,17 +935,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                 </div>
                             )}
 
-                            <div className="project-data-pagination">
-                                <span>Showing {filteredDocuments.length === 0 ? '0' : `1 to ${filteredDocuments.length}`} of {documents.length} documents</span>
-                                <div>
-                                    <button type="button" disabled>1</button>
-                                    <button type="button">2</button>
-                                    <button type="button">3</button>
-                                    <span>...</span>
-                                    <button type="button">19</button>
-                                </div>
-                                <button type="button" className="project-data-page-size">10 per page <ChevronDown size={15} /></button>
-                            </div>
                         </div>
                     </div>
 
