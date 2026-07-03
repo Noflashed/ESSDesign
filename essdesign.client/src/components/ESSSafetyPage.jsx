@@ -5,9 +5,7 @@ import {
     CheckCircle,
     ChevronDown,
     ClipboardCheck,
-    Download,
     ExternalLink,
-    Eye,
     FileCheck,
     FileText,
     Filter,
@@ -87,6 +85,18 @@ const formatDate = (value) => {
         day: '2-digit',
         month: 'short',
         year: 'numeric'
+    }).format(date);
+};
+
+const formatDateTime = (value) => {
+    const date = toDate(value);
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
     }).format(date);
 };
 
@@ -243,121 +253,93 @@ function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, 
     );
 }
 
+function getPreviewDetails(doc, tab, builder, project) {
+    const baseDetails = [
+        ['Builder', builder?.name || '-'],
+        ['Project', project?.name || '-'],
+        ['Uploaded by', doc.uploadedBy || '-'],
+        ['Date uploaded', formatDateTime(doc.uploadedAt)],
+        ['Status', doc.status || '-']
+    ];
+
+    if (tab.key === 'scaff-tags') {
+        return [
+            ['Scaffold reference', doc.raw?.scaffoldNo || doc.raw?.tagNumber || doc.ref],
+            ['Tag / Ref No.', doc.ref],
+            ['Structure location', doc.location || project?.siteLocation || '-'],
+            ['Last inspection', formatDateTime(doc.raw?.latestInspectionDate || doc.uploadedAt)],
+            ...baseDetails
+        ];
+    }
+
+    if (tab.key === 'handover-certificates') {
+        return [
+            ['Form reference', doc.raw?.formReferenceName || doc.name],
+            ['Inspection no.', doc.raw?.inspectionNumber || doc.ref],
+            ['ESS representative', doc.raw?.essRepresentativeName || doc.uploadedBy || '-'],
+            ['Inspection date', formatDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
+            ['Client project no.', doc.raw?.projectNumberClient || '-'],
+            ...baseDetails
+        ];
+    }
+
+    return [
+        ['Document name', doc.name],
+        [tab.refLabel, doc.ref],
+        ['File size', doc.size || '-'],
+        ...baseDetails
+    ];
+}
+
 function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoading, previewError, onClose, onOpen }) {
-    const isScaffTag = tab.key === 'scaff-tags';
-    const isHandoverCertificate = tab.key === 'handover-certificates';
-    const previewSrc = previewUrl ? `${previewUrl}#toolbar=0&navpanes=0&scrollbar=1` : '';
+    const previewSrc = previewUrl ? `${previewUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : '';
+    const details = getPreviewDetails(doc, tab, builder, project);
 
     return (
         <aside className="project-data-preview-panel" aria-label="Document preview">
             <div className="project-data-preview-titlebar">
                 <strong title={doc.name}>{doc.name}</strong>
-                <button type="button" onClick={onClose} aria-label="Close preview" title="Close preview">
-                    <X size={18} />
-                </button>
+                <div className="project-data-preview-actions">
+                    <button type="button" onClick={onOpen} aria-label="Open document" title="Open document">
+                        <ExternalLink size={17} />
+                    </button>
+                    <button type="button" onClick={onClose} aria-label="Close preview" title="Close preview">
+                        <X size={18} />
+                    </button>
+                </div>
             </div>
-            <div className="project-data-preview-tabs">
-                <button type="button" className="active">Preview</button>
-                <button type="button">Details</button>
-            </div>
-            <div className="project-data-pdf-toolbar">
-                <Eye size={15} />
-                <Search size={15} />
-                <span>1</span>
-                <span>/</span>
-                <span>1</span>
-                <button type="button" onClick={onOpen} title="Open document">
-                    <ExternalLink size={15} />
-                </button>
-                <button type="button" onClick={onOpen} title="Download or open PDF">
-                    <Download size={15} />
-                </button>
-            </div>
-            <div className="project-data-paper">
-                {previewLoading ? (
-                    <div className="project-data-preview-state">
-                        <LoadingBrandmark label="Loading preview" />
-                    </div>
-                ) : previewSrc ? (
-                    <iframe
-                        src={previewSrc}
-                        title={`${doc.name} preview`}
-                        className="project-data-preview-frame"
-                    />
-                ) : previewError ? (
-                    <div className="project-data-preview-state">
-                        <FileText size={36} />
-                        <strong>Preview unavailable</strong>
-                        <span>{previewError}</span>
-                        <button type="button" onClick={onOpen}>Open document</button>
-                    </div>
-                ) : isScaffTag ? (
-                    <>
-                        <div className="project-data-tag-head">
-                            <div className="project-data-preview-brand">
-                                <span className="project-data-brand-mark"><HardHat size={20} /></span>
-                                <strong>{builder?.name || 'Builder'}</strong>
-                            </div>
-                            <div>
-                                <h3>SCAFFOLD TAG</h3>
-                                <p>DO NOT USE SCAFFOLD</p>
-                            </div>
-                            <div>
-                                <span>TAG No.</span>
-                                <strong>{doc.ref}</strong>
-                            </div>
+            <div className="project-data-preview-content">
+                <div className="project-data-paper">
+                    {previewLoading ? (
+                        <div className="project-data-preview-state">
+                            <LoadingBrandmark label="Loading preview" />
                         </div>
-                        <div className="project-data-tag-grid">
-                            <div>
-                                <span>Structure location</span>
-                                <strong>{project?.name || '-'}</strong>
-                                <small>{doc.location || project?.siteLocation || 'Project location pending'}</small>
-                            </div>
-                            <div>
-                                <span>SWL</span>
-                                <strong>{doc.raw?.loadRating || '450kg/m2'}</strong>
-                            </div>
+                    ) : previewSrc ? (
+                        <iframe
+                            src={previewSrc}
+                            title={`${doc.name} preview`}
+                            className="project-data-preview-frame"
+                        />
+                    ) : (
+                        <div className="project-data-preview-state">
+                            <FileText size={36} />
+                            <strong>Preview unavailable</strong>
+                            <span>{previewError || 'This document can still be opened in a new tab.'}</span>
+                            <button type="button" onClick={onOpen}>Open document</button>
                         </div>
-                        <dl className="project-data-tag-details">
-                            <div><dt>Erected by</dt><dd>{doc.raw?.erectedBy || 'Site team'}</dd></div>
-                            <div><dt>Date inspected</dt><dd>{formatDate(doc.raw?.latestInspectionDate || doc.uploadedAt)}</dd></div>
-                            <div><dt>Inspected by</dt><dd>{doc.uploadedBy}</dd></div>
-                            <div><dt>Signature</dt><dd className="signature">{doc.uploadedBy}</dd></div>
-                        </dl>
-                        <div className={`project-data-safe-strip ${doc.status === 'Expired' ? 'expired' : ''}`}>
-                            {doc.status === 'Expired' ? 'REVIEW REQUIRED' : 'SAFE FOR USE'}
-                            <CheckCircle size={18} />
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="project-data-document-preview">
-                            <div className="project-data-document-icon">
-                                <FileText size={46} />
+                    )}
+                </div>
+                <section className="project-data-preview-details" aria-label="General details">
+                    <h3>General details</h3>
+                    <dl>
+                        {details.map(([label, value]) => (
+                            <div key={label}>
+                                <dt>{label}</dt>
+                                <dd>{value || '-'}</dd>
                             </div>
-                            <h3>{tab.label}</h3>
-                            <strong>{doc.name}</strong>
-                            <span>{builder?.name || 'Builder'} / {project?.name || 'Project'}</span>
-                        </div>
-                        <dl className="project-data-tag-details">
-                            {isHandoverCertificate ? (
-                                <>
-                                    <div><dt>Inspection no.</dt><dd>{doc.raw?.inspectionNumber || doc.ref}</dd></div>
-                                    <div><dt>ESS representative</dt><dd>{doc.raw?.essRepresentativeName || doc.uploadedBy}</dd></div>
-                                    <div><dt>Inspection date</dt><dd>{formatDate(doc.raw?.inspectionDateTime || doc.uploadedAt)}</dd></div>
-                                    <div><dt>Client project no.</dt><dd>{doc.raw?.projectNumberClient || '-'}</dd></div>
-                                </>
-                            ) : (
-                                <>
-                                    <div><dt>Reference</dt><dd>{doc.ref}</dd></div>
-                                    <div><dt>Status</dt><dd>{doc.status}</dd></div>
-                                    <div><dt>Uploaded</dt><dd>{formatDate(doc.uploadedAt)}</dd></div>
-                                    <div><dt>Size</dt><dd>{doc.size || '-'}</dd></div>
-                                </>
-                            )}
-                        </dl>
-                    </>
-                )}
+                        ))}
+                    </dl>
+                </section>
             </div>
         </aside>
     );

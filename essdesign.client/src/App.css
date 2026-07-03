@@ -17533,7 +17533,7 @@ button.stat-card {
     min-width: 0;
     min-height: 0;
     display: grid;
-    grid-template-rows: 58px 47px 48px minmax(0, 1fr);
+    grid-template-rows: 58px minmax(0, 1fr);
     background: #ffffff;
     border-left: 1px solid #dfe4ea;
     box-shadow: -18px 0 42px rgba(15, 23, 42, 0.18);
@@ -17584,8 +17584,14 @@ button.stat-card {
     white-space: nowrap;
 }
 
-.project-data-preview-titlebar button,
-.project-data-pdf-toolbar button {
+.project-data-preview-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.project-data-preview-titlebar button {
     width: 32px;
     height: 32px;
     display: inline-flex;
@@ -17598,73 +17604,25 @@ button.stat-card {
     cursor: pointer;
 }
 
-.project-data-preview-titlebar button:hover,
-.project-data-pdf-toolbar button:hover {
+.project-data-preview-titlebar button:hover {
     background: #f1f5f9;
 }
 
-.project-data-preview-tabs {
-    display: flex;
-    align-items: end;
-    gap: 20px;
-    padding: 0 20px;
-    border-bottom: 1px solid #dfe4ea;
-}
-
-.project-data-preview-tabs button {
-    position: relative;
-    height: 47px;
-    border: 0;
-    background: transparent;
-    color: #475569;
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.project-data-preview-tabs button.active {
-    color: #f05a1a;
-}
-
-.project-data-preview-tabs button.active::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 2px;
-    background: #f05a1a;
-}
-
-.project-data-pdf-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-width: 0;
-    padding: 0 18px;
-    background: #242b31;
-    color: #ffffff;
-    font-size: 12.5px;
-    font-weight: 600;
-}
-
-.project-data-pdf-toolbar button {
-    margin-left: auto;
-    color: #ffffff;
-}
-
-.project-data-pdf-toolbar button + button {
-    margin-left: 0;
+.project-data-preview-content {
+    min-height: 0;
+    overflow: auto;
+    background: #f8fafc;
+    padding: 18px;
 }
 
 .project-data-paper {
-    min-height: 0;
-    margin: 18px;
+    min-height: 440px;
+    height: min(58vh, 560px);
     border: 1px solid #cbd5e1;
     background: #ffffff;
-    overflow: auto;
+    overflow: hidden;
     color: #111827;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
 .project-data-preview-frame {
@@ -17710,6 +17668,56 @@ button.stat-card {
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
+}
+
+.project-data-preview-details {
+    margin-top: 16px;
+    border: 1px solid #dbe2eb;
+    border-radius: 5px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.project-data-preview-details h3 {
+    margin: 0;
+    padding: 13px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.project-data-preview-details dl {
+    display: grid;
+    margin: 0;
+}
+
+.project-data-preview-details div {
+    min-height: 40px;
+    display: grid;
+    grid-template-columns: 142px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    border-bottom: 1px solid #eef2f6;
+}
+
+.project-data-preview-details div:last-child {
+    border-bottom: 0;
+}
+
+.project-data-preview-details dt {
+    color: #64748b;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.project-data-preview-details dd {
+    margin: 0;
+    color: #111827;
+    font-size: 12.5px;
+    font-weight: 400;
+    overflow-wrap: anywhere;
 }
 
 .project-data-tag-head {
