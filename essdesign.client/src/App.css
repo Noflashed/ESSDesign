@@ -5549,36 +5549,6 @@ body {
     color: #334155;
 }
 
-.admin-assistant-loading-line {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-.admin-assistant-typing {
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-}
-
-.admin-assistant-typing i {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: #F47C20;
-    animation: admin-assistant-typing 1s ease-in-out infinite;
-}
-
-.admin-assistant-typing i:nth-child(2) {
-    animation-delay: 0.14s;
-}
-
-.admin-assistant-typing i:nth-child(3) {
-    animation-delay: 0.28s;
-}
-
 .admin-assistant-links {
     display: grid;
     gap: 6px;
@@ -5653,17 +5623,6 @@ body {
     }
 }
 
-@keyframes admin-assistant-typing {
-    0%, 80%, 100% {
-        transform: translateY(0);
-        opacity: 0.42;
-    }
-    40% {
-        transform: translateY(-3px);
-        opacity: 1;
-    }
-}
-
 @keyframes admin-assistant-first-message-shift {
     0% {
         transform: translateX(96px);
@@ -5684,7 +5643,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
     .admin-assistant-spin-icon,
-    .admin-assistant-typing i,
+    .admin-assistant-page-chat .admin-assistant-thinking span,
     .admin-assistant-page-chat .admin-assistant-caret,
     .admin-assistant-page-chat.is-active .admin-assistant-message-row:first-child .admin-assistant-message.assistant {
         animation: none;
@@ -7340,33 +7299,25 @@ button.stat-card {
     min-width: 156px;
 }
 
-.admin-assistant-page-chat .admin-assistant-loading-line {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-}
-
-.admin-assistant-page-chat .admin-assistant-typing {
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-}
-
-.admin-assistant-page-chat .admin-assistant-typing i {
-    width: 4px;
-    height: 4px;
+.admin-assistant-page-chat .admin-assistant-thinking {
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    background: #F47C20;
-    animation: admin-assistant-typing 1s ease-in-out infinite;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(10px);
 }
 
-.admin-assistant-page-chat .admin-assistant-typing i:nth-child(2) {
-    animation-delay: 0.14s;
-}
-
-.admin-assistant-page-chat .admin-assistant-typing i:nth-child(3) {
-    animation-delay: 0.28s;
+.admin-assistant-page-chat .admin-assistant-thinking span {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(244, 124, 32, 0.22);
+    border-top-color: #F47C20;
+    animation: admin-assistant-spin 0.75s linear infinite;
 }
 
 .admin-assistant-page-chat .admin-assistant-links {
@@ -7490,6 +7441,11 @@ button.stat-card {
     border-color: rgba(244, 124, 32, 0.38);
     background: rgba(67, 35, 12, 0.86);
     color: #fdba74;
+}
+
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-thinking {
+    border-color: rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.82);
 }
 
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-message,

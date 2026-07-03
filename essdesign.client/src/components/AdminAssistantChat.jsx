@@ -153,15 +153,8 @@ export default function AdminAssistantChat({ className = '' }) {
                 {loading ? (
                     <div className="admin-assistant-message-row assistant">
                         <AssistantAvatar />
-                        <div className="admin-assistant-message assistant loading">
-                            <div className="admin-assistant-loading-line">
-                                <span>Checking ESS data</span>
-                                <span className="admin-assistant-typing" aria-hidden="true">
-                                    <i />
-                                    <i />
-                                    <i />
-                                </span>
-                            </div>
+                        <div className="admin-assistant-thinking" aria-label="AI is thinking" role="status">
+                            <span aria-hidden="true" />
                         </div>
                     </div>
                 ) : null}
