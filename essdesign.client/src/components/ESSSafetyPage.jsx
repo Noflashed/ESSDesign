@@ -22,7 +22,7 @@ import {
     Users,
     X
 } from 'lucide-react';
-import { scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
+import { handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
 const PROJECT_DATA_TABS = [
@@ -109,6 +109,11 @@ const makeFileRef = (prefix, index) => `${prefix}-${String(index + 1).padStart(5
 
 const normaliseFileName = (name) => String(name || 'document.pdf').replace(/^\d+-/, '');
 
+const withPdfExtension = (value) => {
+    const name = String(value || 'Handover certificate').trim() || 'Handover certificate';
+    return name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`;
+};
+
 function getScaffTagStatus(item) {
     const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
     if (!item.latestInspectionDate) return 'Draft';
@@ -129,6 +134,25 @@ function mapScaffTagRows(items) {
             expiresAt: expiry ? expiry.toISOString() : '',
             uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
             location: item.jobLocation || '',
+            size: '',
+            raw: item
+        };
+    });
+}
+
+function mapHandoverRows(items) {
+    return items.map((item, index) => {
+        const ref = item.inspectionNumber || item.formReferenceName || makeFileRef('HOC', index);
+        return {
+            id: item.id,
+            kind: 'handover-certificates',
+            name: withPdfExtension(item.formReferenceName || `Handover certificate ${ref}`),
+            ref,
+            status: 'Current',
+            uploadedAt: item.updatedAt || item.inspectionDateTime || '',
+            expiresAt: '',
+            uploadedBy: item.essRepresentativeName || 'Site team',
+            location: item.projectNumberClient || '',
             size: '',
             raw: item
         };
@@ -221,6 +245,7 @@ function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, 
 
 function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
     const isScaffTag = tab.key === 'scaff-tags';
+    const isHandoverCertificate = tab.key === 'handover-certificates';
 
     return (
         <aside className="project-data-preview-panel" aria-label="Document preview">
@@ -297,10 +322,21 @@ function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
                             <span>{builder?.name || 'Builder'} / {project?.name || 'Project'}</span>
                         </div>
                         <dl className="project-data-tag-details">
-                            <div><dt>Reference</dt><dd>{doc.ref}</dd></div>
-                            <div><dt>Status</dt><dd>{doc.status}</dd></div>
-                            <div><dt>Uploaded</dt><dd>{formatDate(doc.uploadedAt)}</dd></div>
-                            <div><dt>Size</dt><dd>{doc.size || '-'}</dd></div>
+                            {isHandoverCertificate ? (
+                                <>
+                                    <div><dt>Inspection no.</dt><dd>{doc.raw?.inspectionNumber || doc.ref}</dd></div>
+                                    <div><dt>ESS representative</dt><dd>{doc.raw?.essRepresentativeName || doc.uploadedBy}</dd></div>
+                                    <div><dt>Inspection date</dt><dd>{formatDate(doc.raw?.inspectionDateTime || doc.uploadedAt)}</dd></div>
+                                    <div><dt>Client project no.</dt><dd>{doc.raw?.projectNumberClient || '-'}</dd></div>
+                                </>
+                            ) : (
+                                <>
+                                    <div><dt>Reference</dt><dd>{doc.ref}</dd></div>
+                                    <div><dt>Status</dt><dd>{doc.status}</dd></div>
+                                    <div><dt>Uploaded</dt><dd>{formatDate(doc.uploadedAt)}</dd></div>
+                                    <div><dt>Size</dt><dd>{doc.size || '-'}</dd></div>
+                                </>
+                            )}
                         </dl>
                     </>
                 )}
@@ -439,9 +475,14 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         setDocumentsLoading(true);
         setError('');
         try {
-            const rows = activeTab.key === 'scaff-tags'
-                ? mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id))
-                : mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
+            let rows;
+            if (activeTab.key === 'scaff-tags') {
+                rows = mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id));
+            } else if (activeTab.key === 'handover-certificates') {
+                rows = mapHandoverRows(await handoverCertificatesAPI.listForms(selectedBuilder.id, selectedProject.id));
+            } else {
+                rows = mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
+            }
 
             setDocuments(rows);
             setSelectedDocumentId('');
@@ -473,6 +514,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             || document.ref.toLowerCase().includes(query)
             || document.status.toLowerCase().includes(query)
             || document.uploadedBy.toLowerCase().includes(query)
+            || document.location.toLowerCase().includes(query)
         ));
     }, [documents, searchQuery]);
 
@@ -492,12 +534,17 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             onOpenScaffTags(selectedBuilder, selectedProject);
             return;
         }
+        if (activeTab.key === 'handover-certificates') {
+            setError('Handover certificates are created in the iOS app and sync here.');
+            return;
+        }
         uploadInputRef.current?.click();
     };
 
     const handleUploadPdf = async (event) => {
         const file = event.target.files?.[0];
         if (!file || !selectedBuilder || !selectedProject) return;
+        if (activeTab.key === 'handover-certificates') return;
 
         setUploading(true);
         setError('');
@@ -519,6 +566,13 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                 const form = await scaffTagsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
                 if (!form) throw new Error('Scaff-tag form not found');
                 const url = await scaffTagsAPI.getPdfUrl(form);
+                window.open(url, '_blank', 'noopener,noreferrer');
+                return;
+            }
+            if (doc.kind === 'handover-certificates') {
+                const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+                if (!form) throw new Error('Handover certificate not found');
+                const url = await handoverCertificatesAPI.getPdfUrl(form);
                 window.open(url, '_blank', 'noopener,noreferrer');
                 return;
             }
@@ -606,6 +660,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                 className="project-data-upload-btn"
                                 onClick={handleUploadClick}
                                 disabled={!selectedBuilder || !selectedProject || uploading}
+                                title={activeTab.key === 'handover-certificates' ? 'Handover certificates are created in the iOS app and sync here.' : undefined}
                             >
                                 {uploading ? <Upload size={17} /> : <Plus size={17} />}
                                 {uploading ? 'Uploading...' : 'Upload'}

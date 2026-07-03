@@ -4040,6 +4040,69 @@ export const safetyFilesAPI = {
     getSignedModuleFileUrl: async (path) => signedStorageUrl(path, 3600)
 };
 
+const handoverPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'handover-certificates')}`;
+const handoverIndexPath = (builderId, projectId) => `${handoverPrefix(builderId, projectId)}/index.json`;
+const handoverFormPath = (builderId, projectId, formId) => `${handoverPrefix(builderId, projectId)}/forms/${formId}.json`;
+const handoverPdfPath = (builderId, projectId, formId) => `${handoverPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
+
+function parseHandoverIndex(raw) {
+    if (!raw || !Array.isArray(raw.forms)) {
+        return { forms: [], updatedAt: nowIso() };
+    }
+
+    return {
+        forms: raw.forms
+            .filter(item => item && typeof item.id === 'string')
+            .map(item => ({
+                id: item.id,
+                formReferenceName: item.formReferenceName || '',
+                inspectionNumber: item.inspectionNumber || '',
+                essRepresentativeName: item.essRepresentativeName || '',
+                projectNumberClient: item.projectNumberClient || '',
+                inspectionDateTime: item.inspectionDateTime || '',
+                updatedAt: item.updatedAt || nowIso()
+            }))
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+        updatedAt: raw.updatedAt || nowIso()
+    };
+}
+
+export const handoverCertificatesAPI = {
+    listForms: async (builderId, projectId) => {
+        const index = await readStorageJson(handoverIndexPath(builderId, projectId));
+        return parseHandoverIndex(index).forms;
+    },
+
+    getForm: async (builderId, projectId, formId) => {
+        const form = await readStorageJson(handoverFormPath(builderId, projectId, formId));
+        if (!form) {
+            return null;
+        }
+        return {
+            ...form,
+            id: form.id || formId,
+            inspectionNumber: form.inspectionNumber || '',
+            formReferenceName: form.formReferenceName || '',
+            inspectionDateTime: form.inspectionDateTime || '',
+            projectNumberClient: form.projectNumberClient || '',
+            sectionLocation: form.sectionLocation || '',
+            intendedUse: form.intendedUse || '',
+            drawingNumber: form.drawingNumber || '',
+            scaffoldIdNo: form.scaffoldIdNo || '',
+            scaffoldDuty: form.scaffoldDuty || '',
+            essRepresentativeName: form.essRepresentativeName || '',
+            clientName: form.clientName || '',
+            comments: form.comments || '',
+            photoSlots: Array.isArray(form.photoSlots) ? form.photoSlots : [],
+            correctiveActions: Array.isArray(form.correctiveActions) ? form.correctiveActions : [],
+            pdfPath: form.pdfPath || handoverPdfPath(builderId, projectId, formId),
+            updatedAt: form.updatedAt || nowIso()
+        };
+    },
+
+    getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14)
+};
+
 function parseScaffIndex(raw) {
     if (!raw || !Array.isArray(raw.forms)) {
         return { forms: [], updatedAt: nowIso() };
