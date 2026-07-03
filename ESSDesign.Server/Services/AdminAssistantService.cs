@@ -378,6 +378,7 @@ namespace ESSDesign.Server.Services
         {
             var today = GetSydneyToday();
             var collectedLinks = new List<AdminAssistantLink>();
+            var verifiedEvidence = await BuildVerifiedEvidencePackAsync(question, currentUser, cancellationToken);
 
             var systemPrompt = $"""
 You are Cori, the ESS Design assistant. You work at Erect Safe Scaffolding and know the business inside out — the sites, the crew, the trucks, the designs, everything. You talk like a real person who works here, not a customer service bot.
@@ -440,6 +441,20 @@ WHEN THINGS GO WRONG:
 """;
 
             var messages = new List<object> { new { role = "system", content = systemPrompt } };
+            messages.Add(new
+            {
+                role = "system",
+                content = $"""
+VERIFIED ESS DATA FOR THIS QUESTION:
+{verifiedEvidence}
+
+Rules for using this data:
+- Treat this as database evidence, not a suggestion.
+- Prefer exact site, builder, person, document, and date matches from this evidence.
+- If multiple records match, either answer each matching record or ask for the missing builder/site detail.
+- If this evidence is not enough, call tools before answering.
+""",
+            });
 
             foreach (var msg in (history ?? Array.Empty<ChatMessage>()).TakeLast(10))
             {
@@ -458,7 +473,7 @@ WHEN THINGS GO WRONG:
                 var payload = new
                 {
                     model,
-                    temperature = 0.85,
+                    temperature = 0.2,
                     messages = messages.ToArray(),
                     tools = GetToolDefinitions(),
                     tool_choice = "auto",
@@ -816,6 +831,213 @@ WHEN THINGS GO WRONG:
             if (!string.IsNullOrWhiteSpace(emergencyContactDetails)) parts.Add($"emergencyContact={emergencyContactDetails}");
             return string.Join("; ", parts);
         }
+
+        private async Task<string> BuildVerifiedEvidencePackAsync(string question, UserInfo currentUser, CancellationToken ct)
+        {
+            try
+            {
+                var normalizedQuestion = NormalizeSearchText(question);
+                var tokens = BuildBroadSearchTokens(question);
+                var flags = BuildQuestionIntentFlags(normalizedQuestion);
+                var jobsites = await FetchJobsiteDirectoryAsync(ct);
+                var employees = await FetchEmployeeDirectoryAsync(ct);
+                var designResolution = ResolveDesignQueryAgainstKnownSites(question, jobsites);
+                var evidence = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["question"] = question,
+                    ["currentUser"] = new { currentUser.FullName, currentUser.Email, currentUser.Role },
+                    ["sydneyDate"] = GetSydneyToday().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    ["intent"] = flags,
+                    ["correctedQuery"] = designResolution.CorrectedFrom == null ? null : new
+                    {
+                        searchedQuery = designResolution.Query,
+                        designResolution.CorrectedFrom,
+                        designResolution.CorrectionReason,
+                        designResolution.MatchedSites,
+                    },
+                };
+
+                var rankedSites = RankMatchingJobsites(jobsites, tokens, normalizedQuestion, includeArchived: flags.IncludeArchived).ToList();
+                if (rankedSites.Count == 0 && flags.SiteRelated && flags.WantsList)
+                    rankedSites = jobsites.Where(site => flags.IncludeArchived || !site.Archived).OrderBy(site => site.Name).ToList();
+
+                var matchingSites = rankedSites
+                    .Take(flags.WantsList ? 20 : 8)
+                    .Select(site => new
+                    {
+                        site.Id,
+                        site.Name,
+                        builder = site.BuilderName,
+                        siteLocation = site.SiteLocation,
+                        scaffoldEntity = site.ScaffoldEntity,
+                        site.Archived,
+                        assignedProjectManager = FormatAssignedSitePerson(site.ProjectManager),
+                        assignedSiteSupervisor = FormatAssignedSitePerson(site.SiteSupervisor),
+                        assignedLeadingHand = FormatAssignedSitePerson(site.LeadingHand),
+                        inductedEmployeeCount = site.InductedEmployees.Count,
+                    })
+                    .ToList();
+
+                if (matchingSites.Count > 0 || flags.SiteRelated)
+                    evidence["matchingSites"] = matchingSites;
+
+                var matchingEmployees = RankMatchingEmployees(employees, tokens, normalizedQuestion)
+                    .Take(flags.WantsList ? 20 : 8)
+                    .Select(employee => new
+                    {
+                        employee.Id,
+                        employee.FullName,
+                        employee.Email,
+                        employee.PhoneNumber,
+                        siteRole = FormatDirectoryRole(employee),
+                        appRole = employee.AppRole ?? AppRoles.Viewer,
+                        employee.Verified,
+                    })
+                    .ToList();
+
+                if (matchingEmployees.Count > 0 || flags.PersonRelated)
+                    evidence["matchingEmployees"] = matchingEmployees;
+
+                if (flags.DesignRelated)
+                {
+                    var (folders, documents) = await FetchDesignDataAsync(ct);
+                    var designSearch = SearchDesignDocuments(
+                        designResolution.Query,
+                        folders,
+                        documents,
+                        flags.WantsLatest ? "date" : "relevance",
+                        limit: flags.WantsList ? 12 : 6,
+                        includeIds: true,
+                        jobsites: jobsites);
+                    evidence["designs"] = JsonSerializer.Deserialize<JsonElement>(designSearch, _jsonOptions);
+                }
+
+                if (flags.ProjectDataRelated)
+                {
+                    var projectData = await FetchProjectDataDocumentsAsync(
+                        designResolution.Query,
+                        null,
+                        null,
+                        NormalizeProjectDataKind(question),
+                        includeArchived: flags.IncludeArchived,
+                        ct);
+                    evidence["projectDataDocuments"] = projectData
+                        .OrderByDescending(document => flags.WantsLatest
+                            ? TryParseDateTimeOffset(document.UploadedAt)?.ToUnixTimeSeconds() ?? 0
+                            : document.MatchScore)
+                        .ThenByDescending(document => document.UploadedAt)
+                        .Take(flags.WantsList ? 15 : 7)
+                        .Select(ProjectDataDocumentResponse)
+                        .ToList();
+                }
+
+                if (flags.RosterRelated)
+                    evidence["roster"] = JsonSerializer.Deserialize<JsonElement>(await Tool_GetRoster(JsonSerializer.SerializeToElement(new { days = flags.WantsList ? 7 : 1 }, _jsonOptions), ct), _jsonOptions);
+
+                if (flags.DeliveryRelated)
+                    evidence["deliveries"] = JsonSerializer.Deserialize<JsonElement>(await Tool_GetActiveDeliveries(JsonSerializer.SerializeToElement(new { scheduled_only = false }, _jsonOptions), ct), _jsonOptions);
+
+                if (flags.TruckRelated)
+                    evidence["truckLocations"] = JsonSerializer.Deserialize<JsonElement>(await Tool_GetTruckLocations(JsonSerializer.SerializeToElement(new { }, _jsonOptions), ct), _jsonOptions);
+
+                evidence["instruction"] = "Answer operational ESS questions only from this verified evidence or from follow-up tool calls. If evidence is empty or ambiguous, say what is missing or ask a focused clarification.";
+
+                var json = JsonSerializer.Serialize(evidence, _jsonOptions);
+                return TruncateForPrompt(json, 24000);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to build admin assistant evidence pack");
+                return JsonSerializer.Serialize(new
+                {
+                    warning = "The server could not build the verified evidence pack. The assistant must call tools before answering factual ESS questions.",
+                    error = ex.Message,
+                }, _jsonOptions);
+            }
+        }
+
+        private sealed class QuestionIntentFlags
+        {
+            public bool SiteRelated { get; set; }
+            public bool PersonRelated { get; set; }
+            public bool DesignRelated { get; set; }
+            public bool ProjectDataRelated { get; set; }
+            public bool RosterRelated { get; set; }
+            public bool DeliveryRelated { get; set; }
+            public bool TruckRelated { get; set; }
+            public bool WantsLatest { get; set; }
+            public bool WantsList { get; set; }
+            public bool IncludeArchived { get; set; }
+        }
+
+        private static QuestionIntentFlags BuildQuestionIntentFlags(string normalizedQuestion)
+        {
+            bool HasAny(params string[] terms) => terms.Any(term => normalizedQuestion.Contains(term, StringComparison.OrdinalIgnoreCase));
+            return new QuestionIntentFlags
+            {
+                SiteRelated = HasAny("site", "job", "project", "builder", "address", "supervisor", "manager", "leading hand", "inducted"),
+                PersonRelated = HasAny("who", "person", "employee", "user", "phone", "email", "role", "supervisor", "manager", "leading hand"),
+                DesignRelated = HasAny("design", "drawing", "revision", "rev", "document", "pdf", "external", "demolition", "scaffold"),
+                ProjectDataRelated = HasAny("project data", "scaff tag", "scaffold tag", "tag", "swms", "handover", "certificate", "day labour", "day labor"),
+                RosterRelated = HasAny("roster", "on today", "working today", "crew today", "scheduled today"),
+                DeliveryRelated = HasAny("delivery", "deliveries", "material", "materials", "transport schedule", "order"),
+                TruckRelated = HasAny("truck", "gps", "location", "where is ess"),
+                WantsLatest = HasAny("latest", "newest", "most recent", "current"),
+                WantsList = HasAny("list", "show", "all", "active", "how many"),
+                IncludeArchived = HasAny("archived", "deleted", "inactive"),
+            };
+        }
+
+        private static IEnumerable<JobsiteContextRow> RankMatchingJobsites(
+            IReadOnlyList<JobsiteContextRow> jobsites,
+            IReadOnlyList<string> tokens,
+            string normalizedQuestion,
+            bool includeArchived)
+        {
+            return jobsites
+                .Where(site => includeArchived || !site.Archived)
+                .Select(site =>
+                {
+                    var text = $"{site.Name} {site.BuilderName} {site.SiteLocation} {site.ScaffoldEntity}";
+                    var score = tokens.Count == 0 ? 1 : ScoreSearchCandidate(text, tokens, out _);
+                    var normalizedSite = NormalizeSearchText(text);
+                    var numericBoost = BuildNumericSearchTokens(normalizedQuestion).Count(number => NumericTokenAppears(normalizedSite, number)) * 40;
+                    return new { Site = site, Score = score + numericBoost };
+                })
+                .Where(item => tokens.Count == 0 || item.Score > 0)
+                .OrderByDescending(item => item.Score)
+                .ThenBy(item => item.Site.Archived)
+                .ThenBy(item => item.Site.Name)
+                .Select(item => item.Site);
+        }
+
+        private static IEnumerable<EmployeeContextRow> RankMatchingEmployees(
+            IReadOnlyList<EmployeeContextRow> employees,
+            IReadOnlyList<string> tokens,
+            string normalizedQuestion)
+        {
+            return employees
+                .Select(employee =>
+                {
+                    var text = $"{employee.FullName} {employee.Email} {employee.PhoneNumber} {employee.AppRole} {FormatDirectoryRole(employee)}";
+                    var score = tokens.Count == 0 ? 0 : ScoreSearchCandidate(text, tokens, out _);
+                    if (!string.IsNullOrWhiteSpace(employee.FullName) && normalizedQuestion.Contains(NormalizeSearchText(employee.FullName), StringComparison.OrdinalIgnoreCase))
+                        score += 120;
+                    return new { Employee = employee, Score = score };
+                })
+                .Where(item => item.Score > 0)
+                .OrderByDescending(item => item.Score)
+                .ThenBy(item => item.Employee.FullName)
+                .Select(item => item.Employee);
+        }
+
+        private static string TruncateForPrompt(string value, int maxChars)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxChars)
+                return value;
+            return $"{value[..maxChars]}\n...TRUNCATED: additional verified records were omitted to keep the AI context focused.";
+        }
+
         private async Task<string> Tool_SearchEmployees(JsonElement args, CancellationToken ct)
         {
             var nameFilter = TryGetString(args, "name");

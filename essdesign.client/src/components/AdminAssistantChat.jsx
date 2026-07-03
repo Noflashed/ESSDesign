@@ -9,11 +9,19 @@ const STARTER_PROMPTS = [
     'Find the latest design for a job-site',
 ];
 
-const TYPEWRITER_DELAY_MS = 14;
-const MAX_TYPEWRITER_STEPS = 220;
+const TYPEWRITER_DELAY_MS = 16;
+const TYPEWRITER_PUNCTUATION_PAUSE_MS = 70;
+const TYPEWRITER_LINE_PAUSE_MS = 110;
 
 function wait(ms) {
     return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function getTypewriterDelay(character) {
+    if (character === '\n') return TYPEWRITER_LINE_PAUSE_MS;
+    if (/[.!?]/.test(character)) return TYPEWRITER_PUNCTUATION_PAUSE_MS;
+    if (/[,;:]/.test(character)) return Math.round(TYPEWRITER_PUNCTUATION_PAUSE_MS * 0.55);
+    return TYPEWRITER_DELAY_MS;
 }
 
 function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials = 'U', userDisplayName = 'User', onUserAvatarError }) {
@@ -72,7 +80,6 @@ export default function AdminAssistantChat({
     const typeAssistantMessage = async ({ content, links = [], error = false }) => {
         const fullText = content || 'I could not answer that from the current ESS data.';
         const messageId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const stepSize = Math.max(1, Math.ceil(fullText.length / MAX_TYPEWRITER_STEPS));
         setTyping(true);
 
         setMessages(current => [
@@ -87,7 +94,7 @@ export default function AdminAssistantChat({
             },
         ]);
 
-        for (let index = stepSize; index < fullText.length; index += stepSize) {
+        for (let index = 1; index < fullText.length; index += 1) {
             if (!mountedRef.current) return;
             const partialText = fullText.slice(0, index);
             setMessages(current => current.map(message =>
@@ -95,7 +102,7 @@ export default function AdminAssistantChat({
                     ? { ...message, content: partialText }
                     : message
             ));
-            await wait(TYPEWRITER_DELAY_MS);
+            await wait(getTypewriterDelay(fullText[index - 1]));
         }
 
         if (!mountedRef.current) return;
