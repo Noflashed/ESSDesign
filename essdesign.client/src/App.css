@@ -8801,21 +8801,6 @@ button.stat-card {
     font-weight: 700;
 }
 
-.site-registry-entity-pill {
-    display: inline-flex;
-    align-items: center;
-    min-height: 28px;
-    max-width: 100%;
-    padding: 0 10px;
-    border-radius: 5px;
-    border: 1px solid #d8e2f1;
-    background: #f8fafc;
-    color: #334155;
-    font-size: 12px;
-    font-weight: 750;
-    white-space: nowrap;
-}
-
 .site-registry-table-actions {
     gap: 14px;
     flex-wrap: nowrap;

@@ -3,7 +3,7 @@ import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, 
 import { analysisAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
-const SCAFFOLD_ENTITY_OPTIONS = ['Erect Safe Scaffolding', 'Maloo Access Group'];
+const SCAFFOLD_ENTITY_OPTIONS = ['Erect Safe Scaffolding', 'Maloo Access Group', 'Scaff-Technic'];
 const DEFAULT_SCAFFOLD_ENTITY = SCAFFOLD_ENTITY_OPTIONS[0];
 
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
@@ -302,6 +302,7 @@ export default function SiteInformationPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [inductedSearch, setInductedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [scaffoldEntityFilter, setScaffoldEntityFilter] = useState('all');
     const [error, setError] = useState('');
 
     const loadBuilders = async () => {
@@ -431,6 +432,7 @@ export default function SiteInformationPage() {
             .flatMap(builder => builder.projects.map(project => ({ ...project, builder })))
             .filter(project => showArchived || statusFilter === 'archived' || !project.archived)
             .filter(project => statusFilter === 'all' || (statusFilter === 'archived' ? project.archived : !project.archived))
+            .filter(project => scaffoldEntityFilter === 'all' || normalizeScaffoldEntity(project.scaffoldEntity) === scaffoldEntityFilter)
             .filter(project => {
                 if (!cleanSearchQuery) {
                     return true;
@@ -443,9 +445,10 @@ export default function SiteInformationPage() {
                     project.archived ? 'Archived' : 'Active',
                 ].join(' ').toLowerCase().includes(cleanSearchQuery);
             });
-    }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter]);
+    }, [builders, selectedBuilder, showArchived, searchQuery, statusFilter, scaffoldEntityFilter]);
 
     const hasStatusFilter = statusFilter !== 'all';
+    const hasScaffoldEntityFilter = scaffoldEntityFilter !== 'all';
     const employeeById = useMemo(() => new Map(employees.map(employee => [employee.id, employee])), [employees]);
     const appUserById = useMemo(() => new Map(appUsers.map(user => [user.id, user])), [appUsers]);
     const employeeByAuthUserId = useMemo(
@@ -837,6 +840,11 @@ export default function SiteInformationPage() {
         setColumnFilterMenu('');
     };
 
+    const selectScaffoldEntityFilter = (entity) => {
+        setScaffoldEntityFilter(entity);
+        setColumnFilterMenu('');
+    };
+
     const toggleColumnFilterMenu = (menuName) => {
         setColumnFilterMenu(prev => prev === menuName ? '' : menuName);
     };
@@ -987,7 +995,31 @@ export default function SiteInformationPage() {
                                                 ) : null}
                                             </div>
                                         </th>
-                                        <th>Scaffold Entity</th>
+                                        <th>
+                                            <div className={`site-registry-column-filter ${hasScaffoldEntityFilter ? 'filtered' : ''} ${columnFilterMenu === 'scaffoldEntity' ? 'open' : ''}`}>
+                                                <button type="button" onClick={event => {
+                                                    event.stopPropagation();
+                                                    toggleColumnFilterMenu('scaffoldEntity');
+                                                }}>
+                                                    <span>Scaffold Entity</span>
+                                                </button>
+                                                {columnFilterMenu === 'scaffoldEntity' ? (
+                                                    <div className="site-registry-column-menu site-registry-column-menu-list" onClick={event => event.stopPropagation()}>
+                                                        <button type="button" className={scaffoldEntityFilter === 'all' ? 'selected' : ''} onClick={() => selectScaffoldEntityFilter('all')}>All Entities</button>
+                                                        {SCAFFOLD_ENTITY_OPTIONS.map(entity => (
+                                                            <button
+                                                                key={entity}
+                                                                type="button"
+                                                                className={scaffoldEntityFilter === entity ? 'selected' : ''}
+                                                                onClick={() => selectScaffoldEntityFilter(entity)}
+                                                            >
+                                                                {entity}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </th>
                                         <th>Site Location</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${hasStatusFilter ? 'filtered' : ''} ${columnFilterMenu === 'status' ? 'open' : ''}`}>
@@ -1077,9 +1109,7 @@ export default function SiteInformationPage() {
                                                         </div>
                                                     </td>
                                                     <td>{project.builder.name}</td>
-                                                    <td>
-                                                        <span className="site-registry-entity-pill">{normalizeScaffoldEntity(project.scaffoldEntity)}</span>
-                                                    </td>
+                                                    <td>{normalizeScaffoldEntity(project.scaffoldEntity)}</td>
                                                     <td>{project.siteLocation || 'Not set'}</td>
                                                     <td>
                                                         <span className={`site-registry-status ${project.archived ? 'archived' : 'active'}`}>

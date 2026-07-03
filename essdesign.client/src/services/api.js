@@ -314,7 +314,7 @@ const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
 const SAFETY_PROJECTS_PATH = 'projects.json';
 const DEFAULT_SCAFFOLD_ENTITY = 'Erect Safe Scaffolding';
-const SCAFFOLD_ENTITIES = new Set(['Erect Safe Scaffolding', 'Maloo Access Group']);
+const SCAFFOLD_ENTITIES = new Set(['Erect Safe Scaffolding', 'Maloo Access Group', 'Scaff-Technic']);
 const BUILDER_LOGOS_PREFIX = 'builder-logos';
 
 const currentSupabaseBearer = () => localStorage.getItem('access_token') || SUPABASE_ANON_KEY;

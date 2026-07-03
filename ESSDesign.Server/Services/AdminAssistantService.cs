@@ -361,7 +361,7 @@ Today is {today:dddd, MMMM d, yyyy}. The person you're talking to is {currentUse
 Current user profile: {FormatUserProfileForPrompt(currentUser)}
 
 ESS Design runs scaffolding projects across Sydney. The app tracks job-sites, builders, employees, inductions, design documents (PDFs), rosters, material deliveries, live truck GPS, and user accounts.
-Each job-site also has a scaffold entity: either Erect Safe Scaffolding or Maloo Access Group. Use that field when someone asks which company/entity a site belongs to, or asks about ESS versus Maloo sites.
+Each job-site also has a scaffold entity: Erect Safe Scaffolding, Maloo Access Group, or Scaff-Technic. Use that field when someone asks which company/entity a site belongs to, or asks about ESS, Maloo, or Scaff-Technic sites.
 
 The ESS yard is at 130 Gilba Road, Girraween NSW 2145. That's what people mean when they say "the yard" or "the depot".
 
@@ -540,7 +540,7 @@ WHEN THINGS GO WRONG:
                     ("name", "string", "Partial or full site name to search for"),
                     ("builder", "string", "Filter by builder/company name"),
                     ("location", "string", "Filter by suburb or address"),
-                    ("scaffold_entity", "string", "Filter by scaffold entity: Erect Safe Scaffolding or Maloo Access Group"),
+                    ("scaffold_entity", "string", "Filter by scaffold entity: Erect Safe Scaffolding, Maloo Access Group, or Scaff-Technic"),
                     ("archived", "boolean", "If true return archived sites, if false return active sites only. Leave unset for all."),
                     ("limit", "integer", "Maximum results (default 30)"))),
             Fn("get_site_details", "Get full details about a specific job-site including assigned project manager, assigned site supervisor, assigned leading hand, inducted employees, builder, and location.",
@@ -2689,6 +2689,11 @@ WHEN THINGS GO WRONG:
             if (value.Equals("Maloo Access Group", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("Maloo access group", StringComparison.OrdinalIgnoreCase))
                 return "Maloo Access Group";
+
+            if (value.Equals("Scaff-Technic", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Scaff Technic", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Scafftechnic", StringComparison.OrdinalIgnoreCase))
+                return "Scaff-Technic";
 
             if (value.Equals(DefaultScaffoldEntity, StringComparison.OrdinalIgnoreCase)
                 || value.Equals("ESS", StringComparison.OrdinalIgnoreCase)
