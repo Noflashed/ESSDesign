@@ -95,6 +95,31 @@ namespace ESSDesign.Server.Services
             public List<object> MatchedSites { get; set; } = new();
         }
 
+        private sealed class ProjectDataDocumentRow
+        {
+            public string DocumentId { get; set; } = string.Empty;
+            public string Kind { get; set; } = string.Empty;
+            public string KindLabel { get; set; } = string.Empty;
+            public string BuilderId { get; set; } = string.Empty;
+            public string BuilderName { get; set; } = string.Empty;
+            public string ProjectId { get; set; } = string.Empty;
+            public string ProjectName { get; set; } = string.Empty;
+            public string? SiteLocation { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public string Reference { get; set; } = string.Empty;
+            public string Status { get; set; } = "Current";
+            public string UploadedAt { get; set; } = string.Empty;
+            public string UploadedBy { get; set; } = "Project data";
+            public string? ExpiresAt { get; set; }
+            public string? Location { get; set; }
+            public string? StoragePath { get; set; }
+            public string? FormId { get; set; }
+            public long? Size { get; set; }
+            public Dictionary<string, string> Details { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+            public int MatchScore { get; set; }
+            public List<string> MatchedTerms { get; set; } = new();
+        }
+
         private sealed class TruckLiveLocationContext
         {
             public string TruckId { get; set; } = string.Empty;
@@ -362,6 +387,7 @@ Current user profile: {FormatUserProfileForPrompt(currentUser)}
 
 ESS Design runs scaffolding projects across Sydney. The app tracks job-sites, builders, employees, inductions, design documents (PDFs), rosters, material deliveries, live truck GPS, and user accounts.
 Each job-site also has a scaffold entity: Erect Safe Scaffolding, Maloo Access Group, or Scaff-Technic. Use that field when someone asks which company/entity a site belongs to, or asks about ESS, Maloo, or Scaff-Technic sites.
+Project data is site-specific information stored against a builder and job-site. It includes scaff-tags, SWMS PDFs, handover certificates, day labour forms, and project data design-document PDFs. Use the project data tools for questions about those site files, generated form details, the latest site document, or opening/downloading a Project data document.
 
 The ESS yard is at 130 Gilba Road, Girraween NSW 2145. That's what people mean when they say "the yard" or "the depot".
 
@@ -377,6 +403,12 @@ DESIGN SEARCH SAFETY:
 - Treat design requests as natural descriptions, not exact PDF-title searches. Correct obvious spelling mistakes and common shorthand like demo/demolition when choosing between results.
 - Do not call get_design_link unless the returned design clearly matches the corrected query/site/scaffold. If the design result says count is 0, or the site is ambiguous, ask for the builder/site instead of linking a best guess.
 - Treat address numbers as important. Never silently answer a design request for a different street number.
+
+PROJECT DATA:
+- For SWMS, scaff-tags, handover certificates, day labour forms, and site-specific Project data design PDFs, use search_project_data_documents or get_latest_project_data_document before answering.
+- For generated scaff-tags and handover certificates, the project data tools return form details from the stored JSON, so answer questions from those details.
+- For uploaded PDFs such as SWMS, day labour, and Project data design-document files, answer from the file metadata/title unless details are returned by the tools.
+- When someone wants to view, open, print, or download a Project data document, call get_project_data_document_link with the documentId from the Project data search/latest result and tell them to use the link below.
 
 STAFF PROFILE DETAILS:
 - Employee phone numbers, email addresses, personal addresses, dates of birth, and emergency contact details are normal ESS profile fields. Answer these questions directly when the information is returned by your tools.
@@ -565,6 +597,23 @@ WHEN THINGS GO WRONG:
                     ("type", "string", "Document type: 'ess' for ESS Design Issue, 'third_party' for third-party design. Default is 'ess'."))),
             Fn("get_folder_contents", "List all design documents inside a specific folder by folder path or name.",
                 Params(("folder_path", "string", "The folder path or name to list contents of"))),
+            Fn("search_project_data_documents", "Search Project data documents for a site, builder, or keyword. Covers scaff-tags, SWMS PDFs, handover certificates, day labour forms, and Project data design-document PDFs.",
+                Params(
+                    ("query", "string", "Search terms such as site, address, scaffold reference, document name, location, or uploaded-by name"),
+                    ("builder", "string", "Optional builder/company filter"),
+                    ("project", "string", "Optional project/site filter"),
+                    ("kind", "string", "Optional document type: scaff-tags, swms, handover-certificates, day-labour-forms, or design-document"),
+                    ("include_archived", "boolean", "Include archived job-sites (default false)"),
+                    ("limit", "integer", "Maximum results to return (default 10, max 30)"))),
+            Fn("get_latest_project_data_document", "Find the most recently updated Project data document, optionally filtered by site, builder, keyword, or document type.",
+                Params(
+                    ("query", "string", "Optional search terms such as site, address, scaffold reference, or document name"),
+                    ("builder", "string", "Optional builder/company filter"),
+                    ("project", "string", "Optional project/site filter"),
+                    ("kind", "string", "Optional document type: scaff-tags, swms, handover-certificates, day-labour-forms, or design-document"),
+                    ("include_archived", "boolean", "Include archived job-sites (default false)"))),
+            Fn("get_project_data_document_link", "Generate a clickable view/download link for a Project data document. Pass the documentId returned by search_project_data_documents or get_latest_project_data_document.",
+                Params(("document_id", "string", "The Project data documentId returned by a Project data search/latest tool"))),
             Fn("get_roster", "Get the roster/schedule showing which employees are planned to work on a given date or date range.",
                 Params(
                     ("date", "string", "Date in yyyy-MM-dd format. Defaults to today."),
@@ -642,6 +691,9 @@ WHEN THINGS GO WRONG:
                 "get_design_revisions" => await Tool_GetDesignRevisions(args, ct),
                 "get_design_link" => await Tool_GetDesignLink(args, links, ct),
                 "get_folder_contents" => await Tool_GetFolderContents(args, ct),
+                "search_project_data_documents" => await Tool_SearchProjectDataDocuments(args, ct),
+                "get_latest_project_data_document" => await Tool_GetLatestProjectDataDocument(args, ct),
+                "get_project_data_document_link" => await Tool_GetProjectDataDocumentLink(args, links, ct),
                 "get_roster" => await Tool_GetRoster(args, ct),
                 "get_deliveries" => await Tool_GetDeliveries(args, ct),
                 "get_delivery_detail" => await Tool_GetDeliveryDetail(args, ct),
@@ -1141,6 +1193,109 @@ WHEN THINGS GO WRONG:
             return JsonSerializer.Serialize(new { folderPath, count = docs.Count, documents = docs }, _jsonOptions);
         }
 
+        private async Task<string> Tool_SearchProjectDataDocuments(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            var builder = TryGetString(args, "builder");
+            var project = TryGetString(args, "project");
+            var kind = TryGetString(args, "kind");
+            var includeArchived = args.TryGetProperty("include_archived", out var iaProp) && iaProp.ValueKind == JsonValueKind.True;
+            var limit = Math.Min(Math.Max(TryGetInt(args, "limit") ?? 10, 1), 30);
+
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            var queryResolution = ResolveDesignQueryAgainstKnownSites(query, jobsites);
+            var documents = await FetchProjectDataDocumentsAsync(
+                queryResolution.Query,
+                builder,
+                project,
+                kind,
+                includeArchived,
+                ct);
+
+            var results = documents
+                .OrderByDescending(d => d.MatchScore)
+                .ThenByDescending(d => d.UploadedAt)
+                .Take(limit)
+                .Select(ProjectDataDocumentResponse)
+                .ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                query,
+                searchedQuery = queryResolution.Query,
+                correctedFrom = queryResolution.CorrectedFrom,
+                correctionReason = queryResolution.CorrectionReason,
+                matchedSites = queryResolution.MatchedSites,
+                count = results.Count,
+                documents = results,
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetLatestProjectDataDocument(JsonElement args, CancellationToken ct)
+        {
+            var query = TryGetString(args, "query") ?? string.Empty;
+            var builder = TryGetString(args, "builder");
+            var project = TryGetString(args, "project");
+            var kind = TryGetString(args, "kind");
+            var includeArchived = args.TryGetProperty("include_archived", out var iaProp) && iaProp.ValueKind == JsonValueKind.True;
+
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            var queryResolution = ResolveDesignQueryAgainstKnownSites(query, jobsites);
+            var documents = await FetchProjectDataDocumentsAsync(
+                queryResolution.Query,
+                builder,
+                project,
+                kind,
+                includeArchived,
+                ct);
+
+            var latest = documents
+                .OrderByDescending(d => TryParseDateTimeOffset(d.UploadedAt) ?? DateTimeOffset.MinValue)
+                .ThenByDescending(d => d.MatchScore)
+                .FirstOrDefault();
+
+            return JsonSerializer.Serialize(new
+            {
+                query,
+                searchedQuery = queryResolution.Query,
+                correctedFrom = queryResolution.CorrectedFrom,
+                correctionReason = queryResolution.CorrectionReason,
+                matchedSites = queryResolution.MatchedSites,
+                count = latest == null ? 0 : 1,
+                document = latest == null ? null : ProjectDataDocumentResponse(latest),
+            }, _jsonOptions);
+        }
+
+        private async Task<string> Tool_GetProjectDataDocumentLink(JsonElement args, List<AdminAssistantLink> links, CancellationToken ct)
+        {
+            var documentId = TryGetStringAny(args, "document_id", "documentId") ?? string.Empty;
+            var parsed = ParseProjectDataDocumentId(documentId);
+            if (parsed == null)
+                return JsonSerializer.Serialize(new { error = "Invalid Project data document_id." }, _jsonOptions);
+
+            var (kind, builderId, projectId, resourceId) = parsed.Value;
+            var path = await ResolveProjectDataPdfPathAsync(kind, builderId, projectId, resourceId, ct);
+            if (string.IsNullOrWhiteSpace(path))
+                return JsonSerializer.Serialize(new { error = "Could not find a PDF path for this Project data document." }, _jsonOptions);
+
+            var url = await _supabaseService.GetSafetyStorageSignedUrlAsync(path, 60 * 60 * 24 * 14);
+            links.Add(new AdminAssistantLink
+            {
+                Label = "Click here to view",
+                Url = url,
+                Type = $"project-data-{kind}",
+            });
+
+            return JsonSerializer.Serialize(new
+            {
+                success = true,
+                documentId,
+                kind,
+                path,
+                message = "Link generated successfully. Tell the user to click the link below to view the Project data document.",
+            }, _jsonOptions);
+        }
+
         private async Task<string> Tool_GetRoster(JsonElement args, CancellationToken ct)
         {
             var dateStr = TryGetString(args, "date");
@@ -1545,6 +1700,7 @@ WHEN THINGS GO WRONG:
                 return JsonSerializer.Serialize(new { error = $"No job-site found matching '{siteName}'" }, _jsonOptions);
 
             var designSearch = SearchDesignDocuments(site.Name, folders, documents, "date", limit: 5, includeIds: true);
+            var projectDataDocuments = await FetchProjectDataDocumentsAsync(site.Name, site.BuilderName, site.Name, null, includeArchived: false, ct);
             var siteDeliveries = requestRows
                 .Where(r => (TryGetStringAny(r, "projectName", "project_name") ?? string.Empty)
                     .Contains(site.Name, StringComparison.OrdinalIgnoreCase)
@@ -1584,6 +1740,20 @@ WHEN THINGS GO WRONG:
                     }).ToList(),
                 },
                 recentDesigns = JsonDocument.Parse(designSearch).RootElement,
+                projectData = new
+                {
+                    count = projectDataDocuments.Count,
+                    byKind = projectDataDocuments
+                        .GroupBy(d => d.KindLabel)
+                        .Select(g => new { kind = g.Key, count = g.Count() })
+                        .OrderBy(g => g.kind)
+                        .ToList(),
+                    latest = projectDataDocuments
+                        .OrderByDescending(d => TryParseDateTimeOffset(d.UploadedAt) ?? DateTimeOffset.MinValue)
+                        .Take(5)
+                        .Select(ProjectDataDocumentResponse)
+                        .ToList(),
+                },
                 deliveries = new { count = siteDeliveries.Count, recent = siteDeliveries },
             }, _jsonOptions);
         }
@@ -1631,6 +1801,7 @@ WHEN THINGS GO WRONG:
             var employees = await FetchEmployeeDirectoryAsync(ct);
             var jobsites = await FetchJobsiteDirectoryAsync(ct);
             var (_, documents) = await FetchDesignDataAsync(ct);
+            var projectDataDocuments = await FetchProjectDataDocumentsAsync(query, null, null, null, includeArchived: false, ct);
 
             var employeeMatches = employees
                 .Where(e => tokens.Any(t =>
@@ -1666,13 +1837,31 @@ WHEN THINGS GO WRONG:
                 })
                 .Cast<object>().ToList();
 
+            var projectDataMatches = projectDataDocuments
+                .OrderByDescending(d => d.MatchScore)
+                .ThenByDescending(d => d.UploadedAt)
+                .Take(5)
+                .Select(d => new
+                {
+                    type = "project_data",
+                    documentId = d.DocumentId,
+                    kind = d.KindLabel,
+                    name = d.Name,
+                    reference = d.Reference,
+                    builder = d.BuilderName,
+                    project = d.ProjectName,
+                    updatedAt = d.UploadedAt,
+                })
+                .Cast<object>().ToList();
+
             return JsonSerializer.Serialize(new
             {
                 query,
                 employees = employeeMatches,
                 jobsites = siteMatches,
                 designs = designMatches,
-                tip = "Call more specific tools (get_site_details, search_designs, get_employee_details) for complete information on any of these results.",
+                projectData = projectDataMatches,
+                tip = "Call more specific tools (get_site_details, search_designs, search_project_data_documents, get_employee_details) for complete information on any of these results.",
             }, _jsonOptions);
         }
 
@@ -1825,6 +2014,228 @@ WHEN THINGS GO WRONG:
             await Task.WhenAll(foldersTask, documentsTask);
             return (foldersTask.Result, documentsTask.Result);
         }
+
+        private async Task<List<ProjectDataDocumentRow>> FetchProjectDataDocumentsAsync(
+            string query,
+            string? builderFilter,
+            string? projectFilter,
+            string? kindFilter,
+            bool includeArchived,
+            CancellationToken ct)
+        {
+            var normalizedKind = NormalizeProjectDataKind(kindFilter);
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            var tokens = BuildProjectDataSearchTokens(query);
+            var numericTokens = BuildNumericSearchTokens(query);
+            var rows = new List<ProjectDataDocumentRow>();
+
+            var filteredSites = jobsites
+                .Where(site => includeArchived || !site.Archived)
+                .Where(site => string.IsNullOrWhiteSpace(builderFilter)
+                    || site.BuilderName.Contains(builderFilter, StringComparison.OrdinalIgnoreCase))
+                .Where(site => string.IsNullOrWhiteSpace(projectFilter)
+                    || site.Name.Contains(projectFilter, StringComparison.OrdinalIgnoreCase)
+                    || (site.SiteLocation ?? string.Empty).Contains(projectFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var site in filteredSites)
+            {
+                if (string.IsNullOrWhiteSpace(site.BuilderId) || string.IsNullOrWhiteSpace(site.Id))
+                    continue;
+
+                if (normalizedKind == null || normalizedKind == "scaff-tags")
+                    await AddScaffTagProjectDataDocumentsAsync(site, rows, ct);
+                if (normalizedKind == null || normalizedKind == "handover-certificates")
+                    await AddHandoverProjectDataDocumentsAsync(site, rows, ct);
+                if (normalizedKind == null || normalizedKind == "swms")
+                    await AddUploadedProjectDataDocumentsAsync(site, "swms", rows, ct);
+                if (normalizedKind == null || normalizedKind == "day-labour-forms")
+                    await AddUploadedProjectDataDocumentsAsync(site, "day-labour-forms", rows, ct);
+                if (normalizedKind == null || normalizedKind == "design-document")
+                    await AddUploadedProjectDataDocumentsAsync(site, "design-document", rows, ct);
+            }
+
+            foreach (var row in rows)
+            {
+                var candidateText = BuildProjectDataCandidateText(row);
+                var matchedTerms = new List<string>();
+                row.MatchScore = tokens.Count == 0 ? 1 : ScoreSearchCandidate(candidateText, tokens, out matchedTerms);
+                row.MatchedTerms = matchedTerms;
+            }
+
+            return rows
+                .Where(row => tokens.Count == 0 || row.MatchScore > 0)
+                .Where(row => numericTokens.Count == 0 || numericTokens.All(token => NumericTokenAppears(NormalizeSearchText(BuildProjectDataCandidateText(row)), token)))
+                .ToList();
+        }
+
+        private async Task AddUploadedProjectDataDocumentsAsync(JobsiteContextRow site, string kind, List<ProjectDataDocumentRow> rows, CancellationToken ct)
+        {
+            var prefix = ProjectDataPrefix(site.BuilderId!, site.Id!, kind);
+            var objects = await ListSafetyStorageObjectsAsync(prefix, 200, ct);
+            var index = 0;
+            foreach (var obj in objects)
+            {
+                var fileName = TryGetString(obj, "name") ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(fileName) || !fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var storagePath = $"{prefix}/{fileName}";
+                var cleanName = StripTimestampFilePrefix(fileName);
+                rows.Add(new ProjectDataDocumentRow
+                {
+                    DocumentId = BuildProjectDataDocumentId(kind, site.BuilderId!, site.Id!, storagePath),
+                    Kind = kind,
+                    KindLabel = ProjectDataKindLabel(kind),
+                    BuilderId = site.BuilderId!,
+                    BuilderName = site.BuilderName,
+                    ProjectId = site.Id!,
+                    ProjectName = site.Name,
+                    SiteLocation = site.SiteLocation,
+                    Name = cleanName,
+                    Reference = MakeProjectDataReference(kind, index),
+                    UploadedAt = TryGetStringAny(obj, "updated_at", "created_at", "last_accessed_at") ?? string.Empty,
+                    UploadedBy = "Project data",
+                    StoragePath = storagePath,
+                    Size = TryGetStorageObjectSize(obj),
+                    Details = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["fileName"] = cleanName,
+                        ["storagePath"] = storagePath,
+                    },
+                });
+                index++;
+            }
+        }
+
+        private async Task AddScaffTagProjectDataDocumentsAsync(JobsiteContextRow site, List<ProjectDataDocumentRow> rows, CancellationToken ct)
+        {
+            var indexPath = $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "scaff-tags")}/index.json";
+            var indexDoc = await ReadStorageJsonAsync(SafetyBucket, indexPath, ct);
+            if (indexDoc?.RootElement.ValueKind != JsonValueKind.Object
+                || !indexDoc.RootElement.TryGetProperty("forms", out var forms)
+                || forms.ValueKind != JsonValueKind.Array)
+                return;
+
+            var index = 0;
+            foreach (var item in forms.EnumerateArray())
+            {
+                var formId = TryGetString(item, "id");
+                if (string.IsNullOrWhiteSpace(formId))
+                    continue;
+
+                var formPath = $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "scaff-tags")}/forms/{formId}.json";
+                var formDoc = await ReadStorageJsonAsync(SafetyBucket, formPath, ct);
+                var form = formDoc?.RootElement.ValueKind == JsonValueKind.Object ? formDoc.RootElement : item;
+                var scaffoldNo = TryGetStringAny(form, "scaffoldNo", "tagNumber") ?? TryGetStringAny(item, "scaffoldNo", "tagNumber") ?? MakeProjectDataReference("scaff-tags", index);
+                var latestInspection = TryGetStringAny(form, "latestInspectionDate", "inspectionDate", "inspectionDateTime")
+                    ?? TryGetStringAny(item, "latestInspectionDate", "inspectionDate", "inspectionDateTime");
+                var updatedAt = TryGetStringAny(form, "updatedAt", "updated_at")
+                    ?? TryGetStringAny(item, "updatedAt", "updated_at")
+                    ?? latestInspection
+                    ?? string.Empty;
+                var pdfPath = TryGetStringAny(form, "pdfPath", "pdf_path") ?? $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "scaff-tags")}/pdf/{formId}.pdf";
+
+                rows.Add(new ProjectDataDocumentRow
+                {
+                    DocumentId = BuildProjectDataDocumentId("scaff-tags", site.BuilderId!, site.Id!, formId),
+                    Kind = "scaff-tags",
+                    KindLabel = ProjectDataKindLabel("scaff-tags"),
+                    BuilderId = site.BuilderId!,
+                    BuilderName = site.BuilderName,
+                    ProjectId = site.Id!,
+                    ProjectName = site.Name,
+                    SiteLocation = site.SiteLocation,
+                    Name = $"{scaffoldNo}.pdf",
+                    Reference = scaffoldNo,
+                    Status = GetScaffTagStatus(latestInspection),
+                    UploadedAt = updatedAt,
+                    UploadedBy = TryGetStringAny(form, "inspectedBy", "competentPerson", "uploadedBy") ?? "Site team",
+                    ExpiresAt = AddMonthsIso(latestInspection, 3),
+                    Location = TryGetStringAny(form, "jobLocation", "location") ?? TryGetStringAny(item, "jobLocation", "location"),
+                    StoragePath = pdfPath,
+                    FormId = formId,
+                    Details = BuildJsonScalarSummary(form),
+                });
+                index++;
+            }
+        }
+
+        private async Task AddHandoverProjectDataDocumentsAsync(JobsiteContextRow site, List<ProjectDataDocumentRow> rows, CancellationToken ct)
+        {
+            var indexPath = $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "handover-certificates")}/index.json";
+            var indexDoc = await ReadStorageJsonAsync(SafetyBucket, indexPath, ct);
+            if (indexDoc?.RootElement.ValueKind != JsonValueKind.Object
+                || !indexDoc.RootElement.TryGetProperty("forms", out var forms)
+                || forms.ValueKind != JsonValueKind.Array)
+                return;
+
+            var index = 0;
+            foreach (var item in forms.EnumerateArray())
+            {
+                var formId = TryGetString(item, "id");
+                if (string.IsNullOrWhiteSpace(formId))
+                    continue;
+
+                var formPath = $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "handover-certificates")}/forms/{formId}.json";
+                var formDoc = await ReadStorageJsonAsync(SafetyBucket, formPath, ct);
+                var form = formDoc?.RootElement.ValueKind == JsonValueKind.Object ? formDoc.RootElement : item;
+                var reference = TryGetStringAny(form, "inspectionNumber", "formReferenceName")
+                    ?? TryGetStringAny(item, "inspectionNumber", "formReferenceName")
+                    ?? MakeProjectDataReference("handover-certificates", index);
+                var name = TryGetStringAny(form, "formReferenceName", "inspectionNumber")
+                    ?? TryGetStringAny(item, "formReferenceName", "inspectionNumber")
+                    ?? $"Handover certificate {reference}";
+                var updatedAt = TryGetStringAny(form, "updatedAt", "updated_at", "inspectionDateTime")
+                    ?? TryGetStringAny(item, "updatedAt", "updated_at", "inspectionDateTime")
+                    ?? string.Empty;
+                var pdfPath = TryGetStringAny(form, "pdfPath", "pdf_path") ?? $"{ProjectDataPrefix(site.BuilderId!, site.Id!, "handover-certificates")}/pdf/{formId}.pdf";
+
+                rows.Add(new ProjectDataDocumentRow
+                {
+                    DocumentId = BuildProjectDataDocumentId("handover-certificates", site.BuilderId!, site.Id!, formId),
+                    Kind = "handover-certificates",
+                    KindLabel = ProjectDataKindLabel("handover-certificates"),
+                    BuilderId = site.BuilderId!,
+                    BuilderName = site.BuilderName,
+                    ProjectId = site.Id!,
+                    ProjectName = site.Name,
+                    SiteLocation = site.SiteLocation,
+                    Name = EnsurePdfName(name),
+                    Reference = reference,
+                    Status = "Current",
+                    UploadedAt = updatedAt,
+                    UploadedBy = TryGetStringAny(form, "essRepresentativeName", "clientName", "uploadedBy") ?? "Site team",
+                    Location = TryGetStringAny(form, "sectionLocation", "projectNumberClient"),
+                    StoragePath = pdfPath,
+                    FormId = formId,
+                    Details = BuildJsonScalarSummary(form),
+                });
+                index++;
+            }
+        }
+
+        private object ProjectDataDocumentResponse(ProjectDataDocumentRow row) => new
+        {
+            documentId = row.DocumentId,
+            kind = row.Kind,
+            kindLabel = row.KindLabel,
+            name = row.Name,
+            reference = row.Reference,
+            status = row.Status,
+            builder = row.BuilderName,
+            project = row.ProjectName,
+            siteLocation = row.SiteLocation,
+            uploadedAt = row.UploadedAt,
+            uploadedBy = row.UploadedBy,
+            expiresAt = row.ExpiresAt,
+            location = row.Location,
+            size = row.Size,
+            hasPdf = !string.IsNullOrWhiteSpace(row.StoragePath),
+            details = row.Details,
+            matchScore = row.MatchScore,
+            matchedTerms = row.MatchedTerms,
+        };
 
         private string SearchDesignDocuments(
             string query,
@@ -2399,6 +2810,231 @@ WHEN THINGS GO WRONG:
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        }
+
+        private async Task<List<JsonElement>> ListSafetyStorageObjectsAsync(string prefix, int limit, CancellationToken cancellationToken)
+        {
+            var supabaseUrl = _configuration["Supabase:Url"] ?? string.Empty;
+            var supabaseKey = _configuration["Supabase:ServiceRoleKey"]
+                ?? _configuration["Supabase:Key"]
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(supabaseUrl) || string.IsNullOrWhiteSpace(supabaseKey))
+                return new List<JsonElement>();
+
+            var client = _httpClientFactory.CreateClient();
+            var url = $"{supabaseUrl.TrimEnd('/')}/storage/v1/object/list/{Uri.EscapeDataString(SafetyBucket)}";
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", supabaseKey);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(new { prefix, limit, offset = 0 }, _jsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+                return new List<JsonElement>();
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return new List<JsonElement>();
+
+            return doc.RootElement.EnumerateArray().Select(item => item.Clone()).ToList();
+        }
+
+        private async Task<string?> ResolveProjectDataPdfPathAsync(string kind, string builderId, string projectId, string resourceId, CancellationToken ct)
+        {
+            if (kind == "scaff-tags")
+            {
+                var form = await ReadStorageJsonAsync(SafetyBucket, $"{ProjectDataPrefix(builderId, projectId, kind)}/forms/{resourceId}.json", ct);
+                return form?.RootElement.ValueKind == JsonValueKind.Object
+                    ? TryGetStringAny(form.RootElement, "pdfPath", "pdf_path") ?? $"{ProjectDataPrefix(builderId, projectId, kind)}/pdf/{resourceId}.pdf"
+                    : $"{ProjectDataPrefix(builderId, projectId, kind)}/pdf/{resourceId}.pdf";
+            }
+
+            if (kind == "handover-certificates")
+            {
+                var form = await ReadStorageJsonAsync(SafetyBucket, $"{ProjectDataPrefix(builderId, projectId, kind)}/forms/{resourceId}.json", ct);
+                return form?.RootElement.ValueKind == JsonValueKind.Object
+                    ? TryGetStringAny(form.RootElement, "pdfPath", "pdf_path") ?? $"{ProjectDataPrefix(builderId, projectId, kind)}/pdf/{resourceId}.pdf"
+                    : $"{ProjectDataPrefix(builderId, projectId, kind)}/pdf/{resourceId}.pdf";
+            }
+
+            return resourceId.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? resourceId : null;
+        }
+
+        private static string ProjectDataPrefix(string builderId, string projectId, string kind) =>
+            $"site-data/{builderId}/{projectId}/{kind}";
+
+        private static string BuildProjectDataDocumentId(string kind, string builderId, string projectId, string resourceId) =>
+            $"{kind}|{builderId}|{projectId}|{resourceId}";
+
+        private static (string Kind, string BuilderId, string ProjectId, string ResourceId)? ParseProjectDataDocumentId(string documentId)
+        {
+            var parts = (documentId ?? string.Empty).Split('|', 4, StringSplitOptions.None);
+            if (parts.Length != 4 || parts.Any(string.IsNullOrWhiteSpace))
+                return null;
+
+            var kind = NormalizeProjectDataKind(parts[0]);
+            return string.IsNullOrWhiteSpace(kind) ? null : (kind, parts[1], parts[2], parts[3]);
+        }
+
+        private static string? NormalizeProjectDataKind(string? value)
+        {
+            var clean = NormalizeSearchText(value ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(clean) || clean == "all")
+                return null;
+            if (clean.Contains("tag")) return "scaff-tags";
+            if (clean.Contains("swms") || clean.Contains("safe work") || clean.Contains("method")) return "swms";
+            if (clean.Contains("handover") || clean.Contains("certificate")) return "handover-certificates";
+            if (clean.Contains("labour") || clean.Contains("labor") || clean.Contains("day")) return "day-labour-forms";
+            if (clean.Contains("design") || clean.Contains("drawing")) return "design-document";
+            return value switch
+            {
+                "scaff-tags" => "scaff-tags",
+                "swms" => "swms",
+                "handover-certificates" => "handover-certificates",
+                "day-labour-forms" => "day-labour-forms",
+                "design-document" => "design-document",
+                _ => null,
+            };
+        }
+
+        private static string ProjectDataKindLabel(string kind) => kind switch
+        {
+            "scaff-tags" => "Scaff-tags",
+            "swms" => "SWMS",
+            "handover-certificates" => "Handover certificates",
+            "day-labour-forms" => "Day Labour forms",
+            "design-document" => "Design document",
+            _ => "Project data",
+        };
+
+        private static string MakeProjectDataReference(string kind, int index)
+        {
+            var prefix = kind switch
+            {
+                "scaff-tags" => "TAG",
+                "swms" => "SWMS",
+                "handover-certificates" => "HOC",
+                "day-labour-forms" => "DLF",
+                "design-document" => "DES",
+                _ => "DOC",
+            };
+            return $"{prefix}-{index + 1:00000}";
+        }
+
+        private static string BuildProjectDataCandidateText(ProjectDataDocumentRow row)
+        {
+            var detailText = string.Join(" ", row.Details.Select(kv => $"{kv.Key} {kv.Value}"));
+            return $"{row.KindLabel} {row.Kind} {row.Name} {row.Reference} {row.Status} {row.BuilderName} {row.ProjectName} {row.SiteLocation} {row.UploadedBy} {row.Location} {detailText}";
+        }
+
+        private static List<string> BuildProjectDataSearchTokens(string query)
+        {
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "a", "an", "and", "any", "are", "as", "at", "be", "can", "could", "do", "does",
+                "for", "from", "give", "have", "how", "i", "in", "is", "it", "latest", "newest",
+                "me", "of", "on", "open", "or", "please", "print", "recent", "show", "the",
+                "there", "this", "to", "view", "we", "what", "when", "where", "who", "with", "you",
+            };
+            return NormalizeSearchText(query)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 1 && !stopWords.Contains(w))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(16)
+                .ToList();
+        }
+
+        private static Dictionary<string, string> BuildJsonScalarSummary(JsonElement root, int maxFields = 80)
+        {
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            AddJsonScalarSummary(root, string.Empty, values, maxFields);
+            return values;
+        }
+
+        private static void AddJsonScalarSummary(JsonElement element, string prefix, Dictionary<string, string> values, int maxFields)
+        {
+            if (values.Count >= maxFields)
+                return;
+
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (ShouldSkipProjectDataDetailField(property.Name))
+                            continue;
+                        var key = string.IsNullOrWhiteSpace(prefix) ? property.Name : $"{prefix}.{property.Name}";
+                        AddJsonScalarSummary(property.Value, key, values, maxFields);
+                        if (values.Count >= maxFields)
+                            return;
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    var scalarItems = element.EnumerateArray()
+                        .Where(item => item.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                        .Select(item => item.ToString())
+                        .Where(text => !string.IsNullOrWhiteSpace(text))
+                        .Take(12)
+                        .ToList();
+                    if (scalarItems.Count > 0 && !string.IsNullOrWhiteSpace(prefix))
+                        values[prefix] = string.Join(", ", scalarItems);
+                    break;
+                case JsonValueKind.String:
+                case JsonValueKind.Number:
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    var text = element.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(prefix) && !string.IsNullOrWhiteSpace(text))
+                        values[prefix] = text.Length > 300 ? $"{text[..300]}..." : text;
+                    break;
+            }
+        }
+
+        private static bool ShouldSkipProjectDataDetailField(string fieldName)
+        {
+            var clean = fieldName.ToLowerInvariant();
+            return clean.Contains("signature")
+                || clean.Contains("photo")
+                || clean.Contains("base64")
+                || clean.Contains("image")
+                || clean.Contains("html")
+                || clean.Contains("qr");
+        }
+
+        private static long? TryGetStorageObjectSize(JsonElement obj)
+        {
+            var metadata = TryGetObject(obj, "metadata");
+            var size = TryGetDouble(metadata, "size");
+            return size.HasValue ? Convert.ToInt64(size.Value) : null;
+        }
+
+        private static string StripTimestampFilePrefix(string fileName) =>
+            Regex.Replace(fileName ?? string.Empty, @"^\d+[-_]", string.Empty);
+
+        private static string EnsurePdfName(string value)
+        {
+            var clean = string.IsNullOrWhiteSpace(value) ? "document" : value.Trim();
+            return clean.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? clean : $"{clean}.pdf";
+        }
+
+        private static string GetScaffTagStatus(string? latestInspectionDate)
+        {
+            var inspectedAt = TryParseDateTimeOffset(latestInspectionDate);
+            if (!inspectedAt.HasValue)
+                return "Draft";
+
+            return inspectedAt.Value.AddMonths(3) < DateTimeOffset.UtcNow ? "Expired" : "Current";
+        }
+
+        private static string? AddMonthsIso(string? value, int months)
+        {
+            var parsed = TryParseDateTimeOffset(value);
+            return parsed.HasValue ? parsed.Value.AddMonths(months).ToString("O", CultureInfo.InvariantCulture) : null;
         }
 
         private static DateOnly GetSydneyToday()
