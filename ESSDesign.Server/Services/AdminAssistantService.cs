@@ -75,6 +75,15 @@ namespace ESSDesign.Server.Services
             public string InductionSource { get; set; } = "explicit";
             public List<string> InductedEmployeeIds { get; set; } = new();
             public List<EmployeeContextRow> InductedEmployees { get; set; } = new();
+            public string? ProjectManagerEmployeeId { get; set; }
+            public string? ProjectManagerUserId { get; set; }
+            public EmployeeContextRow? ProjectManager { get; set; }
+            public string? SiteSupervisorEmployeeId { get; set; }
+            public string? SiteSupervisorUserId { get; set; }
+            public EmployeeContextRow? SiteSupervisor { get; set; }
+            public string? LeadingHandEmployeeId { get; set; }
+            public string? LeadingHandUserId { get; set; }
+            public EmployeeContextRow? LeadingHand { get; set; }
         }
 
         private sealed class TruckLiveLocationContext
@@ -347,6 +356,11 @@ The ESS yard is at 130 Gilba Road, Girraween NSW 2145. That's what people mean w
 
 You have tools — use them to look up real data before answering. Never make up names, addresses, dates, or document titles. Chain tool calls as needed to get the full picture.
 
+SITE ROLE ASSIGNMENTS:
+- For questions like "who is the site supervisor/project manager/leading hand at a site", use the job-site assignment fields returned by get_jobsites, get_site_details, get_builder_sites, or get_site_health_report first.
+- Do not infer assigned site supervisors only from inducted employees. Inducted employees are the worker list for a site; the registered supervisor can be stored separately as siteSupervisor.
+- If multiple job-sites match the same address or name, answer for each matching builder/site when the tool result gives more than one match.
+
 STAFF PROFILE DETAILS:
 - Employee phone numbers, email addresses, personal addresses, dates of birth, and emergency contact details are normal ESS profile fields. Answer these questions directly when the information is returned by your tools.
 - Do not refuse profile-detail requests because they involve phone numbers or personal/contact information. Use the database result and keep the answer concise.
@@ -511,11 +525,11 @@ WHEN THINGS GO WRONG:
                     ("location", "string", "Filter by suburb or address"),
                     ("archived", "boolean", "If true return archived sites, if false return active sites only. Leave unset for all."),
                     ("limit", "integer", "Maximum results (default 30)"))),
-            Fn("get_site_details", "Get full details about a specific job-site including inducted employees, builder, and location.",
+            Fn("get_site_details", "Get full details about a specific job-site including assigned project manager, assigned site supervisor, assigned leading hand, inducted employees, builder, and location.",
                 Params(("site_name", "string", "The name of the job-site to look up"))),
             Fn("get_builder_sites", "Get all job-sites for a specific builder/company.",
                 Params(("builder_name", "string", "The builder or company name"))),
-            Fn("get_inducted_employees_for_site", "Get the list of employees inducted at a specific job-site.",
+            Fn("get_inducted_employees_for_site", "Get the list of employees inducted at a specific job-site. Do not use this by itself to answer who the assigned site supervisor, project manager, or leading hand is; use get_site_details for assignments.",
                 Params(("site_name", "string", "The name of the job-site"))),
             Fn("get_employee_inductions", "Get all job-sites that a specific employee is inducted on.",
                 Params(("employee_name", "string", "The name of the employee"))),
@@ -559,7 +573,7 @@ WHEN THINGS GO WRONG:
                     ("name", "string", "Filter by user name"))),
             Fn("get_app_stats", "Get overall statistics for the ESS app: counts of employees, job-sites, designs, deliveries, and users.",
                 new { type = "object", properties = new { }, required = Array.Empty<string>() }),
-            Fn("get_site_health_report", "Get a comprehensive overview of a job-site: builder, location, inducted employees, recent designs, and delivery history.",
+            Fn("get_site_health_report", "Get a comprehensive overview of a job-site: builder, location, assigned site roles, inducted employees, recent designs, and delivery history.",
                 Params(("site_name", "string", "The name of the job-site"))),
             Fn("get_recent_designs", "Get the most recently uploaded or updated design documents.",
                 Params(
@@ -649,6 +663,25 @@ WHEN THINGS GO WRONG:
 
             return employee.LeadingHand ? "Leading Hand" : "Scaffolder";
         }
+
+        private static object? FormatAssignedSitePerson(EmployeeContextRow? employee)
+        {
+            if (employee == null)
+                return null;
+
+            return new
+            {
+                employee.Id,
+                employee.UserId,
+                employee.FullName,
+                employee.Email,
+                employee.PhoneNumber,
+                siteRole = FormatDirectoryRole(employee),
+                appRole = employee.AppRole ?? AppRoles.Viewer,
+                employee.Verified,
+            };
+        }
+
         private static object BuildEmployeeProfileSummary(EmployeeContextRow employee)
         {
             var emergencyContactDetails = FormatEmergencyContactDetails(
@@ -844,6 +877,9 @@ WHEN THINGS GO WRONG:
                 builder = j.BuilderName,
                 siteLocation = j.SiteLocation,
                 j.Archived,
+                assignedSiteSupervisor = FormatAssignedSitePerson(j.SiteSupervisor),
+                assignedProjectManager = FormatAssignedSitePerson(j.ProjectManager),
+                assignedLeadingHand = FormatAssignedSitePerson(j.LeadingHand),
                 inductedEmployeeCount = j.InductedEmployees.Count,
             }).ToList();
 
@@ -870,6 +906,18 @@ WHEN THINGS GO WRONG:
                 site.Archived,
                 site.SiteKey,
                 site.InductionSource,
+                assignedProjectManager = FormatAssignedSitePerson(site.ProjectManager),
+                assignedSiteSupervisor = FormatAssignedSitePerson(site.SiteSupervisor),
+                assignedLeadingHand = FormatAssignedSitePerson(site.LeadingHand),
+                assignedRoleIds = new
+                {
+                    site.ProjectManagerEmployeeId,
+                    site.ProjectManagerUserId,
+                    site.SiteSupervisorEmployeeId,
+                    site.SiteSupervisorUserId,
+                    site.LeadingHandEmployeeId,
+                    site.LeadingHandUserId,
+                },
                 inductedEmployeeCount = site.InductedEmployees.Count,
                 inductedEmployees = site.InductedEmployees.Select(e => new
                 {
@@ -894,6 +942,9 @@ WHEN THINGS GO WRONG:
                     j.Name,
                     siteLocation = j.SiteLocation,
                     j.Archived,
+                    assignedSiteSupervisor = FormatAssignedSitePerson(j.SiteSupervisor),
+                    assignedProjectManager = FormatAssignedSitePerson(j.ProjectManager),
+                    assignedLeadingHand = FormatAssignedSitePerson(j.LeadingHand),
                     inductedEmployeeCount = j.InductedEmployees.Count,
                 }).ToList();
 
@@ -1481,6 +1532,9 @@ WHEN THINGS GO WRONG:
                     builder = site.BuilderName,
                     siteLocation = site.SiteLocation,
                     site.Archived,
+                    assignedProjectManager = FormatAssignedSitePerson(site.ProjectManager),
+                    assignedSiteSupervisor = FormatAssignedSitePerson(site.SiteSupervisor),
+                    assignedLeadingHand = FormatAssignedSitePerson(site.LeadingHand),
                 },
                 inductedEmployees = new
                 {
@@ -1943,6 +1997,21 @@ WHEN THINGS GO WRONG:
             var employeesById = employeeDirectory
                 .Where(e => !string.IsNullOrWhiteSpace(e.Id))
                 .ToDictionary(e => e.Id!, e => e, StringComparer.OrdinalIgnoreCase);
+            var employeesByUserId = employeeDirectory
+                .Where(e => !string.IsNullOrWhiteSpace(e.UserId))
+                .GroupBy(e => e.UserId!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            EmployeeContextRow? ResolveAssignedPerson(string? employeeId, string? userId)
+            {
+                if (!string.IsNullOrWhiteSpace(employeeId) && employeesById.TryGetValue(employeeId, out var byEmployeeId))
+                    return byEmployeeId;
+
+                if (!string.IsNullOrWhiteSpace(userId) && employeesByUserId.TryGetValue(userId, out var byUserId))
+                    return byUserId;
+
+                return null;
+            }
 
             if (projectsDoc?.RootElement.TryGetProperty("builders", out var builders) != true
                 || builders.ValueKind != JsonValueKind.Array)
@@ -1962,6 +2031,12 @@ WHEN THINGS GO WRONG:
                     var hasExplicitInductions = HasStringArray(project, "inductedEmployeeIds") || HasStringArray(project, "inducted_employee_ids");
                     var inductedIds = TryGetStringArrayAny(project, "inductedEmployeeIds", "inducted_employee_ids")
                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var projectManagerEmployeeId = TryGetStringAny(project, "projectManagerEmployeeId", "project_manager_employee_id");
+                    var projectManagerUserId = TryGetStringAny(project, "projectManagerUserId", "project_manager_user_id");
+                    var siteSupervisorEmployeeId = TryGetStringAny(project, "siteSupervisorEmployeeId", "site_supervisor_employee_id");
+                    var siteSupervisorUserId = TryGetStringAny(project, "siteSupervisorUserId", "site_supervisor_user_id");
+                    var leadingHandEmployeeId = TryGetStringAny(project, "leadingHandEmployeeId", "leading_hand_employee_id");
+                    var leadingHandUserId = TryGetStringAny(project, "leadingHandUserId", "leading_hand_user_id");
 
                     var inductedEmployees = hasExplicitInductions
                         ? inductedIds
@@ -1986,6 +2061,15 @@ WHEN THINGS GO WRONG:
                             ? inductedIds
                             : inductedEmployees.Select(e => e.Id ?? string.Empty).Where(id => !string.IsNullOrWhiteSpace(id)).ToList(),
                         InductedEmployees = inductedEmployees,
+                        ProjectManagerEmployeeId = projectManagerEmployeeId,
+                        ProjectManagerUserId = projectManagerUserId,
+                        ProjectManager = ResolveAssignedPerson(projectManagerEmployeeId, projectManagerUserId),
+                        SiteSupervisorEmployeeId = siteSupervisorEmployeeId,
+                        SiteSupervisorUserId = siteSupervisorUserId,
+                        SiteSupervisor = ResolveAssignedPerson(siteSupervisorEmployeeId, siteSupervisorUserId),
+                        LeadingHandEmployeeId = leadingHandEmployeeId,
+                        LeadingHandUserId = leadingHandUserId,
+                        LeadingHand = ResolveAssignedPerson(leadingHandEmployeeId, leadingHandUserId),
                     });
                 }
             }
