@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, Loader2, Send, User } from 'lucide-react';
+import { Loader2, Send, User } from 'lucide-react';
 import { adminAssistantAPI } from '../services/api';
 
 const STARTER_PROMPTS = [
@@ -11,11 +11,11 @@ const STARTER_PROMPTS = [
 
 function AssistantAvatar({ role = 'assistant' }) {
     const isUser = role === 'user';
-    const Icon = isUser ? User : Bot;
+    if (!isUser) return null;
 
     return (
-        <div className={`admin-assistant-avatar ${isUser ? 'user' : 'assistant'}`} aria-hidden="true">
-            <Icon size={16} />
+        <div className="admin-assistant-avatar user" aria-hidden="true">
+            <User size={16} />
         </div>
     );
 }
