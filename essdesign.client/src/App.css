@@ -5664,9 +5664,19 @@ body {
     }
 }
 
+@keyframes admin-assistant-first-message-shift {
+    0% {
+        transform: translateX(96px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .admin-assistant-spin-icon,
-    .admin-assistant-typing i {
+    .admin-assistant-typing i,
+    .admin-assistant-page-chat.is-active .admin-assistant-message-row:first-child .admin-assistant-message.assistant {
         animation: none;
         transition: none;
     }
@@ -7186,6 +7196,12 @@ button.stat-card {
     grid-template-rows: minmax(170px, 1fr) auto auto;
     gap: 14px;
     color: #101820;
+    transition: gap 360ms ease;
+}
+
+.admin-assistant-page-chat.is-pristine {
+    grid-template-rows: auto auto auto;
+    gap: 16px;
 }
 
 .admin-assistant-page-messages {
@@ -7196,6 +7212,14 @@ button.stat-card {
     padding: 4px 6px 8px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    transition: min-height 360ms ease, max-height 360ms ease, padding 360ms ease;
+}
+
+.admin-assistant-page-chat.is-pristine .admin-assistant-page-messages {
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
 }
 
 .admin-assistant-page-messages::-webkit-scrollbar {
@@ -7210,6 +7234,12 @@ button.stat-card {
     display: flex;
     align-items: flex-start;
     gap: 12px;
+    transition: margin 360ms ease, transform 380ms ease;
+}
+
+.admin-assistant-page-chat.is-pristine .admin-assistant-message-row.assistant {
+    justify-content: center;
+    margin-bottom: 0;
 }
 
 .admin-assistant-page-chat .admin-assistant-message-row.user {
@@ -7254,6 +7284,16 @@ button.stat-card {
     color: #172033;
     box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
     backdrop-filter: blur(10px);
+    transition: max-width 360ms ease, transform 380ms ease, text-align 220ms ease;
+}
+
+.admin-assistant-page-chat.is-pristine .admin-assistant-message.assistant {
+    max-width: min(620px, 100%);
+    text-align: center;
+}
+
+.admin-assistant-page-chat.is-active .admin-assistant-message-row:first-child .admin-assistant-message.assistant {
+    animation: admin-assistant-first-message-shift 420ms ease both;
 }
 
 .admin-assistant-page-chat .admin-assistant-message.user {

@@ -30,6 +30,7 @@ export default function AdminAssistantChat({ className = '' }) {
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [hasStarted, setHasStarted] = useState(false);
     const scrollRef = useRef(null);
 
     useEffect(() => {
@@ -42,6 +43,7 @@ export default function AdminAssistantChat({ className = '' }) {
         const text = messageText.trim();
         if (!text || loading) return;
 
+        setHasStarted(true);
         const nextMessages = [...messages, { role: 'user', content: text, links: [] }];
         setMessages(nextMessages);
         setInput('');
@@ -76,8 +78,10 @@ export default function AdminAssistantChat({ className = '' }) {
         }
     };
 
+    const chatStateClass = hasStarted ? 'is-active' : 'is-pristine';
+
     return (
-        <section className={`admin-assistant-page-chat ${className}`} aria-label="ESS AI assistant">
+        <section className={`admin-assistant-page-chat ${chatStateClass} ${className}`} aria-label="ESS AI assistant">
             <div className="admin-assistant-page-messages" ref={scrollRef}>
                 {messages.map((message, index) => (
                     <div key={`${message.role}-${index}`} className={`admin-assistant-message-row ${message.role}`}>
