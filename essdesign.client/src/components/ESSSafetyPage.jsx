@@ -1,21 +1,300 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { safetyProjectsAPI } from '../services/api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+    AlertTriangle,
+    Building2,
+    CheckCircle,
+    ChevronDown,
+    ClipboardCheck,
+    Download,
+    ExternalLink,
+    Eye,
+    FileCheck,
+    FileText,
+    Filter,
+    HardHat,
+    List,
+    MoreVertical,
+    Plus,
+    Search,
+    Shield,
+    Tag,
+    Upload,
+    Users,
+    X
+} from 'lucide-react';
+import { scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+
+const PROJECT_DATA_TABS = [
+    {
+        key: 'scaff-tags',
+        label: 'Scaff-tags',
+        noun: 'scaffold tags',
+        refLabel: 'Tag / Ref No.',
+        storageKind: 'scaff-tags',
+        icon: Tag
+    },
+    {
+        key: 'swms',
+        label: 'SWMS',
+        noun: 'SWMS documents',
+        refLabel: 'SWMS / Ref No.',
+        storageKind: 'swms',
+        icon: Shield
+    },
+    {
+        key: 'handover-certificates',
+        label: 'Handover certificates',
+        noun: 'handover certificates',
+        refLabel: 'Certificate / Ref No.',
+        storageKind: 'handover-certificates',
+        icon: ClipboardCheck
+    },
+    {
+        key: 'day-labour-forms',
+        label: 'Day Labour forms',
+        noun: 'day labour forms',
+        refLabel: 'Form / Ref No.',
+        storageKind: 'day-labour-forms',
+        icon: Users
+    },
+    {
+        key: 'design-document',
+        label: 'Design document',
+        noun: 'design documents',
+        refLabel: 'Drawing / Ref No.',
+        storageKind: 'design-document',
+        icon: FileText
+    }
+];
+
+const STATUS_META = {
+    Current: { className: 'current', icon: CheckCircle },
+    Expired: { className: 'expired', icon: AlertTriangle },
+    Draft: { className: 'draft', icon: FileText }
+};
+
+const toDate = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDate = (value) => {
+    const date = toDate(value);
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    }).format(date);
+};
+
+const addMonths = (value, months) => {
+    const date = toDate(value);
+    if (!date) return null;
+    const next = new Date(date);
+    next.setMonth(next.getMonth() + months);
+    return next;
+};
+
+const formatBytes = (value) => {
+    if (!Number.isFinite(value)) return '';
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const makeFileRef = (prefix, index) => `${prefix}-${String(index + 1).padStart(5, '0')}`;
+
+const normaliseFileName = (name) => String(name || 'document.pdf').replace(/^\d+-/, '');
+
+function getScaffTagStatus(item) {
+    const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
+    if (!item.latestInspectionDate) return 'Draft';
+    return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
+}
+
+function mapScaffTagRows(items) {
+    return items.map((item, index) => {
+        const tagNo = item.scaffoldNo || item.tagNumber || makeFileRef('TAG', index);
+        const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
+        return {
+            id: item.id,
+            kind: 'scaff-tags',
+            name: `${tagNo}.pdf`,
+            ref: tagNo,
+            status: getScaffTagStatus(item),
+            uploadedAt: item.updatedAt || item.latestInspectionDate || '',
+            expiresAt: expiry ? expiry.toISOString() : '',
+            uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
+            location: item.jobLocation || '',
+            size: '',
+            raw: item
+        };
+    });
+}
+
+function mapFileRows(files, tab) {
+    const refPrefix = tab.key === 'swms'
+        ? 'SWMS'
+        : tab.key === 'handover-certificates'
+            ? 'HOC'
+            : tab.key === 'day-labour-forms'
+                ? 'DLF'
+                : 'DES';
+
+    return files.map((file, index) => ({
+        id: file.path,
+        kind: tab.key,
+        name: normaliseFileName(file.name),
+        ref: makeFileRef(refPrefix, index),
+        status: 'Current',
+        uploadedAt: file.updatedAt,
+        expiresAt: '',
+        uploadedBy: 'Project data',
+        location: '',
+        size: formatBytes(file.size),
+        raw: file
+    }));
+}
+
+function StatusChip({ status }) {
+    const meta = STATUS_META[status] || STATUS_META.Draft;
+    const Icon = meta.icon;
+    return (
+        <span className={`project-data-status ${meta.className}`}>
+            <Icon size={13} />
+            {status}
+        </span>
+    );
+}
+
+function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
+    if (!doc) {
+        return (
+            <aside className="project-data-preview-panel empty">
+                <div className="project-data-preview-empty">
+                    <FileText size={34} />
+                    <strong>No document selected</strong>
+                    <span>Select a row to preview project data.</span>
+                </div>
+            </aside>
+        );
+    }
+
+    const isScaffTag = tab.key === 'scaff-tags';
+
+    return (
+        <aside className="project-data-preview-panel">
+            <div className="project-data-preview-titlebar">
+                <strong title={doc.name}>{doc.name}</strong>
+                <button type="button" onClick={onClose} aria-label="Close preview" title="Close preview">
+                    <X size={18} />
+                </button>
+            </div>
+            <div className="project-data-preview-tabs">
+                <button type="button" className="active">Preview</button>
+                <button type="button">Details</button>
+            </div>
+            <div className="project-data-pdf-toolbar">
+                <Eye size={15} />
+                <Search size={15} />
+                <span>1</span>
+                <span>/</span>
+                <span>1</span>
+                <button type="button" onClick={onOpen} title="Open document">
+                    <ExternalLink size={15} />
+                </button>
+                <button type="button" onClick={onOpen} title="Download or open PDF">
+                    <Download size={15} />
+                </button>
+            </div>
+            <div className="project-data-paper">
+                {isScaffTag ? (
+                    <>
+                        <div className="project-data-tag-head">
+                            <div className="project-data-preview-brand">
+                                <span className="project-data-brand-mark"><HardHat size={20} /></span>
+                                <strong>{builder?.name || 'Builder'}</strong>
+                            </div>
+                            <div>
+                                <h3>SCAFFOLD TAG</h3>
+                                <p>DO NOT USE SCAFFOLD</p>
+                            </div>
+                            <div>
+                                <span>TAG No.</span>
+                                <strong>{doc.ref}</strong>
+                            </div>
+                        </div>
+                        <div className="project-data-tag-grid">
+                            <div>
+                                <span>Structure location</span>
+                                <strong>{project?.name || '-'}</strong>
+                                <small>{doc.location || project?.siteLocation || 'Project location pending'}</small>
+                            </div>
+                            <div>
+                                <span>SWL</span>
+                                <strong>{doc.raw?.loadRating || '450kg/m2'}</strong>
+                            </div>
+                        </div>
+                        <dl className="project-data-tag-details">
+                            <div><dt>Erected by</dt><dd>{doc.raw?.erectedBy || 'Site team'}</dd></div>
+                            <div><dt>Date inspected</dt><dd>{formatDate(doc.raw?.latestInspectionDate || doc.uploadedAt)}</dd></div>
+                            <div><dt>Inspected by</dt><dd>{doc.uploadedBy}</dd></div>
+                            <div><dt>Signature</dt><dd className="signature">{doc.uploadedBy}</dd></div>
+                        </dl>
+                        <div className={`project-data-safe-strip ${doc.status === 'Expired' ? 'expired' : ''}`}>
+                            {doc.status === 'Expired' ? 'REVIEW REQUIRED' : 'SAFE FOR USE'}
+                            <CheckCircle size={18} />
+                        </div>
+                        <div className="project-data-tag-footer">
+                            <span>Next inspection due</span>
+                            <strong>{formatDate(doc.expiresAt)}</strong>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="project-data-document-preview">
+                            <div className="project-data-document-icon">
+                                <FileText size={46} />
+                            </div>
+                            <h3>{tab.label}</h3>
+                            <strong>{doc.name}</strong>
+                            <span>{builder?.name || 'Builder'} / {project?.name || 'Project'}</span>
+                        </div>
+                        <dl className="project-data-tag-details">
+                            <div><dt>Reference</dt><dd>{doc.ref}</dd></div>
+                            <div><dt>Status</dt><dd>{doc.status}</dd></div>
+                            <div><dt>Uploaded</dt><dd>{formatDate(doc.uploadedAt)}</dd></div>
+                            <div><dt>Size</dt><dd>{doc.size || '-'}</dd></div>
+                        </dl>
+                    </>
+                )}
+            </div>
+        </aside>
+    );
+}
 
 export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [loading, setLoading] = useState(true);
     const [builders, setBuilders] = useState([]);
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
+    const [documentsLoading, setDocumentsLoading] = useState(false);
+    const [documents, setDocuments] = useState([]);
+    const [selectedDocumentId, setSelectedDocumentId] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
+    const uploadInputRef = useRef(null);
 
     useEffect(() => {
         let active = true;
         safetyProjectsAPI.getBuilders()
             .then(nextBuilders => {
-                if (!active) {
-                    return;
-                }
+                if (!active) return;
                 setBuilders(nextBuilders);
                 const firstBuilder = nextBuilders[0] || null;
                 setSelectedBuilderId(firstBuilder?.id || '');
@@ -23,7 +302,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
             })
             .catch(err => {
                 if (active) {
-                    setError(err.message || 'Failed to load safety projects');
+                    setError(err.message || 'Failed to load project data');
                 }
             })
             .finally(() => {
@@ -46,65 +325,295 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         [selectedBuilder, selectedProjectId]
     );
 
+    const activeTab = useMemo(
+        () => PROJECT_DATA_TABS.find(tab => tab.key === activeTabKey) || PROJECT_DATA_TABS[0],
+        [activeTabKey]
+    );
+
     useEffect(() => {
         if (selectedBuilder && !selectedBuilder.projects.some(project => project.id === selectedProjectId)) {
             setSelectedProjectId(selectedBuilder.projects[0]?.id || '');
         }
     }, [selectedBuilder, selectedProjectId]);
 
+    const loadDocuments = async () => {
+        if (!selectedBuilder || !selectedProject) {
+            setDocuments([]);
+            setSelectedDocumentId('');
+            return;
+        }
+
+        setDocumentsLoading(true);
+        setError('');
+        try {
+            const rows = activeTab.key === 'scaff-tags'
+                ? mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id))
+                : mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
+
+            setDocuments(rows);
+            setSelectedDocumentId(prev => rows.some(row => row.id === prev) ? prev : rows[0]?.id || '');
+        } catch (err) {
+            setDocuments([]);
+            setSelectedDocumentId('');
+            setError(err.message || `Failed to load ${activeTab.noun}`);
+        } finally {
+            setDocumentsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDocuments().catch(() => {});
+    }, [selectedBuilder?.id, selectedProject?.id, activeTab.key]);
+
+    const selectedDocument = useMemo(
+        () => documents.find(document => document.id === selectedDocumentId) || documents[0] || null,
+        [documents, selectedDocumentId]
+    );
+
+    const filteredDocuments = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return documents;
+        return documents.filter(document => (
+            document.name.toLowerCase().includes(query)
+            || document.ref.toLowerCase().includes(query)
+            || document.status.toLowerCase().includes(query)
+            || document.uploadedBy.toLowerCase().includes(query)
+        ));
+    }, [documents, searchQuery]);
+
+    const currentCount = documents.filter(document => document.status === 'Current').length;
+    const expiredCount = documents.filter(document => document.status === 'Expired').length;
+
+    const handleUploadClick = () => {
+        if (!selectedBuilder || !selectedProject) return;
+        if (activeTab.key === 'scaff-tags') {
+            onOpenScaffTags(selectedBuilder, selectedProject);
+            return;
+        }
+        uploadInputRef.current?.click();
+    };
+
+    const handleUploadPdf = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !selectedBuilder || !selectedProject) return;
+
+        setUploading(true);
+        setError('');
+        try {
+            await safetyFilesAPI.uploadModulePdf(selectedBuilder.id, selectedProject.id, activeTab.storageKind, file);
+            await loadDocuments();
+        } catch (err) {
+            setError(err.message || 'Failed to upload PDF');
+        } finally {
+            setUploading(false);
+            event.target.value = '';
+        }
+    };
+
+    const openSelectedDocument = async (doc = selectedDocument) => {
+        if (!doc || !selectedBuilder || !selectedProject) return;
+        try {
+            if (doc.kind === 'scaff-tags') {
+                const form = await scaffTagsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+                if (!form) throw new Error('Scaff-tag form not found');
+                const url = await scaffTagsAPI.getPdfUrl(form);
+                window.open(url, '_blank', 'noopener,noreferrer');
+                return;
+            }
+            const url = await safetyFilesAPI.getSignedModuleFileUrl(doc.raw.path);
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (err) {
+            setError(err.message || 'Failed to open document');
+        }
+    };
+
+    const openDetailedPage = () => {
+        if (!selectedBuilder || !selectedProject) return;
+        if (activeTab.key === 'scaff-tags') {
+            onOpenScaffTags(selectedBuilder, selectedProject);
+        } else if (activeTab.key === 'swms') {
+            onOpenSwms(selectedBuilder, selectedProject);
+        }
+    };
+
     if (loading) {
-        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading safety data" /></div></div>;
+        return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading project data" /></div></div>;
     }
 
     return (
-        <div className="module-page">
-            <div className="module-shell">
-                <div className="module-header">
+        <div className="module-page project-data-page">
+            <div className="project-data-shell">
+                <header className="project-data-topbar">
                     <div>
-                        <h2>ESS Safety</h2>
-                        <p>Shared builder, project, SWMS, and Scaff-Tag data backed by the same Supabase storage as iOS.</p>
+                        <h1>Project data</h1>
+                        <p>Builder and project specific files, forms, certificates, and design access.</p>
                     </div>
-                </div>
+                    <div className="project-data-top-stats" aria-label="Project document status summary">
+                        <span><CheckCircle size={15} /> {currentCount} current</span>
+                        <span><AlertTriangle size={15} /> {expiredCount} expired</span>
+                    </div>
+                </header>
 
-                <div className="module-card">
-                    <div className="module-toolbar">
-                        <div className="module-field">
-                            <label>Builder</label>
+                <section className="project-data-selector-row" aria-label="Project selector">
+                    <label className="project-data-select-field">
+                        <span>Builder</span>
+                        <div className="project-data-select-shell">
+                            <Building2 size={19} />
                             <select value={selectedBuilder?.id || ''} onChange={e => setSelectedBuilderId(e.target.value)}>
                                 {builders.length === 0 ? <option value="">No builders yet</option> : null}
                                 {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
                             </select>
+                            <ChevronDown size={18} />
                         </div>
-                        <div className="module-field">
-                            <label>Project</label>
+                    </label>
+                    <label className="project-data-select-field">
+                        <span>Project</span>
+                        <div className="project-data-select-shell">
+                            <HardHat size={19} />
                             <select value={selectedProject?.id || ''} onChange={e => setSelectedProjectId(e.target.value)} disabled={!selectedBuilder}>
                                 {!selectedBuilder ? <option value="">Select builder</option> : null}
                                 {selectedBuilder?.projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                             </select>
+                            <ChevronDown size={18} />
+                        </div>
+                    </label>
+                </section>
+
+                {error ? <div className="module-error project-data-error">{error}</div> : null}
+
+                <section className="project-data-workspace">
+                    <div className="project-data-main-panel">
+                        <nav className="project-data-tabs" aria-label="Project data sections">
+                            {PROJECT_DATA_TABS.map(tab => {
+                                const Icon = tab.icon;
+                                const active = tab.key === activeTab.key;
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        type="button"
+                                        className={active ? 'active' : ''}
+                                        onClick={() => setActiveTabKey(tab.key)}
+                                    >
+                                        <Icon size={19} />
+                                        <span>{tab.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </nav>
+
+                        <div className="project-data-actions-row">
+                            <button
+                                type="button"
+                                className="project-data-upload-btn"
+                                onClick={handleUploadClick}
+                                disabled={!selectedBuilder || !selectedProject || uploading}
+                            >
+                                {uploading ? <Upload size={17} /> : <Plus size={17} />}
+                                {uploading ? 'Uploading...' : 'Upload'}
+                            </button>
+                            <input ref={uploadInputRef} type="file" accept="application/pdf" hidden onChange={handleUploadPdf} />
+                            <button type="button" className="project-data-secondary-btn">
+                                <Users size={16} />
+                                Access
+                                <ChevronDown size={16} />
+                            </button>
+                            {activeTab.key === 'scaff-tags' || activeTab.key === 'swms' ? (
+                                <button type="button" className="project-data-secondary-btn" onClick={openDetailedPage}>
+                                    <ExternalLink size={16} />
+                                    Open page
+                                </button>
+                            ) : null}
+                            <div className="project-data-search">
+                                <Search size={17} />
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    placeholder="Search documents..."
+                                />
+                            </div>
+                            <button type="button" className="project-data-secondary-btn icon-left">
+                                <Filter size={16} />
+                                Filter
+                            </button>
+                            <button type="button" className="project-data-icon-btn" aria-label="List view" title="List view">
+                                <List size={18} />
+                            </button>
+                        </div>
+
+                        <div className="project-data-table-card">
+                            <div className="project-data-table-head">
+                                <span className="project-data-checkbox" aria-hidden="true" />
+                                <span>Document name</span>
+                                <span>{activeTab.refLabel}</span>
+                                <span>Status</span>
+                                <span>Uploaded</span>
+                                <span>Expires</span>
+                                <span>Uploaded by</span>
+                                <span />
+                            </div>
+
+                            {documentsLoading ? (
+                                <div className="project-data-table-state">
+                                    <LoadingBrandmark label={`Loading ${activeTab.noun}`} />
+                                </div>
+                            ) : filteredDocuments.length === 0 ? (
+                                <div className="project-data-empty-state">
+                                    <FileCheck size={34} />
+                                    <strong>No {activeTab.noun} yet</strong>
+                                    <span>{selectedProject ? `${selectedProject.name} is ready for its first upload.` : 'Select a builder and project to begin.'}</span>
+                                </div>
+                            ) : (
+                                <div className="project-data-table-body">
+                                    {filteredDocuments.map(document => (
+                                        <button
+                                            key={document.id}
+                                            type="button"
+                                            className={`project-data-table-row${selectedDocument?.id === document.id ? ' selected' : ''}`}
+                                            onClick={() => setSelectedDocumentId(document.id)}
+                                            onDoubleClick={() => openSelectedDocument(document)}
+                                        >
+                                            <span className="project-data-checkbox" aria-hidden="true" />
+                                            <span className="project-data-doc-name">
+                                                <span className="project-data-pdf-icon"><FileText size={15} /></span>
+                                                <span title={document.name}>{document.name}</span>
+                                            </span>
+                                            <span>{document.ref}</span>
+                                            <span><StatusChip status={document.status} /></span>
+                                            <span>{formatDate(document.uploadedAt)}</span>
+                                            <span className={document.status === 'Expired' ? 'project-data-expired-text' : ''}>{formatDate(document.expiresAt)}</span>
+                                            <span>{document.uploadedBy}</span>
+                                            <span className="project-data-row-actions">
+                                                <MoreVertical size={17} />
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="project-data-pagination">
+                                <span>Showing {filteredDocuments.length === 0 ? '0' : `1 to ${filteredDocuments.length}`} of {documents.length} documents</span>
+                                <div>
+                                    <button type="button" disabled>1</button>
+                                    <button type="button">2</button>
+                                    <button type="button">3</button>
+                                    <span>...</span>
+                                    <button type="button">19</button>
+                                </div>
+                                <button type="button" className="project-data-page-size">10 per page <ChevronDown size={15} /></button>
+                            </div>
                         </div>
                     </div>
 
-                    {error ? <div className="module-error">{error}</div> : null}
-
-                    <div className="module-grid module-grid-two">
-                        <button
-                            className="module-nav-card"
-                            disabled={!selectedBuilder || !selectedProject}
-                            onClick={() => onOpenScaffTags(selectedBuilder, selectedProject)}
-                        >
-                            <span className="module-nav-label">Scaff-Tags</span>
-                            <span className="module-nav-copy">Inspection forms, QR links, PDF output, and site records.</span>
-                        </button>
-                        <button
-                            className="module-nav-card"
-                            disabled={!selectedBuilder || !selectedProject}
-                            onClick={() => onOpenSwms(selectedBuilder, selectedProject)}
-                        >
-                            <span className="module-nav-label">SWMS</span>
-                            <span className="module-nav-copy">Shared PDF uploads for the selected project site.</span>
-                        </button>
-                    </div>
-                </div>
+                    <ProjectDataPreview
+                        doc={selectedDocument}
+                        tab={activeTab}
+                        builder={selectedBuilder}
+                        project={selectedProject}
+                        onClose={() => setSelectedDocumentId('')}
+                        onOpen={() => openSelectedDocument()}
+                    />
+                </section>
             </div>
         </div>
     );

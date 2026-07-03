@@ -832,7 +832,7 @@ export default function SiteInformationPage() {
         const isArchiving = !project.archived;
         const confirmed = window.confirm(
             isArchiving
-                ? `Archive "${project.name}"? Archived jobs will be hidden from ESS Safety, rostering, and employee preferences until restored.`
+                ? `Archive "${project.name}"? Archived jobs will be hidden from Project data, rostering, and employee preferences until restored.`
                 : `Unarchive "${project.name}"?`
         );
         if (!confirmed) {

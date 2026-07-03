@@ -701,9 +701,9 @@ function App() {
                 : [{ key: 'material-ordering-new', label: 'New Materials List' }]),
             ...(showRosteringAndEmployees ? [
                 { key: 'rostering', label: 'ESS Rostering' },
-                { key: 'safety', label: 'ESS Safety' },
+                { key: 'safety', label: 'Project data' },
             ] : [
-                { key: 'safety', label: 'ESS Safety' },
+                { key: 'safety', label: 'Project data' },
             ]),
             ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];

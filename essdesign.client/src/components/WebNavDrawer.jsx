@@ -3,7 +3,7 @@ import React from 'react';
 const MENU_ITEMS = [
     { key: 'design', label: 'ESS Design' },
     { key: 'site-information', label: 'Site Registry' },
-    { key: 'safety', label: 'ESS Safety' },
+    { key: 'safety', label: 'Project data' },
     { key: 'truck-schedule', label: 'ESS Transport' },
     { key: 'rostering', label: 'ESS Rostering' },
     { key: 'employees', label: 'Employees' }
