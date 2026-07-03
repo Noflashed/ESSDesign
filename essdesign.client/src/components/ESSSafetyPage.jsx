@@ -309,17 +309,28 @@ function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoa
                 </div>
             </div>
             <div className="project-data-preview-content">
-                <div className="project-data-paper">
+                <div className={`project-data-paper${previewSrc ? ' is-clickable' : ''}`}>
                     {previewLoading ? (
                         <div className="project-data-preview-state">
                             <LoadingBrandmark label="Loading preview" />
                         </div>
                     ) : previewSrc ? (
-                        <iframe
-                            src={previewSrc}
-                            title={`${doc.name} preview`}
-                            className="project-data-preview-frame"
-                        />
+                        <>
+                            <iframe
+                                src={previewSrc}
+                                title={`${doc.name} preview`}
+                                className="project-data-preview-frame"
+                            />
+                            <button
+                                type="button"
+                                className="project-data-preview-open-hitarea"
+                                onClick={onOpen}
+                                aria-label={`Open ${doc.name} in a new tab`}
+                                title="Open PDF in a new tab"
+                            >
+                                <span><ExternalLink size={15} /> Open PDF</span>
+                            </button>
+                        </>
                     ) : (
                         <div className="project-data-preview-state">
                             <FileText size={36} />
@@ -628,6 +639,36 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         }
     };
 
+    const downloadDocumentPdf = async (doc) => {
+        if (!doc || !selectedBuilder || !selectedProject) return;
+        try {
+            const url = await resolveDocumentPdfUrl(doc);
+            if (!url) return;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to download document');
+
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = doc.name || 'document.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (err) {
+            setError(err.message || 'Failed to download document');
+        }
+    };
+
+    const handlePdfIconKeyDown = (event, document) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        downloadDocumentPdf(document);
+    };
+
     const openDetailedPage = () => {
         if (!selectedBuilder || !selectedProject) return;
         if (activeTab.key === 'scaff-tags') {
@@ -773,7 +814,21 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                         >
                                             <span className="project-data-checkbox" aria-hidden="true" />
                                             <span className="project-data-doc-name">
-                                                <span className="project-data-pdf-icon"><FileText size={15} /></span>
+                                                <span
+                                                    className="project-data-pdf-icon"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    title="Download PDF"
+                                                    aria-label={`Download ${document.name}`}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        downloadDocumentPdf(document);
+                                                    }}
+                                                    onDoubleClick={(event) => event.stopPropagation()}
+                                                    onKeyDown={(event) => handlePdfIconKeyDown(event, document)}
+                                                >
+                                                    <FileText size={15} />
+                                                </span>
                                                 <span title={document.name}>{document.name}</span>
                                             </span>
                                             <span>{document.ref}</span>

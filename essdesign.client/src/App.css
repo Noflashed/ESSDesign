@@ -17097,6 +17097,8 @@ button.stat-card {
     border: 1px solid #cfd7e2;
     text-align: left;
     cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .project-data-builder-trigger span:not(.project-data-builder-logo) {
@@ -17157,13 +17159,16 @@ button.stat-card {
     padding: 7px 9px;
     text-align: left;
     font: inherit;
-    font-size: 13px;
-    font-weight: 650;
+    font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
 }
 
 .project-data-builder-option span:last-child {
     overflow: hidden;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -17171,7 +17176,7 @@ button.stat-card {
 .project-data-builder-option:hover,
 .project-data-builder-option.selected {
     background: #fff3ea;
-    color: #c2480f;
+    color: #111827;
 }
 
 .project-data-builder-option.empty {
@@ -17432,6 +17437,13 @@ button.stat-card {
     border-radius: 3px;
     background: #d71920;
     color: #ffffff;
+    cursor: pointer;
+}
+
+.project-data-pdf-icon:hover,
+.project-data-pdf-icon:focus-visible {
+    outline: 2px solid rgba(215, 25, 32, 0.28);
+    outline-offset: 2px;
 }
 
 .project-data-status {
@@ -17602,10 +17614,21 @@ button.stat-card {
     background: transparent;
     color: #334155;
     cursor: pointer;
+    opacity: 1;
 }
 
 .project-data-preview-titlebar button:hover {
     background: #f1f5f9;
+}
+
+.project-data-preview-titlebar button svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    color: #334155;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    opacity: 1;
 }
 
 .project-data-preview-content {
@@ -17616,6 +17639,7 @@ button.stat-card {
 }
 
 .project-data-paper {
+    position: relative;
     min-height: 440px;
     height: min(58vh, 560px);
     border: 1px solid #cbd5e1;
@@ -17623,6 +17647,18 @@ button.stat-card {
     overflow: hidden;
     color: #111827;
     box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.project-data-paper.is-clickable {
+    cursor: pointer;
+}
+
+.project-data-paper.is-clickable:hover,
+.project-data-paper.is-clickable:focus-within {
+    border-color: #f05a1a;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.14);
+    transform: translateY(-2px);
 }
 
 .project-data-preview-frame {
@@ -17631,6 +17667,47 @@ button.stat-card {
     display: block;
     border: 0;
     background: #ffffff;
+}
+
+.project-data-preview-open-hitarea {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: rgba(15, 23, 42, 0);
+    color: #ffffff;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+    transition: background 0.16s ease, opacity 0.16s ease;
+}
+
+.project-data-preview-open-hitarea span {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 5px;
+    background: rgba(15, 23, 42, 0.86);
+    padding: 0 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+    transform: translateY(6px);
+    transition: transform 0.16s ease;
+}
+
+.project-data-paper.is-clickable:hover .project-data-preview-open-hitarea,
+.project-data-preview-open-hitarea:focus-visible {
+    background: rgba(15, 23, 42, 0.12);
+    opacity: 1;
+}
+
+.project-data-paper.is-clickable:hover .project-data-preview-open-hitarea span,
+.project-data-preview-open-hitarea:focus-visible span {
+    transform: translateY(0);
 }
 
 .project-data-preview-state {
