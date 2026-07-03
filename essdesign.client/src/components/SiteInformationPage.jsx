@@ -3,6 +3,9 @@ import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, 
 import { analysisAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
+const SCAFFOLD_ENTITY_OPTIONS = ['Erect Safe Scaffolding', 'Maloo Access Group'];
+const DEFAULT_SCAFFOLD_ENTITY = SCAFFOLD_ENTITY_OPTIONS[0];
+
 const SiteRegistryLocationIcon = ({ size = 18 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
@@ -16,6 +19,7 @@ function emptyProjectForm(initialBuilderId = '') {
         projectName: '',
         siteLocation: '',
         siteLocationSourceId: '',
+        scaffoldEntity: DEFAULT_SCAFFOLD_ENTITY,
         projectManagerUserId: '',
         siteSupervisorUserId: '',
         leadingHandUserId: '',
@@ -76,6 +80,11 @@ function BuilderLogoMark({ builder, logoSrc = '', selected = false, header = fal
 
 function projectSiteKey(project) {
     return project?.builder?.id && project?.id ? `${project.builder.id}:${project.id}` : '';
+}
+
+function normalizeScaffoldEntity(value) {
+    const clean = String(value || '').trim();
+    return SCAFFOLD_ENTITY_OPTIONS.find(entity => entity.toLowerCase() === clean.toLowerCase()) || DEFAULT_SCAFFOLD_ENTITY;
 }
 
 function employeeName(employee) {
@@ -430,6 +439,7 @@ export default function SiteInformationPage() {
                     project.name,
                     project.builder.name,
                     project.siteLocation || 'Not set',
+                    normalizeScaffoldEntity(project.scaffoldEntity),
                     project.archived ? 'Archived' : 'Active',
                 ].join(' ').toLowerCase().includes(cleanSearchQuery);
             });
@@ -605,6 +615,7 @@ export default function SiteInformationPage() {
             projectName: project.name,
             siteLocation: project.siteLocation || '',
             siteLocationSourceId: project.siteLocation ? 'existing' : '',
+            scaffoldEntity: normalizeScaffoldEntity(project.scaffoldEntity),
             projectManagerUserId: project.projectManagerUserId || managerEmployee?.linkedAuthUserId || '',
             siteSupervisorUserId: project.siteSupervisorUserId || supervisorEmployee?.linkedAuthUserId || '',
             leadingHandUserId: project.leadingHandUserId || leadingHandEmployee?.linkedAuthUserId || '',
@@ -710,6 +721,7 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
+                    scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 })
                 : await safetyProjectsAPI.createProject(projectForm.builderId, projectForm.projectName, projectForm.siteLocation, {
@@ -719,6 +731,7 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
+                    scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 });
             setBuilders(nextBuilders);
@@ -974,6 +987,7 @@ export default function SiteInformationPage() {
                                                 ) : null}
                                             </div>
                                         </th>
+                                        <th>Scaffold Entity</th>
                                         <th>Site Location</th>
                                         <th>
                                             <div className={`site-registry-column-filter ${hasStatusFilter ? 'filtered' : ''} ${columnFilterMenu === 'status' ? 'open' : ''}`}>
@@ -1007,7 +1021,7 @@ export default function SiteInformationPage() {
                                 <tbody>
                                     {visibleProjects.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="site-registry-empty-cell">
+                                            <td colSpan="7" className="site-registry-empty-cell">
                                                 {builders.length === 0
                                                     ? 'No builders created yet.'
                                                     : showArchived
@@ -1063,6 +1077,9 @@ export default function SiteInformationPage() {
                                                         </div>
                                                     </td>
                                                     <td>{project.builder.name}</td>
+                                                    <td>
+                                                        <span className="site-registry-entity-pill">{normalizeScaffoldEntity(project.scaffoldEntity)}</span>
+                                                    </td>
                                                     <td>{project.siteLocation || 'Not set'}</td>
                                                     <td>
                                                         <span className={`site-registry-status ${project.archived ? 'archived' : 'active'}`}>
@@ -1083,7 +1100,7 @@ export default function SiteInformationPage() {
                                                 </tr>
                                                 {isExpanded ? (
                                                     <tr className="site-registry-detail-row">
-                                                        <td colSpan="6">
+                                                        <td colSpan="7">
                                                             <div className="site-registry-detail-panel">
                                                                 <section className="site-registry-inducted-panel">
                                                                     <div className="site-registry-detail-heading">
@@ -1176,6 +1193,11 @@ export default function SiteInformationPage() {
                                                                             <span>Address</span>
                                                                             <strong>{project.siteLocation || 'Not set'}</strong>
                                                                             <small>Last updated {formatProjectDate(project.updatedAt)}</small>
+                                                                        </div>
+                                                                        <div className="site-registry-contact-card wide">
+                                                                            <span>Scaffold Entity</span>
+                                                                            <strong>{normalizeScaffoldEntity(project.scaffoldEntity)}</strong>
+                                                                            <small>Stored against this site for company reporting and AI lookup</small>
                                                                         </div>
                                                                     </section>
                                                                 </aside>
@@ -1296,6 +1318,20 @@ export default function SiteInformationPage() {
                                             {projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId ? (
                                                 <p className="site-registry-address-hint">Select a suggested address so transport routing can validate it.</p>
                                             ) : null}
+                                        </div>
+                                        <div className="module-field">
+                                            <label>Scaffold Entity <span aria-hidden="true">*</span></label>
+                                            <select
+                                                value={projectForm.scaffoldEntity}
+                                                onChange={event => setProjectForm(prev => ({
+                                                    ...prev,
+                                                    scaffoldEntity: normalizeScaffoldEntity(event.target.value)
+                                                }))}
+                                            >
+                                                {SCAFFOLD_ENTITY_OPTIONS.map(entity => (
+                                                    <option key={entity} value={entity}>{entity}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 </section>

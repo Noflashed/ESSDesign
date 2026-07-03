@@ -70,6 +70,7 @@ namespace ESSDesign.Server.Services
             public string BuilderName { get; set; } = string.Empty;
             public string Name { get; set; } = string.Empty;
             public string? SiteLocation { get; set; }
+            public string ScaffoldEntity { get; set; } = DefaultScaffoldEntity;
             public bool Archived { get; set; }
             public string SiteKey { get; set; } = string.Empty;
             public string InductionSource { get; set; } = "explicit";
@@ -123,6 +124,7 @@ namespace ESSDesign.Server.Services
 
         private const string SafetyBucket = "project-information";
         private const string SafetyProjectsPath = "projects.json";
+        private const string DefaultScaffoldEntity = "Erect Safe Scaffolding";
         private const string MaterialRequestsPath = "material-order-requests/index.json";
         private const string MaterialRequestsTable = "ess_material_order_requests";
         private const string TruckLiveLocationsTable = "ess_truck_live_locations";
@@ -359,6 +361,7 @@ Today is {today:dddd, MMMM d, yyyy}. The person you're talking to is {currentUse
 Current user profile: {FormatUserProfileForPrompt(currentUser)}
 
 ESS Design runs scaffolding projects across Sydney. The app tracks job-sites, builders, employees, inductions, design documents (PDFs), rosters, material deliveries, live truck GPS, and user accounts.
+Each job-site also has a scaffold entity: either Erect Safe Scaffolding or Maloo Access Group. Use that field when someone asks which company/entity a site belongs to, or asks about ESS versus Maloo sites.
 
 The ESS yard is at 130 Gilba Road, Girraween NSW 2145. That's what people mean when they say "the yard" or "the depot".
 
@@ -537,6 +540,7 @@ WHEN THINGS GO WRONG:
                     ("name", "string", "Partial or full site name to search for"),
                     ("builder", "string", "Filter by builder/company name"),
                     ("location", "string", "Filter by suburb or address"),
+                    ("scaffold_entity", "string", "Filter by scaffold entity: Erect Safe Scaffolding or Maloo Access Group"),
                     ("archived", "boolean", "If true return archived sites, if false return active sites only. Leave unset for all."),
                     ("limit", "integer", "Maximum results (default 30)"))),
             Fn("get_site_details", "Get full details about a specific job-site including assigned project manager, assigned site supervisor, assigned leading hand, inducted employees, builder, and location.",
@@ -867,6 +871,7 @@ WHEN THINGS GO WRONG:
             var nameFilter = TryGetString(args, "name");
             var builderFilter = TryGetString(args, "builder");
             var locationFilter = TryGetString(args, "location");
+            var scaffoldEntityFilter = TryGetStringAny(args, "scaffold_entity", "scaffoldEntity");
             var archivedFilter = args.TryGetProperty("archived", out var aProp) && aProp.ValueKind == JsonValueKind.True ? true :
                                  args.TryGetProperty("archived", out var aProp2) && aProp2.ValueKind == JsonValueKind.False ? false : (bool?)null;
             var limit = TryGetInt(args, "limit") ?? 30;
@@ -881,6 +886,11 @@ WHEN THINGS GO WRONG:
             if (!string.IsNullOrWhiteSpace(locationFilter))
                 filtered = filtered.Where(j => (j.SiteLocation ?? string.Empty).Contains(locationFilter, StringComparison.OrdinalIgnoreCase)
                     || j.Name.Contains(locationFilter, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(scaffoldEntityFilter))
+            {
+                var normalizedEntity = NormalizeScaffoldEntity(scaffoldEntityFilter);
+                filtered = filtered.Where(j => j.ScaffoldEntity.Equals(normalizedEntity, StringComparison.OrdinalIgnoreCase));
+            }
             if (archivedFilter.HasValue)
                 filtered = filtered.Where(j => j.Archived == archivedFilter.Value);
 
@@ -890,6 +900,7 @@ WHEN THINGS GO WRONG:
                 j.Name,
                 builder = j.BuilderName,
                 siteLocation = j.SiteLocation,
+                scaffoldEntity = j.ScaffoldEntity,
                 j.Archived,
                 assignedSiteSupervisor = FormatAssignedSitePerson(j.SiteSupervisor),
                 assignedProjectManager = FormatAssignedSitePerson(j.ProjectManager),
@@ -917,6 +928,7 @@ WHEN THINGS GO WRONG:
                 site.Name,
                 builder = site.BuilderName,
                 siteLocation = site.SiteLocation,
+                scaffoldEntity = site.ScaffoldEntity,
                 site.Archived,
                 site.SiteKey,
                 site.InductionSource,
@@ -955,6 +967,7 @@ WHEN THINGS GO WRONG:
                 {
                     j.Name,
                     siteLocation = j.SiteLocation,
+                    scaffoldEntity = j.ScaffoldEntity,
                     j.Archived,
                     assignedSiteSupervisor = FormatAssignedSitePerson(j.SiteSupervisor),
                     assignedProjectManager = FormatAssignedSitePerson(j.ProjectManager),
@@ -1554,6 +1567,7 @@ WHEN THINGS GO WRONG:
                     site.Name,
                     builder = site.BuilderName,
                     siteLocation = site.SiteLocation,
+                    scaffoldEntity = site.ScaffoldEntity,
                     site.Archived,
                     assignedProjectManager = FormatAssignedSitePerson(site.ProjectManager),
                     assignedSiteSupervisor = FormatAssignedSitePerson(site.SiteSupervisor),
@@ -1630,9 +1644,10 @@ WHEN THINGS GO WRONG:
                 .Where(j => tokens.Any(t =>
                     j.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     j.BuilderName.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                    j.ScaffoldEntity.Contains(t, StringComparison.OrdinalIgnoreCase) ||
                     (j.SiteLocation ?? string.Empty).Contains(t, StringComparison.OrdinalIgnoreCase)))
                 .Take(5)
-                .Select(j => new { type = "jobsite", name = j.Name, builder = j.BuilderName, j.Archived })
+                .Select(j => new { type = "jobsite", name = j.Name, builder = j.BuilderName, scaffoldEntity = j.ScaffoldEntity, j.Archived })
                 .Cast<object>().ToList();
 
             var designMatches = documents
@@ -2095,6 +2110,7 @@ WHEN THINGS GO WRONG:
                         BuilderId = builderId,
                         BuilderName = builderName,
                         SiteLocation = TryGetString(project, "siteLocation"),
+                        ScaffoldEntity = NormalizeScaffoldEntity(TryGetStringAny(project, "scaffoldEntity", "scaffold_entity")),
                         Archived = TryGetBool(project, "archived"),
                         SiteKey = siteKey,
                         InductionSource = hasExplicitInductions ? "explicit-inductedEmployeeIds" : "legacy-employee-preferred-site",
@@ -2663,6 +2679,23 @@ WHEN THINGS GO WRONG:
         {
             var chars = value.ToLowerInvariant().Select(ch => char.IsLetterOrDigit(ch) ? ch : ' ').ToArray();
             return string.Join(" ", new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private static string NormalizeScaffoldEntity(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return DefaultScaffoldEntity;
+
+            if (value.Equals("Maloo Access Group", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Maloo access group", StringComparison.OrdinalIgnoreCase))
+                return "Maloo Access Group";
+
+            if (value.Equals(DefaultScaffoldEntity, StringComparison.OrdinalIgnoreCase)
+                || value.Equals("ESS", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("Erect Safe", StringComparison.OrdinalIgnoreCase))
+                return DefaultScaffoldEntity;
+
+            return DefaultScaffoldEntity;
         }
 
         private static Dictionary<string, string> BuildFolderPaths(IReadOnlyList<JsonElement> folders)

@@ -313,6 +313,8 @@ const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
 const SAFETY_PROJECTS_PATH = 'projects.json';
+const DEFAULT_SCAFFOLD_ENTITY = 'Erect Safe Scaffolding';
+const SCAFFOLD_ENTITIES = new Set(['Erect Safe Scaffolding', 'Maloo Access Group']);
 const BUILDER_LOGOS_PREFIX = 'builder-logos';
 
 const currentSupabaseBearer = () => localStorage.getItem('access_token') || SUPABASE_ANON_KEY;
@@ -613,6 +615,7 @@ function parseSafetyProjects(raw) {
                                 archived: Boolean(project.archived),
                                 archivedAt: project.archivedAt || null,
                                 siteLocation: (project.siteLocation || '').trim(),
+                                scaffoldEntity: normalizeScaffoldEntity(project.scaffoldEntity || project.scaffold_entity),
                                 projectManagerUserId: project.projectManagerUserId || project.project_manager_user_id || '',
                                 siteSupervisorUserId: project.siteSupervisorUserId || project.site_supervisor_user_id || '',
                                 leadingHandUserId: project.leadingHandUserId || project.leading_hand_user_id || '',
@@ -647,6 +650,15 @@ function cloneSafetyBuilders(builders, { includeArchived = true } = {}) {
             .filter(project => includeArchived || !project.archived)
             .map(project => ({ ...project }))
     }));
+}
+
+function normalizeScaffoldEntity(value) {
+    const clean = String(value || '').trim();
+    if (!clean) {
+        return DEFAULT_SCAFFOLD_ENTITY;
+    }
+    const matched = Array.from(SCAFFOLD_ENTITIES).find(entity => entity.toLowerCase() === clean.toLowerCase());
+    return matched || DEFAULT_SCAFFOLD_ENTITY;
 }
 
 const sanitizeStorageFileName = (value, fallback = 'logo') => {
@@ -1201,6 +1213,7 @@ export const safetyProjectsAPI = {
             archived: false,
             archivedAt: null,
             siteLocation: cleanLocation,
+            scaffoldEntity: normalizeScaffoldEntity(options.scaffoldEntity),
             projectManagerUserId: options.projectManagerUserId || '',
             siteSupervisorUserId: options.siteSupervisorUserId || '',
             leadingHandUserId: options.leadingHandUserId || '',
@@ -1276,6 +1289,11 @@ export const safetyProjectsAPI = {
         }
         project.name = clean;
         project.siteLocation = cleanLocation;
+        if (Object.prototype.hasOwnProperty.call(options, 'scaffoldEntity')) {
+            project.scaffoldEntity = normalizeScaffoldEntity(options.scaffoldEntity);
+        } else if (!project.scaffoldEntity) {
+            project.scaffoldEntity = DEFAULT_SCAFFOLD_ENTITY;
+        }
         if (Object.prototype.hasOwnProperty.call(options, 'projectManagerUserId')) {
             project.projectManagerUserId = options.projectManagerUserId || '';
         }

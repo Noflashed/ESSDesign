@@ -8193,7 +8193,7 @@ button.stat-card {
 
 .site-registry-table {
     width: 100%;
-    min-width: 1080px;
+    min-width: 1180px;
     border-collapse: separate;
     border-spacing: 0;
     background: #ffffff;
@@ -8237,7 +8237,7 @@ button.stat-card {
 
 .site-registry-table th:nth-child(2),
 .site-registry-table td:nth-child(2) {
-    width: 25%;
+    width: 22%;
 }
 
 .site-registry-table td:nth-child(2) {
@@ -8248,24 +8248,30 @@ button.stat-card {
 
 .site-registry-table th:nth-child(3),
 .site-registry-table td:nth-child(3) {
-    width: 21%;
+    width: 18%;
 }
 
 .site-registry-table th:nth-child(4),
 .site-registry-table td:nth-child(4) {
-    width: 28%;
+    width: 17%;
     text-align: left;
 }
 
 .site-registry-table th:nth-child(5),
 .site-registry-table td:nth-child(5) {
-    width: 12%;
+    width: 26%;
     text-align: left;
 }
 
 .site-registry-table th:nth-child(6),
 .site-registry-table td:nth-child(6) {
-    width: 24%;
+    width: 11%;
+}
+
+.site-registry-table th:nth-child(7),
+.site-registry-table td:nth-child(7) {
+    width: 64px;
+    text-align: right;
 }
 
 .site-registry-select-col {
@@ -8793,6 +8799,21 @@ button.stat-card {
     color: #334155;
     font-size: 12px;
     font-weight: 700;
+}
+
+.site-registry-entity-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    max-width: 100%;
+    padding: 0 10px;
+    border-radius: 5px;
+    border: 1px solid #d8e2f1;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 750;
+    white-space: nowrap;
 }
 
 .site-registry-table-actions {
