@@ -170,23 +170,60 @@ function StatusChip({ status }) {
     );
 }
 
-function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
-    if (!doc) {
-        return (
-            <aside className="project-data-preview-panel empty">
-                <div className="project-data-preview-empty">
-                    <FileText size={34} />
-                    <strong>No document selected</strong>
-                    <span>Select a row to preview project data.</span>
-                </div>
-            </aside>
-        );
+function BuilderLogo({ builder, logoUrl }) {
+    if (logoUrl) {
+        return <img src={logoUrl} alt="" className="project-data-builder-logo" />;
     }
 
+    return (
+        <span className="project-data-builder-logo fallback" aria-hidden="true">
+            <Building2 size={17} />
+        </span>
+    );
+}
+
+function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, onSelect, dropdownRef }) {
+    return (
+        <div className="project-data-builder-dropdown" ref={dropdownRef}>
+            <button
+                type="button"
+                className="project-data-select-shell project-data-builder-trigger"
+                onClick={onToggle}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
+                <BuilderLogo builder={selectedBuilder} logoUrl={selectedBuilder ? logoUrls[selectedBuilder.id] : ''} />
+                <span>{selectedBuilder?.name || 'No builders yet'}</span>
+                <ChevronDown size={18} />
+            </button>
+            {open ? (
+                <div className="project-data-builder-menu" role="listbox" aria-label="Builder">
+                    {builders.length === 0 ? (
+                        <div className="project-data-builder-option empty">No builders yet</div>
+                    ) : builders.map(builder => (
+                        <button
+                            key={builder.id}
+                            type="button"
+                            className={`project-data-builder-option${builder.id === selectedBuilder?.id ? ' selected' : ''}`}
+                            onClick={() => onSelect(builder.id)}
+                            role="option"
+                            aria-selected={builder.id === selectedBuilder?.id}
+                        >
+                            <BuilderLogo builder={builder} logoUrl={logoUrls[builder.id]} />
+                            <span>{builder.name}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
     const isScaffTag = tab.key === 'scaff-tags';
 
     return (
-        <aside className="project-data-preview-panel">
+        <aside className="project-data-preview-panel" aria-label="Document preview">
             <div className="project-data-preview-titlebar">
                 <strong title={doc.name}>{doc.name}</strong>
                 <button type="button" onClick={onClose} aria-label="Close preview" title="Close preview">
@@ -248,10 +285,6 @@ function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
                             {doc.status === 'Expired' ? 'REVIEW REQUIRED' : 'SAFE FOR USE'}
                             <CheckCircle size={18} />
                         </div>
-                        <div className="project-data-tag-footer">
-                            <span>Next inspection due</span>
-                            <strong>{formatDate(doc.expiresAt)}</strong>
-                        </div>
                     </>
                 ) : (
                     <>
@@ -281,14 +314,18 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [builders, setBuilders] = useState([]);
     const [selectedBuilderId, setSelectedBuilderId] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [builderLogoUrls, setBuilderLogoUrls] = useState({});
+    const [builderDropdownOpen, setBuilderDropdownOpen] = useState(false);
     const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
     const [documentsLoading, setDocumentsLoading] = useState(false);
     const [documents, setDocuments] = useState([]);
     const [selectedDocumentId, setSelectedDocumentId] = useState('');
+    const [previewOpen, setPreviewOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
     const uploadInputRef = useRef(null);
+    const builderDropdownRef = useRef(null);
 
     useEffect(() => {
         let active = true;
@@ -315,6 +352,55 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         };
     }, []);
 
+    useEffect(() => {
+        let active = true;
+        const logoBuilders = builders.filter(builder => builder.logoPath || builder.logoUrl || builder.logo_url);
+
+        if (logoBuilders.length === 0) {
+            setBuilderLogoUrls({});
+            return () => {
+                active = false;
+            };
+        }
+
+        Promise.all(
+            logoBuilders.map(builder => (
+                safetyProjectsAPI.resolveBuilderLogoUrl(builder)
+                    .then(url => [builder.id, url])
+                    .catch(() => [builder.id, builder.logoUrl || builder.logo_url || ''])
+            ))
+        ).then(entries => {
+            if (!active) return;
+            setBuilderLogoUrls(Object.fromEntries(entries.filter(([, url]) => Boolean(url))));
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [builders]);
+
+    useEffect(() => {
+        if (!builderDropdownOpen) return undefined;
+
+        const handlePointerDown = (event) => {
+            if (!builderDropdownRef.current?.contains(event.target)) {
+                setBuilderDropdownOpen(false);
+            }
+        };
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setBuilderDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('pointerdown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [builderDropdownOpen]);
+
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
         [builders, selectedBuilderId]
@@ -336,6 +422,13 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         }
     }, [selectedBuilder, selectedProjectId]);
 
+    const handleSelectBuilder = (builderId) => {
+        setSelectedBuilderId(builderId);
+        setBuilderDropdownOpen(false);
+        setPreviewOpen(false);
+        setSelectedDocumentId('');
+    };
+
     const loadDocuments = async () => {
         if (!selectedBuilder || !selectedProject) {
             setDocuments([]);
@@ -351,10 +444,12 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                 : mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
 
             setDocuments(rows);
-            setSelectedDocumentId(prev => rows.some(row => row.id === prev) ? prev : rows[0]?.id || '');
+            setSelectedDocumentId('');
+            setPreviewOpen(false);
         } catch (err) {
             setDocuments([]);
             setSelectedDocumentId('');
+            setPreviewOpen(false);
             setError(err.message || `Failed to load ${activeTab.noun}`);
         } finally {
             setDocumentsLoading(false);
@@ -366,7 +461,7 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     }, [selectedBuilder?.id, selectedProject?.id, activeTab.key]);
 
     const selectedDocument = useMemo(
-        () => documents.find(document => document.id === selectedDocumentId) || documents[0] || null,
+        () => documents.find(document => document.id === selectedDocumentId) || null,
         [documents, selectedDocumentId]
     );
 
@@ -381,8 +476,15 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         ));
     }, [documents, searchQuery]);
 
-    const currentCount = documents.filter(document => document.status === 'Current').length;
-    const expiredCount = documents.filter(document => document.status === 'Expired').length;
+    const openDocumentPreview = (documentId) => {
+        setSelectedDocumentId(documentId);
+        setPreviewOpen(true);
+    };
+
+    const closeDocumentPreview = () => {
+        setPreviewOpen(false);
+        setSelectedDocumentId('');
+    };
 
     const handleUploadClick = () => {
         if (!selectedBuilder || !selectedProject) return;
@@ -443,34 +545,31 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     return (
         <div className="module-page project-data-page">
             <div className="project-data-shell">
-                <header className="project-data-topbar">
-                    <div>
-                        <h1>Project data</h1>
-                        <p>Builder and project specific files, forms, certificates, and design access.</p>
-                    </div>
-                    <div className="project-data-top-stats" aria-label="Project document status summary">
-                        <span><CheckCircle size={15} /> {currentCount} current</span>
-                        <span><AlertTriangle size={15} /> {expiredCount} expired</span>
-                    </div>
-                </header>
-
                 <section className="project-data-selector-row" aria-label="Project selector">
                     <label className="project-data-select-field">
                         <span>Builder</span>
-                        <div className="project-data-select-shell">
-                            <Building2 size={19} />
-                            <select value={selectedBuilder?.id || ''} onChange={e => setSelectedBuilderId(e.target.value)}>
-                                {builders.length === 0 ? <option value="">No builders yet</option> : null}
-                                {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                            </select>
-                            <ChevronDown size={18} />
-                        </div>
+                        <BuilderDropdown
+                            builders={builders}
+                            selectedBuilder={selectedBuilder}
+                            logoUrls={builderLogoUrls}
+                            open={builderDropdownOpen}
+                            onToggle={() => setBuilderDropdownOpen(prev => !prev)}
+                            onSelect={handleSelectBuilder}
+                            dropdownRef={builderDropdownRef}
+                        />
                     </label>
                     <label className="project-data-select-field">
                         <span>Project</span>
                         <div className="project-data-select-shell">
                             <HardHat size={19} />
-                            <select value={selectedProject?.id || ''} onChange={e => setSelectedProjectId(e.target.value)} disabled={!selectedBuilder}>
+                            <select
+                                value={selectedProject?.id || ''}
+                                onChange={e => {
+                                    setSelectedProjectId(e.target.value);
+                                    closeDocumentPreview();
+                                }}
+                                disabled={!selectedBuilder}
+                            >
                                 {!selectedBuilder ? <option value="">Select builder</option> : null}
                                 {selectedBuilder?.projects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
                             </select>
@@ -548,7 +647,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                 <span>{activeTab.refLabel}</span>
                                 <span>Status</span>
                                 <span>Uploaded</span>
-                                <span>Expires</span>
                                 <span>Uploaded by</span>
                                 <span />
                             </div>
@@ -569,8 +667,8 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                         <button
                                             key={document.id}
                                             type="button"
-                                            className={`project-data-table-row${selectedDocument?.id === document.id ? ' selected' : ''}`}
-                                            onClick={() => setSelectedDocumentId(document.id)}
+                                            className={`project-data-table-row${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
+                                            onClick={() => openDocumentPreview(document.id)}
                                             onDoubleClick={() => openSelectedDocument(document)}
                                         >
                                             <span className="project-data-checkbox" aria-hidden="true" />
@@ -581,7 +679,6 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                             <span>{document.ref}</span>
                                             <span><StatusChip status={document.status} /></span>
                                             <span>{formatDate(document.uploadedAt)}</span>
-                                            <span className={document.status === 'Expired' ? 'project-data-expired-text' : ''}>{formatDate(document.expiresAt)}</span>
                                             <span>{document.uploadedBy}</span>
                                             <span className="project-data-row-actions">
                                                 <MoreVertical size={17} />
@@ -605,14 +702,24 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                         </div>
                     </div>
 
-                    <ProjectDataPreview
-                        doc={selectedDocument}
-                        tab={activeTab}
-                        builder={selectedBuilder}
-                        project={selectedProject}
-                        onClose={() => setSelectedDocumentId('')}
-                        onOpen={() => openSelectedDocument()}
-                    />
+                    {previewOpen && selectedDocument ? (
+                        <>
+                            <button
+                                type="button"
+                                className="project-data-preview-backdrop"
+                                aria-label="Close document preview"
+                                onClick={closeDocumentPreview}
+                            />
+                            <ProjectDataPreview
+                                doc={selectedDocument}
+                                tab={activeTab}
+                                builder={selectedBuilder}
+                                project={selectedProject}
+                                onClose={closeDocumentPreview}
+                                onOpen={() => openSelectedDocument()}
+                            />
+                        </>
+                    ) : null}
                 </section>
             </div>
         </div>
