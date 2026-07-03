@@ -697,7 +697,7 @@ export default function MaterialOrderingPage({ user, view = 'form', onNavigate }
         let active = true;
 
         Promise.allSettled([
-            safetyProjectsAPI.getBuilders({ includeArchived: true }),
+            safetyProjectsAPI.getBuilders(),
             materialOrderRequestsAPI.listActiveRequests(),
             materialOrderRequestsAPI.listArchivedRequests()
         ])

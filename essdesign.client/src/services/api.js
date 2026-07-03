@@ -641,12 +641,14 @@ function parseSafetyProjects(raw) {
 }
 
 function cloneSafetyBuilders(builders, { includeArchived = true } = {}) {
-    return builders.map(builder => ({
-        ...builder,
-        projects: builder.projects
-            .filter(project => includeArchived || !project.archived)
-            .map(project => ({ ...project }))
-    }));
+    return builders
+        .map(builder => ({
+            ...builder,
+            projects: builder.projects
+                .filter(project => includeArchived || !project.archived)
+                .map(project => ({ ...project }))
+        }))
+        .filter(builder => includeArchived || builder.projects.length > 0);
 }
 
 const sanitizeStorageFileName = (value, fallback = 'logo') => {

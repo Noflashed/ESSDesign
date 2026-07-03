@@ -5288,7 +5288,9 @@ export default function TruckSchedulePage({ user, onNavigate }) {
       allRequests,
     );
     const projectAddressOptions = (builders || [])
-      .flatMap(builder => (builder.projects || []).map(project => ({
+      .flatMap(builder => (builder.projects || [])
+        .filter(project => !project.archived)
+        .map(project => ({
         id: `${builder.id || builder.name}:${project.id || project.name}`,
         label: `${builder.name || 'Builder'} - ${project.name || 'Project'}`,
         siteLocation: project.siteLocation || '',
