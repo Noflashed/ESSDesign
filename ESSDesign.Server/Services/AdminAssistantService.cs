@@ -86,6 +86,14 @@ namespace ESSDesign.Server.Services
             public EmployeeContextRow? LeadingHand { get; set; }
         }
 
+        private sealed class DesignQueryResolution
+        {
+            public string Query { get; set; } = string.Empty;
+            public string? CorrectedFrom { get; set; }
+            public string? CorrectionReason { get; set; }
+            public List<object> MatchedSites { get; set; } = new();
+        }
+
         private sealed class TruckLiveLocationContext
         {
             public string TruckId { get; set; } = string.Empty;
@@ -360,6 +368,11 @@ SITE ROLE ASSIGNMENTS:
 - For questions like "who is the site supervisor/project manager/leading hand at a site", use the job-site assignment fields returned by get_jobsites, get_site_details, get_builder_sites, or get_site_health_report first.
 - Do not infer assigned site supervisors only from inducted employees. Inducted employees are the worker list for a site; the registered supervisor can be stored separately as siteSupervisor.
 - If multiple job-sites match the same address or name, answer for each matching builder/site when the tool result gives more than one match.
+
+DESIGN SEARCH SAFETY:
+- If a design-search tool returns correctedFrom or correctionReason, mention the correction before giving the answer.
+- Do not call get_design_link unless the returned design clearly matches the corrected query/site/scaffold. If the design result says count is 0, or the site is ambiguous, ask for the builder/site instead of linking a best guess.
+- Treat address numbers as important. Never silently answer a design request for a different street number.
 
 STAFF PROFILE DETAILS:
 - Employee phone numbers, email addresses, personal addresses, dates of birth, and emergency contact details are normal ESS profile fields. Answer these questions directly when the information is returned by your tools.
@@ -1016,22 +1029,31 @@ WHEN THINGS GO WRONG:
             var query = TryGetString(args, "query") ?? string.Empty;
             var sortBy = TryGetString(args, "sort_by") ?? "relevance";
 
-            var (folders, documents) = await FetchDesignDataAsync(ct);
-            return SearchDesignDocuments(query, folders, documents, sortBy, limit: 10, includeIds: true);
+            var designDataTask = FetchDesignDataAsync(ct);
+            var jobsitesTask = FetchJobsiteDirectoryAsync(ct);
+            await Task.WhenAll(designDataTask, jobsitesTask);
+            var (folders, documents) = designDataTask.Result;
+            return SearchDesignDocuments(query, folders, documents, sortBy, limit: 10, includeIds: true, jobsites: jobsitesTask.Result);
         }
 
         private async Task<string> Tool_GetLatestDesign(JsonElement args, CancellationToken ct)
         {
             var query = TryGetString(args, "query") ?? string.Empty;
-            var (folders, documents) = await FetchDesignDataAsync(ct);
-            return SearchDesignDocuments(query, folders, documents, "date", limit: 1, includeIds: true);
+            var designDataTask = FetchDesignDataAsync(ct);
+            var jobsitesTask = FetchJobsiteDirectoryAsync(ct);
+            await Task.WhenAll(designDataTask, jobsitesTask);
+            var (folders, documents) = designDataTask.Result;
+            return SearchDesignDocuments(query, folders, documents, "date", limit: 1, includeIds: true, jobsites: jobsitesTask.Result);
         }
 
         private async Task<string> Tool_GetDesignRevisions(JsonElement args, CancellationToken ct)
         {
             var query = TryGetString(args, "query") ?? string.Empty;
-            var (folders, documents) = await FetchDesignDataAsync(ct);
-            return SearchDesignDocuments(query, folders, documents, "relevance", limit: 20, includeIds: true, allRevisions: true);
+            var designDataTask = FetchDesignDataAsync(ct);
+            var jobsitesTask = FetchJobsiteDirectoryAsync(ct);
+            await Task.WhenAll(designDataTask, jobsitesTask);
+            var (folders, documents) = designDataTask.Result;
+            return SearchDesignDocuments(query, folders, documents, "relevance", limit: 20, includeIds: true, allRevisions: true, jobsites: jobsitesTask.Result);
         }
 
         private async Task<string> Tool_GetDesignLink(JsonElement args, List<AdminAssistantLink> links, CancellationToken ct)
@@ -1795,10 +1817,14 @@ WHEN THINGS GO WRONG:
             string sortBy,
             int limit,
             bool includeIds,
-            bool allRevisions = false)
+            bool allRevisions = false,
+            IReadOnlyList<JobsiteContextRow>? jobsites = null)
         {
             var folderPaths = BuildFolderPaths(folders);
-            var tokens = BuildSearchTokens(query);
+            var queryResolution = ResolveDesignQueryAgainstKnownSites(query, jobsites);
+            var searchQuery = queryResolution.Query;
+            var tokens = BuildSearchTokens(searchQuery);
+            var numericTokens = BuildNumericSearchTokens(searchQuery);
 
             var candidates = documents.Select(d =>
             {
@@ -1810,6 +1836,7 @@ WHEN THINGS GO WRONG:
                 var revision = TryGetString(d, "revision_number") ?? string.Empty;
                 var candidateText = $"{path} {essName} {thirdName} {description} {revision}";
                 var score = tokens.Count > 0 ? ScoreSearchCandidate(candidateText, tokens, out _) : 1;
+                var normalizedCandidate = NormalizeSearchText(candidateText);
                 return new
                 {
                     documentId = TryGetString(d, "id"),
@@ -1823,12 +1850,14 @@ WHEN THINGS GO WRONG:
                     hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "ess_design_issue_path")),
                     hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "third_party_design_path")),
                     score,
+                    normalizedCandidate,
                 };
             })
             .Where(c => tokens.Count == 0 || c.score > 0)
+            .Where(c => numericTokens.Count == 0 || numericTokens.All(token => NumericTokenAppears(c.normalizedCandidate, token)))
             .ToList();
 
-            IEnumerable<dynamic> sorted = sortBy == "date"
+            IEnumerable<dynamic> sorted = sortBy == "date" && tokens.Count == 0
                 ? candidates.OrderByDescending(c => c.updatedAt)
                 : candidates.OrderByDescending(c => c.score).ThenByDescending(c => c.updatedAt);
 
@@ -1838,7 +1867,8 @@ WHEN THINGS GO WRONG:
                 sorted = sorted
                     .GroupBy(c => (string)c.folderId)
                     .SelectMany(g => g.Take(1))
-                    .OrderByDescending(c => sortBy == "date" ? c.updatedAt : c.score.ToString());
+                    .OrderByDescending(c => (int)c.score)
+                    .ThenByDescending(c => (string)c.updatedAt);
             }
 
             var results = sorted.Take(limit).ToList();
@@ -1846,6 +1876,10 @@ WHEN THINGS GO WRONG:
             return JsonSerializer.Serialize(new
             {
                 query,
+                searchedQuery = searchQuery,
+                correctedFrom = queryResolution.CorrectedFrom,
+                correctionReason = queryResolution.CorrectionReason,
+                matchedSites = queryResolution.MatchedSites,
                 count = results.Count,
                 designs = results.Select(c => (object)new
                 {
@@ -1855,6 +1889,7 @@ WHEN THINGS GO WRONG:
                     description = c.description,
                     folderPath = c.folderPath,
                     updatedAt = c.updatedAt,
+                    matchScore = c.score,
                     hasEssDesign = c.hasEssDesign,
                     hasThirdPartyDesign = c.hasThirdPartyDesign,
                 }).ToList(),
@@ -2371,6 +2406,119 @@ WHEN THINGS GO WRONG:
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(12)
                 .ToList();
+        }
+
+        private static List<string> BuildNumericSearchTokens(string question) =>
+            NormalizeSearchText(question)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(token => token.All(char.IsDigit))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+
+        private static bool NumericTokenAppears(string normalizedText, string numericToken)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedText) || string.IsNullOrWhiteSpace(numericToken))
+                return false;
+
+            return normalizedText
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Any(token => string.Equals(token, numericToken, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static DesignQueryResolution ResolveDesignQueryAgainstKnownSites(
+            string query,
+            IReadOnlyList<JobsiteContextRow>? jobsites)
+        {
+            var resolution = new DesignQueryResolution { Query = query };
+            if (string.IsNullOrWhiteSpace(query) || jobsites == null || jobsites.Count == 0)
+                return resolution;
+
+            var normalizedQueryTokens = NormalizeSearchText(query)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .ToList();
+            var queryNumbers = normalizedQueryTokens.Where(token => token.All(char.IsDigit)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (queryNumbers.Count == 0)
+                return resolution;
+
+            var queryWords = normalizedQueryTokens
+                .Where(token => !token.All(char.IsDigit) && token.Length > 2)
+                .ToList();
+
+            var likelyMatches = jobsites
+                .Where(site => !site.Archived)
+                .Select(site =>
+                {
+                    var siteText = NormalizeSearchText($"{site.Name} {site.SiteLocation} {site.BuilderName}");
+                    var siteTokens = siteText.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+                    var siteNumbers = siteTokens.Where(token => token.All(char.IsDigit)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var wordHits = queryWords.Count == 0
+                        ? 0
+                        : queryWords.Count(word => siteTokens.Any(token => string.Equals(token, word, StringComparison.OrdinalIgnoreCase)));
+                    var hasLikelyNumberTypo = queryNumbers.Any(queryNumber =>
+                        siteNumbers.Any(siteNumber => IsLikelyAddressNumberTypo(queryNumber, siteNumber)));
+
+                    return new
+                    {
+                        Site = site,
+                        SiteNumbers = siteNumbers,
+                        WordHits = wordHits,
+                        HasLikelyNumberTypo = hasLikelyNumberTypo,
+                    };
+                })
+                .Where(match => match.HasLikelyNumberTypo && match.WordHits >= Math.Min(2, queryWords.Count))
+                .OrderByDescending(match => match.WordHits)
+                .ThenBy(match => match.Site.Archived)
+                .Take(5)
+                .ToList();
+
+            if (likelyMatches.Count == 0)
+                return resolution;
+
+            var correctedNumber = likelyMatches
+                .SelectMany(match => match.SiteNumbers)
+                .FirstOrDefault(siteNumber => queryNumbers.Any(queryNumber => IsLikelyAddressNumberTypo(queryNumber, siteNumber)));
+
+            var originalNumber = queryNumbers.FirstOrDefault(queryNumber =>
+                correctedNumber != null && IsLikelyAddressNumberTypo(queryNumber, correctedNumber));
+
+            if (string.IsNullOrWhiteSpace(originalNumber) || string.IsNullOrWhiteSpace(correctedNumber))
+                return resolution;
+
+            resolution.Query = Regex.Replace(
+                query,
+                $@"(?<!\d){Regex.Escape(originalNumber)}(?!\d)",
+                correctedNumber,
+                RegexOptions.IgnoreCase);
+            resolution.CorrectedFrom = query;
+            resolution.CorrectionReason = $"Corrected likely address typo from {originalNumber} to {correctedNumber} based on active job-site records.";
+            resolution.MatchedSites = likelyMatches.Select(match => (object)new
+            {
+                match.Site.Name,
+                builder = match.Site.BuilderName,
+                siteLocation = match.Site.SiteLocation,
+                match.Site.Archived,
+            }).ToList();
+
+            return resolution;
+        }
+
+        private static bool IsLikelyAddressNumberTypo(string queryNumber, string siteNumber)
+        {
+            if (string.Equals(queryNumber, siteNumber, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (queryNumber.Length != siteNumber.Length + 1)
+                return false;
+
+            for (var i = 0; i < queryNumber.Length; i++)
+            {
+                var withoutOneDigit = queryNumber.Remove(i, 1);
+                if (string.Equals(withoutOneDigit, siteNumber, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private static List<string> BuildBroadSearchTokens(string question)
