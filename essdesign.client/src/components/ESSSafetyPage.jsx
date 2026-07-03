@@ -243,9 +243,10 @@ function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, 
     );
 }
 
-function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
+function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoading, previewError, onClose, onOpen }) {
     const isScaffTag = tab.key === 'scaff-tags';
     const isHandoverCertificate = tab.key === 'handover-certificates';
+    const previewSrc = previewUrl ? `${previewUrl}#toolbar=0&navpanes=0&scrollbar=1` : '';
 
     return (
         <aside className="project-data-preview-panel" aria-label="Document preview">
@@ -273,7 +274,24 @@ function ProjectDataPreview({ doc, tab, builder, project, onClose, onOpen }) {
                 </button>
             </div>
             <div className="project-data-paper">
-                {isScaffTag ? (
+                {previewLoading ? (
+                    <div className="project-data-preview-state">
+                        <LoadingBrandmark label="Loading preview" />
+                    </div>
+                ) : previewSrc ? (
+                    <iframe
+                        src={previewSrc}
+                        title={`${doc.name} preview`}
+                        className="project-data-preview-frame"
+                    />
+                ) : previewError ? (
+                    <div className="project-data-preview-state">
+                        <FileText size={36} />
+                        <strong>Preview unavailable</strong>
+                        <span>{previewError}</span>
+                        <button type="button" onClick={onOpen}>Open document</button>
+                    </div>
+                ) : isScaffTag ? (
                     <>
                         <div className="project-data-tag-head">
                             <div className="project-data-preview-brand">
@@ -357,6 +375,9 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const [documents, setDocuments] = useState([]);
     const [selectedDocumentId, setSelectedDocumentId] = useState('');
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewPdfUrl, setPreviewPdfUrl] = useState('');
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
@@ -526,6 +547,8 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
     const closeDocumentPreview = () => {
         setPreviewOpen(false);
         setSelectedDocumentId('');
+        setPreviewPdfUrl('');
+        setPreviewError('');
     };
 
     const handleUploadClick = () => {
@@ -559,25 +582,65 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
         }
     };
 
+    const resolveDocumentPdfUrl = async (doc) => {
+        if (!doc || !selectedBuilder || !selectedProject) return '';
+        if (doc.kind === 'scaff-tags') {
+            const form = await scaffTagsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            if (!form) throw new Error('Scaff-tag form not found');
+            return scaffTagsAPI.getPdfUrl(form);
+        }
+        if (doc.kind === 'handover-certificates') {
+            const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            if (!form) throw new Error('Handover certificate not found');
+            return handoverCertificatesAPI.getPdfUrl(form);
+        }
+        return safetyFilesAPI.getSignedModuleFileUrl(doc.raw.path);
+    };
+
+    useEffect(() => {
+        let active = true;
+
+        if (!previewOpen || !selectedDocument || !selectedBuilder || !selectedProject) {
+            setPreviewPdfUrl('');
+            setPreviewError('');
+            setPreviewLoading(false);
+            return () => {
+                active = false;
+            };
+        }
+
+        setPreviewPdfUrl('');
+        setPreviewError('');
+        setPreviewLoading(true);
+        resolveDocumentPdfUrl(selectedDocument)
+            .then(url => {
+                if (active) {
+                    setPreviewPdfUrl(url);
+                }
+            })
+            .catch(err => {
+                if (active) {
+                    setPreviewError(err.message || 'Failed to load preview');
+                }
+            })
+            .finally(() => {
+                if (active) {
+                    setPreviewLoading(false);
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [previewOpen, selectedDocument?.id, selectedDocument?.kind, selectedBuilder?.id, selectedProject?.id]);
+
     const openSelectedDocument = async (doc = selectedDocument) => {
         if (!doc || !selectedBuilder || !selectedProject) return;
         try {
-            if (doc.kind === 'scaff-tags') {
-                const form = await scaffTagsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
-                if (!form) throw new Error('Scaff-tag form not found');
-                const url = await scaffTagsAPI.getPdfUrl(form);
+            const url = await resolveDocumentPdfUrl(doc);
+            if (url) {
                 window.open(url, '_blank', 'noopener,noreferrer');
-                return;
             }
-            if (doc.kind === 'handover-certificates') {
-                const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
-                if (!form) throw new Error('Handover certificate not found');
-                const url = await handoverCertificatesAPI.getPdfUrl(form);
-                window.open(url, '_blank', 'noopener,noreferrer');
-                return;
-            }
-            const url = await safetyFilesAPI.getSignedModuleFileUrl(doc.raw.path);
-            window.open(url, '_blank', 'noopener,noreferrer');
         } catch (err) {
             setError(err.message || 'Failed to open document');
         }
@@ -770,6 +833,9 @@ export default function ESSSafetyPage({ onOpenScaffTags, onOpenSwms }) {
                                 tab={activeTab}
                                 builder={selectedBuilder}
                                 project={selectedProject}
+                                previewUrl={previewPdfUrl}
+                                previewLoading={previewLoading}
+                                previewError={previewError}
                                 onClose={closeDocumentPreview}
                                 onOpen={() => openSelectedDocument()}
                             />
