@@ -9,6 +9,13 @@ const STARTER_PROMPTS = [
     'Find the latest design for a job-site',
 ];
 
+const TYPEWRITER_DELAY_MS = 14;
+const MAX_TYPEWRITER_STEPS = 220;
+
+function wait(ms) {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
 function AssistantAvatar({ role = 'assistant' }) {
     const isUser = role === 'user';
     if (!isUser) return null;
@@ -30,8 +37,16 @@ export default function AdminAssistantChat({ className = '' }) {
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [typing, setTyping] = useState(false);
     const [hasStarted, setHasStarted] = useState(false);
     const scrollRef = useRef(null);
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -39,9 +54,47 @@ export default function AdminAssistantChat({ className = '' }) {
         }
     }, [messages, loading]);
 
+    const typeAssistantMessage = async ({ content, links = [], error = false }) => {
+        const fullText = content || 'I could not answer that from the current ESS data.';
+        const messageId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const stepSize = Math.max(1, Math.ceil(fullText.length / MAX_TYPEWRITER_STEPS));
+        setTyping(true);
+
+        setMessages(current => [
+            ...current,
+            {
+                id: messageId,
+                role: 'assistant',
+                content: '',
+                links: [],
+                error,
+                typing: true,
+            },
+        ]);
+
+        for (let index = stepSize; index < fullText.length; index += stepSize) {
+            if (!mountedRef.current) return;
+            const partialText = fullText.slice(0, index);
+            setMessages(current => current.map(message =>
+                message.id === messageId
+                    ? { ...message, content: partialText }
+                    : message
+            ));
+            await wait(TYPEWRITER_DELAY_MS);
+        }
+
+        if (!mountedRef.current) return;
+        setMessages(current => current.map(message =>
+            message.id === messageId
+                ? { ...message, content: fullText, links, typing: false }
+                : message
+        ));
+        setTyping(false);
+    };
+
     const sendMessage = async (messageText = input) => {
         const text = messageText.trim();
-        if (!text || loading) return;
+        if (!text || loading || typing) return;
 
         setHasStarted(true);
         const nextMessages = [...messages, { role: 'user', content: text, links: [] }];
@@ -55,24 +108,18 @@ export default function AdminAssistantChat({ className = '' }) {
                 .slice(-10)
                 .map(item => ({ role: item.role, content: item.content }));
             const response = await adminAssistantAPI.chat(text, history);
-            setMessages(current => [
-                ...current,
-                {
-                    role: 'assistant',
-                    content: response.reply || 'I could not answer that from the current ESS data.',
-                    links: response.links || [],
-                },
-            ]);
+            setLoading(false);
+            await typeAssistantMessage({
+                content: response.reply,
+                links: response.links || [],
+            });
         } catch (error) {
-            setMessages(current => [
-                ...current,
-                {
-                    role: 'assistant',
-                    content: error.response?.data?.error || error.message || 'The admin assistant is unavailable right now.',
-                    links: [],
-                    error: true,
-                },
-            ]);
+            setLoading(false);
+            await typeAssistantMessage({
+                content: error.response?.data?.error || error.message || 'The admin assistant is unavailable right now.',
+                links: [],
+                error: true,
+            });
         } finally {
             setLoading(false);
         }
@@ -87,7 +134,10 @@ export default function AdminAssistantChat({ className = '' }) {
                     <div key={`${message.role}-${index}`} className={`admin-assistant-message-row ${message.role}`}>
                         <AssistantAvatar role={message.role} />
                         <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}`}>
-                            <p>{message.content}</p>
+                            <p>
+                                {message.content}
+                                {message.typing ? <span className="admin-assistant-caret" aria-hidden="true" /> : null}
+                            </p>
                             {message.links?.length ? (
                                 <div className="admin-assistant-links">
                                     {message.links.map(link => (
@@ -138,9 +188,9 @@ export default function AdminAssistantChat({ className = '' }) {
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
                     placeholder="Ask anything about ESS operations..."
-                    disabled={loading}
+                    disabled={loading || typing}
                 />
-                <button type="submit" disabled={loading || !input.trim()} aria-label="Send message">
+                <button type="submit" disabled={loading || typing || !input.trim()} aria-label="Send message">
                     {loading ? <Loader2 className="admin-assistant-spin-icon" size={18} /> : <Send size={18} />}
                 </button>
             </form>

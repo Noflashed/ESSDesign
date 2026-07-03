@@ -5673,9 +5673,19 @@ body {
     }
 }
 
+@keyframes admin-assistant-caret-blink {
+    0%, 45% {
+        opacity: 1;
+    }
+    46%, 100% {
+        opacity: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .admin-assistant-spin-icon,
     .admin-assistant-typing i,
+    .admin-assistant-page-chat .admin-assistant-caret,
     .admin-assistant-page-chat.is-active .admin-assistant-message-row:first-child .admin-assistant-message.assistant {
         animation: none;
         transition: none;
@@ -7314,6 +7324,16 @@ button.stat-card {
     line-height: 1.5;
     font-size: 14px;
     font-weight: 400;
+}
+
+.admin-assistant-page-chat .admin-assistant-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    background: currentColor;
+    vertical-align: -0.15em;
+    animation: admin-assistant-caret-blink 900ms steps(2, start) infinite;
 }
 
 .admin-assistant-page-chat .admin-assistant-message.loading {
