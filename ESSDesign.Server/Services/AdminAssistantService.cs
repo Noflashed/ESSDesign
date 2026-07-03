@@ -612,8 +612,12 @@ WHEN THINGS GO WRONG:
                     ("project", "string", "Optional project/site filter"),
                     ("kind", "string", "Optional document type: scaff-tags, swms, handover-certificates, day-labour-forms, or design-document"),
                     ("include_archived", "boolean", "Include archived job-sites (default false)"))),
-            Fn("get_project_data_document_link", "Generate a clickable view/download link for a Project data document. Pass the documentId returned by search_project_data_documents or get_latest_project_data_document.",
-                Params(("document_id", "string", "The Project data documentId returned by a Project data search/latest tool"))),
+            Fn("get_project_data_document_link", "Generate a clickable view/download link for a Project data document. Prefer the documentId returned by search_project_data_documents or get_latest_project_data_document. If only a form reference/name was provided, pass it as document_id with optional builder/project/kind filters.",
+                Params(
+                    ("document_id", "string", "The Project data documentId returned by a Project data search/latest tool, or a form ID/reference/name to resolve"),
+                    ("builder", "string", "Optional builder/company filter when resolving a loose document_id"),
+                    ("project", "string", "Optional project/site filter when resolving a loose document_id"),
+                    ("kind", "string", "Optional document type: scaff-tags, swms, handover-certificates, day-labour-forms, or design-document"))),
             Fn("get_roster", "Get the roster/schedule showing which employees are planned to work on a given date or date range.",
                 Params(
                     ("date", "string", "Date in yyyy-MM-dd format. Defaults to today."),
@@ -1269,16 +1273,44 @@ WHEN THINGS GO WRONG:
         private async Task<string> Tool_GetProjectDataDocumentLink(JsonElement args, List<AdminAssistantLink> links, CancellationToken ct)
         {
             var documentId = TryGetStringAny(args, "document_id", "documentId") ?? string.Empty;
+            var builder = TryGetString(args, "builder");
+            var project = TryGetString(args, "project");
+            var kindFilter = TryGetString(args, "kind");
             var parsed = ParseProjectDataDocumentId(documentId);
+            ProjectDataDocumentRow? resolvedDocument = null;
+
             if (parsed == null)
-                return JsonSerializer.Serialize(new { error = "Invalid Project data document_id." }, _jsonOptions);
+            {
+                resolvedDocument = await ResolveLooseProjectDataDocumentAsync(documentId, builder, project, kindFilter, ct);
+                if (resolvedDocument == null)
+                    return JsonSerializer.Serialize(new { error = "Could not resolve a Project data document from the supplied document_id/reference." }, _jsonOptions);
+
+                parsed = ParseProjectDataDocumentId(resolvedDocument.DocumentId);
+            }
+            if (!parsed.HasValue)
+                return JsonSerializer.Serialize(new { error = "Could not resolve a valid Project data document_id." }, _jsonOptions);
 
             var (kind, builderId, projectId, resourceId) = parsed.Value;
             var path = await ResolveProjectDataPdfPathAsync(kind, builderId, projectId, resourceId, ct);
             if (string.IsNullOrWhiteSpace(path))
+                path = resolvedDocument?.StoragePath;
+            if (string.IsNullOrWhiteSpace(path))
                 return JsonSerializer.Serialize(new { error = "Could not find a PDF path for this Project data document." }, _jsonOptions);
 
-            var url = await _supabaseService.GetSafetyStorageSignedUrlAsync(path, 60 * 60 * 24 * 14);
+            string url;
+            try
+            {
+                url = await _supabaseService.GetSafetyStorageSignedUrlAsync(path, 60 * 60 * 24 * 14);
+            }
+            catch
+            {
+                var fallbackPath = await ResolveProjectDataPdfPathFromStorageListingAsync(kind, builderId, projectId, resourceId, path, ct);
+                if (string.IsNullOrWhiteSpace(fallbackPath))
+                    throw;
+                path = fallbackPath;
+                url = await _supabaseService.GetSafetyStorageSignedUrlAsync(path, 60 * 60 * 24 * 14);
+            }
+
             links.Add(new AdminAssistantLink
             {
                 Label = "Click here to view",
@@ -1289,7 +1321,7 @@ WHEN THINGS GO WRONG:
             return JsonSerializer.Serialize(new
             {
                 success = true,
-                documentId,
+                documentId = resolvedDocument?.DocumentId ?? documentId,
                 kind,
                 path,
                 message = "Link generated successfully. Tell the user to click the link below to view the Project data document.",
@@ -2863,6 +2895,59 @@ WHEN THINGS GO WRONG:
             }
 
             return resourceId.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? resourceId : null;
+        }
+
+        private async Task<ProjectDataDocumentRow?> ResolveLooseProjectDataDocumentAsync(
+            string documentReference,
+            string? builder,
+            string? project,
+            string? kind,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(documentReference))
+                return null;
+
+            var documents = await FetchProjectDataDocumentsAsync(documentReference, builder, project, kind, includeArchived: false, ct);
+            var normalizedReference = NormalizeSearchText(documentReference);
+
+            return documents
+                .OrderByDescending(document =>
+                    string.Equals(document.FormId, documentReference, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(document.Reference, documentReference, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(document.Name, documentReference, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(NormalizeSearchText(document.Reference), normalizedReference, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(NormalizeSearchText(document.Name), normalizedReference, StringComparison.OrdinalIgnoreCase)
+                        ? 1000
+                        : document.MatchScore)
+                .ThenByDescending(document => TryParseDateTimeOffset(document.UploadedAt) ?? DateTimeOffset.MinValue)
+                .FirstOrDefault();
+        }
+
+        private async Task<string?> ResolveProjectDataPdfPathFromStorageListingAsync(
+            string kind,
+            string builderId,
+            string projectId,
+            string resourceId,
+            string attemptedPath,
+            CancellationToken ct)
+        {
+            if (kind is "swms" or "day-labour-forms" or "design-document")
+                return null;
+
+            var pdfPrefix = $"{ProjectDataPrefix(builderId, projectId, kind)}/pdf";
+            var objects = await ListSafetyStorageObjectsAsync(pdfPrefix, 200, ct);
+            var resourceToken = NormalizeSearchText(resourceId);
+            var attemptedName = Path.GetFileName(attemptedPath);
+
+            var match = objects
+                .Select(obj => TryGetString(obj, "name") ?? string.Empty)
+                .Where(name => name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(name => string.Equals(name, attemptedName, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(name => NormalizeSearchText(name).Contains(resourceToken, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(name => name)
+                .FirstOrDefault();
+
+            return string.IsNullOrWhiteSpace(match) ? null : $"{pdfPrefix}/{match}";
         }
 
         private static string ProjectDataPrefix(string builderId, string projectId, string kind) =>
