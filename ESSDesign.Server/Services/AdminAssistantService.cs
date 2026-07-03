@@ -380,6 +380,20 @@ namespace ESSDesign.Server.Services
             var includeArchived = normalizedQuestion.Contains("archived", StringComparison.OrdinalIgnoreCase)
                 || normalizedQuestion.Contains("deleted", StringComparison.OrdinalIgnoreCase)
                 || normalizedQuestion.Contains("inactive", StringComparison.OrdinalIgnoreCase);
+            var requestedEntity = TryResolveRequestedScaffoldEntity(normalizedQuestion);
+            var wantsEntityList = requestedEntity != null && WantsScaffoldEntitySiteList(normalizedQuestion);
+            if (wantsEntityList)
+            {
+                var entityMatches = jobsites
+                    .Where(site => includeArchived || !site.Archived)
+                    .Where(site => site.ScaffoldEntity.Equals(requestedEntity, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(site => site.BuilderName)
+                    .ThenBy(site => site.Name)
+                    .ToList();
+
+                return BuildScaffoldEntitySiteListAnswer(requestedEntity!, entityMatches, includeArchived);
+            }
+
             var tokens = BuildBroadSearchTokens(question)
                 .Where(token => !ScaffoldEntityQuestionStopWords.Contains(token))
                 .ToList();
@@ -422,6 +436,33 @@ namespace ESSDesign.Server.Services
             };
         }
 
+        private static ChatResult BuildScaffoldEntitySiteListAnswer(string scaffoldEntity, IReadOnlyList<JobsiteContextRow> sites, bool includeArchived)
+        {
+            var statusLabel = includeArchived ? "matching" : "active";
+            if (sites.Count == 0)
+            {
+                return new ChatResult
+                {
+                    Reply = $"I couldn't find any {statusLabel} job-sites under {scaffoldEntity} in the Project data registry.",
+                    Links = new List<AdminAssistantLink>(),
+                    Sources = new List<string> { "Project data job-site registry" },
+                };
+            }
+
+            var siteList = string.Join("; ", sites.Select(site =>
+            {
+                var archived = site.Archived ? " archived" : "";
+                return $"{site.BuilderName} - {site.Name}{archived}";
+            }));
+
+            return new ChatResult
+            {
+                Reply = $"There are {sites.Count} {statusLabel} job-site{(sites.Count == 1 ? "" : "s")} under {scaffoldEntity}: {siteList}.",
+                Links = new List<AdminAssistantLink>(),
+                Sources = new List<string> { "Project data job-site registry" },
+            };
+        }
+
         // ── Agent Loop ────────────────────────────────────────────────────────
 
         private static readonly HashSet<string> ScaffoldEntityQuestionStopWords = new(StringComparer.OrdinalIgnoreCase)
@@ -454,6 +495,32 @@ namespace ESSDesign.Server.Services
                 || BuildNumericSearchTokens(normalizedQuestion).Count > 0;
 
             return mentionsSiteContext && (asksEntity || mentionsKnownEntity);
+        }
+
+        private static string? TryResolveRequestedScaffoldEntity(string normalizedQuestion)
+        {
+            if (normalizedQuestion.Contains("maloo", StringComparison.OrdinalIgnoreCase))
+                return "Maloo Access Group";
+            if (normalizedQuestion.Contains("scaff technic", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("scafftechnic", StringComparison.OrdinalIgnoreCase))
+                return "Scaff-Technic";
+            var tokens = normalizedQuestion.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (normalizedQuestion.Contains("erect safe", StringComparison.OrdinalIgnoreCase)
+                || tokens.Contains("ess", StringComparer.OrdinalIgnoreCase))
+                return DefaultScaffoldEntity;
+            return null;
+        }
+
+        private static bool WantsScaffoldEntitySiteList(string normalizedQuestion)
+        {
+            return normalizedQuestion.Contains("active", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("list", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("show", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("all", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("job site", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("jobsites", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("sites", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("projects", StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<JobsiteContextRow> FilterToLikelyExactAddressMatches(
