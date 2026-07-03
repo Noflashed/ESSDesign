@@ -371,6 +371,7 @@ SITE ROLE ASSIGNMENTS:
 
 DESIGN SEARCH SAFETY:
 - If a design-search tool returns correctedFrom or correctionReason, mention the correction before giving the answer.
+- Treat design requests as natural descriptions, not exact PDF-title searches. Correct obvious spelling mistakes and common shorthand like demo/demolition when choosing between results.
 - Do not call get_design_link unless the returned design clearly matches the corrected query/site/scaffold. If the design result says count is 0, or the site is ambiguous, ask for the builder/site instead of linking a best guess.
 - Treat address numbers as important. Never silently answer a design request for a different street number.
 
@@ -1835,7 +1836,10 @@ WHEN THINGS GO WRONG:
                 var description = TryGetString(d, "description") ?? string.Empty;
                 var revision = TryGetString(d, "revision_number") ?? string.Empty;
                 var candidateText = $"{path} {essName} {thirdName} {description} {revision}";
-                var score = tokens.Count > 0 ? ScoreSearchCandidate(candidateText, tokens, out _) : 1;
+                var matchedTerms = new List<string>();
+                var score = tokens.Count > 0
+                    ? ScoreSearchCandidate(candidateText, tokens, out matchedTerms)
+                    : 1;
                 var normalizedCandidate = NormalizeSearchText(candidateText);
                 return new
                 {
@@ -1850,6 +1854,7 @@ WHEN THINGS GO WRONG:
                     hasEssDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "ess_design_issue_path")),
                     hasThirdPartyDesign = !string.IsNullOrWhiteSpace(TryGetString(d, "third_party_design_path")),
                     score,
+                    matchedTerms,
                     normalizedCandidate,
                 };
             })
@@ -1890,6 +1895,7 @@ WHEN THINGS GO WRONG:
                     folderPath = c.folderPath,
                     updatedAt = c.updatedAt,
                     matchScore = c.score,
+                    matchedTerms = c.matchedTerms,
                     hasEssDesign = c.hasEssDesign,
                     hasThirdPartyDesign = c.hasThirdPartyDesign,
                 }).ToList(),
@@ -2543,6 +2549,7 @@ WHEN THINGS GO WRONG:
             matchedTerms = new List<string>();
             if (string.IsNullOrWhiteSpace(candidateText) || tokens.Count == 0) return 0;
             var normalized = NormalizeSearchText(candidateText);
+            var candidateTokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             var score = 0;
             foreach (var token in tokens)
             {
@@ -2550,6 +2557,13 @@ WHEN THINGS GO WRONG:
                 {
                     matchedTerms.Add(token);
                     score += token.Length >= 4 ? 12 : 8;
+                    continue;
+                }
+
+                if (TryMatchFuzzyDesignToken(token, candidateTokens, out var matchedToken, out var fuzzyScore))
+                {
+                    matchedTerms.Add($"{token}~{matchedToken}");
+                    score += fuzzyScore;
                 }
             }
             for (var i = 0; i < tokens.Count - 1; i++)
@@ -2565,6 +2579,84 @@ WHEN THINGS GO WRONG:
             if (matchedTerms.Count == tokens.Count) score += 80;
             else if (tokens.Count > 2 && matchedTerms.Count >= (int)Math.Ceiling(tokens.Count * 0.6)) score += 35;
             return score;
+        }
+
+        private static bool TryMatchFuzzyDesignToken(
+            string token,
+            IReadOnlyList<string> candidateTokens,
+            out string matchedToken,
+            out int score)
+        {
+            matchedToken = string.Empty;
+            score = 0;
+
+            if (IsStrictDesignSearchToken(token))
+                return false;
+
+            foreach (var alias in BuildDesignSearchAliases(token))
+            {
+                var aliasMatch = candidateTokens.FirstOrDefault(candidate =>
+                    string.Equals(candidate, alias, StringComparison.OrdinalIgnoreCase)
+                    || candidate.StartsWith(alias, StringComparison.OrdinalIgnoreCase)
+                    || alias.StartsWith(candidate, StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrWhiteSpace(aliasMatch))
+                {
+                    matchedToken = aliasMatch;
+                    score = Math.Max(7, Math.Min(11, token.Length + 2));
+                    return true;
+                }
+            }
+
+            var best = candidateTokens
+                .Where(candidate => !IsStrictDesignSearchToken(candidate))
+                .Select(candidate => new
+                {
+                    Candidate = candidate,
+                    Distance = GetDesignTokenDistance(candidate, token),
+                })
+                .OrderBy(item => item.Distance)
+                .FirstOrDefault();
+
+            if (best == null || best.Distance > MaxDesignTokenDistance(token))
+                return false;
+
+            matchedToken = best.Candidate;
+            score = Math.Max(5, (token.Length >= 7 ? 11 : 9) - best.Distance);
+            return true;
+        }
+
+        private static bool IsStrictDesignSearchToken(string token) =>
+            token.Length <= 3 || token.Any(char.IsDigit);
+
+        private static IEnumerable<string> BuildDesignSearchAliases(string token)
+        {
+            if (token.StartsWith("demol", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return "demo";
+                yield return "demolition";
+                yield return "demolish";
+                yield return "demolished";
+            }
+        }
+
+        private static int GetDesignTokenDistance(string candidateToken, string queryToken)
+        {
+            if (candidateToken.StartsWith(queryToken, StringComparison.OrdinalIgnoreCase)
+                || queryToken.StartsWith(candidateToken, StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            if (!string.Equals(candidateToken[..1], queryToken[..1], StringComparison.OrdinalIgnoreCase))
+                return int.MaxValue;
+
+            return LevenshteinDistance(candidateToken, queryToken);
+        }
+
+        private static int MaxDesignTokenDistance(string queryToken)
+        {
+            if (queryToken.Length <= 4) return 0;
+            if (queryToken.Length <= 7) return 1;
+            return 2;
         }
 
         private static string NormalizeSearchText(string value)
