@@ -350,6 +350,10 @@ namespace ESSDesign.Server.Services
             if (string.IsNullOrWhiteSpace(cleanQuestion))
                 throw new InvalidOperationException("Question is required.");
 
+            var deterministicAnswer = await TryAnswerScaffoldEntityQuestionAsync(cleanQuestion, cancellationToken);
+            if (deterministicAnswer != null)
+                return deterministicAnswer;
+
             var apiKey = _configuration["OpenAI:ApiKey"];
             if (string.IsNullOrWhiteSpace(apiKey))
                 return new ChatResult
@@ -366,7 +370,136 @@ namespace ESSDesign.Server.Services
             return await RunAgentLoopAsync(cleanQuestion, history, currentUser, apiKey, model, cancellationToken);
         }
 
+        private async Task<ChatResult?> TryAnswerScaffoldEntityQuestionAsync(string question, CancellationToken ct)
+        {
+            var normalizedQuestion = NormalizeSearchText(question);
+            if (!IsScaffoldEntityQuestion(normalizedQuestion))
+                return null;
+
+            var jobsites = await FetchJobsiteDirectoryAsync(ct);
+            var includeArchived = normalizedQuestion.Contains("archived", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("deleted", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("inactive", StringComparison.OrdinalIgnoreCase);
+            var tokens = BuildBroadSearchTokens(question)
+                .Where(token => !ScaffoldEntityQuestionStopWords.Contains(token))
+                .ToList();
+
+            var matches = RankMatchingJobsites(jobsites, tokens, normalizedQuestion, includeArchived)
+                .Take(8)
+                .ToList();
+
+            if (matches.Count == 0)
+                return null;
+
+            var exactAddressMatches = FilterToLikelyExactAddressMatches(matches, normalizedQuestion);
+            if (exactAddressMatches.Count > 0)
+                matches = exactAddressMatches;
+
+            var activeLabel = includeArchived ? "matching" : "active";
+            string reply;
+            if (matches.Count == 1)
+            {
+                var site = matches[0];
+                reply = $"{SiteLabel(site)} is under {site.ScaffoldEntity}.";
+            }
+            else if (matches.Select(site => site.ScaffoldEntity).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
+            {
+                var entity = matches[0].ScaffoldEntity;
+                var siteList = string.Join("; ", matches.Select(SiteLabel));
+                reply = $"You're right - the {activeLabel} {BestSiteReference(matches, normalizedQuestion)} job-sites are under {entity}: {siteList}.";
+            }
+            else
+            {
+                var siteList = string.Join("; ", matches.Select(site => $"{SiteLabel(site)} is under {site.ScaffoldEntity}"));
+                reply = $"There are multiple {activeLabel} matches, so the entity depends on the builder: {siteList}.";
+            }
+
+            return new ChatResult
+            {
+                Reply = reply,
+                Links = new List<AdminAssistantLink>(),
+                Sources = new List<string> { "Project data job-site registry" },
+            };
+        }
+
         // ── Agent Loop ────────────────────────────────────────────────────────
+
+        private static readonly HashSet<string> ScaffoldEntityQuestionStopWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "site", "job", "project", "company", "entity", "associated", "belongs", "belong",
+            "under", "with", "what", "which", "who", "is", "are", "the", "at", "to",
+            "erect", "safe", "scaffolding", "maloo", "access", "group", "scaff", "technic",
+        };
+
+        private static bool IsScaffoldEntityQuestion(string normalizedQuestion)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedQuestion))
+                return false;
+
+            var mentionsKnownEntity = normalizedQuestion.Contains("maloo", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("erect safe", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("scaff technic", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("scafftechnic", StringComparison.OrdinalIgnoreCase);
+            var asksEntity = normalizedQuestion.Contains("scaffold entity", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains(" entity", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("company", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("associated", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("belongs", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("under", StringComparison.OrdinalIgnoreCase);
+            var mentionsSiteContext = normalizedQuestion.Contains("site", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("job", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("project", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("place", StringComparison.OrdinalIgnoreCase)
+                || normalizedQuestion.Contains("street", StringComparison.OrdinalIgnoreCase)
+                || BuildNumericSearchTokens(normalizedQuestion).Count > 0;
+
+            return mentionsSiteContext && (asksEntity || mentionsKnownEntity);
+        }
+
+        private static List<JobsiteContextRow> FilterToLikelyExactAddressMatches(
+            IReadOnlyList<JobsiteContextRow> matches,
+            string normalizedQuestion)
+        {
+            var numericTokens = BuildNumericSearchTokens(normalizedQuestion);
+            if (numericTokens.Count == 0)
+                return new List<JobsiteContextRow>();
+
+            return matches
+                .Where(site =>
+                {
+                    var siteText = NormalizeSearchText($"{site.Name} {site.SiteLocation}");
+                    return numericTokens.All(token => NumericTokenAppears(siteText, token));
+                })
+                .ToList();
+        }
+
+        private static string SiteLabel(JobsiteContextRow site)
+        {
+            var location = string.IsNullOrWhiteSpace(site.SiteLocation) || site.SiteLocation.Equals(site.Name, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $" at {site.SiteLocation}";
+            return $"{site.BuilderName} - {site.Name}{location}";
+        }
+
+        private static string BestSiteReference(IReadOnlyList<JobsiteContextRow> matches, string normalizedQuestion)
+        {
+            var first = matches.FirstOrDefault();
+            if (first == null)
+                return "matching";
+
+            var numericTokens = BuildNumericSearchTokens(normalizedQuestion);
+            if (numericTokens.Count > 0)
+            {
+                var text = first.SiteLocation ?? first.Name;
+                var parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var partWithNumber = parts.FirstOrDefault(part =>
+                    numericTokens.Any(token => NumericTokenAppears(NormalizeSearchText(part), token)));
+                if (!string.IsNullOrWhiteSpace(partWithNumber))
+                    return partWithNumber;
+            }
+
+            return first.Name;
+        }
 
         private async Task<ChatResult> RunAgentLoopAsync(
             string question,
