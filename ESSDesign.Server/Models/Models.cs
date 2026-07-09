@@ -438,6 +438,17 @@ namespace ESSDesign.Server.Models
         public int ScheduledMinute { get; set; }
     }
 
+    public class ProjectDataFormShareNotificationRequest
+    {
+        public string RecipientUserId { get; set; } = string.Empty;
+        public string FormType { get; set; } = string.Empty;
+        public string FormTitle { get; set; } = string.Empty;
+        public string FormNumber { get; set; } = string.Empty;
+        public string BuilderName { get; set; } = string.Empty;
+        public string ProjectName { get; set; } = string.Empty;
+        public string PdfUrl { get; set; } = string.Empty;
+    }
+
     public class CreateFolderRequest
     {
         public string Name { get; set; } = string.Empty;

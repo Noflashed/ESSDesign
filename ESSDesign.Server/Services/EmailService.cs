@@ -371,6 +371,50 @@ namespace ESSDesign.Server.Services
                 folderName);
         }
 
+        public async Task SendProjectDataFormShareNotificationAsync(
+            List<string> recipientEmails,
+            string formType,
+            string formTitle,
+            string formNumber,
+            string sharedByName,
+            string builderName,
+            string projectName,
+            string pdfUrl)
+        {
+            if (recipientEmails == null || !recipientEmails.Any())
+            {
+                _logger.LogWarning("No recipients provided for project data form share notification");
+                return;
+            }
+
+            if (_resend == null)
+            {
+                _logger.LogWarning("Email service is not configured (missing Resend:ApiKey). Skipping project data form share notifications.");
+                return;
+            }
+
+            var subject = $"Project Data Form Shared: {builderName} - {projectName} - {formType}";
+            var htmlContent = BuildProjectDataFormShareEmailContent(
+                formType,
+                formTitle,
+                formNumber,
+                sharedByName,
+                builderName,
+                projectName,
+                pdfUrl);
+
+            foreach (var recipientEmail in recipientEmails)
+            {
+                await SendEmailWithRetryAsync(recipientEmail, subject, htmlContent);
+            }
+
+            _logger.LogInformation(
+                "Project data form share summary: {RecipientCount} sent. Form: {FormType} {FormNumber}",
+                recipientEmails.Count,
+                formType,
+                formNumber);
+        }
+
         private async Task SendEmailWithRetryAsync(string recipientEmail, string subject, string htmlContent, int maxRetries = 3)
         {
             var retryDelays = new[] { 1000, 2000, 4000 }; // Exponential backoff: 1s, 2s, 4s
@@ -605,6 +649,83 @@ namespace ESSDesign.Server.Services
                                 Automated confirmation from the ESS Design document management system.<br>
                                 &copy; {DateTime.Now.Year} ErectSafe Scaffolding. All rights reserved.
                             </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+            </table>
+</body>
+</html>";
+        }
+
+        private string BuildProjectDataFormShareEmailContent(
+            string formType,
+            string formTitle,
+            string formNumber,
+            string sharedByName,
+            string builderName,
+            string projectName,
+            string pdfUrl)
+        {
+            var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
+            var safeFormType = HttpUtility.HtmlEncode(formType);
+            var safeFormTitle = HttpUtility.HtmlEncode(formTitle);
+            var safeFormNumber = HttpUtility.HtmlEncode(string.IsNullOrWhiteSpace(formNumber) ? "-" : formNumber);
+            var safeSharer = HttpUtility.HtmlEncode(sharedByName);
+            var safeBuilder = HttpUtility.HtmlEncode(builderName);
+            var safeProject = HttpUtility.HtmlEncode(projectName);
+            var safePdfUrl = HttpUtility.HtmlAttributeEncode(pdfUrl);
+
+            return $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+</head>
+<body style=""margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#2d3748;background-color:#edf2f7;"">
+    <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#edf2f7;padding:40px 20px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""620"" style=""max-width:620px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;"">
+                    <tr>
+                        <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
+                            <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">A Project Data Form Was Shared With You</h1>
+                            <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Open the PDF using the link below</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding:32px;"">
+                            <p style=""font-size:14px;color:#4a5568;margin:0 0 24px;line-height:1.7;"">
+                                <strong style=""color:#2d3748;"">{safeSharer}</strong> shared <strong style=""color:#2d3748;"">{safeFormTitle}</strong> with you.
+                            </p>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Form Type</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFormType}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Form Number</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFormNumber}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeBuilder}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
+                            </table>
+                            <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"">
+                                <tr>
+                                    <td align=""center"" style=""padding:8px;"">
+                                        <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"">
+                                            <tr>
+                                                <td align=""center"" style=""border-radius:100px;background-color:#1a73e8;"">
+                                                    <a href=""{safePdfUrl}"" style=""display:inline-block;padding:14px 24px;border-radius:100px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;min-width:160px;text-align:center;"">View PDF</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align=""center"" style=""background-color:#f7fafc;padding:24px 32px;border-top:1px solid #e2e8f0;"">
+                            <p style=""font-size:12px;font-weight:700;color:#2d3748;letter-spacing:0.5px;margin:0 0 6px;"">ESS Design</p>
+                            <p style=""font-size:11px;color:#a0aec0;line-height:1.6;margin:0;"">Automated project data share from the ESS Design system.</p>
                         </td>
                     </tr>
                 </table>
@@ -1116,7 +1237,5 @@ namespace ESSDesign.Server.Services
         }
     }
 }
-
-
 
 

@@ -164,6 +164,33 @@ namespace ESSDesign.Server.Services
                 });
         }
 
+        public async Task<int> SendProjectDataFormSharePushAsync(
+            IEnumerable<string> recipientUserIds,
+            string sharedByName,
+            string builderName,
+            string projectName,
+            string formType,
+            string formTitle,
+            string formNumber,
+            string pdfUrl)
+        {
+            return await SendDocumentPushAsync(
+                recipientUserIds,
+                "Project data form shared",
+                $"{builderName} / {projectName} - {formType}",
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "project_data_form_shared",
+                    ["uploaderName"] = sharedByName,
+                    ["builderName"] = builderName,
+                    ["projectName"] = projectName,
+                    ["formType"] = formType,
+                    ["formTitle"] = formTitle,
+                    ["formNumber"] = formNumber,
+                    ["pdfUrl"] = pdfUrl,
+                });
+        }
+
         public async Task<int> SendMaterialOrderScheduledPushAsync(
             IEnumerable<string> recipientUserIds,
             string builderName,
