@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Info, Plus, Search, UserPlus } from 'lucide-react';
-import { authAPI, rosteringAPI, usersAPI } from '../services/api';
+import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
 const SUPABASE_BASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
@@ -244,6 +244,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [inviteMessage, setInviteMessage] = useState('');
     const [employees, setEmployees] = useState([]);
     const [appUsers, setAppUsers] = useState([]);
+    const [profileImageUrls, setProfileImageUrls] = useState({});
     const [search, setSearch] = useState('');
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -325,6 +326,37 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         };
     }, [employeeMenu]);
 
+    useEffect(() => {
+        let active = true;
+        const userIds = [
+            ...appUsers.map(user => user.id),
+            ...employees.map(employee => employee.linkedAuthUserId)
+        ].filter(Boolean);
+
+        if (userIds.length === 0) {
+            setProfileImageUrls({});
+            return () => {
+                active = false;
+            };
+        }
+
+        resolveProfileImageUrls(userIds)
+            .then(urls => {
+                if (active) {
+                    setProfileImageUrls(urls);
+                }
+            })
+            .catch(() => {
+                if (active) {
+                    setProfileImageUrls({});
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [appUsers, employees]);
+
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
         const appUserByEmail = Object.fromEntries(appUsers
@@ -340,6 +372,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             if (appUser) linkedUserIds.add(appUser.id);
             const effectiveRole = appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder');
             const appUserAvatars = getAvatarCandidates(appUser);
+            const linkedProfileImageUrl = profileImageUrls[appUser?.id] || profileImageUrls[emp.linkedAuthUserId] || '';
+            const storageAvatars = linkedProfileImageUrl ? [linkedProfileImageUrl] : [];
             result.push({
                 key: `emp-${emp.id}`,
                 type: 'employee',
@@ -352,7 +386,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 role: effectiveRole,
                 leadingHand: effectiveRole === 'leading_hand',
                 preferredSiteIds: emp.preferredSiteIds || [],
-                avatarCandidates: appUserAvatars.length > 0 ? appUserAvatars : getAvatarCandidates(emp, { includeStorageCandidates: false }),
+                avatarCandidates: appUserAvatars.length > 0 ? appUserAvatars : [...storageAvatars, ...getAvatarCandidates(emp)],
             });
         }
 
@@ -370,13 +404,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     role: u.role,
                     leadingHand: u.role === 'leading_hand',
                     preferredSiteIds: [],
-                    avatarCandidates: getAvatarCandidates(u),
+                    avatarCandidates: getAvatarCandidates(u).length > 0 ? getAvatarCandidates(u) : (profileImageUrls[u.id] ? [profileImageUrls[u.id]] : []),
                 });
             }
         }
 
         return result;
-    }, [employees, appUsers]);
+    }, [employees, appUsers, profileImageUrls]);
 
     const roleFilterOptions = useMemo(() => {
         const roles = Array.from(new Set(mergedEntries.map((entry) => entry.role).filter(Boolean)));

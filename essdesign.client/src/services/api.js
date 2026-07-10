@@ -12,13 +12,20 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
 const API_ORIGIN_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const PROFILE_IMAGES_BUCKET = 'profile-images';
 
 const getPublicStorageUrl = (bucket, objectPath) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`;
 
-const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext';
-const AVATAR_MISSING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext-v2';
+const AVATAR_MISSING_CACHE_TTL_MS = 30 * 60 * 1000;
 const avatarLookupInflight = new Map();
+
+const profileImageStorageHeaders = (contentType = false) => ({
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...(contentType ? { 'Content-Type': 'application/json' } : {})
+});
 
 const getCachedAvatarEntry = (userId) => {
     try {
@@ -50,20 +57,30 @@ const resolveProfileImageUrlUncached = async (userId) => {
         return null;
     }
 
-    const extensions = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
+    try {
+        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PROFILE_IMAGES_BUCKET}`, {
+            method: 'POST',
+            headers: profileImageStorageHeaders(true),
+            body: JSON.stringify({
+                prefix: userId,
+                limit: 20,
+                offset: 0,
+                sortBy: { column: 'updated_at', order: 'desc' }
+            })
+        });
 
-    for (const ext of extensions) {
-        const objectPath = `${userId}/avatar.${ext}`;
-        const testUrl = getPublicStorageUrl(PROFILE_IMAGES_BUCKET, objectPath);
-        try {
-            const response = await fetch(testUrl, { method: 'HEAD' });
-            if (response.ok) {
+        if (response.ok) {
+            const payload = await response.json();
+            const rows = Array.isArray(payload) ? payload : payload?.value || [];
+            const avatar = rows.find(row => /^avatar\.(jpe?g|png|webp|heic)$/i.test(row?.name || ''));
+            const ext = avatar?.name?.split('.').pop()?.toLowerCase();
+            if (ext) {
                 setCachedAvatarEntry(userId, { ext, missingAt: null });
-                return testUrl;
+                return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${ext}`);
             }
-        } catch {
-            // Try next possible extension.
         }
+    } catch {
+        // Treat lookup failures as temporarily missing and retry after the short TTL.
     }
 
     setCachedAvatarEntry(userId, { ext: null, missingAt: Date.now() });
@@ -83,6 +100,12 @@ export const resolveProfileImageUrl = async (userId) => {
     }
 
     return avatarLookupInflight.get(userId);
+};
+
+export const resolveProfileImageUrls = async (userIds = []) => {
+    const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+    const entries = await Promise.all(uniqueUserIds.map(async (userId) => [userId, await resolveProfileImageUrl(userId)]));
+    return Object.fromEntries(entries.filter(([, url]) => Boolean(url)));
 };
 
 const apiClient = axios.create({
@@ -351,7 +374,6 @@ export const authAPI = {
     }
 };
 
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const SUPABASE_REST_BASE = `${SUPABASE_URL}/rest/v1`;
 const SAFETY_BUCKET = 'project-information';
 const ESS_NEWS_BUCKET = 'ess-news';
