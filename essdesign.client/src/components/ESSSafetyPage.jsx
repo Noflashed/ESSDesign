@@ -15,7 +15,7 @@ import {
     Users,
     X
 } from 'lucide-react';
-import { handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
+import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
 const PROJECT_DATA_TABS = [
@@ -44,11 +44,11 @@ const PROJECT_DATA_TABS = [
         icon: ClipboardCheck
     },
     {
-        key: 'day-labour-forms',
-        label: 'Day Labour forms',
-        noun: 'day labour forms',
-        refLabel: 'Form / Ref No.',
-        storageKind: 'day-labour-forms',
+        key: 'day-labour-variations',
+        label: 'Day Labour/Variations',
+        noun: 'day labour/variations',
+        refLabel: 'Variation / Ref No.',
+        storageKind: 'day-labour-variations',
         icon: Users
     },
     {
@@ -164,13 +164,33 @@ function mapHandoverRows(items) {
     });
 }
 
+function mapDayLabourVariationRows(items) {
+    return items.map((item, index) => {
+        const ref = item.variationNumber || item.formReferenceName || makeFileRef('DLV', index);
+        const title = item.formReferenceName || `Day Labour/Variation ${ref}`;
+        return {
+            id: item.id,
+            kind: 'day-labour-variations',
+            name: withPdfExtension(title),
+            ref,
+            status: 'Current',
+            uploadedAt: item.updatedAt || item.date || '',
+            expiresAt: '',
+            uploadedBy: item.requestedBy || 'Site team',
+            location: item.clientProjectName || item.handoverDocumentTitle || '',
+            size: formatBytes(item.size),
+            raw: item
+        };
+    });
+}
+
 function mapFileRows(files, tab) {
     const refPrefix = tab.key === 'swms'
         ? 'SWMS'
         : tab.key === 'handover-certificates'
             ? 'HOC'
-            : tab.key === 'day-labour-forms'
-                ? 'DLF'
+            : tab.key === 'day-labour-variations'
+                ? 'DLV'
                 : 'DES';
 
     return files.map((file, index) => ({
@@ -373,6 +393,18 @@ function getPreviewDetails(doc, tab, builder, project) {
             ['ESS representative', doc.raw?.essRepresentativeName || doc.uploadedBy || '-'],
             ['Inspection date', formatDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
             ['Client project no.', doc.raw?.projectNumberClient || '-'],
+            ...baseDetails
+        ];
+    }
+
+    if (tab.key === 'day-labour-variations') {
+        return [
+            ['Form reference', doc.raw?.formReferenceName || doc.name],
+            ['Variation no.', doc.raw?.variationNumber || doc.ref],
+            ['Requested by', doc.raw?.requestedBy || doc.uploadedBy || '-'],
+            ['Form date', formatDate(doc.raw?.date || doc.uploadedAt)],
+            ['Linked handover', doc.raw?.handoverDocumentNumber || doc.raw?.handoverDocumentTitle || '-'],
+            ['Client project', doc.raw?.clientProjectName || '-'],
             ...baseDetails
         ];
     }
@@ -622,6 +654,8 @@ export default function ESSSafetyPage() {
                 rows = mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id));
             } else if (activeTab.key === 'handover-certificates') {
                 rows = mapHandoverRows(await handoverCertificatesAPI.listForms(selectedBuilder.id, selectedProject.id));
+            } else if (activeTab.key === 'day-labour-variations') {
+                rows = mapDayLabourVariationRows(await dayLabourVariationsAPI.listForms(selectedBuilder.id, selectedProject.id));
             } else {
                 rows = mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
             }
@@ -692,6 +726,16 @@ export default function ESSSafetyPage() {
             const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
             if (!form) throw new Error('Handover certificate not found');
             return handoverCertificatesAPI.getPdfUrl(form);
+        }
+        if (doc.kind === 'day-labour-variations') {
+            const form = await dayLabourVariationsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            if (form) {
+                return dayLabourVariationsAPI.getPdfUrl(form);
+            }
+            if (doc.raw?.pdfPath) {
+                return dayLabourVariationsAPI.getPdfUrl({ pdfPath: doc.raw.pdfPath });
+            }
+            throw new Error('Day labour/variation PDF not found');
         }
         return safetyFilesAPI.getSignedModuleFileUrl(doc.raw.path);
     };

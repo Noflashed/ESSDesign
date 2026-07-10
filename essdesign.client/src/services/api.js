@@ -375,6 +375,12 @@ const storageHeaders = (contentType = false) => ({
     ...(contentType ? { 'Content-Type': 'application/json' } : {})
 });
 
+const anonStorageHeaders = (contentType = false) => ({
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...(contentType ? { 'Content-Type': 'application/json' } : {})
+});
+
 const nowIso = () => new Date().toISOString();
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -4162,6 +4168,181 @@ export const handoverCertificatesAPI = {
     },
 
     getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14)
+};
+
+const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
+const dayLabourVariationIndexPath = (builderId, projectId) => `${dayLabourVariationPrefix(builderId, projectId)}/index.json`;
+const dayLabourVariationFormPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/forms/${formId}.json`;
+const dayLabourVariationPdfPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
+
+async function readDayLabourVariationJson(path) {
+    const response = await fetch(safetyModuleObjectUrl(path), {
+        method: 'GET',
+        headers: anonStorageHeaders()
+    });
+
+    if (response.status === 404) {
+        return null;
+    }
+
+    if (!response.ok) {
+        const details = await response.text();
+        if ((details || '').toLowerCase().includes('object not found')) {
+            return null;
+        }
+        throw new Error(details || `Failed to load ${path}`);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+}
+
+async function signedDayLabourVariationUrl(path, expiresIn = 60 * 60 * 24 * 14) {
+    const response = await fetch(safetyModuleSignUrl(path), {
+        method: 'POST',
+        headers: anonStorageHeaders(true),
+        body: JSON.stringify({ expiresIn })
+    });
+
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(details || 'Failed to generate signed URL');
+    }
+
+    const payload = await response.json();
+    return `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
+}
+
+async function listDayLabourVariationPdfFiles(builderId, projectId) {
+    const prefix = `${dayLabourVariationPrefix(builderId, projectId)}/pdf`;
+    const response = await fetch(safetyBucketListUrl(), {
+        method: 'POST',
+        headers: anonStorageHeaders(true),
+        body: JSON.stringify({ prefix, limit: 200, offset: 0 })
+    });
+
+    if (!response.ok) {
+        return [];
+    }
+
+    const rows = await response.json();
+    const entries = Array.isArray(rows) ? rows : rows?.value || [];
+    return entries
+        .filter(row => typeof row.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
+        .map(row => {
+            const formId = row.name.replace(/\.pdf$/i, '');
+            return {
+                id: formId,
+                name: row.name,
+                pdfPath: `${prefix}/${row.name}`,
+                updatedAt: row.updated_at || row.created_at || nowIso(),
+                size: row.metadata?.size ?? null
+            };
+        });
+}
+
+function parseDayLabourVariationIndex(raw) {
+    if (!raw || !Array.isArray(raw.forms)) {
+        return { forms: [], updatedAt: nowIso() };
+    }
+
+    return {
+        forms: raw.forms
+            .filter(item => item && typeof item.id === 'string')
+            .map(item => ({
+                id: item.id,
+                variationNumber: item.variationNumber || '',
+                formReferenceName: item.formReferenceName || '',
+                requestedBy: item.requestedBy || '',
+                clientProjectName: item.clientProjectName || '',
+                date: item.date || '',
+                handoverDocumentNumber: item.handoverDocumentNumber || '',
+                handoverDocumentId: item.handoverDocumentId || '',
+                handoverDocumentTitle: item.handoverDocumentTitle || '',
+                pdfPath: item.pdfPath || '',
+                updatedAt: item.updatedAt || nowIso()
+            }))
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+        updatedAt: raw.updatedAt || nowIso()
+    };
+}
+
+export const dayLabourVariationsAPI = {
+    listForms: async (builderId, projectId) => {
+        const [index, pdfFiles] = await Promise.all([
+            readDayLabourVariationJson(dayLabourVariationIndexPath(builderId, projectId)).catch(() => null),
+            listDayLabourVariationPdfFiles(builderId, projectId)
+        ]);
+        const formsById = new Map(
+            parseDayLabourVariationIndex(index).forms.map(form => [
+                form.id,
+                {
+                    ...form,
+                    pdfPath: form.pdfPath || dayLabourVariationPdfPath(builderId, projectId, form.id)
+                }
+            ])
+        );
+
+        pdfFiles.forEach(file => {
+            const existing = formsById.get(file.id);
+            if (existing) {
+                formsById.set(file.id, {
+                    ...existing,
+                    pdfPath: existing.pdfPath || file.pdfPath,
+                    size: file.size ?? existing.size ?? null
+                });
+                return;
+            }
+
+            formsById.set(file.id, {
+                id: file.id,
+                variationNumber: '',
+                formReferenceName: file.name.replace(/\.pdf$/i, ''),
+                requestedBy: 'Site team',
+                clientProjectName: '',
+                date: '',
+                handoverDocumentNumber: '',
+                handoverDocumentId: '',
+                handoverDocumentTitle: '',
+                pdfPath: file.pdfPath,
+                size: file.size,
+                updatedAt: file.updatedAt
+            });
+        });
+
+        return Array.from(formsById.values()).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    },
+
+    getForm: async (builderId, projectId, formId) => {
+        const form = await readDayLabourVariationJson(dayLabourVariationFormPath(builderId, projectId, formId));
+        if (!form) {
+            return null;
+        }
+        return {
+            ...form,
+            id: form.id || formId,
+            variationNumber: form.variationNumber || '',
+            formReferenceName: form.formReferenceName || '',
+            clientProjectName: form.clientProjectName || '',
+            date: form.date || '',
+            requestedBy: form.requestedBy || '',
+            siteInstructionNumber: form.siteInstructionNumber || '',
+            handoverDocumentNumber: form.handoverDocumentNumber || '',
+            handoverDocumentId: form.handoverDocumentId || '',
+            handoverDocumentTitle: form.handoverDocumentTitle || '',
+            locationLevelGridLine: form.locationLevelGridLine || '',
+            descriptionOfWork: form.descriptionOfWork || '',
+            labourRows: Array.isArray(form.labourRows) ? form.labourRows : [],
+            photoSlots: Array.isArray(form.photoSlots) ? form.photoSlots : [],
+            essRepresentativeName: form.essRepresentativeName || '',
+            clientName: form.clientName || '',
+            pdfPath: form.pdfPath || dayLabourVariationPdfPath(builderId, projectId, formId),
+            updatedAt: form.updatedAt || nowIso()
+        };
+    },
+
+    getPdfUrl: async (form) => signedDayLabourVariationUrl(form.pdfPath, 60 * 60 * 24 * 14),
+    getPhotoUrl: async (path) => signedDayLabourVariationUrl(path, 60 * 60 * 24 * 14)
 };
 
 function parseScaffIndex(raw) {
