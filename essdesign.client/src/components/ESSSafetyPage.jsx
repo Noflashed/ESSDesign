@@ -505,6 +505,7 @@ export default function ESSSafetyPage() {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
+    const [pendingDeleteDocument, setPendingDeleteDocument] = useState(null);
     const [deletingDocumentId, setDeletingDocumentId] = useState('');
     const [error, setError] = useState('');
     const builderDropdownRef = useRef(null);
@@ -851,11 +852,6 @@ export default function ESSSafetyPage() {
 
     const deleteProjectDataDocument = async (doc = contextMenuDocument) => {
         if (!doc || !selectedBuilder || !selectedProject || deletingDocumentId) return;
-        const confirmed = window.confirm(`Delete "${doc.name}" from Project data? This cannot be undone.`);
-        if (!confirmed) {
-            setContextMenu(null);
-            return;
-        }
 
         setDeletingDocumentId(doc.id);
         setError('');
@@ -874,6 +870,7 @@ export default function ESSSafetyPage() {
                 closeDocumentPreview();
             }
             setContextMenu(null);
+            setPendingDeleteDocument(null);
             await loadDocuments();
         } catch (err) {
             setError(err.message || 'Failed to delete document');
@@ -1065,7 +1062,10 @@ export default function ESSSafetyPage() {
                                         type="button"
                                         className="danger"
                                         disabled={deletingDocumentId === contextMenuDocument.id}
-                                        onClick={() => deleteProjectDataDocument(contextMenuDocument)}
+                                        onClick={() => {
+                                            setPendingDeleteDocument(contextMenuDocument);
+                                            setContextMenu(null);
+                                        }}
                                         role="menuitem"
                                     >
                                         <Trash2 size={15} />
@@ -1100,6 +1100,46 @@ export default function ESSSafetyPage() {
                     ) : null}
                 </section>
             </div>
+
+            {pendingDeleteDocument ? (
+                <div className="module-modal-backdrop project-data-delete-backdrop" onClick={() => {
+                    if (!deletingDocumentId) {
+                        setPendingDeleteDocument(null);
+                    }
+                }}>
+                    <div className="module-modal compact project-data-delete-modal" onClick={(event) => event.stopPropagation()}>
+                        <div className="project-data-delete-icon" aria-hidden="true">
+                            <AlertTriangle size={25} />
+                        </div>
+                        <div className="project-data-delete-copy">
+                            <h3>Delete Project Data PDF?</h3>
+                            <p>
+                                This will permanently delete <strong>{pendingDeleteDocument.name}</strong> from {selectedProject?.name || 'this project'}.
+                            </p>
+                            <span>This cannot be undone.</span>
+                        </div>
+                        {error ? <div className="module-error">{error}</div> : null}
+                        <div className="module-form-actions">
+                            <button
+                                type="button"
+                                className="module-secondary-btn"
+                                disabled={Boolean(deletingDocumentId)}
+                                onClick={() => setPendingDeleteDocument(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="module-danger-btn"
+                                disabled={Boolean(deletingDocumentId)}
+                                onClick={() => deleteProjectDataDocument(pendingDeleteDocument)}
+                            >
+                                {deletingDocumentId ? 'Deleting...' : 'Delete PDF'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

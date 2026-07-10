@@ -17887,6 +17887,60 @@ button.stat-card {
     opacity: 0.62;
 }
 
+.project-data-delete-backdrop {
+    z-index: 360;
+}
+
+.project-data-delete-modal {
+    display: grid;
+    justify-items: center;
+    gap: 16px;
+    padding: 28px;
+    text-align: center;
+}
+
+.project-data-delete-icon {
+    width: 54px;
+    height: 54px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #fff1f2;
+    color: #b91c1c;
+}
+
+.project-data-delete-copy {
+    display: grid;
+    gap: 8px;
+}
+
+.project-data-delete-copy h3 {
+    margin: 0;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.project-data-delete-copy p {
+    max-width: 420px;
+    margin: 0;
+    color: #334155;
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.project-data-delete-copy span {
+    color: #b91c1c;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.project-data-delete-modal .module-form-actions {
+    width: 100%;
+    justify-content: center;
+}
+
 .project-data-empty-state,
 .project-data-table-state {
     min-height: 280px;
