@@ -15,11 +15,18 @@ const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const PROFILE_IMAGES_BUCKET = 'profile-images';
 
-const getPublicStorageUrl = (bucket, objectPath) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`;
+const optimizeProfileImageUrl = (url) => {
+    if (!url || !url.includes('/storage/v1/object/public/')) return url || null;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}width=256&height=256&resize=cover&quality=75`;
+};
+const getPublicStorageUrl = (bucket, objectPath) => optimizeProfileImageUrl(`${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`);
 
 const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext-v2';
 const AVATAR_MISSING_CACHE_TTL_MS = 30 * 60 * 1000;
 const avatarLookupInflight = new Map();
+const signedStorageUrlCache = new Map();
+const signedStorageUrlInflight = new Map();
 
 const profileImageStorageHeaders = (contentType = false) => ({
     apikey: SUPABASE_ANON_KEY,
@@ -106,6 +113,11 @@ export const resolveProfileImageUrls = async (userIds = []) => {
     const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
     const entries = await Promise.all(uniqueUserIds.map(async (userId) => [userId, await resolveProfileImageUrl(userId)]));
     return Object.fromEntries(entries.filter(([, url]) => Boolean(url)));
+};
+
+const hydrateProfileImageUrl = async (user) => {
+    const existing = user?.profileImageUrl || user?.profile_image_url || user?.avatarUrl || user?.avatar_url || user?.picture;
+    return optimizeProfileImageUrl(existing) || resolveProfileImageUrl(user?.id);
 };
 
 const apiClient = axios.create({
@@ -215,7 +227,7 @@ const refreshAuthSession = async () => {
         refreshSessionPromise = apiClient
             .post('/auth/refresh', { refreshToken })
             .then(async (response) => {
-                const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+                const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data.user);
                 const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
                 const refreshedSession = { ...response.data, user: hydratedUser };
                 storeAuthSession(refreshedSession);
@@ -274,14 +286,14 @@ apiClient.interceptors.response.use(
 export const authAPI = {
     signUp: async (email, password, fullName, employeeId = null) => {
         const response = await apiClient.post('/auth/signup', { email, password, fullName, employeeId });
-        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+        const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data.user);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         return { ...response.data, user: hydratedUser };
     },
 
     signIn: async (identifier, password) => {
         const response = await apiClient.post('/auth/signin', { email: identifier, identifier, password });
-        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data.user?.id);
+        const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data.user);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         const signedInSession = { ...response.data, user: hydratedUser };
         storeAuthSession(signedInSession);
@@ -305,7 +317,7 @@ export const authAPI = {
     refreshCurrentUser: async () => {
         try {
             const response = await apiClient.get('/auth/user');
-            const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
+            const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data);
             const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
             if (response.data) {
                 localStorage.setItem('user', JSON.stringify(hydratedUser));
@@ -424,6 +436,7 @@ const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 60 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
+const MISSING_STORAGE_JSON_CACHE_TTL_MS = 15 * 60 * 1000;
 const STORAGE_JSON_REQUEST_TIMEOUT_MS = 15 * 1000;
 const STORAGE_JSON_CACHE_SYNC_CHANNEL = 'ess-storage-json-cache-sync';
 const STORAGE_JSON_CACHE_SYNC_KEY = 'ess-storage-json-cache-sync-message';
@@ -3943,19 +3956,36 @@ async function uploadStorageObject(path, body, contentType) {
 }
 
 async function signedStorageUrl(path, expiresIn = 3600) {
-    const response = await fetch(safetyModuleSignUrl(path), {
-        method: 'POST',
-        headers: storageHeaders(true),
-        body: JSON.stringify({ expiresIn })
-    });
-
-    if (!response.ok) {
-        const details = await response.text();
-        throw new Error(details || 'Failed to generate signed URL');
+    const cacheKey = `${path}:${expiresIn}`;
+    const cached = signedStorageUrlCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now() + 60 * 1000) {
+        return cached.url;
+    }
+    if (signedStorageUrlInflight.has(cacheKey)) {
+        return signedStorageUrlInflight.get(cacheKey);
     }
 
-    const payload = await response.json();
-    return `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
+    const request = (async () => {
+        const response = await fetch(safetyModuleSignUrl(path), {
+            method: 'POST',
+            headers: storageHeaders(true),
+            body: JSON.stringify({ expiresIn })
+        });
+        if (!response.ok) {
+            const details = await response.text();
+            throw new Error(details || 'Failed to generate signed URL');
+        }
+        const payload = await response.json();
+        const url = `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
+        signedStorageUrlCache.set(cacheKey, {
+            url,
+            expiresAt: Date.now() + Math.max(60, expiresIn - 300) * 1000
+        });
+        return url;
+    })().finally(() => signedStorageUrlInflight.delete(cacheKey));
+
+    signedStorageUrlInflight.set(cacheKey, request);
+    return request;
 }
 
 function createStorageJsonAbortSignal(path) {
@@ -4029,14 +4059,14 @@ async function readStorageJson(path, options = {}) {
             responseText = await response.text();
 
             if (response.status === 404) {
-                setStorageJsonCache(path, null, ttlMs);
+                setStorageJsonCache(path, null, Math.max(ttlMs, MISSING_STORAGE_JSON_CACHE_TTL_MS));
                 return null;
             }
 
             if (!response.ok) {
                 const details = responseText;
                 if ((details || '').toLowerCase().includes('object not found')) {
-                    setStorageJsonCache(path, null, ttlMs);
+                    setStorageJsonCache(path, null, Math.max(ttlMs, MISSING_STORAGE_JSON_CACHE_TTL_MS));
                     return null;
                 }
                 throw new Error(details || `Failed to load ${path}`);
@@ -4081,6 +4111,7 @@ async function deleteStorageObject(path) {
     });
 
     if (response.status === 404) {
+        Array.from(signedStorageUrlCache.keys()).filter(key => key.startsWith(`${path}:`)).forEach(key => signedStorageUrlCache.delete(key));
         invalidateStorageJsonCache(path);
         emitStorageJsonChanged(path);
         return;
@@ -4091,6 +4122,7 @@ async function deleteStorageObject(path) {
         throw new Error(details || `Failed to delete ${path}`);
     }
     invalidateStorageJsonCache(path);
+    Array.from(signedStorageUrlCache.keys()).filter(key => key.startsWith(`${path}:`)).forEach(key => signedStorageUrlCache.delete(key));
     emitStorageJsonChanged(path);
 }
 
@@ -4221,45 +4253,20 @@ const dayLabourVariationFormPath = (builderId, projectId, formId) => `${dayLabou
 const dayLabourVariationPdfPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
 
 async function readDayLabourVariationJson(path) {
-    const response = await fetch(safetyModuleObjectUrl(path), {
-        method: 'GET',
-        headers: anonStorageHeaders()
-    });
-
-    if (response.status === 404) {
-        return null;
-    }
-
-    if (!response.ok) {
-        const details = await response.text();
-        if ((details || '').toLowerCase().includes('object not found')) {
-            return null;
-        }
-        throw new Error(details || `Failed to load ${path}`);
-    }
-
-    const text = await response.text();
-    return text ? JSON.parse(text) : null;
+    return readStorageJson(path);
 }
 
 async function signedDayLabourVariationUrl(path, expiresIn = 60 * 60 * 24 * 14) {
-    const response = await fetch(safetyModuleSignUrl(path), {
-        method: 'POST',
-        headers: anonStorageHeaders(true),
-        body: JSON.stringify({ expiresIn })
-    });
-
-    if (!response.ok) {
-        const details = await response.text();
-        throw new Error(details || 'Failed to generate signed URL');
-    }
-
-    const payload = await response.json();
-    return `${SUPABASE_URL}/storage/v1${payload.signedURL}`;
+    return signedStorageUrl(path, expiresIn);
 }
 
 async function listDayLabourVariationPdfFiles(builderId, projectId) {
     const prefix = `${dayLabourVariationPrefix(builderId, projectId)}/pdf`;
+    const cacheKey = `storage-list:${prefix}`;
+    const cached = storageJsonCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now() && Array.isArray(cached.value)) {
+        return cloneJsonValue(cached.value);
+    }
     const response = await fetch(safetyBucketListUrl(), {
         method: 'POST',
         headers: anonStorageHeaders(true),
@@ -4272,7 +4279,7 @@ async function listDayLabourVariationPdfFiles(builderId, projectId) {
 
     const rows = await response.json();
     const entries = Array.isArray(rows) ? rows : rows?.value || [];
-    return entries
+    const files = entries
         .filter(row => typeof row.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
         .map(row => {
             const formId = row.name.replace(/\.pdf$/i, '');
@@ -4284,6 +4291,8 @@ async function listDayLabourVariationPdfFiles(builderId, projectId) {
                 size: row.metadata?.size ?? null
             };
         });
+    setStorageJsonCache(cacheKey, files, 5 * 60 * 1000);
+    return files;
 }
 
 function parseDayLabourVariationIndex(raw) {
@@ -4801,7 +4810,7 @@ export const usersAPI = {
 
     updateMyProfile: async (profile) => {
         const response = await apiClient.put('/users/me', profile);
-        const resolvedProfileImageUrl = await resolveProfileImageUrl(response.data?.id);
+        const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data);
         const hydratedUser = { ...response.data, profileImageUrl: resolvedProfileImageUrl };
         localStorage.setItem('user', JSON.stringify(hydratedUser));
         return hydratedUser;
@@ -4818,7 +4827,7 @@ export const usersAPI = {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
         setCachedAvatarEntry(userId, { ext: extension, missingAt: null });
-        return response.data?.profileImageUrl || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
+        return optimizeProfileImageUrl(response.data?.profileImageUrl) || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
     },
 
     deleteUser: async (userId) => {
