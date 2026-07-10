@@ -72,7 +72,7 @@ function normalizeAvatarSource(value) {
     ];
 }
 
-function getAvatarCandidates(user, { includeStorageCandidates = true } = {}) {
+function getAvatarCandidates(user) {
     const rawValues = [
         user?.avatarUrl,
         user?.avatar_url,
@@ -90,10 +90,7 @@ function getAvatarCandidates(user, { includeStorageCandidates = true } = {}) {
         user?.AvatarPath
     ].filter(Boolean);
 
-    const storageCandidates = includeStorageCandidates && user?.id ? ['jpg', 'jpeg', 'png', 'webp', 'heic']
-        .map((ext) => `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${user.id}/avatar.${ext}`) : [];
-
-    return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
+    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
 }
 
 function getAccountStatus(entry) {

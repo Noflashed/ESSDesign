@@ -17,8 +17,10 @@ const PROFILE_IMAGES_BUCKET = 'profile-images';
 const getPublicStorageUrl = (bucket, objectPath) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectPath}`;
 
 const AVATAR_EXT_CACHE_KEY = 'ess-avatar-ext';
+const AVATAR_MISSING_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const avatarLookupInflight = new Map();
 
-const getCachedAvatarExt = (userId) => {
+const getCachedAvatarEntry = (userId) => {
     try {
         const raw = localStorage.getItem(AVATAR_EXT_CACHE_KEY);
         const cache = raw ? JSON.parse(raw) : {};
@@ -26,29 +28,26 @@ const getCachedAvatarExt = (userId) => {
     } catch { return null; }
 };
 
-const setCachedAvatarExt = (userId, ext) => {
+const setCachedAvatarEntry = (userId, entry) => {
     try {
         const raw = localStorage.getItem(AVATAR_EXT_CACHE_KEY);
         const cache = raw ? JSON.parse(raw) : {};
-        cache[userId] = ext;
+        cache[userId] = entry;
         localStorage.setItem(AVATAR_EXT_CACHE_KEY, JSON.stringify(cache));
     } catch { /* ignore */ }
 };
 
-export const resolveProfileImageUrl = async (userId) => {
-    if (!userId) return null;
+const resolveProfileImageUrlUncached = async (userId) => {
+    const cached = getCachedAvatarEntry(userId);
+    const cachedExt = typeof cached === 'string' ? cached : cached?.ext;
+    const cachedMissingAt = typeof cached === 'object' ? cached?.missingAt : null;
 
-    const cached = getCachedAvatarExt(userId);
-    if (cached) {
-        const cachedUrl = getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cached}`);
-        try {
-            const response = await fetch(cachedUrl, { method: 'HEAD' });
-            if (response.ok) {
-                return cachedUrl;
-            }
-        } catch {
-            // Fall through and probe the known extensions.
-        }
+    if (cachedExt) {
+        return getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${cachedExt}`);
+    }
+
+    if (cachedMissingAt && Date.now() - cachedMissingAt < AVATAR_MISSING_CACHE_TTL_MS) {
+        return null;
     }
 
     const extensions = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
@@ -59,7 +58,7 @@ export const resolveProfileImageUrl = async (userId) => {
         try {
             const response = await fetch(testUrl, { method: 'HEAD' });
             if (response.ok) {
-                setCachedAvatarExt(userId, ext);
+                setCachedAvatarEntry(userId, { ext, missingAt: null });
                 return testUrl;
             }
         } catch {
@@ -67,7 +66,23 @@ export const resolveProfileImageUrl = async (userId) => {
         }
     }
 
+    setCachedAvatarEntry(userId, { ext: null, missingAt: Date.now() });
     return null;
+};
+
+export const resolveProfileImageUrl = async (userId) => {
+    if (!userId) return null;
+
+    if (!avatarLookupInflight.has(userId)) {
+        avatarLookupInflight.set(
+            userId,
+            resolveProfileImageUrlUncached(userId).finally(() => {
+                avatarLookupInflight.delete(userId);
+            })
+        );
+    }
+
+    return avatarLookupInflight.get(userId);
 };
 
 const apiClient = axios.create({
@@ -79,6 +94,25 @@ const clearStoredAuth = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+};
+
+const getJwtExpiryMs = (token) => {
+    if (!token) return null;
+    try {
+        const payloadSegment = token.split('.')[1];
+        if (!payloadSegment) return null;
+        const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+        const payload = JSON.parse(window.atob(padded));
+        return Number.isFinite(payload?.exp) ? payload.exp * 1000 : null;
+    } catch {
+        return null;
+    }
+};
+
+const isAccessTokenFresh = () => {
+    const expiresAt = getJwtExpiryMs(localStorage.getItem('access_token'));
+    return expiresAt !== null && expiresAt > Date.now() + 2 * 60 * 1000;
 };
 
 const storeAuthSession = (authResponse) => {
@@ -264,13 +298,22 @@ export const authAPI = {
 
     restoreSession: async () => {
         const refreshToken = localStorage.getItem('refresh_token');
+        const currentUser = authAPI.getCurrentUser();
+        if (isAccessTokenFresh()) {
+            if (currentUser) {
+                return currentUser;
+            }
+
+            return authAPI.refreshCurrentUser();
+        }
+
         if (!refreshToken) {
             clearStoredAuth();
             throw new Error('No refresh token available');
         }
 
         const refreshedSession = await refreshAuthSession();
-        return refreshedSession.user ?? authAPI.getCurrentUser();
+        return refreshedSession.user ?? currentUser;
     },
     consumeAuthCallbackFromUrl,
     isAuthenticated: () => {
@@ -4529,7 +4572,7 @@ export const usersAPI = {
         const response = await apiClient.post('/users/me/profile-image', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
-        setCachedAvatarExt(userId, extension);
+        setCachedAvatarEntry(userId, { ext: extension, missingAt: null });
         return response.data?.profileImageUrl || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
     },
 

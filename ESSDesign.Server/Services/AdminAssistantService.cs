@@ -1800,7 +1800,7 @@ Rules for using this data:
             var startDate = string.IsNullOrWhiteSpace(dateStr) ? today : DateOnly.TryParse(dateStr, out var parsed) ? parsed : today;
 
             var requestRows = await GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+                $"{MaterialRequestsTable}?select=id,builder_name,project_name,scheduled_date,scheduled_hour,scheduled_minute,scheduled_truck_label,delivery_status,archived_at,schedule_removed_at&order=submitted_at.desc&limit=1000", ct);
 
             var dates = Enumerable.Range(0, days).Select(i => startDate.AddDays(i).ToString("yyyy-MM-dd")).ToHashSet();
 
@@ -1851,7 +1851,7 @@ Rules for using this data:
         {
             var requestId = TryGetString(args, "request_id") ?? string.Empty;
             var requestRows = await GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+                $"{MaterialRequestsTable}?select=*&id=eq.{Uri.EscapeDataString(requestId)}&limit=1", ct);
 
             var request = requestRows.FirstOrDefault(r => string.Equals(TryGetString(r, "id"), requestId, StringComparison.OrdinalIgnoreCase));
             if (request.ValueKind == JsonValueKind.Undefined)
@@ -1890,7 +1890,7 @@ Rules for using this data:
             var scheduledOnly = args.TryGetProperty("scheduled_only", out var soProp) && soProp.ValueKind == JsonValueKind.True;
 
             var requestRows = await GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+                $"{MaterialRequestsTable}?select=id,builder_name,project_name,scheduled_date,scheduled_hour,scheduled_minute,scheduled_truck_label,delivery_status,archived_at,schedule_removed_at&order=submitted_at.desc&limit=1000", ct);
 
             var active = requestRows
                 .Where(r => string.IsNullOrWhiteSpace(TryGetStringAny(r, "archivedAt", "archived_at")))
@@ -2089,15 +2089,15 @@ Rules for using this data:
         private async Task<string> Tool_GetAppStats(CancellationToken ct)
         {
             var employeesTask = GetRestRowsAsync<JsonElement>(
-                "ess_rostering_employees?select=id,verified_at&limit=5000", ct);
+                "ess_rostering_employees?select=id,verified_at&limit=1000", ct);
             var userNamesTask = GetRestRowsAsync<JsonElement>(
                 "user_names?select=id&limit=1000", ct);
             var foldersTask = GetRestRowsAsync<JsonElement>(
-                "folders?select=id&limit=5000", ct);
+                "folders?select=id&limit=1000", ct);
             var documentsTask = GetRestRowsAsync<JsonElement>(
-                "design_documents?select=id,updated_at&limit=5000", ct);
+                "design_documents?select=id,updated_at&limit=1000", ct);
             var requestsTask = GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=id,archived_at&limit=5000", ct);
+                $"{MaterialRequestsTable}?select=id,archived_at&limit=1000", ct);
             var projectsTask = ReadStorageJsonAsync(SafetyBucket, SafetyProjectsPath, ct);
 
             await Task.WhenAll(employeesTask, userNamesTask, foldersTask, documentsTask, requestsTask, projectsTask);
@@ -2144,7 +2144,7 @@ Rules for using this data:
             var jobsitesTask = FetchJobsiteDirectoryAsync(ct);
             var (folders, documents) = await FetchDesignDataAsync(ct);
             var requestRows = await GetRestRowsAsync<JsonElement>(
-                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=5000", ct);
+                $"{MaterialRequestsTable}?select=*&order=submitted_at.desc&limit=1000", ct);
             var jobsites = await jobsitesTask;
 
             var site = jobsites.FirstOrDefault(j => j.Name.Equals(siteName, StringComparison.OrdinalIgnoreCase))
@@ -2461,9 +2461,9 @@ Rules for using this data:
         private async Task<(List<JsonElement> folders, List<JsonElement> documents)> FetchDesignDataAsync(CancellationToken ct)
         {
             var foldersTask = GetRestRowsAsync<JsonElement>(
-                "folders?select=id,name,parent_folder_id,user_id,total_file_size,created_at,updated_at&limit=5000", ct);
+                "folders?select=id,name,parent_folder_id,user_id,total_file_size,created_at,updated_at&limit=1000", ct);
             var documentsTask = GetRestRowsAsync<JsonElement>(
-                "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=5000",
+                "design_documents?select=id,folder_id,revision_number,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=1000",
                 ct);
             await Task.WhenAll(foldersTask, documentsTask);
             return (foldersTask.Result, documentsTask.Result);

@@ -538,21 +538,6 @@ const normalizeAvatarSource = (value) => {
 };
 
 const buildAvatarCandidates = (user) => {
-    const storageIds = [
-        user?.employeeId,
-        user?.EmployeeId,
-        user?.employee_id,
-        user?.linkedAuthUserId,
-        user?.linked_auth_user_id,
-        user?.LinkedAuthUserId,
-        user?.id,
-        user?.Id,
-        user?.userId,
-        user?.user_id,
-        user?.sub,
-        user?.appUserId,
-        user?.app_user_id
-    ].filter(Boolean);
     const rawValues = [
         user?.resolvedAvatarUrl,
         user?.resolved_avatar_url,
@@ -582,14 +567,7 @@ const buildAvatarCandidates = (user) => {
         user?.EmployeeAvatarPath
     ].filter(Boolean);
 
-    const storageCandidates = storageIds.flatMap((id) => ['jpg', 'jpeg', 'png', 'webp', 'heic']
-        .flatMap((ext) => [
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}/avatar.${ext}`,
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}/profile.${ext}`,
-            `${SUPABASE_BASE_URL}/storage/v1/object/public/profile-images/${id}.${ext}`
-        ]));
-
-    return [...new Set([...rawValues.flatMap(normalizeAvatarSource), ...storageCandidates])];
+    return [...new Set(rawValues.flatMap(normalizeAvatarSource))];
 };
 
 const isAvatarDebugEnabled = () => {
