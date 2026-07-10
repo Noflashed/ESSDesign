@@ -1796,7 +1796,52 @@ namespace ESSDesign.Server.Services
                     $"Failed to upload profile image. Status: {(int)response.StatusCode}. Body: {errorBody}");
             }
 
-            return $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/public/{_profileImagesBucketName}/{objectPath}";
+            var publicUrl = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/public/{_profileImagesBucketName}/{objectPath}";
+            try
+            {
+                await PersistProfileImageMetadataAsync(safeUserId, publicUrl, objectPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Profile image uploaded but canonical metadata could not be persisted for {UserId}", safeUserId);
+            }
+            return publicUrl;
+        }
+
+        private async Task PersistProfileImageMetadataAsync(string userId, string publicUrl, string objectPath)
+        {
+            var client = _httpClientFactory.CreateClient();
+            var endpoint = $"{_supabaseUrl.TrimEnd('/')}/auth/v1/admin/users/{Uri.EscapeDataString(userId)}";
+            using var getRequest = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            getRequest.Headers.Add("apikey", _supabaseKey);
+            getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            using var getResponse = await client.SendAsync(getRequest);
+            getResponse.EnsureSuccessStatusCode();
+
+            var metadata = new Dictionary<string, object?>();
+            using (var document = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync()))
+            {
+                if (document.RootElement.TryGetProperty("user_metadata", out var currentMetadata)
+                    && currentMetadata.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in currentMetadata.EnumerateObject())
+                    {
+                        metadata[property.Name] = property.Value.Clone();
+                    }
+                }
+            }
+
+            metadata["avatar_url"] = publicUrl;
+            metadata["profile_image_url"] = publicUrl;
+            metadata["avatar_path"] = objectPath;
+            metadata["avatar_updated_at"] = DateTime.UtcNow.ToString("O");
+
+            using var updateRequest = new HttpRequestMessage(HttpMethod.Put, endpoint);
+            updateRequest.Headers.Add("apikey", _supabaseKey);
+            updateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            updateRequest.Content = JsonContent.Create(new { user_metadata = metadata });
+            using var updateResponse = await client.SendAsync(updateRequest);
+            updateResponse.EnsureSuccessStatusCode();
         }
 
         private async Task DeleteFileAsync(string path)
