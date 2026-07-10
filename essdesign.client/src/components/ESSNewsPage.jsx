@@ -19,12 +19,12 @@ function emptyComposer() {
     };
 }
 
-function optimizedNewsImageUrl(url, quality = 72) {
+function optimizedNewsImageUrl(url, quality = 72, width = 360) {
     if (!url || !url.includes('/storage/v1/object/public/')) {
         return url;
     }
     const separator = url.includes('?') ? '&' : '?';
-    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}quality=${quality}`;
+    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}width=${width}&quality=${quality}`;
 }
 
 function newsThumbnailUrl(item) {
