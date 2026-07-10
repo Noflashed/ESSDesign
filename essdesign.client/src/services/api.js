@@ -4104,7 +4104,11 @@ export const safetyFilesAPI = {
         await uploadStorageObject(objectPath, file, 'application/pdf');
     },
 
-    getSignedModuleFileUrl: async (path) => signedStorageUrl(path, 3600)
+    getSignedModuleFileUrl: async (path) => signedStorageUrl(path, 3600),
+
+    deleteModuleFile: async (path) => {
+        await deleteStorageObject(path);
+    }
 };
 
 const handoverPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'handover-certificates')}`;
@@ -4167,7 +4171,26 @@ export const handoverCertificatesAPI = {
         };
     },
 
-    getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14)
+    getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14),
+
+    deleteForm: async (builderId, projectId, formId) => {
+        const existing = await handoverCertificatesAPI.getForm(builderId, projectId, formId);
+        const indexRaw = await readStorageJson(handoverIndexPath(builderId, projectId), { force: true });
+        const nextIndex = {
+            forms: parseHandoverIndex(indexRaw).forms.filter(item => item.id !== formId),
+            updatedAt: nowIso()
+        };
+
+        await uploadStorageObject(handoverIndexPath(builderId, projectId), JSON.stringify(nextIndex), 'application/json');
+
+        const cleanupPaths = [
+            handoverFormPath(builderId, projectId, formId),
+            existing?.pdfPath || handoverPdfPath(builderId, projectId, formId),
+            ...((existing?.photoSlots || []).map(item => item.path).filter(Boolean))
+        ];
+
+        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
+    }
 };
 
 const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
@@ -4342,7 +4365,26 @@ export const dayLabourVariationsAPI = {
     },
 
     getPdfUrl: async (form) => signedDayLabourVariationUrl(form.pdfPath, 60 * 60 * 24 * 14),
-    getPhotoUrl: async (path) => signedDayLabourVariationUrl(path, 60 * 60 * 24 * 14)
+    getPhotoUrl: async (path) => signedDayLabourVariationUrl(path, 60 * 60 * 24 * 14),
+
+    deleteForm: async (builderId, projectId, formId) => {
+        const existing = await dayLabourVariationsAPI.getForm(builderId, projectId, formId);
+        const indexRaw = await readDayLabourVariationJson(dayLabourVariationIndexPath(builderId, projectId)).catch(() => null);
+        const nextIndex = {
+            forms: parseDayLabourVariationIndex(indexRaw).forms.filter(item => item.id !== formId),
+            updatedAt: nowIso()
+        };
+
+        await uploadStorageObject(dayLabourVariationIndexPath(builderId, projectId), JSON.stringify(nextIndex), 'application/json');
+
+        const cleanupPaths = [
+            dayLabourVariationFormPath(builderId, projectId, formId),
+            existing?.pdfPath || dayLabourVariationPdfPath(builderId, projectId, formId),
+            ...((existing?.photoSlots || []).map(item => item.path).filter(Boolean))
+        ];
+
+        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
+    }
 };
 
 function parseScaffIndex(raw) {

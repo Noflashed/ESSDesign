@@ -17824,7 +17824,67 @@ button.stat-card {
 
 .project-data-row-actions {
     justify-self: end;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
     color: #0f172a;
+}
+
+.project-data-row-actions:hover,
+.project-data-row-actions:focus-visible {
+    background: #eef2f7;
+    outline: none;
+}
+
+.project-data-context-menu {
+    position: fixed;
+    z-index: 320;
+    width: 204px;
+    padding: 6px;
+    border: 1px solid #d9e1ec;
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.18);
+}
+
+.project-data-context-menu button {
+    width: 100%;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #1f2937;
+    cursor: pointer;
+    padding: 0 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.project-data-context-menu button:hover,
+.project-data-context-menu button:focus-visible {
+    background: #f8fafc;
+    outline: none;
+}
+
+.project-data-context-menu button.danger {
+    color: #b91c1c;
+}
+
+.project-data-context-menu button.danger:hover,
+.project-data-context-menu button.danger:focus-visible {
+    background: #fff1f2;
+}
+
+.project-data-context-menu button:disabled {
+    cursor: wait;
+    opacity: 0.62;
 }
 
 .project-data-empty-state,

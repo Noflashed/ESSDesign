@@ -12,6 +12,7 @@ import {
     MoreVertical,
     Shield,
     Tag,
+    Trash2,
     Users,
     X
 } from 'lucide-react';
@@ -503,6 +504,8 @@ export default function ESSSafetyPage() {
     const [previewPdfUrl, setPreviewPdfUrl] = useState('');
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState('');
+    const [contextMenu, setContextMenu] = useState(null);
+    const [deletingDocumentId, setDeletingDocumentId] = useState('');
     const [error, setError] = useState('');
     const builderDropdownRef = useRef(null);
     const projectDropdownRef = useRef(null);
@@ -561,9 +564,12 @@ export default function ESSSafetyPage() {
     }, [builders]);
 
     useEffect(() => {
-        if (!builderDropdownOpen && !projectDropdownOpen && !kindDropdownOpen && !columnFilterMenu) return undefined;
+        if (!builderDropdownOpen && !projectDropdownOpen && !kindDropdownOpen && !columnFilterMenu && !contextMenu) return undefined;
 
         const handlePointerDown = (event) => {
+            if (event.target.closest?.('.project-data-context-menu') || event.target.closest?.('.project-data-row-actions')) {
+                return;
+            }
             if (!builderDropdownRef.current?.contains(event.target)) {
                 setBuilderDropdownOpen(false);
             }
@@ -576,6 +582,7 @@ export default function ESSSafetyPage() {
             if (!event.target.closest?.('.project-data-column-filter')) {
                 setColumnFilterMenu('');
             }
+            setContextMenu(null);
         };
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
@@ -583,6 +590,7 @@ export default function ESSSafetyPage() {
                 setProjectDropdownOpen(false);
                 setKindDropdownOpen(false);
                 setColumnFilterMenu('');
+                setContextMenu(null);
             }
         };
 
@@ -592,7 +600,7 @@ export default function ESSSafetyPage() {
             document.removeEventListener('pointerdown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [builderDropdownOpen, projectDropdownOpen, kindDropdownOpen, columnFilterMenu]);
+    }, [builderDropdownOpen, projectDropdownOpen, kindDropdownOpen, columnFilterMenu, contextMenu]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
@@ -699,6 +707,11 @@ export default function ESSSafetyPage() {
         [documents]
     );
 
+    const contextMenuDocument = useMemo(
+        () => documents.find(document => document.id === contextMenu?.documentId) || null,
+        [documents, contextMenu]
+    );
+
     const toggleColumnFilterMenu = (key) => {
         setColumnFilterMenu(current => current === key ? '' : key);
     };
@@ -706,6 +719,7 @@ export default function ESSSafetyPage() {
     const openDocumentPreview = (documentId) => {
         setSelectedDocumentId(documentId);
         setPreviewOpen(true);
+        setContextMenu(null);
     };
 
     const closeDocumentPreview = () => {
@@ -817,6 +831,55 @@ export default function ESSSafetyPage() {
         event.preventDefault();
         event.stopPropagation();
         downloadDocumentPdf(document);
+    };
+
+    const openRowMenu = (event, document) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = event.currentTarget?.getBoundingClientRect?.();
+        const fallbackX = rect ? rect.right - 190 : window.innerWidth - 220;
+        const fallbackY = rect ? rect.bottom + 6 : window.innerHeight / 2;
+        const clientX = Number.isFinite(event.clientX) && event.clientX > 0 ? event.clientX : fallbackX;
+        const clientY = Number.isFinite(event.clientY) && event.clientY > 0 ? event.clientY : fallbackY;
+        setSelectedDocumentId(document.id);
+        setContextMenu({
+            documentId: document.id,
+            x: Math.max(8, Math.min(clientX, window.innerWidth - 220)),
+            y: Math.max(8, Math.min(clientY, window.innerHeight - 96))
+        });
+    };
+
+    const deleteProjectDataDocument = async (doc = contextMenuDocument) => {
+        if (!doc || !selectedBuilder || !selectedProject || deletingDocumentId) return;
+        const confirmed = window.confirm(`Delete "${doc.name}" from Project data? This cannot be undone.`);
+        if (!confirmed) {
+            setContextMenu(null);
+            return;
+        }
+
+        setDeletingDocumentId(doc.id);
+        setError('');
+        try {
+            if (doc.kind === 'scaff-tags') {
+                await scaffTagsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+            } else if (doc.kind === 'handover-certificates') {
+                await handoverCertificatesAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+            } else if (doc.kind === 'day-labour-variations') {
+                await dayLabourVariationsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+            } else {
+                await safetyFilesAPI.deleteModuleFile(doc.raw.path);
+            }
+
+            if (selectedDocumentId === doc.id) {
+                closeDocumentPreview();
+            }
+            setContextMenu(null);
+            await loadDocuments();
+        } catch (err) {
+            setError(err.message || 'Failed to delete document');
+        } finally {
+            setDeletingDocumentId('');
+        }
     };
 
     if (loading) {
@@ -947,6 +1010,7 @@ export default function ESSSafetyPage() {
                                             className={`project-data-table-row${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
                                             onClick={() => openDocumentPreview(document.id)}
                                             onDoubleClick={() => openSelectedDocument(document)}
+                                            onContextMenu={(event) => openRowMenu(event, document)}
                                         >
                                             <span className="project-data-checkbox" aria-hidden="true" />
                                             <span className="project-data-doc-name">
@@ -971,13 +1035,44 @@ export default function ESSSafetyPage() {
                                             <span><StatusChip status={document.status} /></span>
                                             <span>{formatDate(document.uploadedAt)}</span>
                                             <span>{document.uploadedBy}</span>
-                                            <span className="project-data-row-actions">
+                                            <span
+                                                className="project-data-row-actions"
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-label={`Open actions for ${document.name}`}
+                                                title="Actions"
+                                                onClick={(event) => openRowMenu(event, document)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                                                    openRowMenu(event, document);
+                                                }}
+                                            >
                                                 <MoreVertical size={17} />
                                             </span>
                                         </button>
                                     ))}
                                 </div>
                             )}
+
+                            {contextMenu && contextMenuDocument ? (
+                                <div
+                                    className="project-data-context-menu"
+                                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                                    role="menu"
+                                    aria-label={`Actions for ${contextMenuDocument.name}`}
+                                >
+                                    <button
+                                        type="button"
+                                        className="danger"
+                                        disabled={deletingDocumentId === contextMenuDocument.id}
+                                        onClick={() => deleteProjectDataDocument(contextMenuDocument)}
+                                        role="menuitem"
+                                    >
+                                        <Trash2 size={15} />
+                                        {deletingDocumentId === contextMenuDocument.id ? 'Deleting...' : 'Delete PDF'}
+                                    </button>
+                                </div>
+                            ) : null}
 
                         </div>
                     </div>
