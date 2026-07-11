@@ -5,12 +5,20 @@ import AdminAssistantChat from './AdminAssistantChat';
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const LANDING_BACKDROP_CACHE_KEY = 'ess-landing-backdrop-url';
 
+function optimizedBackdropUrl(url) {
+    if (!url || !url.includes('/storage/v1/object/public/')) {
+        return url || null;
+    }
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')}${separator}width=1920&quality=78`;
+}
+
 function readCachedBackdropUrl() {
     if (typeof window === 'undefined') {
         return null;
     }
     try {
-        return window.localStorage.getItem(LANDING_BACKDROP_CACHE_KEY) || null;
+        return optimizedBackdropUrl(window.localStorage.getItem(LANDING_BACKDROP_CACHE_KEY));
     } catch {
         return null;
     }
@@ -42,8 +50,9 @@ export default function WebLandingPage({
                 const imageItems = items.filter(item => item.mediaType === 'image' && item.mediaUrl);
                 if (imageItems.length === 0) return;
                 const pick = imageItems[Math.floor(Math.random() * imageItems.length)];
-                setBackdropUrl(pick.mediaUrl);
-                cacheBackdropUrl(pick.mediaUrl);
+                const optimizedUrl = optimizedBackdropUrl(pick.mediaUrl);
+                setBackdropUrl(optimizedUrl);
+                cacheBackdropUrl(optimizedUrl);
             })
             .catch(() => { /* fall back to gradient background */ });
     }, []);

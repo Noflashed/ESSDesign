@@ -4765,7 +4765,11 @@ export const essNewsAPI = {
         const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${ESS_NEWS_BUCKET}/${path}`, {
             method: 'POST',
-            headers: storageHeaders(true),
+            headers: {
+                ...storageHeaders(),
+                'Content-Type': file.type || 'application/octet-stream',
+                'Cache-Control': 'max-age=31536000, immutable',
+            },
             body: file
         });
         if (!response.ok) {
