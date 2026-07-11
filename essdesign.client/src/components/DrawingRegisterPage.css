@@ -1,0 +1,33 @@
+.drawing-register-page { min-width: 0; height: 100%; overflow: auto; padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
+.drawing-register-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.drawing-register-heading h1 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: 0; }
+.drawing-register-heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
+.register-icon-button, .register-row-menu { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); cursor: pointer; }
+.drawing-register-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.register-search { width: min(360px, 34vw); height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); }
+.register-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; }
+.register-filter { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); font-size: 13px; }
+.register-filter select { border: 0; outline: 0; background: transparent; color: var(--text-primary); }
+.register-toolbar-spacer { flex: 1; }
+.register-secondary-button, .register-primary-button { height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.register-primary-button { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
+.drawing-register-add { margin-bottom: 18px; padding: 16px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
+.register-add-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.register-add-grid { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)) auto auto; align-items: end; gap: 10px; }
+.register-add-grid label { min-width: 0; }
+.register-add-grid label span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
+.register-add-grid input { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
+.drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
+.drawing-register-table { width: 100%; min-width: 1240px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
+.drawing-register-table th:nth-child(2) { width: 180px; } .drawing-register-table th:nth-child(3) { width: 250px; } .drawing-register-table th:nth-child(4) { width: 270px; } .drawing-register-table th:nth-child(5) { width: 170px; } .drawing-register-table th:nth-child(6) { width: 125px; } .drawing-register-table th:nth-child(7) { width: 105px; } .drawing-register-table th:nth-child(8) { width: 150px; }
+.drawing-register-table tbody tr:hover { background: var(--hover-bg); }
+.drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
+.row-number { width: 46px; text-align: center !important; color: var(--text-secondary); } .row-actions { width: 48px; text-align: center !important; }
+.register-row-menu { width: 30px; height: 30px; border-color: transparent; background: transparent; } .register-row-menu:hover { color: #d93025; background: rgba(217,48,37,.08); }
+.register-status { display: inline-flex; align-items: center; min-height: 28px; padding: 0 11px; border-radius: 14px; font-size: 11px; font-weight: 750; }
+.register-status.construction { background: #e2f4e7; color: #188038; } .register-status.preliminary { background: #fff1d6; color: #d97706; } .register-status.concept { background: #e4efff; color: #0b57d0; } .register-status.as-built { background: #fde4e4; color: #d93025; }
+.register-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); }
+@media (max-width: 1100px) { .drawing-register-toolbar { flex-wrap: wrap; } .register-toolbar-spacer { display: none; } .register-add-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); } }
+@media (max-width: 700px) { .drawing-register-page { padding: 16px; } .register-search { width: 100%; } .register-secondary-button, .register-primary-button { flex: 1; } .register-add-grid { grid-template-columns: 1fr; } }

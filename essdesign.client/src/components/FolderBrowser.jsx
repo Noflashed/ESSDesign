@@ -600,7 +600,7 @@ function BuilderFolderLogo({ logoUrl }) {
     );
 }
 
-function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false, onOpenDrawingRegister }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(null);
     const [folders, setFolders] = useState([]);
@@ -1629,6 +1629,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         </div>
                                     )}
                                 </label>
+                                <button type="button" className="toolbar-btn drawing-register-launch" onClick={onOpenDrawingRegister}>
+                                    <FileTextIcon size={16} /> Drawing Register
+                                </button>
                                 <div className="document-toolbar-spacer"></div>
                                 {canManage && (
                                     <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>

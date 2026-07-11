@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import FolderBrowser from './components/FolderBrowser';
+import DrawingRegisterPage from './components/DrawingRegisterPage';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import RegistrationSuccess from './components/RegistrationSuccess';
@@ -190,10 +191,11 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'ess-news']);
-const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'profile', 'settings']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news']);
+const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'profile', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
+    if (itemKey === 'design') return currentPage === 'design' || currentPage === 'drawing-register';
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
@@ -1603,6 +1605,10 @@ function App() {
             return <ESSNewsPage />;
         }
 
+        if (currentPage === 'drawing-register') {
+            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
+        }
+
         return (
             <div className="module-page">
                 <FolderBrowser
@@ -1612,6 +1618,7 @@ function App() {
                     onViewModeChange={handleViewModeChange}
                     onRefreshNeeded={triggerRefresh}
                     canManage={canManageEssDesign}
+                    onOpenDrawingRegister={() => applyPageState('drawing-register', { builder: null, project: null }, { leadingHand: null }, { planDate: null })}
                 />
             </div>
         );
