@@ -20,7 +20,12 @@
 .register-modal-grid label span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
 .register-modal-grid input, .register-modal-grid select { width: 100%; height: 42px; padding: 0 11px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
 .register-modal-grid input:focus, .register-modal-grid select:focus { outline: 2px solid rgba(26, 115, 232, .16); border-color: var(--primary-color); }
+.register-modal-grid input:disabled, .register-modal-grid select:disabled { opacity: .65; cursor: not-allowed; }
+.register-generated-number { font-weight: 700; color: var(--primary-color) !important; background: var(--bg-secondary) !important; }
+.register-field-hint, .register-field-error { display: block; margin-top: 6px; color: var(--text-secondary); font-size: 11px; }
+.register-field-error { color: #d93025; }
 .register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+.register-modal-actions .register-primary-button:disabled { opacity: .55; cursor: not-allowed; }
 .drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
 .drawing-register-table { width: 100%; min-width: 1240px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
