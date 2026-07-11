@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Download, FileSpreadsheet, Filter, MoreVertical, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, FileSpreadsheet, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import './DrawingRegisterPage.css';
 
@@ -56,7 +56,6 @@ export default function DrawingRegisterPage({ onBack }) {
     const [draft, setDraft] = useState(EMPTY_ROW);
     const [editingId, setEditingId] = useState(null);
     const [openMenuId, setOpenMenuId] = useState(null);
-    const importRef = useRef(null);
 
     useEffect(() => {
         const load = async () => {
@@ -110,20 +109,6 @@ export default function DrawingRegisterPage({ onBack }) {
         setOpenMenuId(null);
     };
 
-    const importWorkbook = async event => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        setRows(await readWorkbook(file));
-        event.target.value = '';
-    };
-
-    const exportWorkbook = () => {
-        const data = rows.map(row => Object.fromEntries(FIELDS.map(([key, label]) => [label, row[key]])));
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data), 'Drawing Register');
-        XLSX.writeFile(workbook, 'ESS Drawing Register.xlsx');
-    };
-
     return (
         <main className="drawing-register-page">
             <header className="drawing-register-heading">
@@ -135,21 +120,19 @@ export default function DrawingRegisterPage({ onBack }) {
                 <label className="register-search"><Search size={18} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drawings..." /></label>
                 <label className="register-filter"><Filter size={17} /><span>Filter</span><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">All uses</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label>
                 <span className="register-toolbar-spacer" />
-                <input ref={importRef} hidden type="file" accept=".xlsx,.xls" onChange={importWorkbook} />
-                <button type="button" className="register-secondary-button" onClick={() => importRef.current?.click()}><Upload size={17} /> Import XLSX</button>
-                <button type="button" className="register-secondary-button" onClick={exportWorkbook}><Download size={17} /> Export XLSX</button>
                 <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>
             </div>
 
             {showAddRow && (
-                <form className="drawing-register-add" onSubmit={addRow}>
-                    <div className="register-add-title"><strong>Add new drawing</strong><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close"><X size={18} /></button></div>
-                    <div className="register-add-grid">
-                        {FIELDS.map(([key, label]) => <label key={key}><span>{label}</span>{key === 'designUse' ? <select value={draft[key]} onChange={event => updateDraft(key, event.target.value)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select> : <input type={key === 'dateIssued' ? 'date' : 'text'} value={draft[key]} onChange={event => updateDraft(key, event.target.value)} placeholder={`Enter ${label.toLowerCase()}`} />}</label>)}
-                        <button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)}>Cancel</button>
-                        <button type="submit" className="register-primary-button">Save</button>
-                    </div>
-                </form>
+                <div className="register-modal-backdrop" role="presentation" onMouseDown={() => setShowAddRow(false)}>
+                    <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title">
+                        <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close"><X size={18} /></button></div>
+                        <div className="register-modal-grid">
+                            {FIELDS.map(([key, label]) => <label key={key}><span>{label}</span>{key === 'designUse' ? <select value={draft[key]} onChange={event => updateDraft(key, event.target.value)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select> : <input type={key === 'dateIssued' ? 'date' : 'text'} value={draft[key]} onChange={event => updateDraft(key, event.target.value)} placeholder={`Enter ${label.toLowerCase()}`} autoFocus={key === 'client'} />}</label>)}
+                        </div>
+                        <div className="register-modal-actions"><button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)}>Cancel</button><button type="submit" className="register-primary-button">Add drawing</button></div>
+                    </form>
+                </div>
             )}
 
             <section className="drawing-register-table-wrap">

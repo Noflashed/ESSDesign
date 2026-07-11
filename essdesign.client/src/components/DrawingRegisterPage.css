@@ -9,14 +9,18 @@
 .register-filter { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); font-size: 13px; }
 .register-filter select { border: 0; outline: 0; background: transparent; color: var(--text-primary); }
 .register-toolbar-spacer { flex: 1; }
-.register-secondary-button, .register-primary-button { height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.register-secondary-button, .register-primary-button { height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .register-primary-button { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
-.drawing-register-add { margin-bottom: 18px; padding: 16px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
-.register-add-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.register-add-grid { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)) auto auto; align-items: end; gap: 10px; }
-.register-add-grid label { min-width: 0; }
-.register-add-grid label span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
-.register-add-grid input, .register-add-grid select { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
+.register-modal-backdrop { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, .48); }
+.drawing-register-modal { width: min(720px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 22px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); box-shadow: 0 24px 70px rgba(15, 23, 42, .28); }
+.register-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.register-modal-header h2 { margin: 0; font-size: 19px; letter-spacing: 0; } .register-modal-header p { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
+.register-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.register-modal-grid label { min-width: 0; } .register-modal-grid label:nth-child(3) { grid-column: 1 / -1; }
+.register-modal-grid label span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
+.register-modal-grid input, .register-modal-grid select { width: 100%; height: 42px; padding: 0 11px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
+.register-modal-grid input:focus, .register-modal-grid select:focus { outline: 2px solid rgba(26, 115, 232, .16); border-color: var(--primary-color); }
+.register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
 .drawing-register-table { width: 100%; min-width: 1240px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -24,7 +28,9 @@
 .drawing-register-table th:nth-child(1) { width: 180px; } .drawing-register-table th:nth-child(2) { width: 250px; } .drawing-register-table th:nth-child(3) { width: 270px; } .drawing-register-table th:nth-child(4) { width: 170px; } .drawing-register-table th:nth-child(5) { width: 125px; } .drawing-register-table th:nth-child(6) { width: 105px; } .drawing-register-table th:nth-child(7) { width: 150px; }
 .drawing-register-table tbody tr:hover { background: var(--hover-bg); }
 .drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
-.row-actions { width: 48px; text-align: center !important; overflow: visible !important; }
+.drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky; right: 0; z-index: 3; width: 48px; padding: 0 8px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color); }
+.drawing-register-table th.row-actions { z-index: 5; background: var(--bg-secondary); }
+.drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
 .register-row-actions-wrap { position: relative; display: inline-flex; }
 .register-row-menu { width: 30px; height: 30px; border-color: transparent; background: transparent; } .register-row-menu:hover, .register-row-menu[aria-expanded="true"] { color: var(--primary-color); background: var(--hover-bg); }
 .register-context-menu { position: absolute; z-index: 8; top: 32px; right: 0; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
@@ -35,5 +41,5 @@
 .register-status-select.construction { background: #e2f4e7; color: #188038; } .register-status-select.preliminary { background: #fff1d6; color: #d97706; } .register-status-select.concept { background: #e4efff; color: #0b57d0; } .register-status-select.as-built { background: #fde4e4; color: #d93025; }
 .register-status.construction { background: #e2f4e7; color: #188038; } .register-status.preliminary { background: #fff1d6; color: #d97706; } .register-status.concept { background: #e4efff; color: #0b57d0; } .register-status.as-built { background: #fde4e4; color: #d93025; }
 .register-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); }
-@media (max-width: 1100px) { .drawing-register-toolbar { flex-wrap: wrap; } .register-toolbar-spacer { display: none; } .register-add-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); } }
-@media (max-width: 700px) { .drawing-register-page { padding: 16px; } .register-search { width: 100%; } .register-secondary-button, .register-primary-button { flex: 1; } .register-add-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .drawing-register-toolbar { flex-wrap: wrap; } .register-toolbar-spacer { display: none; } }
+@media (max-width: 700px) { .drawing-register-page { padding: 16px; } .register-search { width: 100%; } .register-modal-backdrop { padding: 12px; } .drawing-register-modal { padding: 18px; } .register-modal-grid { grid-template-columns: 1fr; } .register-modal-grid label:nth-child(3) { grid-column: auto; } }
