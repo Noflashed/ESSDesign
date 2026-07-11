@@ -15,6 +15,7 @@ const FIELDS = [
     ['designUse', 'DESIGN USE'],
 ];
 const EMPTY_ROW = Object.fromEntries(FIELDS.map(([key]) => [key, '']));
+const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'CONCEPT ONLY', 'AS-BUILT'];
 
 const cleanStatus = value => String(value || '').trim().toUpperCase();
 const statusClass = value => {
@@ -23,6 +24,11 @@ const statusClass = value => {
     if (status.includes('PRELIMINARY')) return 'preliminary';
     if (status.includes('CONCEPT')) return 'concept';
     return 'construction';
+};
+
+const getDrawingSequence = drawingNo => {
+    const match = String(drawingNo || '').trim().match(/(\d+)$/);
+    return match ? Number(match[1]) : Number.NEGATIVE_INFINITY;
 };
 
 const readWorkbook = async file => {
@@ -49,6 +55,7 @@ export default function DrawingRegisterPage({ onBack }) {
     const [showAddRow, setShowAddRow] = useState(false);
     const [draft, setDraft] = useState(EMPTY_ROW);
     const [editingId, setEditingId] = useState(null);
+    const [openMenuId, setOpenMenuId] = useState(null);
     const importRef = useRef(null);
 
     useEffect(() => {
@@ -69,11 +76,22 @@ export default function DrawingRegisterPage({ onBack }) {
         if (!loading) localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
     }, [rows, loading]);
 
+    useEffect(() => {
+        const closeMenu = () => setOpenMenuId(null);
+        document.addEventListener('click', closeMenu);
+        return () => document.removeEventListener('click', closeMenu);
+    }, []);
+
     const statuses = useMemo(() => [...new Set(rows.map(row => cleanStatus(row.designUse)).filter(Boolean))].sort(), [rows]);
     const filteredRows = useMemo(() => {
         const needle = query.trim().toLowerCase();
-        return rows.filter(row => (!statusFilter || cleanStatus(row.designUse) === statusFilter)
-            && (!needle || FIELDS.some(([key]) => String(row[key]).toLowerCase().includes(needle))));
+        return rows
+            .map((row, sourceIndex) => ({ row, sourceIndex }))
+            .filter(({ row }) => (!statusFilter || cleanStatus(row.designUse) === statusFilter)
+                && (!needle || FIELDS.some(([key]) => String(row[key]).toLowerCase().includes(needle))))
+            .sort((left, right) => getDrawingSequence(right.row.drawingNo) - getDrawingSequence(left.row.drawingNo)
+                || left.sourceIndex - right.sourceIndex)
+            .map(({ row }) => row);
     }, [rows, query, statusFilter]);
 
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
@@ -86,6 +104,11 @@ export default function DrawingRegisterPage({ onBack }) {
     };
     const updateRow = (id, key, value) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
     const deleteRow = id => setRows(current => current.filter(row => row.id !== id));
+    const openAddRow = () => {
+        setDraft(EMPTY_ROW);
+        setShowAddRow(true);
+        setOpenMenuId(null);
+    };
 
     const importWorkbook = async event => {
         const file = event.target.files?.[0];
@@ -115,14 +138,14 @@ export default function DrawingRegisterPage({ onBack }) {
                 <input ref={importRef} hidden type="file" accept=".xlsx,.xls" onChange={importWorkbook} />
                 <button type="button" className="register-secondary-button" onClick={() => importRef.current?.click()}><Upload size={17} /> Import XLSX</button>
                 <button type="button" className="register-secondary-button" onClick={exportWorkbook}><Download size={17} /> Export XLSX</button>
-                <button type="button" className="register-primary-button" onClick={() => setShowAddRow(true)}><Plus size={18} /> Add Row</button>
+                <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>
             </div>
 
             {showAddRow && (
                 <form className="drawing-register-add" onSubmit={addRow}>
                     <div className="register-add-title"><strong>Add new drawing</strong><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close"><X size={18} /></button></div>
                     <div className="register-add-grid">
-                        {FIELDS.map(([key, label]) => <label key={key}><span>{label}</span><input type={key === 'dateIssued' ? 'date' : 'text'} value={draft[key]} onChange={event => updateDraft(key, event.target.value)} placeholder={`Enter ${label.toLowerCase()}`} /></label>)}
+                        {FIELDS.map(([key, label]) => <label key={key}><span>{label}</span>{key === 'designUse' ? <select value={draft[key]} onChange={event => updateDraft(key, event.target.value)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select> : <input type={key === 'dateIssued' ? 'date' : 'text'} value={draft[key]} onChange={event => updateDraft(key, event.target.value)} placeholder={`Enter ${label.toLowerCase()}`} />}</label>)}
                         <button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)}>Cancel</button>
                         <button type="submit" className="register-primary-button">Save</button>
                     </div>
@@ -132,13 +155,20 @@ export default function DrawingRegisterPage({ onBack }) {
             <section className="drawing-register-table-wrap">
                 {loading ? <div className="register-empty"><FileSpreadsheet size={28} />Loading drawing register...</div> : (
                     <table className="drawing-register-table">
-                        <thead><tr><th className="row-number">#</th>{FIELDS.map(([, label]) => <th key={label}>{label}</th>)}<th className="row-actions" /></tr></thead>
+                        <thead><tr>{FIELDS.map(([, label]) => <th key={label}>{label}</th>)}<th className="row-actions" /></tr></thead>
                         <tbody>
-                            {filteredRows.map((row, index) => (
+                            {filteredRows.map(row => (
                                 <tr key={row.id}>
-                                    <td className="row-number">{index + 1}</td>
-                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={() => setEditingId(row.id)}>{editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : key === 'designUse' ? <span className={`register-status ${statusClass(row[key])}`}>{row[key] || 'CONSTRUCTION'}</span> : row[key]}</td>)}
-                                    <td className="row-actions"><button type="button" className="register-row-menu" title="Delete row" onClick={() => deleteRow(row.id)}><Trash2 size={16} /></button></td>
+                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' ? undefined : () => setEditingId(row.id)}>{key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
+                                    <td className="row-actions">
+                                        <div className="register-row-actions-wrap">
+                                            <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={17} /></button>
+                                            {openMenuId === row.id && <div className="register-context-menu" onClick={event => event.stopPropagation()}>
+                                                <button type="button" onClick={openAddRow}><Plus size={16} /> Add drawing</button>
+                                                <button type="button" className="danger" onClick={() => { deleteRow(row.id); setOpenMenuId(null); }}><Trash2 size={16} /> Delete drawing</button>
+                                            </div>}
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

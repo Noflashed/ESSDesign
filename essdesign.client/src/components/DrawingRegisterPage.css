@@ -16,17 +16,23 @@
 .register-add-grid { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)) auto auto; align-items: end; gap: 10px; }
 .register-add-grid label { min-width: 0; }
 .register-add-grid label span { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 700; }
-.register-add-grid input { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
+.register-add-grid input, .register-add-grid select { width: 100%; height: 40px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); }
 .drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
 .drawing-register-table { width: 100%; min-width: 1240px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
-.drawing-register-table th:nth-child(2) { width: 180px; } .drawing-register-table th:nth-child(3) { width: 250px; } .drawing-register-table th:nth-child(4) { width: 270px; } .drawing-register-table th:nth-child(5) { width: 170px; } .drawing-register-table th:nth-child(6) { width: 125px; } .drawing-register-table th:nth-child(7) { width: 105px; } .drawing-register-table th:nth-child(8) { width: 150px; }
+.drawing-register-table th:nth-child(1) { width: 180px; } .drawing-register-table th:nth-child(2) { width: 250px; } .drawing-register-table th:nth-child(3) { width: 270px; } .drawing-register-table th:nth-child(4) { width: 170px; } .drawing-register-table th:nth-child(5) { width: 125px; } .drawing-register-table th:nth-child(6) { width: 105px; } .drawing-register-table th:nth-child(7) { width: 150px; }
 .drawing-register-table tbody tr:hover { background: var(--hover-bg); }
 .drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
-.row-number { width: 46px; text-align: center !important; color: var(--text-secondary); } .row-actions { width: 48px; text-align: center !important; }
-.register-row-menu { width: 30px; height: 30px; border-color: transparent; background: transparent; } .register-row-menu:hover { color: #d93025; background: rgba(217,48,37,.08); }
+.row-actions { width: 48px; text-align: center !important; overflow: visible !important; }
+.register-row-actions-wrap { position: relative; display: inline-flex; }
+.register-row-menu { width: 30px; height: 30px; border-color: transparent; background: transparent; } .register-row-menu:hover, .register-row-menu[aria-expanded="true"] { color: var(--primary-color); background: var(--hover-bg); }
+.register-context-menu { position: absolute; z-index: 8; top: 32px; right: 0; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
+.register-context-menu button { width: 100%; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 13px; text-align: left; }
+.register-context-menu button:hover { background: var(--hover-bg); } .register-context-menu button.danger { color: #d93025; }
 .register-status { display: inline-flex; align-items: center; min-height: 28px; padding: 0 11px; border-radius: 14px; font-size: 11px; font-weight: 750; }
+.register-status-select { min-height: 30px; max-width: 100%; padding: 0 28px 0 11px; border: 1px solid transparent; border-radius: 15px; outline: 0; font-size: 11px; font-weight: 750; cursor: pointer; }
+.register-status-select.construction { background: #e2f4e7; color: #188038; } .register-status-select.preliminary { background: #fff1d6; color: #d97706; } .register-status-select.concept { background: #e4efff; color: #0b57d0; } .register-status-select.as-built { background: #fde4e4; color: #d93025; }
 .register-status.construction { background: #e2f4e7; color: #188038; } .register-status.preliminary { background: #fff1d6; color: #d97706; } .register-status.concept { background: #e4efff; color: #0b57d0; } .register-status.as-built { background: #fde4e4; color: #d93025; }
 .register-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); }
 @media (max-width: 1100px) { .drawing-register-toolbar { flex-wrap: wrap; } .register-toolbar-spacer { display: none; } .register-add-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); } }
