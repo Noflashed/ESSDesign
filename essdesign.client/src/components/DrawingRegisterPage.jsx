@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpDown, ChevronDown, ChevronUp, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -27,14 +27,6 @@ const cleanStatus = value => {
     if (['CONC', 'CONCEPT', 'CONCEPT ONLY', 'CONCEPTUAL'].includes(status)) return 'CONCEPT';
     return status;
 };
-const statusClass = value => {
-    const status = cleanStatus(value);
-    if (status.includes('AS-BU')) return 'as-built';
-    if (status.includes('PRELIMINARY')) return 'preliminary';
-    if (status.includes('CONCEPT')) return 'concept';
-    return 'construction';
-};
-
 const getDrawingSequence = drawingNo => {
     const match = String(drawingNo || '').trim().match(/(\d+)$/);
     return match ? Number(match[1]) : Number.NEGATIVE_INFINITY;
@@ -357,7 +349,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                 : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
         }
         if (key === 'designUse') {
-            return <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
+            return <select className="register-status-select" value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
         }
         return editingId === row.id
             ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} />
@@ -368,7 +360,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         <main className="drawing-register-page">
             <header className="drawing-register-heading">
                 <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
-                <div><h1>Drawing Register</h1><p>{rows.length} drawings</p></div>
+                <h1>Drawing Register</h1>
             </header>
 
             <div className="drawing-register-toolbar">
@@ -400,7 +392,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             <section className="drawing-register-table-wrap">
                 {loading || buildersLoading || !registryReconciled || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className="drawing-register-table">
-                        <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span>{sortField === key ? sortDirection === 'asc' ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" /> : <ArrowUpDown aria-hidden="true" />}</button></th>)}<th className="row-actions" /></tr></thead>
+                        <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span><ChevronDown aria-hidden="true" /></button></th>)}<th className="row-actions" /></tr></thead>
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
