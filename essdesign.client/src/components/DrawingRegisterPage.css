@@ -28,22 +28,22 @@
 .register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .register-modal-actions .register-primary-button:disabled { opacity: .55; cursor: not-allowed; }
 .drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
-.drawing-register-table { width: 100%; min-width: 1240px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.drawing-register-table { width: 100%; min-width: 1480px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11.5px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
-.drawing-register-table th:nth-child(1) { width: 180px; } .drawing-register-table th:nth-child(2) { width: 250px; } .drawing-register-table th:nth-child(3) { width: 270px; } .drawing-register-table th:nth-child(4) { width: 260px; } .drawing-register-table th:nth-child(5) { width: 125px; } .drawing-register-table th:nth-child(6) { width: 105px; } .drawing-register-table th:nth-child(7) { width: 150px; }
+.drawing-register-table th:nth-child(1) { width: 220px; } .drawing-register-table th:nth-child(2) { width: 330px; } .drawing-register-table th:nth-child(3) { width: 280px; } .drawing-register-table th:nth-child(4) { width: 270px; } .drawing-register-table th:nth-child(5) { width: 125px; } .drawing-register-table th:nth-child(6) { width: 105px; } .drawing-register-table th:nth-child(7) { width: 150px; }
 .drawing-register-table tbody tr:hover { background: var(--hover-bg); }
 .drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
-.register-table-select { width: 100%; height: 34px; padding: 0 26px 0 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; text-overflow: ellipsis; }
+.register-table-select { width: 100%; height: 34px; padding: 0 22px 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-primary); font: inherit; font-size: 11.5px; cursor: pointer; text-overflow: ellipsis; }
 .register-table-select:hover, .register-table-select:focus { border-color: var(--border-color); background: var(--card-bg); outline: none; } .register-table-select:disabled { color: var(--text-secondary); cursor: not-allowed; }
 .register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
 .register-drawing-unavailable { color: var(--text-primary); }
-.drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky; right: 0; z-index: 3; width: 48px; padding: 0 8px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color); }
+.drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky !important; right: 0; z-index: 6; width: 54px !important; min-width: 54px; max-width: 54px; padding: 0 8px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color), -8px 0 12px rgba(15, 23, 42, .04); }
 .drawing-register-table th.row-actions { z-index: 5; background: var(--bg-secondary); }
 .drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
 .register-row-actions-wrap { position: relative; display: inline-flex; }
-.register-row-menu { width: 30px; height: 30px; border-color: transparent; background: transparent; } .register-row-menu:hover, .register-row-menu[aria-expanded="true"] { color: var(--primary-color); background: var(--hover-bg); }
+.register-row-menu { width: 32px; height: 32px; border-color: transparent; background: transparent; color: var(--text-primary); opacity: 1; } .register-row-menu:hover, .register-row-menu[aria-expanded="true"] { color: var(--primary-color); background: var(--hover-bg); }
 .register-context-menu { position: absolute; z-index: 8; top: 32px; right: 0; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
 .register-context-menu button { width: 100%; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 13px; text-align: left; }
 .register-context-menu button:hover { background: var(--hover-bg); } .register-context-menu button.danger { color: #d93025; }

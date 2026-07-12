@@ -312,11 +312,11 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
 
     const renderCell = (row, key) => {
         if (key === 'client') {
-            return <select className="register-table-select" value={row.client} onChange={event => updateRowClient(row.id, event.target.value)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>;
+            return <select className="register-table-select" value={row.client} title={row.client || 'Select client'} onChange={event => updateRowClient(row.id, event.target.value)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>;
         }
         if (key === 'project') {
             const projects = getBuilderProjects(row.client);
-            return <select className="register-table-select" value={row.project} onChange={event => updateRow(row.id, 'project', event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select>;
+            return <select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRow(row.id, 'project', event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select>;
         }
         if (key === 'drawingNo') {
             return drawingFolders[getBaseDrawingNumber(row[key])]
