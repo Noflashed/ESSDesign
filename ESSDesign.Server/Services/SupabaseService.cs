@@ -2143,11 +2143,13 @@ namespace ESSDesign.Server.Services
             // filename also handles uploader-added prefixes before the drawing number.
             var pattern = $"*{baseNumber}*";
             var documents = await GetRestRowsAsync<DesignDocument>(
-                $"design_documents?select=folder_id,ess_design_issue_name,third_party_design_name,updated_at&or=(ess_design_issue_name.ilike.{pattern},third_party_design_name.ilike.{pattern})&limit=100");
+                $"design_documents?select=folder_id,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&or=(ess_design_issue_name.ilike.{pattern},ess_design_issue_path.ilike.{pattern},third_party_design_name.ilike.{pattern},third_party_design_path.ilike.{pattern})&limit=100");
 
             var documentFolderId = documents
                 .Where(document => DocumentMatchesDrawingNumber(document.EssDesignIssueName, baseNumber)
-                    || DocumentMatchesDrawingNumber(document.ThirdPartyDesignName, baseNumber))
+                    || DocumentMatchesDrawingNumber(document.EssDesignIssuePath, baseNumber)
+                    || DocumentMatchesDrawingNumber(document.ThirdPartyDesignName, baseNumber)
+                    || DocumentMatchesDrawingNumber(document.ThirdPartyDesignPath, baseNumber))
                 .OrderByDescending(document => document.UpdatedAt)
                 .Select(document => (Guid?)document.FolderId)
                 .FirstOrDefault();
@@ -2169,7 +2171,7 @@ namespace ESSDesign.Server.Services
                 return false;
             }
 
-            var name = Path.GetFileNameWithoutExtension(fileName).Trim();
+            var name = Uri.UnescapeDataString(fileName).Trim();
             var index = name.IndexOf(drawingNumber, StringComparison.OrdinalIgnoreCase);
             if (index < 0)
             {
