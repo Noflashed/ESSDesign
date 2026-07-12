@@ -17,9 +17,16 @@ const FIELDS = [
     ['designUse', 'DESIGN USE'],
 ];
 const EMPTY_ROW = Object.fromEntries(FIELDS.map(([key]) => [key, '']));
-const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'CONCEPT ONLY', 'AS-BUILT'];
+const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'AS-BUILT'];
 
-const cleanStatus = value => String(value || '').trim().toUpperCase();
+const cleanStatus = value => {
+    const status = String(value || '').trim().toUpperCase();
+    if (['CON', 'CONSTRUCTION', 'CONSTRICTION'].includes(status)) return 'CONSTRUCTION';
+    if (['PRE', 'PRELIMINARY'].includes(status)) return 'PRELIMINARY';
+    if (['ASB', 'AS-BUILT', 'AS-BULT'].includes(status)) return 'AS-BUILT';
+    if (['CONC', 'CONCEPT', 'CONCEPT ONLY', 'CONCEPTUAL'].includes(status)) return 'CONCEPT';
+    return status;
+};
 const statusClass = value => {
     const status = cleanStatus(value);
     if (status.includes('AS-BU')) return 'as-built';
@@ -159,8 +166,18 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         let cancelled = false;
         setDrawingFoldersLoading(true);
         foldersAPI.resolveDrawingFolders(drawingNumberKey.split('|'))
-            .then(folders => {
-                if (!cancelled) setDrawingFolders(folders);
+            .then(resolutions => {
+                if (cancelled) return;
+                setDrawingFolders(Object.fromEntries(Object.entries(resolutions).map(([drawingNumber, resolution]) => [drawingNumber, resolution.folderId])));
+                setRows(current => current.map(row => {
+                    const resolution = resolutions[getBaseDrawingNumber(row.drawingNo)];
+                    if (!resolution) return { ...row, designUse: cleanStatus(row.designUse) };
+                    return {
+                        ...row,
+                        revisionNo: resolution.revisionNo || row.revisionNo,
+                        designUse: cleanStatus(resolution.designUse || row.designUse)
+                    };
+                }));
             })
             .catch(error => {
                 console.error('Drawing folder availability lookup failed', error);

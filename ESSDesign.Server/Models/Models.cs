@@ -491,6 +491,13 @@ namespace ESSDesign.Server.Models
         public List<string> DrawingNumbers { get; set; } = new();
     }
 
+    public class DrawingFolderResolution
+    {
+        public Guid FolderId { get; set; }
+        public string RevisionNo { get; set; } = string.Empty;
+        public string DesignUse { get; set; } = string.Empty;
+    }
+
     public class UploadDocumentRequest
     {
         public Guid FolderId { get; set; }

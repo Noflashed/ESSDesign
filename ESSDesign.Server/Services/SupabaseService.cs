@@ -65,6 +65,12 @@ namespace ESSDesign.Server.Services
             [JsonPropertyName("third_party_design_path")]
             public string? ThirdPartyDesignPath { get; set; }
 
+            [JsonPropertyName("revision_number")]
+            public string? RevisionNumber { get; set; }
+
+            [JsonPropertyName("drawing_status")]
+            public string? DrawingStatus { get; set; }
+
             [JsonPropertyName("updated_at")]
             public DateTime UpdatedAt { get; set; }
         }
@@ -2185,7 +2191,7 @@ namespace ESSDesign.Server.Services
             return folderMatch?.Id;
         }
 
-        public async Task<Dictionary<string, Guid>> FindDrawingFoldersAsync(IEnumerable<string> drawingNumbers)
+        public async Task<Dictionary<string, DrawingFolderResolution>> FindDrawingFoldersAsync(IEnumerable<string> drawingNumbers)
         {
             var requested = drawingNumbers
                 .Select(number => number.Trim().ToUpperInvariant())
@@ -2194,12 +2200,12 @@ namespace ESSDesign.Server.Services
 
             if (requested.Count == 0)
             {
-                return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, DrawingFolderResolution>(StringComparer.OrdinalIgnoreCase);
             }
 
             var documents = await GetRestRowsAsync<DrawingDocumentLookupRow>(
-                "design_documents?select=folder_id,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&limit=10000");
-            var matches = new Dictionary<string, (Guid FolderId, DateTime UpdatedAt)>(StringComparer.OrdinalIgnoreCase);
+                "design_documents?select=folder_id,revision_number,drawing_status,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&limit=10000");
+            var matches = new Dictionary<string, (DrawingFolderResolution Resolution, int RevisionSort, DateTime UpdatedAt)>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var document in documents)
             {
@@ -2222,15 +2228,57 @@ namespace ESSDesign.Server.Services
                             continue;
                         }
 
-                        if (!matches.TryGetValue(drawingNumber, out var existing) || document.UpdatedAt > existing.UpdatedAt)
+                        var revisionNo = ExtractDrawingRevision(decoded, document.RevisionNumber);
+                        var revisionSort = int.TryParse(revisionNo, out var parsedRevision) ? parsedRevision : 0;
+                        var designUse = ExtractDrawingUse(decoded, document.DrawingStatus);
+                        if (!matches.TryGetValue(drawingNumber, out var existing)
+                            || revisionSort > existing.RevisionSort
+                            || revisionSort == existing.RevisionSort && document.UpdatedAt > existing.UpdatedAt)
                         {
-                            matches[drawingNumber] = (document.FolderId, document.UpdatedAt);
+                            matches[drawingNumber] = (
+                                new DrawingFolderResolution
+                                {
+                                    FolderId = document.FolderId,
+                                    RevisionNo = revisionNo,
+                                    DesignUse = designUse
+                                },
+                                revisionSort,
+                                document.UpdatedAt);
                         }
                     }
                 }
             }
 
-            return matches.ToDictionary(match => match.Key, match => match.Value.FolderId, StringComparer.OrdinalIgnoreCase);
+            return matches.ToDictionary(match => match.Key, match => match.Value.Resolution, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string ExtractDrawingRevision(string fileName, string? fallbackRevision)
+        {
+            var match = Regex.Match(fileName, @"\(REV(?:ISION)?\s*0*(\d+)\)", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+
+            var fallbackMatch = Regex.Match(fallbackRevision ?? string.Empty, @"\d+");
+            return fallbackMatch.Success ? fallbackMatch.Value.TrimStart('0').PadLeft(1, '0') : string.Empty;
+        }
+
+        private static string ExtractDrawingUse(string fileName, string? fallbackStatus)
+        {
+            var match = Regex.Match(fileName, @"\((CONSTRUCTION|CON|PRELIMINARY|PRE|AS-BUILT|ASB|CONCEPT|CONC)\)", RegexOptions.IgnoreCase);
+            var value = match.Success ? match.Groups[1].Value : fallbackStatus ?? string.Empty;
+            return NormalizeRegisterDesignUse(value);
+        }
+
+        private static string NormalizeRegisterDesignUse(string value)
+        {
+            var normalized = value.Trim().ToUpperInvariant();
+            if (normalized is "CON" or "CONSTRUCTION" or "CONSTRICTION") return "CONSTRUCTION";
+            if (normalized is "PRE" or "PRELIMINARY") return "PRELIMINARY";
+            if (normalized is "ASB" or "AS-BUILT" or "AS-BULT") return "AS-BUILT";
+            if (normalized is "CONC" or "CONCEPT" or "CONCEPT ONLY" or "CONCEPTUAL") return "CONCEPT";
+            return normalized;
         }
 
         private static bool DocumentMatchesDrawingNumber(string? fileName, string drawingNumber)
