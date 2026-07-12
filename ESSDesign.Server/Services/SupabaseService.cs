@@ -48,6 +48,27 @@ namespace ESSDesign.Server.Services
             public Guid FolderId { get; set; }
         }
 
+        private sealed class DrawingDocumentLookupRow
+        {
+            [JsonPropertyName("folder_id")]
+            public Guid FolderId { get; set; }
+
+            [JsonPropertyName("ess_design_issue_name")]
+            public string? EssDesignIssueName { get; set; }
+
+            [JsonPropertyName("ess_design_issue_path")]
+            public string? EssDesignIssuePath { get; set; }
+
+            [JsonPropertyName("third_party_design_name")]
+            public string? ThirdPartyDesignName { get; set; }
+
+            [JsonPropertyName("third_party_design_path")]
+            public string? ThirdPartyDesignPath { get; set; }
+
+            [JsonPropertyName("updated_at")]
+            public DateTime UpdatedAt { get; set; }
+        }
+
         private sealed class AuthAdminUser
         {
             public string Id { get; set; } = string.Empty;
@@ -2142,7 +2163,7 @@ namespace ESSDesign.Server.Services
             // PostgREST accepts * as the ILIKE wildcard. Searching anywhere in the
             // filename also handles uploader-added prefixes before the drawing number.
             var pattern = $"*{baseNumber}*";
-            var documents = await GetRestRowsAsync<DesignDocument>(
+            var documents = await GetRestRowsAsync<DrawingDocumentLookupRow>(
                 $"design_documents?select=folder_id,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&or=(ess_design_issue_name.ilike.{pattern},ess_design_issue_path.ilike.{pattern},third_party_design_name.ilike.{pattern},third_party_design_path.ilike.{pattern})&limit=100");
 
             var documentFolderId = documents
