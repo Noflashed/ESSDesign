@@ -42,6 +42,22 @@ const getDrawingSequence = drawingNo => {
 
 const getBaseDrawingNumber = drawingNo => String(drawingNo || '').trim().match(/^[A-Z0-9]+-[A-Z0-9]+-ESD\d+/i)?.[0]?.toUpperCase() || '';
 
+const getDrawingUseCode = designUse => ({
+    CONSTRUCTION: 'CON',
+    PRELIMINARY: 'PRE',
+    'AS-BUILT': 'ASB',
+    CONCEPT: 'CONC',
+})[cleanStatus(designUse)] || '';
+
+const formatFullDrawingNumber = row => {
+    const baseNumber = getBaseDrawingNumber(row.drawingNo);
+    if (!baseNumber) return row.drawingNo;
+    const useCode = getDrawingUseCode(row.designUse);
+    const revisionMatch = String(row.revisionNo || '').match(/\d+/);
+    const revision = revisionMatch ? revisionMatch[0].replace(/^0+(?=\d)/, '') : '';
+    return `${baseNumber}${useCode ? `(${useCode})` : ''}${revision ? `(REV${revision})` : ''}`;
+};
+
 const parseDrawingNumber = drawingNo => {
     const match = String(drawingNo || '').trim().match(/^([A-Z0-9]+)-([A-Z0-9]+)-ESD(\d+)$/i);
     return match ? { builderCode: match[1].toUpperCase(), projectCode: match[2].toUpperCase() } : null;
@@ -262,7 +278,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
-                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' || key === 'drawingNo' ? undefined : () => setEditingId(row.id)}>{key === 'drawingNo' ? drawingFolders[getBaseDrawingNumber(row[key])] ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : row[key]}</button> : <span className="register-drawing-unavailable">{row[key]}</span> : key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
+                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' || key === 'drawingNo' ? undefined : () => setEditingId(row.id)}>{key === 'drawingNo' ? drawingFolders[getBaseDrawingNumber(row[key])] ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button> : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span> : key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
                                     <td className="row-actions">
                                         <div className="register-row-actions-wrap">
                                             <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={17} /></button>
