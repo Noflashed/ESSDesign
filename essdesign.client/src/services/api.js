@@ -4699,6 +4699,13 @@ export const foldersAPI = {
             params: { drawingNumber }
         });
         return response.data;
+    },
+
+    resolveDrawingFolders: async (drawingNumbers) => {
+        const response = await apiClient.post('/folders/drawing-folders/resolve', {
+            drawingNumbers
+        });
+        return response.data?.folders || {};
     }
 };
 

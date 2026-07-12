@@ -1026,6 +1026,24 @@ namespace ESSDesign.Server.Controllers
                 : NotFound(new { error = $"No ESS Design folder contains a revision for {baseNumber}" });
         }
 
+        [HttpPost("drawing-folders/resolve")]
+        public async Task<ActionResult> ResolveDrawingFolders([FromBody] DrawingFolderBatchRequest request)
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return Unauthorized(new { error = "Not authenticated" });
+            }
+
+            var drawingNumbers = request.DrawingNumbers
+                .Where(number => !string.IsNullOrWhiteSpace(number))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(500)
+                .ToList();
+            var folders = await _supabaseService.FindDrawingFoldersAsync(drawingNumbers);
+            return Ok(new { folders });
+        }
+
         [HttpGet("health")]
         public ActionResult Health()
         {

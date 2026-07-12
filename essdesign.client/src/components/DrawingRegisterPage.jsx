@@ -85,6 +85,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [buildersError, setBuildersError] = useState('');
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
     const [folderNavigationError, setFolderNavigationError] = useState('');
+    const [drawingFolders, setDrawingFolders] = useState({});
 
     useEffect(() => {
         const load = async () => {
@@ -121,6 +122,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     }, []);
 
     const statuses = useMemo(() => [...new Set(rows.map(row => cleanStatus(row.designUse)).filter(Boolean))].sort(), [rows]);
+    const drawingNumberKey = useMemo(() => [...new Set(rows.map(row => getBaseDrawingNumber(row.drawingNo)).filter(Boolean))].sort().join('|'), [rows]);
     const selectedBuilder = useMemo(() => builders.find(builder => builder.name === draft.client) || null, [builders, draft.client]);
     const availableProjects = useMemo(() => (selectedBuilder?.projects || []).filter(project => !project.archived), [selectedBuilder]);
     const generatedDrawingNo = useMemo(() => {
@@ -146,6 +148,22 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             .map(({ row }) => row);
     }, [rows, query, statusFilter]);
 
+    useEffect(() => {
+        if (loading || !drawingNumberKey) return;
+        let cancelled = false;
+        foldersAPI.resolveDrawingFolders(drawingNumberKey.split('|'))
+            .then(folders => {
+                if (!cancelled) setDrawingFolders(folders);
+            })
+            .catch(error => {
+                console.error('Drawing folder availability lookup failed', error);
+                if (!cancelled) setDrawingFolders({});
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawingNumberKey, loading]);
+
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
     const addRow = event => {
         event.preventDefault();
@@ -167,9 +185,9 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         setOpeningDrawingId(row.id);
         setFolderNavigationError('');
         try {
-            const result = await foldersAPI.findDrawingFolder(drawingNumber);
-            if (!result?.folderId) throw new Error(`No ESS Design folder was found for ${drawingNumber}.`);
-            onOpenFolder(result.folderId);
+            const folderId = drawingFolders[drawingNumber];
+            if (!folderId) throw new Error(`No ESS Design folder was found for ${drawingNumber}.`);
+            onOpenFolder(folderId);
         } catch (error) {
             setFolderNavigationError(error?.response?.data?.error || error.message || `No ESS Design folder was found for ${drawingNumber}.`);
         } finally {
@@ -217,7 +235,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
-                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' || key === 'drawingNo' ? undefined : () => setEditingId(row.id)}>{key === 'drawingNo' ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : row[key]}</button> : key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
+                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' || key === 'drawingNo' ? undefined : () => setEditingId(row.id)}>{key === 'drawingNo' ? drawingFolders[getBaseDrawingNumber(row[key])] ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : row[key]}</button> : <span className="register-drawing-unavailable">{row[key]}</span> : key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
                                     <td className="row-actions">
                                         <div className="register-row-actions-wrap">
                                             <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={17} /></button>

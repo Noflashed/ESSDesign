@@ -2185,6 +2185,54 @@ namespace ESSDesign.Server.Services
             return folderMatch?.Id;
         }
 
+        public async Task<Dictionary<string, Guid>> FindDrawingFoldersAsync(IEnumerable<string> drawingNumbers)
+        {
+            var requested = drawingNumbers
+                .Select(number => number.Trim().ToUpperInvariant())
+                .Where(number => Regex.IsMatch(number, @"^[A-Z0-9]+-[A-Z0-9]+-ESD\d+$"))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (requested.Count == 0)
+            {
+                return new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var documents = await GetRestRowsAsync<DrawingDocumentLookupRow>(
+                "design_documents?select=folder_id,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&limit=10000");
+            var matches = new Dictionary<string, (Guid FolderId, DateTime UpdatedAt)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var document in documents)
+            {
+                var sources = new[]
+                {
+                    document.EssDesignIssueName,
+                    document.EssDesignIssuePath,
+                    document.ThirdPartyDesignName,
+                    document.ThirdPartyDesignPath
+                };
+
+                foreach (var source in sources.Where(source => !string.IsNullOrWhiteSpace(source)))
+                {
+                    var decoded = Uri.UnescapeDataString(source!);
+                    foreach (Match match in Regex.Matches(decoded, @"[A-Z0-9]+-[A-Z0-9]+-ESD\d+", RegexOptions.IgnoreCase))
+                    {
+                        var drawingNumber = match.Value.ToUpperInvariant();
+                        if (!requested.Contains(drawingNumber))
+                        {
+                            continue;
+                        }
+
+                        if (!matches.TryGetValue(drawingNumber, out var existing) || document.UpdatedAt > existing.UpdatedAt)
+                        {
+                            matches[drawingNumber] = (document.FolderId, document.UpdatedAt);
+                        }
+                    }
+                }
+            }
+
+            return matches.ToDictionary(match => match.Key, match => match.Value.FolderId, StringComparer.OrdinalIgnoreCase);
+        }
+
         private static bool DocumentMatchesDrawingNumber(string? fileName, string drawingNumber)
         {
             if (string.IsNullOrWhiteSpace(fileName))

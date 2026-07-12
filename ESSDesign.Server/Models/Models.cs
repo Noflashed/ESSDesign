@@ -486,6 +486,11 @@ namespace ESSDesign.Server.Models
         public Guid TargetFolderId { get; set; }
     }
 
+    public class DrawingFolderBatchRequest
+    {
+        public List<string> DrawingNumbers { get; set; } = new();
+    }
+
     public class UploadDocumentRequest
     {
         public Guid FolderId { get; set; }
