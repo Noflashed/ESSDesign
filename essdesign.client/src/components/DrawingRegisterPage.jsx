@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, ChevronDown, ChevronUp, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -56,6 +56,23 @@ const formatFullDrawingNumber = row => {
     const revisionMatch = String(row.revisionNo || '').match(/\d+/);
     const revision = revisionMatch ? revisionMatch[0].replace(/^0+(?=\d)/, '') : '';
     return `${baseNumber}${useCode ? `(${useCode})` : ''}${revision ? `(REV${revision})` : ''}`;
+};
+
+const getDateSortValue = value => {
+    const text = String(value || '').trim();
+    const parts = text.split(/[/-]/).map(Number);
+    if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return Number.NEGATIVE_INFINITY;
+    if (parts[0] > 31) return new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+    const year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
+    return new Date(year, parts[1] - 1, parts[0]).getTime();
+};
+
+const getRowSortValue = (row, field) => {
+    if (field === 'drawingNo') return getDrawingSequence(getBaseDrawingNumber(row.drawingNo));
+    if (field === 'dateIssued') return getDateSortValue(row.dateIssued);
+    if (field === 'revisionNo') return Number(String(row.revisionNo || '').match(/\d+/)?.[0] || -1);
+    if (field === 'designUse') return cleanStatus(row.designUse);
+    return String(row[field] || '').trim().toLowerCase();
 };
 
 const parseDrawingNumber = drawingNo => {
@@ -146,6 +163,8 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [sortField, setSortField] = useState('drawingNo');
+    const [sortDirection, setSortDirection] = useState('desc');
     const [showAddRow, setShowAddRow] = useState(false);
     const [draft, setDraft] = useState(EMPTY_ROW);
     const [editingId, setEditingId] = useState(null);
@@ -238,10 +257,16 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             .map((row, sourceIndex) => ({ row, sourceIndex }))
             .filter(({ row }) => (!statusFilter || cleanStatus(row.designUse) === statusFilter)
                 && (!needle || FIELDS.some(([key]) => String(row[key]).toLowerCase().includes(needle))))
-            .sort((left, right) => getDrawingSequence(right.row.drawingNo) - getDrawingSequence(left.row.drawingNo)
-                || left.sourceIndex - right.sourceIndex)
+            .sort((left, right) => {
+                const leftValue = getRowSortValue(left.row, sortField);
+                const rightValue = getRowSortValue(right.row, sortField);
+                const comparison = typeof leftValue === 'number'
+                    ? leftValue - rightValue
+                    : leftValue.localeCompare(rightValue);
+                return (sortDirection === 'asc' ? comparison : -comparison) || left.sourceIndex - right.sourceIndex;
+            })
             .map(({ row }) => row);
-    }, [rows, query, statusFilter]);
+    }, [rows, query, sortDirection, sortField, statusFilter]);
 
     useEffect(() => {
         if (loading) return;
@@ -309,6 +334,14 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         }
     };
     const getBuilderProjects = client => (builders.find(builder => builder.name === client)?.projects || []).filter(project => !project.archived);
+    const handleColumnSort = field => {
+        if (sortField === field) {
+            setSortDirection(current => current === 'asc' ? 'desc' : 'asc');
+            return;
+        }
+        setSortField(field);
+        setSortDirection(field === 'drawingNo' || field === 'dateIssued' || field === 'revisionNo' ? 'desc' : 'asc');
+    };
 
     const renderCell = (row, key) => {
         if (key === 'client') {
@@ -367,7 +400,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             <section className="drawing-register-table-wrap">
                 {loading || buildersLoading || !registryReconciled || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className="drawing-register-table">
-                        <thead><tr>{FIELDS.map(([, label]) => <th key={label}>{label}</th>)}<th className="row-actions" /></tr></thead>
+                        <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span>{sortField === key ? sortDirection === 'asc' ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" /> : <ArrowUpDown aria-hidden="true" />}</button></th>)}<th className="row-actions" /></tr></thead>
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
