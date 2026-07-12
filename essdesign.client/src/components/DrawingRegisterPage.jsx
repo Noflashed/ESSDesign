@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, FileSpreadsheet, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
+import LoadingBrandmark from './LoadingBrandmark';
 import './DrawingRegisterPage.css';
 
 const SOURCE_FILE = '/data/ESS Drawing Register.xlsx';
@@ -86,6 +87,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
     const [folderNavigationError, setFolderNavigationError] = useState('');
     const [drawingFolders, setDrawingFolders] = useState({});
+    const [drawingFoldersLoading, setDrawingFoldersLoading] = useState(true);
 
     useEffect(() => {
         const load = async () => {
@@ -149,8 +151,13 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     }, [rows, query, statusFilter]);
 
     useEffect(() => {
-        if (loading || !drawingNumberKey) return;
+        if (loading) return;
+        if (!drawingNumberKey) {
+            setDrawingFoldersLoading(false);
+            return;
+        }
         let cancelled = false;
+        setDrawingFoldersLoading(true);
         foldersAPI.resolveDrawingFolders(drawingNumberKey.split('|'))
             .then(folders => {
                 if (!cancelled) setDrawingFolders(folders);
@@ -158,6 +165,9 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             .catch(error => {
                 console.error('Drawing folder availability lookup failed', error);
                 if (!cancelled) setDrawingFolders({});
+            })
+            .finally(() => {
+                if (!cancelled) setDrawingFoldersLoading(false);
             });
         return () => {
             cancelled = true;
@@ -229,7 +239,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             )}
 
             <section className="drawing-register-table-wrap">
-                {loading ? <div className="register-empty"><FileSpreadsheet size={28} />Loading drawing register...</div> : (
+                {loading || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className="drawing-register-table">
                         <thead><tr>{FIELDS.map(([, label]) => <th key={label}>{label}</th>)}<th className="row-actions" /></tr></thead>
                         <tbody>

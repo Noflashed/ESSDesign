@@ -50,5 +50,6 @@
 .register-status-select.construction { background: #e2f4e7; color: #188038; } .register-status-select.preliminary { background: #fff1d6; color: #d97706; } .register-status-select.concept { background: #e4efff; color: #0b57d0; } .register-status-select.as-built { background: #fde4e4; color: #d93025; }
 .register-status.construction { background: #e2f4e7; color: #188038; } .register-status.preliminary { background: #fff1d6; color: #d97706; } .register-status.concept { background: #e4efff; color: #0b57d0; } .register-status.as-built { background: #fde4e4; color: #d93025; }
 .register-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-secondary); }
+.register-loading { min-height: 320px; display: flex; align-items: center; justify-content: center; }
 @media (max-width: 1100px) { .drawing-register-toolbar { flex-wrap: wrap; } .register-toolbar-spacer { display: none; } }
 @media (max-width: 700px) { .drawing-register-page { padding: 16px; } .register-search { width: 100%; } .register-modal-backdrop { padding: 12px; } .drawing-register-modal { padding: 18px; } .register-modal-grid { grid-template-columns: 1fr; } .register-modal-grid label:nth-child(3) { grid-column: auto; } }
