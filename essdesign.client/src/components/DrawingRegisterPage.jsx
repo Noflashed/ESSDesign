@@ -334,7 +334,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     return (
         <main className="drawing-register-page">
             <header className="drawing-register-heading">
-                <button type="button" className="register-icon-button" onClick={onBack} title="Back to ESS Design"><ArrowLeft size={19} /></button>
+                <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
                 <div><h1>Drawing Register</h1><p>{rows.length} drawings</p></div>
             </header>
 
@@ -374,7 +374,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                                     {FIELDS.map(([key]) => <td key={key} onDoubleClick={['client', 'project', 'designUse', 'drawingNo'].includes(key) ? undefined : () => setEditingId(row.id)}>{renderCell(row, key)}</td>)}
                                     <td className="row-actions">
                                         <div className="register-row-actions-wrap">
-                                            <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={17} /></button>
+                                            <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={20} aria-hidden="true" /></button>
                                             {openMenuId === row.id && <div className="register-context-menu" onClick={event => event.stopPropagation()}>
                                                 <button type="button" onClick={openAddRow}><Plus size={16} /> Add drawing</button>
                                                 <button type="button" className="danger" onClick={() => { deleteRow(row.id); setOpenMenuId(null); }}><Trash2 size={16} /> Delete drawing</button>
