@@ -602,11 +602,12 @@ function BuilderFolderLogo({ logoUrl }) {
 
 function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false, onOpenDrawingRegister }) {
     const { showToast, updateToast } = useToast();
-    const [currentFolder, setCurrentFolder] = useState(null);
+    const [currentFolder, setCurrentFolder] = useState(() => selectedFolderId ?? null);
     const [folders, setFolders] = useState([]);
     const [builderLogos, setBuilderLogos] = useState(() => new Map());
     const [breadcrumbs, setBreadcrumbs] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [folderReady, setFolderReady] = useState(false);
     const [showNewFolderModal, setShowNewFolderModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
@@ -637,6 +638,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     const [detailsPanelDismissed, setDetailsPanelDismissed] = useState(false);
     const cacheRef = useRef(new Map());
     const searchSelectionRef = useRef(false);
+    const folderLoadRequestRef = useRef(0);
 
     // Drag-and-drop state
     const draggedItemRef = useRef(null);
@@ -775,6 +777,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
 
     useEffect(() => {
         if (selectedFolderId !== undefined) {
+            setFolderReady(false);
             setCurrentFolder(selectedFolderId);
         }
     }, [selectedFolderId]);
@@ -895,20 +898,25 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     }, [sortField, sortDirection]);
 
     const loadCurrentFolder = useCallback(async () => {
+        const requestId = ++folderLoadRequestRef.current;
         const cacheKey = currentFolder === null ? 'root' : currentFolder;
         const cached = cacheRef.current.get(cacheKey);
+        setLoading(true);
+        setFolderReady(false);
 
         if (cached && (Date.now() - cached.timestamp < 60000)) {
             logFolderCountDebug(cached.data, `client-cache:${cacheKey}`);
             setFolders(cached.data);
             setBreadcrumbs(cached.breadcrumbs || []);
+            setLoading(false);
+            setFolderReady(true);
             return;
         }
 
-        setLoading(true);
         try {
             if (currentFolder === null) {
                 const data = await foldersAPI.getRootFolders();
+                if (requestId !== folderLoadRequestRef.current) return;
                 logFolderCountDebug(data, 'api:root');
                 setFolders(data);
                 setBreadcrumbs([]);
@@ -923,6 +931,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                     foldersAPI.getFolder(currentFolder),
                     foldersAPI.getBreadcrumbs(currentFolder)
                 ]);
+                if (requestId !== folderLoadRequestRef.current) return;
 
                 const folderItems = [...data.subFolders, ...data.documents.map(d => ({ ...d, isDocument: true }))];
                 logFolderCountDebug(folderItems, `api:folder:${currentFolder}`);
@@ -938,7 +947,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         } catch (error) {
             console.error('Error loading folder:', error);
         } finally {
-            setLoading(false);
+            if (requestId === folderLoadRequestRef.current) {
+                setLoading(false);
+                setFolderReady(true);
+            }
         }
     }, [currentFolder]);
 
@@ -1533,6 +1545,16 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         document.addEventListener('click', handleClick);
         return () => document.removeEventListener('click', handleClick);
     }, []);
+
+    if (!folderReady) {
+        return (
+            <div className="folder-browser">
+                <div className="folder-browser-loading page-loading-brandmark">
+                    <LoadingBrandmark label="Loading ESS Design" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="folder-browser">
