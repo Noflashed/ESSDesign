@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
@@ -65,6 +65,52 @@ const parseDrawingNumber = drawingNo => {
 
 const normalizeName = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
 
+const normalizeRegistryName = value => {
+    const ignored = new Set(['the', 'and', 'pty', 'ltd', 'limited', 'construction', 'constructions', 'consrtuctions', 'group', 'development', 'project', 'projects']);
+    return normalizeName(value).split(' ').filter(word => word && !ignored.has(word)).join(' ');
+};
+
+const editDistance = (left, right) => {
+    const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+    for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+        const current = [leftIndex];
+        for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+            current[rightIndex] = Math.min(
+                current[rightIndex - 1] + 1,
+                previous[rightIndex] + 1,
+                previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+            );
+        }
+        previous.splice(0, previous.length, ...current);
+    }
+    return previous[right.length];
+};
+
+const registryMatchScore = (source, candidate) => {
+    const left = normalizeRegistryName(source);
+    const right = normalizeRegistryName(candidate);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+    const similarity = 1 - (editDistance(left, right) / Math.max(left.length, right.length));
+    const leftTokens = new Set(left.split(' '));
+    const rightTokens = new Set(right.split(' '));
+    const intersection = [...leftTokens].filter(token => rightTokens.has(token)).length;
+    const union = new Set([...leftTokens, ...rightTokens]).size;
+    return Math.max(similarity, union ? intersection / union : 0);
+};
+
+const findConfidentRegistryMatch = (source, candidates, minimumScore) => {
+    if (!source) return null;
+    const ranked = candidates
+        .map(candidate => ({ candidate, score: registryMatchScore(source, candidate.name) }))
+        .sort((left, right) => right.score - left.score);
+    const best = ranked[0];
+    const runnerUp = ranked[1];
+    if (!best || best.score < minimumScore) return null;
+    if (runnerUp && best.score < 0.95 && best.score - runnerUp.score < 0.08) return null;
+    return best.candidate;
+};
+
 const mostCommonCode = codes => {
     const counts = new Map();
     codes.filter(Boolean).forEach(code => counts.set(code, (counts.get(code) || 0) + 1));
@@ -111,6 +157,8 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [folderNavigationError, setFolderNavigationError] = useState('');
     const [drawingFolders, setDrawingFolders] = useState({});
     const [drawingFoldersLoading, setDrawingFoldersLoading] = useState(true);
+    const [registryReconciled, setRegistryReconciled] = useState(false);
+    const registryReconciledRef = useRef(false);
 
     useEffect(() => {
         const load = async () => {
@@ -145,6 +193,28 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             })
             .finally(() => setBuildersLoading(false));
     }, []);
+
+    useEffect(() => {
+        if (loading || buildersLoading || registryReconciledRef.current) return;
+        registryReconciledRef.current = true;
+        if (buildersError || builders.length === 0) {
+            setRegistryReconciled(true);
+            return;
+        }
+
+        setRows(current => current.map(row => {
+            const builder = findConfidentRegistryMatch(row.client, builders, 0.82);
+            if (!builder) return { ...row, client: '', project: '' };
+            const activeProjects = (builder.projects || []).filter(project => !project.archived);
+            const project = findConfidentRegistryMatch(row.project, activeProjects, 0.78);
+            return {
+                ...row,
+                client: builder.name,
+                project: project?.name || ''
+            };
+        }));
+        setRegistryReconciled(true);
+    }, [builders, buildersError, buildersLoading, loading]);
 
     const statuses = useMemo(() => [...new Set(rows.map(row => cleanStatus(row.designUse)).filter(Boolean))].sort(), [rows]);
     const drawingNumberKey = useMemo(() => [...new Set(rows.map(row => getBaseDrawingNumber(row.drawingNo)).filter(Boolean))].sort().join('|'), [rows]);
@@ -216,6 +286,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         setShowAddRow(false);
     };
     const updateRow = (id, key, value) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
+    const updateRowClient = (id, client) => setRows(current => current.map(row => row.id === id ? { ...row, client, project: '' } : row));
     const deleteRow = id => setRows(current => current.filter(row => row.id !== id));
     const openAddRow = () => {
         setDraft(EMPTY_ROW);
@@ -236,6 +307,28 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         } finally {
             setOpeningDrawingId(null);
         }
+    };
+    const getBuilderProjects = client => (builders.find(builder => builder.name === client)?.projects || []).filter(project => !project.archived);
+
+    const renderCell = (row, key) => {
+        if (key === 'client') {
+            return <select className="register-table-select" value={row.client} onChange={event => updateRowClient(row.id, event.target.value)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>;
+        }
+        if (key === 'project') {
+            const projects = getBuilderProjects(row.client);
+            return <select className="register-table-select" value={row.project} onChange={event => updateRow(row.id, 'project', event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select>;
+        }
+        if (key === 'drawingNo') {
+            return drawingFolders[getBaseDrawingNumber(row[key])]
+                ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
+                : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
+        }
+        if (key === 'designUse') {
+            return <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
+        }
+        return editingId === row.id
+            ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} />
+            : row[key];
     };
 
     return (
@@ -272,13 +365,13 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             )}
 
             <section className="drawing-register-table-wrap">
-                {loading || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
+                {loading || buildersLoading || !registryReconciled || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className="drawing-register-table">
                         <thead><tr>{FIELDS.map(([, label]) => <th key={label}>{label}</th>)}<th className="row-actions" /></tr></thead>
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
-                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={key === 'designUse' || key === 'drawingNo' ? undefined : () => setEditingId(row.id)}>{key === 'drawingNo' ? drawingFolders[getBaseDrawingNumber(row[key])] ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button> : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span> : key === 'designUse' ? <select className={`register-status-select ${statusClass(row[key])}`} value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select> : editingId === row.id ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} autoFocus={key === 'client'} /> : row[key]}</td>)}
+                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={['client', 'project', 'designUse', 'drawingNo'].includes(key) ? undefined : () => setEditingId(row.id)}>{renderCell(row, key)}</td>)}
                                     <td className="row-actions">
                                         <div className="register-row-actions-wrap">
                                             <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={17} /></button>
