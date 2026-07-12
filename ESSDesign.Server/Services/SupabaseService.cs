@@ -2139,16 +2139,27 @@ namespace ESSDesign.Server.Services
         public async Task<Guid?> FindDrawingFolderAsync(string drawingNumber)
         {
             var baseNumber = drawingNumber.Trim().ToUpperInvariant();
-            var pattern = Uri.EscapeDataString($"{baseNumber}%");
+            // PostgREST accepts * as the ILIKE wildcard. Searching anywhere in the
+            // filename also handles uploader-added prefixes before the drawing number.
+            var pattern = $"*{baseNumber}*";
             var documents = await GetRestRowsAsync<DesignDocument>(
                 $"design_documents?select=folder_id,ess_design_issue_name,third_party_design_name,updated_at&or=(ess_design_issue_name.ilike.{pattern},third_party_design_name.ilike.{pattern})&limit=100");
 
-            return documents
+            var documentFolderId = documents
                 .Where(document => DocumentMatchesDrawingNumber(document.EssDesignIssueName, baseNumber)
                     || DocumentMatchesDrawingNumber(document.ThirdPartyDesignName, baseNumber))
                 .OrderByDescending(document => document.UpdatedAt)
                 .Select(document => (Guid?)document.FolderId)
                 .FirstOrDefault();
+
+            if (documentFolderId.HasValue)
+            {
+                return documentFolderId;
+            }
+
+            var folderMatch = (await SearchAsync(baseNumber))
+                .FirstOrDefault(folder => folder.Name.Contains(baseNumber, StringComparison.OrdinalIgnoreCase));
+            return folderMatch?.Id;
         }
 
         private static bool DocumentMatchesDrawingNumber(string? fileName, string drawingNumber)
@@ -2159,14 +2170,16 @@ namespace ESSDesign.Server.Services
             }
 
             var name = Path.GetFileNameWithoutExtension(fileName).Trim();
-            if (!name.StartsWith(drawingNumber, StringComparison.OrdinalIgnoreCase))
+            var index = name.IndexOf(drawingNumber, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
             {
                 return false;
             }
 
-            return name.Length == drawingNumber.Length
-                || name[drawingNumber.Length] == '('
-                || char.IsWhiteSpace(name[drawingNumber.Length]);
+            var hasValidStartBoundary = index == 0 || !char.IsLetterOrDigit(name[index - 1]);
+            var suffixIndex = index + drawingNumber.Length;
+            var hasValidEndBoundary = suffixIndex == name.Length || !char.IsLetterOrDigit(name[suffixIndex]);
+            return hasValidStartBoundary && hasValidEndBoundary;
         }
 
         
