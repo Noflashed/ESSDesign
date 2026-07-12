@@ -2136,6 +2136,39 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task<Guid?> FindDrawingFolderAsync(string drawingNumber)
+        {
+            var baseNumber = drawingNumber.Trim().ToUpperInvariant();
+            var pattern = Uri.EscapeDataString($"{baseNumber}%");
+            var documents = await GetRestRowsAsync<DesignDocument>(
+                $"design_documents?select=folder_id,ess_design_issue_name,third_party_design_name,updated_at&or=(ess_design_issue_name.ilike.{pattern},third_party_design_name.ilike.{pattern})&limit=100");
+
+            return documents
+                .Where(document => DocumentMatchesDrawingNumber(document.EssDesignIssueName, baseNumber)
+                    || DocumentMatchesDrawingNumber(document.ThirdPartyDesignName, baseNumber))
+                .OrderByDescending(document => document.UpdatedAt)
+                .Select(document => (Guid?)document.FolderId)
+                .FirstOrDefault();
+        }
+
+        private static bool DocumentMatchesDrawingNumber(string? fileName, string drawingNumber)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return false;
+            }
+
+            var name = Path.GetFileNameWithoutExtension(fileName).Trim();
+            if (!name.StartsWith(drawingNumber, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return name.Length == drawingNumber.Length
+                || name[drawingNumber.Length] == '('
+                || char.IsWhiteSpace(name[drawingNumber.Length]);
+        }
+
         
 
         // User Preferences Methods

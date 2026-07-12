@@ -1237,6 +1237,24 @@ function App() {
         savePreferencesToBackend({ selectedFolderId: folderId });
     }, [buildAppUrl, currentPage, safetyContext, employeeContext, savePreferencesToBackend]);
 
+    const handleOpenDesignFolder = useCallback((folderId) => {
+        const emptySafetyContext = { builder: null, project: null };
+        const emptyEmployeeContext = { leadingHand: null };
+        const emptyRosteringContext = { planDate: null };
+        setSelectedFolderId(folderId);
+        setCurrentPage('design');
+        setSafetyContext(emptySafetyContext);
+        setEmployeeContext(emptyEmployeeContext);
+        setRosteringContext(emptyRosteringContext);
+        localStorage.setItem('selectedFolderId', folderId);
+        window.history.pushState(
+            { folderId, page: 'design', safetyContext: emptySafetyContext, employeeContext: emptyEmployeeContext, rosteringContext: emptyRosteringContext },
+            '',
+            buildAppUrl(folderId, 'design', emptySafetyContext, emptyEmployeeContext, emptyRosteringContext)
+        );
+        savePreferencesToBackend({ selectedFolderId: folderId });
+    }, [buildAppUrl, savePreferencesToBackend]);
+
     const handleSidebarResize = (newWidth) => {
         setSidebarWidth(newWidth);
         localStorage.setItem('sidebarWidth', newWidth.toString());
@@ -1606,7 +1624,7 @@ function App() {
         }
 
         if (currentPage === 'drawing-register') {
-            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} />;
+            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenFolder={handleOpenDesignFolder} />;
         }
 
         return (

@@ -4692,6 +4692,13 @@ export const foldersAPI = {
             { signal: searchAbortController.signal }
         );
         return response.data;
+    },
+
+    findDrawingFolder: async (drawingNumber) => {
+        const response = await apiClient.get('/folders/drawing-folder', {
+            params: { drawingNumber }
+        });
+        return response.data;
     }
 };
 

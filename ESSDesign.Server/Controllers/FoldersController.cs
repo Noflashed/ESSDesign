@@ -1005,6 +1005,27 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpGet("drawing-folder")]
+        public async Task<ActionResult> FindDrawingFolder([FromQuery] string drawingNumber)
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return Unauthorized(new { error = "Not authenticated" });
+            }
+
+            var baseNumber = drawingNumber?.Trim().ToUpperInvariant() ?? string.Empty;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(baseNumber, @"^[A-Z0-9]+-[A-Z0-9]+-ESD\d+$"))
+            {
+                return BadRequest(new { error = "A valid base drawing number is required" });
+            }
+
+            var folderId = await _supabaseService.FindDrawingFolderAsync(baseNumber);
+            return folderId.HasValue
+                ? Ok(new { folderId = folderId.Value })
+                : NotFound(new { error = $"No ESS Design folder contains a revision for {baseNumber}" });
+        }
+
         [HttpGet("health")]
         public ActionResult Health()
         {
