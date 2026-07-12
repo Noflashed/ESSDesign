@@ -3,8 +3,8 @@
 .drawing-register-heading h1 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: 0; }
 .drawing-register-heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
 .register-icon-button, .register-row-menu { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); cursor: pointer; }
-.drawing-register-page .register-icon-button svg, .drawing-register-page .register-row-menu svg { display: block !important; width: 20px !important; height: 20px !important; min-width: 20px; min-height: 20px; visibility: visible !important; opacity: 1 !important; fill: none !important; stroke: currentColor !important; stroke-width: 2.25 !important; }
-.drawing-register-page .register-back-button { flex: 0 0 40px; width: 40px; height: 40px; color: var(--text-primary, #1f2937) !important; }
+.drawing-register-page .register-icon-button svg, .drawing-register-page .register-row-menu svg { display: block !important; width: 17px !important; height: 17px !important; min-width: 17px; min-height: 17px; visibility: visible !important; opacity: 1 !important; fill: none !important; stroke: currentColor !important; stroke-width: 2 !important; }
+.drawing-register-page .register-back-button { flex: 0 0 34px; width: 34px; height: 34px; border-color: transparent; background: transparent; color: var(--text-primary, #1f2937) !important; }
 .drawing-register-page .register-back-button:hover { border-color: var(--primary-color); color: var(--primary-color) !important; background: var(--hover-bg); }
 .drawing-register-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .register-search { width: min(360px, 34vw); height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); }
@@ -35,18 +35,19 @@
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
 .drawing-register-table th:nth-child(1) { width: 220px; } .drawing-register-table th:nth-child(2) { width: 330px; } .drawing-register-table th:nth-child(3) { width: 280px; } .drawing-register-table th:nth-child(4) { width: 270px; } .drawing-register-table th:nth-child(5) { width: 125px; } .drawing-register-table th:nth-child(6) { width: 105px; } .drawing-register-table th:nth-child(7) { width: 150px; }
-.drawing-register-table tbody tr:hover { background: var(--hover-bg); }
+.drawing-register-table tbody td { background: var(--card-bg); }
+.drawing-register-table tbody tr:hover td { background: var(--hover-bg); }
 .drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
 .register-table-select { width: 100%; height: 34px; padding: 0 22px 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-primary); font: inherit; font-size: 11.5px; cursor: pointer; text-overflow: ellipsis; }
 .register-table-select:hover, .register-table-select:focus { border-color: var(--border-color); background: var(--card-bg); outline: none; } .register-table-select:disabled { color: var(--text-secondary); cursor: not-allowed; }
 .register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
 .register-drawing-unavailable { color: var(--text-primary); }
-.drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky !important; right: 0; z-index: 6; width: 54px !important; min-width: 54px; max-width: 54px; padding: 0 8px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color), -8px 0 12px rgba(15, 23, 42, .04); }
+.drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky !important; right: 0; z-index: 6; width: 46px !important; min-width: 46px; max-width: 46px; padding: 0 6px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color); }
 .drawing-register-table th.row-actions { z-index: 5; background: var(--bg-secondary); }
 .drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
 .register-row-actions-wrap { position: relative; display: inline-flex; }
-.drawing-register-page .register-row-menu { display: inline-flex !important; width: 34px; height: 34px; border-color: var(--border-color); background: var(--card-bg); color: var(--text-primary, #1f2937) !important; visibility: visible !important; opacity: 1 !important; } .drawing-register-page .register-row-menu:hover, .drawing-register-page .register-row-menu[aria-expanded="true"] { color: var(--primary-color) !important; background: var(--hover-bg); }
+.drawing-register-page .register-row-menu { display: inline-flex !important; width: 28px; height: 28px; border-color: transparent; background: transparent; color: var(--text-secondary, #475569) !important; visibility: visible !important; opacity: 1 !important; } .drawing-register-page .register-row-menu:hover, .drawing-register-page .register-row-menu[aria-expanded="true"] { color: var(--primary-color) !important; background: var(--hover-bg); }
 .register-context-menu { position: absolute; z-index: 8; top: 32px; right: 0; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
 .register-context-menu button { width: 100%; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 13px; text-align: left; }
 .register-context-menu button:hover { background: var(--hover-bg); } .register-context-menu button.danger { color: #d93025; }
