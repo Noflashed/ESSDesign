@@ -78,6 +78,7 @@ public sealed class EssAssistantDocumentIndexService
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         var result = new EssAssistantDocumentSyncResult { VectorStoreId = vectorStoreId, Discovered = candidates.Count };
         var maximumBytes = Math.Clamp(_configuration.GetValue<long?>("OpenAI:AssistantDocumentMaxBytes") ?? 40_000_000, 1_000_000, 100_000_000);
+        var sizeLimitError = BuildSizeLimitError(maximumBytes);
         var processed = 0;
 
         foreach (var candidate in candidates)
@@ -85,9 +86,13 @@ public sealed class EssAssistantDocumentIndexService
             cancellationToken.ThrowIfCancellationRequested();
             var key = $"{candidate.Bucket}/{candidate.Path}";
             indexedByPath.TryGetValue(key, out var previousIndex);
-            if (previousIndex.ValueKind == JsonValueKind.Object &&
-                string.Equals(GetString(previousIndex, "fingerprint"), candidate.Fingerprint, StringComparison.Ordinal) &&
-                string.Equals(GetString(previousIndex, "status"), "ready", StringComparison.OrdinalIgnoreCase))
+            var unchanged = previousIndex.ValueKind == JsonValueKind.Object &&
+                string.Equals(GetString(previousIndex, "fingerprint"), candidate.Fingerprint, StringComparison.Ordinal);
+            var previousStatus = GetString(previousIndex, "status");
+            if (unchanged &&
+                (string.Equals(previousStatus, "ready", StringComparison.OrdinalIgnoreCase) ||
+                 (string.Equals(previousStatus, "skipped", StringComparison.OrdinalIgnoreCase) &&
+                  string.Equals(GetString(previousIndex, "error"), sizeLimitError, StringComparison.Ordinal))))
             {
                 result.Unchanged++;
                 continue;
@@ -103,7 +108,7 @@ public sealed class EssAssistantDocumentIndexService
             if (candidate.Size is > 0 && candidate.Size > maximumBytes)
             {
                 result.Skipped++;
-                await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", "File exceeds the configured assistant size limit.", cancellationToken);
+                await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", sizeLimitError, cancellationToken);
                 continue;
             }
 
@@ -120,7 +125,7 @@ public sealed class EssAssistantDocumentIndexService
                 if (file.Bytes.LongLength > maximumBytes)
                 {
                     result.Skipped++;
-                    await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", "File exceeds the configured assistant size limit.", cancellationToken);
+                    await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", sizeLimitError, cancellationToken);
                     continue;
                 }
 
@@ -184,12 +189,12 @@ public sealed class EssAssistantDocumentIndexService
     {
         var candidates = new List<DocumentCandidate>();
         var designs = await _gateway.GetRowsAsync(
-            "design_documents?select=id,updated_at,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name&order=updated_at.desc&limit=10000",
+            "design_documents?select=id,updated_at,ess_design_issue_path,ess_design_issue_name,ess_design_file_size,third_party_design_path,third_party_design_name,third_party_design_file_size&order=updated_at.desc&limit=10000",
             cancellationToken);
         foreach (var design in designs)
         {
-            AddDesignCandidate(design, "ess_design_issue_path", "ess_design_issue_name", "ess_design", candidates);
-            AddDesignCandidate(design, "third_party_design_path", "third_party_design_name", "third_party_design", candidates);
+            AddDesignCandidate(design, "ess_design_issue_path", "ess_design_issue_name", "ess_design_file_size", "ess_design", candidates);
+            AddDesignCandidate(design, "third_party_design_path", "third_party_design_name", "third_party_design_file_size", "third_party_design", candidates);
         }
 
         if (candidates.Count < limit)
@@ -223,6 +228,7 @@ public sealed class EssAssistantDocumentIndexService
         JsonElement design,
         string pathProperty,
         string nameProperty,
+        string sizeProperty,
         string domain,
         ICollection<DocumentCandidate> candidates)
     {
@@ -238,6 +244,7 @@ public sealed class EssAssistantDocumentIndexService
             RecordId = GetString(design, "id") ?? path,
             UpdatedAt = GetString(design, "updated_at"),
             Fingerprint = GetString(design, "updated_at") ?? path,
+            Size = GetInt64(design, sizeProperty),
         });
     }
 
@@ -441,6 +448,23 @@ public sealed class EssAssistantDocumentIndexService
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind != JsonValueKind.Null
             ? value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString()
             : null;
+
+    private static long? GetInt64(JsonElement element, string property)
+    {
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty(property, out var value) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var numericValue))
+            return numericValue;
+        return value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out var stringValue)
+            ? stringValue
+            : null;
+    }
+
+    private static string BuildSizeLimitError(long maximumBytes) =>
+        $"File exceeds the configured assistant size limit of {maximumBytes} bytes.";
 
     private static string Trim(string value) => Truncate(value, 600);
     private static string Truncate(string value, int length) => value.Length <= length ? value : value[..length];
