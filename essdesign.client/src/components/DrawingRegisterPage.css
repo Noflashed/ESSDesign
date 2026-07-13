@@ -27,6 +27,8 @@
 .register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .register-modal-actions .register-primary-button:disabled { opacity: .55; cursor: not-allowed; }
 .drawing-register-table-wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
+.drawing-register-table-wrap.is-loading { overflow: hidden; scrollbar-width: none; }
+.drawing-register-table-wrap.is-loading::-webkit-scrollbar { display: none; }
 .drawing-register-table { width: 100%; min-width: 1480px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11.5px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
@@ -47,7 +49,7 @@
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
 .register-drawing-unavailable { color: var(--text-primary); }
 .drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky !important; right: 0; z-index: 6; width: 46px !important; min-width: 46px; max-width: 46px; padding: 0 6px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color); }
-.drawing-register-table th.row-actions { z-index: 5; background: var(--bg-secondary); }
+.drawing-register-table th.row-actions { top: 0; z-index: 12; background: var(--bg-secondary) !important; background-clip: padding-box; }
 .drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
 .register-row-actions-wrap { position: relative; display: inline-flex; }
 .drawing-register-page .register-row-menu { display: inline-flex !important; width: 28px; height: 28px; border-color: transparent; background: transparent; color: var(--text-secondary, #475569) !important; visibility: visible !important; opacity: 1 !important; } .drawing-register-page .register-row-menu:hover, .drawing-register-page .register-row-menu[aria-expanded="true"] { color: var(--primary-color) !important; background: var(--hover-bg); }

@@ -380,6 +380,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => { if (key === 'dateIssued') updateRow(row.id, key, formatDateIssued(event.target.value)); setEditingId(null); }} />
             : row[key];
     };
+    const registerLoading = loading || buildersLoading || !registryReconciled || drawingFoldersLoading;
 
     return (
         <main className="drawing-register-page">
@@ -409,8 +410,8 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                 </div>
             )}
 
-            <section className="drawing-register-table-wrap">
-                {loading || buildersLoading || !registryReconciled || drawingFoldersLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
+            <section className={`drawing-register-table-wrap${registerLoading ? ' is-loading' : ''}`}>
+                {registerLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className="drawing-register-table">
                         <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span><ChevronDown aria-hidden="true" /></button></th>)}<th className="row-actions" /></tr></thead>
                         <tbody>
