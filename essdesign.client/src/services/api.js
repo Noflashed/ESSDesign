@@ -445,6 +445,7 @@ const storageJsonCacheTabId = makeId();
 const seenStorageJsonSyncMessages = new Set();
 let storageJsonBroadcastChannel = null;
 let materialRequestIndexWriteQueue = Promise.resolve();
+let safetyProjectsWriteQueue = Promise.resolve();
 let materialOrderRequestsTableAvailable = null;
 let materialOrderRequestsTableSeedPromise = null;
 
@@ -711,6 +712,15 @@ function parseSafetyProjects(raw) {
                                     : Array.isArray(project.inducted_employee_ids)
                                         ? project.inducted_employee_ids.filter(Boolean)
                                         : null,
+                                drawingNumbers: Array.from(new Set(
+                                    (Array.isArray(project.drawingNumbers)
+                                        ? project.drawingNumbers
+                                        : Array.isArray(project.drawing_numbers)
+                                            ? project.drawing_numbers
+                                            : [])
+                                        .map(value => String(value || '').trim().toUpperCase())
+                                        .filter(Boolean)
+                                )),
                                 createdAt: project.createdAt || nowIso(),
                                 updatedAt: project.updatedAt || nowIso()
                             }))
@@ -868,6 +878,18 @@ async function saveSafetyProjectsDocument(doc) {
     }
 
     throw new Error(lastError || 'Failed to save safety projects');
+}
+
+async function withSafetyProjectsWriteLock(callback) {
+    const runLocked = async () => {
+        if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+            return navigator.locks.request('ess-safety-projects-write', { mode: 'exclusive' }, callback);
+        }
+        return callback();
+    };
+    const queued = safetyProjectsWriteQueue.then(runLocked, runLocked);
+    safetyProjectsWriteQueue = queued.catch(() => {});
+    return queued;
 }
 
 const restEndpoint = (table, query = '') => `${SUPABASE_REST_BASE}/${table}${query}`;
@@ -1209,6 +1231,7 @@ export const safetyProjectsAPI = {
             existingBuilder.projects.push({
                 id: makeId(),
                 name: cleanProject,
+                drawingNumbers: [],
                 archived: false,
                 archivedAt: null,
                 createdAt: timestamp,
@@ -1225,6 +1248,7 @@ export const safetyProjectsAPI = {
                 projects: [{
                     id: makeId(),
                     name: cleanProject,
+                    drawingNumbers: [],
                     archived: false,
                     archivedAt: null,
                     createdAt: timestamp,
@@ -1294,6 +1318,7 @@ export const safetyProjectsAPI = {
         builder.projects.push({
             id: makeId(),
             name: cleanProject,
+            drawingNumbers: [],
             archived: false,
             archivedAt: null,
             siteLocation: cleanLocation,
@@ -1468,6 +1493,45 @@ export const safetyProjectsAPI = {
         builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
+    },
+
+    syncDrawingProjectLinks: async (assignments = []) => withSafetyProjectsWriteLock(async () => {
+        const normalizedAssignments = assignments
+            .map(assignment => ({
+                drawingNumber: String(assignment?.drawingNumber || '').trim().toUpperCase(),
+                builderId: assignment?.builderId || '',
+                projectId: assignment?.projectId || ''
+            }))
+            .filter(assignment => /^[A-Z0-9]+-[A-Z0-9]+-ESD\d+$/.test(assignment.drawingNumber));
+
+        if (normalizedAssignments.length === 0) {
+            return safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
+        }
+
+        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
+        const drawingNumbers = new Set(normalizedAssignments.map(assignment => assignment.drawingNumber));
+        const timestamp = nowIso();
+
+        builders.forEach(builder => builder.projects.forEach(project => {
+            project.drawingNumbers = (project.drawingNumbers || []).filter(number => !drawingNumbers.has(number));
+        }));
+
+        normalizedAssignments.forEach(assignment => {
+            if (!assignment.builderId || !assignment.projectId) return;
+            const builder = builders.find(item => item.id === assignment.builderId);
+            const project = builder?.projects.find(item => item.id === assignment.projectId);
+            if (!project) throw new Error('The selected Site Registry project could not be found.');
+            project.drawingNumbers = Array.from(new Set([...(project.drawingNumbers || []), assignment.drawingNumber]));
+            project.updatedAt = timestamp;
+            builder.updatedAt = timestamp;
+        });
+
+        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
+        return builders;
+    }),
+
+    setDrawingProjectLink: async (drawingNumber, builderId = '', projectId = '') => {
+        return safetyProjectsAPI.syncDrawingProjectLinks([{ drawingNumber, builderId, projectId }]);
     }
 };
 
