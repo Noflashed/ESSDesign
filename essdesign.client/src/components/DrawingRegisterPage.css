@@ -1,9 +1,10 @@
-.drawing-register-page { min-width: 0; height: 100%; overflow: auto; padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
+.app-page-content:has(.drawing-register-page) { min-height: 0; overflow: hidden; }
+.drawing-register-page { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; padding: 24px; background: var(--bg-primary); color: var(--text-primary); }
 .register-icon-button, .register-row-menu { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); cursor: pointer; }
 .drawing-register-page .register-icon-button svg, .drawing-register-page .register-row-menu svg { display: block !important; width: 17px !important; height: 17px !important; min-width: 17px; min-height: 17px; visibility: visible !important; opacity: 1 !important; fill: none !important; stroke: currentColor !important; stroke-width: 2 !important; }
 .drawing-register-page .register-back-button { flex: 0 0 34px; width: 34px; height: 34px; border-color: transparent; background: transparent; color: var(--text-primary, #1f2937) !important; }
 .drawing-register-page .register-back-button:hover { border-color: var(--primary-color); color: var(--primary-color) !important; background: var(--hover-bg); }
-.drawing-register-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.drawing-register-toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .register-search { width: min(560px, 52vw); height: 42px; display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); }
 .register-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; }
 .register-toolbar-spacer { flex: 1; }
@@ -25,7 +26,7 @@
 .register-field-error { color: #d93025; }
 .register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .register-modal-actions .register-primary-button:disabled { opacity: .55; cursor: not-allowed; }
-.drawing-register-table-wrap { position: relative; overflow: auto; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
+.drawing-register-table-wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
 .drawing-register-table { width: 100%; min-width: 1480px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11.5px; }
 .drawing-register-table th, .drawing-register-table td { height: 46px; padding: 0 12px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawing-register-table th { position: sticky; top: 0; z-index: 2; height: 42px; background: var(--bg-secondary); font-size: 11px; font-weight: 750; }
