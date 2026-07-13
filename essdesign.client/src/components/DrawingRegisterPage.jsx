@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, Filter, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -161,7 +161,6 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
     const [sortField, setSortField] = useState('drawingNo');
     const [sortDirection, setSortDirection] = useState('desc');
     const [showAddRow, setShowAddRow] = useState(false);
@@ -234,7 +233,6 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         setRegistryReconciled(true);
     }, [builders, buildersError, buildersLoading, loading]);
 
-    const statuses = useMemo(() => [...new Set(rows.map(row => cleanStatus(row.designUse)).filter(Boolean))].sort(), [rows]);
     const drawingNumberKey = useMemo(() => [...new Set(rows.map(row => getBaseDrawingNumber(row.drawingNo)).filter(Boolean))].sort().join('|'), [rows]);
     const selectedBuilder = useMemo(() => builders.find(builder => builder.name === draft.client) || null, [builders, draft.client]);
     const availableProjects = useMemo(() => (selectedBuilder?.projects || []).filter(project => !project.archived), [selectedBuilder]);
@@ -254,8 +252,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         const needle = query.trim().toLowerCase();
         return rows
             .map((row, sourceIndex) => ({ row, sourceIndex }))
-            .filter(({ row }) => (!statusFilter || cleanStatus(row.designUse) === statusFilter)
-                && (!needle || FIELDS.some(([key]) => String(row[key]).toLowerCase().includes(needle))))
+            .filter(({ row }) => !needle || FIELDS.some(([key]) => String(row[key]).toLowerCase().includes(needle)))
             .sort((left, right) => {
                 const leftValue = getRowSortValue(left.row, sortField);
                 const rightValue = getRowSortValue(right.row, sortField);
@@ -265,7 +262,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                 return (sortDirection === 'asc' ? comparison : -comparison) || left.sourceIndex - right.sourceIndex;
             })
             .map(({ row }) => row);
-    }, [rows, query, sortDirection, sortField, statusFilter]);
+    }, [rows, query, sortDirection, sortField]);
 
     useEffect(() => {
         if (loading) return;
@@ -365,14 +362,9 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
 
     return (
         <main className="drawing-register-page">
-            <header className="drawing-register-heading">
-                <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
-                <h1>Drawing Register</h1>
-            </header>
-
             <div className="drawing-register-toolbar">
+                <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
                 <label className="register-search"><Search size={18} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drawings..." /></label>
-                <label className="register-filter"><Filter size={17} /><span>Filter</span><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">All uses</option>{statuses.map(status => <option key={status}>{status}</option>)}</select></label>
                 <span className="register-toolbar-spacer" />
                 <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>
             </div>
