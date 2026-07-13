@@ -1496,11 +1496,11 @@ function App() {
     }, []);
 
     const handleDocumentClick = (document) => {
-        if (document.essDesignIssuePath) {
+        if (document.essDesignIssuePath || document.fileType === 'thirdparty') {
             setPdfViewer({
                 documentId: document.id,
                 fileName: document.essDesignIssueName || 'document.pdf',
-                fileType: 'ess'
+                fileType: document.fileType || 'ess'
             });
         }
     };
@@ -1609,7 +1609,7 @@ function App() {
         }
 
         if (currentPage === 'drawing-register') {
-            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenFolder={handleOpenDesignFolder} />;
+            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} />;
         }
 
         return (

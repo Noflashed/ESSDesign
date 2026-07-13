@@ -50,6 +50,9 @@ namespace ESSDesign.Server.Services
 
         private sealed class DrawingDocumentLookupRow
         {
+            [JsonPropertyName("id")]
+            public Guid Id { get; set; }
+
             [JsonPropertyName("folder_id")]
             public Guid FolderId { get; set; }
 
@@ -2204,22 +2207,22 @@ namespace ESSDesign.Server.Services
             }
 
             var documents = await GetRestRowsAsync<DrawingDocumentLookupRow>(
-                "design_documents?select=folder_id,revision_number,drawing_status,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&limit=10000");
+                "design_documents?select=id,folder_id,revision_number,drawing_status,ess_design_issue_name,ess_design_issue_path,third_party_design_name,third_party_design_path,updated_at&limit=10000");
             var matches = new Dictionary<string, (DrawingFolderResolution Resolution, int RevisionSort, DateTime UpdatedAt)>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var document in documents)
             {
                 var sources = new[]
                 {
-                    document.EssDesignIssueName,
-                    document.EssDesignIssuePath,
-                    document.ThirdPartyDesignName,
-                    document.ThirdPartyDesignPath
+                    new { Value = document.EssDesignIssueName, FileType = "ess", FileName = document.EssDesignIssueName },
+                    new { Value = document.EssDesignIssuePath, FileType = "ess", FileName = document.EssDesignIssueName },
+                    new { Value = document.ThirdPartyDesignName, FileType = "thirdparty", FileName = document.ThirdPartyDesignName },
+                    new { Value = document.ThirdPartyDesignPath, FileType = "thirdparty", FileName = document.ThirdPartyDesignName }
                 };
 
-                foreach (var source in sources.Where(source => !string.IsNullOrWhiteSpace(source)))
+                foreach (var source in sources.Where(source => !string.IsNullOrWhiteSpace(source.Value)))
                 {
-                    var decoded = Uri.UnescapeDataString(source!);
+                    var decoded = Uri.UnescapeDataString(source.Value!);
                     foreach (Match match in Regex.Matches(decoded, @"[A-Z0-9]+-[A-Z0-9]+-ESD\d+", RegexOptions.IgnoreCase))
                     {
                         var drawingNumber = match.Value.ToUpperInvariant();
@@ -2239,6 +2242,9 @@ namespace ESSDesign.Server.Services
                                 new DrawingFolderResolution
                                 {
                                     FolderId = document.FolderId,
+                                    DocumentId = document.Id,
+                                    FileType = source.FileType,
+                                    FileName = source.FileName ?? Path.GetFileName(decoded),
                                     RevisionNo = revisionNo,
                                     DesignUse = designUse
                                 },

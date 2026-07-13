@@ -177,7 +177,7 @@ const readWorkbook = async file => {
     })).filter(row => FIELDS.some(([key]) => row[key]));
 };
 
-export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
+export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -191,9 +191,9 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const [buildersLoading, setBuildersLoading] = useState(true);
     const [buildersError, setBuildersError] = useState('');
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
-    const [folderNavigationError, setFolderNavigationError] = useState('');
-    const [drawingFolders, setDrawingFolders] = useState({});
-    const [drawingFoldersLoading, setDrawingFoldersLoading] = useState(true);
+    const [documentOpenError, setDocumentOpenError] = useState('');
+    const [drawingDocuments, setDrawingDocuments] = useState({});
+    const [drawingDocumentsLoading, setDrawingDocumentsLoading] = useState(true);
     const [registryReconciled, setRegistryReconciled] = useState(false);
     const registryReconciledRef = useRef(false);
 
@@ -288,15 +288,15 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     useEffect(() => {
         if (loading) return;
         if (!drawingNumberKey) {
-            setDrawingFoldersLoading(false);
+            setDrawingDocumentsLoading(false);
             return;
         }
         let cancelled = false;
-        setDrawingFoldersLoading(true);
+        setDrawingDocumentsLoading(true);
         foldersAPI.resolveDrawingFolders(drawingNumberKey.split('|'))
             .then(resolutions => {
                 if (cancelled) return;
-                setDrawingFolders(Object.fromEntries(Object.entries(resolutions).map(([drawingNumber, resolution]) => [drawingNumber, resolution.folderId])));
+                setDrawingDocuments(resolutions);
                 setRows(current => current.map(row => {
                     const resolution = resolutions[getBaseDrawingNumber(row.drawingNo)];
                     if (!resolution) return { ...row, designUse: cleanStatus(row.designUse) };
@@ -308,11 +308,11 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                 }));
             })
             .catch(error => {
-                console.error('Drawing folder availability lookup failed', error);
-                if (!cancelled) setDrawingFolders({});
+                console.error('Drawing document availability lookup failed', error);
+                if (!cancelled) setDrawingDocuments({});
             })
             .finally(() => {
-                if (!cancelled) setDrawingFoldersLoading(false);
+                if (!cancelled) setDrawingDocumentsLoading(false);
             });
         return () => {
             cancelled = true;
@@ -335,17 +335,22 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         setShowAddRow(true);
         setOpenMenuId(null);
     };
-    const openDrawingFolder = async row => {
+    const openLatestDrawing = row => {
         const drawingNumber = getBaseDrawingNumber(row.drawingNo);
         if (!drawingNumber || openingDrawingId) return;
         setOpeningDrawingId(row.id);
-        setFolderNavigationError('');
+        setDocumentOpenError('');
         try {
-            const folderId = drawingFolders[drawingNumber];
-            if (!folderId) throw new Error(`No ESS Design folder was found for ${drawingNumber}.`);
-            onOpenFolder(folderId);
+            const document = drawingDocuments[drawingNumber];
+            if (!document?.documentId) throw new Error(`No ESS Design PDF was found for ${drawingNumber}.`);
+            onOpenDocument({
+                id: document.documentId,
+                essDesignIssuePath: document.fileType === 'ess' ? document.fileName : null,
+                essDesignIssueName: document.fileName,
+                fileType: document.fileType
+            });
         } catch (error) {
-            setFolderNavigationError(error?.response?.data?.error || error.message || `No ESS Design folder was found for ${drawingNumber}.`);
+            setDocumentOpenError(error?.response?.data?.error || error.message || `No ESS Design PDF was found for ${drawingNumber}.`);
         } finally {
             setOpeningDrawingId(null);
         }
@@ -369,8 +374,8 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             return <span className="register-table-select-wrap"><select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRow(row.id, 'project', event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
         if (key === 'drawingNo') {
-            return drawingFolders[getBaseDrawingNumber(row[key])]
-                ? <button type="button" className="register-drawing-link" onClick={() => openDrawingFolder(row)} disabled={openingDrawingId === row.id} title={`Open all revisions for ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
+            return drawingDocuments[getBaseDrawingNumber(row[key])]?.documentId
+                ? <button type="button" className="register-drawing-link" onClick={() => openLatestDrawing(row)} disabled={openingDrawingId === row.id} title={`Open latest revision of ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
                 : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
         }
         if (key === 'designUse') {
@@ -380,7 +385,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => { if (key === 'dateIssued') updateRow(row.id, key, formatDateIssued(event.target.value)); setEditingId(null); }} />
             : row[key];
     };
-    const registerLoading = loading || buildersLoading || !registryReconciled || drawingFoldersLoading;
+    const registerLoading = loading || buildersLoading || !registryReconciled || drawingDocumentsLoading;
 
     return (
         <main className="drawing-register-page">
@@ -390,7 +395,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
                 <span className="register-toolbar-spacer" />
                 <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>
             </div>
-            {folderNavigationError && <div className="register-navigation-error" role="alert">{folderNavigationError}</div>}
+            {documentOpenError && <div className="register-navigation-error" role="alert">{documentOpenError}</div>}
 
             {showAddRow && (
                 <div className="register-modal-backdrop" role="presentation" onMouseDown={() => setShowAddRow(false)}>

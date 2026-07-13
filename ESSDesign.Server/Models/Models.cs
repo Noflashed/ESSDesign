@@ -494,6 +494,9 @@ namespace ESSDesign.Server.Models
     public class DrawingFolderResolution
     {
         public Guid FolderId { get; set; }
+        public Guid DocumentId { get; set; }
+        public string FileType { get; set; } = "ess";
+        public string FileName { get; set; } = string.Empty;
         public string RevisionNo { get; set; } = string.Empty;
         public string DesignUse { get; set; } = string.Empty;
     }
