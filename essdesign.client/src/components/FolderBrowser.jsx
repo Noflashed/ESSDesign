@@ -70,34 +70,6 @@ const MoreIcon = ({ size = 18, color = 'currentColor' }) => (
     </svg>
 );
 
-const GridIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7"></rect>
-        <rect x="14" y="3" width="7" height="7"></rect>
-        <rect x="3" y="14" width="7" height="7"></rect>
-        <rect x="14" y="14" width="7" height="7"></rect>
-    </svg>
-);
-
-const ListIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="8" y1="6" x2="21" y2="6"></line>
-        <line x1="8" y1="12" x2="21" y2="12"></line>
-        <line x1="8" y1="18" x2="21" y2="18"></line>
-        <line x1="3" y1="6" x2="3.01" y2="6"></line>
-        <line x1="3" y1="12" x2="3.01" y2="12"></line>
-        <line x1="3" y1="18" x2="3.01" y2="18"></line>
-    </svg>
-);
-
-const InfoIcon = ({ size = 18, color = 'currentColor' }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="16" x2="12" y2="12"></line>
-        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-    </svg>
-);
-
 const ShareIcon = ({ size = 16, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -600,7 +572,7 @@ function BuilderFolderLogo({ logoUrl }) {
     );
 }
 
-function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialViewMode, onViewModeChange, onRefreshNeeded, canManage = false, onOpenDrawingRegister }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canManage = false, onOpenDrawingRegister }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(() => selectedFolderId ?? null);
     const [folders, setFolders] = useState([]);
@@ -643,12 +615,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
     // Drag-and-drop state
     const draggedItemRef = useRef(null);
     const [dragOverFolderId, setDragOverFolderId] = useState(null);
-    const [viewMode, setViewMode] = useState(() => {
-        if (initialViewMode) return initialViewMode;
-        return localStorage.getItem('viewModeUserSelected') === 'true'
-            ? (localStorage.getItem('viewMode') || 'list')
-            : 'list';
-    }); // 'grid' or 'list'
+    const viewMode = 'list';
     const [sortField, setSortField] = useState(() => {
         return localStorage.getItem('sortField') || 'name';
     });
@@ -765,13 +732,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         setColWidths({ ...DEFAULT_COL_WIDTHS });
     }, []);
 
-    const handleViewModeSelect = useCallback((nextViewMode) => {
-        setViewMode(nextViewMode);
-        if (onViewModeChange) {
-            onViewModeChange(nextViewMode);
-        }
-    }, [onViewModeChange]);
-
     // PDF Viewer state
     const [pdfViewer, setPdfViewer] = useState(null);
 
@@ -875,15 +835,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
         };
     }, []);
 
-    // Save view mode preference
     useEffect(() => {
-        if (!initialViewMode || initialViewMode === viewMode) return;
-        setViewMode(initialViewMode);
-    }, [initialViewMode, viewMode]);
-
-    useEffect(() => {
-        localStorage.setItem('viewMode', viewMode);
-    }, [viewMode]);
+        localStorage.setItem('viewMode', 'list');
+    }, []);
 
     useEffect(() => {
         if (!showRevisionColumn && sortField === 'revision') {
@@ -1681,25 +1635,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, viewMode: initialView
                                         </button>
                                     </div>
                                 )}
-                                <div className="view-toggle">
-                                    <button
-                                        className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                                        onClick={() => handleViewModeSelect('list')}
-                                        title="List view"
-                                    >
-                                        <ListIcon size={18} />
-                                    </button>
-                                    <button
-                                        className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                                        onClick={() => handleViewModeSelect('grid')}
-                                        title="Grid view"
-                                    >
-                                        <GridIcon size={18} />
-                                    </button>
-                                </div>
-                                <button type="button" className="toolbar-icon-btn" title="Details">
-                                    <InfoIcon size={18} />
-                                </button>
                             </div>
                         </div>
                         {loading ? (

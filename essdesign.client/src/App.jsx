@@ -615,11 +615,6 @@ function App() {
         const saved = localStorage.getItem('sidebarWidth');
         return saved ? parseInt(saved) : 280;
     });
-    const [viewMode, setViewMode] = useState(() => (
-        localStorage.getItem('viewModeUserSelected') === 'true'
-            ? (localStorage.getItem('viewMode') || 'list')
-            : 'list'
-    ));
     const [pdfViewer, setPdfViewer] = useState(null);
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -1007,10 +1002,7 @@ function App() {
                 setTheme(prefs.theme);
                 localStorage.setItem('theme', prefs.theme);
             }
-            if (prefs.viewMode && localStorage.getItem('viewModeUserSelected') === 'true') {
-                setViewMode(prefs.viewMode);
-                localStorage.setItem('viewMode', prefs.viewMode);
-            }
+            localStorage.setItem('viewMode', 'list');
             if (prefs.sidebarWidth) {
                 setSidebarWidth(prefs.sidebarWidth);
                 localStorage.setItem('sidebarWidth', prefs.sidebarWidth.toString());
@@ -1259,13 +1251,6 @@ function App() {
         setSidebarWidth(newWidth);
         localStorage.setItem('sidebarWidth', newWidth.toString());
         savePreferencesToBackend({ sidebarWidth: newWidth });
-    };
-
-    const handleViewModeChange = (newViewMode) => {
-        setViewMode(newViewMode);
-        localStorage.setItem('viewModeUserSelected', 'true');
-        localStorage.setItem('viewMode', newViewMode);
-        savePreferencesToBackend({ viewMode: newViewMode });
     };
 
     const triggerRefresh = () => {
@@ -1632,8 +1617,6 @@ function App() {
                 <FolderBrowser
                     selectedFolderId={selectedFolderId}
                     onFolderChange={handleFolderSelect}
-                    viewMode={viewMode}
-                    onViewModeChange={handleViewModeChange}
                     onRefreshNeeded={triggerRefresh}
                     canManage={canManageEssDesign}
                     onOpenDrawingRegister={() => applyPageState('drawing-register', { builder: null, project: null }, { leadingHand: null }, { planDate: null })}
