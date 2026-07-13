@@ -26,6 +26,26 @@ const getTodayInputValue = () => {
     return `${year}-${month}-${day}`;
 };
 
+const formatDateIssued = value => {
+    const text = String(value || '').trim();
+    let day;
+    let month;
+    let year;
+    const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    const localMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+    if (isoMatch) {
+        [, year, month, day] = isoMatch;
+    } else if (localMatch) {
+        [, day, month, year] = localMatch;
+    } else {
+        return '';
+    }
+    const fullYear = Number(year) < 100 ? 2000 + Number(year) : Number(year);
+    const candidate = new Date(fullYear, Number(month) - 1, Number(day));
+    if (candidate.getFullYear() !== fullYear || candidate.getMonth() !== Number(month) - 1 || candidate.getDate() !== Number(day)) return '';
+    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${fullYear}`;
+};
+
 const cleanStatus = value => {
     const status = String(value || '').trim().toUpperCase();
     if (['CON', 'CONSTRUCTION', 'CONSTRICTION'].includes(status)) return 'CONSTRUCTION';
@@ -151,7 +171,7 @@ const readWorkbook = async file => {
         project: String(row.PROJECT || '').trim(),
         design: String(row.DESIGN || '').trim(),
         drawingNo: String(row['DRAWING NO.'] || '').trim(),
-        dateIssued: String(row['DATE ISSUED'] || '').trim(),
+        dateIssued: formatDateIssued(row['DATE ISSUED']),
         revisionNo: String(row['REVISION NO.'] || '').trim(),
         designUse: cleanStatus(row['DESIGN USE']),
     })).filter(row => FIELDS.some(([key]) => row[key]));
@@ -181,7 +201,8 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
         const load = async () => {
             try {
                 const saved = localStorage.getItem(STORAGE_KEY);
-                setRows(saved ? JSON.parse(saved) : await readWorkbook(SOURCE_FILE));
+                const loadedRows = saved ? JSON.parse(saved) : await readWorkbook(SOURCE_FILE);
+                setRows(loadedRows.map(row => ({ ...row, dateIssued: formatDateIssued(row.dateIssued) })));
             } catch (error) {
                 console.error('Drawing register load failed', error);
             } finally {
@@ -302,7 +323,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const addRow = event => {
         event.preventDefault();
         if (!draft.client || !draft.project || !draft.design || !generatedDrawingNo) return;
-        setRows(current => [{ ...draft, drawingNo: generatedDrawingNo, id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
+        setRows(current => [{ ...draft, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
         setDraft(EMPTY_ROW);
         setShowAddRow(false);
     };
@@ -356,7 +377,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
             return <select className="register-status-select" value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
         }
         return editingId === row.id
-            ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={() => setEditingId(null)} />
+            ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => { if (key === 'dateIssued') updateRow(row.id, key, formatDateIssued(event.target.value)); setEditingId(null); }} />
             : row[key];
     };
 
