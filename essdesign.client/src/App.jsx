@@ -1609,7 +1609,7 @@ function App() {
         }
 
         if (currentPage === 'drawing-register') {
-            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} />;
+            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} canEdit={canManageEssDesign} />;
         }
 
         return (

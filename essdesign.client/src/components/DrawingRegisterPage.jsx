@@ -177,7 +177,7 @@ const readWorkbook = async file => {
     })).filter(row => FIELDS.some(([key]) => row[key]));
 };
 
-export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
+export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = false }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -322,15 +322,25 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
     const addRow = event => {
         event.preventDefault();
-        if (!draft.client || !draft.project || !draft.design || !generatedDrawingNo) return;
+        if (!canEdit || !draft.client || !draft.project || !draft.design || !generatedDrawingNo) return;
         setRows(current => [{ ...draft, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
         setDraft(EMPTY_ROW);
         setShowAddRow(false);
     };
-    const updateRow = (id, key, value) => setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
-    const updateRowClient = (id, client) => setRows(current => current.map(row => row.id === id ? { ...row, client, project: '' } : row));
-    const deleteRow = id => setRows(current => current.filter(row => row.id !== id));
+    const updateRow = (id, key, value) => {
+        if (!canEdit) return;
+        setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
+    };
+    const updateRowClient = (id, client) => {
+        if (!canEdit) return;
+        setRows(current => current.map(row => row.id === id ? { ...row, client, project: '' } : row));
+    };
+    const deleteRow = id => {
+        if (!canEdit) return;
+        setRows(current => current.filter(row => row.id !== id));
+    };
     const openAddRow = () => {
+        if (!canEdit) return;
         setDraft({ ...EMPTY_ROW, dateIssued: getTodayInputValue() });
         setShowAddRow(true);
         setOpenMenuId(null);
@@ -367,9 +377,11 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
 
     const renderCell = (row, key) => {
         if (key === 'client') {
+            if (!canEdit) return <span className="register-read-only-value" title={row.client}>{row.client}</span>;
             return <span className="register-table-select-wrap"><select className="register-table-select" value={row.client} title={row.client || 'Select client'} onChange={event => updateRowClient(row.id, event.target.value)}><option value="">Select client</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
         if (key === 'project') {
+            if (!canEdit) return <span className="register-read-only-value" title={row.project}>{row.project}</span>;
             const projects = getBuilderProjects(row.client);
             return <span className="register-table-select-wrap"><select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRow(row.id, 'project', event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
@@ -379,11 +391,12 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
                 : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
         }
         if (key === 'designUse') {
+            if (!canEdit) return <span className="register-read-only-value" title={cleanStatus(row[key])}>{cleanStatus(row[key])}</span>;
             return <select className="register-status-select" value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
         }
-        return editingId === row.id
+        return canEdit && editingId === row.id
             ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => { if (key === 'dateIssued') updateRow(row.id, key, formatDateIssued(event.target.value)); setEditingId(null); }} />
-            : row[key];
+            : <span className="register-read-only-value" title={row[key]}>{row[key]}</span>;
     };
     const registerLoading = loading || buildersLoading || !registryReconciled || drawingDocumentsLoading;
 
@@ -393,11 +406,11 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
                 <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
                 <label className="register-search"><Search size={18} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drawings..." /></label>
                 <span className="register-toolbar-spacer" />
-                <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>
+                {canEdit && <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>}
             </div>
             {documentOpenError && <div className="register-navigation-error" role="alert">{documentOpenError}</div>}
 
-            {showAddRow && (
+            {canEdit && showAddRow && (
                 <div className="register-modal-backdrop" role="presentation" onMouseDown={() => setShowAddRow(false)}>
                     <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title">
                         <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close"><X size={18} /></button></div>
@@ -417,13 +430,13 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
 
             <section className={`drawing-register-table-wrap${registerLoading ? ' is-loading' : ''}`}>
                 {registerLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
-                    <table className="drawing-register-table">
-                        <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span><ChevronDown aria-hidden="true" /></button></th>)}<th className="row-actions" /></tr></thead>
+                    <table className={`drawing-register-table${canEdit ? '' : ' is-read-only'}`}>
+                        <thead><tr>{FIELDS.map(([key, label]) => <th key={label}><button type="button" className={`register-column-sort${sortField === key ? ' active' : ''}`} onClick={() => handleColumnSort(key)} title={`Sort by ${label.toLowerCase()}`}><span>{label}</span><ChevronDown aria-hidden="true" /></button></th>)}{canEdit && <th className="row-actions" />}</tr></thead>
                         <tbody>
                             {filteredRows.map(row => (
                                 <tr key={row.id}>
-                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={['client', 'project', 'designUse', 'drawingNo'].includes(key) ? undefined : () => setEditingId(row.id)}>{renderCell(row, key)}</td>)}
-                                    <td className="row-actions">
+                                    {FIELDS.map(([key]) => <td key={key} onDoubleClick={!canEdit || ['client', 'project', 'designUse', 'drawingNo'].includes(key) ? undefined : () => setEditingId(row.id)}>{renderCell(row, key)}</td>)}
+                                    {canEdit && <td className="row-actions">
                                         <div className="register-row-actions-wrap">
                                             <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={20} aria-hidden="true" /></button>
                                             {openMenuId === row.id && <div className="register-context-menu" onClick={event => event.stopPropagation()}>
@@ -431,7 +444,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument }) {
                                                 <button type="button" className="danger" onClick={() => { deleteRow(row.id); setOpenMenuId(null); }}><Trash2 size={16} /> Delete drawing</button>
                                             </div>}
                                         </div>
-                                    </td>
+                                    </td>}
                                 </tr>
                             ))}
                         </tbody>
