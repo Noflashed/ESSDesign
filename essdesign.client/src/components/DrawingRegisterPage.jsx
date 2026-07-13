@@ -18,6 +18,13 @@ const FIELDS = [
 ];
 const EMPTY_ROW = Object.fromEntries(FIELDS.map(([key]) => [key, '']));
 const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'AS-BUILT'];
+const getTodayInputValue = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 const cleanStatus = value => {
     const status = String(value || '').trim().toUpperCase();
@@ -306,7 +313,7 @@ export default function DrawingRegisterPage({ onBack, onOpenFolder }) {
     const updateRowClient = (id, client) => setRows(current => current.map(row => row.id === id ? { ...row, client, project: '' } : row));
     const deleteRow = id => setRows(current => current.filter(row => row.id !== id));
     const openAddRow = () => {
-        setDraft(EMPTY_ROW);
+        setDraft({ ...EMPTY_ROW, dateIssued: getTodayInputValue() });
         setShowAddRow(true);
         setOpenMenuId(null);
     };
