@@ -678,6 +678,7 @@ function parseSafetyProjects(raw) {
                     createdAt: item.createdAt || nowIso(),
                     updatedAt: item.updatedAt || nowIso()
                 })),
+            drawingRegisterEntries: [],
             updatedAt: nowIso()
         };
     }
@@ -730,11 +731,37 @@ function parseSafetyProjects(raw) {
                     updatedAt: builder.updatedAt || nowIso()
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name)),
+            drawingRegisterEntries: Array.isArray(raw.drawingRegisterEntries)
+                ? raw.drawingRegisterEntries.map((entry, index) => ({
+                    id: String(entry?.id || `drawing-${index}`),
+                    builderId: String(entry?.builderId || entry?.builder_id || ''),
+                    projectId: String(entry?.projectId || entry?.project_id || ''),
+                    client: String(entry?.client || '').trim(),
+                    project: String(entry?.project || '').trim(),
+                    design: String(entry?.design || '').trim(),
+                    drawingNo: String(entry?.drawingNo || entry?.drawing_no || '').trim(),
+                    dateIssued: String(entry?.dateIssued || entry?.date_issued || '').trim(),
+                    revisionNo: String(entry?.revisionNo || entry?.revision_no || '').trim(),
+                    designUse: String(entry?.designUse || entry?.design_use || '').trim()
+                }))
+                : [],
             updatedAt: raw.updatedAt || nowIso()
         };
     }
 
-    return { builders: [], updatedAt: nowIso() };
+    return { builders: [], drawingRegisterEntries: [], updatedAt: nowIso() };
+}
+
+function resolveDrawingRegisterEntries(doc) {
+    return (doc.drawingRegisterEntries || []).map(entry => {
+        const builder = doc.builders.find(item => item.id === entry.builderId);
+        const project = builder?.projects.find(item => item.id === entry.projectId);
+        return {
+            ...entry,
+            client: builder?.name || entry.client || '',
+            project: project?.name || entry.project || ''
+        };
+    });
 }
 
 function cloneSafetyBuilders(builders, { includeArchived = true } = {}) {
@@ -853,7 +880,12 @@ async function resolveBuilderLogoUrl(builder, { expiresIn = 86400 } = {}) {
 
 async function saveSafetyProjectsDocument(doc) {
     await ensureSafetyBucketAccess();
-    const payload = JSON.stringify(doc);
+    let nextDocument = doc;
+    if (!Object.prototype.hasOwnProperty.call(doc, 'drawingRegisterEntries')) {
+        const current = parseSafetyProjects(await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS }));
+        nextDocument = { ...doc, drawingRegisterEntries: current.drawingRegisterEntries };
+    }
+    const payload = JSON.stringify(nextDocument);
     const attempts = [
         { method: 'POST', url: safetyProjectsObjectUrl(), headers: { ...storageHeaders(true), 'x-upsert': 'true' } },
         { method: 'POST', url: safetyProjectsObjectUpsertUrl(), headers: storageHeaders(true) },
@@ -869,7 +901,7 @@ async function saveSafetyProjectsDocument(doc) {
         });
 
         if (response.ok) {
-            setStorageJsonCache(SAFETY_PROJECTS_PATH, doc, SAFETY_PROJECTS_CACHE_TTL_MS);
+            setStorageJsonCache(SAFETY_PROJECTS_PATH, nextDocument, SAFETY_PROJECTS_CACHE_TTL_MS);
             emitStorageJsonChanged(SAFETY_PROJECTS_PATH);
             return;
         }
@@ -1212,6 +1244,56 @@ export const safetyProjectsAPI = {
         return cloneSafetyBuilders(parseSafetyProjects(json).builders, { includeArchived });
     },
 
+    getDrawingRegisterEntries: async ({ force = false } = {}) => {
+        await ensureSafetyBucketAccess();
+        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        if (!json) return [];
+        return resolveDrawingRegisterEntries(parseSafetyProjects(json));
+    },
+
+    saveDrawingRegisterEntries: async (entries = []) => withSafetyProjectsWriteLock(async () => {
+        await ensureSafetyBucketAccess();
+        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        const doc = parseSafetyProjects(json);
+        const timestamp = nowIso();
+        const normalizedEntries = entries.map((entry, index) => {
+            const exactBuilder = doc.builders.find(builder => builder.id === entry?.builderId)
+                || doc.builders.find(builder => builder.name.toLowerCase() === String(entry?.client || '').trim().toLowerCase());
+            const exactProject = exactBuilder?.projects.find(project => project.id === entry?.projectId)
+                || exactBuilder?.projects.find(project => project.name.toLowerCase() === String(entry?.project || '').trim().toLowerCase());
+            return {
+                id: String(entry?.id || `drawing-${index}`),
+                builderId: exactBuilder?.id || '',
+                projectId: exactProject?.id || '',
+                client: exactBuilder?.name || String(entry?.client || '').trim(),
+                project: exactProject?.name || String(entry?.project || '').trim(),
+                design: String(entry?.design || '').trim(),
+                drawingNo: String(entry?.drawingNo || '').trim(),
+                dateIssued: String(entry?.dateIssued || '').trim(),
+                revisionNo: String(entry?.revisionNo || '').trim(),
+                designUse: String(entry?.designUse || '').trim()
+            };
+        });
+
+        doc.builders.forEach(builder => builder.projects.forEach(project => {
+            project.drawingNumbers = [];
+        }));
+        normalizedEntries.forEach(entry => {
+            const drawingNumber = String(entry.drawingNo || '').trim().match(/^[A-Z0-9]+-[A-Z0-9]+-ESD\d+/i)?.[0]?.toUpperCase();
+            const builder = doc.builders.find(item => item.id === entry.builderId);
+            const project = builder?.projects.find(item => item.id === entry.projectId);
+            if (!drawingNumber || !project) return;
+            project.drawingNumbers = Array.from(new Set([...(project.drawingNumbers || []), drawingNumber]));
+            project.updatedAt = timestamp;
+            builder.updatedAt = timestamp;
+        });
+
+        doc.drawingRegisterEntries = normalizedEntries;
+        doc.updatedAt = timestamp;
+        await saveSafetyProjectsDocument(doc);
+        return resolveDrawingRegisterEntries(doc);
+    }),
+
     createBuilderAndProject: async (builderName, projectName) => {
         const cleanBuilder = builderName.trim();
         const cleanProject = projectName.trim();
@@ -1493,45 +1575,6 @@ export const safetyProjectsAPI = {
         builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    },
-
-    syncDrawingProjectLinks: async (assignments = []) => withSafetyProjectsWriteLock(async () => {
-        const normalizedAssignments = assignments
-            .map(assignment => ({
-                drawingNumber: String(assignment?.drawingNumber || '').trim().toUpperCase(),
-                builderId: assignment?.builderId || '',
-                projectId: assignment?.projectId || ''
-            }))
-            .filter(assignment => /^[A-Z0-9]+-[A-Z0-9]+-ESD\d+$/.test(assignment.drawingNumber));
-
-        if (normalizedAssignments.length === 0) {
-            return safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        }
-
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const drawingNumbers = new Set(normalizedAssignments.map(assignment => assignment.drawingNumber));
-        const timestamp = nowIso();
-
-        builders.forEach(builder => builder.projects.forEach(project => {
-            project.drawingNumbers = (project.drawingNumbers || []).filter(number => !drawingNumbers.has(number));
-        }));
-
-        normalizedAssignments.forEach(assignment => {
-            if (!assignment.builderId || !assignment.projectId) return;
-            const builder = builders.find(item => item.id === assignment.builderId);
-            const project = builder?.projects.find(item => item.id === assignment.projectId);
-            if (!project) throw new Error('The selected Site Registry project could not be found.');
-            project.drawingNumbers = Array.from(new Set([...(project.drawingNumbers || []), assignment.drawingNumber]));
-            project.updatedAt = timestamp;
-            builder.updatedAt = timestamp;
-        });
-
-        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
-        return builders;
-    }),
-
-    setDrawingProjectLink: async (drawingNumber, builderId = '', projectId = '') => {
-        return safetyProjectsAPI.syncDrawingProjectLinks([{ drawingNumber, builderId, projectId }]);
     }
 };
 

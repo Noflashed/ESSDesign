@@ -158,10 +158,6 @@ const buildDrawingProjectLinks = builders => {
     return links;
 };
 
-const activeRegistryBuilders = builders => builders
-    .filter(builder => !builder.archived)
-    .map(builder => ({ ...builder, projects: (builder.projects || []).filter(project => !project.archived) }));
-
 const mostCommonCode = codes => {
     const counts = new Map();
     codes.filter(Boolean).forEach(code => counts.set(code, (counts.get(code) || 0) + 1));
@@ -211,16 +207,31 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [drawingDocuments, setDrawingDocuments] = useState({});
     const [drawingDocumentsLoading, setDrawingDocumentsLoading] = useState(true);
     const [registryReconciled, setRegistryReconciled] = useState(false);
+    const [sharedRegisterAvailable, setSharedRegisterAvailable] = useState(false);
     const registryReconciledRef = useRef(false);
+    const rowsRef = useRef([]);
+    const sharedSaveEnabledRef = useRef(false);
 
     useEffect(() => {
         const load = async () => {
             try {
-                const saved = localStorage.getItem(STORAGE_KEY);
-                const loadedRows = saved ? JSON.parse(saved) : await readWorkbook(SOURCE_FILE);
+                let loadedRows = await safetyProjectsAPI.getDrawingRegisterEntries({ force: true });
+                setSharedRegisterAvailable(true);
+                if (loadedRows.length === 0) {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    loadedRows = saved ? JSON.parse(saved) : await readWorkbook(SOURCE_FILE);
+                }
                 setRows(loadedRows.map(row => ({ ...row, dateIssued: formatDateIssued(row.dateIssued) })));
             } catch (error) {
-                console.error('Drawing register load failed', error);
+                console.error('Shared drawing register load failed', error);
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    const fallbackRows = saved ? JSON.parse(saved) : await readWorkbook(SOURCE_FILE);
+                    setRows(fallbackRows.map(row => ({ ...row, dateIssued: formatDateIssued(row.dateIssued) })));
+                    setSiteLinkError('The shared Drawing Register could not be loaded. Showing the local fallback without saving changes.');
+                } catch (fallbackError) {
+                    console.error('Drawing register fallback load failed', fallbackError);
+                }
             } finally {
                 setLoading(false);
             }
@@ -231,6 +242,19 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     useEffect(() => {
         if (!loading) localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
     }, [rows, loading]);
+
+    useEffect(() => {
+        rowsRef.current = rows;
+        sharedSaveEnabledRef.current = canEdit && sharedRegisterAvailable && !loading && registryReconciled;
+    }, [canEdit, loading, registryReconciled, rows, sharedRegisterAvailable]);
+
+    useEffect(() => () => {
+        if (sharedSaveEnabledRef.current) {
+            safetyProjectsAPI.saveDrawingRegisterEntries(rowsRef.current).catch(error => {
+                console.error('Final shared Drawing Register save failed', error);
+            });
+        }
+    }, []);
 
     useEffect(() => {
         const closeMenu = () => setOpenMenuId(null);
@@ -257,41 +281,40 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
 
         const drawingProjectLinks = buildDrawingProjectLinks(builders);
-        const exactAssignments = [];
         const reconciledRows = rows.map(row => {
+            const storedBuilder = builders.find(builder => builder.id === row.builderId);
+            const storedProject = storedBuilder?.projects.find(project => project.id === row.projectId);
+            if (storedBuilder && storedProject) {
+                return { ...row, builderId: storedBuilder.id, projectId: storedProject.id, client: storedBuilder.name, project: storedProject.name };
+            }
+
             const drawingNumber = getBaseDrawingNumber(row.drawingNo);
             const linkedSite = drawingProjectLinks.get(drawingNumber);
             if (linkedSite) {
-                return { ...row, client: linkedSite.builder.name, project: linkedSite.project.name };
+                return { ...row, builderId: linkedSite.builder.id, projectId: linkedSite.project.id, client: linkedSite.builder.name, project: linkedSite.project.name };
             }
 
             const exactBuilder = builders.find(builder => normalizeName(builder.name) === normalizeName(row.client));
             const exactProject = exactBuilder?.projects.find(project => normalizeName(project.name) === normalizeName(row.project));
-            if (drawingNumber && exactBuilder && exactProject && canEdit) {
-                exactAssignments.push({ drawingNumber, builderId: exactBuilder.id, projectId: exactProject.id });
+            if (exactBuilder && exactProject) {
+                return { ...row, builderId: exactBuilder.id, projectId: exactProject.id, client: exactBuilder.name, project: exactProject.name };
             }
 
             const builder = findConfidentRegistryMatch(row.client, builders, 0.82);
-            if (!builder) return { ...row, client: '', project: '' };
+            if (!builder) return { ...row, builderId: '', projectId: '', client: '', project: '' };
             const activeProjects = (builder.projects || []).filter(project => !project.archived);
             const project = findConfidentRegistryMatch(row.project, activeProjects, 0.78);
             return {
                 ...row,
+                builderId: builder.id,
+                projectId: project?.id || '',
                 client: builder.name,
                 project: project?.name || ''
             };
         });
         setRows(reconciledRows);
         setRegistryReconciled(true);
-        if (exactAssignments.length > 0) {
-            safetyProjectsAPI.syncDrawingProjectLinks(exactAssignments)
-                .then(updatedBuilders => setBuilders(activeRegistryBuilders(updatedBuilders)))
-                .catch(error => {
-                    console.error('Existing drawing project links could not be shared', error);
-                    setSiteLinkError('Some existing drawing project links could not be saved to the Site Registry.');
-                });
-        }
-    }, [builders, buildersError, buildersLoading, canEdit, loading]);
+    }, [builders, buildersError, buildersLoading, loading]);
 
     const drawingNumberKey = useMemo(() => [...new Set(rows.map(row => getBaseDrawingNumber(row.drawingNo)).filter(Boolean))].sort().join('|'), [rows]);
     const selectedBuilder = useMemo(() => builders.find(builder => builder.name === draft.client) || null, [builders, draft.client]);
@@ -358,92 +381,60 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         };
     }, [drawingNumberKey, loading]);
 
+    useEffect(() => {
+        if (!canEdit || !sharedRegisterAvailable || loading || !registryReconciled || drawingDocumentsLoading) return;
+        let cancelled = false;
+        const saveTimer = window.setTimeout(() => {
+            safetyProjectsAPI.saveDrawingRegisterEntries(rows)
+                .then(() => {
+                    if (!cancelled) setSiteLinkError('');
+                })
+                .catch(error => {
+                    console.error('Shared Drawing Register save failed', error);
+                    if (!cancelled) setSiteLinkError('Changes could not be saved to the shared Drawing Register.');
+                });
+        }, 500);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(saveTimer);
+        };
+    }, [canEdit, drawingDocumentsLoading, loading, registryReconciled, rows, sharedRegisterAvailable]);
+
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
-    const addRow = async event => {
+    const addRow = event => {
         event.preventDefault();
         if (!canEdit || !draft.client || !draft.project || !draft.design || !generatedDrawingNo) return;
         const builder = builders.find(item => item.name === draft.client);
         const project = builder?.projects.find(item => item.name === draft.project);
         if (!builder || !project) return;
         setSiteLinkError('');
-        try {
-            const updatedBuilders = await safetyProjectsAPI.setDrawingProjectLink(generatedDrawingNo, builder.id, project.id);
-            setBuilders(activeRegistryBuilders(updatedBuilders));
-            setRows(current => [{ ...draft, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
-            setDraft(EMPTY_ROW);
-            setShowAddRow(false);
-        } catch (error) {
-            console.error('New drawing project link failed', error);
-            setSiteLinkError('The new drawing could not be linked to its Site Registry project.');
-        }
+        setRows(current => [{ ...draft, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
+        setDraft(EMPTY_ROW);
+        setShowAddRow(false);
     };
     const updateRow = (id, key, value) => {
         if (!canEdit) return;
         setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
     };
-    const updateRowClient = async (id, client) => {
+    const updateRowClient = (id, client) => {
         if (!canEdit) return;
-        const row = rows.find(item => item.id === id);
-        setRows(current => current.map(row => row.id === id ? { ...row, client, project: '' } : row));
-        const drawingNumber = getBaseDrawingNumber(row?.drawingNo);
-        if (!drawingNumber) return;
+        const builder = builders.find(item => item.name === client);
+        setRows(current => current.map(row => row.id === id ? { ...row, builderId: builder?.id || '', projectId: '', client, project: '' } : row));
         setSiteLinkError('');
-        try {
-            const updatedBuilders = await safetyProjectsAPI.setDrawingProjectLink(drawingNumber);
-            setBuilders(activeRegistryBuilders(updatedBuilders));
-        } catch (error) {
-            console.error('Drawing project link removal failed', error);
-            setRows(current => current.map(item => item.id === id ? row : item));
-            setSiteLinkError('The drawing could not be unlinked from its previous Site Registry project.');
-        }
     };
-    const updateRowProject = async (id, projectName) => {
+    const updateRowProject = (id, projectName) => {
         if (!canEdit) return;
         const row = rows.find(item => item.id === id);
         const builder = builders.find(item => item.name === row?.client);
         const project = builder?.projects.find(item => item.name === projectName);
-        const drawingNumber = getBaseDrawingNumber(row?.drawingNo);
-        if (!row || !builder || !drawingNumber) return;
-        if (!projectName) {
-            setRows(current => current.map(item => item.id === id ? { ...item, project: '' } : item));
-            setSiteLinkError('');
-            try {
-                const updatedBuilders = await safetyProjectsAPI.setDrawingProjectLink(drawingNumber);
-                setBuilders(activeRegistryBuilders(updatedBuilders));
-            } catch (error) {
-                console.error('Drawing project unlink failed', error);
-                setRows(current => current.map(item => item.id === id ? row : item));
-                setSiteLinkError('The drawing could not be unlinked from its Site Registry project.');
-            }
-            return;
-        }
-        if (!project) return;
-        setRows(current => current.map(item => item.id === id ? { ...item, project: projectName } : item));
+        if (!row || !builder || projectName && !project) return;
+        setRows(current => current.map(item => item.id === id ? { ...item, projectId: project?.id || '', project: projectName } : item));
         setSiteLinkError('');
-        try {
-            const updatedBuilders = await safetyProjectsAPI.setDrawingProjectLink(drawingNumber, builder.id, project.id);
-            setBuilders(activeRegistryBuilders(updatedBuilders));
-        } catch (error) {
-            console.error('Drawing project link update failed', error);
-            setRows(current => current.map(item => item.id === id ? row : item));
-            setSiteLinkError('The project selection could not be saved to the Site Registry.');
-        }
     };
-    const deleteRow = async id => {
+    const deleteRow = id => {
         if (!canEdit) return;
-        const row = rows.find(item => item.id === id);
-        const drawingNumber = getBaseDrawingNumber(row?.drawingNo);
         setSiteLinkError('');
-        try {
-            if (drawingNumber) {
-                const updatedBuilders = await safetyProjectsAPI.setDrawingProjectLink(drawingNumber);
-                setBuilders(activeRegistryBuilders(updatedBuilders));
-            }
-            setRows(current => current.filter(item => item.id !== id));
-        } catch (error) {
-            console.error('Drawing project link deletion failed', error);
-            setSiteLinkError('The drawing could not be removed from its Site Registry project.');
-        }
+        setRows(current => current.filter(item => item.id !== id));
     };
     const openAddRow = () => {
         if (!canEdit) return;
