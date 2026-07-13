@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Database, ExternalLink, Loader2, Plus, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { assistantAPI } from '../services/api';
 
 const STARTER_PROMPTS = [
@@ -33,6 +35,30 @@ function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials 
 
 function messageKey(message, index) {
     return message.id || `${message.role}-${index}-${message.content.slice(0, 20)}`;
+}
+
+function AssistantMessageContent({ content, role }) {
+    if (role === 'user') return <p>{content}</p>;
+
+    return (
+        <div className="admin-assistant-content">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                skipHtml
+                components={{
+                    a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer">{children}</a>,
+                    img: () => null,
+                    table: ({ children }) => (
+                        <div className="admin-assistant-table-wrap">
+                            <table>{children}</table>
+                        </div>
+                    ),
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+    );
 }
 
 export default function AdminAssistantChat({
@@ -186,7 +212,7 @@ export default function AdminAssistantChat({
                             onUserAvatarError={onUserAvatarError}
                         />
                         <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}`}>
-                            <p>{message.content}</p>
+                            <AssistantMessageContent content={message.content} role={message.role} />
 
                             {message.sources?.length ? (
                                 <div className="admin-assistant-sources" aria-label="ESS sources">
