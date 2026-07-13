@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using ESSDesign.Server.Services;
+using ESSDesign.Server.Services.Assistant;
 using Supabase;
 using Resend;
 
@@ -49,7 +50,14 @@ builder.Services.AddScoped<Client>(_ =>
 builder.Services.AddScoped<SupabaseService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
-builder.Services.AddScoped<AdminAssistantService>();
+builder.Services.AddSingleton<EssAssistantAccessPolicy>();
+builder.Services.AddScoped<EssAssistantSupabaseGateway>();
+builder.Services.AddScoped<EssAssistantConversationStore>();
+builder.Services.AddScoped<EssAssistantDataService>();
+builder.Services.AddScoped<EssAssistantToolCatalog>();
+builder.Services.AddScoped<EssAssistantDocumentIndexService>();
+builder.Services.AddScoped<EssAssistantService>();
+builder.Services.AddHostedService<EssAssistantDocumentIndexWorker>();
 builder.Services.AddScoped<DeliveryAnalysisService>();
 builder.Services.AddScoped<TransportRouteEstimateService>();
 builder.Services.AddScoped<TomTomUsageBudgetService>();

@@ -4961,12 +4961,23 @@ export const usersAPI = {
     }
 };
 
-export const adminAssistantAPI = {
-    chat: async (message, history = []) => {
-        const response = await apiClient.post('/admin-assistant/chat', { message, history });
+export const assistantAPI = {
+    chat: async (message, options = {}) => {
+        const response = await apiClient.post('/assistant/chat', {
+            message,
+            conversationId: options.conversationId || null,
+            history: options.history || [],
+            pageContext: options.pageContext || null,
+        });
+        return response.data;
+    },
+    feedback: async (payload) => {
+        const response = await apiClient.post('/assistant/feedback', payload);
         return response.data;
     }
 };
+
+export const adminAssistantAPI = assistantAPI;
 export const analysisAPI = {
     recommendTimeSlot: async (payload) => {
         const response = await apiClient.post('/analysis/recommend-time-slot', payload);

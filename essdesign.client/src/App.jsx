@@ -1509,7 +1509,8 @@ function App() {
         if (currentPage === 'landing') {
             return (
                 <WebLandingPage
-                    showAssistant={isAdmin}
+                    showAssistant
+                    userId={user?.id || ''}
                     userAvatarUrl={userAvatarUrl}
                     userInitials={userInitials}
                     userDisplayName={userDisplayName}
@@ -1519,7 +1520,15 @@ function App() {
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
-            return <EmployeePortalPage user={user} />;
+            return (
+                <EmployeePortalPage
+                    user={user}
+                    userAvatarUrl={userAvatarUrl}
+                    userInitials={userInitials}
+                    userDisplayName={userDisplayName}
+                    onUserAvatarError={handleAvatarImageError}
+                />
+            );
         }
 
         if (currentPage === 'profile' || currentPage === 'settings') {

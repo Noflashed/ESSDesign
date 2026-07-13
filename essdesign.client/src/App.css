@@ -6554,9 +6554,15 @@ body {
 .employee-portal-shell {
     min-height: calc(100vh - 88px);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 28px;
     padding: 32px;
+}
+
+.employee-portal-assistant {
+    width: min(780px, 100%);
 }
 
 .employee-portal-card {
@@ -7172,11 +7178,38 @@ button.stat-card {
 
 .admin-assistant-page-chat {
     width: min(780px, 100%);
+    position: relative;
     display: grid;
     grid-template-rows: minmax(170px, 1fr) auto auto;
     gap: 14px;
     color: #101820;
     transition: gap 360ms ease;
+}
+
+.admin-assistant-new-chat {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(203, 213, 225, 0.9);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.84);
+    color: #334155;
+    cursor: pointer;
+    box-shadow: 0 7px 20px rgba(15, 23, 42, 0.08);
+}
+
+.admin-assistant-new-chat:hover,
+.admin-assistant-new-chat:focus-visible {
+    color: #c95d0b;
+    border-color: rgba(244, 124, 32, 0.5);
+    outline: none;
 }
 
 .admin-assistant-page-chat.is-pristine {
@@ -7354,6 +7387,94 @@ button.stat-card {
     font-size: 13px;
     font-weight: 700;
     text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.admin-assistant-page-chat .admin-assistant-sources {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(203, 213, 225, 0.66);
+}
+
+.admin-assistant-page-chat .admin-assistant-sources-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #526175;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.admin-assistant-page-chat .admin-assistant-source-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+}
+
+.admin-assistant-page-chat .admin-assistant-source-list a,
+.admin-assistant-page-chat .admin-assistant-source {
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 7px;
+    border: 1px solid #dbe4ef;
+    border-radius: 6px;
+    background: rgba(248, 250, 252, 0.82);
+    color: #334155;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-assistant-page-chat .admin-assistant-source-list a > span,
+.admin-assistant-page-chat .admin-assistant-source b {
+    color: #c95d0b;
+    font-size: 10px;
+}
+
+.admin-assistant-page-chat .admin-assistant-source-list a:hover,
+.admin-assistant-page-chat .admin-assistant-source-list a:focus-visible {
+    border-color: rgba(244, 124, 32, 0.48);
+    outline: none;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback {
+    display: flex;
+    justify-content: flex-end;
+    gap: 2px;
+    margin: 8px -4px -5px 0;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback button {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #7a8798;
+    cursor: pointer;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback button:hover,
+.admin-assistant-page-chat .admin-assistant-feedback button:focus-visible,
+.admin-assistant-page-chat .admin-assistant-feedback button.selected {
+    background: #eef2f7;
+    color: #102b5c;
+    outline: none;
 }
 
 .admin-assistant-page-chat .admin-assistant-prompts {
@@ -7388,6 +7509,33 @@ button.stat-card {
     background: rgba(255, 255, 255, 0.92);
     outline: none;
     transform: translateY(-1px);
+}
+
+.admin-assistant-page-chat .admin-assistant-follow-ups {
+    width: min(720px, 100%);
+    margin: -4px auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.admin-assistant-page-chat .admin-assistant-follow-ups button {
+    min-height: 31px;
+    padding: 6px 9px;
+    border: 1px solid rgba(203, 213, 225, 0.9);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.76);
+    color: #334155;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.admin-assistant-page-chat .admin-assistant-follow-ups button:hover,
+.admin-assistant-page-chat .admin-assistant-follow-ups button:focus-visible {
+    border-color: rgba(244, 124, 32, 0.5);
+    color: #9a4508;
+    outline: none;
 }
 
 .admin-assistant-page-chat .admin-assistant-form {
@@ -7478,6 +7626,30 @@ button.stat-card {
     color: #e5e7eb;
 }
 
+[data-theme='dark'] .admin-assistant-new-chat,
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-source-list a,
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-source,
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-follow-ups button {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.84);
+    color: #cbd5e1;
+}
+
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-sources {
+    border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-sources-label {
+    color: #94a3b8;
+}
+
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-feedback button:hover,
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-feedback button:focus-visible,
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-feedback button.selected {
+    background: rgba(51, 65, 85, 0.82);
+    color: #f8fafc;
+}
+
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-message.user {
     background: #17407f;
     border-color: #17407f;
@@ -7533,6 +7705,52 @@ button.stat-card {
 
     .web-landing-logo {
         width: min(88vw, 460px);
+    }
+
+    .admin-assistant-page-chat {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .admin-assistant-page-messages {
+        max-height: min(46vh, 390px);
+        padding-inline: 2px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-message-row {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-message {
+        max-width: calc(100% - 38px);
+        padding: 10px 11px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-prompts {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-prompts button {
+        min-height: 39px;
+        padding: 8px 10px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-form {
+        min-height: 52px;
+        grid-template-columns: minmax(0, 1fr) 38px;
+        padding: 6px 6px 6px 13px;
+    }
+
+    .admin-assistant-page-chat .admin-assistant-form button {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+    }
+
+    .admin-assistant-new-chat {
+        right: 2px;
     }
 
 }

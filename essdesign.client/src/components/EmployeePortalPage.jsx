@@ -1,6 +1,13 @@
 import React from 'react';
+import AdminAssistantChat from './AdminAssistantChat';
 
-export default function EmployeePortalPage({ user }) {
+export default function EmployeePortalPage({
+    user,
+    userAvatarUrl = '',
+    userInitials = 'U',
+    userDisplayName = 'User',
+    onUserAvatarError,
+}) {
     const displayName = user?.employeeFirstName || user?.employeeLastName
         ? `${user?.employeeFirstName || ''} ${user?.employeeLastName || ''}`.trim()
         : user?.fullName || user?.email || 'Employee';
@@ -30,6 +37,16 @@ export default function EmployeePortalPage({ user }) {
                             <strong>{user?.employeeLastName || 'Not provided'}</strong>
                         </div>
                     </div>
+                </div>
+                <div className="employee-portal-assistant">
+                    <AdminAssistantChat
+                        userId={user?.id || ''}
+                        userAvatarUrl={userAvatarUrl}
+                        userInitials={userInitials}
+                        userDisplayName={userDisplayName}
+                        onUserAvatarError={onUserAvatarError}
+                        pageContext={{ page: 'employee-home' }}
+                    />
                 </div>
             </div>
         </div>

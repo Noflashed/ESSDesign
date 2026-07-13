@@ -37,6 +37,7 @@ function cacheBackdropUrl(url) {
 
 export default function WebLandingPage({
     showAssistant = false,
+    userId = '',
     userAvatarUrl = '',
     userInitials = 'U',
     userDisplayName = 'User',
@@ -77,10 +78,12 @@ export default function WebLandingPage({
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo" loading="eager" decoding="async" fetchPriority="high" />
                 {showAssistant ? (
                     <AdminAssistantChat
+                        userId={userId}
                         userAvatarUrl={userAvatarUrl}
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}
                         onUserAvatarError={onUserAvatarError}
+                        pageContext={{ page: 'landing' }}
                     />
                 ) : null}
             </div>
