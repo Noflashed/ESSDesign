@@ -37,8 +37,11 @@
 .drawing-register-table tbody td { background: var(--card-bg); }
 .drawing-register-table tbody tr:hover td { background: var(--hover-bg); }
 .drawing-register-table td input { width: 100%; height: 34px; padding: 0 7px; border: 1px solid var(--primary-color); border-radius: 4px; background: var(--card-bg); color: var(--text-primary); }
-.register-table-select { width: 100%; height: 34px; padding: 0 22px 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-primary); font: inherit; font-size: 11.5px; cursor: pointer; text-overflow: ellipsis; }
+.register-table-select-wrap { position: relative; display: block; width: 100%; }
+.register-table-select { width: 100%; height: 34px; padding: 0 24px 0 6px; border: 1px solid transparent; border-radius: 4px; appearance: none; background: transparent; color: var(--text-primary); font: inherit; font-size: 11.5px; cursor: pointer; text-overflow: ellipsis; }
+.drawing-register-page .register-table-select-wrap > svg { position: absolute; top: 50%; right: 7px; width: 13px; height: 13px; transform: translateY(-50%); fill: none; stroke: var(--text-secondary); stroke-width: 2; pointer-events: none; visibility: visible; opacity: .85; }
 .register-table-select:hover, .register-table-select:focus { border-color: var(--border-color); background: var(--card-bg); outline: none; } .register-table-select:disabled { color: var(--text-secondary); cursor: not-allowed; }
+.register-table-select:disabled + svg { opacity: .35; }
 .register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
 .register-drawing-unavailable { color: var(--text-primary); }
