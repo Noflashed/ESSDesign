@@ -210,19 +210,25 @@ public sealed class EssAssistantService
                         if (route.AllowSecondToolRound && collectedLinks.Count == 0 &&
                             TryGetFirstDesignDocumentId(executedTools, out var latestDesignId))
                         {
+                            var arguments = JsonSerializer.Serialize(new
+                            {
+                                record_type = "design",
+                                record_id = latestDesignId,
+                                file_type = "ess",
+                            }, JsonOptions);
+                            var automaticCall = new FunctionCall(
+                                Guid.NewGuid().ToString("N"),
+                                "open_ess_record",
+                                arguments);
+                            input.Add(new
+                            {
+                                type = "function_call",
+                                call_id = automaticCall.CallId,
+                                name = automaticCall.Name,
+                                arguments = automaticCall.Arguments,
+                            });
                             await ExecuteToolsAsync(
-                                new[]
-                                {
-                                    new FunctionCall(
-                                        Guid.NewGuid().ToString("N"),
-                                        "open_ess_record",
-                                        JsonSerializer.Serialize(new
-                                        {
-                                            record_type = "design",
-                                            record_id = latestDesignId,
-                                            file_type = "ess",
-                                        }, JsonOptions)),
-                                },
+                                new[] { automaticCall },
                                 input,
                                 access,
                                 collectedSources,
@@ -751,7 +757,7 @@ public sealed class EssAssistantService
             "analyse", "analyze", "compare", "recommend", "relationship", "forecast", "risk", "why", "investigate");
         var action = ContainsAny(value,
             "open", "view", "download", "take me to", "show me the file", "give me", "get me", "fetch", "want the design",
-            "latest design", "latest drawing", "most recent design", "most recent drawing");
+            "latest design", "latest drawing", "lateest design", "lateest drawing", "most recent design", "most recent drawing");
         return new AssistantRoute(
             tools.Count == 0 ? "general" : cacheKey,
             tools.Count > 0,
