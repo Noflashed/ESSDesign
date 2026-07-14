@@ -107,7 +107,7 @@ public sealed class EssAssistantService
                 .Select(message => (object)new { role = message.Role, content = message.Content })
                 .ToList();
             input.Add(new { role = "user", content = request.Message });
-            var route = RouteRequest(request.Message, access);
+            var route = RouteRequest(BuildRoutingText(request.Message, history), access);
             metrics.Route = route.Name;
             preparationTimer.Stop();
             metrics.PreparationMs = preparationTimer.ElapsedMilliseconds;
@@ -619,10 +619,13 @@ public sealed class EssAssistantService
         var status = "Thinking...";
         var cacheKey = "general";
 
-        if (ContainsAny(value, "drawing", "revision", "pdf", "design", "folder", "esd"))
+        if (ContainsAny(value, "drawing", "revision", "pdf", "design", "folder", "esd", "scaffold"))
         {
-            tools.UnionWith(new[] { "search_designs", "search_drawing_register", "open_ess_record" });
-            fileSearch = true;
+            tools.UnionWith(new[] { "search_designs", "open_ess_record" });
+            if (ContainsAny(value, "drawing number", "drawing no", "register", "revision", "esd"))
+                tools.Add("search_drawing_register");
+            fileSearch = ContainsAny(value,
+                "specification", "drawing content", "shown on", "what does", "dimension", "load capacity", "design note");
             status = "Searching ESS Design...";
             cacheKey = "designs";
         }
@@ -695,7 +698,8 @@ public sealed class EssAssistantService
 
         var complex = trimmed.Length > 300 || ContainsAny(value,
             "analyse", "analyze", "compare", "recommend", "relationship", "forecast", "risk", "why", "investigate");
-        var action = ContainsAny(value, "open", "view", "download", "take me to", "show me the file");
+        var action = ContainsAny(value,
+            "open", "view", "download", "take me to", "show me the file", "give me", "get me", "fetch", "want the design");
         return new AssistantRoute(
             tools.Count == 0 ? "general" : cacheKey,
             tools.Count > 0,
@@ -727,6 +731,9 @@ public sealed class EssAssistantService
             - Clearly label inferences and uncertainty. A missing result means not found in the searched source, not proven nonexistent.
             - Never expose private or redacted fields, raw storage paths, tokens, source IDs, JSON, or implementation details.
             - Do not claim an action was performed unless a returned tool link confirms it.
+            - Design records are hierarchical. A site/location in the user's request is a hard constraint: never mix in results from another site.
+            - For design results, name the parent scaffold folder first. Show a drawing/PDF filename only as secondary detail when useful.
+            - If one scaffold folder is the clear match and the user asks to get, give, open, or view its design, open the latest matching ESS design rather than asking them to choose a drawing number.
 
             Answer style:
             - Use restrained Markdown with short paragraphs.
@@ -784,6 +791,21 @@ public sealed class EssAssistantService
 
     private static bool ContainsAny(string value, params string[] terms) =>
         terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    private static string BuildRoutingText(string message, IReadOnlyList<EssAssistantHistoryMessage> history)
+    {
+        var normalized = message.Trim().ToLowerInvariant();
+        var refersToEarlierResult = normalized.Length <= 160 && ContainsAny(normalized,
+            " it", "it ", "that", "this", " one", "one ", "the design", "the file", "the drawing", "for it");
+        if (!refersToEarlierResult)
+            return message;
+
+        var previousUserMessage = history.LastOrDefault(item =>
+            item.Role == "user" && !string.IsNullOrWhiteSpace(item.Content))?.Content;
+        return string.IsNullOrWhiteSpace(previousUserMessage)
+            ? message
+            : $"{previousUserMessage}\nFollow-up: {message}";
+    }
 
     private static string FirstName(string name) =>
         string.IsNullOrWhiteSpace(name) ? "there" : name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];

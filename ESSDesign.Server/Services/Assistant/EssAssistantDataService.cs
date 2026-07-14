@@ -327,6 +327,7 @@ public sealed class EssAssistantDataService
             var documentId = GetString(document, "id") ?? string.Empty;
             var folderId = GetString(document, "folder_id") ?? string.Empty;
             folderPaths.TryGetValue(folderId, out var folderPath);
+            var hierarchy = DescribeDesignHierarchy(folderPath);
             var essName = GetString(document, "ess_design_issue_name");
             var thirdPartyName = GetString(document, "third_party_design_name");
             var score = Score(query, essName, thirdPartyName, GetString(document, "description"), folderPath, GetString(document, "drawing_status"), GetString(document, "revision_number"));
@@ -336,6 +337,8 @@ public sealed class EssAssistantDataService
                 DocumentId = documentId,
                 FolderId = folderId,
                 FolderPath = folderPath ?? string.Empty,
+                SiteName = hierarchy.SiteName,
+                ScaffoldName = hierarchy.ScaffoldName,
                 EssName = essName,
                 ThirdPartyName = thirdPartyName,
                 EssPath = GetString(document, "ess_design_issue_path"),
@@ -349,6 +352,8 @@ public sealed class EssAssistantDataService
         })
         .Where(document => string.IsNullOrWhiteSpace(query) || document.Score > 0)
         .ToList();
+
+        candidates = KeepStrongestDesignMatches(candidates, query);
 
         if (!allRevisions)
         {
@@ -368,6 +373,8 @@ public sealed class EssAssistantDataService
             documentId = document.DocumentId,
             folderId = document.FolderId,
             folderPath = document.FolderPath,
+            siteName = document.SiteName,
+            scaffoldName = document.ScaffoldName,
             essDesignName = document.EssName,
             thirdPartyDesignName = document.ThirdPartyName,
             revision = document.Revision,
@@ -380,13 +387,23 @@ public sealed class EssAssistantDataService
 
         return new EssAssistantToolResult
         {
-            Data = new { query, count = records.Count, designs = records },
-            Sources = matches.Select(document => Source(
-                document.SourceId,
+            Data = new
+            {
+                query,
+                count = records.Count,
+                presentationNote = "Use scaffoldName as the primary result label. Treat the PDF name and drawing number as secondary file details.",
+                designs = records,
+            },
+            Sources = matches.GroupBy(document => document.FolderId, StringComparer.OrdinalIgnoreCase).Select(group =>
+            {
+                var document = group.OrderByDescending(item => ParseTimestamp(item.UpdatedAt)).First();
+                return Source(
+                $"design-folder:{document.FolderId}",
                 "ess_design",
-                document.EssName ?? document.ThirdPartyName ?? "Design document",
+                document.ScaffoldName,
                 document.FolderPath,
-                document.UpdatedAt)).ToList(),
+                document.UpdatedAt);
+            }).ToList(),
         };
     }
 
@@ -1282,6 +1299,39 @@ public sealed class EssAssistantDataService
         return paths;
     }
 
+    private static DesignHierarchy DescribeDesignHierarchy(string? folderPath)
+    {
+        var segments = (folderPath ?? string.Empty)
+            .Split(" / ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        while (segments.Count > 0 && IsDesignContainerFolder(segments[^1]))
+            segments.RemoveAt(segments.Count - 1);
+
+        var scaffoldName = segments.Count > 0 ? segments[^1] : "Design document";
+        var siteName = segments.Count > 1 ? segments[^2] : string.Empty;
+        return new DesignHierarchy(siteName, scaffoldName);
+    }
+
+    private static bool IsDesignContainerFolder(string name)
+    {
+        var normalized = Normalize(name);
+        return normalized is "design pdf" or "design pdfs" or "design drawing" or "design drawings"
+            or "design document" or "design documents" or "designs" or "pdf" or "pdfs" or "revisions";
+    }
+
+    private static List<DesignRecord> KeepStrongestDesignMatches(List<DesignRecord> candidates, string? query)
+    {
+        if (candidates.Count < 2 || string.IsNullOrWhiteSpace(query))
+            return candidates;
+
+        var bestScore = candidates.Max(document => document.Score);
+        if (bestScore < 100)
+            return candidates;
+
+        var threshold = bestScore - 40;
+        return candidates.Where(document => document.Score >= threshold).ToList();
+    }
+
     private static int Score(string? query, params string?[] candidates)
     {
         var normalizedQuery = Normalize(query);
@@ -1487,6 +1537,8 @@ public sealed class EssAssistantDataService
         public string DocumentId { get; init; } = string.Empty;
         public string FolderId { get; init; } = string.Empty;
         public string FolderPath { get; init; } = string.Empty;
+        public string SiteName { get; init; } = string.Empty;
+        public string ScaffoldName { get; init; } = string.Empty;
         public string? EssName { get; init; }
         public string? ThirdPartyName { get; init; }
         public string? EssPath { get; init; }
@@ -1497,6 +1549,8 @@ public sealed class EssAssistantDataService
         public string? UpdatedAt { get; init; }
         public int Score { get; init; }
     }
+
+    private sealed record DesignHierarchy(string SiteName, string ScaffoldName);
 
     private sealed class DrawingRegisterRecord
     {

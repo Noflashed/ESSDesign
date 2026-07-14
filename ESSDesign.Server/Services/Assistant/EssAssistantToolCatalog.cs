@@ -42,7 +42,7 @@ public sealed class EssAssistantToolCatalog
                 start_date = StringSchema("Start date in YYYY-MM-DD format."),
                 days = IntegerSchema("Number of days, from 1 to 31."),
             }, "start_date", "days"),
-            Function("search_designs", "Search all ESS Design folders and design document revisions. Drawing-number queries are supported across nested folder paths.", new
+            Function("search_designs", "Search ESS Design's nested site and scaffold folders. Results identify the parent scaffold folder separately from PDF filenames. Use the strongest site and scaffold match only; do not combine weaker partial matches.", new
             {
                 query = NullableStringSchema("Drawing number, filename, folder, description, revision, or status. Null lists recent designs."),
                 sort = StringSchema("Either relevance or latest."),
