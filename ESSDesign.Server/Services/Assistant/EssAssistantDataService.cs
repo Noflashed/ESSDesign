@@ -19,15 +19,18 @@ public sealed class EssAssistantDataService
 
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly SupabaseService _supabaseService;
+    private readonly DeliveryAnalysisService _deliveryAnalysisService;
     private readonly ILogger<EssAssistantDataService> _logger;
 
     public EssAssistantDataService(
         EssAssistantSupabaseGateway gateway,
         SupabaseService supabaseService,
+        DeliveryAnalysisService deliveryAnalysisService,
         ILogger<EssAssistantDataService> logger)
     {
         _gateway = gateway;
         _supabaseService = supabaseService;
+        _deliveryAnalysisService = deliveryAnalysisService;
         _logger = logger;
     }
 
@@ -872,6 +875,46 @@ public sealed class EssAssistantDataService
         {
             Data = new { person = targetLabel, count = notifications.Count, notifications },
             Sources = notifications.Select(item => Source(item.sourceId, "notifications", item.title ?? "Notification", item.message, item.createdAt)).ToList(),
+        };
+    }
+
+    public async Task<EssAssistantToolResult> GetCurrentWeatherAsync(
+        string location,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            return Error("A suburb, postcode, or location is required for live weather.");
+
+        var weather = await _deliveryAnalysisService.GetCurrentWeatherAsync(location, cancellationToken);
+        if (weather == null)
+            return Error($"Live weather could not be resolved for {location.Trim()}.");
+
+        return new EssAssistantToolResult
+        {
+            Data = new
+            {
+                location = weather.Location,
+                observedAt = weather.ObservedAt,
+                condition = weather.Condition,
+                temperatureC = weather.TemperatureC,
+                feelsLikeC = weather.ApparentTemperatureC,
+                humidityPercent = weather.RelativeHumidityPercent,
+                precipitationMm = weather.PrecipitationMm,
+                cloudCoverPercent = weather.CloudCoverPercent,
+                windSpeedKmh = weather.WindSpeedKmh,
+                windGustKmh = weather.WindGustKmh,
+                provider = "Open-Meteo",
+                presentationNote = "Answer directly in one or two natural sentences. Current conditions are the default; do not ask the user to choose a forecast period.",
+            },
+            Sources = new List<EssAssistantSource>
+            {
+                Source(
+                    $"weather:{Normalize(weather.Location)}",
+                    "live_weather",
+                    weather.Location,
+                    $"{weather.Condition}, {weather.TemperatureC.ToString("F1", CultureInfo.InvariantCulture)} C",
+                    weather.ObservedAt),
+            },
         };
     }
 

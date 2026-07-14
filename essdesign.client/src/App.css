@@ -7513,62 +7513,6 @@ button.stat-card {
     gap: 5px;
 }
 
-.admin-assistant-page-chat .admin-assistant-sources {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(203, 213, 225, 0.66);
-}
-
-.admin-assistant-page-chat .admin-assistant-sources-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: #526175;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.admin-assistant-page-chat .admin-assistant-source-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 7px;
-}
-
-.admin-assistant-page-chat .admin-assistant-source-list a,
-.admin-assistant-page-chat .admin-assistant-source {
-    min-width: 0;
-    max-width: 100%;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 7px;
-    border: 1px solid #dbe4ef;
-    border-radius: 6px;
-    background: rgba(248, 250, 252, 0.82);
-    color: #334155;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.25;
-    text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.admin-assistant-page-chat .admin-assistant-source-list a > span,
-.admin-assistant-page-chat .admin-assistant-source b {
-    color: #c95d0b;
-    font-size: 10px;
-}
-
-.admin-assistant-page-chat .admin-assistant-source-list a:hover,
-.admin-assistant-page-chat .admin-assistant-source-list a:focus-visible {
-    border-color: rgba(244, 124, 32, 0.48);
-    outline: none;
-}
-
 .admin-assistant-page-chat .admin-assistant-feedback {
     display: flex;
     justify-content: flex-end;
@@ -7752,20 +7696,10 @@ button.stat-card {
 }
 
 [data-theme='dark'] .admin-assistant-new-chat,
-[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-source-list a,
-[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-source,
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-follow-ups button {
     border-color: rgba(148, 163, 184, 0.25);
     background: rgba(15, 23, 42, 0.84);
     color: #cbd5e1;
-}
-
-[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-sources {
-    border-top-color: rgba(148, 163, 184, 0.22);
-}
-
-[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-sources-label {
-    color: #94a3b8;
 }
 
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-content h1,

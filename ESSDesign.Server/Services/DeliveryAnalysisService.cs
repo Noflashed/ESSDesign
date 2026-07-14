@@ -35,6 +35,20 @@ namespace ESSDesign.Server.Services
             public string EstimatedReturn { get; set; } = string.Empty;
         }
 
+        public sealed class CurrentWeatherResult
+        {
+            public string Location { get; set; } = string.Empty;
+            public string ObservedAt { get; set; } = string.Empty;
+            public string Condition { get; set; } = string.Empty;
+            public double TemperatureC { get; set; }
+            public double ApparentTemperatureC { get; set; }
+            public double RelativeHumidityPercent { get; set; }
+            public double PrecipitationMm { get; set; }
+            public double CloudCoverPercent { get; set; }
+            public double WindSpeedKmh { get; set; }
+            public double WindGustKmh { get; set; }
+        }
+
         public sealed class RoutePreviewRequest
         {
             public string SiteLocation { get; set; } = string.Empty;
@@ -207,6 +221,7 @@ namespace ESSDesign.Server.Services
         private readonly string _supabaseUrl;
         private readonly string _supabaseKey;
         private static readonly ConcurrentDictionary<string, ReverseGeocodeResult> MemoryReverseGeocodeCache = new(StringComparer.Ordinal);
+        private static readonly ConcurrentDictionary<string, (CurrentWeatherResult Value, DateTimeOffset ExpiresAt)> CurrentWeatherCache = new(StringComparer.OrdinalIgnoreCase);
 
         public DeliveryAnalysisService(
             IHttpClientFactory httpClientFactory,
@@ -526,6 +541,94 @@ namespace ESSDesign.Server.Services
                 return "Weather data unavailable";
             }
         }
+
+        public async Task<CurrentWeatherResult?> GetCurrentWeatherAsync(string location, CancellationToken cancellationToken)
+        {
+            var requestedLocation = location.Trim();
+            if (string.IsNullOrWhiteSpace(requestedLocation))
+                return null;
+
+            var cacheKey = requestedLocation.ToLowerInvariant();
+            if (CurrentWeatherCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+                return cached.Value;
+
+            try
+            {
+                var resolvedLocation = PrepareWeatherLocation(requestedLocation);
+                var client = _httpClientFactory.CreateClient();
+                var coordinates = await GeocodeAsync(resolvedLocation, client);
+                if (!coordinates.HasValue)
+                    return null;
+
+                var url = $"https://api.open-meteo.com/v1/forecast?latitude={coordinates.Value.Lat.ToString("F4", CultureInfo.InvariantCulture)}" +
+                          $"&longitude={coordinates.Value.Lon.ToString("F4", CultureInfo.InvariantCulture)}" +
+                          "&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m" +
+                          "&timezone=Australia%2FSydney";
+                using var response = await GetWeatherResponseAsync(client, url, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                    return null;
+
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var document = JsonDocument.Parse(json);
+                if (!document.RootElement.TryGetProperty("current", out var current))
+                    return null;
+
+                var weather = new CurrentWeatherResult
+                {
+                    Location = CorrectKnownAustralianPlaceName(requestedLocation),
+                    ObservedAt = ReadJsonString(current, "time"),
+                    Condition = WeatherCodeToDescription(ReadJsonInt(current, "weather_code")),
+                    TemperatureC = ReadJsonDouble(current, "temperature_2m"),
+                    ApparentTemperatureC = ReadJsonDouble(current, "apparent_temperature"),
+                    RelativeHumidityPercent = ReadJsonDouble(current, "relative_humidity_2m"),
+                    PrecipitationMm = ReadJsonDouble(current, "precipitation"),
+                    CloudCoverPercent = ReadJsonDouble(current, "cloud_cover"),
+                    WindSpeedKmh = ReadJsonDouble(current, "wind_speed_10m"),
+                    WindGustKmh = ReadJsonDouble(current, "wind_gusts_10m"),
+                };
+                CurrentWeatherCache[cacheKey] = (weather, DateTimeOffset.UtcNow.AddMinutes(10));
+                return weather;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Current weather fetch failed for {Location}", requestedLocation);
+                return null;
+            }
+        }
+
+        private static string PrepareWeatherLocation(string location)
+        {
+            var corrected = CorrectKnownAustralianPlaceName(location);
+            var paddedUpper = $" {corrected.ToUpperInvariant()} ";
+            var hasAustralianState = new[] { " NSW ", " VIC ", " QLD ", " SA ", " WA ", " TAS ", " NT ", " ACT " }
+                .Any(paddedUpper.Contains);
+            return hasAustralianState && !corrected.Contains("Australia", StringComparison.OrdinalIgnoreCase)
+                ? $"{corrected}, Australia"
+                : corrected;
+        }
+
+        private static string CorrectKnownAustralianPlaceName(string location) =>
+            location.Replace("Giraween", "Girraween", StringComparison.OrdinalIgnoreCase);
+
+        private static async Task<HttpResponseMessage> GetWeatherResponseAsync(
+            HttpClient client,
+            string url,
+            CancellationToken cancellationToken)
+        {
+            var response = await client.GetAsync(url, cancellationToken);
+            if ((int)response.StatusCode is not (429 or 503))
+                return response;
+
+            response.Dispose();
+            await Task.Delay(300, cancellationToken);
+            return await client.GetAsync(url, cancellationToken);
+        }
+
+        private static double ReadJsonDouble(JsonElement element, string propertyName) =>
+            element.TryGetProperty(propertyName, out var value) && value.TryGetDouble(out var number) ? number : 0;
+
+        private static int ReadJsonInt(JsonElement element, string propertyName) =>
+            element.TryGetProperty(propertyName, out var value) && value.TryGetInt32(out var number) ? number : 0;
 
         private static string WeatherCodeToDescription(int code) => code switch
         {

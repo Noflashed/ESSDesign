@@ -76,6 +76,10 @@ public sealed class EssAssistantToolCatalog
                 person = NullableStringSchema("Null for the current user, a person's name, or 'all' for administrators."),
                 limit = IntegerSchema("Maximum results, from 1 to 100."),
             }, "person", "limit"),
+            Function("get_weather", "Get live current weather for a location. Correct obvious place-name spelling, preserve any supplied state or postcode, and call immediately when the location is known.", new
+            {
+                location = StringSchema("Suburb, postcode, address, or place name. Include the Australian state or postcode when the conversation provides it."),
+            }, "location"),
             Function("get_ess_overview", "Get a live, high-level count and status summary across the ESS system. Use for company-wide overview questions.", new { }),
             Function("open_ess_record", "Open a document from a prior tool result. Call this only with an exact record type and ID returned by a search tool.", new
             {
@@ -126,6 +130,7 @@ public sealed class EssAssistantToolCatalog
             "get_transport" => _data.GetTransportAsync(GetString(args, "query"), GetInt(args, "history_hours", 24), GetInt(args, "limit", 20), access, cancellationToken),
             "get_news" => _data.GetNewsAsync(GetString(args, "query"), GetInt(args, "limit", 20), cancellationToken),
             "get_notifications" => _data.GetNotificationsAsync(GetString(args, "person"), GetInt(args, "limit", 30), access, cancellationToken),
+            "get_weather" => _data.GetCurrentWeatherAsync(GetString(args, "location") ?? string.Empty, cancellationToken),
             "get_ess_overview" => _data.GetOverviewAsync(cancellationToken),
             "open_ess_record" => _data.OpenRecordAsync(GetString(args, "record_type") ?? string.Empty, GetString(args, "record_id") ?? string.Empty, GetString(args, "file_type"), cancellationToken),
             _ => Task.FromResult(new EssAssistantToolResult { Data = new { error = $"Unknown ESS assistant tool: {name}" } }),

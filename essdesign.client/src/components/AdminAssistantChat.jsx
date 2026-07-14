@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Database, ExternalLink, Loader2, Plus, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ExternalLink, Loader2, Plus, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { assistantAPI } from '../services/api';
@@ -263,23 +263,6 @@ export default function AdminAssistantChat({
                         />
                         <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}${message.streaming ? ' streaming' : ''}`}>
                             <AssistantMessageContent content={message.content} role={message.role} />
-
-                            {message.sources?.length ? (
-                                <div className="admin-assistant-sources" aria-label="ESS sources">
-                                    <span className="admin-assistant-sources-label"><Database size={13} aria-hidden="true" /> ESS sources</span>
-                                    <div className="admin-assistant-source-list">
-                                        {message.sources.map((source, sourceIndex) => source.url ? (
-                                            <a key={source.id} href={source.url} target="_blank" rel="noreferrer" title={source.detail || source.label}>
-                                                <span>{sourceIndex + 1}</span>{source.label}<ExternalLink size={12} aria-hidden="true" />
-                                            </a>
-                                        ) : (
-                                            <span key={source.id} className="admin-assistant-source" title={source.detail || source.label}>
-                                                <b>{sourceIndex + 1}</b>{source.label}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : null}
 
                             {message.links?.length ? (
                                 <div className="admin-assistant-links">
