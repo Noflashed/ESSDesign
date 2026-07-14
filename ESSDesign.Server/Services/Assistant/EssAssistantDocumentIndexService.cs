@@ -8,6 +8,10 @@ public sealed class EssAssistantDocumentIndexService
 {
     private const string ProjectBucket = "project-information";
     private const string DesignBucket = "design-pdfs";
+    private const string SyncLeaseName = "ess-assistant-document-index";
+    private const int SyncLeaseSeconds = 900;
+    private const string PermanentErrorPrefix = "Permanent indexing failure: ";
+    private static readonly SemaphoreSlim SyncGate = new(1, 1);
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
@@ -67,6 +71,153 @@ public sealed class EssAssistantDocumentIndexService
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
 
+        if (!await SyncGate.WaitAsync(0, cancellationToken))
+            return new EssAssistantDocumentSyncResult { ConcurrentRunSkipped = true };
+
+        var leaseOwner = Guid.NewGuid();
+        var leaseAcquired = false;
+        try
+        {
+            leaseAcquired = await _gateway.TryAcquireWorkerLeaseAsync(
+                SyncLeaseName,
+                leaseOwner,
+                SyncLeaseSeconds,
+                cancellationToken);
+            if (!leaseAcquired)
+                return new EssAssistantDocumentSyncResult { ConcurrentRunSkipped = true };
+
+            return await SyncCoreAsync(apiKey, leaseOwner, maxDocuments, cancellationToken);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("try_acquire_ess_ai_worker_lease", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Apply migration 034_reduce_storage_egress.sql before synchronising documents.", ex);
+        }
+        finally
+        {
+            if (leaseAcquired)
+            {
+                try
+                {
+                    await _gateway.ReleaseWorkerLeaseAsync(SyncLeaseName, leaseOwner, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to release ESS assistant indexing lease {LeaseOwner}", leaseOwner);
+                }
+            }
+            SyncGate.Release();
+        }
+    }
+
+    public async Task<bool> IndexUploadedDocumentAsync(
+        EssAssistantPendingUpload upload,
+        CancellationToken cancellationToken)
+    {
+        if (!_gateway.HasServiceRoleKey || !File.Exists(upload.TempFilePath))
+            return false;
+        var apiKey = _configuration["OpenAI:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return false;
+
+        await SyncGate.WaitAsync(cancellationToken);
+        var leaseOwner = Guid.NewGuid();
+        var leaseAcquired = false;
+        try
+        {
+            leaseAcquired = await _gateway.TryAcquireWorkerLeaseAsync(
+                SyncLeaseName,
+                leaseOwner,
+                SyncLeaseSeconds,
+                cancellationToken);
+            if (!leaseAcquired)
+                return false;
+
+            var vectorStoreId = await GetOrCreateVectorStoreAsync(apiKey, cancellationToken);
+            var candidate = new DocumentCandidate
+            {
+                Bucket = upload.Bucket,
+                Path = upload.StoragePath,
+                DisplayName = upload.DisplayName,
+                Domain = upload.Domain,
+                RecordId = upload.RecordId,
+                UpdatedAt = upload.SourceUpdatedAt,
+                Fingerprint = upload.Fingerprint,
+                Size = upload.Size,
+            };
+            var bucketFilter = Uri.EscapeDataString(upload.Bucket);
+            var pathFilter = Uri.EscapeDataString(upload.StoragePath);
+            var rows = await _gateway.GetRowsAsync(
+                $"ess_ai_document_index?select=*&storage_bucket=eq.{bucketFilter}&storage_path=eq.{pathFilter}&limit=1",
+                cancellationToken);
+            var previousIndex = rows.FirstOrDefault();
+            var maximumBytes = GetMaximumDocumentBytes();
+            var sizeLimitError = BuildSizeLimitError(maximumBytes);
+            var result = new EssAssistantDocumentSyncResult();
+            if (ShouldDeferCandidate(candidate, previousIndex, sizeLimitError, result))
+                return true;
+
+            if (upload.Size > maximumBytes)
+            {
+                await SaveIndexStatusAsync(
+                    candidate,
+                    vectorStoreId,
+                    GetString(previousIndex, "openai_file_id"),
+                    "skipped",
+                    sizeLimitError,
+                    0,
+                    null,
+                    0,
+                    cancellationToken);
+                return true;
+            }
+
+            var bytes = await File.ReadAllBytesAsync(upload.TempFilePath, cancellationToken);
+            var file = new EssAssistantStorageObject
+            {
+                Bytes = bytes,
+                ContentType = upload.ContentType,
+                FileName = upload.DisplayName,
+            };
+            var outcome = await ProcessCandidateAsync(
+                candidate,
+                previousIndex,
+                apiKey,
+                vectorStoreId,
+                maximumBytes,
+                sizeLimitError,
+                file,
+                cancellationToken);
+            return outcome.Status is CandidateStatus.Indexed or CandidateStatus.Skipped;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("try_acquire_ess_ai_worker_lease", StringComparison.Ordinal))
+        {
+            _logger.LogWarning("Upload-time assistant indexing is waiting for migration 034_reduce_storage_egress.sql");
+            return false;
+        }
+        finally
+        {
+            if (leaseAcquired)
+            {
+                try
+                {
+                    await _gateway.ReleaseWorkerLeaseAsync(SyncLeaseName, leaseOwner, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Unable to release upload-time indexing lease {LeaseOwner}", leaseOwner);
+                }
+            }
+            SyncGate.Release();
+        }
+    }
+
+    private async Task<EssAssistantDocumentSyncResult> SyncCoreAsync(
+        string apiKey,
+        Guid leaseOwner,
+        int maxDocuments,
+        CancellationToken cancellationToken)
+    {
+
         var vectorStoreId = await GetOrCreateVectorStoreAsync(apiKey, cancellationToken);
         const int discoveryLimit = 20_000;
         var batchSize = Math.Clamp(maxDocuments, 1, 5_000);
@@ -77,26 +228,30 @@ public sealed class EssAssistantDocumentIndexService
             .GroupBy(row => $"{GetString(row, "storage_bucket")}/{GetString(row, "storage_path")}", StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         var result = new EssAssistantDocumentSyncResult { VectorStoreId = vectorStoreId, Discovered = candidates.Count };
-        var maximumBytes = Math.Clamp(_configuration.GetValue<long?>("OpenAI:AssistantDocumentMaxBytes") ?? 40_000_000, 1_000_000, 100_000_000);
+        var maximumBytes = GetMaximumDocumentBytes();
         var sizeLimitError = BuildSizeLimitError(maximumBytes);
         var processed = 0;
+        var nextLeaseRenewal = DateTimeOffset.UtcNow.AddMinutes(5);
 
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (DateTimeOffset.UtcNow >= nextLeaseRenewal)
+            {
+                var renewed = await _gateway.RenewWorkerLeaseAsync(
+                    SyncLeaseName,
+                    leaseOwner,
+                    SyncLeaseSeconds,
+                    cancellationToken);
+                if (!renewed)
+                    throw new InvalidOperationException("The ESS assistant indexing lease expired during synchronisation.");
+                nextLeaseRenewal = DateTimeOffset.UtcNow.AddMinutes(5);
+            }
+
             var key = $"{candidate.Bucket}/{candidate.Path}";
             indexedByPath.TryGetValue(key, out var previousIndex);
-            var unchanged = previousIndex.ValueKind == JsonValueKind.Object &&
-                string.Equals(GetString(previousIndex, "fingerprint"), candidate.Fingerprint, StringComparison.Ordinal);
-            var previousStatus = GetString(previousIndex, "status");
-            if (unchanged &&
-                (string.Equals(previousStatus, "ready", StringComparison.OrdinalIgnoreCase) ||
-                 (string.Equals(previousStatus, "skipped", StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(GetString(previousIndex, "error"), sizeLimitError, StringComparison.Ordinal))))
-            {
-                result.Unchanged++;
+            if (ShouldDeferCandidate(candidate, previousIndex, sizeLimitError, result))
                 continue;
-            }
 
             if (processed >= batchSize)
             {
@@ -104,104 +259,247 @@ public sealed class EssAssistantDocumentIndexService
                 continue;
             }
             processed++;
-
-            if (candidate.Size is > 0 && candidate.Size > maximumBytes)
-            {
-                result.Skipped++;
-                await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", sizeLimitError, cancellationToken);
-                continue;
-            }
-
-            string? uploadedFileId = null;
-            try
-            {
-                var file = await _gateway.DownloadStorageObjectAsync(candidate.Bucket, candidate.Path, cancellationToken);
-                if (file == null || file.Bytes.Length == 0)
-                {
-                    result.Failed++;
-                    await SaveIndexStatusAsync(candidate, vectorStoreId, null, "failed", "Storage object could not be downloaded.", cancellationToken);
-                    continue;
-                }
-                if (file.Bytes.LongLength > maximumBytes)
-                {
-                    result.Skipped++;
-                    await SaveIndexStatusAsync(candidate, vectorStoreId, null, "skipped", sizeLimitError, cancellationToken);
-                    continue;
-                }
-
-                uploadedFileId = await UploadFileAsync(apiKey, file, candidate.DisplayName, cancellationToken);
-                await AttachFileAsync(apiKey, vectorStoreId, uploadedFileId, candidate, cancellationToken);
-                await WaitForFileReadyAsync(apiKey, vectorStoreId, uploadedFileId, cancellationToken);
-                await SaveIndexStatusAsync(candidate, vectorStoreId, uploadedFileId, "ready", null, cancellationToken);
-                var previousFileId = GetString(previousIndex, "openai_file_id");
-                if (!string.IsNullOrWhiteSpace(previousFileId) && !string.Equals(previousFileId, uploadedFileId, StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        await DeleteIndexedFileAsync(apiKey, vectorStoreId, previousFileId, cancellationToken);
-                    }
-                    catch (Exception cleanupException)
-                    {
-                        _logger.LogWarning(cleanupException, "Unable to clean up stale ESS assistant file {FileId}", previousFileId);
-                    }
-                }
-                result.Indexed++;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                if (!string.IsNullOrWhiteSpace(uploadedFileId))
-                {
-                    try
-                    {
-                        await DeleteIndexedFileAsync(apiKey, vectorStoreId, uploadedFileId, CancellationToken.None);
-                    }
-                    catch (Exception cleanupException)
-                    {
-                        _logger.LogWarning(cleanupException, "Unable to clean up cancelled ESS assistant file {FileId}", uploadedFileId);
-                    }
-                }
-                throw;
-            }
-            catch (Exception ex)
-            {
-                result.Failed++;
-                _logger.LogWarning(ex, "Unable to index ESS document {Bucket}/{Path}", candidate.Bucket, candidate.Path);
-                if (!string.IsNullOrWhiteSpace(uploadedFileId))
-                {
-                    try
-                    {
-                        await DeleteIndexedFileAsync(apiKey, vectorStoreId, uploadedFileId, cancellationToken);
-                    }
-                    catch (Exception cleanupException)
-                    {
-                        _logger.LogWarning(cleanupException, "Unable to clean up failed ESS assistant file {FileId}", uploadedFileId);
-                    }
-                }
-                if (string.IsNullOrWhiteSpace(GetString(previousIndex, "openai_file_id")))
-                    await SaveIndexStatusAsync(candidate, vectorStoreId, null, "failed", ex.Message, cancellationToken);
-            }
+            var outcome = await ProcessCandidateAsync(
+                candidate,
+                previousIndex,
+                apiKey,
+                vectorStoreId,
+                maximumBytes,
+                sizeLimitError,
+                null,
+                cancellationToken);
+            result.DownloadedBytes += outcome.DownloadedBytes;
+            if (outcome.DownloadedBytes > 0)
+                result.DownloadedDocuments++;
+            if (outcome.Status == CandidateStatus.Indexed) result.Indexed++;
+            if (outcome.Status == CandidateStatus.Skipped) result.Skipped++;
+            if (outcome.Status == CandidateStatus.Failed) result.Failed++;
         }
 
         return result;
     }
 
+    private static bool ShouldDeferCandidate(
+        DocumentCandidate candidate,
+        JsonElement previousIndex,
+        string sizeLimitError,
+        EssAssistantDocumentSyncResult result)
+    {
+        if (previousIndex.ValueKind != JsonValueKind.Object ||
+            !string.Equals(GetString(previousIndex, "fingerprint"), candidate.Fingerprint, StringComparison.Ordinal))
+            return false;
+
+        var status = GetString(previousIndex, "status");
+        var error = GetString(previousIndex, "error");
+        if (string.Equals(status, "ready", StringComparison.OrdinalIgnoreCase) ||
+            (string.Equals(status, "skipped", StringComparison.OrdinalIgnoreCase) &&
+             (string.Equals(error, sizeLimitError, StringComparison.Ordinal) ||
+              error?.StartsWith(PermanentErrorPrefix, StringComparison.Ordinal) == true)))
+        {
+            result.Unchanged++;
+            return true;
+        }
+
+        if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase) &&
+            GetTimestamp(previousIndex, "next_retry_at") is { } retryAt && retryAt > DateTimeOffset.UtcNow)
+        {
+            result.BackedOff++;
+            return true;
+        }
+
+        if (string.Equals(status, "pending", StringComparison.OrdinalIgnoreCase) &&
+            GetTimestamp(previousIndex, "updated_at") is { } pendingAt && pendingAt > DateTimeOffset.UtcNow.AddMinutes(-20))
+        {
+            result.BackedOff++;
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task<CandidateProcessOutcome> ProcessCandidateAsync(
+        DocumentCandidate candidate,
+        JsonElement previousIndex,
+        string apiKey,
+        string vectorStoreId,
+        long maximumBytes,
+        string sizeLimitError,
+        EssAssistantStorageObject? providedFile,
+        CancellationToken cancellationToken)
+    {
+        var sameFingerprint = previousIndex.ValueKind == JsonValueKind.Object &&
+            string.Equals(GetString(previousIndex, "fingerprint"), candidate.Fingerprint, StringComparison.Ordinal);
+        var attemptCount = sameFingerprint ? GetInt32(previousIndex, "attempt_count") : 0;
+        var previousFileId = GetString(previousIndex, "openai_file_id");
+
+        if (candidate.Size is > 0 && candidate.Size > maximumBytes)
+        {
+            await SaveIndexStatusAsync(
+                candidate,
+                vectorStoreId,
+                previousFileId,
+                "skipped",
+                sizeLimitError,
+                0,
+                null,
+                0,
+                cancellationToken);
+            return new CandidateProcessOutcome(CandidateStatus.Skipped, 0);
+        }
+
+        await SaveIndexStatusAsync(
+            candidate,
+            vectorStoreId,
+            previousFileId,
+            "pending",
+            null,
+            attemptCount,
+            null,
+            0,
+            cancellationToken);
+
+        string? uploadedFileId = null;
+        long downloadedBytes = 0;
+        try
+        {
+            var file = providedFile;
+            if (file == null)
+            {
+                file = await _gateway.DownloadStorageObjectAsync(candidate.Bucket, candidate.Path, cancellationToken);
+                downloadedBytes = file?.Bytes.LongLength ?? 0;
+            }
+
+            if (file == null || file.Bytes.Length == 0)
+            {
+                var nextAttempt = attemptCount + 1;
+                await SaveIndexStatusAsync(
+                    candidate,
+                    vectorStoreId,
+                    previousFileId,
+                    "failed",
+                    "Storage object could not be downloaded.",
+                    nextAttempt,
+                    CalculateNextRetry(nextAttempt),
+                    downloadedBytes,
+                    cancellationToken);
+                return new CandidateProcessOutcome(CandidateStatus.Failed, downloadedBytes);
+            }
+
+            if (file.Bytes.LongLength > maximumBytes)
+            {
+                await SaveIndexStatusAsync(
+                    candidate,
+                    vectorStoreId,
+                    previousFileId,
+                    "skipped",
+                    sizeLimitError,
+                    0,
+                    null,
+                    downloadedBytes,
+                    cancellationToken);
+                return new CandidateProcessOutcome(CandidateStatus.Skipped, downloadedBytes);
+            }
+
+            uploadedFileId = await UploadFileAsync(apiKey, file, candidate.DisplayName, cancellationToken);
+            await AttachFileAsync(apiKey, vectorStoreId, uploadedFileId, candidate, cancellationToken);
+            await WaitForFileReadyAsync(apiKey, vectorStoreId, uploadedFileId, cancellationToken);
+            await SaveIndexStatusAsync(
+                candidate,
+                vectorStoreId,
+                uploadedFileId,
+                "ready",
+                null,
+                0,
+                null,
+                downloadedBytes,
+                cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(previousFileId) &&
+                !string.Equals(previousFileId, uploadedFileId, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await DeleteIndexedFileAsync(apiKey, vectorStoreId, previousFileId, cancellationToken);
+                }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogWarning(cleanupException, "Unable to clean up stale ESS assistant file {FileId}", previousFileId);
+                }
+            }
+
+            return new CandidateProcessOutcome(CandidateStatus.Indexed, downloadedBytes);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!string.IsNullOrWhiteSpace(uploadedFileId))
+                await TryDeleteUploadedFileAsync(apiKey, vectorStoreId, uploadedFileId, CancellationToken.None, "cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to index ESS document {Bucket}/{Path}", candidate.Bucket, candidate.Path);
+            if (!string.IsNullOrWhiteSpace(uploadedFileId))
+                await TryDeleteUploadedFileAsync(apiKey, vectorStoreId, uploadedFileId, cancellationToken, "failed");
+
+            var nextAttempt = attemptCount + 1;
+            var permanent = ex is OpenAiIndexException { IsPermanent: true };
+            await SaveIndexStatusAsync(
+                candidate,
+                vectorStoreId,
+                previousFileId,
+                permanent ? "skipped" : "failed",
+                permanent ? $"{PermanentErrorPrefix}{ex.Message}" : ex.Message,
+                nextAttempt,
+                permanent ? null : CalculateNextRetry(nextAttempt),
+                downloadedBytes,
+                cancellationToken);
+            return new CandidateProcessOutcome(permanent ? CandidateStatus.Skipped : CandidateStatus.Failed, downloadedBytes);
+        }
+    }
+
+    private async Task TryDeleteUploadedFileAsync(
+        string apiKey,
+        string vectorStoreId,
+        string uploadedFileId,
+        CancellationToken cancellationToken,
+        string reason)
+    {
+        try
+        {
+            await DeleteIndexedFileAsync(apiKey, vectorStoreId, uploadedFileId, cancellationToken);
+        }
+        catch (Exception cleanupException)
+        {
+            _logger.LogWarning(cleanupException, "Unable to clean up {Reason} ESS assistant file {FileId}", reason, uploadedFileId);
+        }
+    }
+
+    private static DateTimeOffset CalculateNextRetry(int attemptCount) => attemptCount switch
+    {
+        <= 1 => DateTimeOffset.UtcNow.AddHours(1),
+        2 => DateTimeOffset.UtcNow.AddHours(6),
+        _ => DateTimeOffset.UtcNow.AddHours(24),
+    };
+
+    private long GetMaximumDocumentBytes() =>
+        Math.Clamp(_configuration.GetValue<long?>("OpenAI:AssistantDocumentMaxBytes") ?? 40_000_000, 1_000_000, 100_000_000);
+
     private async Task<List<DocumentCandidate>> LoadCandidatesAsync(int limit, CancellationToken cancellationToken)
     {
         var candidates = new List<DocumentCandidate>();
         var designs = await _gateway.GetRowsAsync(
-            "design_documents?select=id,updated_at,ess_design_issue_path,ess_design_issue_name,ess_design_file_size,third_party_design_path,third_party_design_name,third_party_design_file_size&order=updated_at.desc&limit=10000",
+            "design_documents?select=id,updated_at,ess_design_issue_path,ess_design_issue_name,ess_design_file_size,ess_design_file_fingerprint,third_party_design_path,third_party_design_name,third_party_design_file_size,third_party_design_file_fingerprint&order=updated_at.desc&limit=10000",
             cancellationToken);
         foreach (var design in designs)
         {
-            AddDesignCandidate(design, "ess_design_issue_path", "ess_design_issue_name", "ess_design_file_size", "ess_design", candidates);
-            AddDesignCandidate(design, "third_party_design_path", "third_party_design_name", "third_party_design_file_size", "third_party_design", candidates);
+            AddDesignCandidate(design, "ess_design_issue_path", "ess_design_issue_name", "ess_design_file_size", "ess_design_file_fingerprint", "ess_design", candidates);
+            AddDesignCandidate(design, "third_party_design_path", "third_party_design_name", "third_party_design_file_size", "third_party_design_file_fingerprint", "third_party_design", candidates);
         }
 
         if (candidates.Count < limit)
         {
-            var projectFiles = await _gateway.ListStorageObjectsRecursiveAsync(ProjectBucket, "site-data", limit * 2, cancellationToken);
+            var projectFiles = await _gateway.ListStoragePdfObjectsAsync(ProjectBucket, "site-data", limit, cancellationToken);
             candidates.AddRange(projectFiles
-                .Where(file => file.Path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 .Select(file => new DocumentCandidate
                 {
                     Bucket = ProjectBucket,
@@ -229,6 +527,7 @@ public sealed class EssAssistantDocumentIndexService
         string pathProperty,
         string nameProperty,
         string sizeProperty,
+        string fingerprintProperty,
         string domain,
         ICollection<DocumentCandidate> candidates)
     {
@@ -243,7 +542,8 @@ public sealed class EssAssistantDocumentIndexService
             Domain = domain,
             RecordId = GetString(design, "id") ?? path,
             UpdatedAt = GetString(design, "updated_at"),
-            Fingerprint = GetString(design, "updated_at") ?? path,
+            Fingerprint = GetString(design, fingerprintProperty)
+                ?? $"legacy:{path}:{GetInt64(design, sizeProperty)?.ToString() ?? "unknown"}",
             Size = GetInt64(design, sizeProperty),
         });
     }
@@ -298,7 +598,9 @@ public sealed class EssAssistantDocumentIndexService
         using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"OpenAI file upload failed: {(int)response.StatusCode} {Trim(body)}");
+            throw new OpenAiIndexException(
+                $"OpenAI file upload failed: {(int)response.StatusCode} {Trim(body)}",
+                IsPermanentDocumentError(response.StatusCode));
         using var document = JsonDocument.Parse(body);
         return GetString(document.RootElement, "id") ?? throw new InvalidOperationException("OpenAI did not return a file ID.");
     }
@@ -325,7 +627,9 @@ public sealed class EssAssistantDocumentIndexService
         using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"OpenAI vector-store attachment failed: {(int)response.StatusCode} {Trim(body)}");
+            throw new OpenAiIndexException(
+                $"OpenAI vector-store attachment failed: {(int)response.StatusCode} {Trim(body)}",
+                IsPermanentDocumentError(response.StatusCode));
     }
 
     private async Task WaitForFileReadyAsync(
@@ -343,13 +647,24 @@ public sealed class EssAssistantDocumentIndexService
             using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException($"OpenAI vector-store status failed: {(int)response.StatusCode} {Trim(body)}");
+                throw new OpenAiIndexException(
+                    $"OpenAI vector-store status failed: {(int)response.StatusCode} {Trim(body)}",
+                    IsPermanentDocumentError(response.StatusCode));
             using var document = JsonDocument.Parse(body);
             var status = GetString(document.RootElement, "status");
             if (string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
                 return;
-            if (status is "failed" or "cancelled")
-                throw new InvalidOperationException($"OpenAI could not index {fileId}: {status}.");
+            if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
+            {
+                var lastError = document.RootElement.TryGetProperty("last_error", out var errorValue)
+                    ? GetString(errorValue, "message") ?? GetString(errorValue, "code")
+                    : null;
+                throw new OpenAiIndexException(
+                    $"OpenAI could not index {fileId}: {lastError ?? status}.",
+                    true);
+            }
+            if (string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                throw new OpenAiIndexException($"OpenAI indexing was cancelled for {fileId}.", false);
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
@@ -384,6 +699,9 @@ public sealed class EssAssistantDocumentIndexService
         string? openAiFileId,
         string status,
         string? error,
+        int attemptCount,
+        DateTimeOffset? nextRetryAt,
+        long lastDownloadBytes,
         CancellationToken cancellationToken) =>
         await _gateway.InsertRowsAsync(
             "ess_ai_document_index",
@@ -401,11 +719,17 @@ public sealed class EssAssistantDocumentIndexService
                 vector_store_id = vectorStoreId,
                 status,
                 error = string.IsNullOrWhiteSpace(error) ? null : Truncate(error, 1_000),
+                attempt_count = Math.Max(0, attemptCount),
+                next_retry_at = nextRetryAt,
+                last_download_bytes = Math.Max(0, lastDownloadBytes),
                 last_synced_at = DateTimeOffset.UtcNow,
                 updated_at = DateTimeOffset.UtcNow,
             },
             cancellationToken,
             "storage_bucket,storage_path");
+
+    private static bool IsPermanentDocumentError(System.Net.HttpStatusCode statusCode) =>
+        (int)statusCode is 400 or 413 or 415 or 422;
 
     private static HttpRequestMessage CreateOpenAiRequest(string apiKey, HttpMethod method, string url)
     {
@@ -463,6 +787,16 @@ public sealed class EssAssistantDocumentIndexService
             : null;
     }
 
+    private static int GetInt32(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object &&
+        element.TryGetProperty(property, out var value) &&
+        value.TryGetInt32(out var number)
+            ? number
+            : 0;
+
+    private static DateTimeOffset? GetTimestamp(JsonElement element, string property) =>
+        DateTimeOffset.TryParse(GetString(element, property), out var timestamp) ? timestamp : null;
+
     private static string BuildSizeLimitError(long maximumBytes) =>
         $"File exceeds the configured assistant size limit of {maximumBytes} bytes.";
 
@@ -480,6 +814,26 @@ public sealed class EssAssistantDocumentIndexService
         public string Fingerprint { get; init; } = string.Empty;
         public long? Size { get; init; }
     }
+
+    private enum CandidateStatus
+    {
+        Indexed,
+        Skipped,
+        Failed,
+    }
+
+    private sealed record CandidateProcessOutcome(CandidateStatus Status, long DownloadedBytes);
+
+    private sealed class OpenAiIndexException : Exception
+    {
+        public OpenAiIndexException(string message, bool isPermanent)
+            : base(message)
+        {
+            IsPermanent = isPermanent;
+        }
+
+        public bool IsPermanent { get; }
+    }
 }
 
 public sealed class EssAssistantDocumentSyncResult
@@ -491,21 +845,28 @@ public sealed class EssAssistantDocumentSyncResult
     public int Skipped { get; set; }
     public int Failed { get; set; }
     public int Deferred { get; set; }
+    public int BackedOff { get; set; }
+    public int DownloadedDocuments { get; set; }
+    public long DownloadedBytes { get; set; }
+    public bool ConcurrentRunSkipped { get; set; }
 }
 
 public sealed class EssAssistantDocumentIndexWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<EssAssistantDocumentIndexWorker> _logger;
 
     public EssAssistantDocumentIndexWorker(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
+        IHostEnvironment environment,
         ILogger<EssAssistantDocumentIndexWorker> logger)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -513,9 +874,12 @@ public sealed class EssAssistantDocumentIndexWorker : BackgroundService
     {
         if (!_configuration.GetValue("OpenAI:AssistantDocumentIndexingEnabled", true))
             return;
+        if (!_environment.IsProduction() &&
+            !_configuration.GetValue("OpenAI:AssistantDocumentIndexWorkerEnabledOutsideProduction", false))
+            return;
 
         await Task.Delay(TimeSpan.FromSeconds(90), stoppingToken);
-        var interval = TimeSpan.FromMinutes(Math.Clamp(_configuration.GetValue("OpenAI:AssistantDocumentSyncMinutes", 60), 15, 1440));
+        var interval = TimeSpan.FromMinutes(Math.Clamp(_configuration.GetValue("OpenAI:AssistantDocumentSyncMinutes", 360), 15, 1440));
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -524,10 +888,13 @@ public sealed class EssAssistantDocumentIndexWorker : BackgroundService
                 var service = scope.ServiceProvider.GetRequiredService<EssAssistantDocumentIndexService>();
                 var result = await service.SyncAsync(_configuration.GetValue("OpenAI:AssistantDocumentSyncBatchSize", 100), null, stoppingToken);
                 _logger.LogInformation(
-                    "ESS assistant document sync completed: {Indexed} indexed, {Unchanged} unchanged, {Failed} failed",
+                    "ESS assistant document sync completed: {Indexed} indexed, {Unchanged} unchanged, {BackedOff} backed off, {Failed} failed, {DownloadedBytes} storage bytes downloaded, concurrent skip {ConcurrentRunSkipped}",
                     result.Indexed,
                     result.Unchanged,
-                    result.Failed);
+                    result.BackedOff,
+                    result.Failed,
+                    result.DownloadedBytes,
+                    result.ConcurrentRunSkipped);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

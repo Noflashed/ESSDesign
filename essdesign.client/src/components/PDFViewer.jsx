@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import './PDFViewer.css';
 
-function PDFViewer({ documentId, fileName, fileType, onClose }) {
+const pdfUrlCache = new Map();
+const PDF_URL_CACHE_MS = 50 * 60 * 1000;
+
+function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose }) {
     const [pdfUrl, setPdfUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         loadPDF();
-    }, [documentId, fileType]);
+    }, [documentId, fileType, versionKey]);
 
     const loadPDF = async () => {
         try {
             setLoading(true);
             setError(null);
+
+            const cacheKey = `${documentId}:${fileType}:${versionKey}`;
+            const cached = pdfUrlCache.get(cacheKey);
+            if (cached?.expiresAt > Date.now()) {
+                setPdfUrl(cached.url);
+                setLoading(false);
+                return;
+            }
 
             const response = await fetch(
                 `${import.meta.env.VITE_API_URL || 'https://localhost:7001/api'}/folders/documents/${documentId}/download/${fileType}`,
@@ -28,6 +39,7 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
 
             const data = await response.json();
             setPdfUrl(data.url);
+            pdfUrlCache.set(cacheKey, { url: data.url, expiresAt: Date.now() + PDF_URL_CACHE_MS });
         } catch (err) {
             setError('Failed to load PDF');
             console.error(err);
@@ -39,7 +51,7 @@ function PDFViewer({ documentId, fileName, fileType, onClose }) {
     const handleDownload = async () => {
         try {
             // Fetch the PDF as a blob
-            const response = await fetch(pdfUrl);
+            const response = await fetch(pdfUrl, { cache: 'force-cache' });
             const blob = await response.blob();
 
             // Create a download link

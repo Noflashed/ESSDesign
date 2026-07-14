@@ -1,11 +1,13 @@
 using Supabase;
 using ESSDesign.Server.Models;
+using ESSDesign.Server.Services.Assistant;
 using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Services
@@ -46,6 +48,15 @@ namespace ESSDesign.Server.Services
         {
             [JsonPropertyName("folder_id")]
             public Guid FolderId { get; set; }
+        }
+
+        private sealed class PreparedDocumentUpload
+        {
+            public string TempFilePath { get; init; } = string.Empty;
+            public string FileName { get; init; } = string.Empty;
+            public string ContentType { get; init; } = "application/pdf";
+            public long Length { get; init; }
+            public string Fingerprint { get; init; } = string.Empty;
         }
 
         private sealed class DrawingDocumentLookupRow
@@ -100,6 +111,7 @@ namespace ESSDesign.Server.Services
         private readonly Supabase.Client _supabase;
         private readonly ILogger<SupabaseService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly EssAssistantUploadQueue _assistantUploadQueue;
         private readonly string _supabaseUrl;
         private readonly string _supabaseKey;
         private readonly string _bucketName = "design-pdfs";
@@ -111,6 +123,8 @@ namespace ESSDesign.Server.Services
         // In-memory cache for folders (5 minute expiration)
         private static readonly ConcurrentDictionary<Guid, (FolderResponse Data, DateTime Expiry)> _folderCache = new();
         private static readonly ConcurrentDictionary<string, (string Value, DateTime Expiry)> _userNameCache = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, (string Url, DateTimeOffset ExpiresAt)> _signedUrlCache = new(StringComparer.Ordinal);
+        private static readonly SemaphoreSlim _signedUrlLock = new(1, 1);
         private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
 
         // Root folders cache
@@ -121,11 +135,13 @@ namespace ESSDesign.Server.Services
             Supabase.Client supabase,
             ILogger<SupabaseService> logger,
             IHttpClientFactory httpClientFactory,
+            EssAssistantUploadQueue assistantUploadQueue,
             IConfiguration configuration)
         {
             _supabase = supabase;
             _logger = logger;
             _httpClientFactory = httpClientFactory;
+            _assistantUploadQueue = assistantUploadQueue;
             _supabaseUrl = configuration["Supabase:Url"] ?? string.Empty;
             _supabaseKey = configuration["Supabase:ServiceRoleKey"]
                 ?? configuration["Supabase:Key"]
@@ -1223,6 +1239,8 @@ namespace ESSDesign.Server.Services
                 ThirdPartyDesignName = document.ThirdPartyDesignName,
                 EssDesignFileSize = document.EssDesignFileSize,
                 ThirdPartyDesignFileSize = document.ThirdPartyDesignFileSize,
+                EssDesignFileFingerprint = document.EssDesignFileFingerprint,
+                ThirdPartyDesignFileFingerprint = document.ThirdPartyDesignFileFingerprint,
                 TotalFileSize = totalSize > 0 ? totalSize : null,
                 UserId = document.UserId,
                 OwnerName = ownerName,
@@ -1315,6 +1333,8 @@ namespace ESSDesign.Server.Services
                         DrawingStatus = document.DrawingStatus,
                         EssDesignFileSize = document.EssDesignFileSize,
                         ThirdPartyDesignFileSize = document.ThirdPartyDesignFileSize,
+                        EssDesignFileFingerprint = document.EssDesignFileFingerprint,
+                        ThirdPartyDesignFileFingerprint = document.ThirdPartyDesignFileFingerprint,
                         TotalFileSize = document.TotalFileSize,
                         UserId = document.UserId,
                         OwnerName = document.OwnerName,
@@ -1453,8 +1473,24 @@ namespace ESSDesign.Server.Services
 
         public async Task<Guid> UploadDocumentAsync(Guid folderId, string revisionNumber, IFormFile? essDesign, IFormFile? thirdParty, string? description = null, string? userId = null, string? drawingStatus = null)
         {
+            PreparedDocumentUpload? preparedEss = null;
+            PreparedDocumentUpload? preparedThirdParty = null;
+            var essQueued = false;
+            var thirdPartyQueued = false;
+            var uploadedPaths = new List<string>();
+            var documentCreated = false;
             try
             {
+                var essPreparationTask = essDesign == null
+                    ? Task.FromResult<PreparedDocumentUpload?>(null)
+                    : PrepareOptionalDocumentUploadAsync(essDesign);
+                var thirdPartyPreparationTask = thirdParty == null
+                    ? Task.FromResult<PreparedDocumentUpload?>(null)
+                    : PrepareOptionalDocumentUploadAsync(thirdParty);
+                await Task.WhenAll(essPreparationTask, thirdPartyPreparationTask);
+                preparedEss = await essPreparationTask;
+                preparedThirdParty = await thirdPartyPreparationTask;
+
                 var now = DateTime.UtcNow;
                 var document = new DesignDocument
                 {
@@ -1468,19 +1504,18 @@ namespace ESSDesign.Server.Services
                     UpdatedAt = now
                 };
 
-                // Upload files in parallel
                 var uploadTasks = new List<Task>();
-
-                if (essDesign != null)
+                if (preparedEss != null)
                 {
-                    var path = $"documents/{folderId}/{document.Id}/ess_{essDesign.FileName}";
-                    uploadTasks.Add(UploadAndAssignEssFileAsync(essDesign, path, document));
+                    var path = BuildVersionedDocumentPath(folderId, document.Id, "ess", preparedEss);
+                    uploadedPaths.Add(path);
+                    uploadTasks.Add(UploadAndAssignEssFileAsync(preparedEss, path, document));
                 }
-
-                if (thirdParty != null)
+                if (preparedThirdParty != null)
                 {
-                    var path = $"documents/{folderId}/{document.Id}/third_party_{thirdParty.FileName}";
-                    uploadTasks.Add(UploadAndAssignThirdPartyFileAsync(thirdParty, path, document));
+                    var path = BuildVersionedDocumentPath(folderId, document.Id, "third_party", preparedThirdParty);
+                    uploadedPaths.Add(path);
+                    uploadTasks.Add(UploadAndAssignThirdPartyFileAsync(preparedThirdParty, path, document));
                 }
 
                 await Task.WhenAll(uploadTasks);
@@ -1488,33 +1523,50 @@ namespace ESSDesign.Server.Services
                 var response = await _supabase.From<DesignDocument>().Insert(document);
                 var created = response.Models.FirstOrDefault();
                 if (created == null) throw new Exception("Failed to create document");
+                documentCreated = true;
 
                 await TouchFolderModifiedAsync(folderId, now);
+                if (preparedEss != null && !string.IsNullOrWhiteSpace(created.EssDesignIssuePath))
+                    essQueued = QueueAssistantUpload(created, preparedEss, created.EssDesignIssuePath, "ess_design");
+                if (preparedThirdParty != null && !string.IsNullOrWhiteSpace(created.ThirdPartyDesignPath))
+                    thirdPartyQueued = QueueAssistantUpload(created, preparedThirdParty, created.ThirdPartyDesignPath, "third_party_design");
 
                 _logger.LogInformation("Uploaded document Rev {RevisionNumber}", revisionNumber);
                 return created.Id;
             }
             catch (Exception ex)
             {
+                if (!documentCreated)
+                {
+                    foreach (var path in uploadedPaths)
+                        await DeleteFileAsync(path);
+                }
                 _logger.LogError(ex, "Error uploading document");
                 throw;
             }
+            finally
+            {
+                if (!essQueued) DeletePreparedUpload(preparedEss);
+                if (!thirdPartyQueued) DeletePreparedUpload(preparedThirdParty);
+            }
         }
 
-        private async Task UploadAndAssignEssFileAsync(IFormFile essDesign, string path, DesignDocument document)
+        private async Task UploadAndAssignEssFileAsync(PreparedDocumentUpload essDesign, string path, DesignDocument document)
         {
             await UploadFileAsync(essDesign, path);
             document.EssDesignIssuePath = path;
             document.EssDesignIssueName = essDesign.FileName;
             document.EssDesignFileSize = essDesign.Length;
+            document.EssDesignFileFingerprint = essDesign.Fingerprint;
         }
 
-        private async Task UploadAndAssignThirdPartyFileAsync(IFormFile thirdParty, string path, DesignDocument document)
+        private async Task UploadAndAssignThirdPartyFileAsync(PreparedDocumentUpload thirdParty, string path, DesignDocument document)
         {
             await UploadFileAsync(thirdParty, path);
             document.ThirdPartyDesignPath = path;
             document.ThirdPartyDesignName = thirdParty.FileName;
             document.ThirdPartyDesignFileSize = thirdParty.Length;
+            document.ThirdPartyDesignFileFingerprint = thirdParty.Fingerprint;
         }
 
         public async Task DeleteDocumentAsync(Guid documentId)
@@ -1629,6 +1681,12 @@ namespace ESSDesign.Server.Services
             string? userId = null,
             string? drawingStatus = null)
         {
+            PreparedDocumentUpload? preparedEss = null;
+            PreparedDocumentUpload? preparedThirdParty = null;
+            var essQueued = false;
+            var thirdPartyQueued = false;
+            var newlyUploadedPaths = new List<string>();
+            var documentUpdated = false;
             try
             {
                 var document = await _supabase
@@ -1646,28 +1704,30 @@ namespace ESSDesign.Server.Services
                     throw new InvalidOperationException("At least one replacement file is required");
                 }
 
+                var essPreparationTask = essDesign == null
+                    ? Task.FromResult<PreparedDocumentUpload?>(null)
+                    : PrepareOptionalDocumentUploadAsync(essDesign);
+                var thirdPartyPreparationTask = thirdParty == null
+                    ? Task.FromResult<PreparedDocumentUpload?>(null)
+                    : PrepareOptionalDocumentUploadAsync(thirdParty);
+                await Task.WhenAll(essPreparationTask, thirdPartyPreparationTask);
+                preparedEss = await essPreparationTask;
+                preparedThirdParty = await thirdPartyPreparationTask;
+
+                var oldEssPath = document.EssDesignIssuePath;
+                var oldThirdPartyPath = document.ThirdPartyDesignPath;
                 var replaceTasks = new List<Task>();
-
-                if (essDesign != null)
+                if (preparedEss != null)
                 {
-                    if (!string.IsNullOrWhiteSpace(document.EssDesignIssuePath))
-                    {
-                        replaceTasks.Add(DeleteFileAsync(document.EssDesignIssuePath));
-                    }
-
-                    var essPath = $"documents/{document.FolderId}/{document.Id}/ess_{essDesign.FileName}";
-                    replaceTasks.Add(UploadAndAssignEssFileAsync(essDesign, essPath, document));
+                    var essPath = BuildVersionedDocumentPath(document.FolderId, document.Id, "ess", preparedEss);
+                    newlyUploadedPaths.Add(essPath);
+                    replaceTasks.Add(UploadAndAssignEssFileAsync(preparedEss, essPath, document));
                 }
-
-                if (thirdParty != null)
+                if (preparedThirdParty != null)
                 {
-                    if (!string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath))
-                    {
-                        replaceTasks.Add(DeleteFileAsync(document.ThirdPartyDesignPath));
-                    }
-
-                    var thirdPartyPath = $"documents/{document.FolderId}/{document.Id}/third_party_{thirdParty.FileName}";
-                    replaceTasks.Add(UploadAndAssignThirdPartyFileAsync(thirdParty, thirdPartyPath, document));
+                    var thirdPartyPath = BuildVersionedDocumentPath(document.FolderId, document.Id, "third_party", preparedThirdParty);
+                    newlyUploadedPaths.Add(thirdPartyPath);
+                    replaceTasks.Add(UploadAndAssignThirdPartyFileAsync(preparedThirdParty, thirdPartyPath, document));
                 }
 
                 await Task.WhenAll(replaceTasks);
@@ -1681,16 +1741,40 @@ namespace ESSDesign.Server.Services
                 await _supabase
                     .From<DesignDocument>()
                     .Update(document);
+                documentUpdated = true;
 
                 await TouchFolderModifiedAsync(document.FolderId, now);
+                var stalePathDeletes = new List<Task>();
+                if (preparedEss != null && !string.IsNullOrWhiteSpace(oldEssPath) &&
+                    !string.Equals(oldEssPath, document.EssDesignIssuePath, StringComparison.Ordinal))
+                    stalePathDeletes.Add(DeleteFileAsync(oldEssPath));
+                if (preparedThirdParty != null && !string.IsNullOrWhiteSpace(oldThirdPartyPath) &&
+                    !string.Equals(oldThirdPartyPath, document.ThirdPartyDesignPath, StringComparison.Ordinal))
+                    stalePathDeletes.Add(DeleteFileAsync(oldThirdPartyPath));
+                await Task.WhenAll(stalePathDeletes);
+
+                if (preparedEss != null && !string.IsNullOrWhiteSpace(document.EssDesignIssuePath))
+                    essQueued = QueueAssistantUpload(document, preparedEss, document.EssDesignIssuePath, "ess_design");
+                if (preparedThirdParty != null && !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath))
+                    thirdPartyQueued = QueueAssistantUpload(document, preparedThirdParty, document.ThirdPartyDesignPath, "third_party_design");
 
                 _logger.LogInformation("Replaced files for document {DocumentId}", documentId);
                 return document;
             }
             catch (Exception ex)
             {
+                if (!documentUpdated)
+                {
+                    foreach (var path in newlyUploadedPaths)
+                        await DeleteFileAsync(path);
+                }
                 _logger.LogError(ex, "Error replacing files for document {DocumentId}", documentId);
                 throw;
+            }
+            finally
+            {
+                if (!essQueued) DeletePreparedUpload(preparedEss);
+                if (!thirdPartyQueued) DeletePreparedUpload(preparedThirdParty);
             }
         }
 
@@ -1736,7 +1820,110 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        private async Task<string> UploadFileAsync(IFormFile file, string path)
+        private static async Task<PreparedDocumentUpload> PrepareDocumentUploadAsync(IFormFile file)
+        {
+            var tempFilePath = Path.Combine(
+                Path.GetTempPath(),
+                $"{EssAssistantUploadQueue.TempFilePrefix}{Guid.NewGuid():N}.tmp");
+            try
+            {
+                await using (var destination = new FileStream(
+                    tempFilePath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.Read,
+                    81920,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    await file.CopyToAsync(destination);
+                }
+
+                await using var source = new FileStream(
+                    tempFilePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    81920,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+                var hash = await SHA256.HashDataAsync(source);
+                return new PreparedDocumentUpload
+                {
+                    TempFilePath = tempFilePath,
+                    FileName = Path.GetFileName(file.FileName),
+                    ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/pdf" : file.ContentType,
+                    Length = source.Length,
+                    Fingerprint = $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}",
+                };
+            }
+            catch
+            {
+                TryDeleteTempFile(tempFilePath);
+                throw;
+            }
+        }
+
+        private static async Task<PreparedDocumentUpload?> PrepareOptionalDocumentUploadAsync(IFormFile file) =>
+            await PrepareDocumentUploadAsync(file);
+
+        private static string BuildVersionedDocumentPath(
+            Guid folderId,
+            Guid documentId,
+            string prefix,
+            PreparedDocumentUpload upload)
+        {
+            var safeName = Regex.Replace(upload.FileName, "[^a-zA-Z0-9._-]+", "_").Trim('_');
+            if (string.IsNullOrWhiteSpace(safeName))
+                safeName = "document.pdf";
+            if (safeName.Length > 160)
+            {
+                var extension = Path.GetExtension(safeName);
+                var stem = Path.GetFileNameWithoutExtension(safeName);
+                safeName = $"{stem[..Math.Min(stem.Length, 140)]}{extension}";
+            }
+            var hash = upload.Fingerprint.StartsWith("sha256:", StringComparison.Ordinal)
+                ? upload.Fingerprint[7..23]
+                : Guid.NewGuid().ToString("N")[..16];
+            return $"documents/{folderId:D}/{documentId:D}/{prefix}_{hash}_{safeName}";
+        }
+
+        private bool QueueAssistantUpload(
+            DesignDocument document,
+            PreparedDocumentUpload upload,
+            string storagePath,
+            string domain) =>
+            _assistantUploadQueue.TryQueue(new EssAssistantPendingUpload
+            {
+                StoragePath = storagePath,
+                DisplayName = upload.FileName,
+                ContentType = upload.ContentType,
+                Domain = domain,
+                RecordId = document.Id.ToString("D"),
+                SourceUpdatedAt = document.UpdatedAt.ToUniversalTime().ToString("O"),
+                Fingerprint = upload.Fingerprint,
+                Size = upload.Length,
+                TempFilePath = upload.TempFilePath,
+            });
+
+        private static void DeletePreparedUpload(PreparedDocumentUpload? upload)
+        {
+            if (upload != null)
+                TryDeleteTempFile(upload.TempFilePath);
+        }
+
+        private static void TryDeleteTempFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // Stale upload files are cleaned by EssAssistantUploadWorker on startup.
+            }
+        }
+
+        private async Task<string> UploadFileAsync(PreparedDocumentUpload file, string path)
         {
             if (string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
             {
@@ -1753,8 +1940,19 @@ namespace ESSDesign.Server.Services
             request.Headers.Add("apikey", _supabaseKey);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
             request.Headers.Add("x-upsert", "true");
+            request.Headers.CacheControl = new CacheControlHeaderValue
+            {
+                MaxAge = TimeSpan.FromDays(365),
+            };
+            request.Headers.CacheControl.Extensions.Add(new NameValueHeaderValue("immutable"));
 
-            var stream = file.OpenReadStream();
+            var stream = new FileStream(
+                file.TempFilePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
             var content = new StreamContent(stream);
             content.Headers.ContentType = MediaTypeHeaderValue.Parse(
                 string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
@@ -1888,7 +2086,26 @@ namespace ESSDesign.Server.Services
 
         private async Task<string> GetSignedUrlAsync(string path)
         {
-            return await _supabase.Storage.From(_bucketName).CreateSignedUrl(path, 3600);
+            if (_signedUrlCache.TryGetValue(path, out var cached) &&
+                cached.ExpiresAt > DateTimeOffset.UtcNow.AddMinutes(2))
+                return cached.Url;
+
+            await _signedUrlLock.WaitAsync();
+            try
+            {
+                if (_signedUrlCache.TryGetValue(path, out cached) &&
+                    cached.ExpiresAt > DateTimeOffset.UtcNow.AddMinutes(2))
+                    return cached.Url;
+
+                const int lifetimeSeconds = 3600;
+                var url = await _supabase.Storage.From(_bucketName).CreateSignedUrl(path, lifetimeSeconds);
+                _signedUrlCache[path] = (url, DateTimeOffset.UtcNow.AddMinutes(55));
+                return url;
+            }
+            finally
+            {
+                _signedUrlLock.Release();
+            }
         }
 
         public async Task InitializeStorageAsync()

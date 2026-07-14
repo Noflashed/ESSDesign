@@ -443,6 +443,27 @@ const buildGridTemplateColumns = (widths, includeRevision, includeBuilderLogo = 
 };
 
 const pdfThumbnailCache = new Map();
+const PDF_THUMBNAIL_CACHE_NAME = 'ess-pdf-thumbnails-v1';
+
+const getThumbnailCacheRequest = (cacheKey) => new Request(
+    `${window.location.origin}/__ess-cache/pdf-thumbnail/${encodeURIComponent(cacheKey)}`
+);
+
+const readPersistedThumbnail = async (cacheKey) => {
+    if (!('caches' in window)) return '';
+    const cache = await window.caches.open(PDF_THUMBNAIL_CACHE_NAME);
+    const response = await cache.match(getThumbnailCacheRequest(cacheKey));
+    return response ? response.text() : '';
+};
+
+const persistThumbnail = async (cacheKey, dataUrl) => {
+    if (!('caches' in window)) return;
+    const cache = await window.caches.open(PDF_THUMBNAIL_CACHE_NAME);
+    await cache.put(
+        getThumbnailCacheRequest(cacheKey),
+        new Response(dataUrl, { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=31536000, immutable' } })
+    );
+};
 
 function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 }) {
     const [thumbnailUrl, setThumbnailUrl] = useState('');
@@ -466,12 +487,30 @@ function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 
                 return;
             }
 
-            const cacheKey = `${documentItem.id}-${preferredType}-${targetWidth}-${jpegQuality}-${documentItem.updatedAt || documentItem.createdAt || ''}`;
+            const documentVersion = documentItem.essDesignFileFingerprint
+                || documentItem.essDesignIssuePath
+                || documentItem.updatedAt
+                || documentItem.createdAt
+                || '';
+            const cacheKey = `${documentItem.id}-${preferredType}-${targetWidth}-${jpegQuality}-${documentVersion}`;
             const cachedThumbnail = pdfThumbnailCache.get(cacheKey);
             if (cachedThumbnail) {
                 setThumbnailUrl(cachedThumbnail);
                 setThumbnailStatus('ready');
                 return;
+            }
+
+            try {
+                const persistedThumbnail = await readPersistedThumbnail(cacheKey);
+                if (cancelled) return;
+                if (persistedThumbnail) {
+                    pdfThumbnailCache.set(cacheKey, persistedThumbnail);
+                    setThumbnailUrl(persistedThumbnail);
+                    setThumbnailStatus('ready');
+                    return;
+                }
+            } catch {
+                // Preview rendering remains available when browser cache storage is unavailable.
             }
 
             setThumbnailStatus('loading');
@@ -518,6 +557,7 @@ function PdfPageThumbnail({ documentItem, targetWidth = 280, jpegQuality = 0.58 
                 if (!cancelled) {
                     const previewDataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
                     pdfThumbnailCache.set(cacheKey, previewDataUrl);
+                    persistThumbnail(cacheKey, previewDataUrl).catch(() => {});
                     setThumbnailUrl(previewDataUrl);
                     setThumbnailStatus('ready');
                 }
@@ -1356,7 +1396,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
         setPdfViewer({
             documentId: document.id,
             fileName: fileName || 'document.pdf',
-            fileType: type || 'ess'
+            fileType: type || 'ess',
+            versionKey: type === 'thirdparty'
+                ? document.thirdPartyDesignFileFingerprint || document.thirdPartyDesignPath || document.updatedAt || ''
+                : document.essDesignFileFingerprint || document.essDesignIssuePath || document.updatedAt || ''
         });
     };
 
@@ -2432,6 +2475,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                     documentId={pdfViewer.documentId}
                     fileName={pdfViewer.fileName}
                     fileType={pdfViewer.fileType}
+                    versionKey={pdfViewer.versionKey}
                     onClose={() => setPdfViewer(null)}
                 />
             )}

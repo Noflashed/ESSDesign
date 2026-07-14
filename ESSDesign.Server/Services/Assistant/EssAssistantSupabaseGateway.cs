@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 
@@ -6,6 +7,8 @@ namespace ESSDesign.Server.Services.Assistant;
 
 public sealed class EssAssistantSupabaseGateway
 {
+    private static readonly ConcurrentDictionary<string, CachedJsonObject> JsonObjectCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan JsonObjectCacheDuration = TimeSpan.FromSeconds(30);
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EssAssistantSupabaseGateway> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
@@ -107,6 +110,10 @@ public sealed class EssAssistantSupabaseGateway
 
     public async Task<JsonDocument?> ReadStorageJsonAsync(string bucket, string path, CancellationToken cancellationToken)
     {
+        var cacheKey = $"{bucket}/{path}";
+        if (JsonObjectCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return JsonDocument.Parse(cached.Json);
+
         using var request = CreateRequest(HttpMethod.Get, BuildStorageObjectUrl(bucket, path));
         using var response = await SendAsync(request, cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -118,8 +125,74 @@ public sealed class EssAssistantSupabaseGateway
             return null;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        JsonObjectCache[cacheKey] = new CachedJsonObject(json, DateTimeOffset.UtcNow.Add(JsonObjectCacheDuration));
+        return JsonDocument.Parse(json);
+    }
+
+    public async Task<bool> TryAcquireWorkerLeaseAsync(
+        string leaseName,
+        Guid ownerId,
+        int leaseSeconds,
+        CancellationToken cancellationToken) =>
+        await InvokeBooleanRpcAsync(
+            "try_acquire_ess_ai_worker_lease",
+            new { p_lease_name = leaseName, p_owner_id = ownerId, p_lease_seconds = leaseSeconds },
+            cancellationToken);
+
+    public async Task<bool> RenewWorkerLeaseAsync(
+        string leaseName,
+        Guid ownerId,
+        int leaseSeconds,
+        CancellationToken cancellationToken) =>
+        await InvokeBooleanRpcAsync(
+            "renew_ess_ai_worker_lease",
+            new { p_lease_name = leaseName, p_owner_id = ownerId, p_lease_seconds = leaseSeconds },
+            cancellationToken);
+
+    public async Task ReleaseWorkerLeaseAsync(
+        string leaseName,
+        Guid ownerId,
+        CancellationToken cancellationToken) =>
+        _ = await InvokeBooleanRpcAsync(
+            "release_ess_ai_worker_lease",
+            new { p_lease_name = leaseName, p_owner_id = ownerId },
+            cancellationToken);
+
+    public async Task<List<EssAssistantStorageEntry>> ListStoragePdfObjectsAsync(
+        string bucket,
+        string prefix,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        using var request = CreateRequest(HttpMethod.Post, $"{_supabaseUrl}/rest/v1/rpc/list_ess_ai_storage_pdfs");
+        request.Content = JsonContent(new
+        {
+            p_bucket = bucket,
+            p_prefix = prefix,
+            p_limit = Math.Clamp(limit, 1, 20_000),
+        });
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Supabase PDF manifest lookup failed: {response.StatusCode} {TrimForLog(body)}");
+
+        using var document = JsonDocument.Parse(body);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+            return new List<EssAssistantStorageEntry>();
+
+        return document.RootElement.EnumerateArray().Select(row =>
+        {
+            var metadata = row.TryGetProperty("metadata", out var metadataValue) ? metadataValue : default;
+            return new EssAssistantStorageEntry
+            {
+                Path = GetString(row, "object_path") ?? string.Empty,
+                UpdatedAt = GetString(row, "updated_at") ?? GetString(row, "created_at"),
+                ETag = metadata.ValueKind == JsonValueKind.Object ? GetString(metadata, "eTag") ?? GetString(metadata, "etag") : null,
+                Size = GetMetadataSize(metadata),
+                ContentType = metadata.ValueKind == JsonValueKind.Object ? GetString(metadata, "mimetype") : null,
+            };
+        }).Where(entry => !string.IsNullOrWhiteSpace(entry.Path)).ToList();
     }
 
     public async Task<List<JsonElement>> ListStorageObjectsAsync(
@@ -221,6 +294,15 @@ public sealed class EssAssistantSupabaseGateway
             return null;
 
         var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var cacheStatus = response.Headers.TryGetValues("cf-cache-status", out var cacheValues)
+            ? cacheValues.FirstOrDefault()
+            : null;
+        _logger.LogInformation(
+            "ESS assistant downloaded {ByteCount} bytes from {Bucket}/{Path}; CDN cache {CacheStatus}",
+            bytes.LongLength,
+            bucket,
+            path,
+            cacheStatus ?? "unknown");
         return new EssAssistantStorageObject
         {
             Bytes = bytes,
@@ -249,6 +331,20 @@ public sealed class EssAssistantSupabaseGateway
     private StringContent JsonContent(object payload) =>
         new(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
 
+    private async Task<bool> InvokeBooleanRpcAsync(
+        string functionName,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        using var request = CreateRequest(HttpMethod.Post, $"{_supabaseUrl}/rest/v1/rpc/{Uri.EscapeDataString(functionName)}");
+        request.Content = JsonContent(payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Supabase RPC {functionName} failed: {response.StatusCode} {TrimForLog(body)}");
+        return bool.TryParse(body.Trim(), out var value) && value;
+    }
+
     private string BuildStorageObjectUrl(string bucket, string path)
     {
         var escapedPath = string.Join('/', path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
@@ -257,12 +353,25 @@ public sealed class EssAssistantSupabaseGateway
 
     private static string TrimForLog(string value) => value.Length <= 500 ? value : value[..500];
 
+    private static long? GetMetadataSize(JsonElement metadata)
+    {
+        if (metadata.ValueKind != JsonValueKind.Object || !metadata.TryGetProperty("size", out var value))
+            return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number))
+            return number;
+        return value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out number)
+            ? number
+            : null;
+    }
+
     private static string? GetString(JsonElement element, string property)
     {
         if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
+
+    private sealed record CachedJsonObject(string Json, DateTimeOffset ExpiresAt);
 }
 
 public sealed class EssAssistantStorageObject

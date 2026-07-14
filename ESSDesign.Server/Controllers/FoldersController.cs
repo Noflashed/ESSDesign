@@ -829,6 +829,7 @@ namespace ESSDesign.Server.Controllers
                     var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
 
                     Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+                    Response.Headers.CacheControl = "private, max-age=3600";
 
                     return new FileStreamResult(stream, contentType);
                 }
@@ -868,6 +869,7 @@ namespace ESSDesign.Server.Controllers
                 var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
 
                 Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+                Response.Headers.CacheControl = "private, max-age=3600";
 
                 return new FileStreamResult(stream, contentType);
             }
@@ -965,6 +967,7 @@ namespace ESSDesign.Server.Controllers
                 var stream = await response.Content.ReadAsStreamAsync();
                 var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
                 Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
+                Response.Headers.CacheControl = "private, max-age=3600";
 
                 return new FileStreamResult(stream, contentType);
             }

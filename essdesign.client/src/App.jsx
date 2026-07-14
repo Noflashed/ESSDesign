@@ -1300,7 +1300,10 @@ function App() {
         setPdfViewer({
             documentId: doc.id,
             fileName: fileName || 'document.pdf',
-            fileType: type || 'ess'
+            fileType: type || 'ess',
+            versionKey: type === 'thirdparty'
+                ? doc.thirdPartyDesignFileFingerprint || doc.thirdPartyDesignPath || doc.updatedAt || ''
+                : doc.essDesignFileFingerprint || doc.essDesignIssuePath || doc.updatedAt || ''
         });
         closeSearch();
     };
@@ -1500,7 +1503,10 @@ function App() {
             setPdfViewer({
                 documentId: document.id,
                 fileName: document.essDesignIssueName || 'document.pdf',
-                fileType: document.fileType || 'ess'
+                fileType: document.fileType || 'ess',
+                versionKey: document.fileType === 'thirdparty'
+                    ? document.thirdPartyDesignFileFingerprint || document.thirdPartyDesignPath || document.updatedAt || ''
+                    : document.essDesignFileFingerprint || document.essDesignIssuePath || document.updatedAt || ''
             });
         }
     };
@@ -2004,6 +2010,7 @@ function App() {
                     documentId={pdfViewer.documentId}
                     fileName={pdfViewer.fileName}
                     fileType={pdfViewer.fileType}
+                    versionKey={pdfViewer.versionKey}
                     onClose={() => setPdfViewer(null)}
                 />
             )}

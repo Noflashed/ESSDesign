@@ -64,6 +64,12 @@ namespace ESSDesign.Server.Models
         [Column("third_party_design_file_size")]
         public long? ThirdPartyDesignFileSize { get; set; }
 
+        [Column("ess_design_file_fingerprint")]
+        public string? EssDesignFileFingerprint { get; set; }
+
+        [Column("third_party_design_file_fingerprint")]
+        public string? ThirdPartyDesignFileFingerprint { get; set; }
+
         [Column("user_id")]
         public string? UserId { get; set; }
 
@@ -556,6 +562,8 @@ namespace ESSDesign.Server.Models
         public string? ThirdPartyDesignName { get; set; }
         public long? EssDesignFileSize { get; set; }
         public long? ThirdPartyDesignFileSize { get; set; }
+        public string? EssDesignFileFingerprint { get; set; }
+        public string? ThirdPartyDesignFileFingerprint { get; set; }
         public long? TotalFileSize { get; set; }
         public string? UserId { get; set; }
         public string? OwnerName { get; set; }
@@ -608,6 +616,8 @@ namespace ESSDesign.Server.Models
         public string? DrawingStatus { get; set; }
         public long? EssDesignFileSize { get; set; }
         public long? ThirdPartyDesignFileSize { get; set; }
+        public string? EssDesignFileFingerprint { get; set; }
+        public string? ThirdPartyDesignFileFingerprint { get; set; }
         public long? TotalFileSize { get; set; }
         public string? UserId { get; set; }
         public string? OwnerName { get; set; }
