@@ -16,6 +16,53 @@ public sealed class EssAssistantConversationStore
         _logger = logger;
     }
 
+    public async Task<EssAssistantPreparedTurn> PrepareTurnAsync(
+        Guid? requestedConversationId,
+        EssAssistantAccessContext access,
+        string message,
+        int historyLimit,
+        CancellationToken cancellationToken)
+    {
+        var messageId = Guid.NewGuid();
+        try
+        {
+            var result = await _gateway.InvokeJsonRpcAsync(
+                "prepare_ess_ai_chat_turn",
+                new
+                {
+                    p_conversation_id = requestedConversationId,
+                    p_user_id = Guid.Parse(access.UserId),
+                    p_title = BuildTitle(message),
+                    p_message_id = messageId,
+                    p_message = message,
+                    p_history_limit = Math.Clamp(historyLimit, 1, 20),
+                },
+                cancellationToken);
+            var conversationId = Guid.Parse(GetString(result, "conversationId")!);
+            var history = result.TryGetProperty("history", out var historyValue) && historyValue.ValueKind == JsonValueKind.Array
+                ? historyValue.EnumerateArray()
+                    .Select(row => new EssAssistantHistoryMessage
+                    {
+                        Role = GetString(row, "role") ?? string.Empty,
+                        Content = GetString(row, "content") ?? string.Empty,
+                    })
+                    .Where(item => item.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(item.Content))
+                    .ToList()
+                : new List<EssAssistantHistoryMessage>();
+            return new EssAssistantPreparedTurn(conversationId, messageId, history);
+        }
+        catch (Exception ex) when (ex is FormatException || ex.Message.Contains("prepare_ess_ai_chat_turn", StringComparison.Ordinal))
+        {
+            if (Interlocked.Exchange(ref _schemaWarningLogged, 1) == 0)
+                _logger.LogWarning(ex, "Apply migration 035_reduce_assistant_latency.sql to enable the low-latency conversation path");
+
+            var conversationId = await GetOrCreateAsync(requestedConversationId, access, message, cancellationToken);
+            var history = await LoadRecentAsync(conversationId, access, historyLimit, cancellationToken);
+            await AppendMessageAsync(conversationId, access, "user", message, null, cancellationToken, messageId);
+            return new EssAssistantPreparedTurn(conversationId, messageId, history);
+        }
+    }
+
     public async Task<Guid> GetOrCreateAsync(
         Guid? requestedConversationId,
         EssAssistantAccessContext access,
@@ -77,11 +124,12 @@ public sealed class EssAssistantConversationStore
         string role,
         string content,
         IReadOnlyList<EssAssistantSource>? sources,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid? requestedMessageId = null)
     {
         var safeContent = content.Length <= 30_000 ? content : content[..30_000];
-        var messageId = Guid.NewGuid();
-        await TryAsync(() => _gateway.InsertRowsAsync(
+        var messageId = requestedMessageId ?? Guid.NewGuid();
+        var insertTask = TryAsync(() => _gateway.InsertRowsAsync(
             "ess_ai_messages",
             new
             {
@@ -94,8 +142,7 @@ public sealed class EssAssistantConversationStore
                 created_at = DateTimeOffset.UtcNow,
             },
             cancellationToken));
-
-        await TryAsync(async () =>
+        var touchTask = TryAsync(async () =>
         {
             await _gateway.PatchRowsAsync(
                 $"ess_ai_conversations?id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}",
@@ -103,6 +150,7 @@ public sealed class EssAssistantConversationStore
                 cancellationToken);
             return true;
         });
+        await Task.WhenAll(insertTask, touchTask);
         return messageId;
     }
 
@@ -125,7 +173,16 @@ public sealed class EssAssistantConversationStore
                 tool_call_count = metrics.ToolCalls,
                 input_tokens = metrics.InputTokens,
                 output_tokens = metrics.OutputTokens,
+                cached_input_tokens = metrics.CachedInputTokens,
+                reasoning_tokens = metrics.ReasoningTokens,
                 duration_ms = metrics.DurationMs,
+                route = metrics.Route,
+                authentication_ms = metrics.AuthenticationMs,
+                preparation_ms = metrics.PreparationMs,
+                model_ms = metrics.ModelMs,
+                tool_ms = metrics.ToolMs,
+                persistence_ms = metrics.PersistenceMs,
+                first_event_ms = metrics.FirstEventMs,
                 success = metrics.Success,
                 error_code = metrics.ErrorCode,
                 created_at = DateTimeOffset.UtcNow,
@@ -203,3 +260,8 @@ public sealed class EssAssistantConversationStore
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
 }
+
+public sealed record EssAssistantPreparedTurn(
+    Guid ConversationId,
+    Guid UserMessageId,
+    List<EssAssistantHistoryMessage> History);

@@ -97,6 +97,23 @@ public sealed class EssAssistantSupabaseGateway
         }
     }
 
+    public async Task<JsonElement> InvokeJsonRpcAsync(
+        string functionName,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        using var request = CreateRequest(
+            HttpMethod.Post,
+            $"{_supabaseUrl}/rest/v1/rpc/{Uri.EscapeDataString(functionName)}");
+        request.Content = JsonContent(payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Supabase RPC {functionName} failed: {response.StatusCode} {TrimForLog(body)}");
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.Clone();
+    }
+
     public async Task DeleteRowsAsync(string relativePath, CancellationToken cancellationToken)
     {
         using var request = CreateRequest(HttpMethod.Delete, $"{_supabaseUrl}/rest/v1/{relativePath.TrimStart('/')}");

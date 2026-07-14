@@ -7463,11 +7463,15 @@ button.stat-card {
 }
 
 .admin-assistant-page-chat .admin-assistant-thinking {
-    width: 34px;
+    width: max-content;
+    max-width: min(360px, 80vw);
+    min-width: 34px;
     height: 34px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
+    border-radius: 17px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 11px 0 8px;
     background: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(226, 232, 240, 0.9);
     box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
@@ -7475,12 +7479,21 @@ button.stat-card {
 }
 
 .admin-assistant-page-chat .admin-assistant-thinking span {
+    flex: 0 0 auto;
     width: 16px;
     height: 16px;
     border-radius: 50%;
     border: 2px solid rgba(244, 124, 32, 0.22);
     border-top-color: #F47C20;
     animation: admin-assistant-spin 0.75s linear infinite;
+}
+
+.admin-assistant-page-chat .admin-assistant-thinking small {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .admin-assistant-page-chat .admin-assistant-links {
@@ -7724,6 +7737,10 @@ button.stat-card {
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-thinking {
     border-color: rgba(148, 163, 184, 0.22);
     background: rgba(15, 23, 42, 0.82);
+}
+
+[data-theme='dark'] .admin-assistant-page-chat .admin-assistant-thinking small {
+    color: #cbd5e1;
 }
 
 [data-theme='dark'] .admin-assistant-page-chat .admin-assistant-message,

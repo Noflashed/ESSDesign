@@ -12,13 +12,13 @@ public sealed class EssAssistantDocumentIndexService
     private const int SyncLeaseSeconds = 900;
     private const string PermanentErrorPrefix = "Permanent indexing failure: ";
     private static readonly SemaphoreSlim SyncGate = new(1, 1);
+    private static readonly SemaphoreSlim VectorStoreLock = new(1, 1);
+    private static string? CachedVectorStoreId;
+    private static DateTimeOffset VectorStoreCacheExpiresAt;
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<EssAssistantDocumentIndexService> _logger;
-    private readonly SemaphoreSlim _vectorStoreLock = new(1, 1);
-    private string? _cachedVectorStoreId;
-    private bool _vectorStoreResolved;
 
     public EssAssistantDocumentIndexService(
         EssAssistantSupabaseGateway gateway,
@@ -37,22 +37,21 @@ public sealed class EssAssistantDocumentIndexService
         var configured = _configuration["OpenAI:AssistantVectorStoreId"];
         if (!string.IsNullOrWhiteSpace(configured))
             return configured;
-        if (_vectorStoreResolved)
-            return _cachedVectorStoreId;
-        if (!string.IsNullOrWhiteSpace(_cachedVectorStoreId))
-            return _cachedVectorStoreId;
+        if (VectorStoreCacheExpiresAt > DateTimeOffset.UtcNow)
+            return CachedVectorStoreId;
 
         if (!await _gateway.ResourceExistsAsync("ess_ai_settings?select=key&limit=1", cancellationToken))
         {
-            _vectorStoreResolved = true;
+            CachedVectorStoreId = null;
+            VectorStoreCacheExpiresAt = DateTimeOffset.UtcNow.AddMinutes(1);
             return null;
         }
 
         var rows = await _gateway.GetRowsAsync("ess_ai_settings?select=value&key=eq.openai_vector_store_id&limit=1", cancellationToken);
         var value = rows.FirstOrDefault();
-        _cachedVectorStoreId = GetString(value, "value");
-        _vectorStoreResolved = true;
-        return _cachedVectorStoreId;
+        CachedVectorStoreId = GetString(value, "value");
+        VectorStoreCacheExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        return CachedVectorStoreId;
     }
 
     public async Task<EssAssistantDocumentSyncResult> SyncAsync(
@@ -554,7 +553,7 @@ public sealed class EssAssistantDocumentIndexService
         if (!string.IsNullOrWhiteSpace(existing))
             return existing;
 
-        await _vectorStoreLock.WaitAsync(cancellationToken);
+        await VectorStoreLock.WaitAsync(cancellationToken);
         try
         {
             existing = await GetVectorStoreIdAsync(cancellationToken);
@@ -573,12 +572,13 @@ public sealed class EssAssistantDocumentIndexService
                 new { key = "openai_vector_store_id", value = existing, updated_at = DateTimeOffset.UtcNow },
                 cancellationToken,
                 "key");
-            _cachedVectorStoreId = existing;
+            CachedVectorStoreId = existing;
+            VectorStoreCacheExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
             return existing;
         }
         finally
         {
-            _vectorStoreLock.Release();
+            VectorStoreLock.Release();
         }
     }
 

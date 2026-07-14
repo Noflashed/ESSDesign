@@ -81,6 +81,8 @@ export default function AdminAssistantChat({
     });
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [streamStatus, setStreamStatus] = useState('');
+    const [streamingReplyVisible, setStreamingReplyVisible] = useState(false);
     const [feedback, setFeedback] = useState({});
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
@@ -121,36 +123,80 @@ export default function AdminAssistantChat({
         setMessages(current => [...current, userMessage]);
         setInput('');
         setLoading(true);
+        setStreamStatus('Thinking...');
+        setStreamingReplyVisible(false);
 
         try {
             const history = priorMessages
                 .filter(item => item.role === 'user' || (item.role === 'assistant' && item !== WELCOME_MESSAGE))
                 .slice(-20)
                 .map(item => ({ role: item.role, content: item.content }));
-            const response = await assistantAPI.chat(text, {
+            const streamingId = crypto.randomUUID();
+            let hasDelta = false;
+            let completed = false;
+            await assistantAPI.chatStream(text, {
                 conversationId,
                 history,
                 pageContext,
-            });
-            const nextConversationId = response.conversationId || conversationId;
-            setConversationId(nextConversationId);
-            if (nextConversationId) {
-                try {
-                    window.localStorage.setItem(storageKey, nextConversationId);
-                } catch {
-                    // Server-side conversation continuity still works for this page session.
+            }, (event) => {
+                if (event.type === 'status') {
+                    setStreamStatus(event.message || 'Checking ESS...');
+                    return;
                 }
+                if (event.type === 'delta' && event.delta) {
+                    setStreamingReplyVisible(true);
+                    if (!hasDelta) {
+                        hasDelta = true;
+                        setMessages(current => [...current, {
+                            id: streamingId,
+                            role: 'assistant',
+                            content: event.delta,
+                            sources: [],
+                            links: [],
+                            followUps: [],
+                            streaming: true,
+                        }]);
+                    } else {
+                        setMessages(current => current.map(item => item.id === streamingId
+                            ? { ...item, content: `${item.content}${event.delta}` }
+                            : item));
+                    }
+                    return;
+                }
+                if (event.type === 'complete' && event.response) {
+                    completed = true;
+                    const response = event.response;
+                    const nextConversationId = response.conversationId || conversationId;
+                    setConversationId(nextConversationId);
+                    if (nextConversationId) {
+                        try {
+                            window.localStorage.setItem(storageKey, nextConversationId);
+                        } catch {
+                            // Server-side conversation continuity still works for this page session.
+                        }
+                    }
+                    setMessages(current => {
+                        const existing = current.some(item => item.id === streamingId);
+                        const finalMessage = {
+                            id: streamingId,
+                            persistedMessageId: response.messageId || null,
+                            role: 'assistant',
+                            content: response.reply || 'I could not produce an answer from the available ESS records.',
+                            grounded: Boolean(response.grounded),
+                            sources: response.sources || [],
+                            links: response.links || [],
+                            followUps: response.followUps || [],
+                            streaming: false,
+                        };
+                        return existing
+                            ? current.map(item => item.id === streamingId ? finalMessage : item)
+                            : [...current, finalMessage];
+                    });
+                }
+            });
+            if (!completed) {
+                throw new Error('The assistant stream ended before the answer was completed.');
             }
-            setMessages(current => [...current, {
-                id: crypto.randomUUID(),
-                persistedMessageId: response.messageId || null,
-                role: 'assistant',
-                content: response.reply || 'I could not produce an answer from the available ESS records.',
-                grounded: Boolean(response.grounded),
-                sources: response.sources || [],
-                links: response.links || [],
-                followUps: response.followUps || [],
-            }]);
         } catch (error) {
             setMessages(current => [...current, {
                 id: crypto.randomUUID(),
@@ -163,6 +209,8 @@ export default function AdminAssistantChat({
             }]);
         } finally {
             setLoading(false);
+            setStreamStatus('');
+            setStreamingReplyVisible(false);
         }
     };
 
@@ -211,7 +259,7 @@ export default function AdminAssistantChat({
                             userDisplayName={userDisplayName}
                             onUserAvatarError={onUserAvatarError}
                         />
-                        <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}`}>
+                        <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}${message.streaming ? ' streaming' : ''}`}>
                             <AssistantMessageContent content={message.content} role={message.role} />
 
                             {message.sources?.length ? (
@@ -266,10 +314,11 @@ export default function AdminAssistantChat({
                         </div>
                     </div>
                 ))}
-                {loading ? (
+                {loading && !streamingReplyVisible ? (
                     <div className="admin-assistant-message-row assistant">
                         <div className="admin-assistant-thinking" aria-label="ESS Assistant is investigating" role="status">
                             <span aria-hidden="true" />
+                            {streamStatus ? <small>{streamStatus}</small> : null}
                         </div>
                     </div>
                 ) : null}

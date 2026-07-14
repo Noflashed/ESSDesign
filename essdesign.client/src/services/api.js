@@ -4971,6 +4971,77 @@ export const assistantAPI = {
         });
         return response.data;
     },
+    chatStream: async (message, options = {}, onEvent = () => {}) => {
+        if (!isAccessTokenFresh() && localStorage.getItem('refresh_token')) {
+            await refreshAuthSession();
+        }
+
+        const send = () => fetch(`${API_BASE_URL}/assistant/chat/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
+            },
+            body: JSON.stringify({
+                message,
+                conversationId: options.conversationId || null,
+                history: options.history || [],
+                pageContext: options.pageContext || null,
+            }),
+            signal: options.signal,
+        });
+
+        let response = await send();
+        if (response.status === 401 && localStorage.getItem('refresh_token')) {
+            await refreshAuthSession();
+            response = await send();
+        }
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || `Assistant request failed (${response.status})`);
+        }
+        if (!response.body) {
+            throw new Error('Streaming is unavailable in this browser.');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { value, done } = await reader.read();
+            buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+            const blocks = buffer.split(/\r?\n\r?\n/);
+            buffer = blocks.pop() || '';
+            for (const block of blocks) {
+                const data = block
+                    .split(/\r?\n/)
+                    .filter(line => line.startsWith('data:'))
+                    .map(line => line.slice(5).trim())
+                    .join('\n');
+                if (!data) continue;
+                const event = JSON.parse(data);
+                onEvent(event);
+                if (event.type === 'error') {
+                    throw new Error(event.message || 'ESS Assistant could not complete that request.');
+                }
+            }
+            if (done) break;
+        }
+        if (buffer.trim()) {
+            const data = buffer
+                .split(/\r?\n/)
+                .filter(line => line.startsWith('data:'))
+                .map(line => line.slice(5).trim())
+                .join('\n');
+            if (data) {
+                const event = JSON.parse(data);
+                onEvent(event);
+                if (event.type === 'error') {
+                    throw new Error(event.message || 'ESS Assistant could not complete that request.');
+                }
+            }
+        }
+    },
     feedback: async (payload) => {
         const response = await apiClient.post('/assistant/feedback', payload);
         return response.data;

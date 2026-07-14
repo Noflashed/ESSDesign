@@ -1,8 +1,13 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
 using ESSDesign.Server.Services.Assistant;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace ESSDesign.Server.Controllers;
 
@@ -12,6 +17,8 @@ namespace ESSDesign.Server.Controllers;
 public sealed class AssistantController : ControllerBase
 {
     private static readonly ConcurrentDictionary<string, RequestWindow> RequestWindows = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, CachedAssistantUser> UserCache = new(StringComparer.Ordinal);
+    private static readonly TimeSpan UserCacheDuration = TimeSpan.FromMinutes(2);
     private readonly EssAssistantService _assistant;
     private readonly EssAssistantAccessPolicy _accessPolicy;
     private readonly EssAssistantConversationStore _conversations;
@@ -45,26 +52,23 @@ public sealed class AssistantController : ControllerBase
         if (request.Message.Length > 4_000)
             return BadRequest(new { error = "Messages must be 4,000 characters or fewer." });
 
+        var authTimer = Stopwatch.StartNew();
         var currentUser = await GetCurrentUserAsync();
+        authTimer.Stop();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
         if (!AllowRequest(currentUser.Id))
             return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Too many assistant requests. Please wait a moment and try again." });
 
-        request.Message = request.Message.Trim();
-        request.History = request.History
-            .Where(item => item.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(item.Content))
-            .TakeLast(20)
-            .Select(item => new EssAssistantHistoryMessage
-            {
-                Role = item.Role,
-                Content = item.Content.Length <= 8_000 ? item.Content : item.Content[..8_000],
-            })
-            .ToList();
+        NormalizeRequest(request);
 
         try
         {
-            return Ok(await _assistant.ChatAsync(request, _accessPolicy.For(currentUser), cancellationToken));
+            return Ok(await _assistant.ChatAsync(
+                request,
+                _accessPolicy.For(currentUser),
+                cancellationToken,
+                authTimer.ElapsedMilliseconds));
         }
         catch (InvalidOperationException ex)
         {
@@ -79,6 +83,76 @@ public sealed class AssistantController : ControllerBase
         {
             _logger.LogError(ex, "ESS assistant chat failed for {UserId}", currentUser.Id);
             return StatusCode(StatusCodes.Status502BadGateway, new { error = "ESS Assistant could not complete that request. Please try again." });
+        }
+    }
+
+    [HttpPost("chat/stream")]
+    public async Task ChatStream(
+        [FromBody] EssAssistantChatRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message) || request.Message.Length > 4_000)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = "A message of 4,000 characters or fewer is required." }, cancellationToken);
+            return;
+        }
+
+        var authTimer = Stopwatch.StartNew();
+        var currentUser = await GetCurrentUserAsync();
+        authTimer.Stop();
+        if (currentUser == null)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await Response.WriteAsJsonAsync(new { error = "Not authenticated." }, cancellationToken);
+            return;
+        }
+        if (!AllowRequest(currentUser.Id))
+        {
+            Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            await Response.WriteAsJsonAsync(new { error = "Too many assistant requests. Please wait a moment and try again." }, cancellationToken);
+            return;
+        }
+
+        NormalizeRequest(request);
+        Response.StatusCode = StatusCodes.Status200OK;
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache, no-store";
+        Response.Headers.ContentEncoding = "identity";
+        Response.Headers.Append("X-Accel-Buffering", "no");
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        async Task EmitAsync(EssAssistantStreamEvent streamEvent, CancellationToken token)
+        {
+            var json = JsonSerializer.Serialize(streamEvent, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            await Response.WriteAsync($"event: {streamEvent.Type}\ndata: {json}\n\n", token);
+            await Response.Body.FlushAsync(token);
+        }
+
+        try
+        {
+            await _assistant.ChatStreamAsync(
+                request,
+                _accessPolicy.For(currentUser),
+                EmitAsync,
+                cancellationToken,
+                authTimer.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The browser closed the stream.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ESS assistant stream failed for {UserId}", currentUser.Id);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                await EmitAsync(new EssAssistantStreamEvent
+                {
+                    Type = "error",
+                    Message = "ESS Assistant could not complete that request. Please try again.",
+                }, cancellationToken);
+            }
         }
     }
 
@@ -140,7 +214,33 @@ public sealed class AssistantController : ControllerBase
             return null;
 
         var accessToken = authorizationHeader["Bearer ".Length..].Trim();
-        return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        var cacheKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(accessToken)));
+        if (UserCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached.User;
+
+        var user = await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        if (user != null)
+            UserCache[cacheKey] = new CachedAssistantUser(user, DateTimeOffset.UtcNow.Add(UserCacheDuration));
+        if (UserCache.Count > 1_000)
+        {
+            foreach (var expired in UserCache.Where(item => item.Value.ExpiresAt <= DateTimeOffset.UtcNow).Select(item => item.Key))
+                UserCache.TryRemove(expired, out _);
+        }
+        return user;
+    }
+
+    private static void NormalizeRequest(EssAssistantChatRequest request)
+    {
+        request.Message = request.Message.Trim();
+        request.History = request.History
+            .Where(item => item.Role is "user" or "assistant" && !string.IsNullOrWhiteSpace(item.Content))
+            .TakeLast(10)
+            .Select(item => new EssAssistantHistoryMessage
+            {
+                Role = item.Role,
+                Content = item.Content.Length <= 8_000 ? item.Content : item.Content[..8_000],
+            })
+            .ToList();
     }
 
     private static bool AllowRequest(string userId)
@@ -164,4 +264,5 @@ public sealed class AssistantController : ControllerBase
     }
 
     private sealed record RequestWindow(DateTimeOffset StartedAt, int Count);
+    private sealed record CachedAssistantUser(UserInfo User, DateTimeOffset ExpiresAt);
 }

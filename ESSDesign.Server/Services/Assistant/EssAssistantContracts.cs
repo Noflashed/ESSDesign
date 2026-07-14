@@ -36,6 +36,14 @@ public sealed class EssAssistantChatResponse
     public List<string> FollowUps { get; set; } = new();
 }
 
+public sealed class EssAssistantStreamEvent
+{
+    public string Type { get; init; } = string.Empty;
+    public string? Message { get; init; }
+    public string? Delta { get; init; }
+    public EssAssistantChatResponse? Response { get; init; }
+}
+
 public sealed class EssAssistantSource
 {
     public string Id { get; set; } = string.Empty;
@@ -67,7 +75,16 @@ public sealed class EssAssistantRunMetrics
     public int ToolCalls { get; set; }
     public int InputTokens { get; set; }
     public int OutputTokens { get; set; }
+    public int CachedInputTokens { get; set; }
+    public int ReasoningTokens { get; set; }
     public long DurationMs { get; set; }
+    public long AuthenticationMs { get; set; }
+    public long PreparationMs { get; set; }
+    public long ModelMs { get; set; }
+    public long ToolMs { get; set; }
+    public long PersistenceMs { get; set; }
+    public long FirstEventMs { get; set; }
+    public string Route { get; set; } = string.Empty;
     public bool Success { get; set; }
     public string? ErrorCode { get; set; }
     public List<string> ToolNames { get; } = new();
@@ -87,4 +104,6 @@ internal sealed class EssAssistantModelResponse
     public List<JsonElement> Output { get; init; } = new();
     public int InputTokens { get; init; }
     public int OutputTokens { get; init; }
+    public int CachedInputTokens { get; init; }
+    public int ReasoningTokens { get; init; }
 }

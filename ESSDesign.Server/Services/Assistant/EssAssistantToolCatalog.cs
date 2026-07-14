@@ -12,7 +12,9 @@ public sealed class EssAssistantToolCatalog
         _data = data;
     }
 
-    public IReadOnlyList<object> GetDefinitions(EssAssistantAccessContext access)
+    public IReadOnlyList<object> GetDefinitions(
+        EssAssistantAccessContext access,
+        IReadOnlySet<string>? allowedNames = null)
     {
         var tools = new List<object>
         {
@@ -93,7 +95,9 @@ public sealed class EssAssistantToolCatalog
             }, "query", "history_hours", "limit"));
         }
 
-        return tools;
+        return allowedNames == null
+            ? tools
+            : tools.Where(tool => allowedNames.Contains(GetDefinitionName(tool))).ToList();
     }
 
     public Task<EssAssistantToolResult> ExecuteAsync(
@@ -148,6 +152,12 @@ public sealed class EssAssistantToolCatalog
     private static object BooleanSchema(string description) => new { type = "boolean", description };
     private static object IntegerSchema(string description) => new { type = "integer", description };
     private static object ArraySchema(string description) => new { type = "array", description, items = new { type = "string" } };
+
+    private static string GetDefinitionName(object definition)
+    {
+        var json = JsonSerializer.SerializeToElement(definition);
+        return json.TryGetProperty("name", out var name) ? name.GetString() ?? string.Empty : string.Empty;
+    }
 
     private static string? GetString(JsonElement args, string property)
     {

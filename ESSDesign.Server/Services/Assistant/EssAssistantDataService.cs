@@ -11,6 +11,10 @@ public sealed class EssAssistantDataService
     private const string DesignBucket = "design-pdfs";
     private const string ProjectsPath = "projects.json";
     private static readonly Regex DrawingNumberPattern = new(@"[A-Z0-9]+-[A-Z0-9]+-ESD\d+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly SemaphoreSlim SitesCacheLock = new(1, 1);
+    private static readonly SemaphoreSlim PeopleCacheLock = new(1, 1);
+    private static (List<SiteRecord> Value, DateTimeOffset ExpiresAt)? SitesCache;
+    private static (List<PersonRecord> Value, DateTimeOffset ExpiresAt)? PeopleCache;
 
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly SupabaseService _supabaseService;
@@ -39,27 +43,26 @@ public sealed class EssAssistantDataService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var searchAll = requested.Count == 0 || requested.Contains("all");
         var perDomainLimit = Math.Clamp(limit, 1, 12);
-        var results = new Dictionary<string, object?>();
-        var sources = new List<EssAssistantSource>();
-
-        async Task AddAsync(string domain, Func<Task<EssAssistantToolResult>> load)
+        var searches = new List<(string Domain, Func<Task<EssAssistantToolResult>> Load)>
         {
-            if (!searchAll && !requested.Contains(Normalize(domain)))
-                return;
-            var result = await load();
-            results[domain] = result.Data;
-            sources.AddRange(result.Sources);
-        }
-
-        await AddAsync("sites", () => SearchSitesAsync(query, false, perDomainLimit, cancellationToken));
-        await AddAsync("people", () => SearchPeopleAsync(query, null, false, perDomainLimit, access, cancellationToken));
-        await AddAsync("designs", () => SearchDesignsAsync(query, "relevance", false, perDomainLimit, cancellationToken));
-        await AddAsync("drawing_register", () => SearchDrawingRegisterAsync(query, perDomainLimit, cancellationToken));
-        await AddAsync("project_data", () => SearchProjectDataAsync(query, null, perDomainLimit, cancellationToken));
-        await AddAsync("materials", () => SearchMaterialOrdersAsync(query, false, perDomainLimit, cancellationToken));
+            ("sites", () => SearchSitesAsync(query, false, perDomainLimit, cancellationToken)),
+            ("people", () => SearchPeopleAsync(query, null, false, perDomainLimit, access, cancellationToken)),
+            ("designs", () => SearchDesignsAsync(query, "relevance", false, perDomainLimit, cancellationToken)),
+            ("drawing_register", () => SearchDrawingRegisterAsync(query, perDomainLimit, cancellationToken)),
+            ("project_data", () => SearchProjectDataAsync(query, null, perDomainLimit, cancellationToken)),
+            ("materials", () => SearchMaterialOrdersAsync(query, false, perDomainLimit, cancellationToken)),
+            ("news", () => GetNewsAsync(query, perDomainLimit, cancellationToken)),
+        };
         if (access.CanSeeTransportOperations)
-            await AddAsync("transport", () => GetTransportAsync(query, 24, perDomainLimit, access, cancellationToken));
-        await AddAsync("news", () => GetNewsAsync(query, perDomainLimit, cancellationToken));
+            searches.Add(("transport", () => GetTransportAsync(query, 24, perDomainLimit, access, cancellationToken)));
+
+        var selected = searches
+            .Where(search => searchAll || requested.Contains(Normalize(search.Domain)))
+            .ToList();
+        var loaded = await Task.WhenAll(selected.Select(async search =>
+            (search.Domain, Result: await search.Load())));
+        var results = loaded.ToDictionary(item => item.Domain, item => (object?)item.Result.Data);
+        var sources = loaded.SelectMany(item => item.Result.Sources).ToList();
 
         return new EssAssistantToolResult
         {
@@ -956,6 +959,25 @@ public sealed class EssAssistantDataService
 
     private async Task<List<SiteRecord>> LoadSitesAsync(CancellationToken cancellationToken)
     {
+        if (SitesCache is { } cached && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached.Value;
+        await SitesCacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (SitesCache is { } refreshed && refreshed.ExpiresAt > DateTimeOffset.UtcNow)
+                return refreshed.Value;
+            var sites = await LoadSitesUncachedAsync(cancellationToken);
+            SitesCache = (sites, DateTimeOffset.UtcNow.AddSeconds(30));
+            return sites;
+        }
+        finally
+        {
+            SitesCacheLock.Release();
+        }
+    }
+
+    private async Task<List<SiteRecord>> LoadSitesUncachedAsync(CancellationToken cancellationToken)
+    {
         using var projects = await _gateway.ReadStorageJsonAsync(ProjectBucket, ProjectsPath, cancellationToken);
         var sites = new List<SiteRecord>();
         if (projects?.RootElement.TryGetProperty("builders", out var builders) != true || builders.ValueKind != JsonValueKind.Array)
@@ -998,6 +1020,25 @@ public sealed class EssAssistantDataService
     }
 
     private async Task<List<PersonRecord>> LoadPeopleAsync(CancellationToken cancellationToken)
+    {
+        if (PeopleCache is { } cached && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached.Value;
+        await PeopleCacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (PeopleCache is { } refreshed && refreshed.ExpiresAt > DateTimeOffset.UtcNow)
+                return refreshed.Value;
+            var people = await LoadPeopleUncachedAsync(cancellationToken);
+            PeopleCache = (people, DateTimeOffset.UtcNow.AddSeconds(30));
+            return people;
+        }
+        finally
+        {
+            PeopleCacheLock.Release();
+        }
+    }
+
+    private async Task<List<PersonRecord>> LoadPeopleUncachedAsync(CancellationToken cancellationToken)
     {
         var employeesTask = _gateway.GetRowsAsync("ess_rostering_employees?select=*&order=last_name.asc,first_name.asc&limit=2000", cancellationToken);
         var profilesTask = _gateway.GetRowsAsync("user_names?select=*&order=full_name.asc&limit=2000", cancellationToken);

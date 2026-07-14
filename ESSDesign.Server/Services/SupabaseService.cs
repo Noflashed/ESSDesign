@@ -2654,7 +2654,12 @@ namespace ESSDesign.Server.Services
             }
 
             var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-            var role = await EnsureUserRoleAsync(id);
+            var roleTask = EnsureUserRoleAsync(id);
+            var profileTask = string.IsNullOrWhiteSpace(id)
+                ? Task.FromResult<UserInfo?>(null)
+                : GetUserProfileRowAsync(id);
+            await Task.WhenAll(roleTask, profileTask);
+            var role = await roleTask;
 
             var userInfo = new UserInfo
             {
@@ -2667,7 +2672,7 @@ namespace ESSDesign.Server.Services
 
             if (!string.IsNullOrWhiteSpace(id))
             {
-                var profile = await GetUserProfileRowAsync(id);
+                var profile = await profileTask;
                 ApplyUserProfileFields(userInfo, profile);
             }
 
