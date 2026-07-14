@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { essNewsAPI } from '../services/api';
-import AdminAssistantChat from './AdminAssistantChat';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 const LANDING_BACKDROP_CACHE_KEY = 'ess-landing-backdrop-url';
@@ -35,14 +34,7 @@ function cacheBackdropUrl(url) {
     }
 }
 
-export default function WebLandingPage({
-    showAssistant = false,
-    userId = '',
-    userAvatarUrl = '',
-    userInitials = 'U',
-    userDisplayName = 'User',
-    onUserAvatarError,
-}) {
+export default function WebLandingPage() {
     const [backdropUrl, setBackdropUrl] = useState(() => readCachedBackdropUrl());
 
     useEffect(() => {
@@ -76,16 +68,6 @@ export default function WebLandingPage({
 
             <div className="web-landing-content">
                 <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo" loading="eager" decoding="async" fetchPriority="high" />
-                {showAssistant ? (
-                    <AdminAssistantChat
-                        userId={userId}
-                        userAvatarUrl={userAvatarUrl}
-                        userInitials={userInitials}
-                        userDisplayName={userDisplayName}
-                        onUserAvatarError={onUserAvatarError}
-                        pageContext={{ page: 'landing' }}
-                    />
-                ) : null}
             </div>
         </section>
     );

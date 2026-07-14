@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Database, ExternalLink, Loader2, Plus, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,12 +12,26 @@ const STARTER_PROMPTS = [
 ];
 
 const WELCOME_MESSAGE = {
+    id: 'ess-ai-welcome',
     role: 'assistant',
-    content: 'Ask me about ESS sites, people, designs, drawings, project documents, rosters, materials, transport, or company activity.',
+    content: 'What can I help you with?',
     sources: [],
     links: [],
     followUps: [],
 };
+
+function buildInitialMessages(savedMessages) {
+    if (!savedMessages?.length) return [WELCOME_MESSAGE];
+    return savedMessages.map(message => ({
+        id: message.id || crypto.randomUUID(),
+        persistedMessageId: message.id || null,
+        role: message.role,
+        content: message.content,
+        sources: message.sources || [],
+        links: message.links || [],
+        followUps: [],
+    }));
+}
 
 function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials = 'U', userDisplayName = 'User', onUserAvatarError }) {
     if (role !== 'user') return null;
@@ -63,22 +77,20 @@ function AssistantMessageContent({ content, role }) {
 
 export default function AdminAssistantChat({
     className = '',
-    userId = '',
+    initialConversationId = null,
+    initialMessages = [],
     userAvatarUrl = '',
     userInitials = 'U',
     userDisplayName = 'User',
     onUserAvatarError,
     pageContext = null,
+    showNewChatButton = true,
+    onStartNewConversation,
+    onConversationChange,
+    onConversationSnapshot,
 }) {
-    const storageKey = useMemo(() => `ess-assistant-conversation:${userId || 'current-user'}`, [userId]);
-    const [messages, setMessages] = useState([WELCOME_MESSAGE]);
-    const [conversationId, setConversationId] = useState(() => {
-        try {
-            return window.localStorage.getItem(storageKey) || null;
-        } catch {
-            return null;
-        }
-    });
+    const [messages, setMessages] = useState(() => buildInitialMessages(initialMessages));
+    const [conversationId, setConversationId] = useState(initialConversationId);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [streamStatus, setStreamStatus] = useState('');
@@ -88,29 +100,25 @@ export default function AdminAssistantChat({
     const inputRef = useRef(null);
 
     useEffect(() => {
-        try {
-            const saved = window.localStorage.getItem(storageKey);
-            setConversationId(saved || null);
-        } catch {
-            setConversationId(null);
-        }
-    }, [storageKey]);
-
-    useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages, loading]);
 
+    useEffect(() => {
+        if (conversationId && onConversationSnapshot) {
+            onConversationSnapshot(conversationId, messages.filter(message => message.id !== WELCOME_MESSAGE.id));
+        }
+    }, [conversationId, messages, onConversationSnapshot]);
+
     const startNewConversation = () => {
+        if (onStartNewConversation) {
+            onStartNewConversation();
+            return;
+        }
         setMessages([WELCOME_MESSAGE]);
         setConversationId(null);
         setFeedback({});
-        try {
-            window.localStorage.removeItem(storageKey);
-        } catch {
-            // The conversation still resets if browser storage is unavailable.
-        }
         window.setTimeout(() => inputRef.current?.focus(), 0);
     };
 
@@ -168,13 +176,7 @@ export default function AdminAssistantChat({
                     const response = event.response;
                     const nextConversationId = response.conversationId || conversationId;
                     setConversationId(nextConversationId);
-                    if (nextConversationId) {
-                        try {
-                            window.localStorage.setItem(storageKey, nextConversationId);
-                        } catch {
-                            // Server-side conversation continuity still works for this page session.
-                        }
-                    }
+                    onConversationChange?.(nextConversationId, { firstMessage: text, response });
                     setMessages(current => {
                         const existing = current.some(item => item.id === streamingId);
                         const finalMessage = {
@@ -237,7 +239,7 @@ export default function AdminAssistantChat({
 
     return (
         <section className={`admin-assistant-page-chat ${chatStateClass} ${className}`} aria-label="ESS AI assistant">
-            {hasStarted ? (
+            {showNewChatButton && hasStarted ? (
                 <button
                     type="button"
                     className="admin-assistant-new-chat"
@@ -339,13 +341,20 @@ export default function AdminAssistantChat({
             ) : <div />}
 
             <form className="admin-assistant-form" onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-                <input
+                <textarea
                     ref={inputRef}
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            sendMessage();
+                        }
+                    }}
                     placeholder="Ask anything about ESS..."
                     disabled={loading}
                     maxLength={4000}
+                    rows={1}
                 />
                 <button type="submit" disabled={loading || !input.trim()} aria-label="Send message" title="Send">
                     {loading ? <Loader2 className="admin-assistant-spin-icon" size={18} /> : <Send size={18} />}

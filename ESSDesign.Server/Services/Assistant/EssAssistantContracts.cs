@@ -36,6 +36,28 @@ public sealed class EssAssistantChatResponse
     public List<string> FollowUps { get; set; } = new();
 }
 
+public class EssAssistantConversationSummary
+{
+    public Guid Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class EssAssistantConversationDetails : EssAssistantConversationSummary
+{
+    public List<EssAssistantSavedMessage> Messages { get; set; } = new();
+}
+
+public sealed class EssAssistantSavedMessage
+{
+    public Guid Id { get; set; }
+    public string Role { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public List<EssAssistantSource> Sources { get; set; } = new();
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
 public sealed class EssAssistantStreamEvent
 {
     public string Type { get; init; } = string.Empty;

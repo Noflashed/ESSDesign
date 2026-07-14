@@ -4962,6 +4962,21 @@ export const usersAPI = {
 };
 
 export const assistantAPI = {
+    listConversations: async (limit = 100) => {
+        const response = await apiClient.get('/assistant/conversations', { params: { limit } });
+        return response.data || [];
+    },
+    getConversation: async (conversationId) => {
+        const response = await apiClient.get(`/assistant/conversations/${encodeURIComponent(conversationId)}`);
+        return response.data;
+    },
+    renameConversation: async (conversationId, title) => {
+        const response = await apiClient.patch(`/assistant/conversations/${encodeURIComponent(conversationId)}`, { title });
+        return response.data;
+    },
+    deleteConversation: async (conversationId) => {
+        await apiClient.delete(`/assistant/conversations/${encodeURIComponent(conversationId)}`);
+    },
     chat: async (message, options = {}) => {
         const response = await apiClient.post('/assistant/chat', {
             message,

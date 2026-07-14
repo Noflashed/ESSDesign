@@ -183,6 +183,97 @@ public sealed class AssistantController : ControllerBase
         }
     }
 
+    [HttpGet("conversations")]
+    public async Task<ActionResult<List<EssAssistantConversationSummary>>> ListConversations(
+        [FromQuery] int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+
+        try
+        {
+            return Ok(await _conversations.ListConversationsAsync(
+                _accessPolicy.For(currentUser),
+                Math.Clamp(limit, 1, 200),
+                cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unable to list ESS AI conversations for {UserId}", currentUser.Id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Saved chats could not be loaded." });
+        }
+    }
+
+    [HttpGet("conversations/{conversationId:guid}")]
+    public async Task<ActionResult<EssAssistantConversationDetails>> GetConversation(
+        Guid conversationId,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+
+        var conversation = await _conversations.GetConversationAsync(
+            conversationId,
+            _accessPolicy.For(currentUser),
+            cancellationToken);
+        return conversation == null
+            ? NotFound(new { error = "The saved chat was not found." })
+            : Ok(conversation);
+    }
+
+    [HttpPatch("conversations/{conversationId:guid}")]
+    public async Task<IActionResult> RenameConversation(
+        Guid conversationId,
+        [FromBody] RenameConversationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(new { error = "A chat title is required." });
+
+        try
+        {
+            await _conversations.RenameConversationAsync(
+                conversationId,
+                _accessPolicy.For(currentUser),
+                request.Title,
+                cancellationToken);
+            return Ok(new { saved = true });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = "The saved chat was not found." });
+        }
+    }
+
+    [HttpDelete("conversations/{conversationId:guid}")]
+    public async Task<IActionResult> DeleteConversation(
+        Guid conversationId,
+        CancellationToken cancellationToken)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+
+        try
+        {
+            await _conversations.DeleteConversationAsync(
+                conversationId,
+                _accessPolicy.For(currentUser),
+                cancellationToken);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = "The saved chat was not found." });
+        }
+    }
+
     [HttpPost("documents/sync")]
     public async Task<ActionResult<EssAssistantDocumentSyncResult>> SyncDocuments(
         [FromQuery] int limit = 250,
@@ -261,6 +352,11 @@ public sealed class AssistantController : ControllerBase
         public Guid? MessageId { get; set; }
         public int Rating { get; set; }
         public string? Comment { get; set; }
+    }
+
+    public sealed class RenameConversationRequest
+    {
+        public string Title { get; set; } = string.Empty;
     }
 
     private sealed record RequestWindow(DateTimeOffset StartedAt, int Count);

@@ -25,7 +25,10 @@ import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
+import { Sparkles } from 'lucide-react';
 import './App.css';
+
+const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
 
 // Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
@@ -182,6 +185,7 @@ const NAV_PAGE_ICONS = {
     'rostering': CalendarNavIcon,
     'employees': UsersNavIcon,
     'ess-news': NewsNavIcon,
+    'ess-ai': Sparkles,
 };
 
 function NavPageIcon({ pageKey, size = 18 }) {
@@ -191,8 +195,8 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news']);
-const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'profile', 'settings']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai']);
+const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'ess-ai', 'profile', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'design') return currentPage === 'design' || currentPage === 'drawing-register';
@@ -657,17 +661,19 @@ function App() {
     const hasTransportSuiteAccess = user?.role === 'admin' || isTransportManagement || isTruckDeviceUser;
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
-        ? [{ key: 'employee-home', label: 'ESS App' }]
+        ? [{ key: 'employee-home', label: 'ESS App' }, { key: 'ess-ai', label: 'ESS AI' }]
         : isScaffoldDesigner
         ? [
             { key: 'design', label: 'ESS Design' },
+            { key: 'ess-ai', label: 'ESS AI' },
         ]
         : isTruckDeviceUser
-        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }, { key: 'ess-ai', label: 'ESS AI' }]
         : isTransportManagement
-        ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
+        ? [{ key: 'truck-schedule', label: 'ESS Transport' }, { key: 'ess-ai', label: 'ESS AI' }]
         : [
             { key: 'design', label: 'ESS Design' },
+            { key: 'ess-ai', label: 'ESS AI' },
             { key: 'site-information', label: 'Site Registry' },
             ...(showRosteringAndEmployees ? [{ key: 'employees', label: 'Employees' }] : []),
             ...(hasTransportSuiteAccess
@@ -1513,16 +1519,7 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return (
-                <WebLandingPage
-                    showAssistant
-                    userId={user?.id || ''}
-                    userAvatarUrl={userAvatarUrl}
-                    userInitials={userInitials}
-                    userDisplayName={userDisplayName}
-                    onUserAvatarError={handleAvatarImageError}
-                />
-            );
+            return <WebLandingPage />;
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
@@ -1625,6 +1622,20 @@ function App() {
 
         if (currentPage === 'drawing-register') {
             return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} canEdit={canManageEssDesign} />;
+        }
+
+        if (currentPage === 'ess-ai') {
+            return (
+                <React.Suspense fallback={<div className="ess-ai-route-loading"><LoadingBrandmark label="Loading ESS AI" /></div>}>
+                    <ESSAIPage
+                        userId={user?.id || ''}
+                        userAvatarUrl={userAvatarUrl}
+                        userInitials={userInitials}
+                        userDisplayName={userDisplayName}
+                        onUserAvatarError={handleAvatarImageError}
+                    />
+                </React.Suspense>
+            );
         }
 
         return (

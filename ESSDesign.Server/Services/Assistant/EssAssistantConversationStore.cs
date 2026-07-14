@@ -4,6 +4,7 @@ namespace ESSDesign.Server.Services.Assistant;
 
 public sealed class EssAssistantConversationStore
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly ILogger<EssAssistantConversationStore> _logger;
     private int _schemaWarningLogged;
@@ -92,6 +93,75 @@ public sealed class EssAssistantConversationStore
             },
             cancellationToken));
         return conversationId;
+    }
+
+    public async Task<List<EssAssistantConversationSummary>> ListConversationsAsync(
+        EssAssistantAccessContext access,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _gateway.GetRowsAsync(
+            $"ess_ai_conversations?select=id,title,created_at,updated_at&user_id=eq.{Uri.EscapeDataString(access.UserId)}&order=updated_at.desc&limit={Math.Clamp(limit, 1, 200)}",
+            cancellationToken);
+        return rows
+            .Select(ToConversationSummary)
+            .Where(conversation => conversation.Id != Guid.Empty)
+            .ToList();
+    }
+
+    public async Task<EssAssistantConversationDetails?> GetConversationAsync(
+        Guid conversationId,
+        EssAssistantAccessContext access,
+        CancellationToken cancellationToken)
+    {
+        var conversationTask = _gateway.GetRowsAsync(
+            $"ess_ai_conversations?select=id,title,created_at,updated_at&id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}&limit=1",
+            cancellationToken);
+        var messagesTask = _gateway.GetRowsAsync(
+            $"ess_ai_messages?select=id,role,content,sources,created_at&conversation_id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}&order=created_at.asc&limit=500",
+            cancellationToken);
+        await Task.WhenAll(conversationTask, messagesTask);
+
+        var summary = conversationTask.Result.Select(ToConversationSummary).FirstOrDefault();
+        if (summary == null || summary.Id == Guid.Empty)
+            return null;
+
+        return new EssAssistantConversationDetails
+        {
+            Id = summary.Id,
+            Title = summary.Title,
+            CreatedAt = summary.CreatedAt,
+            UpdatedAt = summary.UpdatedAt,
+            Messages = messagesTask.Result
+                .Select(ToSavedMessage)
+                .Where(message => message.Id != Guid.Empty && (message.Role is "user" or "assistant"))
+                .ToList(),
+        };
+    }
+
+    public async Task RenameConversationAsync(
+        Guid conversationId,
+        EssAssistantAccessContext access,
+        string title,
+        CancellationToken cancellationToken)
+    {
+        var safeTitle = BuildTitle(title);
+        await EnsureConversationOwnershipAsync(conversationId, access, cancellationToken);
+        await _gateway.PatchRowsAsync(
+            $"ess_ai_conversations?id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}",
+            new { title = safeTitle, updated_at = DateTimeOffset.UtcNow },
+            cancellationToken);
+    }
+
+    public async Task DeleteConversationAsync(
+        Guid conversationId,
+        EssAssistantAccessContext access,
+        CancellationToken cancellationToken)
+    {
+        await EnsureConversationOwnershipAsync(conversationId, access, cancellationToken);
+        await _gateway.DeleteRowsAsync(
+            $"ess_ai_conversations?id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}",
+            cancellationToken);
     }
 
     public async Task<List<EssAssistantHistoryMessage>> LoadRecentAsync(
@@ -230,6 +300,18 @@ public sealed class EssAssistantConversationStore
             cancellationToken);
     }
 
+    private async Task EnsureConversationOwnershipAsync(
+        Guid conversationId,
+        EssAssistantAccessContext access,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _gateway.GetRowsAsync(
+            $"ess_ai_conversations?select=id&id=eq.{conversationId:D}&user_id=eq.{Uri.EscapeDataString(access.UserId)}&limit=1",
+            cancellationToken);
+        if (rows.Count == 0)
+            throw new KeyNotFoundException("The ESS AI conversation was not found.");
+    }
+
     private async Task<T?> TryAsync<T>(Func<Task<T>> action)
     {
         try
@@ -252,6 +334,42 @@ public sealed class EssAssistantConversationStore
         var title = string.Join(' ', message.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         return title.Length <= 80 ? title : $"{title[..77]}...";
     }
+
+    private static EssAssistantConversationSummary ToConversationSummary(JsonElement row) => new()
+    {
+        Id = Guid.TryParse(GetString(row, "id"), out var id) ? id : Guid.Empty,
+        Title = GetString(row, "title") ?? "New conversation",
+        CreatedAt = ParseTimestamp(GetString(row, "created_at")),
+        UpdatedAt = ParseTimestamp(GetString(row, "updated_at")),
+    };
+
+    private static EssAssistantSavedMessage ToSavedMessage(JsonElement row)
+    {
+        var sources = new List<EssAssistantSource>();
+        if (row.TryGetProperty("sources", out var sourceValue) && sourceValue.ValueKind == JsonValueKind.Array)
+        {
+            try
+            {
+                sources = JsonSerializer.Deserialize<List<EssAssistantSource>>(sourceValue.GetRawText(), JsonOptions)
+                    ?? new List<EssAssistantSource>();
+            }
+            catch (JsonException)
+            {
+                sources = new List<EssAssistantSource>();
+            }
+        }
+        return new EssAssistantSavedMessage
+        {
+            Id = Guid.TryParse(GetString(row, "id"), out var id) ? id : Guid.Empty,
+            Role = GetString(row, "role") ?? string.Empty,
+            Content = GetString(row, "content") ?? string.Empty,
+            Sources = sources,
+            CreatedAt = ParseTimestamp(GetString(row, "created_at")),
+        };
+    }
+
+    private static DateTimeOffset ParseTimestamp(string? value) =>
+        DateTimeOffset.TryParse(value, out var timestamp) ? timestamp : DateTimeOffset.MinValue;
 
     private static string? GetString(JsonElement element, string property)
     {
