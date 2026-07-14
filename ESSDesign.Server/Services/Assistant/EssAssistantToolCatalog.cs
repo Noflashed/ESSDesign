@@ -33,7 +33,7 @@ public sealed class EssAssistantToolCatalog
             Function("search_people", "Search ESS employees and users. Contact and private fields are automatically redacted according to the current user's role.", new
             {
                 query = NullableStringSchema("Person name, email, phone, title, or role. Null lists people."),
-                role = NullableStringSchema("Optional role filter."),
+                role = NullableStringSchema("Optional account role or employee classification. 'Leading Hand' uses the employee registry's leading-hand flag, not only account-role text."),
                 include_private_profile = BooleanSchema("Request private profile fields. They are returned only to authorised administrators."),
                 limit = IntegerSchema("Maximum results, from 1 to 100."),
             }, "query", "role", "include_private_profile", "limit"),

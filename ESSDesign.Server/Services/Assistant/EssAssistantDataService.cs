@@ -13,6 +13,7 @@ public sealed class EssAssistantDataService
     private static readonly Regex DrawingNumberPattern = new(@"[A-Z0-9]+-[A-Z0-9]+-ESD\d+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly SemaphoreSlim SitesCacheLock = new(1, 1);
     private static readonly SemaphoreSlim PeopleCacheLock = new(1, 1);
+    private static readonly TimeZoneInfo SydneyTimeZone = ResolveSydneyTimeZone();
     private static (List<SiteRecord> Value, DateTimeOffset ExpiresAt)? SitesCache;
     private static (List<PersonRecord> Value, DateTimeOffset ExpiresAt)? PeopleCache;
 
@@ -155,9 +156,10 @@ public sealed class EssAssistantDataService
     {
         var people = await LoadPeopleAsync(cancellationToken);
         var normalizedRole = Normalize(role);
+        var leadingHandFilter = normalizedRole is "leading hand" or "leading hands";
         var privateAllowed = includePrivateProfile && access.CanSeePrivateProfileDetails;
         var matches = people
-            .Where(person => string.IsNullOrWhiteSpace(normalizedRole) || Normalize(person.Role).Contains(normalizedRole, StringComparison.OrdinalIgnoreCase))
+            .Where(person => PersonMatchesRole(person, normalizedRole, leadingHandFilter))
             .Select(person => new
             {
                 Person = person,
@@ -167,7 +169,8 @@ public sealed class EssAssistantDataService
                     access.CanSeeWorkContactDetails ? person.Email : null,
                     access.CanSeeWorkContactDetails ? person.PhoneNumber : null,
                     person.Role,
-                    person.EmployeeTitle),
+                    person.EmployeeTitle,
+                    person.LeadingHand ? "leading hand leading hands" : null),
             })
             .Where(item => string.IsNullOrWhiteSpace(query) || item.Score > 0)
             .OrderByDescending(item => item.Score)
@@ -210,15 +213,34 @@ public sealed class EssAssistantDataService
                 count = records.Count,
                 contactDetailsIncluded = access.CanSeeWorkContactDetails,
                 privateProfileIncluded = privateAllowed,
+                presentationNote = leadingHandFilter
+                    ? "These records come from the employee registry's leadingHand classification. Return a concise name list."
+                    : null,
                 people = records,
             },
-            Sources = matches.Select(item => Source(
-                item.Person.SourceId,
-                "people_directory",
-                item.Person.FullName,
-                item.Person.Role,
-                item.Person.UpdatedAt)).ToList(),
+            Sources = matches.Count == 0
+                ? new List<EssAssistantSource>()
+                : new List<EssAssistantSource>
+                {
+                    Source(
+                        "people-directory:registry",
+                        "people_directory",
+                        "ESS employee registry",
+                        $"{matches.Count} matching people",
+                        matches.Select(item => item.Person.UpdatedAt).OrderByDescending(ParseTimestamp).FirstOrDefault()),
+                },
         };
+    }
+
+    private static bool PersonMatchesRole(PersonRecord person, string normalizedRole, bool leadingHandFilter)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedRole))
+            return true;
+        if (leadingHandFilter)
+            return person.LeadingHand || Normalize(person.Role) == "leading hand";
+
+        return Normalize(person.Role).Contains(normalizedRole, StringComparison.OrdinalIgnoreCase)
+            || Normalize(person.EmployeeTitle).Contains(normalizedRole, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<EssAssistantToolResult> GetRosterAsync(
@@ -346,7 +368,7 @@ public sealed class EssAssistantDataService
                 Revision = GetString(document, "revision_number"),
                 DrawingStatus = GetString(document, "drawing_status"),
                 Description = GetString(document, "description"),
-                UpdatedAt = GetString(document, "updated_at") ?? GetString(document, "created_at"),
+                IssuedAt = GetString(document, "created_at") ?? GetString(document, "updated_at"),
                 Score = score,
             };
         })
@@ -359,13 +381,13 @@ public sealed class EssAssistantDataService
         {
             candidates = candidates
                 .GroupBy(document => DrawingKey(document.EssName ?? document.ThirdPartyName ?? document.FolderPath), StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.OrderByDescending(document => ParseTimestamp(document.UpdatedAt)).First())
+                .Select(group => group.OrderByDescending(document => ParseTimestamp(document.IssuedAt)).First())
                 .ToList();
         }
 
         var ordered = Normalize(sort) is "latest" or "date"
-            ? candidates.OrderByDescending(document => ParseTimestamp(document.UpdatedAt)).ThenByDescending(document => document.Score)
-            : candidates.OrderByDescending(document => document.Score).ThenByDescending(document => ParseTimestamp(document.UpdatedAt));
+            ? candidates.OrderByDescending(document => ParseTimestamp(document.IssuedAt)).ThenByDescending(document => document.Score)
+            : candidates.OrderByDescending(document => document.Score).ThenByDescending(document => ParseTimestamp(document.IssuedAt));
         var matches = ordered.Take(Math.Clamp(limit, 1, 100)).ToList();
         var records = matches.Select(document => new
         {
@@ -382,7 +404,7 @@ public sealed class EssAssistantDataService
             description = document.Description,
             hasEssDesign = !string.IsNullOrWhiteSpace(document.EssPath),
             hasThirdPartyDesign = !string.IsNullOrWhiteSpace(document.ThirdPartyPath),
-            updatedAt = document.UpdatedAt,
+            uploadedOn = FormatSydneyDate(document.IssuedAt),
         }).ToList();
 
         return new EssAssistantToolResult
@@ -391,18 +413,18 @@ public sealed class EssAssistantDataService
             {
                 query,
                 count = records.Count,
-                presentationNote = "Use scaffoldName as the primary result label. Treat the PDF name and drawing number as secondary file details.",
+                presentationNote = "Lead with scaffoldName and uploadedOn. For one latest result, answer in one natural sentence and omit the raw filename unless it helps distinguish records.",
                 designs = records,
             },
             Sources = matches.GroupBy(document => document.FolderId, StringComparer.OrdinalIgnoreCase).Select(group =>
             {
-                var document = group.OrderByDescending(item => ParseTimestamp(item.UpdatedAt)).First();
+                var document = group.OrderByDescending(item => ParseTimestamp(item.IssuedAt)).First();
                 return Source(
                 $"design-folder:{document.FolderId}",
                 "ess_design",
                 document.ScaffoldName,
                 document.FolderPath,
-                document.UpdatedAt);
+                document.IssuedAt);
             }).ToList(),
         };
     }
@@ -1307,7 +1329,7 @@ public sealed class EssAssistantDataService
         while (segments.Count > 0 && IsDesignContainerFolder(segments[^1]))
             segments.RemoveAt(segments.Count - 1);
 
-        var scaffoldName = segments.Count > 0 ? segments[^1] : "Design document";
+        var scaffoldName = segments.Count > 0 ? HumanizeFolderName(segments[^1]) : "Design document";
         var siteName = segments.Count > 1 ? segments[^2] : string.Empty;
         return new DesignHierarchy(siteName, scaffoldName);
     }
@@ -1330,6 +1352,39 @@ public sealed class EssAssistantDataService
 
         var threshold = bestScore - 40;
         return candidates.Where(document => document.Score >= threshold).ToList();
+    }
+
+    private static string HumanizeFolderName(string name)
+    {
+        var hasLetters = name.Any(char.IsLetter);
+        var isAllCaps = hasLetters && !name.Any(char.IsLower);
+        return isAllCaps
+            ? CultureInfo.GetCultureInfo("en-AU").TextInfo.ToTitleCase(name.ToLowerInvariant())
+            : name;
+    }
+
+    private static string? FormatSydneyDate(string? value)
+    {
+        var timestamp = ParseTimestamp(value);
+        return timestamp == DateTimeOffset.MinValue
+            ? null
+            : TimeZoneInfo.ConvertTime(timestamp, SydneyTimeZone).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private static TimeZoneInfo ResolveSydneyTimeZone()
+    {
+        foreach (var id in new[] { "Australia/Sydney", "AUS Eastern Standard Time" })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Try the platform-specific alternative.
+            }
+        }
+        return TimeZoneInfo.Local;
     }
 
     private static int Score(string? query, params string?[] candidates)
@@ -1546,7 +1601,7 @@ public sealed class EssAssistantDataService
         public string? Revision { get; init; }
         public string? DrawingStatus { get; init; }
         public string? Description { get; init; }
-        public string? UpdatedAt { get; init; }
+        public string? IssuedAt { get; init; }
         public int Score { get; init; }
     }
 
