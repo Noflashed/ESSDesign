@@ -77,6 +77,17 @@ const formatFullDrawingNumber = row => {
     return `${baseNumber}${useCode ? `(${useCode})` : ''}${revision ? `(REV${revision})` : ''}`;
 };
 
+const drawingDocumentMatchesRow = (row, document) => {
+    if (!document?.documentId) return false;
+    const rowNumber = formatFullDrawingNumber(row).trim().toUpperCase();
+    const documentNumber = formatFullDrawingNumber({
+        drawingNo: getBaseDrawingNumber(row.drawingNo),
+        designUse: document.designUse,
+        revisionNo: document.revisionNo
+    }).trim().toUpperCase();
+    return Boolean(rowNumber && rowNumber === documentNumber);
+};
+
 const getDateSortValue = value => {
     const text = String(value || '').trim();
     const parts = text.split(/[/-]/).map(Number);
@@ -449,7 +460,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         setDocumentOpenError('');
         try {
             const document = drawingDocuments[drawingNumber];
-            if (!document?.documentId) throw new Error(`No ESS Design PDF was found for ${drawingNumber}.`);
+            const fullDrawingNumber = formatFullDrawingNumber(row);
+            if (!drawingDocumentMatchesRow(row, document)) throw new Error(`No ESS Design PDF was found for ${fullDrawingNumber}.`);
             onOpenDocument({
                 id: document.documentId,
                 essDesignIssuePath: document.fileType === 'ess' ? document.fileName : null,
@@ -457,7 +469,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 fileType: document.fileType
             });
         } catch (error) {
-            setDocumentOpenError(error?.response?.data?.error || error.message || `No ESS Design PDF was found for ${drawingNumber}.`);
+            setDocumentOpenError(error?.response?.data?.error || error.message || `No matching ESS Design PDF was found for ${formatFullDrawingNumber(row)}.`);
         } finally {
             setOpeningDrawingId(null);
         }
@@ -483,8 +495,9 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             return <span className="register-table-select-wrap"><select className="register-table-select" value={row.project} title={row.project || (row.client ? 'Select project' : 'Select client first')} onChange={event => updateRowProject(row.id, event.target.value)} disabled={!row.client}><option value="">{row.client ? 'Select project' : 'Select client first'}</option>{projects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select><ChevronDown aria-hidden="true" /></span>;
         }
         if (key === 'drawingNo') {
-            return drawingDocuments[getBaseDrawingNumber(row[key])]?.documentId
-                ? <button type="button" className="register-drawing-link" onClick={() => openLatestDrawing(row)} disabled={openingDrawingId === row.id} title={`Open latest revision of ${getBaseDrawingNumber(row[key])}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
+            const document = drawingDocuments[getBaseDrawingNumber(row[key])];
+            return drawingDocumentMatchesRow(row, document)
+                ? <button type="button" className="register-drawing-link" onClick={() => openLatestDrawing(row)} disabled={openingDrawingId === row.id} title={`Open ${formatFullDrawingNumber(row)}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
                 : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
         }
         if (key === 'designUse') {
