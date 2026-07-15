@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
-import { analysisAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
+import { analysisAPI, foldersAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
 const SCAFFOLD_ENTITY_OPTIONS = ['Erect Safe Scaffolding', 'Maloo Access Group', 'Scaff-Technic'];
@@ -19,6 +19,8 @@ function emptyProjectForm(initialBuilderId = '') {
         projectName: '',
         siteLocation: '',
         siteLocationSourceId: '',
+        designFolderId: '',
+        designFolderPath: '',
         scaffoldEntity: DEFAULT_SCAFFOLD_ENTITY,
         projectManagerUserId: '',
         siteSupervisorUserId: '',
@@ -42,6 +44,8 @@ function emptyBuilderForm() {
         name: '',
         logoUrl: '',
         logoPath: '',
+        designFolderId: '',
+        designFolderPath: '',
         logoPreviewUrl: '',
         logoFile: null,
         removeLogo: false
@@ -54,6 +58,8 @@ function builderToForm(builder, resolvedLogoUrl = '') {
         name: builder?.name || '',
         logoUrl: builder?.logoUrl || '',
         logoPath: builder?.logoPath || '',
+        designFolderId: builder?.designFolderId || '',
+        designFolderPath: builder?.designFolderPath || '',
         logoPreviewUrl: resolvedLogoUrl || builder?.logoUrl || '',
         logoFile: null,
         removeLogo: false
@@ -85,6 +91,18 @@ function projectSiteKey(project) {
 function normalizeScaffoldEntity(value) {
     const clean = String(value || '').trim();
     return SCAFFOLD_ENTITY_OPTIONS.find(entity => entity.toLowerCase() === clean.toLowerCase()) || DEFAULT_SCAFFOLD_ENTITY;
+}
+
+function designFolderLabel(folder) {
+    return folder?.path || folder?.name || 'Unnamed folder';
+}
+
+function selectedDesignFolderPayload(folderId, folders) {
+    const folder = folders.find(item => item.id === folderId);
+    return {
+        designFolderId: folderId || '',
+        designFolderPath: folder ? designFolderLabel(folder) : ''
+    };
 }
 
 function employeeName(employee) {
@@ -282,6 +300,7 @@ export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [builders, setBuilders] = useState([]);
+    const [designFolders, setDesignFolders] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [appUsers, setAppUsers] = useState([]);
     const [employeesLoading, setEmployeesLoading] = useState(false);
@@ -321,6 +340,25 @@ export default function SiteInformationPage() {
 
     useEffect(() => {
         loadBuilders().catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        foldersAPI.getDesignFolderOptions()
+            .then(options => {
+                if (active) {
+                    setDesignFolders(Array.isArray(options) ? options : []);
+                }
+            })
+            .catch(() => {
+                if (active) {
+                    setDesignFolders([]);
+                }
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     useEffect(() => {
@@ -424,6 +462,14 @@ export default function SiteInformationPage() {
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
+    const builderDesignFolderOptions = useMemo(
+        () => designFolders.filter(folder => folder.depth <= 1),
+        [designFolders]
+    );
+    const projectDesignFolderOptions = useMemo(
+        () => designFolders.filter(folder => folder.depth >= 2),
+        [designFolders]
+    );
 
     const visibleProjects = useMemo(() => {
         const cleanSearchQuery = searchQuery.trim().toLowerCase();
@@ -441,6 +487,7 @@ export default function SiteInformationPage() {
                     project.name,
                     project.builder.name,
                     project.siteLocation || 'Not set',
+                    project.designFolderPath || project.builder.designFolderPath || '',
                     normalizeScaffoldEntity(project.scaffoldEntity),
                     project.archived ? 'Archived' : 'Active',
                 ].join(' ').toLowerCase().includes(cleanSearchQuery);
@@ -618,6 +665,8 @@ export default function SiteInformationPage() {
             projectName: project.name,
             siteLocation: project.siteLocation || '',
             siteLocationSourceId: project.siteLocation ? 'existing' : '',
+            designFolderId: project.designFolderId || '',
+            designFolderPath: project.designFolderPath || '',
             scaffoldEntity: normalizeScaffoldEntity(project.scaffoldEntity),
             projectManagerUserId: project.projectManagerUserId || managerEmployee?.linkedAuthUserId || '',
             siteSupervisorUserId: project.siteSupervisorUserId || supervisorEmployee?.linkedAuthUserId || '',
@@ -724,6 +773,8 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
+                    designFolderId: projectForm.designFolderId,
+                    designFolderPath: projectForm.designFolderPath,
                     scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 })
@@ -734,6 +785,8 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
+                    designFolderId: projectForm.designFolderId,
+                    designFolderPath: projectForm.designFolderPath,
                     scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 });
@@ -802,6 +855,8 @@ export default function SiteInformationPage() {
         try {
             const logoOptions = {
                 removeLogo: builderForm.removeLogo,
+                designFolderId: builderForm.designFolderId,
+                designFolderPath: builderForm.designFolderPath,
                 ...(builderForm.logoFile ? { logoFile: builderForm.logoFile } : {})
             };
             const nextBuilders = builderForm.id
@@ -1229,6 +1284,11 @@ export default function SiteInformationPage() {
                                                                             <strong>{normalizeScaffoldEntity(project.scaffoldEntity)}</strong>
                                                                             <small>Stored against this site for company reporting and AI lookup</small>
                                                                         </div>
+                                                                        <div className="site-registry-contact-card wide">
+                                                                            <span>Design Folder</span>
+                                                                            <strong>{project.designFolderPath || project.builder.designFolderPath || 'Not linked'}</strong>
+                                                                            <small>ESS Design path for builder, project and scaffold drawings</small>
+                                                                        </div>
                                                                     </section>
                                                                 </aside>
                                                             </div>
@@ -1363,6 +1423,24 @@ export default function SiteInformationPage() {
                                                 ))}
                                             </select>
                                         </div>
+                                        <div className="module-field">
+                                            <label>Design Folder</label>
+                                            <select
+                                                value={projectForm.designFolderId}
+                                                onChange={event => setProjectForm(prev => ({
+                                                    ...prev,
+                                                    ...selectedDesignFolderPayload(event.target.value, designFolders)
+                                                }))}
+                                            >
+                                                <option value="">No ESS Design folder linked</option>
+                                                {projectForm.designFolderId && !designFolders.some(folder => folder.id === projectForm.designFolderId) ? (
+                                                    <option value={projectForm.designFolderId}>{projectForm.designFolderPath || 'Linked folder'}</option>
+                                                ) : null}
+                                                {projectDesignFolderOptions.map(folder => (
+                                                    <option key={folder.id} value={folder.id}>{designFolderLabel(folder)}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                 </section>
 
@@ -1490,6 +1568,24 @@ export default function SiteInformationPage() {
                             <div className="module-field">
                                 <label>Builder Name</label>
                                 <input value={builderForm.name} onChange={e => setBuilderForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Built" />
+                            </div>
+                            <div className="module-field">
+                                <label>Design Folder</label>
+                                <select
+                                    value={builderForm.designFolderId}
+                                    onChange={event => setBuilderForm(prev => ({
+                                        ...prev,
+                                        ...selectedDesignFolderPayload(event.target.value, designFolders)
+                                    }))}
+                                >
+                                    <option value="">No ESS Design folder linked</option>
+                                    {builderForm.designFolderId && !designFolders.some(folder => folder.id === builderForm.designFolderId) ? (
+                                        <option value={builderForm.designFolderId}>{builderForm.designFolderPath || 'Linked folder'}</option>
+                                    ) : null}
+                                    {builderDesignFolderOptions.map(folder => (
+                                        <option key={folder.id} value={folder.id}>{designFolderLabel(folder)}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="module-field">
                                 <label>Builder Logo</label>

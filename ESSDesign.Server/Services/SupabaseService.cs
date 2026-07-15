@@ -50,6 +50,21 @@ namespace ESSDesign.Server.Services
             public Guid FolderId { get; set; }
         }
 
+        private sealed class DesignFolderOptionRow
+        {
+            [JsonPropertyName("id")]
+            public Guid Id { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = string.Empty;
+
+            [JsonPropertyName("parent_folder_id")]
+            public Guid? ParentFolderId { get; set; }
+
+            [JsonPropertyName("updated_at")]
+            public DateTime UpdatedAt { get; set; }
+        }
+
         private sealed class PreparedDocumentUpload
         {
             public string TempFilePath { get; init; } = string.Empty;
@@ -1463,6 +1478,51 @@ namespace ESSDesign.Server.Services
         {
             return await InvokeRpcAsync<List<BreadcrumbItem>>("get_folder_breadcrumbs", new { p_folder_id = folderId })
                 ?? new List<BreadcrumbItem>();
+        }
+
+        public async Task<List<DesignFolderOption>> GetDesignFolderOptionsAsync()
+        {
+            var rows = await GetRestRowsAsync<DesignFolderOptionRow>(
+                "folders?select=id,name,parent_folder_id,updated_at&limit=10000");
+            var byId = rows.ToDictionary(row => row.Id);
+            var pathCache = new Dictionary<Guid, List<string>>();
+
+            List<string> BuildPath(DesignFolderOptionRow row)
+            {
+                if (pathCache.TryGetValue(row.Id, out var cached))
+                {
+                    return cached;
+                }
+
+                var path = new List<string>();
+                if (row.ParentFolderId.HasValue && byId.TryGetValue(row.ParentFolderId.Value, out var parent))
+                {
+                    path.AddRange(BuildPath(parent));
+                }
+                path.Add(row.Name);
+                pathCache[row.Id] = path;
+                return path;
+            }
+
+            return rows
+                .Select(row =>
+                {
+                    var path = BuildPath(row);
+                    return new DesignFolderOption
+                    {
+                        Id = row.Id,
+                        Name = row.Name,
+                        ParentFolderId = row.ParentFolderId,
+                        Path = string.Join(" / ", path),
+                        Depth = path.Count,
+                        BuilderName = path.ElementAtOrDefault(0),
+                        ProjectName = path.ElementAtOrDefault(1),
+                        ScaffoldName = path.ElementAtOrDefault(2),
+                        UpdatedAt = row.UpdatedAt
+                    };
+                })
+                .OrderBy(option => option.Path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public async Task<FolderHierarchy> GetFolderHierarchyAsync(Guid folderId)

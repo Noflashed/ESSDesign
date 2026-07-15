@@ -577,6 +577,19 @@ namespace ESSDesign.Server.Models
         public string Name { get; set; } = string.Empty;
     }
 
+    public class DesignFolderOption
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public Guid? ParentFolderId { get; set; }
+        public string Path { get; set; } = string.Empty;
+        public int Depth { get; set; }
+        public string? BuilderName { get; set; }
+        public string? ProjectName { get; set; }
+        public string? ScaffoldName { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public class FolderHierarchy
     {
         public string? Client { get; set; }

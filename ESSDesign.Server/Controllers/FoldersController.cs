@@ -59,6 +59,27 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpGet("design-folder-options")]
+        public async Task<ActionResult<List<DesignFolderOption>>> GetDesignFolderOptions()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var folders = await _supabaseService.GetDesignFolderOptionsAsync();
+                return Ok(folders);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting design folder options");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("{folderId}")]
         public async Task<ActionResult<FolderResponse>> GetFolder(Guid folderId)
         {

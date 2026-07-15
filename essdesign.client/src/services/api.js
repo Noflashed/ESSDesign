@@ -674,6 +674,8 @@ function parseSafetyProjects(raw) {
                     name: item.name.trim(),
                     logoUrl: item.logoUrl || item.logo_url || '',
                     logoPath: item.logoPath || item.logo_path || '',
+                    designFolderId: item.designFolderId || item.design_folder_id || '',
+                    designFolderPath: item.designFolderPath || item.design_folder_path || '',
                     projects: [],
                     createdAt: item.createdAt || nowIso(),
                     updatedAt: item.updatedAt || nowIso()
@@ -692,6 +694,8 @@ function parseSafetyProjects(raw) {
                     name: builder.name.trim(),
                     logoUrl: builder.logoUrl || builder.logo_url || '',
                     logoPath: builder.logoPath || builder.logo_path || '',
+                    designFolderId: builder.designFolderId || builder.design_folder_id || '',
+                    designFolderPath: builder.designFolderPath || builder.design_folder_path || '',
                     projects: Array.isArray(builder.projects)
                         ? builder.projects
                             .filter(project => project && typeof project.name === 'string')
@@ -701,6 +705,8 @@ function parseSafetyProjects(raw) {
                                 archived: Boolean(project.archived),
                                 archivedAt: project.archivedAt || null,
                                 siteLocation: (project.siteLocation || '').trim(),
+                                designFolderId: project.designFolderId || project.design_folder_id || '',
+                                designFolderPath: project.designFolderPath || project.design_folder_path || '',
                                 scaffoldEntity: normalizeScaffoldEntity(project.scaffoldEntity || project.scaffold_entity),
                                 projectManagerUserId: project.projectManagerUserId || project.project_manager_user_id || '',
                                 siteSupervisorUserId: project.siteSupervisorUserId || project.site_supervisor_user_id || '',
@@ -1316,6 +1322,8 @@ export const safetyProjectsAPI = {
                 drawingNumbers: [],
                 archived: false,
                 archivedAt: null,
+                designFolderId: '',
+                designFolderPath: '',
                 createdAt: timestamp,
                 updatedAt: timestamp
             });
@@ -1327,12 +1335,16 @@ export const safetyProjectsAPI = {
                 name: cleanBuilder,
                 logoUrl: '',
                 logoPath: '',
+                designFolderId: '',
+                designFolderPath: '',
                 projects: [{
                     id: makeId(),
                     name: cleanProject,
                     drawingNumbers: [],
                     archived: false,
                     archivedAt: null,
+                    designFolderId: '',
+                    designFolderPath: '',
                     createdAt: timestamp,
                     updatedAt: timestamp
                 }],
@@ -1366,6 +1378,8 @@ export const safetyProjectsAPI = {
             name: cleanBuilder,
             logoUrl: '',
             logoPath,
+            designFolderId: options.designFolderId || '',
+            designFolderPath: options.designFolderPath || '',
             projects: [],
             createdAt: timestamp,
             updatedAt: timestamp
@@ -1404,6 +1418,8 @@ export const safetyProjectsAPI = {
             archived: false,
             archivedAt: null,
             siteLocation: cleanLocation,
+            designFolderId: options.designFolderId || '',
+            designFolderPath: options.designFolderPath || '',
             scaffoldEntity: normalizeScaffoldEntity(options.scaffoldEntity),
             projectManagerUserId: options.projectManagerUserId || '',
             siteSupervisorUserId: options.siteSupervisorUserId || '',
@@ -1438,6 +1454,13 @@ export const safetyProjectsAPI = {
             throw new Error('A builder with that name already exists');
         }
         target.name = clean;
+        if (Object.prototype.hasOwnProperty.call(options, 'designFolderId')) {
+            target.designFolderId = options.designFolderId || '';
+            target.designFolderPath = options.designFolderPath || '';
+        } else if (!target.designFolderId) {
+            target.designFolderId = '';
+            target.designFolderPath = target.designFolderPath || '';
+        }
         if (options.removeLogo) {
             target.logoUrl = '';
             target.logoPath = '';
@@ -1480,6 +1503,13 @@ export const safetyProjectsAPI = {
         }
         project.name = clean;
         project.siteLocation = cleanLocation;
+        if (Object.prototype.hasOwnProperty.call(options, 'designFolderId')) {
+            project.designFolderId = options.designFolderId || '';
+            project.designFolderPath = options.designFolderPath || '';
+        } else if (!project.designFolderId) {
+            project.designFolderId = '';
+            project.designFolderPath = project.designFolderPath || '';
+        }
         if (Object.prototype.hasOwnProperty.call(options, 'scaffoldEntity')) {
             project.scaffoldEntity = normalizeScaffoldEntity(options.scaffoldEntity);
         } else if (!project.scaffoldEntity) {
@@ -4606,6 +4636,11 @@ export const foldersAPI = {
     getBreadcrumbs: async (folderId) => {
         const response = await apiClient.get(`/folders/${folderId}/breadcrumbs`);
         return response.data;
+    },
+
+    getDesignFolderOptions: async () => {
+        const response = await apiClient.get('/folders/design-folder-options');
+        return response.data || [];
     },
 
     createFolder: async (name, parentFolderId = null) => {

@@ -112,7 +112,7 @@ public sealed class EssAssistantDataService
         var effectiveQuery = managementQuery ? null : query;
         var matches = sites
             .Where(site => includeArchived || !site.Archived)
-            .Select(site => new { Site = site, Score = Score(effectiveQuery, site.Name, site.BuilderName, site.SiteLocation, site.ScaffoldEntity, string.Join(' ', site.DrawingNumbers)) })
+            .Select(site => new { Site = site, Score = Score(effectiveQuery, site.Name, site.BuilderName, site.SiteLocation, site.DesignFolderPath, site.BuilderDesignFolderPath, site.ScaffoldEntity, string.Join(' ', site.DrawingNumbers)) })
             .Where(item => string.IsNullOrWhiteSpace(effectiveQuery) || item.Score > 0)
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Site.Archived)
@@ -127,8 +127,12 @@ public sealed class EssAssistantDataService
             id = item.Site.ProjectId,
             builderId = item.Site.BuilderId,
             builder = item.Site.BuilderName,
+            builderDesignFolderId = item.Site.BuilderDesignFolderId,
+            builderDesignFolderPath = item.Site.BuilderDesignFolderPath,
             project = item.Site.Name,
             location = item.Site.SiteLocation,
+            designFolderId = item.Site.DesignFolderId,
+            designFolderPath = item.Site.DesignFolderPath,
             scaffoldEntity = item.Site.ScaffoldEntity,
             archived = item.Site.Archived,
             assignedProjectManager = Resolve(item.Site.ProjectManagerEmployeeId, item.Site.ProjectManagerUserId),
@@ -1196,9 +1200,13 @@ public sealed class EssAssistantDataService
                     SourceId = $"site:{builderId}:{projectId}",
                     BuilderId = builderId,
                     BuilderName = builderName,
+                    BuilderDesignFolderId = GetStringAny(builder, "designFolderId", "design_folder_id"),
+                    BuilderDesignFolderPath = GetStringAny(builder, "designFolderPath", "design_folder_path"),
                     ProjectId = projectId,
                     Name = GetString(project, "name") ?? string.Empty,
                     SiteLocation = GetStringAny(project, "siteLocation", "site_location"),
+                    DesignFolderId = GetStringAny(project, "designFolderId", "design_folder_id"),
+                    DesignFolderPath = GetStringAny(project, "designFolderPath", "design_folder_path"),
                     ScaffoldEntity = GetStringAny(project, "scaffoldEntity", "scaffold_entity") ?? "Erect Safe Scaffolding",
                     Archived = GetBool(project, "archived"),
                     ProjectManagerEmployeeId = GetStringAny(project, "projectManagerEmployeeId", "project_manager_employee_id"),
@@ -1726,9 +1734,13 @@ public sealed class EssAssistantDataService
         public string SourceId { get; init; } = string.Empty;
         public string BuilderId { get; init; } = string.Empty;
         public string BuilderName { get; init; } = string.Empty;
+        public string? BuilderDesignFolderId { get; init; }
+        public string? BuilderDesignFolderPath { get; init; }
         public string ProjectId { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
         public string? SiteLocation { get; init; }
+        public string? DesignFolderId { get; init; }
+        public string? DesignFolderPath { get; init; }
         public string ScaffoldEntity { get; init; } = string.Empty;
         public bool Archived { get; init; }
         public string? ProjectManagerEmployeeId { get; init; }
