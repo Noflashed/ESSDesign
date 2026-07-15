@@ -117,7 +117,7 @@ public sealed class EssAssistantService
                 .Select(message => (object)new { role = message.Role, content = message.Content })
                 .ToList();
             input.Add(new { role = "user", content = request.Message });
-            var route = RouteRequest(request.Message);
+            var route = RouteRequest(request.Message, history);
             metrics.Route = route.Name;
             preparationTimer.Stop();
             metrics.PreparationMs = preparationTimer.ElapsedMilliseconds;
@@ -501,7 +501,7 @@ public sealed class EssAssistantService
         return await client.SendAsync(request, completionOption, cancellationToken);
     }
 
-    private AssistantRoute RouteRequest(string message)
+    private AssistantRoute RouteRequest(string message, IReadOnlyList<EssAssistantHistoryMessage> history)
     {
         var trimmed = message.Trim();
         if (GreetingPattern.IsMatch(trimmed))
@@ -510,13 +510,16 @@ public sealed class EssAssistantService
             return AssistantRoute.Local("acknowledgement", "You're welcome.");
 
         var value = trimmed.ToLowerInvariant();
+        var routingValue = UsesPriorRequestContext(value)
+            ? BuildFollowUpRoutingValue(value, history)
+            : value;
         var complex = trimmed.Length > 300 || ContainsAny(value,
             "analyse", "analyze", "compare", "recommend", "relationship", "forecast", "risk", "why", "investigate");
         var effort = complex
             ? _configuration["OpenAI:AssistantReasoningEffort"] ?? "medium"
             : _configuration["OpenAI:AssistantFastReasoningEffort"] ?? "low";
 
-        if (IsSiteRegistryQuery(value))
+        if (IsSiteRegistryQuery(routingValue))
         {
             return new AssistantRoute(
                 "site_registry",
@@ -528,7 +531,7 @@ public sealed class EssAssistantService
                 false);
         }
 
-        if (IsDesignLookupQuery(value))
+        if (IsDesignLookupQuery(routingValue))
         {
             return new AssistantRoute(
                 "design_lookup",
@@ -550,12 +553,39 @@ public sealed class EssAssistantService
             StatusFor(value),
             null,
             null,
-            WantsFileSearch(value));
+            WantsFileSearch(routingValue));
     }
 
-    private static bool IsSiteRegistryQuery(string value) =>
-        ContainsAny(value, "site", "sites", "job", "jobs", "job-site", "job-sites", "project", "projects") &&
-        !ContainsAny(value, "drawing", "revision", "design", "pdf", "document", "file", "esd", "swms", "handover", "certificate", "scaff tag", "scaffold tag");
+    private static bool UsesPriorRequestContext(string value) =>
+        ContainsAny(value,
+            "actually", "also", "add ", "include ", "remove ", "separate", "split ", "group ",
+            "column", "format", "reformat", "same ", "those", "them", "that list", "that table",
+            "instead", "make it", "change it", "sort it", "filter it");
+
+    private static string BuildFollowUpRoutingValue(string value, IReadOnlyList<EssAssistantHistoryMessage> history)
+    {
+        var priorUserMessages = history
+            .Where(item => item.Role == "user" && !string.IsNullOrWhiteSpace(item.Content))
+            .TakeLast(2)
+            .Select(item => item.Content.ToLowerInvariant())
+            .ToList();
+        if (priorUserMessages.Count == 0)
+            return value;
+
+        var context = UsesPriorRequestContext(priorUserMessages[^1]) && priorUserMessages.Count > 1
+            ? priorUserMessages
+            : priorUserMessages.TakeLast(1);
+        return string.Join(' ', context.Append(value));
+    }
+
+    private static bool IsSiteRegistryQuery(string value)
+    {
+        var namesSites = ContainsAny(value, "site", "sites", "job", "jobs", "job-site", "job-sites", "project", "projects");
+        var groupsByEntity = ContainsAny(value, "scaffold entity", "scaffold company") &&
+            ContainsAny(value, "list", "table", "tables", "separate", "group", "column");
+        return (namesSites || groupsByEntity) &&
+            !ContainsAny(value, "drawing", "revision", "design", "pdf", "document", "file", "esd", "swms", "handover", "certificate", "scaff tag", "scaffold tag");
+    }
 
     private static bool IsDesignLookupQuery(string value) =>
         ContainsAny(value, "drawing", "revision", "design", "pdf", "esd");
@@ -608,6 +638,8 @@ public sealed class EssAssistantService
             - People have both account roles and employee classifications. Use explicit fields such as leadingHand instead of assuming everything is in the role text.
             - "Jobs", "job-sites", "sites", and "projects" mean the live site registry unless the user explicitly asks for drawings, designs, files, documents, or roster entries. For current, active, or all jobs, call search_sites with query null, include_archived false, and limit 50. Never use uploaded files, file search, design records, or drawing records to build a current-jobs list.
             - When the user asks which company, scaffold company, or entity a job is under, use scaffoldEntity from search_sites. The builder field is the client/builder and is not a substitute for scaffoldEntity.
+            - Follow-up requests to add/remove columns, group, split, sort, filter, or reformat an earlier result inherit the prior request's subject and data source. Preserve the complete prior record set and every existing column unless the user explicitly asks to remove or filter something. Re-query the same live source when needed; never switch a site-registry answer to uploaded files or design documents.
+            - When separate tables are requested per scaffold entity/company, include the scaffold entity/company column inside every table even though the heading already names it. Grouping never implies permission to drop a requested column.
             - When asked who manages active job-sites or projects, answer as a per-site list/table with the job/site and assigned project manager. Include the assigned site supervisor and assigned leading hand when the user asks for a breakdown. Use only the assignedLeadingHand field for a site's leading hand; never infer it from inducted employees or a person's leadingHand classification. Do not summarise by manager unless the user asks for a summary.
             - For a design or drawing requested by site/address, call search_sites first to resolve the exact site. If there is no exact match but search_sites returns suggestions, say the requested site does not exist and ask whether they meant the closest suggestion. Do not search designs for a different site until the user confirms it.
             - A site or location named by the user is a hard constraint; never mix in results from a different site. A suggested site is not a match.
