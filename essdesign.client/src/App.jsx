@@ -341,7 +341,9 @@ function NavSidebar({
                                 className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
                                 onClick={() => {
                                     if (hasChildren) {
-                                        setExpandedKeys((prev) => ({ ...prev, [item.key]: true }));
+                                        setExpandedKeys({ [item.key]: true });
+                                    } else {
+                                        setExpandedKeys({});
                                     }
                                     onNavigate(item.key);
                                 }}
