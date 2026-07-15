@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Menu,
     MessageSquareText,
     MoreHorizontal,
-    PanelRightClose,
     Pencil,
     Plus,
     Search,
@@ -49,7 +47,6 @@ export default function ESSAIPage({
     const [chatLoading, setChatLoading] = useState(false);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
-    const [historyOpen, setHistoryOpen] = useState(() => window.innerWidth > 820);
     const [menuConversationId, setMenuConversationId] = useState(null);
 
     const openConversation = useCallback(async (conversationId, { persist = true } = {}) => {
@@ -205,8 +202,7 @@ export default function ESSAIPage({
         || 'New chat';
 
     return (
-        <section className={`ess-ai-page${historyOpen ? ' history-open' : ' history-closed'}`}>
-            {historyOpen ? <button className="ess-ai-history-scrim" type="button" onClick={() => setHistoryOpen(false)} aria-label="Close chat history" /> : null}
+        <section className="ess-ai-page">
             <aside className="ess-ai-history" aria-label="Chat history">
                 <div className="ess-ai-history-header">
                     <div className="ess-ai-history-brand">
@@ -214,8 +210,7 @@ export default function ESSAIPage({
                         <strong>Chats</strong>
                     </div>
                     <div className="ess-ai-history-actions">
-                        <button type="button" onClick={() => { startNewConversation(); setHistoryOpen(false); }} title="New chat" aria-label="New chat"><Plus size={18} /></button>
-                        <button type="button" onClick={() => setHistoryOpen(false)} title="Close history" aria-label="Close history"><PanelRightClose size={18} /></button>
+                        <button type="button" onClick={startNewConversation} title="New chat" aria-label="New chat"><Plus size={18} /></button>
                     </div>
                 </div>
 
@@ -232,7 +227,7 @@ export default function ESSAIPage({
                         <div className="ess-ai-history-state">{search ? 'No matching chats' : 'Your chats will appear here'}</div>
                     ) : filteredConversations.map(conversation => (
                         <div key={conversation.id} className={`ess-ai-history-item${activeConversationId === conversation.id ? ' active' : ''}`}>
-                            <button type="button" className="ess-ai-history-select" onClick={() => { openConversation(conversation.id); setHistoryOpen(false); }}>
+                            <button type="button" className="ess-ai-history-select" onClick={() => openConversation(conversation.id)}>
                                 <span>{conversation.title}</span>
                                 <small>{conversationDate(conversation.updatedAt)}</small>
                             </button>
@@ -258,7 +253,6 @@ export default function ESSAIPage({
 
             <main className="ess-ai-workspace">
                 <header className="ess-ai-workspace-header">
-                    <button type="button" className="ess-ai-open-history" onClick={() => setHistoryOpen(true)} title="Open history" aria-label="Open history"><Menu size={19} /></button>
                     <div>
                         <h1>ESS AI</h1>
                         <span>{activeTitle}</span>
