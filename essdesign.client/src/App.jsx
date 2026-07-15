@@ -1663,7 +1663,6 @@ function App() {
                     onFolderChange={handleFolderSelect}
                     onRefreshNeeded={triggerRefresh}
                     canManage={canManageEssDesign}
-                    onOpenDrawingRegister={() => applyPageState('drawing-register', { builder: null, project: null }, { leadingHand: null }, { planDate: null })}
                 />
             </div>
         );

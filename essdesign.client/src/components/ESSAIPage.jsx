@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     MessageSquareText,
+    Maximize2,
+    Minus,
     MoreHorizontal,
     Pencil,
     Plus,
@@ -46,6 +48,7 @@ export default function ESSAIPage({
     const [chatLoading, setChatLoading] = useState(false);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const [historyMinimized, setHistoryMinimized] = useState(false);
     const [menuConversationId, setMenuConversationId] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
@@ -200,7 +203,7 @@ export default function ESSAIPage({
 
     return (
         <section className="ess-ai-page">
-            <aside className="ess-ai-history" aria-label="Chat history">
+            <aside className={`ess-ai-history${historyMinimized ? ' is-minimized' : ''}`} aria-label="Chat history">
                 <div className="ess-ai-history-header">
                     <div className="ess-ai-history-brand">
                         <MessageSquareText size={19} aria-hidden="true" />
@@ -208,43 +211,63 @@ export default function ESSAIPage({
                     </div>
                     <div className="ess-ai-history-actions">
                         <button type="button" onClick={startNewConversation} title="New chat" aria-label="New chat"><Plus size={18} /></button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setHistoryMinimized(current => !current);
+                                setMenuConversationId(null);
+                            }}
+                            title={historyMinimized ? 'Restore chat history' : 'Minimize chat history'}
+                            aria-label={historyMinimized ? 'Restore chat history' : 'Minimize chat history'}
+                            aria-expanded={!historyMinimized}
+                            aria-controls="ess-ai-history-content"
+                        >
+                            {historyMinimized ? <Maximize2 size={16} aria-hidden="true" /> : <Minus size={18} aria-hidden="true" />}
+                        </button>
                     </div>
                 </div>
 
-                <label className="ess-ai-history-search">
-                    <Search size={15} aria-hidden="true" />
-                    <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search chats" />
-                    {search ? <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button> : null}
-                </label>
+                <div
+                    id="ess-ai-history-content"
+                    className="ess-ai-history-content"
+                    aria-hidden={historyMinimized}
+                    inert={historyMinimized ? '' : undefined}
+                >
+                    <label className="ess-ai-history-search">
+                        <Search size={15} aria-hidden="true" />
+                        <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search chats" />
+                        {search ? <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button> : null}
+                    </label>
 
-                <div className="ess-ai-history-list">
-                    {historyLoading ? (
-                        <div className="ess-ai-history-state">Loading chats...</div>
-                    ) : filteredConversations.length === 0 ? (
-                        <div className="ess-ai-history-state">{search ? 'No matching chats' : 'Your chats will appear here'}</div>
-                    ) : filteredConversations.map(conversation => (
-                        <div key={conversation.id} className={`ess-ai-history-item${activeConversationId === conversation.id ? ' active' : ''}`}>
-                            <button type="button" className="ess-ai-history-select" onClick={() => openConversation(conversation.id)}>
-                                <span>{conversation.title}</span>
-                                <small>{conversationDate(conversation.updatedAt)}</small>
-                            </button>
-                            <button
-                                type="button"
-                                className="ess-ai-history-menu-button"
-                                onClick={event => { event.stopPropagation(); setMenuConversationId(current => current === conversation.id ? null : conversation.id); }}
-                                aria-label={`Actions for ${conversation.title}`}
-                                title="Chat actions"
-                            >
-                                <MoreHorizontal size={16} />
-                            </button>
-                            {menuConversationId === conversation.id ? (
-                                <div className="ess-ai-history-menu" onClick={event => event.stopPropagation()}>
-                                    <button type="button" onClick={() => renameConversation(conversation)}><Pencil size={14} /> Rename</button>
-                                    <button type="button" className="danger" onClick={() => requestDeleteConversation(conversation)}><Trash2 size={14} /> Delete</button>
-                                </div>
-                            ) : null}
-                        </div>
-                    ))}
+                    <div className="ess-ai-history-list">
+                        {historyLoading ? (
+                            <div className="ess-ai-history-state">Loading chats...</div>
+                        ) : filteredConversations.length === 0 ? (
+                            <div className="ess-ai-history-state">{search ? 'No matching chats' : 'Your chats will appear here'}</div>
+                        ) : filteredConversations.map(conversation => (
+                            <div key={conversation.id} className={`ess-ai-history-item${activeConversationId === conversation.id ? ' active' : ''}`}>
+                                <button type="button" className="ess-ai-history-select" onClick={() => openConversation(conversation.id)}>
+                                    <span>{conversation.title}</span>
+                                    <small>{conversationDate(conversation.updatedAt)}</small>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="ess-ai-history-menu-button"
+                                    onClick={event => { event.stopPropagation(); setMenuConversationId(current => current === conversation.id ? null : conversation.id); }}
+                                    aria-label={`Actions for ${conversation.title}`}
+                                    title="Chat actions"
+                                >
+                                    <MoreHorizontal size={16} />
+                                </button>
+                                {menuConversationId === conversation.id ? (
+                                    <div className="ess-ai-history-menu" onClick={event => event.stopPropagation()}>
+                                        <button type="button" onClick={() => renameConversation(conversation)}><Pencil size={14} /> Rename</button>
+                                        <button type="button" className="danger" onClick={() => requestDeleteConversation(conversation)}><Trash2 size={14} /> Delete</button>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </aside>
 
