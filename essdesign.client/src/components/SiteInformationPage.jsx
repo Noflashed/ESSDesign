@@ -97,6 +97,10 @@ function designFolderLabel(folder) {
     return folder?.path || folder?.name || 'Unnamed folder';
 }
 
+function compactDesignFolderLabel(folder) {
+    return folder?.scaffoldName || folder?.projectName || folder?.name || 'Unnamed folder';
+}
+
 function selectedDesignFolderPayload(folderId, folders) {
     const folder = folders.find(item => item.id === folderId);
     return {
@@ -497,13 +501,30 @@ export default function SiteInformationPage() {
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
+    const projectFormBuilder = useMemo(
+        () => builders.find(builder => builder.id === projectForm.builderId) || null,
+        [builders, projectForm.builderId]
+    );
     const builderDesignFolderOptions = useMemo(
         () => designFolders.filter(folder => folder.depth <= 1),
         [designFolders]
     );
     const projectDesignFolderOptions = useMemo(
-        () => designFolders.filter(folder => folder.depth >= 2),
-        [designFolders]
+        () => {
+            const projectFolders = designFolders.filter(folder => Number(folder.depth || 0) >= 2);
+            if (!projectFormBuilder) {
+                return [];
+            }
+
+            if (projectFormBuilder.designFolderPath) {
+                const prefix = `${projectFormBuilder.designFolderPath} /`;
+                return projectFolders.filter(folder => folder.path?.startsWith(prefix));
+            }
+
+            const cleanBuilderName = projectFormBuilder.name.trim().toLowerCase();
+            return projectFolders.filter(folder => String(folder.builderName || '').trim().toLowerCase() === cleanBuilderName);
+        },
+        [designFolders, projectFormBuilder]
     );
 
     const visibleProjects = useMemo(() => {
@@ -1427,7 +1448,12 @@ export default function SiteInformationPage() {
                                     <div className="site-registry-project-details-grid">
                                         <div className="module-field">
                                             <label>Builder <span aria-hidden="true">*</span></label>
-                                            <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({ ...prev, builderId: e.target.value }))}>
+                                            <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({
+                                                ...prev,
+                                                builderId: e.target.value,
+                                                designFolderId: '',
+                                                designFolderPath: ''
+                                            }))}>
                                                 <option value="">Select a builder</option>
                                                 {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
                                             </select>
@@ -1502,12 +1528,12 @@ export default function SiteInformationPage() {
                                                     ...selectedProjectDesignFolderPayload(event.target.value, designFolders)
                                                 }))}
                                             >
-                                                <option value="">No ESS Design folder linked</option>
+                                                <option value="">Create Design Folder</option>
                                                 {projectForm.designFolderId && projectForm.designFolderPath.includes(' / ') && !designFolders.some(folder => folder.id === projectForm.designFolderId) ? (
                                                     <option value={projectForm.designFolderId}>{projectForm.designFolderPath || 'Linked folder'}</option>
                                                 ) : null}
                                                 {projectDesignFolderOptions.map(folder => (
-                                                    <option key={folder.id} value={folder.id}>{designFolderLabel(folder)}</option>
+                                                    <option key={folder.id} value={folder.id}>{compactDesignFolderLabel(folder)}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -1648,12 +1674,12 @@ export default function SiteInformationPage() {
                                         ...selectedDesignFolderPayload(event.target.value, designFolders)
                                     }))}
                                 >
-                                    <option value="">No ESS Design folder linked</option>
+                                    <option value="">Create Design Folder</option>
                                     {builderForm.designFolderId && !designFolders.some(folder => folder.id === builderForm.designFolderId) ? (
                                         <option value={builderForm.designFolderId}>{builderForm.designFolderPath || 'Linked folder'}</option>
                                     ) : null}
                                     {builderDesignFolderOptions.map(folder => (
-                                        <option key={folder.id} value={folder.id}>{designFolderLabel(folder)}</option>
+                                        <option key={folder.id} value={folder.id}>{compactDesignFolderLabel(folder)}</option>
                                     ))}
                                 </select>
                             </div>
