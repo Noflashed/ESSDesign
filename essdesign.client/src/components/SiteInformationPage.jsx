@@ -388,20 +388,22 @@ export default function SiteInformationPage() {
     useEffect(() => {
         let active = true;
         setEmployeesLoading(true);
-        Promise.all([
+        Promise.allSettled([
             rosteringAPI.getEmployees(),
-            usersAPI.getAllUsers()
+            usersAPI.getNotificationRecipients()
         ])
-            .then(([employeeRows, userRows]) => {
+            .then(([employeeResult, userResult]) => {
                 if (active) {
-                    setEmployees(employeeRows);
-                    setAppUsers(Array.isArray(userRows) ? userRows : []);
-                }
-            })
-            .catch(() => {
-                if (active) {
-                    setEmployees([]);
-                    setAppUsers([]);
+                    setEmployees(employeeResult.status === 'fulfilled' && Array.isArray(employeeResult.value)
+                        ? employeeResult.value
+                        : []);
+                    setAppUsers(userResult.status === 'fulfilled' && Array.isArray(userResult.value)
+                        ? userResult.value
+                        : []);
+
+                    if (employeeResult.status === 'rejected' && userResult.status === 'rejected') {
+                        setError('The shared company employee directory could not be loaded.');
+                    }
                 }
             })
             .finally(() => {

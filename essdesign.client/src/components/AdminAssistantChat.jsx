@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Download, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowUp, Bot, Download, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
@@ -11,6 +11,9 @@ const STARTER_PROMPTS = [
     'Find the latest revision of a drawing',
     'Summarise current material orders',
 ];
+
+const ESS_LOGO_URL = '/ESS_logo_clean.svg';
+const MALOO_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png';
 
 const WELCOME_MESSAGE = {
     id: 'ess-ai-welcome',
@@ -35,7 +38,13 @@ function buildInitialMessages(savedMessages) {
 }
 
 function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials = 'U', userDisplayName = 'User', onUserAvatarError }) {
-    if (role !== 'user') return null;
+    if (role !== 'user') {
+        return (
+            <div className="admin-assistant-avatar assistant" aria-hidden="true">
+                <Bot size={16} strokeWidth={2.1} />
+            </div>
+        );
+    }
 
     return (
         <div className="admin-assistant-avatar user" aria-hidden="true">
@@ -315,6 +324,13 @@ export default function AdminAssistantChat({
             ) : null}
 
             <div className="admin-assistant-page-messages" ref={scrollRef} aria-live="polite">
+                {!hasStarted ? (
+                    <div className="ess-ai-pristine-brand" aria-label="ErectSafe Scaffolding and Maloo Access Group">
+                        <img src={ESS_LOGO_URL} alt="ErectSafe Scaffolding" />
+                        <span aria-hidden="true" />
+                        <img src={MALOO_LOGO_URL} alt="Maloo Access Group" referrerPolicy="no-referrer" />
+                    </div>
+                ) : null}
                 {messages.map((message, index) => {
                     const hasExportableTable = message.role === 'assistant' && extractMarkdownTables(message.content).length > 0;
                     return (
@@ -377,6 +393,7 @@ export default function AdminAssistantChat({
                 })}
                 {loading && !streamingReplyVisible ? (
                     <div className="admin-assistant-message-row assistant">
+                        <AssistantAvatar role="assistant" />
                         <div className="admin-assistant-thinking" aria-label="ESS Assistant is investigating" role="status">
                             <span aria-hidden="true" />
                             {streamStatus ? <small>{streamStatus}</small> : null}
