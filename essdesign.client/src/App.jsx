@@ -199,6 +199,11 @@ const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers',
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
 const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'ess-ai', 'profile', 'settings']);
+const DESIGN_NAV_ITEM = {
+    key: 'design',
+    label: 'ESS Design',
+    children: [{ key: 'drawing-register', label: 'Drawing Register' }],
+};
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'design') return currentPage === 'design' || currentPage === 'drawing-register';
@@ -328,7 +333,9 @@ function NavSidebar({
             <nav className="app-nav-sidebar-nav">
                 {visibleNavItems.map(item => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-                    const expanded = navSearchQuery.trim() ? true : expandedKeys[item.key];
+                    const hasActiveChild = hasChildren && item.children.some((child) => child.key === currentPage);
+                    const expanded = navSearchQuery.trim() ? true : (expandedKeys[item.key] ?? hasActiveChild);
+                    const submenuId = `app-nav-sidebar-submenu-${item.key}`;
                     return (
                         <div key={item.key} className={`app-nav-sidebar-group${isPageActive(item.key, currentPage) ? ' active' : ''}`}>
                             <button
@@ -345,12 +352,14 @@ function NavSidebar({
                                     className={`app-nav-sidebar-subtoggle${expanded ? ' open' : ''}`}
                                     onClick={() => toggleGroup(item.key)}
                                     aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+                                    aria-expanded={expanded}
+                                    aria-controls={submenuId}
                                 >
                                     <span className={`app-nav-sidebar-caret${expanded ? ' open' : ''}`}>▾</span>
                                 </button>
                             ) : null}
                             {open && hasChildren && expanded ? (
-                                <div className="app-nav-sidebar-submenu">
+                                <div id={submenuId} className="app-nav-sidebar-submenu">
                                     {item.children.map((child) => (
                                         <button
                                             key={child.key}
@@ -666,7 +675,7 @@ function App() {
         ? [{ key: 'employee-home', label: 'ESS App' }, { key: 'ess-ai', label: 'ESS AI' }]
         : isScaffoldDesigner
         ? [
-            { key: 'design', label: 'ESS Design' },
+            DESIGN_NAV_ITEM,
             { key: 'ess-ai', label: 'ESS AI' },
         ]
         : isTruckDeviceUser
@@ -674,7 +683,7 @@ function App() {
         : isTransportManagement
         ? [{ key: 'truck-schedule', label: 'ESS Transport' }, { key: 'ess-ai', label: 'ESS AI' }]
         : [
-            { key: 'design', label: 'ESS Design' },
+            DESIGN_NAV_ITEM,
             { key: 'ess-ai', label: 'ESS AI' },
             { key: 'site-information', label: 'Site Registry' },
             ...(showRosteringAndEmployees ? [{ key: 'employees', label: 'Employees' }] : []),
