@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowUp, Download, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import * as XLSX from 'xlsx';
 import { assistantAPI } from '../services/api';
 
 const STARTER_PROMPTS = [
@@ -49,6 +50,68 @@ function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials 
 
 function messageKey(message, index) {
     return message.id || `${message.role}-${index}-${message.content.slice(0, 20)}`;
+}
+
+function splitMarkdownTableRow(line) {
+    return line
+        .trim()
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map(cell => cell
+            .trim()
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/\*\*/g, ''));
+}
+
+function isMarkdownTableRow(line = '') {
+    return /^\s*\|?.+\|.+\|?\s*$/.test(line);
+}
+
+function isMarkdownTableSeparator(line = '') {
+    const cells = splitMarkdownTableRow(line);
+    return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell.trim()));
+}
+
+function extractMarkdownTables(content = '') {
+    const lines = String(content).split(/\r?\n/);
+    const tables = [];
+
+    for (let index = 0; index < lines.length - 1; index += 1) {
+        if (!isMarkdownTableRow(lines[index]) || !isMarkdownTableSeparator(lines[index + 1])) {
+            continue;
+        }
+
+        const headers = splitMarkdownTableRow(lines[index]);
+        const rows = [];
+        index += 2;
+
+        while (index < lines.length && isMarkdownTableRow(lines[index])) {
+            rows.push(splitMarkdownTableRow(lines[index]));
+            index += 1;
+        }
+
+        index -= 1;
+        if (headers.length > 1 && rows.length) {
+            tables.push({ headers, rows });
+        }
+    }
+
+    return tables;
+}
+
+function exportMessageTables(content) {
+    const tables = extractMarkdownTables(content);
+    if (!tables.length) return;
+
+    const workbook = XLSX.utils.book_new();
+    tables.forEach((table, index) => {
+        const worksheet = XLSX.utils.aoa_to_sheet([table.headers, ...table.rows]);
+        XLSX.utils.book_append_sheet(workbook, worksheet, `Table ${index + 1}`);
+    });
+    XLSX.writeFile(workbook, `ess-ai-table-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function AssistantMessageContent({ content, role }) {
@@ -252,7 +315,9 @@ export default function AdminAssistantChat({
             ) : null}
 
             <div className="admin-assistant-page-messages" ref={scrollRef} aria-live="polite">
-                {messages.map((message, index) => (
+                {messages.map((message, index) => {
+                    const hasExportableTable = message.role === 'assistant' && extractMarkdownTables(message.content).length > 0;
+                    return (
                     <div key={messageKey(message, index)} className={`admin-assistant-message-row ${message.role}`}>
                         <AssistantAvatar
                             role={message.role}
@@ -276,6 +341,16 @@ export default function AdminAssistantChat({
 
                             {message.role === 'assistant' && index > 0 && !message.error ? (
                                 <div className="admin-assistant-feedback" aria-label="Rate this answer">
+                                    {hasExportableTable ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => exportMessageTables(message.content)}
+                                            aria-label="Export table to Excel"
+                                            title="Export table"
+                                        >
+                                            <Download size={13} aria-hidden="true" />
+                                        </button>
+                                    ) : null}
                                     <button
                                         type="button"
                                         className={feedback[message.id] === 1 ? 'selected' : ''}
@@ -298,7 +373,8 @@ export default function AdminAssistantChat({
                             ) : null}
                         </div>
                     </div>
-                ))}
+                    );
+                })}
                 {loading && !streamingReplyVisible ? (
                     <div className="admin-assistant-message-row assistant">
                         <div className="admin-assistant-thinking" aria-label="ESS Assistant is investigating" role="status">

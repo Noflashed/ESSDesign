@@ -135,7 +135,7 @@ public sealed class EssAssistantDataService
             assignedSiteSupervisor = Resolve(item.Site.SiteSupervisorEmployeeId, item.Site.SiteSupervisorUserId),
             assignedLeadingHand = Resolve(item.Site.LeadingHandEmployeeId, item.Site.LeadingHandUserId),
             inductedEmployeeCount = item.Site.InductedEmployeeIds.Count,
-            inductedEmployees = item.Site.InductedEmployeeIds
+            inductedEmployees = managementQuery ? null : item.Site.InductedEmployeeIds
                 .Select(id => peopleByEmployeeId.TryGetValue(id, out var person)
                     ? new { name = person.FullName, role = RoleLabel(person.Role), leadingHand = person.LeadingHand }
                     : null)
@@ -147,6 +147,17 @@ public sealed class EssAssistantDataService
             drawingNumbers = item.Site.DrawingNumbers,
             updatedAt = item.Site.UpdatedAt,
         }).ToList();
+        var managementRows = managementQuery
+            ? records.Select(site => new
+            {
+                site.builder,
+                site.project,
+                site.location,
+                projectManager = site.assignedProjectManager,
+                siteSupervisor = site.assignedSiteSupervisor,
+                leadingHand = site.assignedLeadingHand,
+            }).ToList()
+            : null;
 
         return new EssAssistantToolResult
         {
@@ -155,8 +166,9 @@ public sealed class EssAssistantDataService
                 query,
                 count = records.Count,
                 presentationNote = managementQuery
-                    ? "For active job-site management questions, list each active job/site with its project manager. If the user asks for a table, output a real Markdown table with pipes and a separator row. Do not summarise by manager unless the user asks for a summary. Use '-' when no project manager is assigned."
+                    ? "For active job-site management questions, use managementRows. List each active job/site with its project manager; include site supervisor and the single assigned leading hand when the user asks for a breakdown. Use leadingHand only from assignedLeadingHand. Do not infer a site's leading hand from inductedEmployees or from an employee leadingHand flag. If the user asks for a table, output a real Markdown table with pipes and a separator row. Do not write source markers/citations. Use '-' when a field is missing."
                     : null,
+                managementRows,
                 sites = records,
             },
             Sources = matches.Select(item => Source(
