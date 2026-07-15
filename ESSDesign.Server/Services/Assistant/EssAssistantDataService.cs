@@ -380,10 +380,17 @@ public sealed class EssAssistantDataService
     {
         var foldersTask = _gateway.GetRowsAsync("folders?select=id,name,parent_folder_id,updated_at&limit=10000", cancellationToken);
         var documentsTask = _gateway.GetRowsAsync(
-            "design_documents?select=id,folder_id,revision_number,drawing_status,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,created_at,updated_at&order=updated_at.desc&limit=10000",
+            "design_documents?select=id,folder_id,revision_number,drawing_status,description,ess_design_issue_path,ess_design_issue_name,third_party_design_path,third_party_design_name,user_id,created_at,updated_at&order=updated_at.desc&limit=10000",
             cancellationToken);
-        await Task.WhenAll(foldersTask, documentsTask);
+        var usersTask = _gateway.GetRowsAsync("user_names?select=id,full_name,email&limit=2000", cancellationToken);
+        await Task.WhenAll(foldersTask, documentsTask, usersTask);
         var folderPaths = BuildFolderPaths(foldersTask.Result);
+        var userNames = usersTask.Result
+            .Where(row => !string.IsNullOrWhiteSpace(GetString(row, "id")))
+            .ToDictionary(
+                row => GetString(row, "id")!,
+                row => GetString(row, "full_name") ?? GetString(row, "email") ?? "Unknown user",
+                StringComparer.OrdinalIgnoreCase);
 
         var candidates = documentsTask.Result.Select(document =>
         {
@@ -409,6 +416,9 @@ public sealed class EssAssistantDataService
                 Revision = GetString(document, "revision_number"),
                 DrawingStatus = GetString(document, "drawing_status"),
                 Description = GetString(document, "description"),
+                UploadedBy = userNames.TryGetValue(GetString(document, "user_id") ?? string.Empty, out var uploadedBy)
+                    ? uploadedBy
+                    : null,
                 IssuedAt = GetString(document, "created_at") ?? GetString(document, "updated_at"),
                 Score = score,
             };
@@ -445,6 +455,7 @@ public sealed class EssAssistantDataService
             description = document.Description,
             hasEssDesign = !string.IsNullOrWhiteSpace(document.EssPath),
             hasThirdPartyDesign = !string.IsNullOrWhiteSpace(document.ThirdPartyPath),
+            uploadedBy = document.UploadedBy,
             uploadedOn = FormatSydneyDate(document.IssuedAt),
         }).ToList();
 
@@ -546,7 +557,7 @@ public sealed class EssAssistantDataService
         int limit,
         CancellationToken cancellationToken)
     {
-        var normalizedKind = NormalizeProjectDataKind(kind);
+        var normalizedKind = NormalizeProjectDataKind(kind) ?? InferProjectDataKind(query);
         var sites = await LoadSitesAsync(cancellationToken);
         var candidateSites = sites
             .Where(site => !site.Archived)
@@ -590,7 +601,8 @@ public sealed class EssAssistantDataService
             .Take(Math.Clamp(limit, 1, 60))
             .ToList();
 
-        foreach (var record in matches.Where(record => !string.IsNullOrWhiteSpace(record.FormPath)).Take(12))
+        var includeFormDetails = normalizedKind != "handover-certificates";
+        foreach (var record in matches.Where(record => includeFormDetails && !string.IsNullOrWhiteSpace(record.FormPath)).Take(12))
         {
             using var details = await _gateway.ReadStorageJsonAsync(ProjectBucket, record.FormPath!, cancellationToken);
             record.Details = details?.RootElement.Clone();
@@ -600,6 +612,10 @@ public sealed class EssAssistantDataService
             }
         }
 
+        var links = normalizedKind == "handover-certificates"
+            ? await BuildProjectDataLinksAsync(matches, cancellationToken)
+            : new List<EssAssistantLink>();
+
         return new EssAssistantToolResult
         {
             Data = new
@@ -608,7 +624,7 @@ public sealed class EssAssistantDataService
                 kind = normalizedKind,
                 count = matches.Count,
                 presentationNote = normalizedKind == "handover-certificates"
-                    ? "For handover lists, show only each document name. Do not show document numbers, dates, requester names, representative names, or other fields unless explicitly requested."
+                    ? "For handover lists, show only each document name and say the links below open the handovers. Do not show document numbers, dates, requester names, representative names, related designs, signatures, photos, or other fields unless explicitly requested. Do not ask whether to open them."
                     : null,
                 documents = matches.Select(record => new
                 {
@@ -623,9 +639,10 @@ public sealed class EssAssistantDataService
                     reference = record.Reference,
                     updatedAt = record.UpdatedAt,
                     pdfPath = record.PdfPath,
-                    details = record.Details,
+                    details = includeFormDetails ? record.Details : null,
                 }),
             },
+            Links = links,
             Sources = matches.Select(record => Source(
                 record.SourceId,
                 "project_data",
@@ -633,6 +650,33 @@ public sealed class EssAssistantDataService
                 $"{record.BuilderName} - {record.ProjectName} - {record.Kind}",
                 record.UpdatedAt)).ToList(),
         };
+    }
+
+    private async Task<List<EssAssistantLink>> BuildProjectDataLinksAsync(
+        IEnumerable<ProjectDataRecord> records,
+        CancellationToken cancellationToken)
+    {
+        var links = new List<EssAssistantLink>();
+        foreach (var record in records.Where(record => !string.IsNullOrWhiteSpace(record.PdfPath)).Take(10))
+        {
+            if (!IsAllowedProjectDataPath(record.PdfPath!))
+                continue;
+            try
+            {
+                var url = await _supabaseService.GetSafetyStorageSignedUrlAsync(record.PdfPath!, 60 * 60 * 24 * 14);
+                links.Add(new EssAssistantLink
+                {
+                    Label = string.IsNullOrWhiteSpace(record.Name) ? Path.GetFileName(record.PdfPath) : record.Name,
+                    Url = url,
+                    Type = "project-data",
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "Unable to sign ESS assistant project document {Path}", record.PdfPath);
+            }
+        }
+        return links;
     }
 
     public async Task<EssAssistantToolResult> SearchMaterialOrdersAsync(
@@ -1379,6 +1423,23 @@ public sealed class EssAssistantDataService
         };
     }
 
+    private static string? InferProjectDataKind(string? query)
+    {
+        var normalized = Normalize(query);
+        if (ContainsAny(normalized, "handover", "handovers", "handover certificate", "handover certificates"))
+            return "handover-certificates";
+        if (ContainsAny(normalized, "day labour", "day-labour", "variation", "variations"))
+            return "day-labour-variations";
+        if (ContainsAny(normalized, "scaff tag", "scaffold tag", "scaff tags", "scaffold tags"))
+            return "scaff-tags";
+        if (ContainsAny(normalized, "swms"))
+            return "swms";
+        return null;
+    }
+
+    private static bool ContainsAny(string value, params string[] terms) =>
+        terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+
     private static Dictionary<string, string> BuildFolderPaths(IEnumerable<JsonElement> folders)
     {
         var folderMap = folders
@@ -1690,6 +1751,7 @@ public sealed class EssAssistantDataService
         public string? Revision { get; init; }
         public string? DrawingStatus { get; init; }
         public string? Description { get; init; }
+        public string? UploadedBy { get; init; }
         public string? IssuedAt { get; init; }
         public int Score { get; init; }
     }
