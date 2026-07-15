@@ -300,6 +300,144 @@ public sealed class EssAssistantConversationStore
             cancellationToken);
     }
 
+    public async Task<List<EssAssistantFeedbackLog>> ListFeedbackAsync(
+        EssAssistantAccessContext access,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (!access.IsAdmin)
+            throw new UnauthorizedAccessException("Administrator access is required.");
+
+        var feedbackRows = await _gateway.GetRowsAsync(
+            $"ess_ai_feedback?select=id,conversation_id,message_id,user_id,rating,comment,created_at&order=created_at.desc&limit={Math.Clamp(limit, 1, 500)}",
+            cancellationToken);
+        if (feedbackRows.Count == 0)
+            return new List<EssAssistantFeedbackLog>();
+
+        var conversationIds = feedbackRows
+            .Select(row => GetString(row, "conversation_id"))
+            .Where(value => Guid.TryParse(value, out _))
+            .Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var userIds = feedbackRows
+            .Select(row => GetString(row, "user_id"))
+            .Where(value => Guid.TryParse(value, out _))
+            .Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var conversationRows = await LoadRowsInBatchesAsync(
+            "ess_ai_conversations",
+            "id,title",
+            "id",
+            conversationIds,
+            cancellationToken);
+        var messageRows = await LoadRowsInBatchesAsync(
+            "ess_ai_messages",
+            "id,conversation_id,role,content,created_at",
+            "conversation_id",
+            conversationIds,
+            cancellationToken,
+            20_000,
+            "created_at.asc");
+        var userRows = await LoadRowsInBatchesAsync(
+            "user_names",
+            "id,full_name,email",
+            "id",
+            userIds,
+            cancellationToken);
+
+        var titles = conversationRows
+            .Where(row => !string.IsNullOrWhiteSpace(GetString(row, "id")))
+            .GroupBy(row => GetString(row, "id")!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => GetString(group.First(), "title") ?? "New conversation", StringComparer.OrdinalIgnoreCase);
+        var users = userRows
+            .Where(row => !string.IsNullOrWhiteSpace(GetString(row, "id")))
+            .GroupBy(row => GetString(row, "id")!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => GetString(group.First(), "full_name") ?? GetString(group.First(), "email") ?? "ESS user",
+                StringComparer.OrdinalIgnoreCase);
+        var messagesByConversation = messageRows
+            .Select(row => new FeedbackMessage(
+                GetString(row, "id") ?? string.Empty,
+                GetString(row, "conversation_id") ?? string.Empty,
+                GetString(row, "role") ?? string.Empty,
+                GetString(row, "content") ?? string.Empty,
+                ParseTimestamp(GetString(row, "created_at"))))
+            .Where(message => !string.IsNullOrWhiteSpace(message.ConversationId))
+            .GroupBy(message => message.ConversationId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.OrderBy(message => message.CreatedAt).ToList(), StringComparer.OrdinalIgnoreCase);
+
+        return feedbackRows.Select(row =>
+        {
+            var conversationIdText = GetString(row, "conversation_id") ?? string.Empty;
+            var messageIdText = GetString(row, "message_id");
+            var userId = GetString(row, "user_id") ?? string.Empty;
+            var feedbackAt = ParseTimestamp(GetString(row, "created_at"));
+            messagesByConversation.TryGetValue(conversationIdText, out var messages);
+            messages ??= new List<FeedbackMessage>();
+
+            var responseIndex = !string.IsNullOrWhiteSpace(messageIdText)
+                ? messages.FindIndex(message => string.Equals(message.Id, messageIdText, StringComparison.OrdinalIgnoreCase))
+                : -1;
+            if (responseIndex < 0)
+            {
+                responseIndex = messages.FindLastIndex(message =>
+                    message.Role == "assistant" && message.CreatedAt <= feedbackAt);
+            }
+
+            var response = responseIndex >= 0 ? messages[responseIndex].Content : string.Empty;
+            var question = responseIndex > 0
+                ? messages.Take(responseIndex).LastOrDefault(message => message.Role == "user")?.Content ?? string.Empty
+                : string.Empty;
+
+            return new EssAssistantFeedbackLog
+            {
+                Id = Guid.TryParse(GetString(row, "id"), out var id) ? id : Guid.Empty,
+                ConversationId = Guid.TryParse(conversationIdText, out var conversationId) ? conversationId : Guid.Empty,
+                MessageId = Guid.TryParse(messageIdText, out var messageId) ? messageId : null,
+                UserId = userId,
+                UserName = users.GetValueOrDefault(userId, "ESS user"),
+                ConversationTitle = titles.GetValueOrDefault(conversationIdText, "New conversation"),
+                Question = question,
+                Response = response,
+                Rating = GetInt(row, "rating"),
+                Comment = GetString(row, "comment"),
+                CreatedAt = feedbackAt,
+            };
+        }).Where(item => item.Id != Guid.Empty).ToList();
+    }
+
+    public async Task ClearFeedbackAsync(EssAssistantAccessContext access, CancellationToken cancellationToken)
+    {
+        if (!access.IsAdmin)
+            throw new UnauthorizedAccessException("Administrator access is required.");
+
+        await _gateway.DeleteRowsAsync("ess_ai_feedback?id=not.is.null", cancellationToken);
+    }
+
+    private async Task<List<JsonElement>> LoadRowsInBatchesAsync(
+        string table,
+        string select,
+        string filterColumn,
+        IReadOnlyList<string> ids,
+        CancellationToken cancellationToken,
+        int limit = 500,
+        string? order = null)
+    {
+        if (ids.Count == 0)
+            return new List<JsonElement>();
+
+        var orderQuery = string.IsNullOrWhiteSpace(order) ? string.Empty : $"&order={order}";
+        var tasks = ids.Chunk(40).Select(batch => _gateway.GetRowsAsync(
+            $"{table}?select={select}&{filterColumn}=in.({string.Join(',', batch)}){orderQuery}&limit={limit}",
+            cancellationToken));
+        var batches = await Task.WhenAll(tasks);
+        return batches.SelectMany(rows => rows).ToList();
+    }
+
     private async Task EnsureConversationOwnershipAsync(
         Guid conversationId,
         EssAssistantAccessContext access,
@@ -377,6 +515,11 @@ public sealed class EssAssistantConversationStore
             return null;
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
+
+    private static int GetInt(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.TryGetInt32(out var number) ? number : 0;
+
+    private sealed record FeedbackMessage(string Id, string ConversationId, string Role, string Content, DateTimeOffset CreatedAt);
 }
 
 public sealed record EssAssistantPreparedTurn(

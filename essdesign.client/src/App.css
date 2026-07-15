@@ -7603,6 +7603,82 @@ button.stat-card {
     pointer-events: auto;
 }
 
+.admin-assistant-page-chat .admin-assistant-feedback-panel {
+    width: min(560px, 100%);
+    margin-top: 6px;
+    padding: 12px;
+    border: 1px solid var(--ess-ai-border, #dededb);
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-panel > strong {
+    display: block;
+    margin-bottom: 9px;
+    color: #202328;
+    font-size: 13px;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 9px;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-reasons button,
+.admin-assistant-page-chat .admin-assistant-feedback-actions button {
+    padding: 6px 9px;
+    border: 1px solid #d8d9da;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #41464d;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-reasons button.selected {
+    border-color: #f47c20;
+    background: #fff7ed;
+    color: #a84b08;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-panel textarea {
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    padding: 9px 10px;
+    border: 1px solid #d8d9da;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #202328;
+    font: inherit;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-error {
+    display: block;
+    margin-top: 6px;
+    color: #b42318;
+    font-size: 12px;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.admin-assistant-page-chat .admin-assistant-feedback-actions button.primary {
+    border-color: #102b5c;
+    background: #102b5c;
+    color: #ffffff;
+}
+
 .admin-assistant-page-chat .admin-assistant-feedback button {
     width: 26px;
     height: 26px;

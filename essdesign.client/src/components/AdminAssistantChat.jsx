@@ -12,6 +12,11 @@ const STARTER_PROMPTS = [
     'Summarise current material orders',
 ];
 
+const FEEDBACK_REASONS = {
+    1: ['Accurate', 'Useful sources', 'Clear answer', 'Saved me time'],
+    '-1': ['Incorrect', 'Missing information', 'Outdated information', 'Misunderstood me', 'Wrong source', 'Too long or unclear'],
+};
+
 const ESS_LOGO_URL = '/ESS_logo_clean.svg';
 const MALOO_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png';
 
@@ -168,6 +173,7 @@ export default function AdminAssistantChat({
     const [streamStatus, setStreamStatus] = useState('');
     const [streamingReplyVisible, setStreamingReplyVisible] = useState(false);
     const [feedback, setFeedback] = useState({});
+    const [feedbackDraft, setFeedbackDraft] = useState(null);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -191,6 +197,7 @@ export default function AdminAssistantChat({
         setMessages([WELCOME_MESSAGE]);
         setConversationId(null);
         setFeedback({});
+        setFeedbackDraft(null);
         window.setTimeout(() => inputRef.current?.focus(), 0);
     };
 
@@ -288,21 +295,30 @@ export default function AdminAssistantChat({
         }
     };
 
-    const rateMessage = async (message, rating) => {
+    const openFeedback = (message, rating) => {
         if (!conversationId || feedback[message.id]) return;
-        setFeedback(current => ({ ...current, [message.id]: rating }));
+        setFeedbackDraft({ messageId: message.id, rating, reason: '', comment: '', saving: false, error: '' });
+    };
+
+    const submitFeedback = async (message) => {
+        if (!conversationId || !feedbackDraft || feedbackDraft.messageId !== message.id || feedbackDraft.saving) return;
+        const comment = [feedbackDraft.reason, feedbackDraft.comment.trim()].filter(Boolean).join(' — ');
+        setFeedbackDraft(current => ({ ...current, saving: true, error: '' }));
         try {
             await assistantAPI.feedback({
                 conversationId,
                 messageId: message.persistedMessageId || null,
-                rating,
+                rating: feedbackDraft.rating,
+                comment: comment || null,
             });
-        } catch {
-            setFeedback(current => {
-                const next = { ...current };
-                delete next[message.id];
-                return next;
-            });
+            setFeedback(current => ({ ...current, [message.id]: feedbackDraft.rating }));
+            setFeedbackDraft(null);
+        } catch (error) {
+            setFeedbackDraft(current => ({
+                ...current,
+                saving: false,
+                error: error.response?.data?.error || 'Feedback could not be saved.',
+            }));
         }
     };
 
@@ -373,7 +389,7 @@ export default function AdminAssistantChat({
                                 <button
                                     type="button"
                                     className={feedback[message.id] === 1 ? 'selected' : ''}
-                                    onClick={() => rateMessage(message, 1)}
+                                    onClick={() => openFeedback(message, 1)}
                                     aria-label="Helpful answer"
                                     title="Helpful"
                                 >
@@ -382,12 +398,43 @@ export default function AdminAssistantChat({
                                 <button
                                     type="button"
                                     className={feedback[message.id] === -1 ? 'selected' : ''}
-                                    onClick={() => rateMessage(message, -1)}
+                                    onClick={() => openFeedback(message, -1)}
                                     aria-label="Unhelpful answer"
                                     title="Not helpful"
                                 >
                                     <ThumbsDown size={13} aria-hidden="true" />
                                 </button>
+                            </div>
+                        ) : null}
+                        {feedbackDraft?.messageId === message.id ? (
+                            <div className="admin-assistant-feedback-panel">
+                                <strong>{feedbackDraft.rating === 1 ? 'What worked well?' : 'What should improve?'}</strong>
+                                <div className="admin-assistant-feedback-reasons">
+                                    {FEEDBACK_REASONS[feedbackDraft.rating].map(reason => (
+                                        <button
+                                            key={reason}
+                                            type="button"
+                                            className={feedbackDraft.reason === reason ? 'selected' : ''}
+                                            onClick={() => setFeedbackDraft(current => ({ ...current, reason }))}
+                                        >
+                                            {reason}
+                                        </button>
+                                    ))}
+                                </div>
+                                <textarea
+                                    value={feedbackDraft.comment}
+                                    onChange={(event) => setFeedbackDraft(current => ({ ...current, comment: event.target.value.slice(0, 1800) }))}
+                                    placeholder="Add an optional comment for the admin..."
+                                    rows={3}
+                                    autoFocus
+                                />
+                                {feedbackDraft.error ? <span className="admin-assistant-feedback-error">{feedbackDraft.error}</span> : null}
+                                <div className="admin-assistant-feedback-actions">
+                                    <button type="button" onClick={() => setFeedbackDraft(null)} disabled={feedbackDraft.saving}>Cancel</button>
+                                    <button type="button" className="primary" onClick={() => submitFeedback(message)} disabled={feedbackDraft.saving}>
+                                        {feedbackDraft.saving ? 'Saving...' : 'Save feedback'}
+                                    </button>
+                                </div>
                             </div>
                         ) : null}
                         </div>

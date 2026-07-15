@@ -29,6 +29,7 @@ import { Sparkles } from 'lucide-react';
 import './App.css';
 
 const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
+const AIFeedbackDashboard = React.lazy(() => import('./components/AIFeedbackDashboard'));
 
 // Load logo from Supabase Storage
 // Replace YOUR_PROJECT with your actual Supabase project ID
@@ -186,6 +187,7 @@ const NAV_PAGE_ICONS = {
     'employees': UsersNavIcon,
     'ess-news': NewsNavIcon,
     'ess-ai': Sparkles,
+    'ai-feedback': Sparkles,
 };
 
 function NavPageIcon({ pageKey, size = 18 }) {
@@ -195,7 +197,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'ess-ai', 'profile', 'settings']);
 
 function isPageActive(itemKey, currentPage) {
@@ -685,7 +687,10 @@ function App() {
             ] : [
                 { key: 'safety', label: 'Project data' },
             ]),
-            ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
+            ...(user?.role === 'admin' ? [
+                { key: 'ess-news', label: 'ESS News' },
+                { key: 'ai-feedback', label: 'AI Feedback' },
+            ] : []),
         ];
     const showHeaderSearch = false;
     const searchRef = useRef(null);
@@ -1634,6 +1639,14 @@ function App() {
                         userDisplayName={userDisplayName}
                         onUserAvatarError={handleAvatarImageError}
                     />
+                </React.Suspense>
+            );
+        }
+
+        if (currentPage === 'ai-feedback' && isAdmin) {
+            return (
+                <React.Suspense fallback={<div className="ess-ai-route-loading"><LoadingBrandmark label="Loading AI feedback" /></div>}>
+                    <AIFeedbackDashboard />
                 </React.Suspense>
             );
         }

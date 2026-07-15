@@ -183,6 +183,53 @@ public sealed class AssistantController : ControllerBase
         }
     }
 
+    [HttpGet("feedback/logs")]
+    public async Task<ActionResult<List<EssAssistantFeedbackLog>>> ListFeedbackLogs(
+        [FromQuery] int limit = 250,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+
+        var access = _accessPolicy.For(currentUser);
+        if (!access.IsAdmin)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Administrator access is required." });
+
+        try
+        {
+            return Ok(await _conversations.ListFeedbackAsync(access, Math.Clamp(limit, 1, 500), cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unable to load ESS AI feedback logs");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Feedback logs could not be loaded." });
+        }
+    }
+
+    [HttpDelete("feedback/logs")]
+    public async Task<IActionResult> ClearFeedbackLogs(CancellationToken cancellationToken)
+    {
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null)
+            return Unauthorized(new { error = "Not authenticated." });
+
+        var access = _accessPolicy.For(currentUser);
+        if (!access.IsAdmin)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Administrator access is required." });
+
+        try
+        {
+            await _conversations.ClearFeedbackAsync(access, cancellationToken);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unable to clear ESS AI feedback logs");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Feedback logs could not be cleared." });
+        }
+    }
+
     [HttpGet("conversations")]
     public async Task<ActionResult<List<EssAssistantConversationSummary>>> ListConversations(
         [FromQuery] int limit = 100,

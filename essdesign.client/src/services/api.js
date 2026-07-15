@@ -5292,6 +5292,13 @@ export const assistantAPI = {
     feedback: async (payload) => {
         const response = await apiClient.post('/assistant/feedback', payload);
         return response.data;
+    },
+    listFeedback: async (limit = 250) => {
+        const response = await apiClient.get('/assistant/feedback/logs', { params: { limit } });
+        return response.data;
+    },
+    clearFeedback: async () => {
+        await apiClient.delete('/assistant/feedback/logs');
     }
 };
 

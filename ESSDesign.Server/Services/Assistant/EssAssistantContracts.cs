@@ -58,6 +58,21 @@ public sealed class EssAssistantSavedMessage
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+public sealed class EssAssistantFeedbackLog
+{
+    public Guid Id { get; set; }
+    public Guid ConversationId { get; set; }
+    public Guid? MessageId { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string ConversationTitle { get; set; } = string.Empty;
+    public string Question { get; set; } = string.Empty;
+    public string Response { get; set; } = string.Empty;
+    public int Rating { get; set; }
+    public string? Comment { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
 public sealed class EssAssistantStreamEvent
 {
     public string Type { get; init; } = string.Empty;
