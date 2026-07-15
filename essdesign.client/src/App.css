@@ -10018,16 +10018,19 @@ button.stat-card {
 
 .site-registry-readonly-workers-table table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
 .site-registry-readonly-workers-table th,
 .site-registry-readonly-workers-table td {
-    padding: 10px 12px;
+    height: 52px;
+    padding: 8px 12px;
     border-bottom: 1px solid #e8eef8;
     color: #334155;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.25;
     text-align: left;
     vertical-align: middle;
 }
@@ -10036,11 +10039,11 @@ button.stat-card {
     position: sticky;
     top: 0;
     z-index: 1;
+    height: 36px;
     background: #f1f5f9;
     color: #52637d;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 650;
 }
 
 .site-registry-readonly-workers-table tr:last-child td {
@@ -10059,7 +10062,8 @@ button.stat-card {
     overflow: hidden;
     color: #0f172a;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 500;
+    line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -10674,20 +10678,13 @@ button.stat-card {
 }
 
 .site-registry-role-select-label {
-    display: grid;
-    gap: 3px;
+    display: block;
 }
 
 .site-registry-role-select-label label {
     color: #0f172a;
     font-size: 12px;
     font-weight: 650;
-}
-
-.site-registry-role-select-label span {
-    color: #64748b;
-    font-size: 12px;
-    font-weight: 500;
 }
 
 .site-registry-role-select-control {
@@ -10898,7 +10895,7 @@ button.stat-card {
 }
 
 .site-registry-inducted-editor-search {
-    min-height: 34px;
+    min-height: 36px;
 }
 
 .site-registry-inducted-editor-list {
@@ -10910,12 +10907,12 @@ button.stat-card {
 }
 
 .site-registry-inducted-option {
-    min-height: 40px;
+    min-height: 52px;
     display: grid;
     grid-template-columns: 16px 28px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    padding: 6px 10px;
+    padding: 8px 10px;
     border-bottom: 1px solid #e8eef8;
     cursor: pointer;
 }
@@ -10935,7 +10932,7 @@ button.stat-card {
     accent-color: #0b57d0;
 }
 
-.site-registry-inducted-option > span:last-child {
+.site-registry-inducted-option-person {
     min-width: 0;
     display: grid;
     gap: 1px;

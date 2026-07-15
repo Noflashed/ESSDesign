@@ -108,7 +108,7 @@ function selectedProjectDesignFolderPayload(folderId, folders, fallbackPath = ''
     if (!folderId) {
         return { designFolderId: '', designFolderPath: '' };
     }
-    const folder = folders.find(item => item.id === folderId && Number(item.depth || 0) >= 2);
+    const folder = folders.find(item => item.id === folderId && Number(item.depth || 0) === 2);
     if (!folder && !folders.length) {
         return {
             designFolderId: folderId,
@@ -217,7 +217,7 @@ function withRoleAvatar(user, avatarUrls) {
 
 const roleAvatarUrlCache = new Map();
 
-function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onChange, disabled = false }) {
+function RoleUserSelect({ label, role, value, options, avatarUrls, onChange, disabled = false }) {
     const [open, setOpen] = useState(false);
     const selectedUser = withRoleAvatar(options.find(user => roleOptionValue(user) === value) || null, avatarUrls);
     const chooseUser = (nextValue, option = null) => {
@@ -239,7 +239,6 @@ function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onCha
         >
             <div className="site-registry-role-select-label">
                 <label>{label}</label>
-                <span>{helper}</span>
             </div>
             <button
                 type="button"
@@ -497,7 +496,7 @@ export default function SiteInformationPage() {
     );
     const projectDesignFolderOptions = useMemo(
         () => {
-            const projectFolders = designFolders.filter(folder => Number(folder.depth || 0) >= 2);
+            const projectFolders = designFolders.filter(folder => Number(folder.depth || 0) === 2);
             if (!projectFormBuilder) {
                 return [];
             }
@@ -823,12 +822,10 @@ export default function SiteInformationPage() {
                 }
             }
             setBuilders(nextBuilders);
-            if (projectForm.editingProjectId) {
-                const updatedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
-                const updatedProject = updatedBuilder?.projects.find(project => project.id === projectForm.editingProjectId);
-                if (updatedProject && projectSiteKey(selectedInfoProject) === `${projectForm.builderId}:${projectForm.editingProjectId}`) {
-                    setSelectedInfoProject({ ...updatedProject, builder: updatedBuilder });
-                }
+            const savedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
+            const savedProject = savedBuilder?.projects.find(project => project.id === savedProjectId);
+            if (savedProject) {
+                setSelectedInfoProject({ ...savedProject, builder: savedBuilder });
             }
             closeProjectModal();
         } catch (err) {
@@ -1301,7 +1298,6 @@ export default function SiteInformationPage() {
                                     <div className="site-registry-personnel-grid">
                                         <RoleUserSelect
                                             label="Project Manager"
-                                            helper="Only Project Manager users appear here"
                                             role="project_manager"
                                             value={infoProjectManagerValue}
                                             options={roleUsers.projectManagers}
@@ -1311,7 +1307,6 @@ export default function SiteInformationPage() {
                                         />
                                         <RoleUserSelect
                                             label="Site Supervisor"
-                                            helper="Only Site Supervisor users appear here"
                                             role="site_supervisor"
                                             value={infoSiteSupervisorValue}
                                             options={roleUsers.siteSupervisors}
@@ -1321,7 +1316,6 @@ export default function SiteInformationPage() {
                                         />
                                         <RoleUserSelect
                                             label="Leading Hand"
-                                            helper="Only Leading Hand users appear here"
                                             role="leading_hand"
                                             value={infoLeadingHandValue}
                                             options={roleUsers.leadingHands}
@@ -1542,7 +1536,6 @@ export default function SiteInformationPage() {
                                     <div className="site-registry-personnel-grid">
                                         <RoleUserSelect
                                             label="Project Manager"
-                                            helper="Only Project Manager users appear here"
                                             role="project_manager"
                                             value={projectForm.projectManagerUserId}
                                             options={roleUsers.projectManagers}
@@ -1555,7 +1548,6 @@ export default function SiteInformationPage() {
                                         />
                                         <RoleUserSelect
                                             label="Site Supervisor"
-                                            helper="Only Site Supervisor users appear here"
                                             role="site_supervisor"
                                             value={projectForm.siteSupervisorUserId}
                                             options={roleUsers.siteSupervisors}
@@ -1568,7 +1560,6 @@ export default function SiteInformationPage() {
                                         />
                                         <RoleUserSelect
                                             label="Leading Hand"
-                                            helper="Only Leading Hand users appear here"
                                             role="leading_hand"
                                             value={projectForm.leadingHandUserId || (projectForm.leadingHandEmployeeId ? `employee:${projectForm.leadingHandEmployeeId}` : '')}
                                             options={roleUsers.leadingHands}
@@ -1615,7 +1606,7 @@ export default function SiteInformationPage() {
                                                         onChange={() => toggleProjectInductedEmployee(employee.id)}
                                                     />
                                                     <EmployeeAvatar employee={employee} />
-                                                    <span>
+                                                    <span className="site-registry-inducted-option-person">
                                                         <strong>{employeeName(employee)}</strong>
                                                         <small>{employee.email || employee.phoneNumber || getEmployeeRoleLabel(employee)}</small>
                                                     </span>

@@ -850,7 +850,7 @@ function folderLinkPayload(folder) {
 }
 
 function isProjectDesignFolder(folder) {
-    return Number(folder?.depth || 0) >= 2;
+    return Number(folder?.depth || 0) === 2;
 }
 
 function buildDesignFolderOption(folder, parent = null) {
@@ -1400,7 +1400,7 @@ export const safetyProjectsAPI = {
         let changed = false;
 
         const getBuilderFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) <= 1);
-        const getSiteFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) >= 2);
+        const getSiteFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) === 2);
 
         for (const builder of doc.builders) {
             let builderFolder = builder.designFolderId
@@ -1435,7 +1435,7 @@ export const safetyProjectsAPI = {
             for (const project of builder.projects) {
                 if (project.designFolderId) {
                     const existingProjectFolder = folderOptions.find(folder => folder.id === project.designFolderId) || null;
-                    if (!existingProjectFolder || isProjectDesignFolder(existingProjectFolder)) {
+                    if (isProjectDesignFolder(existingProjectFolder)) {
                         continue;
                     }
                     project.designFolderId = '';
@@ -1457,7 +1457,7 @@ export const safetyProjectsAPI = {
                 let projectFolder = findBestDesignFolderMatch(
                     project.name,
                     candidates,
-                    folder => [folder.projectName, folder.scaffoldName, folder.path].filter(Boolean).join(' '),
+                    folder => [folder.projectName, folder.path].filter(Boolean).join(' '),
                     0.78);
 
                 if (!projectFolder) {
