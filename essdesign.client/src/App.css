@@ -7826,35 +7826,46 @@ button.stat-card {
 }
 
 .ess-ai-page {
+    position: relative;
     width: 100%;
     height: 100vh;
     min-height: 620px;
     display: grid;
-    grid-template-columns: 278px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     overflow: hidden;
     background: #ffffff;
     color: #17191c;
 }
 
 .ess-ai-page.history-closed {
-    grid-template-columns: 0 minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .ess-ai-history {
+    position: absolute;
+    top: 70px;
+    right: 16px;
+    bottom: 16px;
+    width: 304px;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    overflow: visible;
-    background: #f5f5f4;
-    border-right: 1px solid #e4e4e2;
-    transition: opacity 160ms ease;
-    z-index: 4;
+    overflow: hidden;
+    background: #fbfbfa;
+    border: 1px solid #dedfdf;
+    border-radius: 8px;
+    box-shadow: 0 18px 46px rgba(24, 29, 36, 0.14), 0 2px 8px rgba(24, 29, 36, 0.06);
+    transform: translateX(0) scale(1);
+    transform-origin: top right;
+    transition: opacity 150ms ease, transform 180ms ease, visibility 180ms ease;
+    z-index: 30;
 }
 
 .ess-ai-page.history-closed .ess-ai-history {
     opacity: 0;
     pointer-events: none;
-    overflow: hidden;
+    visibility: hidden;
+    transform: translateX(10px) scale(0.985);
 }
 
 .ess-ai-history-header,
@@ -7868,7 +7879,8 @@ button.stat-card {
 .ess-ai-history-header {
     justify-content: space-between;
     gap: 12px;
-    padding: 0 12px 0 16px;
+    padding: 0 10px 0 14px;
+    border-bottom: 1px solid #ececea;
 }
 
 .ess-ai-history-brand {
@@ -7877,7 +7889,13 @@ button.stat-card {
     align-items: center;
     gap: 9px;
     color: #15171a;
-    font-size: 15px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.ess-ai-history-brand strong {
+    font-weight: 600;
 }
 
 .ess-ai-history-actions {
@@ -7920,15 +7938,15 @@ button.stat-card {
 }
 
 .ess-ai-history-search {
-    height: 38px;
-    margin: 4px 12px 10px;
+    height: 34px;
+    margin: 10px 10px 8px;
     padding: 0 7px 0 10px;
     display: grid;
     grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: center;
     gap: 7px;
     border: 1px solid #dededb;
-    border-radius: 7px;
+    border-radius: 6px;
     background: #ffffff;
     color: #717780;
 }
@@ -7939,7 +7957,8 @@ button.stat-card {
     outline: 0;
     background: transparent;
     color: #17191c;
-    font-size: 13px;
+    font-size: 12px;
+    font-weight: 400;
 }
 
 .ess-ai-history-search button {
@@ -7952,7 +7971,7 @@ button.stat-card {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 2px 8px 18px;
+    padding: 2px 7px 12px;
     scrollbar-width: thin;
     scrollbar-color: #c8c8c4 transparent;
 }
@@ -7971,7 +7990,7 @@ button.stat-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 30px;
     align-items: center;
-    border-radius: 6px;
+    border-radius: 5px;
 }
 
 .ess-ai-history-item:hover,
@@ -7981,12 +8000,12 @@ button.stat-card {
 
 .ess-ai-history-select {
     min-width: 0;
-    min-height: 46px;
+    min-height: 42px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 2px;
-    padding: 7px 4px 7px 10px;
+    gap: 3px;
+    padding: 6px 4px 6px 9px;
     border: 0;
     background: transparent;
     color: #25282d;
@@ -8001,12 +8020,21 @@ button.stat-card {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 13px;
-    font-weight: 550;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: 0;
+}
+
+.ess-ai-history-item.active .ess-ai-history-select span {
+    font-weight: 500;
 }
 
 .ess-ai-history-select small {
     color: #858a92;
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0;
 }
 
 .ess-ai-history-menu-button {
@@ -8639,17 +8667,17 @@ button.stat-card {
 
     .ess-ai-history {
         position: fixed;
-        inset: 0 auto 0 0;
-        width: min(310px, 88vw);
+        inset: 68px 10px 10px auto;
+        width: min(304px, calc(100vw - 20px));
         z-index: 302;
-        transform: translateX(0);
-        transition: transform 180ms ease;
+        transform: translateX(0) scale(1);
     }
 
     .ess-ai-page.history-closed .ess-ai-history {
-        width: min(310px, 88vw);
-        opacity: 1;
-        transform: translateX(-100%);
+        width: min(304px, calc(100vw - 20px));
+        opacity: 0;
+        visibility: hidden;
+        transform: translateX(12px) scale(0.985);
     }
 
     .ess-ai-history-scrim {

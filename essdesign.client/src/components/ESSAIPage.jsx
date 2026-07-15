@@ -3,7 +3,7 @@ import {
     Menu,
     MessageSquareText,
     MoreHorizontal,
-    PanelLeftClose,
+    PanelRightClose,
     Pencil,
     Plus,
     Search,
@@ -211,11 +211,11 @@ export default function ESSAIPage({
                 <div className="ess-ai-history-header">
                     <div className="ess-ai-history-brand">
                         <MessageSquareText size={19} aria-hidden="true" />
-                        <strong>ESS AI</strong>
+                        <strong>Chats</strong>
                     </div>
                     <div className="ess-ai-history-actions">
-                        <button type="button" onClick={startNewConversation} title="New chat" aria-label="New chat"><Plus size={18} /></button>
-                        <button type="button" onClick={() => setHistoryOpen(false)} title="Close history" aria-label="Close history"><PanelLeftClose size={18} /></button>
+                        <button type="button" onClick={() => { startNewConversation(); setHistoryOpen(false); }} title="New chat" aria-label="New chat"><Plus size={18} /></button>
+                        <button type="button" onClick={() => setHistoryOpen(false)} title="Close history" aria-label="Close history"><PanelRightClose size={18} /></button>
                     </div>
                 </div>
 
@@ -232,7 +232,7 @@ export default function ESSAIPage({
                         <div className="ess-ai-history-state">{search ? 'No matching chats' : 'Your chats will appear here'}</div>
                     ) : filteredConversations.map(conversation => (
                         <div key={conversation.id} className={`ess-ai-history-item${activeConversationId === conversation.id ? ' active' : ''}`}>
-                            <button type="button" className="ess-ai-history-select" onClick={() => { openConversation(conversation.id); setHistoryOpen(window.innerWidth > 820); }}>
+                            <button type="button" className="ess-ai-history-select" onClick={() => { openConversation(conversation.id); setHistoryOpen(false); }}>
                                 <span>{conversation.title}</span>
                                 <small>{conversationDate(conversation.updatedAt)}</small>
                             </button>

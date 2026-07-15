@@ -678,7 +678,9 @@ public sealed class EssAssistantService
             throw OpenAiError(response.StatusCode, errorBody);
         }
 
-        var text = new StringBuilder();
+        var rawText = new StringBuilder();
+        var visibleText = new StringBuilder();
+        bool? structuredEnvelope = null;
         var inputTokens = 0;
         var outputTokens = 0;
         var cachedInputTokens = 0;
@@ -701,8 +703,14 @@ public sealed class EssAssistantService
                 var delta = GetString(root, "delta");
                 if (!string.IsNullOrEmpty(delta))
                 {
-                    text.Append(delta);
-                    await emit(new EssAssistantStreamEvent { Type = "delta", Delta = delta });
+                    rawText.Append(delta);
+                    structuredEnvelope ??= DetectAnswerEnvelope(rawText.ToString());
+                    if (structuredEnvelope == false)
+                    {
+                        var visibleDelta = visibleText.Length == 0 ? rawText.ToString() : delta;
+                        visibleText.Append(visibleDelta);
+                        await emit(new EssAssistantStreamEvent { Type = "delta", Delta = visibleDelta });
+                    }
                 }
             }
             else if (string.Equals(eventType, "response.completed", StringComparison.OrdinalIgnoreCase) &&
@@ -713,12 +721,14 @@ public sealed class EssAssistantService
                 outputTokens = GetInt(usage, "output_tokens");
                 cachedInputTokens = GetNestedInt(usage, "input_tokens_details", "cached_tokens");
                 reasoningTokens = GetNestedInt(usage, "output_tokens_details", "reasoning_tokens");
-                if (text.Length == 0)
+                if (rawText.Length == 0)
                 {
                     var parsed = ParseAnswer(ParseModelResponse(completedResponse).Output).Reply;
                     if (!string.IsNullOrWhiteSpace(parsed))
                     {
-                        text.Append(parsed);
+                        rawText.Append(parsed);
+                        visibleText.Append(parsed);
+                        structuredEnvelope = false;
                         await emit(new EssAssistantStreamEvent { Type = "delta", Delta = parsed });
                     }
                 }
@@ -728,7 +738,23 @@ public sealed class EssAssistantService
                 throw new InvalidOperationException(GetString(root, "message") ?? "OpenAI streaming failed.");
             }
         }
-        return new StreamedAnswer(string.Empty, text.ToString(), inputTokens, outputTokens, cachedInputTokens, reasoningTokens);
+
+        if (structuredEnvelope == true)
+        {
+            var parsed = ParseAnswerText(rawText.ToString(), preserveRawOnFailure: false).Reply.Trim();
+            if (string.IsNullOrWhiteSpace(parsed))
+                parsed = "I could not produce a complete answer from the available ESS records.";
+            visibleText.Append(parsed);
+            await emit(new EssAssistantStreamEvent { Type = "delta", Delta = parsed });
+        }
+        else if (structuredEnvelope == null && rawText.Length > 0)
+        {
+            var plainText = rawText.ToString();
+            visibleText.Append(plainText);
+            await emit(new EssAssistantStreamEvent { Type = "delta", Delta = plainText });
+        }
+
+        return new StreamedAnswer(string.Empty, visibleText.ToString(), inputTokens, outputTokens, cachedInputTokens, reasoningTokens);
     }
 
     private async Task<HttpResponseMessage> SendOpenAiAsync(
@@ -894,6 +920,7 @@ public sealed class EssAssistantService
             - Ask a clarifying question only when a genuinely required fact is missing and cannot be inferred from the conversation or available tools. Do not ask the user to choose answer length, forecast range, or another presentational preference; choose the simplest sensible default.
             - Clearly label inferences and uncertainty. A missing result means not found in the searched source, not proven nonexistent.
             - Never expose private or redacted fields, raw storage paths, tokens, source IDs, JSON, or implementation details.
+            - The visible reply must contain only the user-facing answer. Never print a JSON response envelope or fields such as reply, grounded, sourceIds, or followUps.
             - Never describe internal tools, tool limitations, search mechanics, row limits, or implementation details to the user. Give the business answer directly.
             - Do not claim an action was performed unless a returned tool link confirms it.
             - Design records are hierarchical. A site/location in the user's request is a hard constraint: never mix in results from another site.
@@ -911,7 +938,7 @@ public sealed class EssAssistantService
             - Use dd/MM/yyyy dates and a short dash for missing values.
             - For one latest-design result, respond in one or two natural sentences: scaffold name, upload date, then the view link below. Do not include a heading, folder path, revision, design status, filename, or uncertainty boilerplate unless the user asks or the result is genuinely ambiguous.
             - Convert all-caps folder labels to normal readable title case while preserving their wording.
-            - For a simple people list, give a brief lead-in followed by names. Do not explain search mechanics, speculate about alternate roles, or offer a menu of follow-up searches unless asked.
+            - For a simple people list, give a brief lead-in followed by names. For more than 12 people, use a compact three-column Markdown table containing names only. Do not explain search mechanics, speculate about alternate roles, or offer a menu of follow-up searches unless asked.
             - For a simple headcount question, answer in one short sentence with the count. Do not mention app-only users, exclusions, caveats, or category choices unless the user asks.
             - For handover certificate lists, show only each scaffold/document name. Do not show handover numbers, dates, requesters, ESS representatives, headings, or field labels unless the user explicitly asks for those details.
             - After opening a selected handover, reply only "Here it is." The verified link below must use the exact handover name as its label.
@@ -1075,15 +1102,47 @@ public sealed class EssAssistantService
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
         if (string.IsNullOrWhiteSpace(text))
             return new EssAssistantModelAnswer { Reply = "I could not produce a complete answer from the available ESS records." };
+        return ParseAnswerText(text, preserveRawOnFailure: true);
+    }
+
+    private static EssAssistantModelAnswer ParseAnswerText(string text, bool preserveRawOnFailure)
+    {
+        var candidate = text.Trim();
+        if (candidate.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLineEnd = candidate.IndexOf('\n');
+            if (firstLineEnd >= 0)
+                candidate = candidate[(firstLineEnd + 1)..];
+            if (candidate.EndsWith("```", StringComparison.Ordinal))
+                candidate = candidate[..^3].TrimEnd();
+        }
         try
         {
-            return JsonSerializer.Deserialize<EssAssistantModelAnswer>(text, JsonOptions)
-                ?? new EssAssistantModelAnswer { Reply = text };
+            return JsonSerializer.Deserialize<EssAssistantModelAnswer>(candidate, JsonOptions)
+                ?? new EssAssistantModelAnswer { Reply = preserveRawOnFailure ? text : string.Empty };
         }
         catch (JsonException)
         {
-            return new EssAssistantModelAnswer { Reply = text };
+            return new EssAssistantModelAnswer { Reply = preserveRawOnFailure ? text : string.Empty };
         }
+    }
+
+    private static bool? DetectAnswerEnvelope(string text)
+    {
+        var candidate = text.TrimStart();
+        if (candidate.Length == 0)
+            return null;
+        if (candidate[0] == '{')
+            return true;
+        if (candidate[0] != '`')
+            return false;
+
+        const string jsonFence = "```json";
+        if (candidate.StartsWith(jsonFence, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (jsonFence.StartsWith(candidate, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return false;
     }
 
     private static string? GetString(JsonElement element, string property) =>
