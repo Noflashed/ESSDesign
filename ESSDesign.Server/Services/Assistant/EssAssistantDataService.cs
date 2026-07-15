@@ -601,7 +601,8 @@ public sealed class EssAssistantDataService
             .Take(Math.Clamp(limit, 1, 60))
             .ToList();
 
-        var includeFormDetails = normalizedKind != "handover-certificates";
+        var isProjectDocumentList = !string.IsNullOrWhiteSpace(normalizedKind);
+        var includeFormDetails = !isProjectDocumentList;
         foreach (var record in matches.Where(record => includeFormDetails && !string.IsNullOrWhiteSpace(record.FormPath)).Take(12))
         {
             using var details = await _gateway.ReadStorageJsonAsync(ProjectBucket, record.FormPath!, cancellationToken);
@@ -612,7 +613,7 @@ public sealed class EssAssistantDataService
             }
         }
 
-        var links = normalizedKind == "handover-certificates"
+        var links = isProjectDocumentList
             ? await BuildProjectDataLinksAsync(matches, cancellationToken)
             : new List<EssAssistantLink>();
 
@@ -623,8 +624,8 @@ public sealed class EssAssistantDataService
                 query,
                 kind = normalizedKind,
                 count = matches.Count,
-                presentationNote = normalizedKind == "handover-certificates"
-                    ? "For handover lists, show only each document name and say the links below open the handovers. Do not show document numbers, dates, requester names, representative names, related designs, signatures, photos, or other fields unless explicitly requested. Do not ask whether to open them."
+                presentationNote = isProjectDocumentList
+                    ? "For project document lists, show only each document name and say the links below open them. Do not show document numbers, dates, requester names, representative names, related designs, signatures, photos, itemised details, or other fields unless explicitly requested. Do not ask whether to open them and do not call open_ess_record for these same documents."
                     : null,
                 documents = matches.Select(record => new
                 {
