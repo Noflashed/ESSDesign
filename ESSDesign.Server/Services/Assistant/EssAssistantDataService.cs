@@ -108,10 +108,12 @@ public sealed class EssAssistantDataService
             return person == null ? null : new { person.FullName, Role = RoleLabel(person.Role), person.LeadingHand };
         }
 
+        var managementQuery = IsSiteManagementQuery(query);
+        var effectiveQuery = managementQuery ? null : query;
         var matches = sites
             .Where(site => includeArchived || !site.Archived)
-            .Select(site => new { Site = site, Score = Score(query, site.Name, site.BuilderName, site.SiteLocation, site.ScaffoldEntity, string.Join(' ', site.DrawingNumbers)) })
-            .Where(item => string.IsNullOrWhiteSpace(query) || item.Score > 0)
+            .Select(site => new { Site = site, Score = Score(effectiveQuery, site.Name, site.BuilderName, site.SiteLocation, site.ScaffoldEntity, string.Join(' ', site.DrawingNumbers)) })
+            .Where(item => string.IsNullOrWhiteSpace(effectiveQuery) || item.Score > 0)
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Site.Archived)
             .ThenBy(item => item.Site.BuilderName)
@@ -148,7 +150,15 @@ public sealed class EssAssistantDataService
 
         return new EssAssistantToolResult
         {
-            Data = new { query, count = records.Count, sites = records },
+            Data = new
+            {
+                query,
+                count = records.Count,
+                presentationNote = managementQuery
+                    ? "For active job-site management questions, list each active job/site with its project manager. Do not summarise by manager unless the user asks for a summary. Use '-' when no project manager is assigned."
+                    : null,
+                sites = records,
+            },
             Sources = matches.Select(item => Source(
                 item.Site.SourceId,
                 "site_registry",
@@ -651,6 +661,13 @@ public sealed class EssAssistantDataService
                 $"{record.BuilderName} - {record.ProjectName} - {record.Kind}",
                 record.UpdatedAt)).ToList(),
         };
+    }
+
+    private static bool IsSiteManagementQuery(string? query)
+    {
+        var value = Normalize(query);
+        return ContainsAny(value, "manage", "manages", "managed", "manager", "project manager", "who manages") &&
+            ContainsAny(value, "site", "sites", "job", "jobs", "job-site", "job-sites", "job site", "job sites", "project", "projects");
     }
 
     private async Task<List<EssAssistantLink>> BuildProjectDataLinksAsync(
