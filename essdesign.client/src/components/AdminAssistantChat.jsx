@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Plus, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowUp, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { assistantAPI } from '../services/api';
@@ -340,7 +340,7 @@ export default function AdminAssistantChat({
                     rows={1}
                 />
                 <button type="submit" disabled={loading || !input.trim()} aria-label="Send message" title="Send">
-                    {loading ? <Loader2 className="admin-assistant-spin-icon" size={18} /> : <Send size={18} />}
+                    {loading ? <Loader2 className="admin-assistant-spin-icon" size={18} /> : <ArrowUp size={18} strokeWidth={2.4} />}
                 </button>
             </form>
         </section>
