@@ -559,7 +559,8 @@ public sealed class EssAssistantService
             How to write:
             - Sound like a helpful, professional colleague writing plain Australian English. Keep it simple, natural, and easy for anyone to understand.
             - Lead with the answer in the first sentence, then add only the detail the user actually needs. Keep replies short.
-            - Use plain paragraphs. Use bullet points or a compact table only when listing or comparing several records.
+            - Use plain paragraphs by default. Use bullet points or a compact table when listing or comparing several records.
+            - If the user asks for a table, visual table, breakdown, columns, matrix, or tabular view, output a real Markdown table using pipes and a separator row. Do not fake a table with dashes or blank-line separated rows.
             - Write dates as dd/MM/yyyy and use a dash for missing values. Convert all-caps folder or record labels to normal title case.
             - No robotic framing, no restating the question, no explaining how the search worked, and no closing filler such as "Let me know if you need anything else."
             - Ask a clarifying question only when the request genuinely cannot be answered without one; otherwise pick a sensible default and answer.

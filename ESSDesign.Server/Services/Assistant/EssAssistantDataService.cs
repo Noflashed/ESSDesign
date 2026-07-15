@@ -155,7 +155,7 @@ public sealed class EssAssistantDataService
                 query,
                 count = records.Count,
                 presentationNote = managementQuery
-                    ? "For active job-site management questions, list each active job/site with its project manager. Do not summarise by manager unless the user asks for a summary. Use '-' when no project manager is assigned."
+                    ? "For active job-site management questions, list each active job/site with its project manager. If the user asks for a table, output a real Markdown table with pipes and a separator row. Do not summarise by manager unless the user asks for a summary. Use '-' when no project manager is assigned."
                     : null,
                 sites = records,
             },
