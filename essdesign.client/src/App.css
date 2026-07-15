@@ -9927,20 +9927,23 @@ button.stat-card {
 }
 
 .site-registry-info-modal {
-    width: min(1080px, calc(100vw - 36px));
-    max-height: min(760px, calc(100vh - 42px));
+    width: min(1420px, calc(100vw - 48px));
+    height: min(880px, calc(100vh - 48px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
     padding: 0;
+    border-radius: 10px;
+    background: #f6f9fd;
 }
 
 .site-registry-info-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 18px;
-    padding: 18px 22px 16px;
+    gap: 24px;
+    min-height: 96px;
+    padding: 22px 28px;
     border-bottom: 1px solid #dbe5f4;
     background: #ffffff;
 }
@@ -9956,7 +9959,7 @@ button.stat-card {
 .site-registry-info-header h3 {
     margin: 0;
     color: #0f172a;
-    font-size: 20px;
+    font-size: 28px;
     line-height: 1.2;
     font-weight: 800;
     letter-spacing: 0;
@@ -9970,12 +9973,212 @@ button.stat-card {
     font-weight: 500;
 }
 
-.site-registry-detail-modal-panel {
+.site-registry-info-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.site-registry-info-body {
     min-height: 0;
     overflow: auto;
-    padding: 18px 22px 22px;
-    border-top: 0;
-    background: #f8fbff;
+    padding: 24px 28px 28px;
+}
+
+.site-registry-info-overview {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 0.7fr)) minmax(260px, 1.4fr);
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.site-registry-info-stat {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    padding: 15px 16px;
+    border: 1px solid #dbe5f4;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.site-registry-info-stat span,
+.site-registry-meta-list span,
+.site-registry-team-card span {
+    color: #52637d;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.site-registry-info-stat strong {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 17px;
+    font-weight: 780;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-info-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.42fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.site-registry-info-main,
+.site-registry-info-aside {
+    min-width: 0;
+    display: grid;
+    gap: 18px;
+}
+
+.site-registry-info-section,
+.site-registry-info-map-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #dbe5f4;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.site-registry-info-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 64px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e5edf8;
+}
+
+.site-registry-info-section-head h4 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 800;
+}
+
+.site-registry-info-section-head span {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 550;
+}
+
+.site-registry-team-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 18px;
+}
+
+.site-registry-team-card {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    padding: 15px;
+    border: 1px solid #e3ebf6;
+    border-radius: 8px;
+    background: #f9fbff;
+}
+
+.site-registry-team-card strong,
+.site-registry-meta-list strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 760;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+}
+
+.site-registry-team-card small {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: #52637d;
+    font-size: 12px;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-workers-table {
+    max-height: 350px;
+    overflow: auto;
+}
+
+.site-registry-worker-row {
+    min-height: 56px;
+    display: grid;
+    grid-template-columns: 36px minmax(220px, 1fr) minmax(120px, 0.35fr) minmax(100px, 0.28fr) 86px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid #e8eef8;
+    background: #ffffff;
+}
+
+.site-registry-worker-row:last-child {
+    border-bottom: 0;
+}
+
+.site-registry-worker-main {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.site-registry-worker-main strong {
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-worker-main span {
+    overflow: hidden;
+    color: #52637d;
+    font-size: 12px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-info-map-card iframe,
+.site-registry-info-map-card .site-registry-map-placeholder.compact {
+    width: calc(100% - 36px);
+    height: 320px;
+    margin: 18px;
+    border: 1px solid #dbe5f4;
+    border-radius: 8px;
+    background: #f4f7fb;
+}
+
+.site-registry-meta-list {
+    display: grid;
+    gap: 0;
+}
+
+.site-registry-meta-list > div {
+    display: grid;
+    gap: 5px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e8eef8;
+}
+
+.site-registry-meta-list > div:last-child {
+    border-bottom: 0;
 }
 
 .site-registry-inducted-panel,
@@ -10904,24 +11107,41 @@ button.stat-card {
 
     .site-registry-info-modal {
         width: calc(100vw - 24px);
-        max-height: calc(100vh - 28px);
+        height: calc(100vh - 28px);
     }
 
-    .site-registry-detail-modal-panel {
-        grid-template-columns: 1fr;
+    .site-registry-info-header {
+        align-items: stretch;
+        flex-direction: column;
+        min-height: auto;
+        padding: 18px;
+    }
+
+    .site-registry-info-header-actions {
+        justify-content: space-between;
+    }
+
+    .site-registry-info-body {
         padding: 16px;
     }
 
-    .site-registry-detail-heading {
+    .site-registry-info-overview,
+    .site-registry-info-layout,
+    .site-registry-team-grid {
         grid-template-columns: 1fr;
+    }
+
+    .site-registry-info-section-head {
         align-items: stretch;
+        flex-direction: column;
     }
 
-    .site-registry-site-panel {
-        grid-template-rows: 180px minmax(0, 1fr);
+    .site-registry-info-map-card iframe,
+    .site-registry-info-map-card .site-registry-map-placeholder.compact {
+        height: 260px;
     }
 
-    .site-registry-employee-row {
+    .site-registry-worker-row {
         grid-template-columns: 32px minmax(150px, 1fr);
     }
 
