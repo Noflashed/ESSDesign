@@ -7097,10 +7097,6 @@ button.stat-card {
 }
 
 .web-landing-page {
-    --landing-photo-x: 0px;
-    --landing-photo-y: 0px;
-    --landing-content-x: 0px;
-    --landing-content-y: 0px;
     position: relative;
     min-height: calc(100vh - 62px);
     overflow: hidden;
@@ -7125,9 +7121,6 @@ button.stat-card {
     z-index: 0;
     inset: -18px;
     overflow: hidden;
-    transform: translate3d(var(--landing-photo-x), var(--landing-photo-y), 0);
-    transition: transform 180ms ease-out;
-    will-change: transform;
 }
 
 .web-landing-photo-frame {
@@ -7195,9 +7188,6 @@ button.stat-card {
     width: min(920px, calc(100vw - 48px));
     min-height: 100%;
     padding: 44px 0;
-    transform: translate3d(var(--landing-content-x), var(--landing-content-y), 0);
-    transition: transform 180ms ease-out;
-    will-change: transform;
 }
 
 .web-landing-logo-pair {

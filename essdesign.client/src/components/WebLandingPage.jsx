@@ -93,69 +93,10 @@ async function preloadPhoto(photo) {
     return photo.displayUrl !== photo.mediaUrl ? loadImageUrl(photo.mediaUrl) : false;
 }
 
-function useLandingParallax(pageRef, enabled) {
-    useEffect(() => {
-        const page = pageRef.current;
-        const finePointer = window.matchMedia('(pointer: fine)');
-        if (!page || !enabled || !finePointer.matches) return undefined;
-
-        let pointerFrame = 0;
-        let latestPointer = null;
-
-        const applyPointerPosition = () => {
-            pointerFrame = 0;
-            if (!latestPointer) return;
-            page.style.setProperty('--landing-photo-x', `${latestPointer.normalX * -10}px`);
-            page.style.setProperty('--landing-photo-y', `${latestPointer.normalY * -8}px`);
-            page.style.setProperty('--landing-content-x', `${latestPointer.normalX * 4}px`);
-            page.style.setProperty('--landing-content-y', `${latestPointer.normalY * 3}px`);
-        };
-
-        const handlePointerMove = event => {
-            if (event.pointerType && event.pointerType !== 'mouse') return;
-            const rect = page.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
-
-            latestPointer = {
-                normalX: (x / rect.width) * 2 - 1,
-                normalY: (y / rect.height) * 2 - 1
-            };
-            if (!pointerFrame) pointerFrame = window.requestAnimationFrame(applyPointerPosition);
-        };
-
-        const resetPointer = () => {
-            latestPointer = null;
-            page.style.setProperty('--landing-photo-x', '0px');
-            page.style.setProperty('--landing-photo-y', '0px');
-            page.style.setProperty('--landing-content-x', '0px');
-            page.style.setProperty('--landing-content-y', '0px');
-        };
-
-        const handleVisibility = () => {
-            if (document.hidden) resetPointer();
-        };
-
-        page.addEventListener('pointermove', handlePointerMove, { passive: true });
-        page.addEventListener('pointerleave', resetPointer);
-        document.addEventListener('visibilitychange', handleVisibility);
-
-        return () => {
-            page.removeEventListener('pointermove', handlePointerMove);
-            page.removeEventListener('pointerleave', resetPointer);
-            document.removeEventListener('visibilitychange', handleVisibility);
-            if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
-            resetPointer();
-        };
-    }, [enabled, pageRef]);
-}
-
 export default function WebLandingPage() {
     const initialCacheRef = useRef(null);
     if (!initialCacheRef.current) initialCacheRef.current = readCachedLandingPhotos();
 
-    const pageRef = useRef(null);
     const transitionTimerRef = useRef(null);
     const transitioningRef = useRef(false);
     const mountedRef = useRef(true);
@@ -176,8 +117,6 @@ export default function WebLandingPage() {
     })), [imageDimensions, photos]);
     const activePhoto = displayPhotos[activeIndex] || displayPhotos[0] || null;
     const canAnimate = pageVisible && !reduceMotion && !saveData && displayPhotos.length > 1;
-
-    useLandingParallax(pageRef, !reduceMotion && !saveData);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -278,7 +217,7 @@ export default function WebLandingPage() {
     };
 
     return (
-        <section ref={pageRef} className={`web-landing-page${activePhoto ? ' has-photo' : ''}`}>
+        <section className={`web-landing-page${activePhoto ? ' has-photo' : ''}`}>
             <div className="web-landing-photo-stage" aria-hidden="true">
                 {previousPhoto ? (
                     <div className="web-landing-photo-frame is-previous">
