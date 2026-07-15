@@ -25,7 +25,7 @@ import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
-import { Sparkles } from 'lucide-react';
+import { ClipboardList, Sparkles } from 'lucide-react';
 import './App.css';
 
 const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
@@ -179,6 +179,7 @@ const NewsNavIcon = ({ size = 18 }) => (
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
     'design': DesignNavIcon,
+    'drawing-register': ClipboardList,
     'site-information': MapNavIcon,
     'safety': ShieldNavIcon,
     'material-ordering': BoxNavIcon,
@@ -206,7 +207,7 @@ const DESIGN_NAV_ITEM = {
 };
 
 function isPageActive(itemKey, currentPage) {
-    if (itemKey === 'design') return currentPage === 'design' || currentPage === 'drawing-register';
+    if (itemKey === 'design') return currentPage === 'design';
     if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
@@ -262,12 +263,8 @@ function NavSidebar({
     onInviteUser,
     onLogout,
 }) {
-    const [expandedKeys, setExpandedKeys] = useState(() => ({ 'material-ordering': false }));
+    const [expandedKeys, setExpandedKeys] = useState({});
     const [navSearchQuery, setNavSearchQuery] = useState('');
-
-    const toggleGroup = (key) => {
-        setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
-    };
 
     const visibleNavItems = useMemo(() => {
         const query = navSearchQuery.trim().toLowerCase();
@@ -334,30 +331,27 @@ function NavSidebar({
                 {visibleNavItems.map(item => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                     const hasActiveChild = hasChildren && item.children.some((child) => child.key === currentPage);
-                    const expanded = navSearchQuery.trim() ? true : (expandedKeys[item.key] ?? hasActiveChild);
+                    const expanded = navSearchQuery.trim()
+                        ? true
+                        : (expandedKeys[item.key] ?? (hasActiveChild || currentPage === item.key));
                     const submenuId = `app-nav-sidebar-submenu-${item.key}`;
                     return (
                         <div key={item.key} className={`app-nav-sidebar-group${isPageActive(item.key, currentPage) ? ' active' : ''}`}>
                             <button
                                 className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
-                                onClick={() => onNavigate(item.key)}
+                                onClick={() => {
+                                    if (hasChildren) {
+                                        setExpandedKeys((prev) => ({ ...prev, [item.key]: true }));
+                                    }
+                                    onNavigate(item.key);
+                                }}
                                 title={!open ? item.label : undefined}
+                                aria-expanded={hasChildren ? expanded : undefined}
+                                aria-controls={hasChildren ? submenuId : undefined}
                             >
                                 <span className="app-nav-sidebar-icon"><NavPageIcon pageKey={item.key} size={18} /></span>
                                 {open && <span className="app-nav-sidebar-label">{item.label}</span>}
                             </button>
-                            {open && hasChildren ? (
-                                <button
-                                    type="button"
-                                    className={`app-nav-sidebar-subtoggle${expanded ? ' open' : ''}`}
-                                    onClick={() => toggleGroup(item.key)}
-                                    aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
-                                    aria-expanded={expanded}
-                                    aria-controls={submenuId}
-                                >
-                                    <span className={`app-nav-sidebar-caret${expanded ? ' open' : ''}`}>▾</span>
-                                </button>
-                            ) : null}
                             {open && hasChildren && expanded ? (
                                 <div id={submenuId} className="app-nav-sidebar-submenu">
                                     {item.children.map((child) => (
@@ -366,7 +360,7 @@ function NavSidebar({
                                             className={`app-nav-sidebar-subitem${currentPage === child.key ? ' active' : ''}`}
                                             onClick={() => onNavigate(child.key)}
                                         >
-                                            <span className="app-nav-sidebar-subdot" />
+                                            <span className="app-nav-sidebar-subicon"><NavPageIcon pageKey={child.key} size={15} /></span>
                                             <span>{child.label}</span>
                                         </button>
                                     ))}

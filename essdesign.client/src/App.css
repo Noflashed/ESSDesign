@@ -5240,52 +5240,6 @@ body {
     gap: 3px;
 }
 
-.app-nav-sidebar-group > .app-nav-sidebar-item {
-    grid-column: 1 / -1;
-    padding-right: 42px;
-}
-
-.app-nav-sidebar-subtoggle {
-    position: absolute;
-    top: 6px;
-    right: 7px;
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 5px;
-    background: transparent;
-    color: #111827;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-}
-
-.app-nav-sidebar-subtoggle:hover {
-    background: #e9ebee;
-    color: #111827;
-}
-
-.app-nav-sidebar-group.active .app-nav-sidebar-subtoggle {
-    color: #111827;
-}
-
-.app-nav-sidebar-group.active .app-nav-sidebar-subtoggle:hover {
-    background: #e2e5e9;
-    color: #111827;
-}
-
-.app-nav-sidebar-caret {
-    margin-left: auto;
-    font-size: 11px;
-    color: currentColor;
-    transition: transform 0.15s ease;
-}
-
-.app-nav-sidebar-caret.open {
-    transform: rotate(180deg);
-}
-
 .app-nav-sidebar-submenu {
     display: grid;
     gap: 3px;
@@ -5320,11 +5274,12 @@ body {
     color: #111827;
 }
 
-.app-nav-sidebar-subdot {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: currentColor;
+.app-nav-sidebar-subicon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
     flex-shrink: 0;
 }
 
