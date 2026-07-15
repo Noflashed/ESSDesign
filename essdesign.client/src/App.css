@@ -8668,9 +8668,9 @@ button.stat-card {
 .ess-ai-page .ess-ai-workspace .ess-ai-chat .admin-assistant-message.user {
     max-width: min(620px, calc(100% - 42px));
     padding: 10px 16px;
-    border: 0;
+    border: 1px solid var(--ess-ai-border);
     border-radius: 18px;
-    background: var(--ess-ai-composer);
+    background: var(--ess-ai-surface);
     color: var(--ess-ai-text);
 }
 
