@@ -7135,6 +7135,10 @@ button.stat-card {
     animation: web-landing-photo-fade-in 1400ms ease both;
 }
 
+.web-landing-photo-frame.is-active img {
+    animation: web-landing-photo-slow-zoom 16s ease-out both;
+}
+
 .web-landing-photo-frame.is-previous {
     z-index: 0;
     opacity: 0;
@@ -7223,6 +7227,15 @@ button.stat-card {
 @keyframes web-landing-photo-fade-out {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+@keyframes web-landing-photo-slow-zoom {
+    from {
+        transform: scale(1.04);
+    }
+    to {
+        transform: scale(1.1);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
