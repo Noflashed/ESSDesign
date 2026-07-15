@@ -54,7 +54,7 @@ public sealed class EssAssistantToolCatalog
                 query = NullableStringSchema("Drawing number, client, project, design type, status, or revision. Null lists the latest drawing numbers."),
                 limit = IntegerSchema("Maximum results, from 1 to 200."),
             }, "query", "limit"),
-            Function("search_project_data", "Search project-level SWMS, design documents, scaffold tags, handover certificates, and day-labour variations across site storage.", new
+            Function("search_project_data", "Search project-level SWMS, design documents, scaffold tags, handover certificates, and day-labour variations across site storage. Present handover result lists using document names only.", new
             {
                 query = NullableStringSchema("Builder, project, document name, form reference, or drawing number. Null searches recent active sites."),
                 kind = NullableStringSchema("Optional kind: swms, design-document, scaff-tags, handover-certificates, or day-labour-variations."),
@@ -86,7 +86,8 @@ public sealed class EssAssistantToolCatalog
                 record_type = StringSchema("design, project_data, or material_order."),
                 record_id = StringSchema("Exact document or record ID returned by an ESS search tool."),
                 file_type = NullableStringSchema("For designs, use ess or third_party. Otherwise null."),
-            }, "record_type", "record_id", "file_type"),
+                display_label = NullableStringSchema("For project_data, use the exact document name returned by the search tool. Otherwise null."),
+            }, "record_type", "record_id", "file_type", "display_label"),
         };
 
         if (access.CanSeeTransportOperations)
@@ -132,7 +133,7 @@ public sealed class EssAssistantToolCatalog
             "get_notifications" => _data.GetNotificationsAsync(GetString(args, "person"), GetInt(args, "limit", 30), access, cancellationToken),
             "get_weather" => _data.GetCurrentWeatherAsync(GetString(args, "location") ?? string.Empty, cancellationToken),
             "get_ess_overview" => _data.GetOverviewAsync(cancellationToken),
-            "open_ess_record" => _data.OpenRecordAsync(GetString(args, "record_type") ?? string.Empty, GetString(args, "record_id") ?? string.Empty, GetString(args, "file_type"), cancellationToken),
+            "open_ess_record" => _data.OpenRecordAsync(GetString(args, "record_type") ?? string.Empty, GetString(args, "record_id") ?? string.Empty, GetString(args, "file_type"), GetString(args, "display_label"), cancellationToken),
             _ => Task.FromResult(new EssAssistantToolResult { Data = new { error = $"Unknown ESS assistant tool: {name}" } }),
         };
     }

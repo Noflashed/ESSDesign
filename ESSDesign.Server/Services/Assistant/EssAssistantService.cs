@@ -16,6 +16,9 @@ public sealed class EssAssistantService
     private static readonly Regex ThanksPattern = new(
         @"^(thanks|thank\s+you|cheers|great|perfect|awesome)[.! ]*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex NumberedResultPattern = new(
+        @"(?:\b(?:link|item|number|option|record)\b[^\d]{0,24}|^\s*#?)(?<ordinal>\d{1,3})\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
@@ -215,6 +218,39 @@ public sealed class EssAssistantService
                                 record_type = "design",
                                 record_id = latestDesignId,
                                 file_type = "ess",
+                                display_label = (string?)null,
+                            }, JsonOptions);
+                            var automaticCall = new FunctionCall(
+                                Guid.NewGuid().ToString("N"),
+                                "open_ess_record",
+                                arguments);
+                            input.Add(new
+                            {
+                                type = "function_call",
+                                call_id = automaticCall.CallId,
+                                name = automaticCall.Name,
+                                arguments = automaticCall.Arguments,
+                            });
+                            await ExecuteToolsAsync(
+                                new[] { automaticCall },
+                                input,
+                                access,
+                                collectedSources,
+                                collectedLinks,
+                                metrics,
+                                EmitAsync,
+                                cancellationToken);
+                        }
+
+                        if (route.SelectedResultOrdinal is int selectedOrdinal && collectedLinks.Count == 0 &&
+                            TryGetProjectDataRecord(executedTools, selectedOrdinal, out var projectRecordId, out var projectRecordName))
+                        {
+                            var arguments = JsonSerializer.Serialize(new
+                            {
+                                record_type = "project_data",
+                                record_id = projectRecordId,
+                                file_type = (string?)null,
+                                display_label = projectRecordName,
                             }, JsonOptions);
                             var automaticCall = new FunctionCall(
                                 Guid.NewGuid().ToString("N"),
@@ -428,6 +464,45 @@ public sealed class EssAssistantService
         }
 
         documentId = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetProjectDataRecord(
+        IEnumerable<ExecutedTool> executedTools,
+        int selectedOrdinal,
+        out string recordId,
+        out string recordName)
+    {
+        if (selectedOrdinal < 1)
+        {
+            recordId = string.Empty;
+            recordName = string.Empty;
+            return false;
+        }
+
+        foreach (var executed in executedTools.Where(item => item.Call.Name == "search_project_data"))
+        {
+            var data = JsonSerializer.SerializeToElement(executed.Result.Data, JsonOptions);
+            if (!data.TryGetProperty("documents", out var documents) || documents.ValueKind != JsonValueKind.Array)
+                continue;
+
+            var records = documents.EnumerateArray().ToList();
+            if (selectedOrdinal > records.Count)
+                continue;
+
+            var selected = records[selectedOrdinal - 1];
+            var candidateId = GetString(selected, "recordId");
+            var candidateName = GetString(selected, "name");
+            if (string.IsNullOrWhiteSpace(candidateId) || string.IsNullOrWhiteSpace(candidateName))
+                continue;
+
+            recordId = candidateId;
+            recordName = candidateName;
+            return true;
+        }
+
+        recordId = string.Empty;
+        recordName = string.Empty;
         return false;
     }
 
@@ -779,6 +854,7 @@ public sealed class EssAssistantService
                 : _configuration["OpenAI:AssistantFastReasoningEffort"] ?? "minimal",
             status,
             cacheKey,
+            ExtractSelectedResultOrdinal(trimmed),
             null);
     }
 
@@ -808,6 +884,8 @@ public sealed class EssAssistantService
             - Treat a request for the latest or most recent design as a request to open it. After a successful open tool call, say that the link below opens the design.
             - When asked what changed, what was revised, or for revision notes, inspect the matching design record and indexed document content automatically. Report the recorded change directly; do not ask permission to open the PDF.
             - For weather, use the live weather tool. Once a suburb, state, postcode, or address is available, return current conditions immediately. Do not ask the user to choose a forecast period or reconfirm an Australian location that already includes a state or postcode. If no location exists anywhere in the conversation, ask only for the suburb or postcode.
+            - A numbered follow-up such as "link to 1" selects that one-based item from the prior ordered result. Search the same domain again if necessary, then open the exact record immediately.
+            - Never invent or imitate a link with Markdown text. Only an open tool result creates a link; the interface renders that verified link separately.
 
             Answer style:
             - Use restrained Markdown with short paragraphs.
@@ -816,6 +894,8 @@ public sealed class EssAssistantService
             - For one latest-design result, respond in one or two natural sentences: scaffold name, upload date, then the view link below. Do not include a heading, folder path, revision, design status, filename, or uncertainty boilerplate unless the user asks or the result is genuinely ambiguous.
             - Convert all-caps folder labels to normal readable title case while preserving their wording.
             - For a simple people list, give a brief lead-in followed by names. Do not explain search mechanics, speculate about alternate roles, or offer a menu of follow-up searches unless asked.
+            - For handover certificate lists, show only each scaffold/document name. Do not show handover numbers, dates, requesters, ESS representatives, headings, or field labels unless the user explicitly asks for those details.
+            - After opening a selected handover, reply only "Here it is." The verified link below must use the exact handover name as its label.
             - Avoid robotic framing and do not end with an invitation to ask another question.
             - For a casual or general question, answer directly without pretending to search ESS.
 
@@ -880,10 +960,10 @@ public sealed class EssAssistantService
             .ToList();
         var followsWeatherRequest = normalized.Length <= 100 && recentUserMessages.Any(item =>
             ContainsAny(item, "weather", "temperature", "forecast", "rain today", "conditions outside"));
-        var refersToEarlierResult = followsWeatherRequest || normalized.Length <= 160 && ContainsAny(normalized,
+        var refersToEarlierResult = followsWeatherRequest || NumberedResultPattern.IsMatch(normalized) || normalized.Length <= 160 && ContainsAny(normalized,
             " it", "it ", "that", "this", " one", "one ", "the design", "the file", "the drawing", "for it",
             "what changed", "what was changed", "what were the changes", "revision note", "revision notes", "issue note",
-            "tell me more", "more detail", "read it", "check it", "open it", "just now", "right now",
+            "tell me more", "more detail", "read it", "check it", "open it", "link to", "link for", "just now", "right now",
             "yes", "yep", "yeah", "correct", "please do");
         if (!refersToEarlierResult)
             return message;
@@ -891,6 +971,14 @@ public sealed class EssAssistantService
         return recentUserMessages.Count == 0
             ? message
             : $"{string.Join("\n", recentUserMessages)}\nFollow-up: {message}";
+    }
+
+    private static int? ExtractSelectedResultOrdinal(string message)
+    {
+        var match = NumberedResultPattern.Match(message);
+        return match.Success && int.TryParse(match.Groups["ordinal"].Value, out var ordinal) && ordinal > 0
+            ? ordinal
+            : null;
     }
 
     private static string FirstName(string name) =>
@@ -1015,6 +1103,7 @@ public sealed class EssAssistantService
         string ReasoningEffort,
         string Status,
         string CacheKey,
+        int? SelectedResultOrdinal,
         string? LocalReply)
     {
         public static AssistantRoute Local(string name, string reply) => new(
@@ -1028,6 +1117,7 @@ public sealed class EssAssistantService
             "minimal",
             "Thinking...",
             name,
+            null,
             reply);
     }
 

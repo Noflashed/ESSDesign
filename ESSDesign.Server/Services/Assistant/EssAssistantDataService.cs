@@ -569,6 +569,9 @@ public sealed class EssAssistantDataService
                 query,
                 kind = normalizedKind,
                 count = matches.Count,
+                presentationNote = normalizedKind == "handover-certificates"
+                    ? "For handover lists, show only each document name. Do not show document numbers, dates, requester names, representative names, or other fields unless explicitly requested."
+                    : null,
                 documents = matches.Select(record => new
                 {
                     sourceId = record.SourceId,
@@ -964,6 +967,7 @@ public sealed class EssAssistantDataService
         string recordType,
         string recordId,
         string? fileType,
+        string? displayLabel,
         CancellationToken cancellationToken)
     {
         var normalizedType = Normalize(recordType);
@@ -1003,7 +1007,7 @@ public sealed class EssAssistantDataService
             storagePath = Uri.UnescapeDataString(recordId);
             if (!IsAllowedProjectDataPath(storagePath))
                 return Error("The Project data record does not contain a valid PDF path.");
-            label = Path.GetFileName(storagePath);
+            label = string.IsNullOrWhiteSpace(displayLabel) ? Path.GetFileName(storagePath) : displayLabel.Trim();
         }
         else if (normalizedType == "material order")
         {
