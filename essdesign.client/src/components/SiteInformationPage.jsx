@@ -105,6 +105,23 @@ function selectedDesignFolderPayload(folderId, folders) {
     };
 }
 
+function selectedProjectDesignFolderPayload(folderId, folders, fallbackPath = '') {
+    if (!folderId) {
+        return { designFolderId: '', designFolderPath: '' };
+    }
+    const folder = folders.find(item => item.id === folderId && Number(item.depth || 0) >= 2);
+    if (!folder && !folders.length) {
+        return {
+            designFolderId: folderId,
+            designFolderPath: fallbackPath
+        };
+    }
+    return {
+        designFolderId: folder?.id || '',
+        designFolderPath: folder ? designFolderLabel(folder) : ''
+    };
+}
+
 function employeeName(employee) {
     if (typeof employee === 'string') {
         return employee.trim() || 'Unnamed employee';
@@ -505,7 +522,7 @@ export default function SiteInformationPage() {
                     project.name,
                     project.builder.name,
                     project.siteLocation || 'Not set',
-                    project.designFolderPath || project.builder.designFolderPath || '',
+                    project.designFolderPath || '',
                     normalizeScaffoldEntity(project.scaffoldEntity),
                     project.archived ? 'Archived' : 'Active',
                 ].join(' ').toLowerCase().includes(cleanSearchQuery);
@@ -783,6 +800,7 @@ export default function SiteInformationPage() {
                     const employee = employeeById.get(employeeId);
                     return employee && isInductableWorker(employee);
                 });
+            const projectDesignFolder = selectedProjectDesignFolderPayload(projectForm.designFolderId, designFolders, projectForm.designFolderPath);
             let nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
@@ -791,8 +809,8 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
-                    designFolderId: projectForm.designFolderId,
-                    designFolderPath: projectForm.designFolderPath,
+                    designFolderId: projectDesignFolder.designFolderId,
+                    designFolderPath: projectDesignFolder.designFolderPath,
                     scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 })
@@ -803,8 +821,8 @@ export default function SiteInformationPage() {
                     projectManagerEmployeeId: projectForm.projectManagerEmployeeId,
                     siteSupervisorEmployeeId: projectForm.siteSupervisorEmployeeId,
                     leadingHandEmployeeId: projectForm.leadingHandEmployeeId,
-                    designFolderId: projectForm.designFolderId,
-                    designFolderPath: projectForm.designFolderPath,
+                    designFolderId: projectDesignFolder.designFolderId,
+                    designFolderPath: projectDesignFolder.designFolderPath,
                     scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 });
@@ -1338,8 +1356,8 @@ export default function SiteInformationPage() {
                                                                         </div>
                                                                         <div className="site-registry-contact-card wide">
                                                                             <span>Design Folder</span>
-                                                                            <strong>{project.designFolderPath || project.builder.designFolderPath || 'Not linked'}</strong>
-                                                                            <small>ESS Design path for builder, project and scaffold drawings</small>
+                                                                            <strong>{project.designFolderPath || 'Not linked'}</strong>
+                                                                            <small>ESS Design project or scaffold folder linked to this site</small>
                                                                         </div>
                                                                     </section>
                                                                 </aside>
@@ -1481,11 +1499,11 @@ export default function SiteInformationPage() {
                                                 value={projectForm.designFolderId}
                                                 onChange={event => setProjectForm(prev => ({
                                                     ...prev,
-                                                    ...selectedDesignFolderPayload(event.target.value, designFolders)
+                                                    ...selectedProjectDesignFolderPayload(event.target.value, designFolders)
                                                 }))}
                                             >
                                                 <option value="">No ESS Design folder linked</option>
-                                                {projectForm.designFolderId && !designFolders.some(folder => folder.id === projectForm.designFolderId) ? (
+                                                {projectForm.designFolderId && projectForm.designFolderPath.includes(' / ') && !designFolders.some(folder => folder.id === projectForm.designFolderId) ? (
                                                     <option value={projectForm.designFolderId}>{projectForm.designFolderPath || 'Linked folder'}</option>
                                                 ) : null}
                                                 {projectDesignFolderOptions.map(folder => (

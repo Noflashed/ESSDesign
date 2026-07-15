@@ -849,6 +849,10 @@ function folderLinkPayload(folder) {
     };
 }
 
+function isProjectDesignFolder(folder) {
+    return Number(folder?.depth || 0) >= 2;
+}
+
 function buildDesignFolderOption(folder, parent = null) {
     const depth = parent ? Number(parent.depth || 1) + 1 : 1;
     const path = parent ? `${optionPath(parent)} / ${folder.name}` : folder.name;
@@ -1429,6 +1433,18 @@ export const safetyProjectsAPI = {
             }
 
             for (const project of builder.projects) {
+                if (project.designFolderId) {
+                    const existingProjectFolder = folderOptions.find(folder => folder.id === project.designFolderId) || null;
+                    if (!existingProjectFolder || isProjectDesignFolder(existingProjectFolder)) {
+                        continue;
+                    }
+                    project.designFolderId = '';
+                    project.designFolderPath = '';
+                    project.updatedAt = timestamp;
+                    builder.updatedAt = timestamp;
+                    changed = true;
+                }
+
                 if (project.designFolderId) {
                     continue;
                 }
