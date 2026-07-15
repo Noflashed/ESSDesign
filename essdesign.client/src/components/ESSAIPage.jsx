@@ -36,7 +36,6 @@ export default function ESSAIPage({
     userDisplayName = 'User',
     onUserAvatarError,
 }) {
-    const storageKey = `ess-ai-active-conversation:${userId || 'current-user'}`;
     const conversationCache = useRef(new Map());
     const requestSequence = useRef(0);
     const [conversations, setConversations] = useState([]);
@@ -51,18 +50,11 @@ export default function ESSAIPage({
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
 
-    const openConversation = useCallback(async (conversationId, { persist = true } = {}) => {
+    const openConversation = useCallback(async (conversationId) => {
         if (!conversationId) return;
         setMenuConversationId(null);
         setActiveConversationId(conversationId);
         setError('');
-        if (persist) {
-            try {
-                window.localStorage.setItem(storageKey, conversationId);
-            } catch {
-                // Server history remains authoritative.
-            }
-        }
 
         const cached = conversationCache.current.get(conversationId);
         if (cached) {
@@ -87,23 +79,21 @@ export default function ESSAIPage({
         } finally {
             if (requestId === requestSequence.current) setChatLoading(false);
         }
-    }, [storageKey]);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
+        requestSequence.current += 1;
+        conversationCache.current.clear();
+        setActiveConversationId(null);
+        setActiveConversation(null);
+        setChatLoading(false);
+        setHistoryLoading(true);
+        setError('');
         assistantAPI.listConversations(MAX_HISTORY)
             .then(items => {
                 if (cancelled) return;
                 setConversations(items);
-                let savedId = null;
-                try {
-                    savedId = window.localStorage.getItem(storageKey);
-                } catch {
-                    savedId = null;
-                }
-                if (savedId && items.some(item => item.id === savedId)) {
-                    openConversation(savedId, { persist: false });
-                }
             })
             .catch(loadError => {
                 if (!cancelled) setError(loadError.response?.data?.error || loadError.message || 'Saved chats could not be loaded.');
@@ -114,7 +104,7 @@ export default function ESSAIPage({
         return () => {
             cancelled = true;
         };
-    }, [openConversation, storageKey]);
+    }, [userId]);
 
     useEffect(() => {
         const closeMenu = () => setMenuConversationId(null);
@@ -131,12 +121,7 @@ export default function ESSAIPage({
         setMenuConversationId(null);
         setDeleteTarget(null);
         setChatInstance(current => current + 1);
-        try {
-            window.localStorage.removeItem(storageKey);
-        } catch {
-            // A new server conversation will still be created on send.
-        }
-    }, [storageKey]);
+    }, []);
 
     const handleConversationChange = useCallback((conversationId, details) => {
         if (!conversationId) return;
@@ -150,12 +135,7 @@ export default function ESSAIPage({
                 : [{ id: conversationId, title, createdAt: now, updatedAt: now }, ...current];
             return [...next].sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
         });
-        try {
-            window.localStorage.setItem(storageKey, conversationId);
-        } catch {
-            // The server list still preserves the chat.
-        }
-    }, [storageKey]);
+    }, []);
 
     const handleConversationSnapshot = useCallback((conversationId, messages) => {
         if (!conversationId) return;
