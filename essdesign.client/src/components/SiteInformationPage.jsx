@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, foldersAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -31,11 +31,6 @@ function emptyProjectForm(initialBuilderId = '') {
         inductedEmployeeIds: [],
         editingProjectId: null
     };
-}
-
-function mapPreviewUrl(location) {
-    if (!location) return '';
-    return `https://www.google.com/maps?q=${encodeURIComponent(location)}&output=embed`;
 }
 
 function emptyBuilderForm() {
@@ -165,18 +160,6 @@ function appUserInitials(user) {
     return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2)).toUpperCase();
 }
 
-function personDisplayName(person) {
-    return person?.fullName || person?.name || employeeName(person);
-}
-
-function personEmail(person) {
-    return person?.email || 'No email recorded';
-}
-
-function personPhone(person) {
-    return person?.phoneNumber || 'No phone recorded';
-}
-
 function employeeMatchesSearchText(employee, roleText, query) {
     if (!query) {
         return true;
@@ -234,10 +217,13 @@ function withRoleAvatar(user, avatarUrls) {
 
 const roleAvatarUrlCache = new Map();
 
-function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onChange }) {
+function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onChange, disabled = false }) {
     const [open, setOpen] = useState(false);
     const selectedUser = withRoleAvatar(options.find(user => roleOptionValue(user) === value) || null, avatarUrls);
     const chooseUser = (nextValue, option = null) => {
+        if (disabled) {
+            return;
+        }
         onChange(nextValue, option);
         setOpen(false);
     };
@@ -258,9 +244,10 @@ function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onCha
             <button
                 type="button"
                 className={`site-registry-role-select-control${selectedUser ? ' has-user' : ''}`}
-                onClick={() => setOpen(prev => !prev)}
+                onClick={() => setOpen(prev => disabled ? false : !prev)}
+                disabled={disabled}
                 aria-haspopup="listbox"
-                aria-expanded={open}
+                aria-expanded={disabled ? false : open}
             >
                 {selectedUser ? (
                     <>
@@ -276,7 +263,7 @@ function RoleUserSelect({ label, helper, role, value, options, avatarUrls, onCha
                 )}
                 <ChevronDown className="site-registry-role-chevron" size={15} strokeWidth={2.3} aria-hidden="true" />
             </button>
-            {open ? (
+            {open && !disabled ? (
                 <div className="site-registry-role-menu" role="listbox" aria-label={label}>
                     <button
                         type="button"
@@ -340,7 +327,6 @@ export default function SiteInformationPage() {
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [projectMenu, setProjectMenu] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [inductedSearch, setInductedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [scaffoldEntityFilter, setScaffoldEntityFilter] = useState('all');
     const [error, setError] = useState('');
@@ -600,7 +586,7 @@ export default function SiteInformationPage() {
     }, [appUserById, appUsers, employeeByAuthUserId, employees]);
 
     useEffect(() => {
-        if (!showProjectModal) {
+        if (!showProjectModal && !selectedInfoProject) {
             return undefined;
         }
 
@@ -638,7 +624,7 @@ export default function SiteInformationPage() {
         return () => {
             cancelled = true;
         };
-    }, [roleAvatarUrls, roleUsers, showProjectModal]);
+    }, [roleAvatarUrls, roleUsers, selectedInfoProject, showProjectModal]);
 
     const getEmployeeRoleKey = (employee) => appUserById.get(employee?.linkedAuthUserId)?.role || employeeFallbackRoleKey(employee);
     const getEmployeeRoleLabel = (employee) => roleLabel(getEmployeeRoleKey(employee));
@@ -669,36 +655,6 @@ export default function SiteInformationPage() {
         return employees
             .filter(employee => Array.isArray(employee.preferredSiteIds) && employee.preferredSiteIds.includes(siteKey))
             .sort((left, right) => employeeName(left).localeCompare(employeeName(right)));
-    };
-
-    const getFilteredProjectEmployees = (project) => {
-        const query = inductedSearch.trim().toLowerCase();
-        const projectEmployees = getProjectEmployees(project);
-        if (!query) {
-            return projectEmployees;
-        }
-        return projectEmployees.filter(employee => employeeMatchesSearchText(employee, getEmployeeRoleLabel(employee), query));
-    };
-
-    const getProjectManager = (project) => {
-        if (project?.projectManager) {
-            return project.projectManager;
-        }
-        return appUserById.get(project?.projectManagerUserId) || employeeById.get(project?.projectManagerEmployeeId) || null;
-    };
-
-    const getSiteSupervisor = (project) => {
-        if (project?.siteSupervisor) {
-            return project.siteSupervisor;
-        }
-        return appUserById.get(project?.siteSupervisorUserId) || employeeById.get(project?.siteSupervisorEmployeeId) || getProjectEmployees(project).find(employee => employee.leadingHand) || null;
-    };
-
-    const getLeadingHand = (project) => {
-        if (project?.leadingHand) {
-            return project.leadingHand;
-        }
-        return appUserById.get(project?.leadingHandUserId) || employeeById.get(project?.leadingHandEmployeeId) || null;
     };
 
     const openCreateProject = () => {
@@ -978,7 +934,6 @@ export default function SiteInformationPage() {
 
     const openProjectInfo = (project) => {
         setSelectedInfoProject(project);
-        setInductedSearch('');
     };
 
     const selectBuilderFilter = (builderId) => {
@@ -1071,10 +1026,17 @@ export default function SiteInformationPage() {
 
     const infoProject = selectedInfoProject;
     const infoProjectEmployees = infoProject ? getProjectEmployees(infoProject) : [];
-    const filteredInfoProjectEmployees = infoProject ? getFilteredProjectEmployees(infoProject) : [];
-    const infoProjectManager = infoProject ? getProjectManager(infoProject) : null;
-    const infoSiteSupervisor = infoProject ? getSiteSupervisor(infoProject) : null;
-    const infoLeadingHand = infoProject ? getLeadingHand(infoProject) : null;
+    const infoProjectManagerValue = infoProject
+        ? infoProject.projectManagerUserId || employeeById.get(infoProject.projectManagerEmployeeId)?.linkedAuthUserId || ''
+        : '';
+    const infoSiteSupervisorValue = infoProject
+        ? infoProject.siteSupervisorUserId || employeeById.get(infoProject.siteSupervisorEmployeeId)?.linkedAuthUserId || ''
+        : '';
+    const infoLeadingHandValue = infoProject
+        ? infoProject.leadingHandUserId
+            || employeeById.get(infoProject.leadingHandEmployeeId)?.linkedAuthUserId
+            || (infoProject.leadingHandEmployeeId ? `employee:${infoProject.leadingHandEmployeeId}` : '')
+        : '';
 
     return (
         <div className="module-page site-registry-page">
@@ -1286,30 +1248,10 @@ export default function SiteInformationPage() {
             </div>
 
             {infoProject ? (
-                <div className="module-modal-backdrop site-registry-info-backdrop" onClick={() => setSelectedInfoProject(null)}>
-                    <div className="module-modal compact site-registry-info-modal" onClick={event => event.stopPropagation()}>
-                        <div className="site-registry-info-header">
-                            <div>
-                                <span>{infoProject.builder?.name || 'Site Registry'}</span>
-                                <h3>{infoProject.name}</h3>
-                                <small>{infoProject.siteLocation || 'No site location set'}</small>
-                            </div>
-                            <div className="site-registry-info-header-actions">
-                                <button
-                                    type="button"
-                                    className="module-secondary-btn compact"
-                                    onClick={() => {
-                                        setSelectedInfoProject(null);
-                                        openEditProject(infoProject.builder.id, infoProject);
-                                    }}
-                                >
-                                    <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                                    <span>Edit Site</span>
-                                </button>
-                                <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information">x</button>
-                            </div>
-                        </div>
-                        <div className="site-registry-view-form site-registry-project-form">
+                <div className="module-modal-backdrop" onClick={() => setSelectedInfoProject(null)}>
+                    <div className="module-modal compact site-registry-project-modal" onClick={event => event.stopPropagation()}>
+                        <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information">x</button>
+                        <div className="module-form site-registry-project-form" role="dialog" aria-label={`${infoProject.name} site information`}>
                             <div className="site-registry-project-form-body">
                                 <section className="site-registry-form-section">
                                     <div className="site-registry-form-section-head">
@@ -1317,28 +1259,37 @@ export default function SiteInformationPage() {
                                     </div>
                                     <div className="site-registry-project-details-grid">
                                         <div className="module-field">
-                                            <label>Builder</label>
-                                            <div className="site-registry-readonly-field">{infoProject.builder?.name || 'Not set'}</div>
+                                            <label>Builder <span aria-hidden="true">*</span></label>
+                                            <select value={infoProject.builder?.id || ''} disabled>
+                                                <option value={infoProject.builder?.id || ''}>{infoProject.builder?.name || 'Not set'}</option>
+                                            </select>
                                         </div>
                                         <div className="module-field">
-                                            <label>Project</label>
-                                            <div className="site-registry-readonly-field">{infoProject.name || 'Not set'}</div>
+                                            <label>Project <span aria-hidden="true">*</span></label>
+                                            <input value={infoProject.name || ''} readOnly />
                                         </div>
                                         <div className="module-field site-registry-project-location-field">
-                                            <label>Site Location</label>
-                                            <div className="site-registry-readonly-field">{infoProject.siteLocation || 'Not set'}</div>
+                                            <label>Site Location <span aria-hidden="true">*</span></label>
+                                            <div className="site-registry-address-autocomplete transport-address-autocomplete">
+                                                <input value={infoProject.siteLocation || ''} readOnly />
+                                            </div>
                                         </div>
                                         <div className="module-field">
-                                            <label>Scaffold Entity</label>
-                                            <div className="site-registry-readonly-field">{normalizeScaffoldEntity(infoProject.scaffoldEntity)}</div>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Status</label>
-                                            <div className="site-registry-readonly-field">{infoProject.archived ? 'Archived' : 'Active'}</div>
+                                            <label>Scaffold Entity <span aria-hidden="true">*</span></label>
+                                            <select value={normalizeScaffoldEntity(infoProject.scaffoldEntity)} disabled>
+                                                {SCAFFOLD_ENTITY_OPTIONS.map(entity => (
+                                                    <option key={entity} value={entity}>{entity}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div className="module-field">
                                             <label>Design Folder</label>
-                                            <div className="site-registry-readonly-field">{infoProject.designFolderPath || 'Not linked'}</div>
+                                            <select value={infoProject.designFolderId || ''} disabled>
+                                                <option value="">Create Design Folder</option>
+                                                {infoProject.designFolderId ? (
+                                                    <option value={infoProject.designFolderId}>{infoProject.designFolderPath || 'Linked folder'}</option>
+                                                ) : null}
+                                            </select>
                                         </div>
                                     </div>
                                 </section>
@@ -1348,46 +1299,44 @@ export default function SiteInformationPage() {
                                         <h4>Site Roles</h4>
                                     </div>
                                     <div className="site-registry-personnel-grid">
-                                        <div className="module-field">
-                                            <label>Project Manager</label>
-                                            <div className="site-registry-readonly-person">
-                                                <strong>{infoProjectManager ? personDisplayName(infoProjectManager) : 'Not assigned'}</strong>
-                                                <span>{infoProjectManager ? personEmail(infoProjectManager) : '-'}</span>
-                                            </div>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Site Supervisor</label>
-                                            <div className="site-registry-readonly-person">
-                                                <strong>{infoSiteSupervisor ? personDisplayName(infoSiteSupervisor) : 'Not assigned'}</strong>
-                                                <span>{infoSiteSupervisor ? personPhone(infoSiteSupervisor) : '-'}</span>
-                                            </div>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Leading Hand</label>
-                                            <div className="site-registry-readonly-person">
-                                                <strong>{infoLeadingHand ? personDisplayName(infoLeadingHand) : 'Not assigned'}</strong>
-                                                <span>{infoLeadingHand ? personPhone(infoLeadingHand) : '-'}</span>
-                                            </div>
-                                        </div>
+                                        <RoleUserSelect
+                                            label="Project Manager"
+                                            helper="Only Project Manager users appear here"
+                                            role="project_manager"
+                                            value={infoProjectManagerValue}
+                                            options={roleUsers.projectManagers}
+                                            avatarUrls={roleAvatarUrls}
+                                            onChange={() => {}}
+                                            disabled
+                                        />
+                                        <RoleUserSelect
+                                            label="Site Supervisor"
+                                            helper="Only Site Supervisor users appear here"
+                                            role="site_supervisor"
+                                            value={infoSiteSupervisorValue}
+                                            options={roleUsers.siteSupervisors}
+                                            avatarUrls={roleAvatarUrls}
+                                            onChange={() => {}}
+                                            disabled
+                                        />
+                                        <RoleUserSelect
+                                            label="Leading Hand"
+                                            helper="Only Leading Hand users appear here"
+                                            role="leading_hand"
+                                            value={infoLeadingHandValue}
+                                            options={roleUsers.leadingHands}
+                                            avatarUrls={roleAvatarUrls}
+                                            onChange={() => {}}
+                                            disabled
+                                        />
                                     </div>
                                 </section>
 
                                 <section className="site-registry-form-section site-registry-form-section-last">
                                     <div className="site-registry-inducted-editor-head">
                                         <label>Inducted Workers</label>
-                                        <span>{employeesLoading ? 'Loading employees...' : `${filteredInfoProjectEmployees.length} of ${infoProjectEmployees.length}`}</span>
+                                        <span>{employeesLoading ? 'Loading employees...' : `${infoProjectEmployees.length} inducted`}</span>
                                     </div>
-                                    <label className="site-registry-inducted-search site-registry-inducted-editor-search">
-                                        <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-                                        <input
-                                            type="search"
-                                            value={inductedSearch}
-                                            onChange={event => setInductedSearch(event.target.value)}
-                                            onClick={event => event.stopPropagation()}
-                                            placeholder="Search inducted workers..."
-                                            aria-label="Search inducted employees"
-                                        />
-                                    </label>
                                     <div className="site-registry-readonly-workers-table">
                                         <table>
                                             <thead>
@@ -1401,9 +1350,9 @@ export default function SiteInformationPage() {
                                             <tbody>
                                                 {employeesLoading ? (
                                                     <tr><td colSpan="4">Loading inducted workers...</td></tr>
-                                                ) : filteredInfoProjectEmployees.length === 0 ? (
-                                                    <tr><td colSpan="4">{infoProjectEmployees.length === 0 ? 'No inducted workers are linked to this site yet.' : 'No inducted workers match this search.'}</td></tr>
-                                                ) : filteredInfoProjectEmployees.map(employee => (
+                                                ) : infoProjectEmployees.length === 0 ? (
+                                                    <tr><td colSpan="4">No inducted workers are linked to this site yet.</td></tr>
+                                                ) : infoProjectEmployees.map(employee => (
                                                     <tr key={employee.id}>
                                                         <td>
                                                             <div className="site-registry-readonly-worker-name">
@@ -1420,6 +1369,22 @@ export default function SiteInformationPage() {
                                         </table>
                                     </div>
                                 </section>
+                            </div>
+                            <div className="module-form-actions site-registry-project-actions">
+                                <button type="button" className="module-secondary-btn" onClick={() => setSelectedInfoProject(null)}>
+                                    Close
+                                </button>
+                                <button
+                                    type="button"
+                                    className="module-primary-btn"
+                                    onClick={() => {
+                                        setSelectedInfoProject(null);
+                                        openEditProject(infoProject.builder.id, infoProject);
+                                    }}
+                                >
+                                    <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
+                                    <span>Edit Site</span>
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -10607,6 +10607,19 @@ button.stat-card {
     outline: none;
 }
 
+.site-registry-project-modal .module-field input[readonly],
+.site-registry-project-modal .module-field select:disabled,
+.site-registry-role-select-control:disabled {
+    opacity: 1;
+    background: #ffffff;
+    color: #0f172a;
+    cursor: default;
+}
+
+.site-registry-project-modal .module-field select:disabled {
+    -webkit-text-fill-color: #0f172a;
+}
+
 .site-registry-project-modal .site-registry-address-autocomplete {
     position: relative;
 }
@@ -10694,7 +10707,7 @@ button.stat-card {
     cursor: pointer;
 }
 
-.site-registry-role-select-control:hover {
+.site-registry-role-select-control:hover:not(:disabled) {
     border-color: #94a3b8;
     background: #f8fbff;
 }
