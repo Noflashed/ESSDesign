@@ -8072,6 +8072,121 @@ button.stat-card {
     color: #b42318;
 }
 
+.ess-ai-confirm-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 360;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 132px 28px 0;
+    background: rgba(17, 24, 39, 0.18);
+}
+
+.ess-ai-confirm-dialog {
+    position: relative;
+    width: min(304px, calc(100vw - 24px));
+    padding: 18px;
+    border: 1px solid #dededb;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 20px 54px rgba(17, 24, 39, 0.2), 0 2px 8px rgba(17, 24, 39, 0.08);
+    color: #17191c;
+}
+
+.ess-ai-confirm-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #717780;
+    cursor: pointer;
+}
+
+.ess-ai-confirm-close:hover,
+.ess-ai-confirm-close:focus-visible {
+    background: #f1f1ef;
+    color: #17191c;
+    outline: none;
+}
+
+.ess-ai-confirm-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    background: #fff1ef;
+    color: #b42318;
+}
+
+.ess-ai-confirm-dialog h2 {
+    margin: 0 28px 6px 0;
+    color: #17191c;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.ess-ai-confirm-dialog p {
+    margin: 0;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.ess-ai-confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.ess-ai-confirm-actions button {
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid #dededb;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #34383f;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ess-ai-confirm-actions button:hover,
+.ess-ai-confirm-actions button:focus-visible {
+    background: #f1f1ef;
+    outline: none;
+}
+
+.ess-ai-confirm-actions button.danger {
+    border-color: #d92d20;
+    background: #d92d20;
+    color: #ffffff;
+}
+
+.ess-ai-confirm-actions button.danger:hover,
+.ess-ai-confirm-actions button.danger:focus-visible {
+    background: #b42318;
+}
+
+.ess-ai-confirm-actions button:disabled,
+.ess-ai-confirm-close:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
 .ess-ai-workspace {
     min-width: 0;
     min-height: 0;
@@ -8403,6 +8518,11 @@ button.stat-card {
     color: #b42318;
 }
 
+.ess-ai-page .ess-ai-confirm-dialog {
+    border-color: #dededb;
+    background: #ffffff;
+}
+
 .ess-ai-page .ess-ai-history-list {
     scrollbar-color: #c8c8c4 transparent;
 }
@@ -8644,6 +8764,12 @@ button.stat-card {
         inset: 68px 10px 10px auto;
         width: min(304px, calc(100vw - 20px));
         z-index: 302;
+    }
+
+    .ess-ai-confirm-scrim {
+        position: fixed;
+        z-index: 380;
+        padding: 126px 10px 0;
     }
 
     .ess-ai-workspace-header {
