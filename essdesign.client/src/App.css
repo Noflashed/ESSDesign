@@ -8305,28 +8305,28 @@ button.stat-card {
 }
 
 .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand {
-    width: min(560px, 100%);
+    width: min(760px, 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: clamp(18px, 4vw, 38px);
-    margin: 0 auto 24px;
+    gap: clamp(24px, 5vw, 52px);
+    margin: 0 auto 30px;
 }
 
 .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand img {
-    width: min(210px, 38%);
-    height: 64px;
+    width: min(320px, 43%);
+    height: 112px;
     display: block;
     object-fit: contain;
 }
 
 .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand img:last-child {
-    width: min(164px, 32%);
+    width: min(250px, 36%);
 }
 
 .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand > span {
     width: 1px;
-    height: 42px;
+    height: 72px;
     flex: 0 0 1px;
     background: #d8d9da;
 }
@@ -8377,8 +8377,15 @@ button.stat-card {
 
 .ess-ai-workspace .ess-ai-chat .admin-assistant-avatar.assistant {
     border-color: #fed7aa;
-    background: #fff7ed;
+    background: #ffffff;
     color: #c95d0b;
+    overflow: hidden;
+}
+
+.ess-ai-workspace .ess-ai-chat .admin-assistant-avatar.assistant img {
+    object-fit: contain;
+    padding: 3px;
+    box-sizing: border-box;
 }
 
 .ess-ai-workspace .ess-ai-chat .admin-assistant-prompts,
@@ -8859,11 +8866,11 @@ button.stat-card {
     }
 
     .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand img {
-        height: 48px;
+        height: 72px;
     }
 
     .ess-ai-workspace .ess-ai-chat .ess-ai-pristine-brand > span {
-        height: 34px;
+        height: 48px;
     }
 }
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Bot, Download, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowUp, Download, ExternalLink, Loader2, Plus, ThumbsDown, ThumbsUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
@@ -18,7 +18,7 @@ const MALOO_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/obje
 const WELCOME_MESSAGE = {
     id: 'ess-ai-welcome',
     role: 'assistant',
-    content: 'What can I help you with?',
+    content: '',
     sources: [],
     links: [],
     followUps: [],
@@ -41,7 +41,7 @@ function AssistantAvatar({ role = 'assistant', userAvatarUrl = '', userInitials 
     if (role !== 'user') {
         return (
             <div className="admin-assistant-avatar assistant" aria-hidden="true">
-                <Bot size={16} strokeWidth={2.1} />
+                <img src={ESS_LOGO_URL} alt="" />
             </div>
         );
     }
@@ -306,7 +306,7 @@ export default function AdminAssistantChat({
         }
     };
 
-    const hasStarted = messages.length > 1;
+    const hasStarted = messages.some(message => message.id !== WELCOME_MESSAGE.id);
     const chatStateClass = hasStarted ? 'is-active' : 'is-pristine';
 
     return (
@@ -332,6 +332,7 @@ export default function AdminAssistantChat({
                     </div>
                 ) : null}
                 {messages.map((message, index) => {
+                    if (message.id === WELCOME_MESSAGE.id) return null;
                     const hasExportableTable = message.role === 'assistant' && extractMarkdownTables(message.content).length > 0;
                     return (
                     <div key={messageKey(message, index)} className={`admin-assistant-message-row ${message.role}`}>
