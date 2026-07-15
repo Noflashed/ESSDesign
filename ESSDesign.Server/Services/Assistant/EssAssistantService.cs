@@ -181,6 +181,7 @@ public sealed class EssAssistantService
                         allowTools ? definitions : Array.Empty<object>(),
                         hasFileSearch && allowTools,
                         route,
+                        round == 0 && route.Name == "site_distance",
                         replyBuilder.Length > 0 ? "\n\n" : string.Empty,
                         EmitAsync,
                         metrics,
@@ -335,6 +336,7 @@ public sealed class EssAssistantService
         IReadOnlyList<object> tools,
         bool includeFileSearchResults,
         AssistantRoute route,
+        bool requireToolCall,
         string firstDeltaPrefix,
         Func<EssAssistantStreamEvent, Task> emit,
         EssAssistantRunMetrics metrics,
@@ -353,6 +355,7 @@ public sealed class EssAssistantService
                     tools,
                     includeFileSearchResults,
                     route,
+                    requireToolCall,
                     firstDeltaPrefix,
                     emit,
                     cancellationToken);
@@ -383,6 +386,7 @@ public sealed class EssAssistantService
         IReadOnlyList<object> tools,
         bool includeFileSearchResults,
         AssistantRoute route,
+        bool requireToolCall,
         string firstDeltaPrefix,
         Func<EssAssistantStreamEvent, Task> emit,
         CancellationToken cancellationToken)
@@ -408,7 +412,7 @@ public sealed class EssAssistantService
         if (tools.Count > 0)
         {
             payload["tools"] = tools;
-            payload["tool_choice"] = "auto";
+            payload["tool_choice"] = requireToolCall ? "required" : "auto";
             payload["parallel_tool_calls"] = true;
         }
         else
@@ -521,13 +525,17 @@ public sealed class EssAssistantService
 
         if (IsSiteRegistryQuery(routingValue))
         {
+            var distanceRequest = IsDistanceQuery(routingValue);
+            var allowedTools = distanceRequest
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "calculate_site_distances" }
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "search_sites" };
             return new AssistantRoute(
-                "site_registry",
+                distanceRequest ? "site_distance" : "site_registry",
                 complex,
                 effort,
-                "Checking the site registry...",
+                distanceRequest ? "Calculating driving distances from the ESS yard..." : "Checking the site registry...",
                 null,
-                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "search_sites" },
+                allowedTools,
                 false);
         }
 
@@ -556,26 +564,38 @@ public sealed class EssAssistantService
             WantsFileSearch(routingValue));
     }
 
-    private static bool UsesPriorRequestContext(string value) =>
-        ContainsAny(value,
+    private static bool UsesPriorRequestContext(string value)
+    {
+        var trimmed = value.Trim().TrimEnd('.', '?', '!');
+        var shortContinuation = trimmed is "yes" or "yes please" or "yep" or "yeah" or "correct" or "do it" or "proceed"
+            or "driving" or "road" or "road distance" or "driving distance" or "from the yard" or "the yard";
+        var addressAnswer = trimmed.Length <= 100 && trimmed.Any(char.IsDigit) &&
+            ContainsAny(trimmed, "road", " rd", "street", " st", "avenue", " ave", "drive", " dr", "lane", "place");
+        return shortContinuation || addressAnswer || ContainsAny(value,
             "actually", "also", "add ", "include ", "remove ", "separate", "split ", "group ",
             "column", "format", "reformat", "same ", "those", "them", "that list", "that table",
             "instead", "make it", "change it", "sort it", "filter it");
+    }
 
     private static string BuildFollowUpRoutingValue(string value, IReadOnlyList<EssAssistantHistoryMessage> history)
     {
         var priorUserMessages = history
             .Where(item => item.Role == "user" && !string.IsNullOrWhiteSpace(item.Content))
-            .TakeLast(2)
+            .TakeLast(6)
             .Select(item => item.Content.ToLowerInvariant())
             .ToList();
         if (priorUserMessages.Count == 0)
             return value;
 
-        var context = UsesPriorRequestContext(priorUserMessages[^1]) && priorUserMessages.Count > 1
-            ? priorUserMessages
-            : priorUserMessages.TakeLast(1);
-        return string.Join(' ', context.Append(value));
+        var context = new List<string> { value };
+        for (var index = priorUserMessages.Count - 1; index >= 0; index--)
+        {
+            var prior = priorUserMessages[index];
+            context.Insert(0, prior);
+            if (!UsesPriorRequestContext(prior))
+                break;
+        }
+        return string.Join(' ', context);
     }
 
     private static bool IsSiteRegistryQuery(string value)
@@ -589,6 +609,9 @@ public sealed class EssAssistantService
 
     private static bool IsDesignLookupQuery(string value) =>
         ContainsAny(value, "drawing", "revision", "design", "pdf", "esd");
+
+    private static bool IsDistanceQuery(string value) =>
+        ContainsAny(value, "distance", "kilometre", "kilometer", " km", "driving", "drive time", "road km", "from the yard", "nearest", "closest", "farthest", "furthest");
 
     private static bool WantsFileSearch(string value) =>
         ContainsAny(value, "uploaded file", "uploaded document", "file contents", "document contents", "inside the file", "inside the document") ||
@@ -638,6 +661,9 @@ public sealed class EssAssistantService
             - People have both account roles and employee classifications. Use explicit fields such as leadingHand instead of assuming everything is in the role text.
             - "Jobs", "job-sites", "sites", and "projects" mean the live site registry unless the user explicitly asks for drawings, designs, files, documents, or roster entries. For current, active, or all jobs, call search_sites with query null, include_archived false, and limit 50. Never use uploaded files, file search, design records, or drawing records to build a current-jobs list.
             - When the user asks which company, scaffold company, or entity a job is under, use scaffoldEntity from search_sites. The builder field is the client/builder and is not a substitute for scaffoldEntity.
+            - The ESS yard is permanently 130 Gilba Road, Girraween NSW 2145. For any distance from "the yard", use that address without asking. Correct the obvious misspelling "Giraween" silently.
+            - Site/job distance means road-driving distance by default. Call calculate_site_distances immediately with include_archived false, limit 50, and the requested order. Use origin null when the user says "yard" or gives no origin; otherwise use their supplied origin. Never offer straight-line distance, ask whether driving is intended, request permission to use maps, or claim mapping is unavailable. The ESS routing service already provides this capability.
+            - If the user asks to add distance to a prior jobs table, preserve its project, scaffold entity/company, and other requested columns, then add distanceKm (and drivingMinutes only when useful). Honour most-to-least or nearest-to-furthest ordering directly.
             - Follow-up requests to add/remove columns, group, split, sort, filter, or reformat an earlier result inherit the prior request's subject and data source. Preserve the complete prior record set and every existing column unless the user explicitly asks to remove or filter something. Re-query the same live source when needed; never switch a site-registry answer to uploaded files or design documents.
             - When separate tables are requested per scaffold entity/company, include the scaffold entity/company column inside every table even though the heading already names it. Grouping never implies permission to drop a requested column.
             - When asked who manages active job-sites or projects, answer as a per-site list/table with the job/site and assigned project manager. Include the assigned site supervisor and assigned leading hand when the user asks for a breakdown. Use only the assignedLeadingHand field for a site's leading hand; never infer it from inducted employees or a person's leadingHand classification. Do not summarise by manager unless the user asks for a summary.
@@ -666,6 +692,7 @@ public sealed class EssAssistantService
         "search_designs" or "search_drawing_register" => "Searching drawings and revisions...",
         "search_people" => "Searching the employee directory...",
         "search_sites" => "Checking the site registry...",
+        "calculate_site_distances" => "Calculating driving distances from the ESS yard...",
         "get_roster" => "Checking the roster...",
         "search_project_data" => "Searching project documents...",
         "search_material_orders" => "Checking material orders...",

@@ -30,6 +30,13 @@ public sealed class EssAssistantToolCatalog
                 include_archived = BooleanSchema("Whether archived sites should be included."),
                 limit = IntegerSchema("Maximum results, from 1 to 50."),
             }, "query", "include_archived", "limit"),
+            Function("calculate_site_distances", "Calculate road-driving distances and drive times from the ESS yard or another origin to every active ESS job site. The default ESS yard is 130 Gilba Road, Girraween NSW 2145. Use immediately when a user asks for job/site distance, kilometres, nearest/furthest sites, or driving distance; do not ask permission to use maps or ask whether they mean driving distance.", new
+            {
+                origin = NullableStringSchema("Origin address. Use null or 'yard' for the ESS yard at 130 Gilba Road, Girraween NSW 2145."),
+                include_archived = BooleanSchema("Whether archived sites should be included. Use false for current or active jobs."),
+                order = StringSchema("Either most_to_least or least_to_most."),
+                limit = IntegerSchema("Maximum sites, from 1 to 50."),
+            }, "origin", "include_archived", "order", "limit"),
             Function("search_people", "Search and count the complete ESS employee registry and app-user directory. For an employee/headcount total, use a null query and role with limit 1, then read employeeCount. For all people or users, read totalMatches. Counts are exhaustive before the result limit. Contact and private fields are automatically redacted according to the current user's role.", new
             {
                 query = NullableStringSchema("Person name, email, phone, title, or role. Use null for a full-directory list or count; do not pass generic words such as people, employees, headcount, ESS, active, or contractors as search terms."),
@@ -122,6 +129,7 @@ public sealed class EssAssistantToolCatalog
                 access,
                 cancellationToken),
             "search_sites" => _data.SearchSitesAsync(GetString(args, "query"), GetBool(args, "include_archived"), GetInt(args, "limit", 20), cancellationToken),
+            "calculate_site_distances" => _data.CalculateSiteDistancesAsync(GetString(args, "origin"), GetBool(args, "include_archived"), GetString(args, "order"), GetInt(args, "limit", 50), cancellationToken),
             "search_people" => _data.SearchPeopleAsync(GetString(args, "query"), GetString(args, "role"), GetBool(args, "include_private_profile"), GetInt(args, "limit", 20), access, cancellationToken),
             "get_roster" => _data.GetRosterAsync(GetDate(args, "start_date"), GetInt(args, "days", 7), cancellationToken),
             "search_designs" => _data.SearchDesignsAsync(GetString(args, "query"), GetString(args, "sort") ?? "relevance", GetBool(args, "all_revisions"), GetInt(args, "limit", 20), cancellationToken),

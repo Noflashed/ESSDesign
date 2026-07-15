@@ -20,17 +20,20 @@ public sealed class EssAssistantDataService
     private readonly EssAssistantSupabaseGateway _gateway;
     private readonly SupabaseService _supabaseService;
     private readonly DeliveryAnalysisService _deliveryAnalysisService;
+    private readonly TransportRouteEstimateService _routeEstimates;
     private readonly ILogger<EssAssistantDataService> _logger;
 
     public EssAssistantDataService(
         EssAssistantSupabaseGateway gateway,
         SupabaseService supabaseService,
         DeliveryAnalysisService deliveryAnalysisService,
+        TransportRouteEstimateService routeEstimates,
         ILogger<EssAssistantDataService> logger)
     {
         _gateway = gateway;
         _supabaseService = supabaseService;
         _deliveryAnalysisService = deliveryAnalysisService;
+        _routeEstimates = routeEstimates;
         _logger = logger;
     }
 
@@ -207,6 +210,126 @@ public sealed class EssAssistantDataService
                 item.Site.SiteLocation,
                 item.Site.UpdatedAt)).ToList(),
         };
+    }
+
+    public async Task<EssAssistantToolResult> CalculateSiteDistancesAsync(
+        string? origin,
+        bool includeArchived,
+        string? order,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var resolvedOrigin = ResolveRouteOrigin(origin);
+        var useEssYard = string.Equals(resolvedOrigin, TransportRouteEstimateService.YardLocation, StringComparison.OrdinalIgnoreCase);
+        var sites = (await LoadSitesAsync(cancellationToken))
+            .Where(site => includeArchived || !site.Archived)
+            .OrderBy(site => site.Name)
+            .Take(Math.Clamp(limit, 1, 50))
+            .ToList();
+        using var concurrency = new SemaphoreSlim(6, 6);
+
+        var distanceTasks = sites.Select(async site =>
+        {
+            if (string.IsNullOrWhiteSpace(site.SiteLocation))
+            {
+                return new SiteDistanceRow(
+                    site.BuilderName,
+                    site.Name,
+                    site.SiteLocation,
+                    site.ScaffoldEntity,
+                    null,
+                    null);
+            }
+
+            var destination = site.SiteLocation;
+            await concurrency.WaitAsync(cancellationToken);
+            try
+            {
+                var route = useEssYard
+                    ? await _routeEstimates.GetOrRefreshYardRouteAsync(
+                        new DeliveryAnalysisService.RoutePreviewRequest
+                        {
+                            SiteLocation = destination,
+                            EnableTolls = true,
+                            Segment = "ess-ai-site-distance",
+                        },
+                        cancellationToken)
+                    : await _routeEstimates.GetOrRefreshRouteBetweenAsync(
+                        new DeliveryAnalysisService.RoutePreviewBetweenRequest
+                        {
+                            FromLocation = resolvedOrigin,
+                            ToLocation = destination,
+                            EnableTolls = true,
+                            Segment = "ess-ai-site-distance",
+                        },
+                        cancellationToken);
+
+                return new SiteDistanceRow(
+                    site.BuilderName,
+                    site.Name,
+                    site.SiteLocation,
+                    site.ScaffoldEntity,
+                    route?.DistanceMeters > 0 ? Math.Round(route.DistanceMeters / 1000d, 1) : null,
+                    route?.DurationSeconds > 0 ? (int)Math.Round(route.DurationSeconds / 60d) : null);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Unable to calculate ESS AI route distance to {Site}", destination);
+                return new SiteDistanceRow(site.BuilderName, site.Name, site.SiteLocation, site.ScaffoldEntity, null, null);
+            }
+            finally
+            {
+                concurrency.Release();
+            }
+        });
+        var rows = (await Task.WhenAll(distanceTasks)).ToList();
+        var descending = !string.Equals(Normalize(order), "least to most", StringComparison.OrdinalIgnoreCase);
+        rows = descending
+            ? rows.OrderByDescending(row => row.DistanceKm ?? -1).ThenBy(row => row.Project).ToList()
+            : rows.OrderBy(row => row.DistanceKm ?? double.MaxValue).ThenBy(row => row.Project).ToList();
+
+        return new EssAssistantToolResult
+        {
+            Data = new
+            {
+                origin = resolvedOrigin,
+                distanceType = "driving",
+                order = descending ? "most_to_least" : "least_to_most",
+                count = rows.Count,
+                unavailableCount = rows.Count(row => !row.DistanceKm.HasValue),
+                presentationNote = "These are road-driving distances calculated by the ESS routing service. The ESS yard is 130 Gilba Road, Girraween NSW 2145. Present the requested rows directly in a real Markdown table. Do not mention external map permissions, straight-line distance, uploaded files, routing limitations, or ask another clarification. Use '-' only for a site whose route is unavailable.",
+                sites = rows.Select(row => new
+                {
+                    builder = row.Builder,
+                    project = row.Project,
+                    location = row.Location,
+                    scaffoldEntity = row.ScaffoldEntity,
+                    distanceKm = row.DistanceKm,
+                    drivingMinutes = row.DrivingMinutes,
+                }),
+            },
+            Sources = sites.Select(site => Source(
+                site.SourceId,
+                "site_registry",
+                $"{site.BuilderName} - {site.Name}",
+                site.SiteLocation,
+                site.UpdatedAt)).ToList(),
+        };
+    }
+
+    private static string ResolveRouteOrigin(string? origin)
+    {
+        var normalized = Normalize(origin);
+        if (string.IsNullOrWhiteSpace(normalized) || normalized is "yard" or "ess yard" ||
+            normalized.Contains("130 gilba", StringComparison.OrdinalIgnoreCase))
+        {
+            return TransportRouteEstimateService.YardLocation;
+        }
+        return origin!.Trim();
     }
 
     public async Task<EssAssistantToolResult> SearchPeopleAsync(
@@ -1783,6 +1906,14 @@ public sealed class EssAssistantDataService
         public List<string> DrawingNumbers { get; init; } = new();
         public string? UpdatedAt { get; init; }
     }
+
+    private sealed record SiteDistanceRow(
+        string Builder,
+        string Project,
+        string? Location,
+        string ScaffoldEntity,
+        double? DistanceKm,
+        int? DrivingMinutes);
 
     private sealed class PersonRecord
     {
