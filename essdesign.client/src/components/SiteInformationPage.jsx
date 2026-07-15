@@ -977,7 +977,7 @@ export default function SiteInformationPage() {
     };
 
     const openProjectInfo = (project) => {
-        setSelectedInfoProject(prev => projectSiteKey(prev) === projectSiteKey(project) ? null : project);
+        setSelectedInfoProject(project);
         setInductedSearch('');
     };
 
@@ -1068,6 +1068,13 @@ export default function SiteInformationPage() {
             setError(err.message || 'Could not delete builder');
         }
     };
+
+    const infoProject = selectedInfoProject;
+    const infoProjectEmployees = infoProject ? getProjectEmployees(infoProject) : [];
+    const filteredInfoProjectEmployees = infoProject ? getFilteredProjectEmployees(infoProject) : [];
+    const infoProjectManager = infoProject ? getProjectManager(infoProject) : null;
+    const infoSiteSupervisor = infoProject ? getSiteSupervisor(infoProject) : null;
+    const infoLeadingHand = infoProject ? getLeadingHand(infoProject) : null;
 
     return (
         <div className="module-page site-registry-page">
@@ -1209,17 +1216,12 @@ export default function SiteInformationPage() {
                                         </tr>
                                     ) : visibleProjects.map(project => {
                                         const rowKey = projectSiteKey(project);
-                                        const isExpanded = projectSiteKey(selectedInfoProject) === rowKey;
-                                        const projectEmployees = isExpanded ? getProjectEmployees(project) : [];
-                                        const filteredProjectEmployees = isExpanded ? getFilteredProjectEmployees(project) : [];
-                                        const projectManager = isExpanded ? getProjectManager(project) : null;
-                                        const siteSupervisor = isExpanded ? getSiteSupervisor(project) : null;
-                                        const leadingHand = isExpanded ? getLeadingHand(project) : null;
+                                        const isSelected = projectSiteKey(selectedInfoProject) === rowKey;
 
                                         return (
                                             <React.Fragment key={rowKey}>
                                                 <tr
-                                                    className={`site-registry-data-row${isExpanded ? ' selected' : ''}${project.archived ? ' archived' : ''}`}
+                                                    className={`site-registry-data-row${isSelected ? ' selected' : ''}${project.archived ? ' archived' : ''}`}
                                                     onClick={() => openProjectInfo(project)}
                                                     onContextMenu={event => openProjectMenuFromRow(event, project)}
                                                     onKeyDown={event => {
@@ -1229,13 +1231,12 @@ export default function SiteInformationPage() {
                                                         }
                                                     }}
                                                     tabIndex={0}
-                                                    aria-expanded={isExpanded}
                                                 >
                                                     <td className="site-registry-select-col">
                                                         <BuilderLogoMark
                                                             builder={project.builder}
                                                             logoSrc={builderLogoUrls.get(project.builder.id)}
-                                                            selected={isExpanded}
+                                                            selected={isSelected}
                                                         />
                                                     </td>
                                                     <td>
@@ -1247,9 +1248,9 @@ export default function SiteInformationPage() {
                                                                     event.stopPropagation();
                                                                     openProjectInfo(project);
                                                                 }}
-                                                                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${project.name}`}
+                                                                aria-label={`View ${project.name}`}
                                                             >
-                                                                {isExpanded ? <ChevronDown size={16} strokeWidth={2.3} aria-hidden="true" /> : <ChevronRight size={16} strokeWidth={2.3} aria-hidden="true" />}
+                                                                <ChevronRight size={16} strokeWidth={2.3} aria-hidden="true" />
                                                             </button>
                                                             <span>{project.name}</span>
                                                         </div>
@@ -1274,118 +1275,6 @@ export default function SiteInformationPage() {
                                                         </button>
                                                     </td>
                                                 </tr>
-                                                {isExpanded ? (
-                                                    <tr className="site-registry-detail-row">
-                                                        <td colSpan="7">
-                                                            <div className="site-registry-detail-panel">
-                                                                <section className="site-registry-inducted-panel">
-                                                                    <div className="site-registry-detail-heading">
-                                                                        <div>
-                                                                            <h4>Inducted Workers</h4>
-                                                                            <span>{employeesLoading ? 'Loading employees...' : `${projectEmployees.length} linked to this site`}</span>
-                                                                        </div>
-                                                                        <label className="site-registry-inducted-search">
-                                                                            <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-                                                                            <input
-                                                                                type="search"
-                                                                                value={inductedSearch}
-                                                                                onChange={event => setInductedSearch(event.target.value)}
-                                                                                onClick={event => event.stopPropagation()}
-                                                                                placeholder="Search inducted employees..."
-                                                                                aria-label="Search inducted employees"
-                                                                            />
-                                                                        </label>
-                                                                    </div>
-                                                                    <div className="site-registry-employee-list">
-                                                                        {employeesLoading ? (
-                                                                            <div className="site-registry-detail-empty">Loading inducted employees...</div>
-                                                                        ) : filteredProjectEmployees.length === 0 ? (
-                                                                            <div className="site-registry-detail-empty">
-                                                                                {projectEmployees.length === 0 ? 'No inducted employees are linked to this site yet.' : 'No inducted employees match this search.'}
-                                                                            </div>
-                                                                        ) : filteredProjectEmployees.map(employee => (
-                                                                            <div className="site-registry-employee-row" key={employee.id}>
-                                                                                <EmployeeAvatar employee={employee} />
-                                                                                <div className="site-registry-employee-main">
-                                                                                    <strong>{employeeName(employee)}</strong>
-                                                                                    <span>{employee.email || 'No email recorded'}</span>
-                                                                                </div>
-                                                                                <span className={`site-registry-employee-role ${getEmployeeRoleKey(employee)}`}>{getEmployeeRoleLabel(employee)}</span>
-                                                                                <span className="site-registry-employee-date">{formatProjectDate(employee.verifiedAt || employee.updatedAt)}</span>
-                                                                                <span className="site-registry-employee-status">Inducted</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </section>
-                                                                <aside className="site-registry-site-panel">
-                                                                    <section className="site-registry-map-detail">
-                                                                        <div className="site-registry-side-heading">Site Location Map</div>
-                                                                        {project.siteLocation ? (
-                                                                            <iframe
-                                                                                title={`${project.name} map preview`}
-                                                                                src={mapPreviewUrl(project.siteLocation)}
-                                                                                loading="lazy"
-                                                                                referrerPolicy="no-referrer-when-downgrade"
-                                                                            />
-                                                                        ) : (
-                                                                            <div className="site-registry-map-placeholder compact">No site location set.</div>
-                                                                        )}
-                                                                    </section>
-                                                                    <section className="site-registry-contact-grid">
-                                                                        <div className="site-registry-contact-card">
-                                                                            <span>Project Manager</span>
-                                                                            {projectManager ? (
-                                                                                <>
-                                                                                    <strong>{personDisplayName(projectManager)}</strong>
-                                                                                    <small><Mail size={13} aria-hidden="true" /> {personEmail(projectManager)}</small>
-                                                                                </>
-                                                                            ) : (
-                                                                                <strong>Not assigned</strong>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="site-registry-contact-card">
-                                                                            <span>Site Supervisor</span>
-                                                                            {siteSupervisor ? (
-                                                                                <>
-                                                                                    <strong>{personDisplayName(siteSupervisor)}</strong>
-                                                                                    <small><Phone size={13} aria-hidden="true" /> {personPhone(siteSupervisor)}</small>
-                                                                                </>
-                                                                            ) : (
-                                                                                <strong>Not assigned</strong>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="site-registry-contact-card">
-                                                                            <span>Leading Hand</span>
-                                                                            {leadingHand ? (
-                                                                                <>
-                                                                                    <strong>{personDisplayName(leadingHand)}</strong>
-                                                                                    <small><Phone size={13} aria-hidden="true" /> {personPhone(leadingHand)}</small>
-                                                                                </>
-                                                                            ) : (
-                                                                                <strong>Not assigned</strong>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="site-registry-contact-card wide">
-                                                                            <span>Address</span>
-                                                                            <strong>{project.siteLocation || 'Not set'}</strong>
-                                                                            <small>Last updated {formatProjectDate(project.updatedAt)}</small>
-                                                                        </div>
-                                                                        <div className="site-registry-contact-card wide">
-                                                                            <span>Scaffold Entity</span>
-                                                                            <strong>{normalizeScaffoldEntity(project.scaffoldEntity)}</strong>
-                                                                            <small>Stored against this site for company reporting and AI lookup</small>
-                                                                        </div>
-                                                                        <div className="site-registry-contact-card wide">
-                                                                            <span>Design Folder</span>
-                                                                            <strong>{project.designFolderPath || 'Not linked'}</strong>
-                                                                            <small>ESS Design project or scaffold folder linked to this site</small>
-                                                                        </div>
-                                                                    </section>
-                                                                </aside>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ) : null}
                                             </React.Fragment>
                                         );
                                     })}
@@ -1395,6 +1284,127 @@ export default function SiteInformationPage() {
                     </section>
                 )}
             </div>
+
+            {infoProject ? (
+                <div className="module-modal-backdrop site-registry-info-backdrop" onClick={() => setSelectedInfoProject(null)}>
+                    <div className="module-modal compact site-registry-info-modal" onClick={event => event.stopPropagation()}>
+                        <div className="site-registry-info-header">
+                            <div>
+                                <span>{infoProject.builder?.name || 'Site Registry'}</span>
+                                <h3>{infoProject.name}</h3>
+                                <small>{infoProject.siteLocation || 'No site location set'}</small>
+                            </div>
+                            <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information">x</button>
+                        </div>
+                        <div className="site-registry-detail-panel site-registry-detail-modal-panel">
+                            <section className="site-registry-inducted-panel">
+                                <div className="site-registry-detail-heading">
+                                    <div>
+                                        <h4>Inducted Workers</h4>
+                                        <span>{employeesLoading ? 'Loading employees...' : `${infoProjectEmployees.length} linked to this site`}</span>
+                                    </div>
+                                    <label className="site-registry-inducted-search">
+                                        <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+                                        <input
+                                            type="search"
+                                            value={inductedSearch}
+                                            onChange={event => setInductedSearch(event.target.value)}
+                                            onClick={event => event.stopPropagation()}
+                                            placeholder="Search inducted employees..."
+                                            aria-label="Search inducted employees"
+                                        />
+                                    </label>
+                                </div>
+                                <div className="site-registry-employee-list">
+                                    {employeesLoading ? (
+                                        <div className="site-registry-detail-empty">Loading inducted employees...</div>
+                                    ) : filteredInfoProjectEmployees.length === 0 ? (
+                                        <div className="site-registry-detail-empty">
+                                            {infoProjectEmployees.length === 0 ? 'No inducted employees are linked to this site yet.' : 'No inducted employees match this search.'}
+                                        </div>
+                                    ) : filteredInfoProjectEmployees.map(employee => (
+                                        <div className="site-registry-employee-row" key={employee.id}>
+                                            <EmployeeAvatar employee={employee} />
+                                            <div className="site-registry-employee-main">
+                                                <strong>{employeeName(employee)}</strong>
+                                                <span>{employee.email || 'No email recorded'}</span>
+                                            </div>
+                                            <span className={`site-registry-employee-role ${getEmployeeRoleKey(employee)}`}>{getEmployeeRoleLabel(employee)}</span>
+                                            <span className="site-registry-employee-date">{formatProjectDate(employee.verifiedAt || employee.updatedAt)}</span>
+                                            <span className="site-registry-employee-status">Inducted</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                            <aside className="site-registry-site-panel">
+                                <section className="site-registry-map-detail">
+                                    <div className="site-registry-side-heading">Site Location Map</div>
+                                    {infoProject.siteLocation ? (
+                                        <iframe
+                                            title={`${infoProject.name} map preview`}
+                                            src={mapPreviewUrl(infoProject.siteLocation)}
+                                            loading="lazy"
+                                            referrerPolicy="no-referrer-when-downgrade"
+                                        />
+                                    ) : (
+                                        <div className="site-registry-map-placeholder compact">No site location set.</div>
+                                    )}
+                                </section>
+                                <section className="site-registry-contact-grid">
+                                    <div className="site-registry-contact-card">
+                                        <span>Project Manager</span>
+                                        {infoProjectManager ? (
+                                            <>
+                                                <strong>{personDisplayName(infoProjectManager)}</strong>
+                                                <small><Mail size={13} aria-hidden="true" /> {personEmail(infoProjectManager)}</small>
+                                            </>
+                                        ) : (
+                                            <strong>Not assigned</strong>
+                                        )}
+                                    </div>
+                                    <div className="site-registry-contact-card">
+                                        <span>Site Supervisor</span>
+                                        {infoSiteSupervisor ? (
+                                            <>
+                                                <strong>{personDisplayName(infoSiteSupervisor)}</strong>
+                                                <small><Phone size={13} aria-hidden="true" /> {personPhone(infoSiteSupervisor)}</small>
+                                            </>
+                                        ) : (
+                                            <strong>Not assigned</strong>
+                                        )}
+                                    </div>
+                                    <div className="site-registry-contact-card">
+                                        <span>Leading Hand</span>
+                                        {infoLeadingHand ? (
+                                            <>
+                                                <strong>{personDisplayName(infoLeadingHand)}</strong>
+                                                <small><Phone size={13} aria-hidden="true" /> {personPhone(infoLeadingHand)}</small>
+                                            </>
+                                        ) : (
+                                            <strong>Not assigned</strong>
+                                        )}
+                                    </div>
+                                    <div className="site-registry-contact-card wide">
+                                        <span>Address</span>
+                                        <strong>{infoProject.siteLocation || 'Not set'}</strong>
+                                        <small>Last updated {formatProjectDate(infoProject.updatedAt)}</small>
+                                    </div>
+                                    <div className="site-registry-contact-card wide">
+                                        <span>Scaffold Entity</span>
+                                        <strong>{normalizeScaffoldEntity(infoProject.scaffoldEntity)}</strong>
+                                        <small>Stored against this site for company reporting and AI lookup</small>
+                                    </div>
+                                    <div className="site-registry-contact-card wide">
+                                        <span>Design Folder</span>
+                                        <strong>{infoProject.designFolderPath || 'Not linked'}</strong>
+                                        <small>ESS Design project or scaffold folder linked to this site</small>
+                                    </div>
+                                </section>
+                            </aside>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             {projectMenu ? (
                 <div
