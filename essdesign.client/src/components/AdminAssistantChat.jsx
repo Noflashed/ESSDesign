@@ -343,6 +343,7 @@ export default function AdminAssistantChat({
                             userDisplayName={userDisplayName}
                             onUserAvatarError={onUserAvatarError}
                         />
+                        <div className={`admin-assistant-response ${message.role}`}>
                         <div className={`admin-assistant-message ${message.role}${message.error ? ' error' : ''}${message.streaming ? ' streaming' : ''}`}>
                             <AssistantMessageContent content={message.content} role={message.role} />
 
@@ -356,38 +357,39 @@ export default function AdminAssistantChat({
                                 </div>
                             ) : null}
 
-                            {message.role === 'assistant' && index > 0 && !message.error ? (
-                                <div className="admin-assistant-feedback" aria-label="Rate this answer">
-                                    {hasExportableTable ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => exportMessageTables(message.content)}
-                                            aria-label="Export table to Excel"
-                                            title="Export table"
-                                        >
-                                            <Download size={13} aria-hidden="true" />
-                                        </button>
-                                    ) : null}
+                        </div>
+                        {message.role === 'assistant' && index > 0 && !message.error ? (
+                            <div className="admin-assistant-feedback" aria-label="Rate this answer">
+                                {hasExportableTable ? (
                                     <button
                                         type="button"
-                                        className={feedback[message.id] === 1 ? 'selected' : ''}
-                                        onClick={() => rateMessage(message, 1)}
-                                        aria-label="Helpful answer"
-                                        title="Helpful"
+                                        onClick={() => exportMessageTables(message.content)}
+                                        aria-label="Export table to Excel"
+                                        title="Export table"
                                     >
-                                        <ThumbsUp size={13} aria-hidden="true" />
+                                        <Download size={13} aria-hidden="true" />
                                     </button>
-                                    <button
-                                        type="button"
-                                        className={feedback[message.id] === -1 ? 'selected' : ''}
-                                        onClick={() => rateMessage(message, -1)}
-                                        aria-label="Unhelpful answer"
-                                        title="Not helpful"
-                                    >
-                                        <ThumbsDown size={13} aria-hidden="true" />
-                                    </button>
-                                </div>
-                            ) : null}
+                                ) : null}
+                                <button
+                                    type="button"
+                                    className={feedback[message.id] === 1 ? 'selected' : ''}
+                                    onClick={() => rateMessage(message, 1)}
+                                    aria-label="Helpful answer"
+                                    title="Helpful"
+                                >
+                                    <ThumbsUp size={13} aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={feedback[message.id] === -1 ? 'selected' : ''}
+                                    onClick={() => rateMessage(message, -1)}
+                                    aria-label="Unhelpful answer"
+                                    title="Not helpful"
+                                >
+                                    <ThumbsDown size={13} aria-hidden="true" />
+                                </button>
+                            </div>
+                        ) : null}
                         </div>
                     </div>
                     );
