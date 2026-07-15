@@ -30,12 +30,12 @@ public sealed class EssAssistantToolCatalog
                 include_archived = BooleanSchema("Whether archived sites should be included."),
                 limit = IntegerSchema("Maximum results, from 1 to 50."),
             }, "query", "include_archived", "limit"),
-            Function("search_people", "Search ESS employees and users. Contact and private fields are automatically redacted according to the current user's role.", new
+            Function("search_people", "Search and count the complete ESS employee registry and app-user directory. For an employee/headcount total, use a null query and role with limit 1, then read employeeCount. For all people or users, read totalMatches. Counts are exhaustive before the result limit. Contact and private fields are automatically redacted according to the current user's role.", new
             {
-                query = NullableStringSchema("Person name, email, phone, title, or role. Null lists people."),
+                query = NullableStringSchema("Person name, email, phone, title, or role. Use null for a full-directory list or count; do not pass generic words such as people, employees, headcount, ESS, active, or contractors as search terms."),
                 role = NullableStringSchema("Optional account role or employee classification. 'Leading Hand' uses the employee registry's leading-hand flag, not only account-role text."),
                 include_private_profile = BooleanSchema("Request private profile fields. They are returned only to authorised administrators."),
-                limit = IntegerSchema("Maximum results, from 1 to 100."),
+                limit = IntegerSchema("Maximum rows returned, from 1 to 100. This does not limit totalMatches or employeeCount; use 1 for count-only questions."),
             }, "query", "role", "include_private_profile", "limit"),
             Function("get_roster", "Read the ESS rostering plan for a date range, including active sites and required crew. Do not describe inducted crew as confirmed assignments.", new
             {

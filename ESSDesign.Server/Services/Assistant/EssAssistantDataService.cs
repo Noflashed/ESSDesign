@@ -161,7 +161,7 @@ public sealed class EssAssistantDataService
         var normalizedRole = Normalize(role);
         var leadingHandFilter = normalizedRole is "leading hand" or "leading hands";
         var privateAllowed = includePrivateProfile && access.CanSeePrivateProfileDetails;
-        var matches = people
+        var rankedMatches = people
             .Where(person => PersonMatchesRole(person, normalizedRole, leadingHandFilter))
             .Select(person => new
             {
@@ -178,6 +178,11 @@ public sealed class EssAssistantDataService
             .Where(item => string.IsNullOrWhiteSpace(query) || item.Score > 0)
             .OrderByDescending(item => item.Score)
             .ThenBy(item => item.Person.FullName)
+            .ToList();
+        var totalMatches = rankedMatches.Count;
+        var employeeMatches = rankedMatches.Count(item => !string.IsNullOrWhiteSpace(item.Person.EmployeeId));
+        var appUserOnlyMatches = totalMatches - employeeMatches;
+        var matches = rankedMatches
             .Take(Math.Clamp(limit, 1, 100))
             .ToList();
 
@@ -191,6 +196,7 @@ public sealed class EssAssistantDataService
             employeeTitle = item.Person.EmployeeTitle,
             leadingHand = item.Person.LeadingHand,
             verified = item.Person.Verified,
+            directoryType = string.IsNullOrWhiteSpace(item.Person.EmployeeId) ? "app_user_only" : "employee",
             preferredSiteIds = item.Person.PreferredSiteIds,
             email = access.CanSeeWorkContactDetails ? item.Person.Email : null,
             phoneNumber = access.CanSeeWorkContactDetails ? item.Person.PhoneNumber : null,
@@ -213,9 +219,15 @@ public sealed class EssAssistantDataService
             {
                 query,
                 role,
-                count = records.Count,
+                count = totalMatches,
+                totalMatches,
+                employeeCount = employeeMatches,
+                appUserOnlyCount = appUserOnlyMatches,
+                returnedCount = records.Count,
+                resultIsComplete = records.Count == totalMatches,
                 contactDetailsIncluded = access.CanSeeWorkContactDetails,
                 privateProfileIncluded = privateAllowed,
+                countGuidance = "Use employeeCount for employee/headcount questions and totalMatches for all people or app-user questions. Counts cover all matching records before the result limit.",
                 presentationNote = leadingHandFilter
                     ? "These records come from the employee registry's leadingHand classification. Return a concise name list."
                     : null,
@@ -229,7 +241,7 @@ public sealed class EssAssistantDataService
                         "people-directory:registry",
                         "people_directory",
                         "ESS employee registry",
-                        $"{matches.Count} matching people",
+                        $"{totalMatches} matching people",
                         matches.Select(item => item.Person.UpdatedAt).OrderByDescending(ParseTimestamp).FirstOrDefault()),
                 },
         };
