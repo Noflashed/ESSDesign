@@ -24,7 +24,7 @@ public sealed class EssAssistantToolCatalog
                 domains = ArraySchema("Domains to search: all, sites, people, designs, drawing_register, project_data, materials, transport, or news."),
                 limit = IntegerSchema("Maximum matches per domain, from 1 to 12."),
             }, "query", "domains", "limit"),
-            Function("search_sites", "Search the universal ESS builder and project site registry, including locations, site assignments, the named inducted employees, and drawing numbers.", new
+            Function("search_sites", "Search the universal ESS builder and project site registry, including locations, scaffold entity/company, site assignments, named inducted employees, and drawing numbers. Use this before searching designs when the user supplies a site name or address; a no-match result may include close suggestions that must not be treated as exact matches.", new
             {
                 query = NullableStringSchema("Builder, project, location, or drawing number. Null lists sites."),
                 include_archived = BooleanSchema("Whether archived sites should be included."),

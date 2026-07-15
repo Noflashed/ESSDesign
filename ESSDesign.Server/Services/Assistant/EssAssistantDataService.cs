@@ -151,6 +151,28 @@ public sealed class EssAssistantDataService
             drawingNumbers = item.Site.DrawingNumbers,
             updatedAt = item.Site.UpdatedAt,
         }).ToList();
+        var suggestionQuery = RemoveNumericTokens(query);
+        var suggestions = records.Count == 0 && !string.IsNullOrWhiteSpace(suggestionQuery)
+            ? sites
+                .Where(site => includeArchived || !site.Archived)
+                .Select(site => new
+                {
+                    Site = site,
+                    Score = Score(suggestionQuery, site.Name, site.BuilderName, site.SiteLocation, site.ScaffoldEntity),
+                })
+                .Where(item => item.Score > 0)
+                .OrderByDescending(item => item.Score)
+                .ThenBy(item => item.Site.Name)
+                .Take(3)
+                .Select(item => new
+                {
+                    builder = item.Site.BuilderName,
+                    project = item.Site.Name,
+                    location = item.Site.SiteLocation,
+                    scaffoldEntity = item.Site.ScaffoldEntity,
+                })
+                .ToList()
+            : null;
         var managementRows = managementQuery
             ? records.Select(site => new
             {
@@ -171,8 +193,11 @@ public sealed class EssAssistantDataService
                 count = records.Count,
                 presentationNote = managementQuery
                     ? "For active job-site management questions, use managementRows. List each active job/site with its project manager; include site supervisor and the single assigned leading hand when the user asks for a breakdown. Use leadingHand only from assignedLeadingHand. Do not infer a site's leading hand from inductedEmployees or from an employee leadingHand flag. If the user asks for a table, output a real Markdown table with pipes and a separator row. Do not write source markers/citations. Use '-' when a field is missing."
-                    : null,
+                    : suggestions?.Count > 0
+                        ? "No exact site matched. These are close site-registry suggestions only, not matches. State that the requested site does not currently exist and ask whether the user meant the closest suggestion. Do not search or present designs for a suggested site until the user confirms it."
+                        : "For current/all jobs, list the non-archived sites returned here. Use scaffoldEntity when the user asks which scaffold company or entity a job is under; builder is the client/builder, not the scaffold entity.",
                 managementRows,
+                suggestions,
                 sites = records,
             },
             Sources = matches.Select(item => Source(
@@ -1607,6 +1632,11 @@ public sealed class EssAssistantDataService
         (value ?? string.Empty).ToLowerInvariant(),
         @"[^a-z0-9]+",
         " ").Trim();
+
+    private static string RemoveNumericTokens(string? value) => string.Join(' ',
+        Normalize(value)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => !token.Any(char.IsDigit)));
 
     private static string DrawingKey(string? value)
     {
