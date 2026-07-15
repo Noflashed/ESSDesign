@@ -19,6 +19,9 @@ public sealed class EssAssistantService
     private static readonly Regex NumberedResultPattern = new(
         @"(?:\b(?:link|item|number|option|record)\b[^\d]{0,24}|^\s*#?)(?<ordinal>\d{1,3})\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex MarkdownLinkPattern = new(
+        @"\[([^\]\r\n]+)\]\([^\)\r\n]+\)",
+        RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
@@ -340,6 +343,12 @@ public sealed class EssAssistantService
             metrics.Success = true;
             var selectedSources = collectedSources.Values.Take(8).ToList();
             var links = collectedLinks.Values.Take(8).ToList();
+            if (links.Count > 0)
+            {
+                reply = route.IsHandoverRequest
+                    ? "Here it is."
+                    : MarkdownLinkPattern.Replace(reply, "$1");
+            }
             assistantMessageId = Guid.NewGuid();
             chatResponse = new EssAssistantChatResponse
             {
@@ -838,9 +847,14 @@ public sealed class EssAssistantService
 
         var complex = trimmed.Length > 300 || ContainsAny(value,
             "analyse", "analyze", "compare", "recommend", "relationship", "forecast", "risk", "why", "investigate");
+        var isHandoverRequest = ContainsAny(value, "handover");
         var action = ContainsAny(value,
             "open", "view", "download", "take me to", "show me the file", "give me", "get me", "fetch", "want the design",
-            "latest design", "latest drawing", "lateest design", "lateest drawing", "most recent design", "most recent drawing");
+            "latest design", "latest drawing", "lateest design", "lateest drawing", "most recent design", "most recent drawing") ||
+            isHandoverRequest && ContainsAny(value, "latest", "most recent", "newest", "link");
+        var selectedResultOrdinal = ExtractSelectedResultOrdinal(trimmed);
+        if (!selectedResultOrdinal.HasValue && isHandoverRequest && ContainsAny(value, "latest", "most recent", "newest"))
+            selectedResultOrdinal = 1;
         return new AssistantRoute(
             tools.Count == 0 ? "general" : cacheKey,
             tools.Count > 0,
@@ -854,7 +868,8 @@ public sealed class EssAssistantService
                 : _configuration["OpenAI:AssistantFastReasoningEffort"] ?? "minimal",
             status,
             cacheKey,
-            ExtractSelectedResultOrdinal(trimmed),
+            selectedResultOrdinal,
+            isHandoverRequest,
             null);
     }
 
@@ -1104,6 +1119,7 @@ public sealed class EssAssistantService
         string Status,
         string CacheKey,
         int? SelectedResultOrdinal,
+        bool IsHandoverRequest,
         string? LocalReply)
     {
         public static AssistantRoute Local(string name, string reply) => new(
@@ -1118,6 +1134,7 @@ public sealed class EssAssistantService
             "Thinking...",
             name,
             null,
+            false,
             reply);
     }
 

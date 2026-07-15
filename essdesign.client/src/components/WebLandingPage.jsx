@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { essNewsAPI } from '../services/api';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
+const MALOO_LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png';
 const LANDING_BACKDROP_CACHE_KEY = 'ess-landing-backdrop-url';
 
 function optimizedBackdropUrl(url) {
@@ -67,7 +68,10 @@ export default function WebLandingPage() {
             <div className="web-landing-grid" aria-hidden="true" />
 
             <div className="web-landing-content">
-                <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo" loading="eager" decoding="async" fetchPriority="high" />
+                <div className="web-landing-logo-pair">
+                    <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo web-landing-logo-ess" loading="eager" decoding="async" fetchPriority="high" />
+                    <img src={MALOO_LOGO_URL} alt="Maloo Access Group" className="web-landing-logo web-landing-logo-maloo" loading="eager" decoding="async" />
+                </div>
             </div>
         </section>
     );
