@@ -112,14 +112,6 @@ public sealed class EssAssistantRunMetrics
     public List<string> ToolNames { get; } = new();
 }
 
-internal sealed class EssAssistantModelAnswer
-{
-    public string Reply { get; set; } = string.Empty;
-    public bool Grounded { get; set; }
-    public List<string> SourceIds { get; set; } = new();
-    public List<string> FollowUps { get; set; } = new();
-}
-
 internal sealed class EssAssistantModelResponse
 {
     public string Id { get; init; } = string.Empty;
