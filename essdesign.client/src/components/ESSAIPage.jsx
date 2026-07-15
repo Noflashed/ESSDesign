@@ -50,8 +50,7 @@ export default function ESSAIPage({
     const [search, setSearch] = useState('');
     const [historyMinimized, setHistoryMinimized] = useState(false);
     const [menuConversationId, setMenuConversationId] = useState(null);
-    const [deleteTarget, setDeleteTarget] = useState(null);
-    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deletingConversationId, setDeletingConversationId] = useState(null);
 
     const openConversation = useCallback(async (conversationId) => {
         if (!conversationId) return;
@@ -122,7 +121,6 @@ export default function ESSAIPage({
         setChatLoading(false);
         setError('');
         setMenuConversationId(null);
-        setDeleteTarget(null);
         setChatInstance(current => current + 1);
     }, []);
 
@@ -163,30 +161,20 @@ export default function ESSAIPage({
         }
     };
 
-    const requestDeleteConversation = (conversation) => {
+    const deleteConversation = async (conversation) => {
+        if (!conversation?.id || deletingConversationId) return;
         setMenuConversationId(null);
-        setDeleteTarget(conversation);
-    };
-
-    const cancelDeleteConversation = () => {
-        if (!deleteLoading) setDeleteTarget(null);
-    };
-
-    const confirmDeleteConversation = async () => {
-        if (!deleteTarget || deleteLoading) return;
-        const conversation = deleteTarget;
-        setDeleteLoading(true);
+        setDeletingConversationId(conversation.id);
         try {
             await assistantAPI.deleteConversation(conversation.id);
             conversationCache.current.delete(conversation.id);
             setConversations(current => current.filter(item => item.id !== conversation.id));
             if (activeConversationId === conversation.id) startNewConversation();
-            setDeleteTarget(null);
             setError('');
         } catch (deleteError) {
             setError(deleteError.response?.data?.error || deleteError.message || 'This chat could not be deleted.');
         } finally {
-            setDeleteLoading(false);
+            setDeletingConversationId(null);
         }
     };
 
@@ -262,7 +250,14 @@ export default function ESSAIPage({
                                 {menuConversationId === conversation.id ? (
                                     <div className="ess-ai-history-menu" onClick={event => event.stopPropagation()}>
                                         <button type="button" onClick={() => renameConversation(conversation)}><Pencil size={14} /> Rename</button>
-                                        <button type="button" className="danger" onClick={() => requestDeleteConversation(conversation)}><Trash2 size={14} /> Delete</button>
+                                        <button
+                                            type="button"
+                                            className="danger"
+                                            onClick={() => deleteConversation(conversation)}
+                                            disabled={Boolean(deletingConversationId)}
+                                        >
+                                            <Trash2 size={14} /> Delete
+                                        </button>
                                     </div>
                                 ) : null}
                             </div>
@@ -270,23 +265,6 @@ export default function ESSAIPage({
                     </div>
                 </div>
             </aside>
-
-            {deleteTarget ? (
-                <div className="ess-ai-confirm-scrim" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) cancelDeleteConversation(); }}>
-                    <div className="ess-ai-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="ess-ai-delete-title">
-                        <button type="button" className="ess-ai-confirm-close" onClick={cancelDeleteConversation} aria-label="Cancel delete" disabled={deleteLoading}><X size={15} /></button>
-                        <div className="ess-ai-confirm-icon"><Trash2 size={18} /></div>
-                        <h2 id="ess-ai-delete-title">Delete chat?</h2>
-                        <p>This will permanently remove "{deleteTarget.title}" from your chat history.</p>
-                        <div className="ess-ai-confirm-actions">
-                            <button type="button" onClick={cancelDeleteConversation} disabled={deleteLoading}>Cancel</button>
-                            <button type="button" className="danger" onClick={confirmDeleteConversation} disabled={deleteLoading}>
-                                {deleteLoading ? 'Deleting...' : 'Delete'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
 
             <main className="ess-ai-workspace">
                 <header className="ess-ai-workspace-header">
