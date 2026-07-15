@@ -4829,6 +4829,20 @@ export const preferencesAPI = {
 };
 
 export const essNewsAPI = {
+    getLandingImages: async (limit = 6) => {
+        const safeLimit = Math.max(1, Math.min(Number(limit) || 6, 8));
+        const query = `?select=id,title,subtitle,media_url,media_type,created_at&media_type=eq.image&media_url=not.is.null&order=created_at.desc&limit=${safeLimit}`;
+        const rows = await readRestRows('ess_news', query);
+        return rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            subtitle: row.subtitle || '',
+            mediaUrl: row.media_url,
+            mediaType: 'image',
+            createdAt: row.created_at
+        }));
+    },
+
     getAll: async () => {
         const rows = await readRestRows('ess_news', '?order=created_at.desc');
         return rows.map(row => ({
