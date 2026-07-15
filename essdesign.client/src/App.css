@@ -7147,11 +7147,9 @@ button.stat-card {
     object-fit: cover;
     filter: grayscale(1) contrast(0.95) brightness(0.98);
     opacity: 0.36;
-    transform: scale(1.025);
-    animation: web-landing-photo-drift 8s ease-out both;
+    transform: scale(1.04);
     pointer-events: none;
     user-select: none;
-    will-change: transform;
 }
 
 .web-landing-overlay {
@@ -7227,11 +7225,6 @@ button.stat-card {
     to { opacity: 0; }
 }
 
-@keyframes web-landing-photo-drift {
-    from { transform: scale(1.025); }
-    to { transform: scale(1.065); }
-}
-
 @media (prefers-reduced-motion: reduce) {
     .web-landing-photo-frame,
     .web-landing-photo-frame img,
@@ -7239,10 +7232,6 @@ button.stat-card {
     .web-landing-content {
         animation: none;
         transition: none;
-    }
-
-    .web-landing-photo-frame img {
-        transform: scale(1.025);
     }
 }
 
