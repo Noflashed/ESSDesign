@@ -8338,10 +8338,10 @@ button.stat-card {
 
 .ess-ai-workspace .ess-ai-chat .admin-assistant-message.assistant {
     max-width: min(740px, calc(100% - 20px));
-    padding: 2px 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
+    padding: 12px 16px;
+    border: 1px solid var(--ess-ai-border, #dededb);
+    border-radius: 18px;
+    background: var(--ess-ai-composer, #ffffff);
     box-shadow: none;
     backdrop-filter: none;
 }
