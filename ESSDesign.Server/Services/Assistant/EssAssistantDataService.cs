@@ -105,7 +105,7 @@ public sealed class EssAssistantDataService
                 peopleByEmployeeId.TryGetValue(employeeId, out person);
             if (person == null && !string.IsNullOrWhiteSpace(userId))
                 peopleByUserId.TryGetValue(userId, out person);
-            return person == null ? null : new { person.FullName, person.Role, person.LeadingHand };
+            return person == null ? null : new { person.FullName, Role = RoleLabel(person.Role), person.LeadingHand };
         }
 
         var matches = sites
@@ -133,6 +133,15 @@ public sealed class EssAssistantDataService
             assignedSiteSupervisor = Resolve(item.Site.SiteSupervisorEmployeeId, item.Site.SiteSupervisorUserId),
             assignedLeadingHand = Resolve(item.Site.LeadingHandEmployeeId, item.Site.LeadingHandUserId),
             inductedEmployeeCount = item.Site.InductedEmployeeIds.Count,
+            inductedEmployees = item.Site.InductedEmployeeIds
+                .Select(id => peopleByEmployeeId.TryGetValue(id, out var person)
+                    ? new { name = person.FullName, role = RoleLabel(person.Role), leadingHand = person.LeadingHand }
+                    : null)
+                .Where(person => person != null)
+                .OrderBy(person => person!.name, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            inductedEmployeesNotInRegistry = item.Site.InductedEmployeeIds
+                .Count(id => !peopleByEmployeeId.ContainsKey(id)),
             drawingNumbers = item.Site.DrawingNumbers,
             updatedAt = item.Site.UpdatedAt,
         }).ToList();
@@ -172,6 +181,7 @@ public sealed class EssAssistantDataService
                     access.CanSeeWorkContactDetails ? person.Email : null,
                     access.CanSeeWorkContactDetails ? person.PhoneNumber : null,
                     person.Role,
+                    RoleLabel(person.Role),
                     person.EmployeeTitle,
                     person.LeadingHand ? "leading hand leading hands" : null),
             })
@@ -192,7 +202,7 @@ public sealed class EssAssistantDataService
             employeeId = item.Person.EmployeeId,
             userId = item.Person.UserId,
             name = item.Person.FullName,
-            role = item.Person.Role,
+            role = RoleLabel(item.Person.Role),
             employeeTitle = item.Person.EmployeeTitle,
             leadingHand = item.Person.LeadingHand,
             verified = item.Person.Verified,
@@ -254,9 +264,25 @@ public sealed class EssAssistantDataService
         if (leadingHandFilter)
             return person.LeadingHand || Normalize(person.Role) == "leading hand";
 
-        return Normalize(person.Role).Contains(normalizedRole, StringComparison.OrdinalIgnoreCase)
-            || Normalize(person.EmployeeTitle).Contains(normalizedRole, StringComparison.OrdinalIgnoreCase);
+        var singularRole = normalizedRole.EndsWith("s", StringComparison.Ordinal)
+            ? normalizedRole[..^1]
+            : normalizedRole;
+        var haystack = Normalize($"{person.Role} {RoleLabel(person.Role)} {person.EmployeeTitle}");
+        return haystack.Contains(singularRole, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string RoleLabel(string? role) => Normalize(role) switch
+    {
+        "admin" => "Admin",
+        "scaffold designer" => "Scaffold Designer",
+        "site supervisor" => "Site Supervisor",
+        "project manager" => "Project Manager",
+        "leading hand" => "Leading Hand",
+        "general scaffolder" => "Scaffolder",
+        "transport management" => "Transport Management",
+        "" or "viewer" => "Viewer",
+        var other => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(other),
+    };
 
     public async Task<EssAssistantToolResult> GetRosterAsync(
         DateOnly startDate,
@@ -1175,7 +1201,10 @@ public sealed class EssAssistantDataService
             if (string.IsNullOrWhiteSpace(fullName) && profile.HasValue)
                 fullName = GetString(profile.Value, "full_name") ?? GetString(profile.Value, "email") ?? "Unknown user";
             var leadingHand = GetBool(employee, "leading_hand");
-            var person = BuildPerson(employeeId, userId, fullName, email, GetString(employee, "phone_number"), leadingHand, GetString(employee, "verified_at"), profile, roles);
+            // Mirrors the Employees page: linked account role wins, otherwise the
+            // registry's leading-hand flag, otherwise the default field classification.
+            var fallbackRole = leadingHand ? "leading_hand" : "general_scaffolder";
+            var person = BuildPerson(employeeId, userId, fullName, email, GetString(employee, "phone_number"), leadingHand, GetString(employee, "verified_at"), profile, roles, fallbackRole);
             person.PreferredSiteIds = new[]
                 {
                     GetString(employee, "preferred_site_1"),
@@ -1194,7 +1223,7 @@ public sealed class EssAssistantDataService
             if (usedProfiles.Contains(profileId))
                 continue;
             var fullName = GetString(profile, "full_name") ?? GetString(profile, "email") ?? "Unknown user";
-            people.Add(BuildPerson(null, profileId, fullName, GetString(profile, "email"), GetString(profile, "phone_number"), false, null, profile, roles));
+            people.Add(BuildPerson(null, profileId, fullName, GetString(profile, "email"), GetString(profile, "phone_number"), false, null, profile, roles, "viewer"));
         }
 
         return people.OrderBy(person => person.FullName).ToList();
@@ -1209,14 +1238,15 @@ public sealed class EssAssistantDataService
         bool leadingHand,
         string? verifiedAt,
         JsonElement? profile,
-        IReadOnlyDictionary<string, string> roles)
+        IReadOnlyDictionary<string, string> roles,
+        string fallbackRole)
     {
         if (string.IsNullOrWhiteSpace(userId) && profile.HasValue)
             userId = GetString(profile.Value, "id");
 
         var role = !string.IsNullOrWhiteSpace(userId) && roles.TryGetValue(userId, out var assignedRole)
             ? assignedRole
-            : GetStringAny(profile, "role", "app_role") ?? "viewer";
+            : GetStringAny(profile, "role", "app_role") ?? fallbackRole;
 
         return new PersonRecord
         {
