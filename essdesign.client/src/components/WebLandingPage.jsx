@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
@@ -94,69 +93,14 @@ async function preloadPhoto(photo) {
     return photo.displayUrl !== photo.mediaUrl ? loadImageUrl(photo.mediaUrl) : false;
 }
 
-function useLandingPointerEffects(pageRef, canvasRef, enabled) {
+function useLandingParallax(pageRef, enabled) {
     useEffect(() => {
         const page = pageRef.current;
-        const canvas = canvasRef.current;
         const finePointer = window.matchMedia('(pointer: fine)');
-        if (!page || !canvas || !enabled || !finePointer.matches) return undefined;
+        if (!page || !enabled || !finePointer.matches) return undefined;
 
-        const context = canvas.getContext('2d');
-        if (!context) return undefined;
-
-        let points = [];
-        let drawFrame = 0;
         let pointerFrame = 0;
-        let width = 0;
-        let height = 0;
         let latestPointer = null;
-
-        const resize = () => {
-            const rect = page.getBoundingClientRect();
-            const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-            width = Math.max(1, Math.round(rect.width));
-            height = Math.max(1, Math.round(rect.height));
-            canvas.width = Math.round(width * ratio);
-            canvas.height = Math.round(height * ratio);
-            canvas.style.width = `${width}px`;
-            canvas.style.height = `${height}px`;
-            context.setTransform(ratio, 0, 0, ratio, 0, 0);
-        };
-
-        const drawTrail = now => {
-            context.clearRect(0, 0, width, height);
-            points = points.filter(point => now - point.time < 560);
-
-            context.lineCap = 'round';
-            context.lineJoin = 'round';
-            for (let index = 1; index < points.length; index += 1) {
-                const from = points[index - 1];
-                const to = points[index];
-                const life = Math.max(0, 1 - ((now - to.time) / 560));
-                context.beginPath();
-                context.moveTo(from.x, from.y);
-                context.lineTo(to.x, to.y);
-                context.lineWidth = 0.7 + (life * 1.35);
-                context.strokeStyle = `rgba(24, 145, 219, ${life * 0.72})`;
-                context.stroke();
-
-                if (index % 5 === 0) {
-                    const dx = to.x - from.x;
-                    const dy = to.y - from.y;
-                    const length = Math.hypot(dx, dy) || 1;
-                    const tickX = (-dy / length) * 3.5;
-                    const tickY = (dx / length) * 3.5;
-                    context.beginPath();
-                    context.moveTo(to.x - tickX, to.y - tickY);
-                    context.lineTo(to.x + tickX, to.y + tickY);
-                    context.lineWidth = 0.8;
-                    context.strokeStyle = `rgba(255, 255, 255, ${life * 0.62})`;
-                    context.stroke();
-                }
-            }
-
-            drawFrame = points.length > 1 ? window.requestAnimationFrame(drawTrail) : 0;
-        };
 
         const applyPointerPosition = () => {
             pointerFrame = 0;
@@ -179,13 +123,6 @@ function useLandingPointerEffects(pageRef, canvasRef, enabled) {
                 normalY: (y / rect.height) * 2 - 1
             };
             if (!pointerFrame) pointerFrame = window.requestAnimationFrame(applyPointerPosition);
-
-            const lastPoint = points[points.length - 1];
-            if (!lastPoint || Math.hypot(x - lastPoint.x, y - lastPoint.y) >= 4) {
-                points.push({ x, y, time: performance.now() });
-                if (points.length > 30) points.shift();
-                if (!drawFrame) drawFrame = window.requestAnimationFrame(drawTrail);
-            }
         };
 
         const resetPointer = () => {
@@ -197,31 +134,21 @@ function useLandingPointerEffects(pageRef, canvasRef, enabled) {
         };
 
         const handleVisibility = () => {
-            if (document.hidden) {
-                points = [];
-                context.clearRect(0, 0, width, height);
-                resetPointer();
-            }
+            if (document.hidden) resetPointer();
         };
 
-        resize();
-        const resizeObserver = new ResizeObserver(resize);
-        resizeObserver.observe(page);
         page.addEventListener('pointermove', handlePointerMove, { passive: true });
         page.addEventListener('pointerleave', resetPointer);
         document.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
-            resizeObserver.disconnect();
             page.removeEventListener('pointermove', handlePointerMove);
             page.removeEventListener('pointerleave', resetPointer);
             document.removeEventListener('visibilitychange', handleVisibility);
-            if (drawFrame) window.cancelAnimationFrame(drawFrame);
             if (pointerFrame) window.cancelAnimationFrame(pointerFrame);
-            context.clearRect(0, 0, width, height);
             resetPointer();
         };
-    }, [canvasRef, enabled, pageRef]);
+    }, [enabled, pageRef]);
 }
 
 export default function WebLandingPage() {
@@ -229,7 +156,6 @@ export default function WebLandingPage() {
     if (!initialCacheRef.current) initialCacheRef.current = readCachedLandingPhotos();
 
     const pageRef = useRef(null);
-    const trailCanvasRef = useRef(null);
     const transitionTimerRef = useRef(null);
     const transitioningRef = useRef(false);
     const mountedRef = useRef(true);
@@ -251,7 +177,7 @@ export default function WebLandingPage() {
     const activePhoto = displayPhotos[activeIndex] || displayPhotos[0] || null;
     const canAnimate = pageVisible && !reduceMotion && !saveData && displayPhotos.length > 1;
 
-    useLandingPointerEffects(pageRef, trailCanvasRef, !reduceMotion && !saveData);
+    useLandingParallax(pageRef, !reduceMotion && !saveData);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -345,12 +271,6 @@ export default function WebLandingPage() {
         return () => window.clearTimeout(timer);
     }, [activeIndex, canAnimate, displayPhotos.length, selectPhoto]);
 
-    const stepPhoto = direction => {
-        if (displayPhotos.length < 2) return;
-        const nextIndex = (activeIndex + direction + displayPhotos.length) % displayPhotos.length;
-        selectPhoto(nextIndex);
-    };
-
     const handleImageError = event => {
         if (activePhoto?.mediaUrl && event.currentTarget.src !== activePhoto.mediaUrl) {
             event.currentTarget.src = activePhoto.mediaUrl;
@@ -380,7 +300,6 @@ export default function WebLandingPage() {
             </div>
             <div className="web-landing-overlay" aria-hidden="true" />
             <div className="web-landing-grid" aria-hidden="true" />
-            <canvas ref={trailCanvasRef} className="web-landing-cursor-trail" aria-hidden="true" />
 
             <div className="web-landing-content">
                 <div className="web-landing-logo-pair">
@@ -388,36 +307,6 @@ export default function WebLandingPage() {
                     <img src={MALOO_LOGO_URL} alt="Maloo Access Group" className="web-landing-logo web-landing-logo-maloo" loading="eager" decoding="async" />
                 </div>
             </div>
-
-            {activePhoto?.title ? (
-                <div className="web-landing-caption" aria-live="polite">
-                    <strong>{activePhoto.title}</strong>
-                    {activePhoto.subtitle ? <span>{activePhoto.subtitle}</span> : null}
-                </div>
-            ) : null}
-
-            {displayPhotos.length > 1 && !saveData ? (
-                <div className="web-landing-carousel-controls">
-                    <button type="button" onClick={() => stepPhoto(-1)} aria-label="Previous photograph">
-                        <ChevronLeft size={18} strokeWidth={2} />
-                    </button>
-                    <div className="web-landing-progress" role="group" aria-label="Choose photograph">
-                        {displayPhotos.map((photo, index) => (
-                            <button
-                                key={photo.id || photo.mediaUrl}
-                                type="button"
-                                className={index === activeIndex ? 'is-active' : ''}
-                                onClick={() => selectPhoto(index)}
-                                aria-label={`Show photograph ${index + 1}`}
-                                aria-current={index === activeIndex ? 'true' : undefined}
-                            />
-                        ))}
-                    </div>
-                    <button type="button" onClick={() => stepPhoto(1)} aria-label="Next photograph">
-                        <ChevronRight size={18} strokeWidth={2} />
-                    </button>
-                </div>
-            ) : null}
         </section>
     );
 }

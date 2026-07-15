@@ -7152,7 +7152,8 @@ button.stat-card {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: saturate(0.94) contrast(1.03);
+    filter: grayscale(1) contrast(0.95) brightness(0.98);
+    opacity: 0.36;
     transform: scale(1.025);
     animation: web-landing-photo-drift 8s ease-out both;
     pointer-events: none;
@@ -7163,11 +7164,13 @@ button.stat-card {
 .web-landing-overlay {
     z-index: 2;
     inset: 0;
-    background: rgba(250, 252, 254, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0.84));
 }
 
 [data-theme='dark'] .web-landing-overlay {
-    background: rgba(5, 12, 24, 0.59);
+    background:
+        linear-gradient(180deg, rgba(2,6,23,0.74), rgba(2,6,23,0.86));
 }
 
 .web-landing-grid {
@@ -7179,15 +7182,6 @@ button.stat-card {
     background-size: 48px 48px;
     opacity: 0.32;
     mask-image: radial-gradient(circle at center, black 20%, transparent 88%);
-}
-
-.web-landing-cursor-trail {
-    position: absolute;
-    z-index: 8;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
 }
 
 .web-landing-content {
@@ -7233,142 +7227,6 @@ button.stat-card {
     filter: brightness(0) invert(1) drop-shadow(0 20px 38px rgba(0, 0, 0, 0.3));
 }
 
-.web-landing-caption {
-    position: absolute;
-    z-index: 6;
-    left: clamp(24px, 4vw, 58px);
-    bottom: clamp(28px, 4vw, 52px);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    max-width: min(520px, calc(100% - 250px));
-    color: #101820;
-    text-shadow: 0 1px 18px rgba(255, 255, 255, 0.68);
-}
-
-.web-landing-caption strong {
-    font-size: clamp(15px, 1.5vw, 20px);
-    line-height: 1.25;
-    font-weight: 740;
-    letter-spacing: 0;
-}
-
-.web-landing-caption span {
-    overflow: hidden;
-    color: rgba(30, 41, 59, 0.78);
-    font-size: 12px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-[data-theme='dark'] .web-landing-caption {
-    color: #f8fafc;
-    text-shadow: 0 1px 18px rgba(0, 0, 0, 0.7);
-}
-
-[data-theme='dark'] .web-landing-caption span {
-    color: rgba(226, 232, 240, 0.8);
-}
-
-.web-landing-carousel-controls {
-    position: absolute;
-    z-index: 6;
-    right: clamp(24px, 4vw, 58px);
-    bottom: clamp(28px, 4vw, 52px);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    opacity: 0.22;
-    transform: translateY(4px);
-    transition: opacity 180ms ease, transform 180ms ease;
-}
-
-.web-landing-page:hover .web-landing-carousel-controls,
-.web-landing-page:focus-within .web-landing-carousel-controls {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.web-landing-carousel-controls > button {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(100, 116, 139, 0.34);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.78);
-    color: #172033;
-    cursor: pointer;
-    box-shadow: 0 7px 22px rgba(15, 23, 42, 0.12);
-}
-
-.web-landing-carousel-controls > button:hover,
-.web-landing-carousel-controls > button:focus-visible {
-    border-color: rgba(18, 133, 204, 0.72);
-    color: #0f75b8;
-    outline: none;
-}
-
-[data-theme='dark'] .web-landing-carousel-controls > button {
-    border-color: rgba(226, 232, 240, 0.28);
-    background: rgba(15, 23, 42, 0.74);
-    color: #f8fafc;
-}
-
-.web-landing-progress {
-    height: 34px;
-    padding: 0 5px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.web-landing-progress button {
-    position: relative;
-    width: 22px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-}
-
-.web-landing-progress button::before {
-    content: '';
-    position: absolute;
-    top: 11px;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: rgba(71, 85, 105, 0.34);
-    transition: background 160ms ease, transform 160ms ease;
-}
-
-.web-landing-progress button:hover::before,
-.web-landing-progress button:focus-visible::before,
-.web-landing-progress button.is-active::before {
-    background: #148fd2;
-    transform: scaleY(1.5);
-}
-
-.web-landing-progress button:focus-visible {
-    outline: 2px solid rgba(20, 143, 210, 0.42);
-    outline-offset: 1px;
-}
-
-[data-theme='dark'] .web-landing-progress button::before {
-    background: rgba(226, 232, 240, 0.34);
-}
-
-[data-theme='dark'] .web-landing-progress button:hover::before,
-[data-theme='dark'] .web-landing-progress button:focus-visible::before,
-[data-theme='dark'] .web-landing-progress button.is-active::before {
-    background: #38bdf8;
-}
-
 @keyframes web-landing-photo-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -7388,18 +7246,13 @@ button.stat-card {
     .web-landing-photo-frame,
     .web-landing-photo-frame img,
     .web-landing-photo-stage,
-    .web-landing-content,
-    .web-landing-carousel-controls {
+    .web-landing-content {
         animation: none;
         transition: none;
     }
 
     .web-landing-photo-frame img {
         transform: scale(1.025);
-    }
-
-    .web-landing-cursor-trail {
-        display: none;
     }
 }
 
@@ -8599,34 +8452,6 @@ button.stat-card {
 
     .web-landing-content {
         transform: none;
-    }
-
-    .web-landing-caption {
-        left: 20px;
-        right: 20px;
-        bottom: 76px;
-        max-width: none;
-        text-align: center;
-    }
-
-    .web-landing-caption span {
-        white-space: normal;
-    }
-
-    .web-landing-carousel-controls {
-        right: 50%;
-        bottom: 24px;
-        opacity: 1;
-        transform: translateX(50%);
-    }
-
-    .web-landing-page:hover .web-landing-carousel-controls,
-    .web-landing-page:focus-within .web-landing-carousel-controls {
-        transform: translateX(50%);
-    }
-
-    .web-landing-cursor-trail {
-        display: none;
     }
 
     .admin-assistant-page-chat {
