@@ -788,6 +788,92 @@ function normalizeScaffoldEntity(value) {
     return matched || DEFAULT_SCAFFOLD_ENTITY;
 }
 
+function normalizeDesignFolderMatchText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\b(nsw|australia|project|development|developments|site|the|pty|ltd)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function matchTokens(value) {
+    return normalizeDesignFolderMatchText(value)
+        .split(' ')
+        .filter(token => token.length > 2);
+}
+
+function scoreDesignFolderNameMatch(source, candidate) {
+    const cleanSource = normalizeDesignFolderMatchText(source);
+    const cleanCandidate = normalizeDesignFolderMatchText(candidate);
+    if (!cleanSource || !cleanCandidate) return 0;
+    if (cleanSource === cleanCandidate) return 1;
+    if (cleanCandidate.includes(cleanSource) || cleanSource.includes(cleanCandidate)) {
+        return 0.92;
+    }
+
+    const sourceTokens = new Set(matchTokens(cleanSource));
+    const candidateTokens = new Set(matchTokens(cleanCandidate));
+    if (!sourceTokens.size || !candidateTokens.size) return 0;
+    const overlap = [...sourceTokens].filter(token => candidateTokens.has(token)).length;
+    const precision = overlap / candidateTokens.size;
+    const recall = overlap / sourceTokens.size;
+    return precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+}
+
+function optionPath(option) {
+    return option?.path || option?.name || '';
+}
+
+function uppercaseDesignFolderName(value, fallback = 'UNTITLED') {
+    return (String(value || '').trim() || fallback).toUpperCase();
+}
+
+function findBestDesignFolderMatch(name, folders, getCandidateText, minimumScore) {
+    return folders
+        .map(folder => ({
+            folder,
+            score: scoreDesignFolderNameMatch(name, getCandidateText(folder))
+        }))
+        .filter(item => item.score >= minimumScore)
+        .sort((left, right) => right.score - left.score || optionPath(left.folder).length - optionPath(right.folder).length)
+        [0]?.folder || null;
+}
+
+function folderLinkPayload(folder) {
+    return {
+        designFolderId: folder?.id || '',
+        designFolderPath: optionPath(folder)
+    };
+}
+
+function buildDesignFolderOption(folder, parent = null) {
+    const depth = parent ? Number(parent.depth || 1) + 1 : 1;
+    const path = parent ? `${optionPath(parent)} / ${folder.name}` : folder.name;
+    return {
+        id: folder.id,
+        name: folder.name,
+        parentFolderId: folder.parentFolderId || folder.parent_folder_id || parent?.id || null,
+        path,
+        depth,
+        builderName: depth >= 1 ? path.split(' / ')[0] : '',
+        projectName: depth >= 2 ? path.split(' / ')[1] : '',
+        scaffoldName: depth >= 3 ? path.split(' / ')[2] : '',
+        updatedAt: folder.updatedAt || folder.updated_at || nowIso()
+    };
+}
+
+async function createDesignFolderOption(name, parent = null) {
+    const response = await apiClient.post('/folders', {
+        name: uppercaseDesignFolderName(name),
+        parentFolderId: parent?.id || null,
+        userId: authAPI.getCurrentUser()?.id
+    });
+    return buildDesignFolderOption(response.data, parent);
+}
+
 const sanitizeStorageFileName = (value, fallback = 'logo') => {
     const clean = String(value || '')
         .trim()
@@ -1298,6 +1384,87 @@ export const safetyProjectsAPI = {
         doc.updatedAt = timestamp;
         await saveSafetyProjectsDocument(doc);
         return resolveDrawingRegisterEntries(doc);
+    }),
+
+    autoLinkDesignFolders: async (designFolders = [], { createMissing = false, createMissingBuilderId = '', createMissingProjectId = '' } = {}) => withSafetyProjectsWriteLock(async () => {
+        const folderOptions = Array.isArray(designFolders) ? [...designFolders] : [];
+
+        await ensureSafetyBucketAccess();
+        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        const doc = parseSafetyProjects(json);
+        const timestamp = nowIso();
+        let changed = false;
+
+        const getBuilderFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) <= 1);
+        const getSiteFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) >= 2);
+
+        for (const builder of doc.builders) {
+            let builderFolder = builder.designFolderId
+                ? folderOptions.find(folder => folder.id === builder.designFolderId) || null
+                : null;
+
+            if (!builderFolder) {
+                builderFolder = findBestDesignFolderMatch(
+                    builder.name,
+                    getBuilderFolders(),
+                    folder => folder.builderName || folder.name || folder.path,
+                    0.78);
+            }
+
+            const canCreateBuilderFolder = createMissing
+                && (builder.id === createMissingBuilderId
+                    || builder.projects.some(project => project.id === createMissingProjectId));
+            if (!builderFolder) {
+                if (!canCreateBuilderFolder) {
+                    continue;
+                }
+                builderFolder = await createDesignFolderOption(builder.name);
+                folderOptions.push(builderFolder);
+            }
+
+            if (!builder.designFolderId) {
+                Object.assign(builder, folderLinkPayload(builderFolder));
+                builder.updatedAt = timestamp;
+                changed = true;
+            }
+
+            for (const project of builder.projects) {
+                if (project.designFolderId) {
+                    continue;
+                }
+
+                const siteFolders = getSiteFolders();
+                const scopedSiteFolders = builderFolder
+                    ? siteFolders.filter(folder => folder.path?.startsWith(`${optionPath(builderFolder)} /`))
+                    : siteFolders.filter(folder => scoreDesignFolderNameMatch(builder.name, folder.builderName || folder.path) >= 0.78);
+                const candidates = scopedSiteFolders.length ? scopedSiteFolders : siteFolders;
+                let projectFolder = findBestDesignFolderMatch(
+                    project.name,
+                    candidates,
+                    folder => [folder.projectName, folder.scaffoldName, folder.path].filter(Boolean).join(' '),
+                    0.78);
+
+                if (!projectFolder) {
+                    if (!createMissing || project.id !== createMissingProjectId) {
+                        continue;
+                    }
+                    projectFolder = await createDesignFolderOption(project.name, builderFolder);
+                    folderOptions.push(projectFolder);
+                }
+
+                Object.assign(project, folderLinkPayload(projectFolder));
+                project.updatedAt = timestamp;
+                builder.updatedAt = timestamp;
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            doc.updatedAt = timestamp;
+            await saveSafetyProjectsDocument(doc);
+        }
+
+        return cloneSafetyBuilders(doc.builders, { includeArchived: true });
     }),
 
     createBuilderAndProject: async (builderName, projectName) => {

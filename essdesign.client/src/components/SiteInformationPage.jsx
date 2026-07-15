@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ChevronDown, ChevronRight, Mail, MoreVertical, Pencil, Phone, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
 import { analysisAPI, foldersAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -323,6 +323,7 @@ export default function SiteInformationPage() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [scaffoldEntityFilter, setScaffoldEntityFilter] = useState('all');
     const [error, setError] = useState('');
+    const autoLinkAttemptedRef = useRef(false);
 
     const loadBuilders = async () => {
         setLoading(true);
@@ -360,6 +361,23 @@ export default function SiteInformationPage() {
             active = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (autoLinkAttemptedRef.current || loading || !builders.length || !designFolders.length) {
+            return;
+        }
+
+        autoLinkAttemptedRef.current = true;
+        safetyProjectsAPI.autoLinkDesignFolders(designFolders)
+            .then(async nextBuilders => {
+                if (Array.isArray(nextBuilders)) {
+                    setBuilders(nextBuilders);
+                }
+                const nextOptions = await foldersAPI.getDesignFolderOptions();
+                setDesignFolders(Array.isArray(nextOptions) ? nextOptions : []);
+            })
+            .catch(() => {});
+    }, [builders.length, designFolders, loading]);
 
     useEffect(() => {
         let active = true;
@@ -765,7 +783,7 @@ export default function SiteInformationPage() {
                     const employee = employeeById.get(employeeId);
                     return employee && isInductableWorker(employee);
                 });
-            const nextBuilders = projectForm.editingProjectId
+            let nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
                     siteSupervisorUserId: projectForm.siteSupervisorUserId,
@@ -790,6 +808,25 @@ export default function SiteInformationPage() {
                     scaffoldEntity: projectForm.scaffoldEntity,
                     inductedEmployeeIds: inductedWorkerIds
                 });
+            const savedProjectId = projectForm.editingProjectId
+                || nextBuilders
+                    .find(builder => builder.id === projectForm.builderId)
+                    ?.projects
+                    .find(project => project.name.trim().toLowerCase() === projectForm.projectName.trim().toLowerCase())
+                    ?.id
+                || '';
+            if (designFolders.length || savedProjectId) {
+                try {
+                    nextBuilders = await safetyProjectsAPI.autoLinkDesignFolders(designFolders, {
+                        createMissing: !projectForm.editingProjectId,
+                        createMissingProjectId: !projectForm.editingProjectId ? savedProjectId : ''
+                    });
+                    const nextOptions = await foldersAPI.getDesignFolderOptions();
+                    setDesignFolders(Array.isArray(nextOptions) ? nextOptions : []);
+                } catch {
+                    // Manual linking remains available if ESS Design folder creation is not permitted.
+                }
+            }
             setBuilders(nextBuilders);
             if (projectForm.editingProjectId) {
                 const updatedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
@@ -859,9 +896,24 @@ export default function SiteInformationPage() {
                 designFolderPath: builderForm.designFolderPath,
                 ...(builderForm.logoFile ? { logoFile: builderForm.logoFile } : {})
             };
-            const nextBuilders = builderForm.id
+            let nextBuilders = builderForm.id
                 ? await safetyProjectsAPI.renameBuilder(builderForm.id, builderForm.name, logoOptions)
                 : await safetyProjectsAPI.createBuilder(builderForm.name, logoOptions);
+            const savedBuilderId = builderForm.id
+                || nextBuilders.find(builder => builder.name.trim().toLowerCase() === builderForm.name.trim().toLowerCase())?.id
+                || '';
+            if (designFolders.length || savedBuilderId) {
+                try {
+                    nextBuilders = await safetyProjectsAPI.autoLinkDesignFolders(designFolders, {
+                        createMissing: !builderForm.id,
+                        createMissingBuilderId: !builderForm.id ? savedBuilderId : ''
+                    });
+                    const nextOptions = await foldersAPI.getDesignFolderOptions();
+                    setDesignFolders(Array.isArray(nextOptions) ? nextOptions : []);
+                } catch {
+                    // Manual linking remains available if ESS Design folder creation is not permitted.
+                }
+            }
             setBuilders(nextBuilders);
             setSelectedBuilderId(builderForm.id || nextBuilders.find(builder => builder.name.toLowerCase() === builderForm.name.trim().toLowerCase())?.id || '');
             setShowBuilderModal(false);
