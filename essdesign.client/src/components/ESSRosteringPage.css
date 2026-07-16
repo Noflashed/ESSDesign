@@ -525,6 +525,17 @@
     margin: 10px 18px 0;
 }
 
+.rostering-save-success {
+    margin: 10px 18px 0;
+    padding: 9px 11px;
+    border: 1px solid rgba(22, 163, 74, .22);
+    border-radius: 5px;
+    background: rgba(22, 163, 74, .08);
+    color: #15803d;
+    font-size: 11px;
+    font-weight: 650;
+}
+
 .rostering-requirements-footer {
     min-height: 72px;
     display: grid;
@@ -604,6 +615,37 @@
 .rostering-clear-plan:disabled {
     opacity: .4;
     cursor: not-allowed;
+}
+
+.rostering-view-tree {
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 14px;
+    border: 1px solid #1463f3;
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: #1463f3;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.rostering-view-tree:hover:not(:disabled) {
+    background: rgba(20, 99, 243, .08);
+}
+
+.rostering-view-tree:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.rostering-view-tree svg {
+    width: 16px;
+    height: 16px;
 }
 
 .rostering-save-requirements {
@@ -732,6 +774,10 @@
 [data-theme='dark'] .rostering-location svg,
 [data-theme='dark'] .rostering-delete-job {
     color: #8db5ff;
+}
+
+[data-theme='dark'] .rostering-save-success {
+    color: #86efac;
 }
 
 @media (max-width: 1180px) {

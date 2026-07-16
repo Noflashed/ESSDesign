@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Minus, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, GitBranch, MapPin, Minus, Plus, Trash2, X } from 'lucide-react';
 import { rosteringAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 import './ESSRosteringPage.css';
@@ -69,7 +69,7 @@ function BuilderMark({ builderName, logoUrl }) {
     );
 }
 
-export default function ESSRosteringPage({ user }) {
+export default function ESSRosteringPage({ user, onViewTree }) {
     const dateInputRef = useRef(null);
     const hydratedRef = useRef(false);
     const dirtyRef = useRef(false);
@@ -77,6 +77,7 @@ export default function ESSRosteringPage({ user }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [saveMessage, setSaveMessage] = useState('');
     const [showJobPicker, setShowJobPicker] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
     const [builders, setBuilders] = useState([]);
@@ -199,6 +200,7 @@ export default function ESSRosteringPage({ user }) {
 
         let active = true;
         setError('');
+        setSaveMessage('');
 
         rosteringAPI.getPlan(planDate)
             .then((plan) => {
@@ -266,6 +268,7 @@ export default function ESSRosteringPage({ user }) {
 
     const setRequiredMen = (siteId, nextValue) => {
         dirtyRef.current = true;
+        setSaveMessage('');
         if (nextValue === '') {
             setRequiredMenBySite((prev) => ({
                 ...prev,
@@ -287,12 +290,14 @@ export default function ESSRosteringPage({ user }) {
 
     const removeActiveSite = (siteId) => {
         dirtyRef.current = true;
+        setSaveMessage('');
         setActiveSiteIds((prev) => prev.filter((id) => id !== siteId));
     };
 
     const clearPlan = () => {
         if (!isSupervisor) return;
         dirtyRef.current = true;
+        setSaveMessage('');
         setActiveSiteIds([]);
         setRequiredMenBySite({});
         setTablePage(1);
@@ -313,6 +318,7 @@ export default function ESSRosteringPage({ user }) {
 
     const confirmJobPicker = () => {
         dirtyRef.current = true;
+        setSaveMessage('');
         setActiveSiteIds(pickerSiteIds);
         setShowJobPicker(false);
     };
@@ -363,15 +369,46 @@ export default function ESSRosteringPage({ user }) {
 
         setSaving(true);
         setError('');
+        setSaveMessage('');
 
         try {
             await persistPlan(planDate, activeSiteIds, requiredMenBySite, user?.id);
             dirtyRef.current = false;
+            setSaveMessage('Requirements saved. The rostering tree is up to date.');
         } catch (err) {
             setError(err.message || 'Could not save roster plan');
         } finally {
             setSaving(false);
         }
+    };
+
+    const viewRosteringTree = async () => {
+        if (activeSites.length === 0) {
+            setError('Add at least one job before opening the rostering tree.');
+            return;
+        }
+
+        if (dirtyRef.current) {
+            if (!isSupervisor) {
+                setError('Only Site Supervisors can save changes before opening the rostering tree.');
+                return;
+            }
+
+            setSaving(true);
+            setError('');
+            setSaveMessage('');
+            try {
+                await persistPlan(planDate, activeSiteIds, requiredMenBySite, user?.id);
+                dirtyRef.current = false;
+            } catch (err) {
+                setError(err.message || 'Could not update the rostering tree');
+                setSaving(false);
+                return;
+            }
+            setSaving(false);
+        }
+
+        onViewTree?.(planDate);
     };
 
     useEffect(() => {
@@ -599,6 +636,7 @@ export default function ESSRosteringPage({ user }) {
                     </div>
 
                     {error ? <div className="module-error rostering-save-error">{error}</div> : null}
+                    {saveMessage ? <div className="rostering-save-success" role="status">{saveMessage}</div> : null}
 
                     <footer className="rostering-requirements-footer">
                         <span>{activeSites.length} {activeSites.length === 1 ? 'job' : 'jobs'} in this plan</span>
@@ -612,8 +650,11 @@ export default function ESSRosteringPage({ user }) {
                         <div className="rostering-footer-actions">
                             <strong>Total required: {totalRequiredMen} people</strong>
                             <button type="button" className="rostering-clear-plan" onClick={clearPlan} disabled={!isSupervisor || activeSites.length === 0}>Clear plan</button>
+                            <button type="button" className="rostering-view-tree" onClick={viewRosteringTree} disabled={saving || activeSites.length === 0}>
+                                <GitBranch aria-hidden="true" /> View Rostering Tree
+                            </button>
                             <button type="button" className="rostering-save-requirements" onClick={savePlan} disabled={saving || !isSupervisor}>
-                                {saving ? 'Saving...' : 'Save Requirements'}
+                                {saving ? 'Saving...' : 'Save & Develop Tree'}
                             </button>
                         </div>
                     </footer>
