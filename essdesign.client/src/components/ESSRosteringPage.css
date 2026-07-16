@@ -352,6 +352,21 @@
 .rostering-builder-mark.tone-2 { background: linear-gradient(145deg, #171717, #3f3f46); }
 .rostering-builder-mark.tone-3 { background: linear-gradient(145deg, #16a34a, #08752f); }
 
+.rostering-builder-mark.has-logo {
+    padding: 4px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color);
+    background: #fff;
+    box-shadow: none;
+}
+
+.rostering-builder-mark.has-logo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+}
+
 .rostering-project-name {
     display: block;
     color: var(--text-primary);

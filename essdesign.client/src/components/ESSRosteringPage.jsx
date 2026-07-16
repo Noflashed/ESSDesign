@@ -52,6 +52,23 @@ function getBuilderTone(value) {
     return `tone-${sum % 4}`;
 }
 
+function BuilderMark({ builderName, logoUrl }) {
+    const [imageFailed, setImageFailed] = useState(false);
+
+    useEffect(() => {
+        setImageFailed(false);
+    }, [logoUrl]);
+
+    const showLogo = Boolean(logoUrl) && !imageFailed;
+    return (
+        <span className={`rostering-builder-mark ${getBuilderTone(builderName)}${showLogo ? ' has-logo' : ''}`} aria-hidden="true">
+            {showLogo
+                ? <img src={logoUrl} alt="" loading="eager" decoding="async" onError={() => setImageFailed(true)} />
+                : getInitials(builderName)}
+        </span>
+    );
+}
+
 export default function ESSRosteringPage({ user }) {
     const dateInputRef = useRef(null);
     const hydratedRef = useRef(false);
@@ -62,6 +79,8 @@ export default function ESSRosteringPage({ user }) {
     const [error, setError] = useState('');
     const [showJobPicker, setShowJobPicker] = useState(false);
     const [isSupervisor, setIsSupervisor] = useState(false);
+    const [builders, setBuilders] = useState([]);
+    const [builderLogoUrls, setBuilderLogoUrls] = useState({});
     const [sites, setSites] = useState([]);
     const [planDate, setPlanDate] = useState(todayDateString());
     const [activeSiteIds, setActiveSiteIds] = useState([]);
@@ -114,6 +133,7 @@ export default function ESSRosteringPage({ user }) {
                     }))
                 );
 
+                setBuilders(builders);
                 setSites(flattenedSites);
                 setIsSupervisor(supervisor);
 
@@ -139,6 +159,38 @@ export default function ESSRosteringPage({ user }) {
             active = false;
         };
     }, [user?.email, user?.id]);
+
+    useEffect(() => {
+        let active = true;
+        const logoBuilders = builders.filter((builder) => builder.logoPath || builder.logoUrl || builder.logo_url);
+        const immediateLogos = Object.fromEntries(
+            logoBuilders
+                .map((builder) => [builder.id, builder.logoUrl || builder.logo_url || ''])
+                .filter(([, url]) => Boolean(url))
+        );
+        setBuilderLogoUrls(immediateLogos);
+
+        if (logoBuilders.length === 0) {
+            return () => {
+                active = false;
+            };
+        }
+
+        Promise.all(
+            logoBuilders.map((builder) => (
+                safetyProjectsAPI.resolveBuilderLogoUrl(builder)
+                    .then((url) => [builder.id, url])
+                    .catch(() => [builder.id, builder.logoUrl || builder.logo_url || ''])
+            ))
+        ).then((entries) => {
+            if (!active) return;
+            setBuilderLogoUrls(Object.fromEntries(entries.filter(([, url]) => Boolean(url))));
+        });
+
+        return () => {
+            active = false;
+        };
+    }, [builders]);
 
     useEffect(() => {
         if (!hydratedRef.current) {
@@ -498,7 +550,7 @@ export default function ESSRosteringPage({ user }) {
                                         <tr key={site.id}>
                                             <td>
                                                 <div className="rostering-builder-cell">
-                                                    <span className={`rostering-builder-mark ${getBuilderTone(site.builderName)}`}>{getInitials(site.builderName)}</span>
+                                                    <BuilderMark builderName={site.builderName} logoUrl={builderLogoUrls[site.builderId]} />
                                                     <span>{site.builderName}</span>
                                                 </div>
                                             </td>
@@ -590,7 +642,7 @@ export default function ESSRosteringPage({ user }) {
                                                 return (
                                                     <button key={site.id} type="button" className={`job-card${selected ? ' selected' : ''}`} onClick={() => togglePickerSite(site.id)} aria-pressed={selected}>
                                                         <div className="rostering-picker-site">
-                                                            <span className={`rostering-builder-mark ${getBuilderTone(site.builderName)}`}>{getInitials(site.builderName)}</span>
+                                                            <BuilderMark builderName={site.builderName} logoUrl={builderLogoUrls[site.builderId]} />
                                                             <span><strong>{site.projectName}</strong><small>{site.siteLocation || 'Site location not set'}</small></span>
                                                         </div>
                                                         <span className={`rostering-picker-status${selected ? ' is-selected' : ''}`}>{selected ? 'Selected' : 'Add'}</span>
