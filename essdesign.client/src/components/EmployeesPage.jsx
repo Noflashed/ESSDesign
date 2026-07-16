@@ -166,15 +166,6 @@ function DeleteIcon() {
     );
 }
 
-function CheckCircleIcon() {
-    return (
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M8.4 12.3l2.25 2.25 4.95-5.1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
-
 function SortGlyph() {
     return (
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -327,6 +318,21 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, [employeeMenu]);
 
     useEffect(() => {
+        if (!selectedInfoEntry) {
+            return undefined;
+        }
+
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                setSelectedInfoEntry(null);
+            }
+        };
+
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [selectedInfoEntry]);
+
+    useEffect(() => {
         let active = true;
         const userIds = [
             ...appUsers.map(user => user.id),
@@ -434,8 +440,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     const pagedEntries = filteredEntries;
 
-    const toggleEmployeeDetails = (entry) => {
-        setSelectedInfoEntry((current) => current?.key === entry.key ? null : entry);
+    const openEmployeeDetails = (entry) => {
+        setSelectedInfoEntry(entry);
     };
 
     const openEmployeeMenu = (event, entry) => {
@@ -713,6 +719,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         });
     };
 
+    const selectedInfoStatus = selectedInfoEntry ? getAccountStatus(selectedInfoEntry) : null;
+
     return (
         <div className="module-page employees-page">
             <div className="module-shell employees-shell">
@@ -796,15 +804,16 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             <React.Fragment key={entry.key}>
                                                 <tr
                                                     className={`employees-data-row ${isExpanded ? 'selected' : ''}`}
-                                                    onClick={() => toggleEmployeeDetails(entry)}
+                                                    onClick={() => openEmployeeDetails(entry)}
                                                     onContextMenu={(event) => openEmployeeMenu(event, entry)}
                                                     onKeyDown={(event) => {
                                                         if (event.key === 'Enter' || event.key === ' ') {
                                                             event.preventDefault();
-                                                            toggleEmployeeDetails(entry);
+                                                            openEmployeeDetails(entry);
                                                         }
                                                     }}
                                                     aria-expanded={isExpanded}
+                                                    aria-haspopup="dialog"
                                                     tabIndex={0}
                                                 >
                                                     <td>
@@ -862,52 +871,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                         </div>
                                                     </td>
                                                 </tr>
-                                                {isExpanded ? (
-                                                    <tr className="employees-info-dropdown-row">
-                                                        <td colSpan={5}>
-                                                            <div className="employees-info-dropdown-panel">
-                                                                <div className="employees-info-list">
-                                                                    <div className="employees-info-row">
-                                                                        <span>Full Name</span>
-                                                                        <strong>{entry.displayName}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Role</span>
-                                                                        <strong><span className="employees-role-text">{getRoleLabel(entry.role)}</span></strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Phone Number</span>
-                                                                        <strong>{entry.displayPhone || '-'}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Email</span>
-                                                                        <strong>{entry.displayEmail || '-'}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Account Status</span>
-                                                                        <strong><span className={`employees-account-pill ${status.className}`}>{status.label}</span></strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Linked App Account</span>
-                                                                        <strong>{entry.appUser ? `Yes (${entry.appUser.email})` : 'No'}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Verified On</span>
-                                                                        <strong>{formatEmployeeDate(entry.employee?.verifiedAt)}</strong>
-                                                                    </div>
-                                                                    <div className="employees-info-row">
-                                                                        <span>Leading Hand</span>
-                                                                        <strong>
-                                                                            {entry.leadingHand ? (
-                                                                                <span className="employees-info-check"><CheckCircleIcon /> Yes</span>
-                                                                            ) : 'No'}
-                                                                        </strong>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ) : null}
                                             </React.Fragment>
                                         );
                                     })}
@@ -932,11 +895,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     <button
                         type="button"
                         className="employees-context-menu-item"
-                        onClick={() => runEmployeeMenuAction(toggleEmployeeDetails)}
+                        onClick={() => runEmployeeMenuAction(openEmployeeDetails)}
                         role="menuitem"
                     >
                         <Info size={15} strokeWidth={2.3} aria-hidden="true" />
-                        <span>{selectedInfoEntry?.key === employeeMenu.entry.key ? 'Hide Details' : 'Open Details'}</span>
+                        <span>Open Details</span>
                     </button>
                     {employeeMenu.entry.leadingHand && employeeMenu.entry.type === 'employee' ? (
                         <button
@@ -968,6 +931,94 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         <DeleteIcon />
                         <span>Delete</span>
                     </button>
+                </div>
+            ) : null}
+
+            {selectedInfoEntry ? (
+                <div className="module-modal-backdrop employee-details-backdrop" onClick={() => setSelectedInfoEntry(null)}>
+                    <section
+                        className="module-modal employees-info-modal employee-details-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="employee-details-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <header className="employee-details-header">
+                            <div className="employee-details-title-row">
+                                <h2 id="employee-details-title">Employee details</h2>
+                                <button
+                                    type="button"
+                                    className="employee-details-close"
+                                    onClick={() => setSelectedInfoEntry(null)}
+                                    aria-label="Close employee details"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="employee-details-identity">
+                                <div className="employee-details-avatar" aria-hidden="true">
+                                    <EmployeeAvatar entry={selectedInfoEntry} />
+                                </div>
+                                <div className="employee-details-identity-copy">
+                                    <strong>{selectedInfoEntry.displayName}</strong>
+                                    <span>{getRoleLabel(selectedInfoEntry.role)}</span>
+                                    <span className={`employees-account-pill ${selectedInfoStatus.className}`}>{selectedInfoStatus.label}</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="employee-details-content">
+                            <h3>Employee information</h3>
+                            <div className="employee-details-grid">
+                                <div className="employee-details-field">
+                                    <span>Full Name</span>
+                                    <strong>{selectedInfoEntry.displayName}</strong>
+                                </div>
+                                <div className="employee-details-field">
+                                    <span>Role</span>
+                                    <strong>{getRoleLabel(selectedInfoEntry.role)}</strong>
+                                </div>
+                                <div className="employee-details-field">
+                                    <span>Phone</span>
+                                    <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
+                                </div>
+                                <div className="employee-details-field">
+                                    <span>Email</span>
+                                    <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
+                                </div>
+                                <div className="employee-details-field">
+                                    <span>Account Status</span>
+                                    <strong>{selectedInfoStatus.label}</strong>
+                                </div>
+                                <div className="employee-details-field">
+                                    <span>Invite Sent</span>
+                                    <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
+                                </div>
+                                <div className="employee-details-field employee-details-field-wide">
+                                    <span>Verified At</span>
+                                    <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <footer className="employee-details-footer">
+                            <button type="button" className="employee-details-secondary-btn" onClick={() => setSelectedInfoEntry(null)}>
+                                Close
+                            </button>
+                            <button
+                                type="button"
+                                className="employee-details-primary-btn"
+                                onClick={() => {
+                                    const entry = selectedInfoEntry;
+                                    setSelectedInfoEntry(null);
+                                    editEntry(entry);
+                                }}
+                            >
+                                <EditIcon />
+                                Edit Employee
+                            </button>
+                        </footer>
+                    </section>
                 </div>
             ) : null}
 
