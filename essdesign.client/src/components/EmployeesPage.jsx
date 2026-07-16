@@ -325,6 +325,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         const closeOnEscape = (event) => {
             if (event.key === 'Escape') {
                 setSelectedInfoEntry(null);
+                setShowModal(false);
+                setShowAppUserModal(false);
             }
         };
 
@@ -463,6 +465,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     const editEntry = (entry) => {
+        setSelectedInfoEntry(entry);
         if (entry.type === 'employee') {
             openEmployeeEditor(entry.employee, entry.role);
         } else {
@@ -568,12 +571,14 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 setEmployees(refreshedEmployees);
                 setInviteMessage(`Invite sent to ${normalizedEmail}`);
                 setShowModal(false);
+                setSelectedInfoEntry(null);
                 setForm(emptyEmployeeForm());
                 setSaveAndInvite(false);
                 return;
             }
 
             setShowModal(false);
+            setSelectedInfoEntry(null);
             setForm(emptyEmployeeForm());
             setSaveAndInvite(false);
         } catch (err) {
@@ -615,6 +620,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 onCurrentUserUpdated?.(refreshedUser);
             }
             setShowAppUserModal(false);
+            setSelectedInfoEntry(null);
         } catch (err) {
             setError(err?.response?.data?.error || err.message || 'Could not save user');
         } finally {
@@ -693,8 +699,16 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     linkedAuthUserId: refreshed.linkedAuthUserId || null,
                     inviteSentAt: refreshed.inviteSentAt || null,
                     verifiedAt: refreshed.verifiedAt || null,
-                    currentEmail: refreshed.email || ''
+                    currentEmail: refreshed.email || '',
+                    effectiveRole: form.effectiveRole,
+                    selectedRole: form.selectedRole
                 });
+                setSelectedInfoEntry((previous) => previous ? ({
+                    ...previous,
+                    employee: refreshed,
+                    displayEmail: refreshed.email || null,
+                    isVerified: !!refreshed.verifiedAt
+                }) : previous);
             }
             setInviteMessage(`Invite sent to ${form.email.trim()}`);
         } catch (err) {
@@ -934,7 +948,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 </div>
             ) : null}
 
-            {selectedInfoEntry ? (
+            {selectedInfoEntry && !showModal && !showAppUserModal ? (
                 <div className="module-modal-backdrop employee-details-backdrop" onClick={() => setSelectedInfoEntry(null)}>
                     <section
                         className="module-modal employees-info-modal employee-details-modal"
@@ -1008,11 +1022,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <button
                                 type="button"
                                 className="employee-details-primary-btn"
-                                onClick={() => {
-                                    const entry = selectedInfoEntry;
-                                    setSelectedInfoEntry(null);
-                                    editEntry(entry);
-                                }}
+                                onClick={() => editEntry(selectedInfoEntry)}
                             >
                                 <EditIcon />
                                 Edit Employee
@@ -1022,7 +1032,161 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 </div>
             ) : null}
 
-            {showModal && (
+            {showModal && form.id && selectedInfoEntry ? (
+                <div
+                    className="module-modal-backdrop employee-details-backdrop"
+                    onClick={() => {
+                        setShowModal(false);
+                        setSelectedInfoEntry(null);
+                    }}
+                >
+                    <section
+                        className="module-modal employees-info-modal employee-details-modal employee-details-edit-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="employee-edit-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <header className="employee-details-header">
+                            <div className="employee-details-title-row">
+                                <h2 id="employee-edit-title">Edit employee</h2>
+                                <button
+                                    type="button"
+                                    className="employee-details-close"
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        setSelectedInfoEntry(null);
+                                    }}
+                                    aria-label="Close employee editor"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="employee-details-identity">
+                                <div className="employee-details-avatar" aria-hidden="true">
+                                    <EmployeeAvatar entry={selectedInfoEntry} />
+                                </div>
+                                <div className="employee-details-identity-copy">
+                                    <strong>{employeeFullNameInput || selectedInfoEntry.displayName}</strong>
+                                    <span>{getRoleLabel(form.selectedRole)}</span>
+                                    <span className={`employees-account-pill ${selectedInfoStatus.className}`}>{selectedInfoStatus.label}</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <form className="employee-details-edit-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: false })}>
+                            <div className="employee-details-content">
+                                <h3>Employee information</h3>
+                                <div className="employee-details-grid">
+                                    <label className="employee-details-field">
+                                        <span>Full Name</span>
+                                        <input
+                                            value={employeeFullNameInput}
+                                            onChange={(event) => updateEmployeeFullName(event.target.value)}
+                                            placeholder="Employee name"
+                                            autoComplete="name"
+                                        />
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Role</span>
+                                        <select
+                                            value={form.selectedRole}
+                                            onChange={(event) => setForm((previous) => ({ ...previous, selectedRole: event.target.value }))}
+                                        >
+                                            <option value="general_scaffolder">Scaffolder</option>
+                                            <option value="leading_hand">Leading Hand</option>
+                                            <option value="scaffold_designer">Scaffold Designer</option>
+                                            <option value="site_supervisor">Site Supervisor</option>
+                                            <option value="project_manager">Project Manager</option>
+                                            <option value="transport_management">Transport Management</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="viewer">Viewer</option>
+                                        </select>
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Phone</span>
+                                        <input
+                                            value={form.phoneNumber}
+                                            onChange={(event) => setForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
+                                            placeholder="0400 000 000"
+                                            autoComplete="tel"
+                                        />
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Email</span>
+                                        <input
+                                            type="email"
+                                            value={form.email}
+                                            onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
+                                            placeholder="employee@company.com"
+                                            autoComplete="email"
+                                        />
+                                    </label>
+                                    <div className="employee-details-field">
+                                        <span>Account Status</span>
+                                        <strong>{selectedInfoStatus.label}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Invite Sent</span>
+                                        <strong>{formatEmployeeDate(form.inviteSentAt)}</strong>
+                                    </div>
+                                    <div className="employee-details-field employee-details-field-wide">
+                                        <span>Verified At</span>
+                                        <strong>{formatEmployeeDate(form.verifiedAt)}</strong>
+                                    </div>
+                                </div>
+
+                                {inviteMessage ? <div className="module-success employee-details-message">{inviteMessage}</div> : null}
+                                {error ? <div className="module-error employee-details-message">{error}</div> : null}
+                            </div>
+
+                            <footer className="employee-details-footer employee-details-edit-footer">
+                                <div className="employee-details-footer-leading">
+                                    {form.selectedRole === 'leading_hand' ? (
+                                        <button
+                                            type="button"
+                                            className="employee-details-secondary-btn"
+                                            onClick={() => {
+                                                setShowModal(false);
+                                                setSelectedInfoEntry(null);
+                                                onOpenLeadingHandRelationships?.(form);
+                                            }}
+                                        >
+                                            Leading Hand Relationships
+                                        </button>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        className="employee-details-invite-btn"
+                                        onClick={sendEmployeeInvite}
+                                        disabled={inviteSending || !form.email.trim()}
+                                    >
+                                        {inviteSending ? 'Sending...' : 'Invite User'}
+                                    </button>
+                                </div>
+                                <div className="employee-details-footer-actions">
+                                    <button
+                                        type="button"
+                                        className="employee-details-secondary-btn"
+                                        disabled={saving}
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            setSelectedInfoEntry(null);
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="employee-details-primary-btn" disabled={saving}>
+                                        {saving ? 'Saving...' : 'Save Employee'}
+                                    </button>
+                                </div>
+                            </footer>
+                        </form>
+                    </section>
+                </div>
+            ) : null}
+
+            {showModal && !form.id && (
                 <div className="module-modal-backdrop employee-form-backdrop" onClick={() => setShowModal(false)}>
                     <div className="module-modal employee-form-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="employee-form-header">
@@ -1128,66 +1292,132 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 </div>
             )}
 
-            {showAppUserModal && (
-                <div className="module-modal-backdrop" onClick={() => setShowAppUserModal(false)}>
-                    <div className="module-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="module-modal-header">
-                            <h3>Edit User</h3>
-                            <button className="nav-drawer-close" onClick={() => setShowAppUserModal(false)}>×</button>
-                        </div>
-                        <form className="module-form" onSubmit={saveAppUser}>
-                            <div className="module-field">
-                                <label>Full Name</label>
-                                <input
-                                    value={appUserForm.fullName}
-                                    onChange={(e) => setAppUserForm((prev) => ({ ...prev, fullName: e.target.value }))}
-                                    placeholder="Full name"
-                                />
-                            </div>
-                            <div className="module-grid module-grid-two">
-                                <div className="module-field">
-                                    <label>Email</label>
-                                    <input value={appUserForm.email} disabled />
-                                </div>
-                                <div className="module-field">
-                                    <label>Phone Number</label>
-                                    <input
-                                        value={appUserForm.phoneNumber}
-                                        onChange={(e) => setAppUserForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                                        placeholder="e.g. 0400 000 000"
-                                    />
-                                </div>
-                            </div>
-                            <div className="module-field">
-                                <label>Role</label>
-                                <select
-                                    value={appUserForm.role}
-                                    onChange={(e) => setAppUserForm((prev) => ({ ...prev, role: e.target.value }))}
+            {showAppUserModal && selectedInfoEntry ? (
+                <div
+                    className="module-modal-backdrop employee-details-backdrop"
+                    onClick={() => {
+                        setShowAppUserModal(false);
+                        setSelectedInfoEntry(null);
+                    }}
+                >
+                    <section
+                        className="module-modal employees-info-modal employee-details-modal employee-details-edit-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="app-user-edit-title"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <header className="employee-details-header">
+                            <div className="employee-details-title-row">
+                                <h2 id="app-user-edit-title">Edit employee</h2>
+                                <button
+                                    type="button"
+                                    className="employee-details-close"
+                                    onClick={() => {
+                                        setShowAppUserModal(false);
+                                        setSelectedInfoEntry(null);
+                                    }}
+                                    aria-label="Close employee editor"
                                 >
-                                    <option value="viewer">Viewer</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="scaffold_designer">Scaffold Designer</option>
-                                    <option value="site_supervisor">Site Supervisor</option>
-                                    <option value="project_manager">Project Manager</option>
-                                    <option value="leading_hand">Leading Hand</option>
-                                    <option value="general_scaffolder">Scaffolder</option>
-                                    <option value="transport_management">Transport Management</option>
-                                    <option value="truck_ess01">Truck ESS01</option>
-                                    <option value="truck_ess02">Truck ESS02</option>
-                                    <option value="truck_ess03">Truck ESS03</option>
-                                </select>
-                            </div>
-                            {error ? <div className="module-error">{error}</div> : null}
-                            <div className="module-form-actions">
-                                <button type="button" className="module-secondary-btn" onClick={() => setShowAppUserModal(false)}>Cancel</button>
-                                <button type="submit" className="module-primary-btn" disabled={savingAppUser}>
-                                    {savingAppUser ? 'Saving...' : 'Save User'}
+                                    &times;
                                 </button>
                             </div>
+                            <div className="employee-details-identity">
+                                <div className="employee-details-avatar" aria-hidden="true">
+                                    <EmployeeAvatar entry={selectedInfoEntry} />
+                                </div>
+                                <div className="employee-details-identity-copy">
+                                    <strong>{appUserForm.fullName || selectedInfoEntry.displayName}</strong>
+                                    <span>{getRoleLabel(appUserForm.role)}</span>
+                                    <span className={`employees-account-pill ${selectedInfoStatus.className}`}>{selectedInfoStatus.label}</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <form className="employee-details-edit-form" onSubmit={saveAppUser}>
+                            <div className="employee-details-content">
+                                <h3>Employee information</h3>
+                                <div className="employee-details-grid">
+                                    <label className="employee-details-field">
+                                        <span>Full Name</span>
+                                        <input
+                                            value={appUserForm.fullName}
+                                            onChange={(event) => setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))}
+                                            placeholder="Full name"
+                                            autoComplete="name"
+                                        />
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Role</span>
+                                        <select
+                                            value={appUserForm.role}
+                                            onChange={(event) => setAppUserForm((previous) => ({ ...previous, role: event.target.value }))}
+                                        >
+                                            <option value="viewer">Viewer</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="scaffold_designer">Scaffold Designer</option>
+                                            <option value="site_supervisor">Site Supervisor</option>
+                                            <option value="project_manager">Project Manager</option>
+                                            <option value="leading_hand">Leading Hand</option>
+                                            <option value="general_scaffolder">Scaffolder</option>
+                                            <option value="transport_management">Transport Management</option>
+                                            <option value="truck_ess01">Truck ESS01</option>
+                                            <option value="truck_ess02">Truck ESS02</option>
+                                            <option value="truck_ess03">Truck ESS03</option>
+                                        </select>
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Phone</span>
+                                        <input
+                                            value={appUserForm.phoneNumber}
+                                            onChange={(event) => setAppUserForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
+                                            placeholder="0400 000 000"
+                                            autoComplete="tel"
+                                        />
+                                    </label>
+                                    <label className="employee-details-field">
+                                        <span>Email</span>
+                                        <input value={appUserForm.email} disabled />
+                                    </label>
+                                    <div className="employee-details-field">
+                                        <span>Account Status</span>
+                                        <strong>{selectedInfoStatus.label}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Invite Sent</span>
+                                        <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
+                                    </div>
+                                    <div className="employee-details-field employee-details-field-wide">
+                                        <span>Verified At</span>
+                                        <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
+                                    </div>
+                                </div>
+
+                                {error ? <div className="module-error employee-details-message">{error}</div> : null}
+                            </div>
+
+                            <footer className="employee-details-footer employee-details-edit-footer">
+                                <div className="employee-details-footer-actions">
+                                    <button
+                                        type="button"
+                                        className="employee-details-secondary-btn"
+                                        disabled={savingAppUser}
+                                        onClick={() => {
+                                            setShowAppUserModal(false);
+                                            setSelectedInfoEntry(null);
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="employee-details-primary-btn" disabled={savingAppUser}>
+                                        {savingAppUser ? 'Saving...' : 'Save Employee'}
+                                    </button>
+                                </div>
+                            </footer>
                         </form>
-                    </div>
+                    </section>
                 </div>
-            )}
+            ) : null}
 
             {showTruckDeviceModal && (
                 <div className="module-modal-backdrop" onClick={() => setShowTruckDeviceModal(false)}>
