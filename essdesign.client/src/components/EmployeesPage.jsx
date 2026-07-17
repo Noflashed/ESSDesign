@@ -157,10 +157,10 @@ function formatEmployeeAddress(profile) {
         profile.addressStreet,
         profile.addressCity,
         profile.addressState,
-        profile.addressPostalCode,
-        profile.addressCountry
+        profile.addressPostalCode
     ].filter(Boolean).join(', ');
-    return structuredAddress || profile.personalAddress || '-';
+    const fallbackAddress = (profile.personalAddress || '').trim().replace(/,\s*Australia\s*$/i, '');
+    return structuredAddress || fallbackAddress || '-';
 }
 
 const EMPLOYEE_CREDENTIAL_CONFIG = [
