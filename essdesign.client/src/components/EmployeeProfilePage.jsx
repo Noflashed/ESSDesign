@@ -129,6 +129,16 @@ function ToggleRow({ label, description, checked, onChange, disabled = false }) 
     );
 }
 
+const DRIVER_LICENCE_CLASSES = [
+    { value: 'C', label: 'C (Car)' },
+    { value: 'R', label: 'R (Rider)' },
+    { value: 'LR', label: 'LR (Light Rigid)' },
+    { value: 'MR', label: 'MR (Medium Rigid)' },
+    { value: 'HR', label: 'HR (Heavy Rigid)' },
+    { value: 'HC', label: 'HC (Heavy Combination)' },
+    { value: 'MC', label: 'MC (Multi Combination)' }
+];
+
 const CREDENTIAL_CONFIG = [
     {
         type: 'white_card',
@@ -136,6 +146,7 @@ const CREDENTIAL_CONFIG = [
         description: 'General construction induction card',
         numberLabel: 'White Card Number',
         showClasses: false,
+        showIssueDate: true,
         showExpiry: false
     },
     {
@@ -144,6 +155,8 @@ const CREDENTIAL_CONFIG = [
         description: 'Australian driver licence details',
         numberLabel: 'Licence Number',
         showClasses: true,
+        classOptions: DRIVER_LICENCE_CLASSES,
+        showIssueDate: false,
         showExpiry: true
     },
     {
@@ -152,6 +165,7 @@ const CREDENTIAL_CONFIG = [
         description: 'SafeWork high risk work licence',
         numberLabel: 'Licence Number',
         showClasses: true,
+        showIssueDate: true,
         showExpiry: true
     }
 ];
@@ -175,6 +189,23 @@ function formatCredentialDate(value) {
     return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 }
 
+function formatCredentialClass(config, value) {
+    if (!value) return 'Not provided';
+    return config.classOptions?.find((option) => option.value === value)?.label || value;
+}
+
+async function hydrateCredentialImages(userId, credentials) {
+    return Promise.all((credentials || []).map(async (credential) => {
+        if (!userId || !credential?.hasFrontImage) return credential;
+        try {
+            const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType);
+            return { ...credential, frontImageUrl };
+        } catch {
+            return credential.frontImageUrl?.startsWith('blob:') ? { ...credential, frontImageUrl: '' } : credential;
+        }
+    }));
+}
+
 function CredentialCard({
     config,
     credential,
@@ -188,6 +219,26 @@ function CredentialCard({
     onFileChange,
     onSave
 }) {
+    const [selectedFilePreview, setSelectedFilePreview] = useState('');
+    const [imageFailed, setImageFailed] = useState(false);
+
+    useEffect(() => {
+        if (!selectedFile) {
+            setSelectedFilePreview('');
+            return undefined;
+        }
+
+        const previewUrl = URL.createObjectURL(selectedFile);
+        setSelectedFilePreview(previewUrl);
+        return () => URL.revokeObjectURL(previewUrl);
+    }, [selectedFile]);
+
+    const imageUrl = selectedFilePreview || credential?.frontImageUrl || '';
+
+    useEffect(() => {
+        setImageFailed(false);
+    }, [imageUrl]);
+
     return (
         <article className={`employee-credential-card${credential ? ' complete' : ''}`}>
             <div className="employee-credential-card-head">
@@ -219,18 +270,33 @@ function CredentialCard({
                             </span>
                         </Field>
                         {config.showClasses ? (
-                            <Field label="Licence Class(es)" wide>
-                                <input
-                                    value={form.licenceClasses}
-                                    onChange={(event) => onChange('licenceClasses', event.target.value)}
-                                    placeholder={config.type === 'driver_licence' ? 'e.g. C, MR, HR' : 'e.g. SB, SI, DG'}
-                                    disabled={saving}
-                                />
+                            <Field label={config.classOptions ? 'Licence Class' : 'Licence Class(es)'} wide>
+                                {config.classOptions ? (
+                                    <span className="employee-profile-select-wrap">
+                                        <select value={form.licenceClasses} onChange={(event) => onChange('licenceClasses', event.target.value)} disabled={saving}>
+                                            <option value="">Select licence class</option>
+                                            {form.licenceClasses && !config.classOptions.some((option) => option.value === form.licenceClasses) ? (
+                                                <option value={form.licenceClasses}>{form.licenceClasses} (existing)</option>
+                                            ) : null}
+                                            {config.classOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                        <ChevronDown size={16} />
+                                    </span>
+                                ) : (
+                                    <input
+                                        value={form.licenceClasses}
+                                        onChange={(event) => onChange('licenceClasses', event.target.value)}
+                                        placeholder="e.g. SB, SI, DG"
+                                        disabled={saving}
+                                    />
+                                )}
                             </Field>
                         ) : null}
-                        <Field label="Issue Date">
-                            <input type="date" value={form.issueDate} onChange={(event) => onChange('issueDate', event.target.value)} disabled={saving} />
-                        </Field>
+                        {config.showIssueDate ? (
+                            <Field label="Issue Date">
+                                <input type="date" value={form.issueDate} onChange={(event) => onChange('issueDate', event.target.value)} disabled={saving} />
+                            </Field>
+                        ) : null}
                         {config.showExpiry ? (
                             <Field label="Expiry Date">
                                 <input type="date" value={form.expiryDate} onChange={(event) => onChange('expiryDate', event.target.value)} disabled={saving} />
@@ -250,6 +316,13 @@ function CredentialCard({
                         <span>Take a clear photo or select a JPEG, PNG, WebP, HEIC or HEIF image up to 10 MB.</span>
                     </label>
 
+                    {imageUrl && !imageFailed ? (
+                        <a className="employee-credential-image" href={imageUrl} target="_blank" rel="noreferrer">
+                            <img src={imageUrl} alt={`Front of ${config.title}`} onError={() => setImageFailed(true)} />
+                            <span>{selectedFilePreview ? 'Selected front image' : 'View current front image'}</span>
+                        </a>
+                    ) : null}
+
                     <div className="employee-credential-actions">
                         <button type="button" className="employee-profile-panel-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
                         <button type="button" className="employee-profile-panel-primary" onClick={onSave} disabled={saving}>
@@ -262,18 +335,20 @@ function CredentialCard({
                     <div className="employee-credential-details">
                         <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || 'Not provided'}</strong></span>
                         <span><small>Issuing State</small><strong>{credential?.issuingState || 'Not provided'}</strong></span>
-                        {config.showClasses ? <span><small>Class(es)</small><strong>{credential?.licenceClasses || 'Not provided'}</strong></span> : null}
-                        <span><small>Issue Date</small><strong>{formatCredentialDate(credential?.issueDate)}</strong></span>
+                        {config.showClasses ? <span><small>{config.classOptions ? 'Class' : 'Class(es)'}</small><strong>{formatCredentialClass(config, credential?.licenceClasses)}</strong></span> : null}
+                        {config.showIssueDate ? <span><small>Issue Date</small><strong>{formatCredentialDate(credential?.issueDate)}</strong></span> : null}
                         {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatCredentialDate(credential?.expiryDate)}</strong></span> : null}
                     </div>
 
-                    {credential?.frontImageUrl ? (
-                        <a className="employee-credential-image" href={credential.frontImageUrl} target="_blank" rel="noreferrer">
-                            <img src={credential.frontImageUrl} alt={`Front of ${config.title}`} />
+                    {imageUrl && !imageFailed ? (
+                        <a className="employee-credential-image" href={imageUrl} target="_blank" rel="noreferrer">
+                            <img src={imageUrl} alt={`Front of ${config.title}`} onError={() => setImageFailed(true)} />
                             <span>View front image</span>
                         </a>
                     ) : (
-                        <div className="employee-credential-image empty">Front image required</div>
+                        <div className="employee-credential-image empty">
+                            {credential?.hasFrontImage ? 'This image format cannot be previewed in this browser' : 'Front image required'}
+                        </div>
                     )}
 
                     <button type="button" className="employee-profile-panel-edit employee-credential-edit" onClick={onEdit}>
@@ -289,6 +364,7 @@ const SECTION_KEYS = ['personal', 'emergency', 'notifications', 'address'];
 
 export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const photoInputRef = useRef(null);
+    const credentialImageUrlsRef = useRef([]);
     const [form, setForm] = useState(() => buildForm(user));
     const [prefs, setPrefs] = useState({
         emailNotifications: true,
@@ -326,9 +402,16 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         let active = true;
         setCredentialsLoading(true);
         usersAPI.getMyCredentials()
-            .then((rows) => {
-                if (!active) return;
-                const nextCredentials = Array.isArray(rows) ? rows : [];
+            .then(async (rows) => {
+                const credentialRows = Array.isArray(rows) ? rows : [];
+                const nextCredentials = await hydrateCredentialImages(user?.id, credentialRows);
+                const nextObjectUrls = nextCredentials.map((item) => item.frontImageUrl).filter((url) => url?.startsWith('blob:'));
+                if (!active) {
+                    nextObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+                    return;
+                }
+                credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+                credentialImageUrlsRef.current = nextObjectUrls;
                 setCredentials(nextCredentials);
                 setCredentialForms(Object.fromEntries(CREDENTIAL_CONFIG.map(({ type }) => [
                     type,
@@ -344,6 +427,11 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
 
         return () => { active = false; };
     }, [user?.id]);
+
+    useEffect(() => () => {
+        credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        credentialImageUrlsRef.current = [];
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -704,7 +792,12 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         setError('');
         try {
             const saved = await usersAPI.saveMyCredential(credentialType, credentialForm, frontImage);
-            setCredentials((current) => [...current.filter((item) => item.credentialType !== credentialType), saved]);
+            const nextRows = [...credentials.filter((item) => item.credentialType !== credentialType), saved];
+            const nextCredentials = await hydrateCredentialImages(user?.id, nextRows);
+            const nextObjectUrls = nextCredentials.map((item) => item.frontImageUrl).filter((url) => url?.startsWith('blob:'));
+            credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+            credentialImageUrlsRef.current = nextObjectUrls;
+            setCredentials(nextCredentials);
             setCredentialForms((current) => ({ ...current, [credentialType]: buildCredentialForm(saved) }));
             setCredentialFiles((current) => ({ ...current, [credentialType]: null }));
             setEditingCredential('');

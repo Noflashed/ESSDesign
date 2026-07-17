@@ -260,6 +260,53 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpGet("{userId}/credentials/{credentialType}/front-image")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<ActionResult> GetUserCredentialFrontImage(string userId, string credentialType)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var isOwner = string.Equals(currentUser.Id, userId, StringComparison.OrdinalIgnoreCase);
+                var isAdmin = string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase);
+                if (!isOwner && !isAdmin)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "You do not have access to this credential image" });
+                }
+
+                var normalizedType = credentialType?.Trim().ToLowerInvariant() ?? string.Empty;
+                if (!EmployeeCredentialTypes.All.Contains(normalizedType))
+                {
+                    return BadRequest(new { error = "Credential type must be white_card, driver_licence or high_risk_work_licence" });
+                }
+
+                var image = await _supabaseService.DownloadEmployeeCredentialImageAsync(userId, normalizedType);
+                if (image == null || image.Bytes.Length == 0)
+                {
+                    return NotFound(new { error = "Credential image was not found" });
+                }
+
+                var contentType = !string.IsNullOrWhiteSpace(image.ContentType) && image.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                    ? image.ContentType
+                    : "application/octet-stream";
+                return File(image.Bytes, contentType);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting {CredentialType} image for {UserId}", credentialType, userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPut("me/credentials/{credentialType}")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(11 * 1024 * 1024)]

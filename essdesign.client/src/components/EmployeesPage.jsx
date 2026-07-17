@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Info, Plus, Search, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -152,16 +152,66 @@ function formatEmployeeAddress(profile) {
 }
 
 const EMPLOYEE_CREDENTIAL_CONFIG = [
-    { type: 'white_card', title: 'White Card', numberLabel: 'Card Number', showClasses: false, showExpiry: false },
-    { type: 'driver_licence', title: 'Driver Licence', numberLabel: 'Licence Number', showClasses: true, showExpiry: true },
-    { type: 'high_risk_work_licence', title: 'High Risk Work Licence', numberLabel: 'Licence Number', showClasses: true, showExpiry: true }
+    { type: 'white_card', title: 'White Card', numberLabel: 'Card Number', showClasses: false, showIssueDate: true, showExpiry: false },
+    { type: 'driver_licence', title: 'Driver Licence', numberLabel: 'Licence Number', showClasses: true, showIssueDate: false, showExpiry: true },
+    { type: 'high_risk_work_licence', title: 'High Risk Work Licence', numberLabel: 'Licence Number', showClasses: true, showIssueDate: true, showExpiry: true }
 ];
+
+const DRIVER_LICENCE_CLASS_LABELS = {
+    C: 'C (Car)',
+    R: 'R (Rider)',
+    LR: 'LR (Light Rigid)',
+    MR: 'MR (Medium Rigid)',
+    HR: 'HR (Heavy Rigid)',
+    HC: 'HC (Heavy Combination)',
+    MC: 'MC (Multi Combination)'
+};
 
 function formatEmployeeCredentialDate(value) {
     if (!value) return '-';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
     return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+}
+
+function formatEmployeeCredentialClass(config, value) {
+    if (!value) return '-';
+    return config.type === 'driver_licence' ? DRIVER_LICENCE_CLASS_LABELS[value] || value : value;
+}
+
+async function hydrateEmployeeCredentialImages(userId, credentials) {
+    return Promise.all((credentials || []).map(async (credential) => {
+        if (!userId || !credential?.hasFrontImage) return credential;
+        try {
+            const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType);
+            return { ...credential, frontImageUrl };
+        } catch {
+            return credential;
+        }
+    }));
+}
+
+function EmployeeCredentialImage({ credential, title }) {
+    const [imageFailed, setImageFailed] = useState(false);
+
+    useEffect(() => {
+        setImageFailed(false);
+    }, [credential?.frontImageUrl]);
+
+    if (!credential?.frontImageUrl || imageFailed) {
+        return (
+            <div className="employee-details-credential-image empty">
+                {credential?.hasFrontImage ? 'This image format cannot be previewed in this browser' : 'Front image not uploaded'}
+            </div>
+        );
+    }
+
+    return (
+        <a href={credential.frontImageUrl} target="_blank" rel="noreferrer" className="employee-details-credential-image">
+            <img src={credential.frontImageUrl} alt={`Front of ${title}`} onError={() => setImageFailed(true)} />
+            <span>View image</span>
+        </a>
+    );
 }
 
 function EmployeeProfileSections({ profile, readOnly = false }) {
@@ -243,18 +293,11 @@ function EmployeeCredentialsSection({ credentials, loading = false, error = '', 
                                 <div className="employee-details-credential-values">
                                     <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || '-'}</strong></span>
                                     <span><small>Issuing State</small><strong>{credential?.issuingState || '-'}</strong></span>
-                                    {config.showClasses ? <span><small>Class(es)</small><strong>{credential?.licenceClasses || '-'}</strong></span> : null}
-                                    <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span>
+                                    {config.showClasses ? <span><small>{config.type === 'driver_licence' ? 'Class' : 'Class(es)'}</small><strong>{formatEmployeeCredentialClass(config, credential?.licenceClasses)}</strong></span> : null}
+                                    {config.showIssueDate ? <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span> : null}
                                     {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
                                 </div>
-                                {credential?.frontImageUrl ? (
-                                    <a href={credential.frontImageUrl} target="_blank" rel="noreferrer" className="employee-details-credential-image">
-                                        <img src={credential.frontImageUrl} alt={`Front of ${config.title}`} />
-                                        <span>View image</span>
-                                    </a>
-                                ) : (
-                                    <div className="employee-details-credential-image empty">Front image not uploaded</div>
-                                )}
+                                <EmployeeCredentialImage credential={credential} title={config.title} />
                             </article>
                         );
                     })}
@@ -371,6 +414,7 @@ function EmployeeActionButton({ title, onClick, children, danger = false }) {
 }
 
 export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
+    const selectedCredentialImageUrlsRef = useRef([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingAppUser, setSavingAppUser] = useState(false);
@@ -485,6 +529,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         const credentialUserId = selectedInfoEntry?.appUser?.id || selectedInfoEntry?.employee?.linkedAuthUserId || '';
         let active = true;
 
+        selectedCredentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        selectedCredentialImageUrlsRef.current = [];
         setSelectedCredentials([]);
         setSelectedCredentialsError('');
         if (!credentialUserId) {
@@ -494,8 +540,17 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
         setSelectedCredentialsLoading(true);
         usersAPI.getUserCredentials(credentialUserId)
-            .then((rows) => {
-                if (active) setSelectedCredentials(Array.isArray(rows) ? rows : []);
+            .then(async (rows) => {
+                const credentialRows = Array.isArray(rows) ? rows : [];
+                const nextCredentials = await hydrateEmployeeCredentialImages(credentialUserId, credentialRows);
+                const nextObjectUrls = nextCredentials.map((item) => item.frontImageUrl).filter((url) => url?.startsWith('blob:'));
+                if (!active) {
+                    nextObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+                    return;
+                }
+                selectedCredentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+                selectedCredentialImageUrlsRef.current = nextObjectUrls;
+                setSelectedCredentials(nextCredentials);
             })
             .catch((credentialError) => {
                 if (active) {
@@ -508,6 +563,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
         return () => { active = false; };
     }, [selectedInfoEntry?.appUser?.id, selectedInfoEntry?.employee?.linkedAuthUserId]);
+
+    useEffect(() => () => {
+        selectedCredentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        selectedCredentialImageUrlsRef.current = [];
+    }, []);
 
     useEffect(() => {
         let active = true;

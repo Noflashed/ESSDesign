@@ -2113,6 +2113,36 @@ namespace ESSDesign.Server.Services
             return responses.OrderBy(item => item.CredentialType, StringComparer.Ordinal).ToList();
         }
 
+        public async Task<StorageObjectDownload?> DownloadEmployeeCredentialImageAsync(
+            string userId,
+            string credentialType)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var normalizedType = credentialType?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (!EmployeeCredentialTypes.All.Contains(normalizedType))
+            {
+                throw new ArgumentException("Unsupported credential type.", nameof(credentialType));
+            }
+
+            var credential = (await GetEmployeeCredentialRecordsAsync(normalizedUserId, normalizedType)).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(credential?.FrontImagePath))
+            {
+                return null;
+            }
+
+            var download = await DownloadStorageBinaryObjectAsync(_employeeCredentialsBucketName, credential.FrontImagePath);
+            if (download is not null && string.IsNullOrWhiteSpace(download.ContentType))
+            {
+                download.ContentType = credential.FrontImageContentType;
+            }
+
+            return download;
+        }
+
         public async Task<EmployeeCredentialResponse> UpsertEmployeeCredentialAsync(
             string userId,
             string credentialType,

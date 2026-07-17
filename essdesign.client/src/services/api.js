@@ -5198,12 +5198,21 @@ export const usersAPI = {
         return response.data || [];
     },
 
+    getCredentialImageUrl: async (userId, credentialType) => {
+        if (!userId || !credentialType) return '';
+        const response = await apiClient.get(
+            `/users/${encodeURIComponent(userId)}/credentials/${encodeURIComponent(credentialType)}/front-image`,
+            { responseType: 'blob' }
+        );
+        return URL.createObjectURL(response.data);
+    },
+
     saveMyCredential: async (credentialType, credential, frontImage = null) => {
         const formData = new FormData();
         formData.append('credentialNumber', credential?.credentialNumber || '');
         formData.append('licenceClasses', credential?.licenceClasses || '');
         formData.append('issuingState', credential?.issuingState || 'NSW');
-        if (credential?.issueDate) formData.append('issueDate', credential.issueDate);
+        if (credentialType !== 'driver_licence' && credential?.issueDate) formData.append('issueDate', credential.issueDate);
         if (credential?.expiryDate) formData.append('expiryDate', credential.expiryDate);
         if (frontImage) formData.append('frontImage', frontImage);
 
