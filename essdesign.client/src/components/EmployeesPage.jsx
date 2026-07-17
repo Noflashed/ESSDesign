@@ -659,16 +659,21 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         return result;
     }, [employees, appUsers, profileImageUrls]);
 
+    const directoryEntries = useMemo(
+        () => mergedEntries.filter((entry) => !isTruckRole(entry.role)),
+        [mergedEntries]
+    );
+
     const roleFilterOptions = useMemo(() => {
-        const roles = Array.from(new Set(mergedEntries
+        const roles = Array.from(new Set(directoryEntries
             .map((entry) => entry.role)
-            .filter((role) => role && !isTruckRole(role))));
+            .filter(Boolean)));
         return roles.map((role) => ({ value: role, label: getRoleLabel(role) })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [mergedEntries]);
+    }, [directoryEntries]);
 
     const filteredEntries = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return mergedEntries.filter((entry) => {
+        return directoryEntries.filter((entry) => {
             if (roleFilter !== 'all' && entry.role !== roleFilter) return false;
             if (!q) return true;
             const name = entry.displayName.toLowerCase();
@@ -678,26 +683,26 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const account = getAccountStatus(entry).label.toLowerCase();
             return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || account.includes(q);
         });
-    }, [mergedEntries, search, roleFilter]);
+    }, [directoryEntries, search, roleFilter]);
 
     useEffect(() => {
-        if (loading || mergedEntries.length === 0) {
+        if (loading || directoryEntries.length === 0) {
             if (!loading) setSelectedInfoEntry(null);
             return;
         }
 
         setSelectedInfoEntry((current) => {
             const refreshedSelection = current
-                ? mergedEntries.find((entry) => entry.key === current.key)
+                ? directoryEntries.find((entry) => entry.key === current.key)
                 : null;
 
             if (filteredEntries.length === 0) {
-                return refreshedSelection || mergedEntries[0];
+                return refreshedSelection || directoryEntries[0];
             }
 
             return filteredEntries.find((entry) => entry.key === current?.key) || filteredEntries[0];
         });
-    }, [filteredEntries, loading, mergedEntries]);
+    }, [directoryEntries, filteredEntries, loading]);
 
     const pagedEntries = filteredEntries;
 
@@ -1049,7 +1054,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
                 {loading ? (
                     <div className="employees-loading page-loading-brandmark"><LoadingBrandmark label="Loading employees" /></div>
-                ) : mergedEntries.length === 0 ? (
+                ) : directoryEntries.length === 0 ? (
                     <div className="employees-empty-state">
                         <UserPlus size={24} aria-hidden="true" />
                         <strong>No employees yet</strong>
@@ -1305,7 +1310,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             </div>
 
                             <footer className="employees-directory-footer">
-                                <span>Showing {pagedEntries.length} of {mergedEntries.length}</span>
+                                <span>Showing {pagedEntries.length} of {directoryEntries.length}</span>
                                 <button type="button" onClick={openTruckDeviceCreator}><TreeIcon /> Add truck device</button>
                             </footer>
                         </aside>
