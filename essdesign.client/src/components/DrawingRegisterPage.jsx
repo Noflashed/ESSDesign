@@ -111,6 +111,9 @@ const parseDrawingNumber = drawingNo => {
 };
 
 const normalizeName = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+const cleanFolderName = value => String(value || '').trim().replace(/\s+/g, ' ');
+const normalizeFolderName = value => cleanFolderName(value).toUpperCase();
+const normalizeFolderId = value => String(value || '').trim().toLowerCase();
 
 const normalizeRegistryName = value => {
     const ignored = new Set(['the', 'and', 'pty', 'ltd', 'limited', 'construction', 'constructions', 'consrtuctions', 'group', 'development', 'project', 'projects']);
@@ -213,6 +216,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [buildersLoading, setBuildersLoading] = useState(true);
     const [buildersError, setBuildersError] = useState('');
     const [siteLinkError, setSiteLinkError] = useState('');
+    const [addRowError, setAddRowError] = useState('');
+    const [addingRow, setAddingRow] = useState(false);
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
     const [documentOpenError, setDocumentOpenError] = useState('');
     const [drawingDocuments, setDrawingDocuments] = useState({});
@@ -412,16 +417,46 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, [canEdit, drawingDocumentsLoading, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
-    const addRow = event => {
+    const addRow = async event => {
         event.preventDefault();
-        if (!canEdit || !draft.client || !draft.project || !draft.design || !generatedDrawingNo) return;
+        const scaffoldFolderName = cleanFolderName(draft.design);
+        if (addingRow || !canEdit || !draft.client || !draft.project || !scaffoldFolderName || !generatedDrawingNo) return;
         const builder = builders.find(item => item.name === draft.client);
         const project = builder?.projects.find(item => item.name === draft.project);
         if (!builder || !project) return;
+
+        const projectFolderId = normalizeFolderId(project.designFolderId);
+        if (!projectFolderId) {
+            setAddRowError(`${project.name} does not have an ESS Design directory linked in the Site Registry.`);
+            return;
+        }
+
+        setAddRowError('');
         setSiteLinkError('');
-        setRows(current => [{ ...draft, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
-        setDraft(EMPTY_ROW);
-        setShowAddRow(false);
+        setAddingRow(true);
+        try {
+            const designFolders = await foldersAPI.getDesignFolderOptions();
+            const projectFolder = designFolders.find(folder => normalizeFolderId(folder.id) === projectFolderId);
+            if (!projectFolder) {
+                throw new Error(`The ESS Design directory linked to ${project.name} could not be found. Please relink it in the Site Registry.`);
+            }
+
+            const existingScaffoldFolder = designFolders.find(folder =>
+                normalizeFolderId(folder.parentFolderId) === projectFolderId
+                && normalizeFolderName(folder.name) === normalizeFolderName(scaffoldFolderName));
+            if (!existingScaffoldFolder) {
+                await foldersAPI.createFolder(scaffoldFolderName, projectFolderId);
+            }
+
+            setRows(current => [{ ...draft, design: scaffoldFolderName, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
+            setDraft(EMPTY_ROW);
+            setShowAddRow(false);
+        } catch (error) {
+            console.error('Scaffold design folder creation failed', error);
+            setAddRowError(error?.response?.data?.error || error.message || 'The scaffold folder could not be created in ESS Design.');
+        } finally {
+            setAddingRow(false);
+        }
     };
     const updateRow = (id, key, value) => {
         if (!canEdit) return;
@@ -450,6 +485,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const openAddRow = () => {
         if (!canEdit) return;
         setDraft({ ...EMPTY_ROW, dateIssued: getTodayInputValue() });
+        setAddRowError('');
         setShowAddRow(true);
         setOpenMenuId(null);
     };
@@ -522,9 +558,9 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             {siteLinkError && <div className="register-navigation-error" role="alert">{siteLinkError}</div>}
 
             {canEdit && showAddRow && (
-                <div className="register-modal-backdrop" role="presentation" onMouseDown={() => setShowAddRow(false)}>
+                <div className="register-modal-backdrop" role="presentation" onMouseDown={() => { if (!addingRow) setShowAddRow(false); }}>
                     <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title">
-                        <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close"><X size={18} /></button></div>
+                        <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close" disabled={addingRow}><X size={18} /></button></div>
                         <div className="register-modal-grid">
                             <label><span>CLIENT</span><select value={draft.client} onChange={event => setDraft(current => ({ ...current, client: event.target.value, project: '' }))} autoFocus disabled={buildersLoading}><option value="">{buildersLoading ? 'Loading builders...' : 'Select client'}</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>{buildersError && <small className="register-field-error">{buildersError}</small>}</label>
                             <label><span>PROJECT</span><select value={draft.project} onChange={event => updateDraft('project', event.target.value)} disabled={!selectedBuilder}><option value="">{selectedBuilder ? 'Select project' : 'Select a client first'}</option>{availableProjects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select></label>
@@ -534,7 +570,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                             <label><span>REVISION NO.</span><input value={draft.revisionNo} onChange={event => updateDraft('revisionNo', event.target.value)} placeholder="Enter revision" /></label>
                             <label><span>DESIGN USE</span><select value={draft.designUse} onChange={event => updateDraft('designUse', event.target.value)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label>
                         </div>
-                        <div className="register-modal-actions"><button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)}>Cancel</button><button type="submit" className="register-primary-button" disabled={!draft.client || !draft.project || !draft.design || !generatedDrawingNo}>Add drawing</button></div>
+                        {addRowError && <div className="register-navigation-error" role="alert">{addRowError}</div>}
+                        <div className="register-modal-actions"><button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)} disabled={addingRow}>Cancel</button><button type="submit" className="register-primary-button" disabled={addingRow || !draft.client || !draft.project || !cleanFolderName(draft.design) || !generatedDrawingNo}>{addingRow ? 'Creating folder...' : 'Add drawing'}</button></div>
                     </form>
                 </div>
             )}
