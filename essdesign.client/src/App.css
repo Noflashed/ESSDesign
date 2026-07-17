@@ -21081,6 +21081,7 @@ button.stat-card {
     color: #64748b;
     font-size: 13px;
     font-weight: 500;
+    line-height: 20px;
 }
 
 .employees-page .employee-profile-status,
@@ -21263,6 +21264,7 @@ button.stat-card {
 }
 
 .employees-page .employee-profile-fields dd {
+    min-height: 24px;
     margin: 0;
     overflow-wrap: anywhere;
     color: #26354f;
@@ -21562,17 +21564,17 @@ button.stat-card {
     min-width: 0;
 }
 
-.employees-page .employee-profile-header-actions,
-.employees-page .employee-profile-inline-tools,
-.employees-page .employee-profile-inline-tools > div {
+.employees-page .employee-profile-header-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .employees-page .employee-profile-cancel-btn,
 .employees-page .employee-profile-relationship-btn,
-.employees-page .employee-profile-inline-tools button {
+.employees-page .employee-profile-invite-btn {
     min-height: 38px;
     padding: 0 13px;
     border: 1px solid #d7dee8;
@@ -21587,7 +21589,7 @@ button.stat-card {
 
 .employees-page .employee-profile-cancel-btn:hover,
 .employees-page .employee-profile-relationship-btn:hover,
-.employees-page .employee-profile-inline-tools button:hover {
+.employees-page .employee-profile-invite-btn:hover {
     border-color: #b8c4d4;
     background: #f8fafc;
 }
@@ -21595,7 +21597,7 @@ button.stat-card {
 .employees-page .employee-profile-edit-btn:disabled,
 .employees-page .employee-profile-cancel-btn:disabled,
 .employees-page .employee-profile-relationship-btn:disabled,
-.employees-page .employee-profile-inline-tools button:disabled {
+.employees-page .employee-profile-invite-btn:disabled {
     cursor: not-allowed;
     opacity: 0.58;
 }
@@ -21612,77 +21614,70 @@ button.stat-card {
     height: 14px;
 }
 
-.employees-page .employee-profile-edit-fields > div,
-.employees-page .employee-profile-edit-field {
-    min-width: 0;
-}
-
-.employees-page .employee-profile-edit-field.wide,
-.employees-page .employee-profile-edit-fields > div.wide {
-    grid-column: 1 / -1;
-}
-
-.employees-page .employee-profile-edit-field,
-.employees-page .employee-profile-edit-fields > div {
-    display: grid;
-    gap: 5px;
-}
-
-.employees-page .employee-profile-edit-field > span,
-.employees-page .employee-profile-edit-fields > div > span {
-    color: #7c8798;
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.employees-page .employee-profile-edit-field input,
-.employees-page .employee-profile-edit-field select {
-    width: 100%;
-    min-width: 0;
-    min-height: 36px;
-    padding: 0 10px;
+.employees-page .employee-profile-summary-name-input,
+.employees-page .employee-profile-summary-role-select,
+.employees-page .employee-profile-inline-value-input {
+    box-sizing: border-box;
     border: 1px solid #cfd8e5;
-    border-radius: 6px;
+    border-radius: 5px;
     background: #ffffff;
     color: #26354f;
     outline: none;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 400;
+    font-family: inherit;
 }
 
-.employees-page .employee-profile-edit-field input:focus,
-.employees-page .employee-profile-edit-field select:focus {
+.employees-page .employee-profile-summary-name-input {
+    width: 100%;
+    max-width: 210px;
+    height: 24px;
+    margin: 18px 0 4px;
+    padding: 0 6px;
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.employees-page .employee-profile-summary-role-select {
+    width: min(100%, 170px);
+    height: 20px;
+    padding: 0 22px 0 6px;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.employees-page .employee-profile-inline-value-input {
+    width: 100%;
+    height: 24px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.42;
+}
+
+.employees-page .employee-profile-summary-name-input:focus,
+.employees-page .employee-profile-summary-role-select:focus,
+.employees-page .employee-profile-inline-value-input:focus {
     border-color: #76a7ed;
     box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
 }
 
-.employees-page .employee-profile-edit-field input:disabled,
-.employees-page .employee-profile-edit-field select:disabled {
+.employees-page .employee-profile-summary-role-select:disabled,
+.employees-page .employee-profile-inline-value-input:disabled {
     border-color: #e3e8ef;
     background: #f6f7f9;
     color: #7c8798;
     cursor: not-allowed;
 }
 
-.employees-page .employee-profile-edit-fields > div > strong {
-    overflow-wrap: anywhere;
-    color: #26354f;
-    font-size: 11px;
-    font-weight: 400;
-    line-height: 1.42;
-}
-
-.employees-page .employee-profile-inline-tools {
-    grid-column: 1 / -1;
-    min-width: 0;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    padding: 12px 14px;
-    border: 1px solid #dce4ee;
-    border-radius: 8px;
-    background: #ffffff;
+.employees-page .employee-profile-inline-feedback {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin: -8px 0 12px;
 }
 
 .employees-page .employee-profile-inline-success,
@@ -21760,6 +21755,12 @@ button.stat-card {
     }
 
     .employees-page .employee-profile-summary-identity h2 {
+        margin-top: 12px;
+        font-size: 17px;
+    }
+
+    .employees-page .employee-profile-summary-name-input {
+        height: 20px;
         margin-top: 12px;
         font-size: 17px;
     }
@@ -21867,15 +21868,9 @@ button.stat-card {
 
     .employees-page .employee-profile-summary-list,
     .employees-page .employee-profile-fields,
-    .employees-page .employee-profile-edit-fields,
     .employees-page .employee-profile-fields.four-column,
     .employees-page .employees-directory-tools {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    .employees-page .employee-profile-edit-field.wide,
-    .employees-page .employee-profile-edit-fields > div.wide {
-        grid-column: 1;
     }
 
     .employees-page .employees-directory-add {

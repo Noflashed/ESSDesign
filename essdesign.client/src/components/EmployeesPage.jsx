@@ -1081,8 +1081,34 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <aside className="employee-profile-summary" aria-label="Selected employee summary">
                                 <div className="employee-profile-summary-identity">
                                     <div className="employee-profile-summary-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
-                                    <h2>{selectedInfoEntry.displayName}</h2>
-                                    <p>{getRoleLabel(selectedInfoEntry.role)}</p>
+                                    {isInlineEditing ? (
+                                        <input
+                                            className="employee-profile-summary-name-input"
+                                            aria-label="Full name"
+                                            value={inlineEditorName}
+                                            onChange={(event) => isEditingEmployee
+                                                ? updateEmployeeFullName(event.target.value)
+                                                : setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))}
+                                            autoComplete="name"
+                                        />
+                                    ) : <h2>{selectedInfoEntry.displayName}</h2>}
+                                    {isInlineEditing ? (
+                                        <select
+                                            className="employee-profile-summary-role-select"
+                                            aria-label="Role"
+                                            value={inlineEditorRole}
+                                            onChange={(event) => isEditingEmployee
+                                                ? setForm((previous) => ({ ...previous, selectedRole: event.target.value }))
+                                                : setAppUserForm((previous) => ({ ...previous, role: event.target.value }))}
+                                            disabled={selectedAppUserIsTruckDevice}
+                                        >
+                                            {selectedAppUserIsTruckDevice ? (
+                                                <option value={inlineEditorRole}>{getRoleLabel(inlineEditorRole)} (device only)</option>
+                                            ) : INDIVIDUAL_ROLE_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    ) : <p>{getRoleLabel(selectedInfoEntry.role)}</p>}
                                     <span className={`employee-profile-status ${selectedInfoStatus.className}`}>
                                         <i aria-hidden="true" />
                                         {selectedInfoStatus.label}
@@ -1130,6 +1156,16 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             ) : null}
                                             {isInlineEditing ? (
                                                 <>
+                                                    {isEditingEmployee ? (
+                                                        <button
+                                                            type="button"
+                                                            className="employee-profile-invite-btn"
+                                                            onClick={sendEmployeeInvite}
+                                                            disabled={inviteSending || !form.email.trim()}
+                                                        >
+                                                            {inviteSending ? 'Sending...' : 'Invite user'}
+                                                        </button>
+                                                    ) : null}
                                                     <button type="button" className="employee-profile-cancel-btn" onClick={cancelInlineEdit} disabled={saving || savingAppUser}>
                                                         Cancel
                                                     </button>
@@ -1146,70 +1182,53 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         </div>
                                     </header>
 
+                                    {isInlineEditing && (inviteMessage || error) ? (
+                                        <div className="employee-profile-inline-feedback" aria-live="polite">
+                                            {inviteMessage ? <span className="employee-profile-inline-success">{inviteMessage}</span> : null}
+                                            {error ? <span className="employee-profile-inline-error">{error}</span> : null}
+                                        </div>
+                                    ) : null}
+
                                     <div className="employee-profile-detail-grid">
                                         <section className="employee-profile-card">
                                             <h3><User size={17} aria-hidden="true" /> Personal details</h3>
-                                            {isInlineEditing ? (
-                                                <div className="employee-profile-fields employee-profile-edit-fields">
-                                                    <label className="employee-profile-edit-field wide">
-                                                        <span>Full name</span>
-                                                        <input
-                                                            value={inlineEditorName}
-                                                            onChange={(event) => isEditingEmployee
-                                                                ? updateEmployeeFullName(event.target.value)
-                                                                : setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))}
-                                                            autoComplete="name"
-                                                        />
-                                                    </label>
-                                                    <label className="employee-profile-edit-field">
-                                                        <span>Role</span>
-                                                        <select
-                                                            value={inlineEditorRole}
-                                                            onChange={(event) => isEditingEmployee
-                                                                ? setForm((previous) => ({ ...previous, selectedRole: event.target.value }))
-                                                                : setAppUserForm((previous) => ({ ...previous, role: event.target.value }))}
-                                                            disabled={selectedAppUserIsTruckDevice}
-                                                        >
-                                                            {selectedAppUserIsTruckDevice ? (
-                                                                <option value={inlineEditorRole}>{getRoleLabel(inlineEditorRole)} (device only)</option>
-                                                            ) : INDIVIDUAL_ROLE_OPTIONS.map((option) => (
-                                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                                            ))}
-                                                        </select>
-                                                    </label>
-                                                    <label className="employee-profile-edit-field">
-                                                        <span>Mobile</span>
-                                                        <input
-                                                            value={inlineEditorPhone}
-                                                            onChange={(event) => isEditingEmployee
-                                                                ? setForm((previous) => ({ ...previous, phoneNumber: event.target.value }))
-                                                                : setAppUserForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
-                                                            autoComplete="tel"
-                                                        />
-                                                    </label>
-                                                    <label className="employee-profile-edit-field wide">
-                                                        <span>Email</span>
-                                                        <input
-                                                            type="email"
-                                                            value={inlineEditorEmail}
-                                                            onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
-                                                            disabled={isEditingAppUser}
-                                                            autoComplete="email"
-                                                        />
-                                                    </label>
-                                                    <div><span>Date of birth</span><strong>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</strong></div>
-                                                    <div><span>Gender</span><strong>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</strong></div>
-                                                    <div className="wide"><span>Residential address</span><strong>{formatEmployeeAddress(selectedEmployeeProfile)}</strong></div>
+                                            <dl className="employee-profile-fields">
+                                                <div><dt>Date of birth</dt><dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
+                                                <div><dt>Gender</dt><dd>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
+                                                <div>
+                                                    <dt>Mobile</dt>
+                                                    <dd>
+                                                        {isInlineEditing ? (
+                                                            <input
+                                                                className="employee-profile-inline-value-input"
+                                                                aria-label="Mobile"
+                                                                value={inlineEditorPhone}
+                                                                onChange={(event) => isEditingEmployee
+                                                                    ? setForm((previous) => ({ ...previous, phoneNumber: event.target.value }))
+                                                                    : setAppUserForm((previous) => ({ ...previous, phoneNumber: event.target.value }))}
+                                                                autoComplete="tel"
+                                                            />
+                                                        ) : (selectedInfoEntry.displayPhone || '-')}
+                                                    </dd>
                                                 </div>
-                                            ) : (
-                                                <dl className="employee-profile-fields">
-                                                    <div><dt>Date of birth</dt><dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
-                                                    <div><dt>Gender</dt><dd>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
-                                                    <div><dt>Mobile</dt><dd>{selectedInfoEntry.displayPhone || '-'}</dd></div>
-                                                    <div><dt>Email</dt><dd>{selectedInfoEntry.displayEmail || '-'}</dd></div>
-                                                    <div className="wide"><dt>Residential address</dt><dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
-                                                </dl>
-                                            )}
+                                                <div>
+                                                    <dt>Email</dt>
+                                                    <dd>
+                                                        {isInlineEditing ? (
+                                                            <input
+                                                                className="employee-profile-inline-value-input"
+                                                                aria-label="Email"
+                                                                type="email"
+                                                                value={inlineEditorEmail}
+                                                                onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
+                                                                disabled={isEditingAppUser}
+                                                                autoComplete="email"
+                                                            />
+                                                        ) : (selectedInfoEntry.displayEmail || '-')}
+                                                    </dd>
+                                                </div>
+                                                <div className="wide"><dt>Residential address</dt><dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
+                                            </dl>
                                         </section>
 
                                         <section className="employee-profile-card">
@@ -1222,20 +1241,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 <div className="wide"><dt>Address</dt><dd>{selectedEmployeeProfile?.emergencyAddress || '-'}</dd></div>
                                             </dl>
                                         </section>
-
-                                        {isInlineEditing ? (
-                                            <div className="employee-profile-inline-tools">
-                                                <div>
-                                                    {isEditingEmployee ? (
-                                                        <button type="button" onClick={sendEmployeeInvite} disabled={inviteSending || !form.email.trim()}>
-                                                            {inviteSending ? 'Sending...' : 'Invite user'}
-                                                        </button>
-                                                    ) : null}
-                                                </div>
-                                                {inviteMessage ? <span className="employee-profile-inline-success">{inviteMessage}</span> : null}
-                                                {error ? <span className="employee-profile-inline-error">{error}</span> : null}
-                                            </div>
-                                        ) : null}
 
                                         <EmployeeCredentialsSection
                                             credentials={selectedCredentials}
