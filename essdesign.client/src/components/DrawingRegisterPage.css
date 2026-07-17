@@ -56,7 +56,7 @@
 .drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
 .register-row-actions-wrap { position: relative; display: inline-flex; }
 .drawing-register-page .register-row-menu { display: inline-flex !important; width: 28px; height: 28px; border-color: transparent; background: transparent; color: var(--text-secondary, #475569) !important; visibility: visible !important; opacity: 1 !important; } .drawing-register-page .register-row-menu:hover, .drawing-register-page .register-row-menu[aria-expanded="true"] { color: var(--primary-color) !important; background: var(--hover-bg); }
-.register-context-menu { position: absolute; z-index: 8; top: 32px; right: 0; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
+.register-context-menu { position: fixed; z-index: 4000; box-sizing: border-box; width: 174px; padding: 5px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
 .register-context-menu button { width: 100%; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 13px; text-align: left; }
 .register-context-menu button:hover { background: var(--hover-bg); } .register-context-menu button.danger { color: #d93025; }
 .register-status-select { width: 100%; min-height: 30px; padding: 0 18px 0 4px; border: 1px solid transparent; border-radius: 4px; outline: 0; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }

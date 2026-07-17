@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ChevronDown, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
@@ -18,6 +19,10 @@ const FIELDS = [
 ];
 const EMPTY_ROW = Object.fromEntries(FIELDS.map(([key]) => [key, '']));
 const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'AS-BUILT'];
+const ACTION_MENU_WIDTH = 174;
+const ACTION_MENU_HEIGHT = 84;
+const ACTION_MENU_GAP = 4;
+const VIEWPORT_MARGIN = 8;
 const getTodayInputValue = () => {
     const today = new Date();
     const year = today.getFullYear();
@@ -212,6 +217,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [draft, setDraft] = useState(EMPTY_ROW);
     const [editingId, setEditingId] = useState(null);
     const [openMenuId, setOpenMenuId] = useState(null);
+    const [menuPosition, setMenuPosition] = useState(null);
     const [builders, setBuilders] = useState([]);
     const [buildersLoading, setBuildersLoading] = useState(true);
     const [buildersError, setBuildersError] = useState('');
@@ -273,9 +279,18 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, []);
 
     useEffect(() => {
-        const closeMenu = () => setOpenMenuId(null);
+        const closeMenu = () => {
+            setOpenMenuId(null);
+            setMenuPosition(null);
+        };
         document.addEventListener('click', closeMenu);
-        return () => document.removeEventListener('click', closeMenu);
+        document.addEventListener('scroll', closeMenu, true);
+        window.addEventListener('resize', closeMenu);
+        return () => {
+            document.removeEventListener('click', closeMenu);
+            document.removeEventListener('scroll', closeMenu, true);
+            window.removeEventListener('resize', closeMenu);
+        };
     }, []);
 
     useEffect(() => {
@@ -419,8 +434,9 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
     const addRow = async event => {
         event.preventDefault();
-        const scaffoldFolderName = cleanFolderName(draft.design);
-        if (addingRow || !canEdit || !draft.client || !draft.project || !scaffoldFolderName || !generatedDrawingNo) return;
+        const designName = cleanFolderName(draft.design);
+        const scaffoldFolderName = designName.toUpperCase();
+        if (addingRow || !canEdit || !draft.client || !draft.project || !designName || !generatedDrawingNo) return;
         const builder = builders.find(item => item.name === draft.client);
         const project = builder?.projects.find(item => item.name === draft.project);
         if (!builder || !project) return;
@@ -448,7 +464,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 await foldersAPI.createFolder(scaffoldFolderName, projectFolderId);
             }
 
-            setRows(current => [{ ...draft, design: scaffoldFolderName, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
+            setRows(current => [{ ...draft, design: designName, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
             setDraft(EMPTY_ROW);
             setShowAddRow(false);
         } catch (error) {
@@ -488,6 +504,27 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         setAddRowError('');
         setShowAddRow(true);
         setOpenMenuId(null);
+        setMenuPosition(null);
+    };
+    const toggleRowMenu = (event, rowId) => {
+        event.stopPropagation();
+        if (openMenuId === rowId) {
+            setOpenMenuId(null);
+            setMenuPosition(null);
+            return;
+        }
+
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const opensBelow = buttonRect.bottom + ACTION_MENU_GAP + ACTION_MENU_HEIGHT <= window.innerHeight - VIEWPORT_MARGIN;
+        const top = opensBelow
+            ? buttonRect.bottom + ACTION_MENU_GAP
+            : Math.max(VIEWPORT_MARGIN, buttonRect.top - ACTION_MENU_GAP - ACTION_MENU_HEIGHT);
+        const left = Math.min(
+            window.innerWidth - ACTION_MENU_WIDTH - VIEWPORT_MARGIN,
+            Math.max(VIEWPORT_MARGIN, buttonRect.right - ACTION_MENU_WIDTH));
+
+        setMenuPosition({ top, left });
+        setOpenMenuId(rowId);
     };
     const openLatestDrawing = row => {
         const drawingNumber = getBaseDrawingNumber(row.drawingNo);
@@ -586,11 +623,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                                     {FIELDS.map(([key]) => <td key={key} onDoubleClick={!canEdit || ['client', 'project', 'designUse', 'drawingNo'].includes(key) ? undefined : () => setEditingId(row.id)}>{renderCell(row, key)}</td>)}
                                     {canEdit && <td className="row-actions">
                                         <div className="register-row-actions-wrap">
-                                            <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-expanded={openMenuId === row.id} onClick={event => { event.stopPropagation(); setOpenMenuId(current => current === row.id ? null : row.id); }}><MoreVertical size={20} aria-hidden="true" /></button>
-                                            {openMenuId === row.id && <div className="register-context-menu" onClick={event => event.stopPropagation()}>
-                                                <button type="button" onClick={openAddRow}><Plus size={16} /> Add drawing</button>
-                                                <button type="button" className="danger" onClick={() => { deleteRow(row.id); setOpenMenuId(null); }}><Trash2 size={16} /> Delete drawing</button>
-                                            </div>}
+                                            <button type="button" className="register-row-menu" title="Drawing actions" aria-label={`Actions for ${row.drawingNo || 'drawing'}`} aria-haspopup="menu" aria-expanded={openMenuId === row.id} onClick={event => toggleRowMenu(event, row.id)}><MoreVertical size={20} aria-hidden="true" /></button>
                                         </div>
                                     </td>}
                                 </tr>
@@ -600,6 +633,12 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 )}
                 {!loading && filteredRows.length === 0 && <div className="register-empty"><MoreVertical size={24} />No drawings match the current search.</div>}
             </section>
+            {openMenuId && menuPosition && createPortal(
+                <div className="register-context-menu" role="menu" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={event => event.stopPropagation()}>
+                    <button type="button" role="menuitem" onClick={openAddRow}><Plus size={16} /> Add drawing</button>
+                    <button type="button" role="menuitem" className="danger" onClick={() => { deleteRow(openMenuId); setOpenMenuId(null); setMenuPosition(null); }}><Trash2 size={16} /> Delete drawing</button>
+                </div>,
+                document.body)}
         </main>
     );
 }
