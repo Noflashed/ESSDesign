@@ -151,6 +151,62 @@ function formatEmployeeAddress(profile) {
     return structuredAddress || profile.personalAddress || '-';
 }
 
+function EmployeeProfileSections({ profile, readOnly = false }) {
+    const readOnlyBadge = readOnly ? <span className="employee-details-section-badge">Read only</span> : null;
+
+    return (
+        <>
+            <section className="employee-details-section">
+                <h3>Personal profile {readOnlyBadge}</h3>
+                <div className="employee-details-grid">
+                    <div className="employee-details-field">
+                        <span>Preferred Name</span>
+                        <strong>{profile?.preferredName || '-'}</strong>
+                    </div>
+                    <div className="employee-details-field">
+                        <span>Date of Birth</span>
+                        <strong>{formatEmployeeBirthDate(profile?.dateOfBirth)}</strong>
+                    </div>
+                    <div className="employee-details-field">
+                        <span>Gender</span>
+                        <strong>{formatEmployeeGender(profile?.gender)}</strong>
+                    </div>
+                    <div className="employee-details-field employee-details-field-wide">
+                        <span>Residential Address</span>
+                        <strong>{formatEmployeeAddress(profile)}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section className="employee-details-section">
+                <h3>Emergency contact {readOnlyBadge}</h3>
+                <div className="employee-details-grid">
+                    <div className="employee-details-field">
+                        <span>Contact Name</span>
+                        <strong>{profile?.emergencyContactName || '-'}</strong>
+                    </div>
+                    <div className="employee-details-field">
+                        <span>Relationship</span>
+                        <strong>{profile?.emergencyRelationship || '-'}</strong>
+                    </div>
+                    <div className="employee-details-field">
+                        <span>Phone</span>
+                        <strong>{profile?.emergencyPhoneNumber || '-'}</strong>
+                    </div>
+                    <div className="employee-details-field">
+                        <span>Email</span>
+                        <strong>{profile?.emergencyEmail || '-'}</strong>
+                    </div>
+                    <div className="employee-details-field employee-details-field-wide">
+                        <span>Address</span>
+                        <strong>{profile?.emergencyAddress || '-'}</strong>
+                    </div>
+                </div>
+            </section>
+        </>
+    );
+}
+
 function TreeIcon() {
     return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1015,23 +1071,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
                         <div className="employee-details-content">
                             <section className="employee-details-section">
-                                <h3>Personal details</h3>
+                                <h3>Employee information</h3>
                                 <div className="employee-details-grid">
                                     <div className="employee-details-field">
                                         <span>Full Name</span>
                                         <strong>{selectedInfoEntry.displayName}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Preferred Name</span>
-                                        <strong>{selectedEmployeeProfile?.preferredName || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Date of Birth</span>
-                                        <strong>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Gender</span>
-                                        <strong>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</strong>
                                     </div>
                                     <div className="employee-details-field">
                                         <span>Role</span>
@@ -1049,10 +1093,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <span>Account Status</span>
                                         <strong>{selectedInfoStatus.label}</strong>
                                     </div>
-                                    <div className="employee-details-field employee-details-field-wide">
-                                        <span>Residential Address</span>
-                                        <strong>{formatEmployeeAddress(selectedEmployeeProfile)}</strong>
-                                    </div>
                                     <div className="employee-details-field">
                                         <span>Invite Sent</span>
                                         <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
@@ -1060,31 +1100,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 </div>
                             </section>
 
-                            <section className="employee-details-section">
-                                <h3>Emergency contact</h3>
-                                <div className="employee-details-grid">
-                                    <div className="employee-details-field">
-                                        <span>Contact Name</span>
-                                        <strong>{selectedEmployeeProfile?.emergencyContactName || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Relationship</span>
-                                        <strong>{selectedEmployeeProfile?.emergencyRelationship || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Phone</span>
-                                        <strong>{selectedEmployeeProfile?.emergencyPhoneNumber || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Email</span>
-                                        <strong>{selectedEmployeeProfile?.emergencyEmail || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field employee-details-field-wide">
-                                        <span>Address</span>
-                                        <strong>{selectedEmployeeProfile?.emergencyAddress || '-'}</strong>
-                                    </div>
-                                </div>
-                            </section>
+                            <EmployeeProfileSections profile={selectedEmployeeProfile} />
                         </div>
 
                         <footer className="employee-details-footer">
@@ -1148,8 +1164,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
                         <form className="employee-details-edit-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: false })}>
                             <div className="employee-details-content">
-                                <h3>Employee information</h3>
-                                <div className="employee-details-grid">
+                                <section className="employee-details-section">
+                                    <h3>Employee information</h3>
+                                    <div className="employee-details-grid">
                                     <label className="employee-details-field">
                                         <span>Full Name</span>
                                         <input
@@ -1202,7 +1219,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <span>Invite Sent</span>
                                         <strong>{formatEmployeeDate(form.inviteSentAt)}</strong>
                                     </div>
-                                </div>
+                                    </div>
+                                </section>
+
+                                <EmployeeProfileSections profile={selectedEmployeeProfile} readOnly />
 
                                 {inviteMessage ? <div className="module-success employee-details-message">{inviteMessage}</div> : null}
                                 {error ? <div className="module-error employee-details-message">{error}</div> : null}
@@ -1404,8 +1424,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
                         <form className="employee-details-edit-form" onSubmit={saveAppUser}>
                             <div className="employee-details-content">
-                                <h3>Employee information</h3>
-                                <div className="employee-details-grid">
+                                <section className="employee-details-section">
+                                    <h3>Employee information</h3>
+                                    <div className="employee-details-grid">
                                     <label className="employee-details-field">
                                         <span>Full Name</span>
                                         <input
@@ -1455,7 +1476,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <span>Invite Sent</span>
                                         <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
                                     </div>
-                                </div>
+                                    </div>
+                                </section>
+
+                                <EmployeeProfileSections profile={selectedEmployeeProfile} readOnly />
 
                                 {error ? <div className="module-error employee-details-message">{error}</div> : null}
                             </div>
