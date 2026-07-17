@@ -2513,8 +2513,7 @@ body {
     white-space: nowrap;
 }
 
-.employees-account-pill.verified,
-.employees-account-pill.app {
+.employees-account-pill.verified {
     border-color: #9ad6a4;
     background: #e8f8e9;
     color: #188034;
@@ -2526,7 +2525,7 @@ body {
     color: #8a4f00;
 }
 
-.employees-account-pill.unlinked {
+.employees-account-pill.unverified {
     border-color: #fecaca;
     background: #fef2f2;
     color: #dc2626;
@@ -17149,8 +17148,7 @@ button.stat-card {
     white-space: nowrap;
 }
 
-.employees-page .employees-account-pill.verified,
-.employees-page .employees-account-pill.app {
+.employees-page .employees-account-pill.verified {
     border-color: #9ad8ad;
     background: #effaf2;
     color: #137333;
@@ -17162,7 +17160,7 @@ button.stat-card {
     color: #8a4f00;
 }
 
-.employees-page .employees-account-pill.unlinked {
+.employees-page .employees-account-pill.unverified {
     border-color: #f4b5b5;
     background: #fff4f4;
     color: #b42318;

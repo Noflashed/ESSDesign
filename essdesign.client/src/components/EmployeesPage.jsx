@@ -112,19 +112,13 @@ function getAvatarCandidates(user) {
 }
 
 function getAccountStatus(entry) {
-    if (entry.type === 'app-user') {
-        return { label: 'App Account', className: 'app' };
-    }
-    if (entry.isVerified) {
+    if (entry.type === 'app-user' || entry.isVerified || entry.appUser) {
         return { label: 'Verified', className: 'verified' };
     }
     if (entry.type === 'employee' && entry.employee?.inviteSentAt) {
-        return { label: 'Invite Sent', className: 'invited' };
+        return { label: 'Invited', className: 'invited' };
     }
-    if (entry.appUser) {
-        return { label: 'App Account', className: 'app' };
-    }
-    return { label: 'Not Linked', className: 'unlinked' };
+    return { label: 'Not Verified', className: 'unverified' };
 }
 
 function formatEmployeeDate(value) {
