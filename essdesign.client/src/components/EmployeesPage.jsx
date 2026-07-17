@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Info, Maximize2, Plus, Search, UserPlus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Briefcase, Calendar, Info, Mail, MapPin, Maximize2, MoreHorizontal, Phone, Plus, Search, ShieldCheck, User, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -402,30 +402,6 @@ function DeleteIcon() {
     );
 }
 
-function SortGlyph() {
-    return (
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M5 3.5 8 1l3 2.5M11 12.5 8 15l-3-2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
-}
-
-function EmployeeColumnFilter({ label, filterKey, active, open, onToggle, children }) {
-    return (
-        <div className={`employees-column-filter ${active ? 'filtered' : ''} ${open ? 'open' : ''}`}>
-            <button type="button" onClick={(event) => { event.stopPropagation(); onToggle(filterKey); }}>
-                <span>{label}</span>
-                <SortGlyph />
-            </button>
-            {open ? (
-                <div className="employees-column-menu" onClick={(event) => event.stopPropagation()}>
-                    {children}
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
 function EmployeeAvatar({ entry }) {
     const [candidateIndex, setCandidateIndex] = useState(0);
     const avatarCandidates = entry.avatarCandidates || [];
@@ -474,7 +450,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [appUsers, setAppUsers] = useState([]);
     const [profileImageUrls, setProfileImageUrls] = useState({});
     const [search, setSearch] = useState('');
-    const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyEmployeeForm());
@@ -524,16 +499,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, []);
 
     useEffect(() => {
-        if (!columnFilterMenu) {
-            return undefined;
-        }
-
-        const closeMenu = () => setColumnFilterMenu('');
-        window.addEventListener('click', closeMenu);
-        return () => window.removeEventListener('click', closeMenu);
-    }, [columnFilterMenu]);
-
-    useEffect(() => {
         if (!employeeMenu) {
             return undefined;
         }
@@ -556,13 +521,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, [employeeMenu]);
 
     useEffect(() => {
-        if (!selectedInfoEntry) {
-            return undefined;
-        }
-
         const closeOnEscape = (event) => {
-            if (event.key === 'Escape' && !document.querySelector('.employee-credential-viewer')) {
-                setSelectedInfoEntry(null);
+            if (event.key === 'Escape' && (showModal || showAppUserModal) && !document.querySelector('.employee-credential-viewer')) {
                 setShowModal(false);
                 setShowAppUserModal(false);
             }
@@ -570,7 +530,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
         window.addEventListener('keydown', closeOnEscape);
         return () => window.removeEventListener('keydown', closeOnEscape);
-    }, [selectedInfoEntry]);
+    }, [showModal, showAppUserModal]);
 
     useEffect(() => {
         const credentialUserId = selectedInfoEntry?.appUser?.id || selectedInfoEntry?.employee?.linkedAuthUserId || '';
@@ -732,6 +692,25 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         });
     }, [mergedEntries, search, roleFilter]);
 
+    useEffect(() => {
+        if (loading || mergedEntries.length === 0) {
+            if (!loading) setSelectedInfoEntry(null);
+            return;
+        }
+
+        setSelectedInfoEntry((current) => {
+            const refreshedSelection = current
+                ? mergedEntries.find((entry) => entry.key === current.key)
+                : null;
+
+            if (filteredEntries.length === 0) {
+                return refreshedSelection || mergedEntries[0];
+            }
+
+            return filteredEntries.find((entry) => entry.key === current?.key) || filteredEntries[0];
+        });
+    }, [filteredEntries, loading, mergedEntries]);
+
     const pagedEntries = filteredEntries;
 
     const openEmployeeDetails = (entry) => {
@@ -748,7 +727,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
         const y = Math.min(event.clientY, window.innerHeight - menuHeight - viewportPadding);
 
-        setColumnFilterMenu('');
         setEmployeeMenu({
             entry,
             x: Math.max(viewportPadding, x),
@@ -882,7 +860,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             }
 
             setShowModal(false);
-            setSelectedInfoEntry(null);
             setForm(emptyEmployeeForm());
         } catch (err) {
             setError(err.message || 'Could not save employee');
@@ -927,7 +904,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 onCurrentUserUpdated?.(refreshedUser);
             }
             setShowAppUserModal(false);
-            setSelectedInfoEntry(null);
         } catch (err) {
             setError(err?.response?.data?.error || err.message || 'Could not save user');
         } finally {
@@ -1046,151 +1022,222 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     return (
         <div className="module-page employees-page">
-            <div className="module-shell employees-shell">
-                <div className="employees-toolbar">
-                    <div className="employees-toolbar-copy">
-                        <div className="employees-search-row">
-                            <div className="employees-search-field">
-                                <Search size={18} />
-                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees by name, role, email or phone..." />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="module-form-actions">
-                        <button type="button" className="module-secondary-btn" onClick={openTruckDeviceCreator}>
-                            <TreeIcon />
-                            Add Truck Device
-                        </button>
-                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); }}>
-                            <Plus size={18} />
-                            Add Employee
-                        </button>
-                    </div>
-                </div>
+            <div className="employees-workspace">
+                {error && !showModal && !showAppUserModal && !employeePendingDelete && !appUserPendingDelete ? (
+                    <div className="module-error employees-workspace-error">{error}</div>
+                ) : null}
 
-                <div className="module-card employees-card">
-                    {error && !showModal && !showAppUserModal && !employeePendingDelete && !appUserPendingDelete ? (
-                        <div className="module-error">{error}</div>
-                    ) : null}
-                    {loading ? (
-                        <div className="employees-loading page-loading-brandmark"><LoadingBrandmark label="Loading employees" /></div>
-                    ) : filteredEntries.length === 0 ? (
-                        <div className="module-empty-inline">No employees found.</div>
-                    ) : (
-                        <div className={`employees-table-wrap ${columnFilterMenu ? 'filter-menu-open' : ''}`}>
-                            <table className="employees-table">
-                                <thead>
-                                    <tr>
-                                        <th>
-                                            <div className="employees-column-label">Employee <SortGlyph /></div>
-                                        </th>
-                                        <th>
-                                            <EmployeeColumnFilter
-                                                label="Role"
-                                                filterKey="role"
-                                                active={roleFilter !== 'all'}
-                                                open={columnFilterMenu === 'role'}
-                                                onToggle={(key) => setColumnFilterMenu((current) => current === key ? '' : key)}
-                                            >
-                                                <button type="button" className={roleFilter === 'all' ? 'selected' : ''} onClick={() => { setRoleFilter('all'); setColumnFilterMenu(''); }}>All Roles</button>
-                                                {roleFilterOptions.map((option) => (
-                                                    <button key={option.value} type="button" className={roleFilter === option.value ? 'selected' : ''} onClick={() => { setRoleFilter(option.value); setColumnFilterMenu(''); }}>
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </EmployeeColumnFilter>
-                                        </th>
-                                        <th>Phone</th>
-                                        <th>Email</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pagedEntries.map((entry) => {
-                                        const isExpanded = selectedInfoEntry?.key === entry.key;
-                                        return (
-                                            <React.Fragment key={entry.key}>
-                                                <tr
-                                                    className={`employees-data-row ${isExpanded ? 'selected' : ''}`}
-                                                    onClick={() => openEmployeeDetails(entry)}
-                                                    onContextMenu={(event) => openEmployeeMenu(event, entry)}
-                                                    onKeyDown={(event) => {
-                                                        if (event.key === 'Enter' || event.key === ' ') {
-                                                            event.preventDefault();
-                                                            openEmployeeDetails(entry);
-                                                        }
-                                                    }}
-                                                    aria-expanded={isExpanded}
-                                                    aria-haspopup="dialog"
-                                                    tabIndex={0}
-                                                >
-                                                    <td>
-                                                        <div className="employees-identity-cell">
-                                                            <EmployeeAvatar entry={entry} />
-                                                            <strong>{entry.displayName}</strong>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span className="employees-role-text">
-                                                            {getRoleLabel(entry.role)}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <div className="employees-contact-cell">
-                                                            <span>{entry.displayPhone || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="employees-contact-cell">
-                                                            <span>{entry.displayEmail || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="employees-table-actions">
-                                                            {entry.leadingHand && entry.type === 'employee' ? (
-                                                                <EmployeeActionButton
-                                                                    title={`Open leading hand relationships for ${entry.displayName}`}
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation();
-                                                                        onOpenLeadingHandRelationships?.(entry.employee);
-                                                                    }}
-                                                                >
-                                                                    <TreeIcon />
-                                                                </EmployeeActionButton>
-                                                            ) : null}
-                                                            <EmployeeActionButton
-                                                                title={`Edit ${entry.displayName}`}
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    editEntry(entry);
-                                                                }}
-                                                            >
-                                                                <EditIcon />
-                                                            </EmployeeActionButton>
-                                                            <EmployeeActionButton
-                                                                danger
-                                                                title={`Delete ${entry.displayName}`}
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    deleteEntry(entry);
-                                                                }}
-                                                            >
-                                                                <DeleteIcon />
-                                                            </EmployeeActionButton>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                            <div className="employees-table-footer">
-                                <span>{filteredEntries.length} employee{filteredEntries.length === 1 ? '' : 's'}</span>
+                {loading ? (
+                    <div className="employees-loading page-loading-brandmark"><LoadingBrandmark label="Loading employees" /></div>
+                ) : mergedEntries.length === 0 ? (
+                    <div className="employees-empty-state">
+                        <UserPlus size={24} aria-hidden="true" />
+                        <strong>No employees yet</strong>
+                        <span>Add your first employee to begin their registration.</span>
+                        <button type="button" onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); }}>
+                            <Plus size={16} aria-hidden="true" />
+                            Add employee
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        {selectedInfoEntry ? (
+                            <aside className="employee-profile-summary" aria-label="Selected employee summary">
+                                <div className="employee-profile-summary-actions">
+                                    {selectedInfoEntry.leadingHand && selectedInfoEntry.type === 'employee' ? (
+                                        <EmployeeActionButton
+                                            title={`Open leading hand relationships for ${selectedInfoEntry.displayName}`}
+                                            onClick={() => onOpenLeadingHandRelationships?.(selectedInfoEntry.employee)}
+                                        >
+                                            <TreeIcon />
+                                        </EmployeeActionButton>
+                                    ) : null}
+                                    <EmployeeActionButton title={`Edit ${selectedInfoEntry.displayName}`} onClick={() => editEntry(selectedInfoEntry)}>
+                                        <EditIcon />
+                                    </EmployeeActionButton>
+                                    <EmployeeActionButton danger title={`Delete ${selectedInfoEntry.displayName}`} onClick={() => deleteEntry(selectedInfoEntry)}>
+                                        <DeleteIcon />
+                                    </EmployeeActionButton>
+                                </div>
+
+                                <div className="employee-profile-summary-identity">
+                                    <div className="employee-profile-summary-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
+                                    <h2>{selectedInfoEntry.displayName}</h2>
+                                    <p>{getRoleLabel(selectedInfoEntry.role)}</p>
+                                    <span className={`employee-profile-status ${selectedInfoStatus.className}`}>
+                                        <i aria-hidden="true" />
+                                        {selectedInfoStatus.label}
+                                    </span>
+                                </div>
+
+                                <dl className="employee-profile-summary-list">
+                                    <div>
+                                        <dt><ShieldCheck size={15} aria-hidden="true" /> Employee ID</dt>
+                                        <dd>{selectedInfoEntry.employee?.id || selectedInfoEntry.appUser?.employeeId || selectedInfoEntry.appUser?.id || '-'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt><Phone size={15} aria-hidden="true" /> Mobile</dt>
+                                        <dd>{selectedInfoEntry.displayPhone || '-'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt><Mail size={15} aria-hidden="true" /> Email</dt>
+                                        <dd>{selectedInfoEntry.displayEmail || '-'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt><Calendar size={15} aria-hidden="true" /> Date of birth</dt>
+                                        <dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt><MapPin size={15} aria-hidden="true" /> Residential address</dt>
+                                        <dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd>
+                                    </div>
+                                </dl>
+                            </aside>
+                        ) : null}
+
+                        {selectedInfoEntry ? (
+                            <main className="employee-profile-main">
+                                <header className="employee-profile-main-header">
+                                    <div>
+                                        <span>Employees</span>
+                                        <h1>Employee profile</h1>
+                                    </div>
+                                    <button type="button" className="employee-profile-edit-btn" onClick={() => editEntry(selectedInfoEntry)}>
+                                        <EditIcon />
+                                        Edit employee
+                                    </button>
+                                </header>
+
+                                <div className="employee-profile-detail-grid">
+                                    <section className="employee-profile-card">
+                                        <h3><User size={17} aria-hidden="true" /> Personal details</h3>
+                                        <dl className="employee-profile-fields">
+                                            <div><dt>Date of birth</dt><dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
+                                            <div><dt>Gender</dt><dd>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
+                                            <div><dt>Mobile</dt><dd>{selectedInfoEntry.displayPhone || '-'}</dd></div>
+                                            <div><dt>Email</dt><dd>{selectedInfoEntry.displayEmail || '-'}</dd></div>
+                                            <div className="wide"><dt>Residential address</dt><dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
+                                        </dl>
+                                    </section>
+
+                                    <section className="employee-profile-card">
+                                        <h3><Briefcase size={17} aria-hidden="true" /> Employment</h3>
+                                        <dl className="employee-profile-fields">
+                                            <div><dt>Role</dt><dd>{getRoleLabel(selectedInfoEntry.role)}</dd></div>
+                                            <div><dt>Account status</dt><dd className={`status-text ${selectedInfoStatus.className}`}>{selectedInfoStatus.label}</dd></div>
+                                            <div className="wide"><dt>Employee ID</dt><dd>{selectedInfoEntry.employee?.id || selectedInfoEntry.appUser?.employeeId || selectedInfoEntry.appUser?.id || '-'}</dd></div>
+                                            <div className="wide"><dt>Invite sent</dt><dd>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</dd></div>
+                                        </dl>
+                                    </section>
+
+                                    <section className="employee-profile-card employee-profile-emergency-card">
+                                        <h3><Phone size={17} aria-hidden="true" /> Emergency contact</h3>
+                                        <dl className="employee-profile-fields four-column">
+                                            <div><dt>Contact name</dt><dd>{selectedEmployeeProfile?.emergencyContactName || '-'}</dd></div>
+                                            <div><dt>Relationship</dt><dd>{selectedEmployeeProfile?.emergencyRelationship || '-'}</dd></div>
+                                            <div><dt>Phone</dt><dd>{selectedEmployeeProfile?.emergencyPhoneNumber || '-'}</dd></div>
+                                            <div><dt>Email</dt><dd>{selectedEmployeeProfile?.emergencyEmail || '-'}</dd></div>
+                                            <div className="wide"><dt>Address</dt><dd>{selectedEmployeeProfile?.emergencyAddress || '-'}</dd></div>
+                                        </dl>
+                                    </section>
+
+                                    <EmployeeCredentialsSection
+                                        credentials={selectedCredentials}
+                                        loading={selectedCredentialsLoading}
+                                        error={selectedCredentialsError}
+                                    />
+                                </div>
+                            </main>
+                        ) : (
+                            <main className="employee-profile-main employee-profile-main-empty">
+                                <User size={28} aria-hidden="true" />
+                                <strong>Select an employee</strong>
+                                <span>Choose an employee from the directory to view their profile.</span>
+                            </main>
+                        )}
+
+                        <aside className="employees-directory-panel" aria-label="Employee directory">
+                            <header className="employees-directory-header">
+                                <div>
+                                    <span>Directory</span>
+                                    <h2>Employees</h2>
+                                </div>
+                                <strong>{mergedEntries.length}</strong>
+                            </header>
+
+                            <div className="employees-directory-tools">
+                                <div className="employees-directory-search">
+                                    <Search size={16} aria-hidden="true" />
+                                    <input
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder="Search employees..."
+                                        aria-label="Search employees"
+                                    />
+                                </div>
+                                <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Filter employees by role">
+                                    <option value="all">All roles</option>
+                                    {roleFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                </select>
+                                <button
+                                    type="button"
+                                    className="employees-directory-add"
+                                    onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); }}
+                                >
+                                    <Plus size={16} aria-hidden="true" />
+                                    Add employee
+                                </button>
                             </div>
-                        </div>
-                    )}
-                </div>
+
+                            <div className="employees-directory-list">
+                                {pagedEntries.length === 0 ? (
+                                    <div className="employees-directory-empty">No employees match your search.</div>
+                                ) : pagedEntries.map((entry) => {
+                                    const status = getAccountStatus(entry);
+                                    const isSelected = selectedInfoEntry?.key === entry.key;
+                                    return (
+                                        <div
+                                            key={entry.key}
+                                            className={`employees-directory-row ${isSelected ? 'selected' : ''}`}
+                                            onContextMenu={(event) => openEmployeeMenu(event, entry)}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="employees-directory-person"
+                                                onClick={() => openEmployeeDetails(entry)}
+                                                aria-pressed={isSelected}
+                                            >
+                                                <EmployeeAvatar entry={entry} />
+                                                <span className="employees-directory-person-copy">
+                                                    <strong>{entry.displayName}</strong>
+                                                    <small>{getRoleLabel(entry.role)}</small>
+                                                    <small>{entry.displayEmail || entry.displayPhone || 'No contact details'}</small>
+                                                </span>
+                                                <span className={`employees-directory-status ${status.className}`} title={status.label}>
+                                                    <i aria-hidden="true" />
+                                                    {status.label}
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="employees-directory-more"
+                                                aria-label={`Open actions for ${entry.displayName}`}
+                                                onClick={(event) => openEmployeeMenu(event, entry)}
+                                            >
+                                                <MoreHorizontal size={17} aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <footer className="employees-directory-footer">
+                                <span>Showing {pagedEntries.length} of {mergedEntries.length}</span>
+                                <button type="button" onClick={openTruckDeviceCreator}><TreeIcon /> Add truck device</button>
+                            </footer>
+                        </aside>
+                    </>
+                )}
             </div>
 
             {employeeMenu ? (
@@ -1243,98 +1290,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 </div>
             ) : null}
 
-            {selectedInfoEntry && !showModal && !showAppUserModal ? (
-                <div className="module-modal-backdrop employee-details-backdrop" onClick={() => setSelectedInfoEntry(null)}>
-                    <section
-                        className="module-modal employees-info-modal employee-details-modal"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="employee-details-title"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <header className="employee-details-header">
-                            <div className="employee-details-title-row">
-                                <h2 id="employee-details-title">Employee details</h2>
-                                <button
-                                    type="button"
-                                    className="employee-details-close"
-                                    onClick={() => setSelectedInfoEntry(null)}
-                                    aria-label="Close employee details"
-                                >
-                                    <X size={16} strokeWidth={2.25} aria-hidden="true" />
-                                </button>
-                            </div>
-                            <div className="employee-details-identity">
-                                <div className="employee-details-avatar" aria-hidden="true">
-                                    <EmployeeAvatar entry={selectedInfoEntry} />
-                                </div>
-                                <div className="employee-details-identity-copy">
-                                    <strong>{selectedInfoEntry.displayName}</strong>
-                                    <span>{getRoleLabel(selectedInfoEntry.role)}</span>
-                                    <span className={`employees-account-pill ${selectedInfoStatus.className}`}>{selectedInfoStatus.label}</span>
-                                </div>
-                            </div>
-                        </header>
-
-                        <div className="employee-details-content">
-                            <section className="employee-details-section">
-                                <h3>Employee information</h3>
-                                <div className="employee-details-grid">
-                                    <div className="employee-details-field">
-                                        <span>Full Name</span>
-                                        <strong>{selectedInfoEntry.displayName}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Role</span>
-                                        <strong>{getRoleLabel(selectedInfoEntry.role)}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Phone</span>
-                                        <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Email</span>
-                                        <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Account Status</span>
-                                        <strong>{selectedInfoStatus.label}</strong>
-                                    </div>
-                                    <div className="employee-details-field">
-                                        <span>Invite Sent</span>
-                                        <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <EmployeeProfileSections profile={selectedEmployeeProfile} />
-                            <EmployeeCredentialsSection
-                                credentials={selectedCredentials}
-                                loading={selectedCredentialsLoading}
-                                error={selectedCredentialsError}
-                            />
-                        </div>
-
-                        <footer className="employee-details-footer">
-                            <button
-                                type="button"
-                                className="employee-details-primary-btn"
-                                onClick={() => editEntry(selectedInfoEntry)}
-                            >
-                                <EditIcon />
-                                Edit Employee
-                            </button>
-                        </footer>
-                    </section>
-                </div>
-            ) : null}
-
             {showModal && form.id && selectedInfoEntry ? (
                 <div
                     className="module-modal-backdrop employee-details-backdrop"
                     onClick={() => {
                         setShowModal(false);
-                        setSelectedInfoEntry(null);
                     }}
                 >
                     <section
@@ -1352,7 +1312,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     className="employee-details-close"
                                     onClick={() => {
                                         setShowModal(false);
-                                        setSelectedInfoEntry(null);
                                     }}
                                     aria-label="Close employee editor"
                                 >
@@ -1446,7 +1405,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             className="employee-details-secondary-btn"
                                             onClick={() => {
                                                 setShowModal(false);
-                                                setSelectedInfoEntry(null);
                                                 onOpenLeadingHandRelationships?.(form);
                                             }}
                                         >
@@ -1469,7 +1427,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         disabled={saving}
                                         onClick={() => {
                                             setShowModal(false);
-                                            setSelectedInfoEntry(null);
                                         }}
                                     >
                                         Cancel
@@ -1547,7 +1504,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     className="module-modal-backdrop employee-details-backdrop"
                     onClick={() => {
                         setShowAppUserModal(false);
-                        setSelectedInfoEntry(null);
                     }}
                 >
                     <section
@@ -1565,7 +1521,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     className="employee-details-close"
                                     onClick={() => {
                                         setShowAppUserModal(false);
-                                        setSelectedInfoEntry(null);
                                     }}
                                     aria-label="Close employee editor"
                                 >
@@ -1655,7 +1610,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         disabled={savingAppUser}
                                         onClick={() => {
                                             setShowAppUserModal(false);
-                                            setSelectedInfoEntry(null);
                                         }}
                                     >
                                         Cancel
