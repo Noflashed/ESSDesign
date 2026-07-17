@@ -21183,14 +21183,6 @@ button.stat-card {
     gap: 4px;
 }
 
-.employees-page .employee-profile-main-header span {
-    color: #1672f7;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
 .employees-page .employee-profile-main-header h1 {
     margin: 0;
     color: #0f172a;
@@ -21336,36 +21328,6 @@ button.stat-card {
     flex-direction: column;
     border-right: 1px solid #dce4ee;
     background: #ffffff;
-}
-
-.employees-page .employees-directory-header {
-    min-height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 14px;
-    padding: 14px 18px;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.employees-page .employees-directory-header > div {
-    display: grid;
-    gap: 3px;
-}
-
-.employees-page .employees-directory-header span {
-    color: #64748b;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.employees-page .employees-directory-header h2 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 19px;
-    font-weight: 700;
 }
 
 .employees-page .employees-directory-tools {

@@ -1099,7 +1099,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 <form className={`employee-profile-inline-form ${isInlineEditing ? 'is-editing' : ''}`} onSubmit={submitInlineEdit}>
                                     <header className="employee-profile-main-header">
                                         <div className="employee-profile-heading">
-                                            <span>Employees</span>
                                             <h1>{isInlineEditing ? 'Edit employee profile' : 'Employee profile'}</h1>
                                         </div>
                                         <div className="employee-profile-header-actions">
@@ -1239,13 +1238,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         )}
 
                         <aside className="employees-directory-panel" aria-label="Employee directory">
-                            <header className="employees-directory-header">
-                                <div>
-                                    <span>Directory</span>
-                                    <h2>Employees</h2>
-                                </div>
-                            </header>
-
                             <div className="employees-directory-tools">
                                 <div className="employees-directory-search">
                                     <Search size={16} aria-hidden="true" />
