@@ -1104,9 +1104,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         </div>
 
                         <footer className="employee-details-footer">
-                            <button type="button" className="employee-details-secondary-btn" onClick={() => setSelectedInfoEntry(null)}>
-                                Close
-                            </button>
                             <button
                                 type="button"
                                 className="employee-details-primary-btn"
