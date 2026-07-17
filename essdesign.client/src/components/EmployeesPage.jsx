@@ -31,6 +31,24 @@ function emptyTruckDeviceForm() {
     return { deviceId: '', fullName: '', password: '', role: 'truck_ess01' };
 }
 
+const INDIVIDUAL_ROLE_OPTIONS = [
+    { value: 'general_scaffolder', label: 'Scaffolder' },
+    { value: 'leading_hand', label: 'Leading Hand' },
+    { value: 'scaffold_designer', label: 'Scaffold Designer' },
+    { value: 'site_supervisor', label: 'Site Supervisor' },
+    { value: 'project_manager', label: 'Project Manager' },
+    { value: 'transport_management', label: 'Transport Management' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'viewer', label: 'Viewer' }
+];
+
+const INDIVIDUAL_ROLE_VALUES = new Set(INDIVIDUAL_ROLE_OPTIONS.map((option) => option.value));
+const TRUCK_ROLE_VALUES = new Set(['truck_ess01', 'truck_ess02', 'truck_ess03']);
+
+function isTruckRole(role) {
+    return TRUCK_ROLE_VALUES.has(role);
+}
+
 function getRoleLabel(role) {
     switch (role) {
         case 'admin': return 'Admin';
@@ -464,7 +482,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [search, setSearch] = useState('');
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
-    const [accountFilter, setAccountFilter] = useState('all');
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(emptyEmployeeForm());
     const [employeeFullNameInput, setEmployeeFullNameInput] = useState('');
@@ -712,7 +729,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         const q = search.trim().toLowerCase();
         return mergedEntries.filter((entry) => {
             if (roleFilter !== 'all' && entry.role !== roleFilter) return false;
-            if (accountFilter !== 'all' && getAccountStatus(entry).className !== accountFilter) return false;
             if (!q) return true;
             const name = entry.displayName.toLowerCase();
             const phone = (entry.displayPhone || '').toLowerCase();
@@ -721,7 +737,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const account = getAccountStatus(entry).label.toLowerCase();
             return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || account.includes(q);
         });
-    }, [mergedEntries, search, roleFilter, accountFilter]);
+    }, [mergedEntries, search, roleFilter]);
 
     const pagedEntries = filteredEntries;
 
@@ -773,7 +789,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     const openEmployeeEditor = (employee, effectiveRole) => {
-        const resolvedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
+        const requestedRole = effectiveRole || (employee.leadingHand ? 'leading_hand' : 'general_scaffolder');
+        const resolvedRole = INDIVIDUAL_ROLE_VALUES.has(requestedRole) ? requestedRole : 'general_scaffolder';
         setForm({
             ...employee,
             email: employee.email || '',
@@ -810,6 +827,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setError('');
         setInviteMessage('');
         try {
+            if (!INDIVIDUAL_ROLE_VALUES.has(form.selectedRole)) {
+                throw new Error('Truck roles can only be assigned through Add Truck Device.');
+            }
             const showPreferredSites = form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder';
             const saveForm = {
                 ...form,
@@ -883,6 +903,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const currentFullName = existingAppUser?.fullName || '';
             const currentPhoneNumber = existingAppUser?.phoneNumber || '';
             const currentRole = existingAppUser?.role || 'viewer';
+
+            if (isTruckRole(currentRole) ? nextRole !== currentRole : !INDIVIDUAL_ROLE_VALUES.has(nextRole)) {
+                throw new Error('Truck roles can only be assigned through Add Truck Device.');
+            }
 
             if (nextRole !== currentRole) {
                 await usersAPI.updateUserRole(appUserForm.id, nextRole);
@@ -1018,6 +1042,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     const selectedInfoStatus = selectedInfoEntry ? getAccountStatus(selectedInfoEntry) : null;
     const selectedEmployeeProfile = selectedInfoEntry?.appUser || null;
+    const selectedAppUserIsTruckDevice = isTruckRole(selectedInfoEntry?.appUser?.role);
 
     return (
         <div className="module-page employees-page">
@@ -1075,28 +1100,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                 ))}
                                             </EmployeeColumnFilter>
                                         </th>
-                                        <th>Contact</th>
-                                        <th>
-                                            <EmployeeColumnFilter
-                                                label="Account Status"
-                                                filterKey="account"
-                                                active={accountFilter !== 'all'}
-                                                open={columnFilterMenu === 'account'}
-                                                onToggle={(key) => setColumnFilterMenu((current) => current === key ? '' : key)}
-                                            >
-                                                <button type="button" className={accountFilter === 'all' ? 'selected' : ''} onClick={() => { setAccountFilter('all'); setColumnFilterMenu(''); }}>All Statuses</button>
-                                                <button type="button" className={accountFilter === 'verified' ? 'selected' : ''} onClick={() => { setAccountFilter('verified'); setColumnFilterMenu(''); }}>Verified</button>
-                                                <button type="button" className={accountFilter === 'app' ? 'selected' : ''} onClick={() => { setAccountFilter('app'); setColumnFilterMenu(''); }}>App Account</button>
-                                                <button type="button" className={accountFilter === 'invited' ? 'selected' : ''} onClick={() => { setAccountFilter('invited'); setColumnFilterMenu(''); }}>Invite Sent</button>
-                                                <button type="button" className={accountFilter === 'unlinked' ? 'selected' : ''} onClick={() => { setAccountFilter('unlinked'); setColumnFilterMenu(''); }}>Not Linked</button>
-                                            </EmployeeColumnFilter>
-                                        </th>
+                                        <th>Phone</th>
+                                        <th>Email</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {pagedEntries.map((entry) => {
-                                        const status = getAccountStatus(entry);
                                         const isExpanded = selectedInfoEntry?.key === entry.key;
                                         return (
                                             <React.Fragment key={entry.key}>
@@ -1128,11 +1138,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                     <td>
                                                         <div className="employees-contact-cell">
                                                             <span>{entry.displayPhone || '-'}</span>
-                                                            <small>{entry.displayEmail || '-'}</small>
                                                         </div>
                                                     </td>
                                                     <td>
-                                                        <span className={`employees-account-pill ${status.className}`}>{status.label}</span>
+                                                        <div className="employees-contact-cell">
+                                                            <span>{entry.displayEmail || '-'}</span>
+                                                        </div>
                                                     </td>
                                                     <td>
                                                         <div className="employees-table-actions">
@@ -1380,14 +1391,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             value={form.selectedRole}
                                             onChange={(event) => setForm((previous) => ({ ...previous, selectedRole: event.target.value }))}
                                         >
-                                            <option value="general_scaffolder">Scaffolder</option>
-                                            <option value="leading_hand">Leading Hand</option>
-                                            <option value="scaffold_designer">Scaffold Designer</option>
-                                            <option value="site_supervisor">Site Supervisor</option>
-                                            <option value="project_manager">Project Manager</option>
-                                            <option value="transport_management">Transport Management</option>
-                                            <option value="admin">Admin</option>
-                                            <option value="viewer">Viewer</option>
+                                            {INDIVIDUAL_ROLE_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
                                         </select>
                                     </label>
                                     <label className="employee-details-field">
@@ -1514,14 +1520,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         value={form.selectedRole}
                                         onChange={(e) => setForm((prev) => ({ ...prev, selectedRole: e.target.value }))}
                                     >
-                                        <option value="general_scaffolder">Scaffolder</option>
-                                        <option value="leading_hand">Leading Hand</option>
-                                        <option value="scaffold_designer">Scaffold Designer</option>
-                                        <option value="site_supervisor">Site Supervisor</option>
-                                        <option value="project_manager">Project Manager</option>
-                                        <option value="transport_management">Transport Management</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="viewer">Viewer</option>
+                                        {INDIVIDUAL_ROLE_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
                                     </select>
                                 </div>
                             </div>
@@ -1645,18 +1646,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <select
                                             value={appUserForm.role}
                                             onChange={(event) => setAppUserForm((previous) => ({ ...previous, role: event.target.value }))}
+                                            disabled={selectedAppUserIsTruckDevice}
                                         >
-                                            <option value="viewer">Viewer</option>
-                                            <option value="admin">Admin</option>
-                                            <option value="scaffold_designer">Scaffold Designer</option>
-                                            <option value="site_supervisor">Site Supervisor</option>
-                                            <option value="project_manager">Project Manager</option>
-                                            <option value="leading_hand">Leading Hand</option>
-                                            <option value="general_scaffolder">Scaffolder</option>
-                                            <option value="transport_management">Transport Management</option>
-                                            <option value="truck_ess01">Truck ESS01</option>
-                                            <option value="truck_ess02">Truck ESS02</option>
-                                            <option value="truck_ess03">Truck ESS03</option>
+                                            {selectedAppUserIsTruckDevice ? (
+                                                <option value={appUserForm.role}>{getRoleLabel(appUserForm.role)} (device only)</option>
+                                            ) : INDIVIDUAL_ROLE_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
                                         </select>
                                     </label>
                                     <label className="employee-details-field">

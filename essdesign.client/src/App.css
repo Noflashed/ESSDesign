@@ -16920,12 +16920,12 @@ button.stat-card {
 
 .employees-page .employees-table th:nth-child(3),
 .employees-page .employees-table td:nth-child(3) {
-    width: 28%;
+    width: 16%;
 }
 
 .employees-page .employees-table th:nth-child(4),
 .employees-page .employees-table td:nth-child(4) {
-    width: 16%;
+    width: 28%;
 }
 
 .employees-page .employees-table th:nth-child(5),
