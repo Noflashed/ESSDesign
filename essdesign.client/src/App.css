@@ -18642,17 +18642,6 @@ button.stat-card {
     line-height: 1.45;
 }
 
-.employee-credentials-heading > span {
-    flex: 0 0 auto;
-    border: 1px solid #d9e5f3;
-    border-radius: 999px;
-    background: #f7faff;
-    color: #516179;
-    padding: 4px 9px;
-    font-size: 11px;
-    font-weight: 600;
-}
-
 .employee-credentials-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -18668,11 +18657,6 @@ button.stat-card {
     border: 1px solid #dce4ee;
     border-radius: 6px;
     background: #fbfcfe;
-}
-
-.employee-credential-card.complete {
-    border-color: #c9dfd1;
-    background: #fcfffd;
 }
 
 .employee-credential-card-head {
@@ -18694,29 +18678,6 @@ button.stat-card {
     color: #64748b;
     font-size: 11px;
     line-height: 1.35;
-}
-
-.employee-credential-status {
-    flex: 0 0 auto;
-    border-radius: 999px;
-    padding: 3px 7px;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    line-height: 1.2;
-    text-transform: uppercase;
-}
-
-.employee-credential-status.complete {
-    border: 1px solid #bbdfc7;
-    background: #eefbf2;
-    color: #18703a;
-}
-
-.employee-credential-status.missing {
-    border: 1px solid #f0cc95;
-    background: #fff8e8;
-    color: #8a5208;
 }
 
 .employee-credential-details {
@@ -18746,7 +18707,7 @@ button.stat-card {
 }
 
 .employee-credential-image {
-    min-height: 98px;
+    min-height: 180px;
     position: relative;
     display: block;
     overflow: hidden;
@@ -18759,9 +18720,9 @@ button.stat-card {
 
 .employee-credential-image img {
     width: 100%;
-    height: 118px;
+    height: 180px;
     display: block;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .employee-credential-image span {
@@ -20510,11 +20471,6 @@ button.stat-card {
     background: #fbfcfe;
 }
 
-.employees-page .employee-details-credential.complete {
-    border-color: #c9dfd1;
-    background: #fcfffd;
-}
-
 .employees-page .employee-details-credential-head {
     display: flex;
     align-items: flex-start;
@@ -20526,23 +20482,6 @@ button.stat-card {
     color: #172033;
     font-size: 11px;
     font-weight: 800;
-}
-
-.employees-page .employee-details-credential-head > span {
-    flex: 0 0 auto;
-    border-radius: 999px;
-    background: #eef2f7;
-    color: #64748b;
-    padding: 2px 6px;
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-}
-
-.employees-page .employee-details-credential.complete .employee-details-credential-head > span {
-    background: #e9f8ee;
-    color: #18703a;
 }
 
 .employees-page .employee-details-credential-values {
@@ -20572,7 +20511,7 @@ button.stat-card {
 }
 
 .employees-page .employee-details-credential-image {
-    min-height: 72px;
+    min-height: 140px;
     position: relative;
     display: flex;
     align-items: center;
@@ -20589,9 +20528,9 @@ button.stat-card {
 
 .employees-page .employee-details-credential-image img {
     width: 100%;
-    height: 84px;
+    height: 140px;
     display: block;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .employees-page .employee-details-credential-image:not(.empty) span {

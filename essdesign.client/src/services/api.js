@@ -5144,6 +5144,40 @@ export const essNewsAPI = {
     }
 };
 
+async function optimizeCredentialUpload(file) {
+    const browserImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!file || !browserImageTypes.has(file.type) || typeof createImageBitmap !== 'function') return file;
+
+    let bitmap = null;
+    try {
+        bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const longestSide = Math.max(bitmap.width, bitmap.height);
+        const scale = Math.min(1, 1600 / longestSide);
+        if (scale === 1 && file.size <= 800 * 1024) return file;
+
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (!context) return file;
+
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(bitmap, 0, 0, width, height);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.84));
+        if (!blob || blob.size >= file.size) return file;
+
+        const baseName = file.name.replace(/\.[^.]+$/, '') || 'credential-front';
+        return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    } catch {
+        return file;
+    } finally {
+        bitmap?.close?.();
+    }
+}
+
 export const usersAPI = {
     getAllUsers: async () => {
         const response = await apiClient.get('/users');
@@ -5198,11 +5232,14 @@ export const usersAPI = {
         return response.data || [];
     },
 
-    getCredentialImageUrl: async (userId, credentialType) => {
+    getCredentialImageUrl: async (userId, credentialType, version = '') => {
         if (!userId || !credentialType) return '';
         const response = await apiClient.get(
             `/users/${encodeURIComponent(userId)}/credentials/${encodeURIComponent(credentialType)}/front-image`,
-            { responseType: 'blob' }
+            {
+                responseType: 'blob',
+                params: version ? { v: version } : undefined
+            }
         );
         return URL.createObjectURL(response.data);
     },
@@ -5214,7 +5251,7 @@ export const usersAPI = {
         formData.append('issuingState', credential?.issuingState || 'NSW');
         if (credentialType !== 'driver_licence' && credential?.issueDate) formData.append('issueDate', credential.issueDate);
         if (credential?.expiryDate) formData.append('expiryDate', credential.expiryDate);
-        if (frontImage) formData.append('frontImage', frontImage);
+        if (frontImage) formData.append('frontImage', await optimizeCredentialUpload(frontImage));
 
         const response = await apiClient.put(
             `/users/me/credentials/${encodeURIComponent(credentialType)}`,

@@ -261,7 +261,6 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("{userId}/credentials/{credentialType}/front-image")]
-        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<ActionResult> GetUserCredentialFrontImage(string userId, string credentialType)
         {
             try
@@ -294,6 +293,9 @@ namespace ESSDesign.Server.Controllers
                 var contentType = !string.IsNullOrWhiteSpace(image.ContentType) && image.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
                     ? image.ContentType
                     : "application/octet-stream";
+                Response.Headers.CacheControl = "private, max-age=604800, immutable";
+                Response.Headers.Append("Vary", "Authorization");
+                Response.Headers.Append("X-Content-Type-Options", "nosniff");
                 return File(image.Bytes, contentType);
             }
             catch (ArgumentException ex)

@@ -2109,8 +2109,10 @@ namespace ESSDesign.Server.Services
             }
 
             var records = await GetEmployeeCredentialRecordsAsync(normalizedUserId);
-            var responses = await Task.WhenAll(records.Select(ToEmployeeCredentialResponseAsync));
-            return responses.OrderBy(item => item.CredentialType, StringComparer.Ordinal).ToList();
+            return records
+                .Select(ToEmployeeCredentialResponse)
+                .OrderBy(item => item.CredentialType, StringComparer.Ordinal)
+                .ToList();
         }
 
         public async Task<StorageObjectDownload?> DownloadEmployeeCredentialImageAsync(
@@ -2204,7 +2206,7 @@ namespace ESSDesign.Server.Services
 
             var saved = (await GetEmployeeCredentialRecordsAsync(normalizedUserId, normalizedType)).FirstOrDefault()
                 ?? throw new InvalidOperationException("Credential could not be loaded after saving.");
-            return await ToEmployeeCredentialResponseAsync(saved);
+            return ToEmployeeCredentialResponse(saved);
         }
 
         private async Task<List<EmployeeCredentialRecord>> GetEmployeeCredentialRecordsAsync(
@@ -2221,21 +2223,8 @@ namespace ESSDesign.Server.Services
             return await GetRestRowsAsync<EmployeeCredentialRecord>(path);
         }
 
-        private async Task<EmployeeCredentialResponse> ToEmployeeCredentialResponseAsync(EmployeeCredentialRecord record)
+        private static EmployeeCredentialResponse ToEmployeeCredentialResponse(EmployeeCredentialRecord record)
         {
-            string? frontImageUrl = null;
-            if (!string.IsNullOrWhiteSpace(record.FrontImagePath))
-            {
-                try
-                {
-                    frontImageUrl = await CreateCredentialImageSignedUrlAsync(record.FrontImagePath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not create a signed credential image URL for {CredentialId}", record.Id);
-                }
-            }
-
             return new EmployeeCredentialResponse
             {
                 Id = record.Id,
@@ -2246,7 +2235,7 @@ namespace ESSDesign.Server.Services
                 IssueDate = record.IssueDate,
                 ExpiryDate = record.ExpiryDate,
                 HasFrontImage = !string.IsNullOrWhiteSpace(record.FrontImagePath),
-                FrontImageUrl = frontImageUrl,
+                FrontImageUrl = null,
                 UpdatedAt = record.UpdatedAt,
             };
         }
@@ -2316,39 +2305,6 @@ namespace ESSDesign.Server.Services
                 var body = await response.Content.ReadAsStringAsync();
                 throw new InvalidOperationException($"Credential image upload failed with status {(int)response.StatusCode}: {body}");
             }
-        }
-
-        private async Task<string> CreateCredentialImageSignedUrlAsync(string objectPath)
-        {
-            var escapedPath = string.Join(
-                "/",
-                objectPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
-            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/sign/{Uri.EscapeDataString(_employeeCredentialsBucketName)}/{escapedPath}";
-
-            var client = _httpClientFactory.CreateClient();
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("apikey", _supabaseKey);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
-            request.Content = JsonContent.Create(new { expiresIn = 60 * 60 });
-
-            using var response = await client.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Credential image URL could not be created: {body}");
-            }
-
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            var signedPath = GetJsonString(root, "signedURL") ?? GetJsonString(root, "signedUrl");
-            if (string.IsNullOrWhiteSpace(signedPath))
-            {
-                throw new InvalidOperationException("Credential image URL response was invalid.");
-            }
-
-            return Uri.TryCreate(signedPath, UriKind.Absolute, out _)
-                ? signedPath
-                : $"{_supabaseUrl.TrimEnd('/')}/storage/v1{(signedPath.StartsWith('/') ? string.Empty : "/")}{signedPath}";
         }
 
         private async Task PersistProfileImageMetadataAsync(string userId, string publicUrl, string objectPath)

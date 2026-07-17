@@ -194,16 +194,14 @@ function formatCredentialClass(config, value) {
     return config.classOptions?.find((option) => option.value === value)?.label || value;
 }
 
-async function hydrateCredentialImages(userId, credentials) {
-    return Promise.all((credentials || []).map(async (credential) => {
-        if (!userId || !credential?.hasFrontImage) return credential;
-        try {
-            const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType);
-            return { ...credential, frontImageUrl };
-        } catch {
-            return credential.frontImageUrl?.startsWith('blob:') ? { ...credential, frontImageUrl: '' } : credential;
-        }
-    }));
+async function loadCredentialImage(userId, credential) {
+    if (!userId || !credential?.hasFrontImage) return credential;
+    try {
+        const frontImageUrl = await usersAPI.getCredentialImageUrl(userId, credential.credentialType, credential.updatedAt);
+        return { ...credential, frontImageUrl, frontImageLoadFailed: false };
+    } catch {
+        return { ...credential, frontImageUrl: '', frontImageLoadFailed: true };
+    }
 }
 
 function CredentialCard({
@@ -240,15 +238,12 @@ function CredentialCard({
     }, [imageUrl]);
 
     return (
-        <article className={`employee-credential-card${credential ? ' complete' : ''}`}>
+        <article className="employee-credential-card">
             <div className="employee-credential-card-head">
                 <div>
                     <h4>{config.title}</h4>
                     <p>{config.description}</p>
                 </div>
-                <span className={`employee-credential-status ${credential ? 'complete' : 'missing'}`}>
-                    {credential ? 'Added' : 'Required'}
-                </span>
             </div>
 
             {editing ? (
@@ -318,7 +313,7 @@ function CredentialCard({
 
                     {imageUrl && !imageFailed ? (
                         <a className="employee-credential-image" href={imageUrl} target="_blank" rel="noreferrer">
-                            <img src={imageUrl} alt={`Front of ${config.title}`} onError={() => setImageFailed(true)} />
+                            <img src={imageUrl} alt={`Front of ${config.title}`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} />
                             <span>{selectedFilePreview ? 'Selected front image' : 'View current front image'}</span>
                         </a>
                     ) : null}
@@ -342,12 +337,16 @@ function CredentialCard({
 
                     {imageUrl && !imageFailed ? (
                         <a className="employee-credential-image" href={imageUrl} target="_blank" rel="noreferrer">
-                            <img src={imageUrl} alt={`Front of ${config.title}`} onError={() => setImageFailed(true)} />
+                            <img src={imageUrl} alt={`Front of ${config.title}`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} />
                             <span>View front image</span>
                         </a>
                     ) : (
                         <div className="employee-credential-image empty">
-                            {credential?.hasFrontImage ? 'This image format cannot be previewed in this browser' : 'Front image required'}
+                            {credential?.hasFrontImage
+                                ? credential.frontImageLoadFailed
+                                    ? 'This image format cannot be previewed in this browser'
+                                    : 'Loading front image...'
+                                : 'Front image required'}
                         </div>
                     )}
 
@@ -364,7 +363,7 @@ const SECTION_KEYS = ['personal', 'emergency', 'notifications', 'address'];
 
 export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const photoInputRef = useRef(null);
-    const credentialImageUrlsRef = useRef([]);
+    const credentialImageUrlsRef = useRef(new Map());
     const [form, setForm] = useState(() => buildForm(user));
     const [prefs, setPrefs] = useState({
         emailNotifications: true,
@@ -400,23 +399,37 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
 
     useEffect(() => {
         let active = true;
+        credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        credentialImageUrlsRef.current.clear();
+        setCredentials([]);
         setCredentialsLoading(true);
         usersAPI.getMyCredentials()
-            .then(async (rows) => {
+            .then((rows) => {
                 const credentialRows = Array.isArray(rows) ? rows : [];
-                const nextCredentials = await hydrateCredentialImages(user?.id, credentialRows);
-                const nextObjectUrls = nextCredentials.map((item) => item.frontImageUrl).filter((url) => url?.startsWith('blob:'));
-                if (!active) {
-                    nextObjectUrls.forEach((url) => URL.revokeObjectURL(url));
-                    return;
-                }
-                credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-                credentialImageUrlsRef.current = nextObjectUrls;
-                setCredentials(nextCredentials);
+                if (!active) return;
+                setCredentials(credentialRows);
                 setCredentialForms(Object.fromEntries(CREDENTIAL_CONFIG.map(({ type }) => [
                     type,
-                    buildCredentialForm(nextCredentials.find((item) => item.credentialType === type))
+                    buildCredentialForm(credentialRows.find((item) => item.credentialType === type))
                 ])));
+
+                credentialRows.forEach((credential) => {
+                    if (!credential.hasFrontImage) return;
+                    loadCredentialImage(user?.id, credential).then((loadedCredential) => {
+                        const nextUrl = loadedCredential.frontImageUrl;
+                        if (!active) {
+                            if (nextUrl?.startsWith('blob:')) URL.revokeObjectURL(nextUrl);
+                            return;
+                        }
+
+                        const previousUrl = credentialImageUrlsRef.current.get(credential.credentialType);
+                        if (previousUrl) URL.revokeObjectURL(previousUrl);
+                        if (nextUrl?.startsWith('blob:')) credentialImageUrlsRef.current.set(credential.credentialType, nextUrl);
+                        setCredentials((current) => current.map((item) => (
+                            item.credentialType === credential.credentialType ? loadedCredential : item
+                        )));
+                    });
+                });
             })
             .catch((credentialError) => {
                 if (active) setError(credentialError.response?.data?.error || credentialError.message || 'Unable to load licence details.');
@@ -430,7 +443,7 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
 
     useEffect(() => () => {
         credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-        credentialImageUrlsRef.current = [];
+        credentialImageUrlsRef.current.clear();
     }, []);
 
     useEffect(() => {
@@ -793,15 +806,24 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         try {
             const saved = await usersAPI.saveMyCredential(credentialType, credentialForm, frontImage);
             const nextRows = [...credentials.filter((item) => item.credentialType !== credentialType), saved];
-            const nextCredentials = await hydrateCredentialImages(user?.id, nextRows);
-            const nextObjectUrls = nextCredentials.map((item) => item.frontImageUrl).filter((url) => url?.startsWith('blob:'));
-            credentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-            credentialImageUrlsRef.current = nextObjectUrls;
-            setCredentials(nextCredentials);
+            setCredentials(nextRows);
             setCredentialForms((current) => ({ ...current, [credentialType]: buildCredentialForm(saved) }));
             setCredentialFiles((current) => ({ ...current, [credentialType]: null }));
             setEditingCredential('');
             setMessage(`${CREDENTIAL_CONFIG.find((item) => item.type === credentialType)?.title || 'Credential'} saved successfully.`);
+
+            loadCredentialImage(user?.id, saved).then((loadedCredential) => {
+                const previousUrl = credentialImageUrlsRef.current.get(credentialType);
+                if (previousUrl) URL.revokeObjectURL(previousUrl);
+                if (loadedCredential.frontImageUrl?.startsWith('blob:')) {
+                    credentialImageUrlsRef.current.set(credentialType, loadedCredential.frontImageUrl);
+                } else {
+                    credentialImageUrlsRef.current.delete(credentialType);
+                }
+                setCredentials((current) => current.map((item) => (
+                    item.credentialType === credentialType ? loadedCredential : item
+                )));
+            });
         } catch (credentialError) {
             setError(credentialError.response?.data?.error || credentialError.message || 'Unable to save credential.');
         } finally {
@@ -1006,7 +1028,6 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                         <h3>Licences &amp; Credentials</h3>
                         <p>Add the details shown on each credential and upload a clear photo of its front.</p>
                     </div>
-                    <span>{credentials.length} of {CREDENTIAL_CONFIG.length} added</span>
                 </div>
 
                 {credentialsLoading ? (
