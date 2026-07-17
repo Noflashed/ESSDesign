@@ -121,6 +121,12 @@ function getAccountStatus(entry) {
     return { label: 'Not Verified', className: 'unverified' };
 }
 
+const ACCOUNT_STATUS_SORT_ORDER = {
+    verified: 0,
+    invited: 1,
+    unverified: 2
+};
+
 function formatEmployeeDate(value) {
     if (!value) return '-';
     return new Date(value).toLocaleString('en-AU', {
@@ -660,7 +666,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, [employees, appUsers, profileImageUrls]);
 
     const directoryEntries = useMemo(
-        () => mergedEntries.filter((entry) => !isTruckRole(entry.role)),
+        () => mergedEntries
+            .filter((entry) => !isTruckRole(entry.role))
+            .sort((left, right) => (
+                ACCOUNT_STATUS_SORT_ORDER[getAccountStatus(left).className]
+                - ACCOUNT_STATUS_SORT_ORDER[getAccountStatus(right).className]
+            )),
         [mergedEntries]
     );
 
