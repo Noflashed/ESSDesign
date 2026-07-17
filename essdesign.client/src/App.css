@@ -18619,6 +18619,231 @@ button.stat-card {
     transform: translateX(16px);
 }
 
+.employee-credentials-panel {
+    margin-top: 20px;
+}
+
+.employee-credentials-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+}
+
+.employee-credentials-heading h3 {
+    margin-bottom: 4px;
+}
+
+.employee-credentials-heading p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.employee-credentials-heading > span {
+    flex: 0 0 auto;
+    border: 1px solid #d9e5f3;
+    border-radius: 999px;
+    background: #f7faff;
+    color: #516179;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.employee-credentials-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.employee-credential-card {
+    min-width: 0;
+    display: grid;
+    gap: 14px;
+    padding: 15px;
+    border: 1px solid #dce4ee;
+    border-radius: 6px;
+    background: #fbfcfe;
+}
+
+.employee-credential-card.complete {
+    border-color: #c9dfd1;
+    background: #fcfffd;
+}
+
+.employee-credential-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.employee-credential-card-head h4 {
+    margin: 0 0 3px;
+    color: #172033;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.employee-credential-card-head p {
+    margin: 0;
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.employee-credential-status {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.employee-credential-status.complete {
+    border: 1px solid #bbdfc7;
+    background: #eefbf2;
+    color: #18703a;
+}
+
+.employee-credential-status.missing {
+    border: 1px solid #f0cc95;
+    background: #fff8e8;
+    color: #8a5208;
+}
+
+.employee-credential-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+}
+
+.employee-credential-details > span {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.employee-credential-details small {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.employee-credential-details strong {
+    overflow-wrap: anywhere;
+    color: #1e293b;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.employee-credential-image {
+    min-height: 98px;
+    position: relative;
+    display: block;
+    overflow: hidden;
+    border: 1px solid #d8e1ec;
+    border-radius: 5px;
+    background: #eef2f7;
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.employee-credential-image img {
+    width: 100%;
+    height: 118px;
+    display: block;
+    object-fit: cover;
+}
+
+.employee-credential-image span {
+    position: absolute;
+    right: 7px;
+    bottom: 7px;
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.82);
+    padding: 4px 7px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.employee-credential-image.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7c8798;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.employee-credential-edit {
+    justify-self: end;
+}
+
+.employee-credential-editor {
+    display: grid;
+    gap: 14px;
+}
+
+.employee-credential-upload {
+    min-height: 82px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 1px dashed #9fb1c7;
+    border-radius: 5px;
+    background: #ffffff;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.employee-credential-upload.has-file {
+    border-color: #7eb48d;
+    background: #f6fff8;
+}
+
+.employee-credential-upload input {
+    display: none;
+}
+
+.employee-credential-upload strong {
+    color: #164a8b;
+    font-size: 12px;
+}
+
+.employee-credential-upload span {
+    max-width: 300px;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+.employee-credential-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+.employee-credentials-loading {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 12px;
+}
+
 .employee-profile-toast {
     position: fixed;
     right: 24px;
@@ -18659,6 +18884,10 @@ button.stat-card {
         grid-template-columns: auto auto;
         justify-content: start;
         align-items: center;
+    }
+
+    .employee-credentials-grid {
+        grid-template-columns: 1fr;
     }
 
 }
@@ -18702,6 +18931,15 @@ button.stat-card {
     .employee-profile-panel-head {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .employee-credentials-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .employee-credential-details {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -20255,6 +20493,136 @@ button.stat-card {
     border-top: 1px solid #e2e8f0;
 }
 
+.employees-page .employee-details-credentials-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.employees-page .employee-details-credential {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 11px;
+    border: 1px solid #dce4ee;
+    border-radius: 5px;
+    background: #fbfcfe;
+}
+
+.employees-page .employee-details-credential.complete {
+    border-color: #c9dfd1;
+    background: #fcfffd;
+}
+
+.employees-page .employee-details-credential-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.employees-page .employee-details-credential-head > strong {
+    color: #172033;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.employees-page .employee-details-credential-head > span {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #64748b;
+    padding: 2px 6px;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.employees-page .employee-details-credential.complete .employee-details-credential-head > span {
+    background: #e9f8ee;
+    color: #18703a;
+}
+
+.employees-page .employee-details-credential-values {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 9px;
+}
+
+.employees-page .employee-details-credential-values > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.employees-page .employee-details-credential-values small {
+    color: #7c8798;
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.employees-page .employee-details-credential-values strong {
+    overflow-wrap: anywhere;
+    color: #26354f;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.employees-page .employee-details-credential-image {
+    min-height: 72px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid #d8e1ec;
+    border-radius: 4px;
+    background: #eef2f7;
+    color: #7c8798;
+    font-size: 9px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.employees-page .employee-details-credential-image img {
+    width: 100%;
+    height: 84px;
+    display: block;
+    object-fit: cover;
+}
+
+.employees-page .employee-details-credential-image:not(.empty) span {
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    border-radius: 3px;
+    background: rgba(15, 23, 42, 0.82);
+    color: #ffffff;
+    padding: 3px 5px;
+    font-size: 8px;
+}
+
+.employees-page .employee-details-credentials-message {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.employees-page .employee-details-credentials-message.error {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
 .employees-page .employee-details-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -20461,6 +20829,10 @@ button.stat-card {
 
     .employees-page .employee-details-field-wide {
         grid-column: auto;
+    }
+
+    .employees-page .employee-details-credentials-grid {
+        grid-template-columns: 1fr;
     }
 
     .employees-page .employee-details-edit-footer,

@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Services
@@ -132,6 +133,7 @@ namespace ESSDesign.Server.Services
         private readonly string _bucketName = "design-pdfs";
         private readonly string _safetyBucketName = "project-information";
         private readonly string _profileImagesBucketName = "profile-images";
+        private readonly string _employeeCredentialsBucketName = "employee-credentials";
         private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
         private const string BootstrapAdminUserId = "dccf9acd-cb29-4a64-8ded-8b58da6bca74";
 
@@ -574,6 +576,9 @@ namespace ESSDesign.Server.Services
 
         private const string UserProfileSelect =
             "id,email,fullName:full_name,phoneNumber:phone_number,preferredName:preferred_name,dateOfBirth:date_of_birth,gender,personalAddress:personal_address,addressStreet:address_street,addressCity:address_city,addressState:address_state,addressPostalCode:address_postal_code,addressCountry:address_country,emergencyContactName:emergency_contact_name,emergencyRelationship:emergency_relationship,emergencyPhoneNumber:emergency_phone_number,emergencyEmail:emergency_email,emergencyAddress:emergency_address";
+
+        private const string EmployeeCredentialSelect =
+            "id,userId:user_id,credentialType:credential_type,credentialNumber:credential_number,licenceClasses:licence_classes,issuingState:issuing_state,issueDate:issue_date,expiryDate:expiry_date,frontImagePath:front_image_path,frontImageContentType:front_image_content_type,createdAt:created_at,updatedAt:updated_at";
 
         private static string? CleanOptional(string? value)
         {
@@ -2096,6 +2101,226 @@ namespace ESSDesign.Server.Services
             return publicUrl;
         }
 
+        public async Task<List<EmployeeCredentialResponse>> GetEmployeeCredentialsAsync(string userId)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var records = await GetEmployeeCredentialRecordsAsync(normalizedUserId);
+            var responses = await Task.WhenAll(records.Select(ToEmployeeCredentialResponseAsync));
+            return responses.OrderBy(item => item.CredentialType, StringComparer.Ordinal).ToList();
+        }
+
+        public async Task<EmployeeCredentialResponse> UpsertEmployeeCredentialAsync(
+            string userId,
+            string credentialType,
+            UpsertEmployeeCredentialRequest request)
+        {
+            if (!TryNormalizeUserId(userId, out var normalizedUserId))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var normalizedType = credentialType?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (!EmployeeCredentialTypes.All.Contains(normalizedType))
+            {
+                throw new ArgumentException("Unsupported credential type.", nameof(credentialType));
+            }
+
+            var credentialNumber = CleanOptional(request.CredentialNumber);
+            if (string.IsNullOrWhiteSpace(credentialNumber))
+            {
+                throw new ArgumentException("Credential number is required.", nameof(request));
+            }
+
+            var existing = (await GetEmployeeCredentialRecordsAsync(normalizedUserId, normalizedType)).FirstOrDefault();
+            var frontImagePath = existing?.FrontImagePath;
+            var frontImageContentType = existing?.FrontImageContentType;
+
+            if (request.FrontImage is not null && request.FrontImage.Length > 0)
+            {
+                var imageInfo = await InspectCredentialImageAsync(request.FrontImage);
+                frontImagePath = $"{normalizedUserId}/{normalizedType}/front.{imageInfo.Extension}";
+                frontImageContentType = imageInfo.ContentType;
+                await UploadCredentialImageAsync(frontImagePath, frontImageContentType, request.FrontImage);
+            }
+
+            if (string.IsNullOrWhiteSpace(frontImagePath))
+            {
+                throw new ArgumentException("A photo of the front of the credential is required.", nameof(request));
+            }
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["id"] = existing?.Id ?? Guid.NewGuid(),
+                ["user_id"] = Guid.Parse(normalizedUserId),
+                ["credential_type"] = normalizedType,
+                ["credential_number"] = credentialNumber,
+                ["licence_classes"] = CleanOptional(request.LicenceClasses),
+                ["issuing_state"] = CleanOptional(request.IssuingState)?.ToUpperInvariant() ?? "NSW",
+                ["issue_date"] = request.IssueDate?.Date,
+                ["expiry_date"] = request.ExpiryDate?.Date,
+                ["front_image_path"] = frontImagePath,
+                ["front_image_content_type"] = frontImageContentType,
+                ["updated_at"] = DateTime.UtcNow,
+            };
+
+            await PostRestRowsAsync<EmployeeCredentialRecord>(
+                "employee_credentials?on_conflict=user_id,credential_type",
+                new[] { payload },
+                "resolution=merge-duplicates,return=representation");
+
+            var saved = (await GetEmployeeCredentialRecordsAsync(normalizedUserId, normalizedType)).FirstOrDefault()
+                ?? throw new InvalidOperationException("Credential could not be loaded after saving.");
+            return await ToEmployeeCredentialResponseAsync(saved);
+        }
+
+        private async Task<List<EmployeeCredentialRecord>> GetEmployeeCredentialRecordsAsync(
+            string normalizedUserId,
+            string? credentialType = null)
+        {
+            var path = $"employee_credentials?select={Uri.EscapeDataString(EmployeeCredentialSelect)}&user_id=eq.{normalizedUserId}";
+            if (!string.IsNullOrWhiteSpace(credentialType))
+            {
+                path += $"&credential_type=eq.{Uri.EscapeDataString(credentialType)}";
+            }
+
+            path += "&order=credential_type.asc";
+            return await GetRestRowsAsync<EmployeeCredentialRecord>(path);
+        }
+
+        private async Task<EmployeeCredentialResponse> ToEmployeeCredentialResponseAsync(EmployeeCredentialRecord record)
+        {
+            string? frontImageUrl = null;
+            if (!string.IsNullOrWhiteSpace(record.FrontImagePath))
+            {
+                try
+                {
+                    frontImageUrl = await CreateCredentialImageSignedUrlAsync(record.FrontImagePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not create a signed credential image URL for {CredentialId}", record.Id);
+                }
+            }
+
+            return new EmployeeCredentialResponse
+            {
+                Id = record.Id,
+                CredentialType = record.CredentialType,
+                CredentialNumber = record.CredentialNumber,
+                LicenceClasses = record.LicenceClasses,
+                IssuingState = record.IssuingState,
+                IssueDate = record.IssueDate,
+                ExpiryDate = record.ExpiryDate,
+                HasFrontImage = !string.IsNullOrWhiteSpace(record.FrontImagePath),
+                FrontImageUrl = frontImageUrl,
+                UpdatedAt = record.UpdatedAt,
+            };
+        }
+
+        private static async Task<(string Extension, string ContentType)> InspectCredentialImageAsync(IFormFile file)
+        {
+            const long maxBytes = 10 * 1024 * 1024;
+            if (file.Length <= 0 || file.Length > maxBytes)
+            {
+                throw new ArgumentException("Credential image must be between 1 byte and 10 MB.", nameof(file));
+            }
+
+            var header = new byte[16];
+            await using var stream = file.OpenReadStream();
+            var bytesRead = await stream.ReadAsync(header.AsMemory(0, header.Length));
+
+            if (bytesRead >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff)
+            {
+                return ("jpg", "image/jpeg");
+            }
+
+            if (bytesRead >= 8
+                && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47
+                && header[4] == 0x0d && header[5] == 0x0a && header[6] == 0x1a && header[7] == 0x0a)
+            {
+                return ("png", "image/png");
+            }
+
+            if (bytesRead >= 12
+                && Encoding.ASCII.GetString(header, 0, 4) == "RIFF"
+                && Encoding.ASCII.GetString(header, 8, 4) == "WEBP")
+            {
+                return ("webp", "image/webp");
+            }
+
+            if (bytesRead >= 12 && Encoding.ASCII.GetString(header, 4, 4) == "ftyp")
+            {
+                var brand = Encoding.ASCII.GetString(header, 8, 4).ToLowerInvariant();
+                if (brand is "heic" or "heix" or "hevc" or "hevx" or "mif1" or "msf1")
+                {
+                    return (brand is "mif1" or "msf1" ? "heif" : "heic", brand is "mif1" or "msf1" ? "image/heif" : "image/heic");
+                }
+            }
+
+            throw new ArgumentException("Credential image must be a JPEG, PNG, WebP, HEIC or HEIF file.", nameof(file));
+        }
+
+        private async Task UploadCredentialImageAsync(string objectPath, string contentType, IFormFile file)
+        {
+            var escapedPath = string.Join(
+                "/",
+                objectPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/{Uri.EscapeDataString(_employeeCredentialsBucketName)}/{escapedPath}?upsert=true";
+
+            var client = _httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Headers.Add("x-upsert", "true");
+            var content = new StreamContent(file.OpenReadStream());
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+            request.Content = content;
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"Credential image upload failed with status {(int)response.StatusCode}: {body}");
+            }
+        }
+
+        private async Task<string> CreateCredentialImageSignedUrlAsync(string objectPath)
+        {
+            var escapedPath = string.Join(
+                "/",
+                objectPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+            var url = $"{_supabaseUrl.TrimEnd('/')}/storage/v1/object/sign/{Uri.EscapeDataString(_employeeCredentialsBucketName)}/{escapedPath}";
+
+            var client = _httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("apikey", _supabaseKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _supabaseKey);
+            request.Content = JsonContent.Create(new { expiresIn = 60 * 60 });
+
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Credential image URL could not be created: {body}");
+            }
+
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            var signedPath = GetJsonString(root, "signedURL") ?? GetJsonString(root, "signedUrl");
+            if (string.IsNullOrWhiteSpace(signedPath))
+            {
+                throw new InvalidOperationException("Credential image URL response was invalid.");
+            }
+
+            return Uri.TryCreate(signedPath, UriKind.Absolute, out _)
+                ? signedPath
+                : $"{_supabaseUrl.TrimEnd('/')}/storage/v1{(signedPath.StartsWith('/') ? string.Empty : "/")}{signedPath}";
+        }
+
         private async Task PersistProfileImageMetadataAsync(string userId, string publicUrl, string objectPath)
         {
             var client = _httpClientFactory.CreateClient();
@@ -2172,10 +2397,14 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var buckets = await _supabase.Storage.ListBuckets();
+                var buckets = await _supabase.Storage.ListBuckets() ?? [];
                 if (!buckets.Any(b => b.Name == _bucketName))
                 {
                     await _supabase.Storage.CreateBucket(_bucketName, new Supabase.Storage.BucketUpsertOptions { Public = false });
+                }
+                if (!buckets.Any(b => b.Name == _employeeCredentialsBucketName))
+                {
+                    await _supabase.Storage.CreateBucket(_employeeCredentialsBucketName, new Supabase.Storage.BucketUpsertOptions { Public = false });
                 }
             }
             catch (Exception ex)

@@ -5187,6 +5187,34 @@ export const usersAPI = {
         return optimizeProfileImageUrl(response.data?.profileImageUrl) || getPublicStorageUrl(PROFILE_IMAGES_BUCKET, `${userId}/avatar.${extension}`);
     },
 
+    getMyCredentials: async () => {
+        const response = await apiClient.get('/users/me/credentials');
+        return response.data || [];
+    },
+
+    getUserCredentials: async (userId) => {
+        if (!userId) return [];
+        const response = await apiClient.get(`/users/${encodeURIComponent(userId)}/credentials`);
+        return response.data || [];
+    },
+
+    saveMyCredential: async (credentialType, credential, frontImage = null) => {
+        const formData = new FormData();
+        formData.append('credentialNumber', credential?.credentialNumber || '');
+        formData.append('licenceClasses', credential?.licenceClasses || '');
+        formData.append('issuingState', credential?.issuingState || 'NSW');
+        if (credential?.issueDate) formData.append('issueDate', credential.issueDate);
+        if (credential?.expiryDate) formData.append('expiryDate', credential.expiryDate);
+        if (frontImage) formData.append('frontImage', frontImage);
+
+        const response = await apiClient.put(
+            `/users/me/credentials/${encodeURIComponent(credentialType)}`,
+            formData,
+            { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data;
+    },
+
     deleteUser: async (userId) => {
         const response = await apiClient.delete('/users/' + userId);
         return response.data;

@@ -129,6 +129,162 @@ function ToggleRow({ label, description, checked, onChange, disabled = false }) 
     );
 }
 
+const CREDENTIAL_CONFIG = [
+    {
+        type: 'white_card',
+        title: 'White Card',
+        description: 'General construction induction card',
+        numberLabel: 'White Card Number',
+        showClasses: false,
+        showExpiry: false
+    },
+    {
+        type: 'driver_licence',
+        title: 'Driver Licence',
+        description: 'Australian driver licence details',
+        numberLabel: 'Licence Number',
+        showClasses: true,
+        showExpiry: true
+    },
+    {
+        type: 'high_risk_work_licence',
+        title: 'High Risk Work Licence',
+        description: 'SafeWork high risk work licence',
+        numberLabel: 'Licence Number',
+        showClasses: true,
+        showExpiry: true
+    }
+];
+
+const AUSTRALIAN_STATES = ['NSW', 'ACT', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'NT'];
+
+function buildCredentialForm(credential = null) {
+    return {
+        credentialNumber: credential?.credentialNumber || '',
+        licenceClasses: credential?.licenceClasses || '',
+        issuingState: credential?.issuingState || 'NSW',
+        issueDate: formatInputDate(credential?.issueDate),
+        expiryDate: formatInputDate(credential?.expiryDate)
+    };
+}
+
+function formatCredentialDate(value) {
+    if (!value) return 'Not provided';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not provided';
+    return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+}
+
+function CredentialCard({
+    config,
+    credential,
+    form,
+    editing,
+    saving,
+    selectedFile,
+    onEdit,
+    onCancel,
+    onChange,
+    onFileChange,
+    onSave
+}) {
+    return (
+        <article className={`employee-credential-card${credential ? ' complete' : ''}`}>
+            <div className="employee-credential-card-head">
+                <div>
+                    <h4>{config.title}</h4>
+                    <p>{config.description}</p>
+                </div>
+                <span className={`employee-credential-status ${credential ? 'complete' : 'missing'}`}>
+                    {credential ? 'Added' : 'Required'}
+                </span>
+            </div>
+
+            {editing ? (
+                <div className="employee-credential-editor">
+                    <div className="employee-profile-form-grid">
+                        <Field label={config.numberLabel}>
+                            <input
+                                value={form.credentialNumber}
+                                onChange={(event) => onChange('credentialNumber', event.target.value)}
+                                disabled={saving}
+                            />
+                        </Field>
+                        <Field label="Issuing State / Territory">
+                            <span className="employee-profile-select-wrap">
+                                <select value={form.issuingState} onChange={(event) => onChange('issuingState', event.target.value)} disabled={saving}>
+                                    {AUSTRALIAN_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+                                </select>
+                                <ChevronDown size={16} />
+                            </span>
+                        </Field>
+                        {config.showClasses ? (
+                            <Field label="Licence Class(es)" wide>
+                                <input
+                                    value={form.licenceClasses}
+                                    onChange={(event) => onChange('licenceClasses', event.target.value)}
+                                    placeholder={config.type === 'driver_licence' ? 'e.g. C, MR, HR' : 'e.g. SB, SI, DG'}
+                                    disabled={saving}
+                                />
+                            </Field>
+                        ) : null}
+                        <Field label="Issue Date">
+                            <input type="date" value={form.issueDate} onChange={(event) => onChange('issueDate', event.target.value)} disabled={saving} />
+                        </Field>
+                        {config.showExpiry ? (
+                            <Field label="Expiry Date">
+                                <input type="date" value={form.expiryDate} onChange={(event) => onChange('expiryDate', event.target.value)} disabled={saving} />
+                            </Field>
+                        ) : null}
+                    </div>
+
+                    <label className={`employee-credential-upload${selectedFile || credential?.hasFrontImage ? ' has-file' : ''}`}>
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                            capture="environment"
+                            onChange={onFileChange}
+                            disabled={saving}
+                        />
+                        <strong>{selectedFile ? selectedFile.name : credential?.hasFrontImage ? 'Replace front image' : 'Upload front image *'}</strong>
+                        <span>Take a clear photo or select a JPEG, PNG, WebP, HEIC or HEIF image up to 10 MB.</span>
+                    </label>
+
+                    <div className="employee-credential-actions">
+                        <button type="button" className="employee-profile-panel-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
+                        <button type="button" className="employee-profile-panel-primary" onClick={onSave} disabled={saving}>
+                            {saving ? 'Saving...' : 'Save credential'}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div className="employee-credential-details">
+                        <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || 'Not provided'}</strong></span>
+                        <span><small>Issuing State</small><strong>{credential?.issuingState || 'Not provided'}</strong></span>
+                        {config.showClasses ? <span><small>Class(es)</small><strong>{credential?.licenceClasses || 'Not provided'}</strong></span> : null}
+                        <span><small>Issue Date</small><strong>{formatCredentialDate(credential?.issueDate)}</strong></span>
+                        {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatCredentialDate(credential?.expiryDate)}</strong></span> : null}
+                    </div>
+
+                    {credential?.frontImageUrl ? (
+                        <a className="employee-credential-image" href={credential.frontImageUrl} target="_blank" rel="noreferrer">
+                            <img src={credential.frontImageUrl} alt={`Front of ${config.title}`} />
+                            <span>View front image</span>
+                        </a>
+                    ) : (
+                        <div className="employee-credential-image empty">Front image required</div>
+                    )}
+
+                    <button type="button" className="employee-profile-panel-edit employee-credential-edit" onClick={onEdit}>
+                        {credential ? 'Edit credential' : 'Add credential'}
+                    </button>
+                </>
+            )}
+        </article>
+    );
+}
+
 const SECTION_KEYS = ['personal', 'emergency', 'notifications', 'address'];
 
 export default function EmployeeProfilePage({ user, onUserUpdated }) {
@@ -150,6 +306,12 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
     const [emergencyAddressLoading, setEmergencyAddressLoading] = useState(false);
     const [selectedEmergencyAddressSourceId, setSelectedEmergencyAddressSourceId] = useState('');
     const [editingSections, setEditingSections] = useState(() => Object.fromEntries(SECTION_KEYS.map((key) => [key, false])));
+    const [credentials, setCredentials] = useState([]);
+    const [credentialForms, setCredentialForms] = useState(() => Object.fromEntries(CREDENTIAL_CONFIG.map(({ type }) => [type, buildCredentialForm()])));
+    const [credentialFiles, setCredentialFiles] = useState({});
+    const [editingCredential, setEditingCredential] = useState('');
+    const [credentialsLoading, setCredentialsLoading] = useState(true);
+    const [savingCredential, setSavingCredential] = useState('');
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
 
@@ -158,6 +320,29 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         setForm(nextForm);
         setInitialSnapshot(JSON.stringify({ form: nextForm, prefs }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
+
+    useEffect(() => {
+        let active = true;
+        setCredentialsLoading(true);
+        usersAPI.getMyCredentials()
+            .then((rows) => {
+                if (!active) return;
+                const nextCredentials = Array.isArray(rows) ? rows : [];
+                setCredentials(nextCredentials);
+                setCredentialForms(Object.fromEntries(CREDENTIAL_CONFIG.map(({ type }) => [
+                    type,
+                    buildCredentialForm(nextCredentials.find((item) => item.credentialType === type))
+                ])));
+            })
+            .catch((credentialError) => {
+                if (active) setError(credentialError.response?.data?.error || credentialError.message || 'Unable to load licence details.');
+            })
+            .finally(() => {
+                if (active) setCredentialsLoading(false);
+            });
+
+        return () => { active = false; };
     }, [user?.id]);
 
     useEffect(() => {
@@ -459,6 +644,78 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
         }
     };
 
+    const findCredential = (credentialType) => credentials.find((item) => item.credentialType === credentialType) || null;
+
+    const editCredential = (credentialType) => {
+        setCredentialForms((current) => ({
+            ...current,
+            [credentialType]: buildCredentialForm(findCredential(credentialType))
+        }));
+        setCredentialFiles((current) => ({ ...current, [credentialType]: null }));
+        setEditingCredential(credentialType);
+        setMessage('');
+        setError('');
+    };
+
+    const cancelCredentialEdit = (credentialType) => {
+        setCredentialForms((current) => ({
+            ...current,
+            [credentialType]: buildCredentialForm(findCredential(credentialType))
+        }));
+        setCredentialFiles((current) => ({ ...current, [credentialType]: null }));
+        setEditingCredential('');
+    };
+
+    const updateCredentialForm = (credentialType, key, value) => {
+        setCredentialForms((current) => ({
+            ...current,
+            [credentialType]: { ...current[credentialType], [key]: value }
+        }));
+        setMessage('');
+        setError('');
+    };
+
+    const selectCredentialFile = (credentialType, event) => {
+        const file = event.target.files?.[0] || null;
+        setCredentialFiles((current) => ({ ...current, [credentialType]: file }));
+        setMessage('');
+        setError('');
+    };
+
+    const saveCredential = async (credentialType) => {
+        const credential = findCredential(credentialType);
+        const credentialForm = credentialForms[credentialType];
+        const frontImage = credentialFiles[credentialType] || null;
+        if (!credentialForm?.credentialNumber?.trim()) {
+            setError('Credential number is required.');
+            return;
+        }
+        if (!credential?.hasFrontImage && !frontImage) {
+            setError('A photo of the front of the credential is required.');
+            return;
+        }
+        if (frontImage && frontImage.size > 10 * 1024 * 1024) {
+            setError('Credential image must not exceed 10 MB.');
+            return;
+        }
+
+        setSavingCredential(credentialType);
+        setMessage('');
+        setError('');
+        try {
+            const saved = await usersAPI.saveMyCredential(credentialType, credentialForm, frontImage);
+            setCredentials((current) => [...current.filter((item) => item.credentialType !== credentialType), saved]);
+            setCredentialForms((current) => ({ ...current, [credentialType]: buildCredentialForm(saved) }));
+            setCredentialFiles((current) => ({ ...current, [credentialType]: null }));
+            setEditingCredential('');
+            setMessage(`${CREDENTIAL_CONFIG.find((item) => item.type === credentialType)?.title || 'Credential'} saved successfully.`);
+        } catch (credentialError) {
+            setError(credentialError.response?.data?.error || credentialError.message || 'Unable to save credential.');
+        } finally {
+            setSavingCredential('');
+        }
+    };
+
     return (
         <form className="employee-profile-page" onSubmit={saveProfile}>
             <section className="employee-profile-summary">
@@ -649,6 +906,39 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                 </Panel>
                 </div>
             </div>
+
+            <section className="employee-profile-panel employee-credentials-panel">
+                <div className="employee-credentials-heading">
+                    <div>
+                        <h3>Licences &amp; Credentials</h3>
+                        <p>Add the details shown on each credential and upload a clear photo of its front.</p>
+                    </div>
+                    <span>{credentials.length} of {CREDENTIAL_CONFIG.length} added</span>
+                </div>
+
+                {credentialsLoading ? (
+                    <div className="employee-credentials-loading">Loading licence details...</div>
+                ) : (
+                    <div className="employee-credentials-grid">
+                        {CREDENTIAL_CONFIG.map((config) => (
+                            <CredentialCard
+                                key={config.type}
+                                config={config}
+                                credential={findCredential(config.type)}
+                                form={credentialForms[config.type] || buildCredentialForm()}
+                                editing={editingCredential === config.type}
+                                saving={savingCredential === config.type}
+                                selectedFile={credentialFiles[config.type] || null}
+                                onEdit={() => editCredential(config.type)}
+                                onCancel={() => cancelCredentialEdit(config.type)}
+                                onChange={(key, value) => updateCredentialForm(config.type, key, value)}
+                                onFileChange={(event) => selectCredentialFile(config.type, event)}
+                                onSave={() => saveCredential(config.type)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </section>
 
             {message ? <div className="employee-profile-toast success">{message}</div> : null}
             {error ? <div className="employee-profile-toast error">{error}</div> : null}

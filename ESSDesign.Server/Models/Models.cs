@@ -382,6 +382,60 @@ namespace ESSDesign.Server.Models
         public string? EmergencyAddress { get; set; }
     }
 
+    public static class EmployeeCredentialTypes
+    {
+        public const string WhiteCard = "white_card";
+        public const string DriverLicence = "driver_licence";
+        public const string HighRiskWorkLicence = "high_risk_work_licence";
+
+        public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+        {
+            WhiteCard,
+            DriverLicence,
+            HighRiskWorkLicence,
+        };
+    }
+
+    public class UpsertEmployeeCredentialRequest
+    {
+        public string? CredentialNumber { get; set; }
+        public string? LicenceClasses { get; set; }
+        public string? IssuingState { get; set; }
+        public DateTime? IssueDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public IFormFile? FrontImage { get; set; }
+    }
+
+    public class EmployeeCredentialRecord
+    {
+        public Guid Id { get; set; }
+        public Guid UserId { get; set; }
+        public string CredentialType { get; set; } = string.Empty;
+        public string CredentialNumber { get; set; } = string.Empty;
+        public string? LicenceClasses { get; set; }
+        public string IssuingState { get; set; } = "NSW";
+        public DateTime? IssueDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public string FrontImagePath { get; set; } = string.Empty;
+        public string? FrontImageContentType { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    public class EmployeeCredentialResponse
+    {
+        public Guid Id { get; set; }
+        public string CredentialType { get; set; } = string.Empty;
+        public string CredentialNumber { get; set; } = string.Empty;
+        public string? LicenceClasses { get; set; }
+        public string IssuingState { get; set; } = "NSW";
+        public DateTime? IssueDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public bool HasFrontImage { get; set; }
+        public string? FrontImageUrl { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
     public class AuthResponse
     {
         public string AccessToken { get; set; } = string.Empty;

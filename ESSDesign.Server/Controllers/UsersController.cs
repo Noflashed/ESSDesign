@@ -203,6 +203,113 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpGet("me/credentials")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<ActionResult<List<EmployeeCredentialResponse>>> GetMyCredentials()
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                return Ok(await _supabaseService.GetEmployeeCredentialsAsync(currentUser.Id));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user credentials");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("{userId}/credentials")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<ActionResult<List<EmployeeCredentialResponse>>> GetUserCredentials(string userId)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var isOwner = string.Equals(currentUser.Id, userId, StringComparison.OrdinalIgnoreCase);
+                var isAdmin = string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase);
+                if (!isOwner && !isAdmin)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "You do not have access to these credentials" });
+                }
+
+                return Ok(await _supabaseService.GetEmployeeCredentialsAsync(userId));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting credentials for {UserId}", userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("me/credentials/{credentialType}")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(11 * 1024 * 1024)]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<ActionResult<EmployeeCredentialResponse>> UpsertMyCredential(
+            string credentialType,
+            [FromForm] UpsertEmployeeCredentialRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!EmployeeCredentialTypes.All.Contains(credentialType))
+                {
+                    return BadRequest(new { error = "Credential type must be white_card, driver_licence or high_risk_work_licence" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.CredentialNumber))
+                {
+                    return BadRequest(new { error = "Credential number is required" });
+                }
+
+                if (request.FrontImage?.Length > 10 * 1024 * 1024)
+                {
+                    return BadRequest(new { error = "Credential image must not exceed 10 MB" });
+                }
+
+                if (request.IssueDate.HasValue && request.ExpiryDate.HasValue && request.ExpiryDate.Value.Date < request.IssueDate.Value.Date)
+                {
+                    return BadRequest(new { error = "Expiry date cannot be earlier than issue date" });
+                }
+
+                var credential = await _supabaseService.UpsertEmployeeCredentialAsync(currentUser.Id, credentialType, request);
+                return Ok(credential);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving {CredentialType} for current user", credentialType);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{userId}")]
         public async Task<ActionResult> DeleteUser(string userId)
         {

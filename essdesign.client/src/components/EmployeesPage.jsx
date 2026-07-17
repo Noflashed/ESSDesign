@@ -151,6 +151,19 @@ function formatEmployeeAddress(profile) {
     return structuredAddress || profile.personalAddress || '-';
 }
 
+const EMPLOYEE_CREDENTIAL_CONFIG = [
+    { type: 'white_card', title: 'White Card', numberLabel: 'Card Number', showClasses: false, showExpiry: false },
+    { type: 'driver_licence', title: 'Driver Licence', numberLabel: 'Licence Number', showClasses: true, showExpiry: true },
+    { type: 'high_risk_work_licence', title: 'High Risk Work Licence', numberLabel: 'Licence Number', showClasses: true, showExpiry: true }
+];
+
+function formatEmployeeCredentialDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+}
+
 function EmployeeProfileSections({ profile, readOnly = false }) {
     const readOnlyBadge = readOnly ? <span className="employee-details-section-badge">Read only</span> : null;
 
@@ -204,6 +217,50 @@ function EmployeeProfileSections({ profile, readOnly = false }) {
                 </div>
             </section>
         </>
+    );
+}
+
+function EmployeeCredentialsSection({ credentials, loading = false, error = '', readOnly = false }) {
+    return (
+        <section className="employee-details-section employee-details-credentials-section">
+            <h3>
+                Licences &amp; credentials
+                {readOnly ? <span className="employee-details-section-badge">Read only</span> : null}
+            </h3>
+
+            {loading ? <div className="employee-details-credentials-message">Loading licence details...</div> : null}
+            {!loading && error ? <div className="employee-details-credentials-message error">{error}</div> : null}
+            {!loading && !error ? (
+                <div className="employee-details-credentials-grid">
+                    {EMPLOYEE_CREDENTIAL_CONFIG.map((config) => {
+                        const credential = credentials.find((item) => item.credentialType === config.type) || null;
+                        return (
+                            <article key={config.type} className={`employee-details-credential${credential ? ' complete' : ' missing'}`}>
+                                <div className="employee-details-credential-head">
+                                    <strong>{config.title}</strong>
+                                    <span>{credential ? 'Added' : 'Not provided'}</span>
+                                </div>
+                                <div className="employee-details-credential-values">
+                                    <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || '-'}</strong></span>
+                                    <span><small>Issuing State</small><strong>{credential?.issuingState || '-'}</strong></span>
+                                    {config.showClasses ? <span><small>Class(es)</small><strong>{credential?.licenceClasses || '-'}</strong></span> : null}
+                                    <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span>
+                                    {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
+                                </div>
+                                {credential?.frontImageUrl ? (
+                                    <a href={credential.frontImageUrl} target="_blank" rel="noreferrer" className="employee-details-credential-image">
+                                        <img src={credential.frontImageUrl} alt={`Front of ${config.title}`} />
+                                        <span>View image</span>
+                                    </a>
+                                ) : (
+                                    <div className="employee-details-credential-image empty">Front image not uploaded</div>
+                                )}
+                            </article>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </section>
     );
 }
 
@@ -338,6 +395,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [showTruckDeviceModal, setShowTruckDeviceModal] = useState(false);
     const [truckDeviceForm, setTruckDeviceForm] = useState(emptyTruckDeviceForm());
     const [selectedInfoEntry, setSelectedInfoEntry] = useState(null);
+    const [selectedCredentials, setSelectedCredentials] = useState([]);
+    const [selectedCredentialsLoading, setSelectedCredentialsLoading] = useState(false);
+    const [selectedCredentialsError, setSelectedCredentialsError] = useState('');
     const [employeeMenu, setEmployeeMenu] = useState(null);
 
     useEffect(() => {
@@ -420,6 +480,34 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         window.addEventListener('keydown', closeOnEscape);
         return () => window.removeEventListener('keydown', closeOnEscape);
     }, [selectedInfoEntry]);
+
+    useEffect(() => {
+        const credentialUserId = selectedInfoEntry?.appUser?.id || selectedInfoEntry?.employee?.linkedAuthUserId || '';
+        let active = true;
+
+        setSelectedCredentials([]);
+        setSelectedCredentialsError('');
+        if (!credentialUserId) {
+            setSelectedCredentialsLoading(false);
+            return () => { active = false; };
+        }
+
+        setSelectedCredentialsLoading(true);
+        usersAPI.getUserCredentials(credentialUserId)
+            .then((rows) => {
+                if (active) setSelectedCredentials(Array.isArray(rows) ? rows : []);
+            })
+            .catch((credentialError) => {
+                if (active) {
+                    setSelectedCredentialsError(credentialError.response?.data?.error || credentialError.message || 'Unable to load licence details.');
+                }
+            })
+            .finally(() => {
+                if (active) setSelectedCredentialsLoading(false);
+            });
+
+        return () => { active = false; };
+    }, [selectedInfoEntry?.appUser?.id, selectedInfoEntry?.employee?.linkedAuthUserId]);
 
     useEffect(() => {
         let active = true;
@@ -1101,6 +1189,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             </section>
 
                             <EmployeeProfileSections profile={selectedEmployeeProfile} />
+                            <EmployeeCredentialsSection
+                                credentials={selectedCredentials}
+                                loading={selectedCredentialsLoading}
+                                error={selectedCredentialsError}
+                            />
                         </div>
 
                         <footer className="employee-details-footer">
@@ -1220,6 +1313,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 </section>
 
                                 <EmployeeProfileSections profile={selectedEmployeeProfile} readOnly />
+                                <EmployeeCredentialsSection
+                                    credentials={selectedCredentials}
+                                    loading={selectedCredentialsLoading}
+                                    error={selectedCredentialsError}
+                                    readOnly
+                                />
 
                                 {inviteMessage ? <div className="module-success employee-details-message">{inviteMessage}</div> : null}
                                 {error ? <div className="module-error employee-details-message">{error}</div> : null}
@@ -1477,6 +1576,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                 </section>
 
                                 <EmployeeProfileSections profile={selectedEmployeeProfile} readOnly />
+                                <EmployeeCredentialsSection
+                                    credentials={selectedCredentials}
+                                    loading={selectedCredentialsLoading}
+                                    error={selectedCredentialsError}
+                                    readOnly
+                                />
 
                                 {error ? <div className="module-error employee-details-message">{error}</div> : null}
                             </div>
