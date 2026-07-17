@@ -20143,16 +20143,28 @@ button.stat-card {
 }
 
 .employees-page .employee-details-close {
-    width: 32px;
-    height: 32px;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-sizing: border-box;
     border: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     background: transparent;
     color: #0f172a;
     cursor: pointer;
-    font-size: 26px;
-    font-weight: 300;
-    line-height: 1;
+    line-height: 0;
+}
+
+.employees-page .employee-details-close svg {
+    display: block;
+    width: 16px;
+    height: 16px;
 }
 
 .employees-page .employee-details-close:hover,

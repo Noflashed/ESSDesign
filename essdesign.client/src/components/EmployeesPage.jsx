@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Info, Plus, Search, UserPlus } from 'lucide-react';
+import { Info, Plus, Search, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -998,7 +998,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     onClick={() => setSelectedInfoEntry(null)}
                                     aria-label="Close employee details"
                                 >
-                                    &times;
+                                    <X size={16} strokeWidth={2.25} aria-hidden="true" />
                                 </button>
                             </div>
                             <div className="employee-details-identity">
@@ -1131,7 +1131,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     }}
                                     aria-label="Close employee editor"
                                 >
-                                    &times;
+                                    <X size={16} strokeWidth={2.25} aria-hidden="true" />
                                 </button>
                             </div>
                             <div className="employee-details-identity">
@@ -1387,7 +1387,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     }}
                                     aria-label="Close employee editor"
                                 >
-                                    &times;
+                                    <X size={16} strokeWidth={2.25} aria-hidden="true" />
                                 </button>
                             </div>
                             <div className="employee-details-identity">
