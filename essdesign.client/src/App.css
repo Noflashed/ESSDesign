@@ -21044,50 +21044,11 @@ button.stat-card {
     overflow-y: auto;
 }
 
-.employees-page .employee-profile-summary-actions {
-    min-height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-}
-
-.employees-page .employee-profile-summary-actions .employee-icon-btn {
-    width: 30px;
-    height: 30px;
-    min-height: 30px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 1px solid #dce4ee;
-    border-radius: 6px;
-    background: #ffffff;
-    color: #334155;
-    cursor: pointer;
-}
-
-.employees-page .employee-profile-summary-actions .employee-icon-btn:hover,
-.employees-page .employee-profile-summary-actions .employee-icon-btn:focus-visible {
-    border-color: #b8c8dc;
-    background: #f1f5f9;
-    outline: none;
-}
-
-.employees-page .employee-profile-summary-actions .employee-icon-btn.danger {
-    color: #dc2626;
-}
-
-.employees-page .employee-profile-summary-actions .employee-icon-btn svg {
-    width: 14px;
-    height: 14px;
-}
-
 .employees-page .employee-profile-summary-identity {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: 18px;
+    margin-top: 0;
     text-align: center;
 }
 
@@ -21643,6 +21604,7 @@ button.stat-card {
 }
 
 .employees-page .employee-profile-cancel-btn,
+.employees-page .employee-profile-relationship-btn,
 .employees-page .employee-profile-inline-tools button {
     min-height: 38px;
     padding: 0 13px;
@@ -21657,6 +21619,7 @@ button.stat-card {
 }
 
 .employees-page .employee-profile-cancel-btn:hover,
+.employees-page .employee-profile-relationship-btn:hover,
 .employees-page .employee-profile-inline-tools button:hover {
     border-color: #b8c4d4;
     background: #f8fafc;
@@ -21664,9 +21627,22 @@ button.stat-card {
 
 .employees-page .employee-profile-edit-btn:disabled,
 .employees-page .employee-profile-cancel-btn:disabled,
+.employees-page .employee-profile-relationship-btn:disabled,
 .employees-page .employee-profile-inline-tools button:disabled {
     cursor: not-allowed;
     opacity: 0.58;
+}
+
+.employees-page .employee-profile-relationship-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+}
+
+.employees-page .employee-profile-relationship-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
 .employees-page .employee-profile-edit-fields > div,
@@ -21803,12 +21779,6 @@ button.stat-card {
         gap: 18px;
         padding-top: 20px;
         padding-bottom: 20px;
-    }
-
-    .employees-page .employee-profile-summary-actions {
-        position: absolute;
-        top: 16px;
-        right: 18px;
     }
 
     .employees-page .employee-profile-summary-identity {

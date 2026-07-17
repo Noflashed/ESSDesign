@@ -424,20 +424,6 @@ function EmployeeAvatar({ entry }) {
     );
 }
 
-function EmployeeActionButton({ title, onClick, children, danger = false }) {
-    return (
-        <button
-            type="button"
-            className={`employee-icon-btn ${danger ? 'danger' : ''}`.trim()}
-            onClick={onClick}
-            aria-label={title}
-            title={title}
-        >
-            {children}
-        </button>
-    );
-}
-
 export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
     const selectedCredentialImageUrlsRef = useRef(new Map());
     const [loading, setLoading] = useState(true);
@@ -1077,17 +1063,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     <>
                         {selectedInfoEntry ? (
                             <aside className="employee-profile-summary" aria-label="Selected employee summary">
-                                {selectedInfoEntry.leadingHand && selectedInfoEntry.type === 'employee' ? (
-                                    <div className="employee-profile-summary-actions">
-                                        <EmployeeActionButton
-                                            title={`Open leading hand relationships for ${selectedInfoEntry.displayName}`}
-                                            onClick={() => onOpenLeadingHandRelationships?.(selectedInfoEntry.employee)}
-                                        >
-                                            <TreeIcon />
-                                        </EmployeeActionButton>
-                                    </div>
-                                ) : null}
-
                                 <div className="employee-profile-summary-identity">
                                     <div className="employee-profile-summary-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
                                     <h2>{selectedInfoEntry.displayName}</h2>
@@ -1128,6 +1103,16 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             <h1>{isInlineEditing ? 'Edit employee profile' : 'Employee profile'}</h1>
                                         </div>
                                         <div className="employee-profile-header-actions">
+                                            {selectedInfoEntry.leadingHand && selectedInfoEntry.type === 'employee' ? (
+                                                <button
+                                                    type="button"
+                                                    className="employee-profile-relationship-btn"
+                                                    onClick={() => onOpenLeadingHandRelationships?.(selectedInfoEntry.employee)}
+                                                >
+                                                    <TreeIcon />
+                                                    Relationships
+                                                </button>
+                                            ) : null}
                                             {isInlineEditing ? (
                                                 <>
                                                     <button type="button" className="employee-profile-cancel-btn" onClick={cancelInlineEdit} disabled={saving || savingAppUser}>
@@ -1226,9 +1211,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         {isInlineEditing ? (
                                             <div className="employee-profile-inline-tools">
                                                 <div>
-                                                    {isEditingEmployee && form.selectedRole === 'leading_hand' ? (
-                                                        <button type="button" onClick={() => onOpenLeadingHandRelationships?.(form)}>Leading Hand Relationships</button>
-                                                    ) : null}
                                                     {isEditingEmployee ? (
                                                         <button type="button" onClick={sendEmployeeInvite} disabled={inviteSending || !form.email.trim()}>
                                                             {inviteSending ? 'Sending...' : 'Invite user'}
