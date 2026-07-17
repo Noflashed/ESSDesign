@@ -480,7 +480,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [form, setForm] = useState(emptyEmployeeForm());
     const [employeeFullNameInput, setEmployeeFullNameInput] = useState('');
     const [employeePendingDelete, setEmployeePendingDelete] = useState(null);
-    const [saveAndInvite, setSaveAndInvite] = useState(false);
     const [showAppUserModal, setShowAppUserModal] = useState(false);
     const [appUserForm, setAppUserForm] = useState(emptyAppUserForm());
     const [appUserPendingDelete, setAppUserPendingDelete] = useState(null);
@@ -797,7 +796,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         });
         setError('');
         setInviteMessage('');
-        setSaveAndInvite(false);
         setEmployeeFullNameInput(`${employee.firstName || ''} ${employee.lastName || ''}`.trim());
         setShowModal(true);
     };
@@ -815,18 +813,31 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         setShowTruckDeviceModal(true);
     };
 
-    const saveEmployee = async (event, { inviteAfterSave = false } = {}) => {
+    const saveEmployee = async (event) => {
         event?.preventDefault?.();
         setSaving(true);
         setError('');
         setInviteMessage('');
         try {
+            const inviteAfterSave = !form.id;
+            const normalizedEmail = (form.email || '').trim().toLowerCase();
+            if (inviteAfterSave && !normalizedEmail) {
+                throw new Error('Enter an email address to start employee registration.');
+            }
             if (!INDIVIDUAL_ROLE_VALUES.has(form.selectedRole)) {
                 throw new Error('Truck roles can only be assigned through Add Truck Device.');
             }
             const showPreferredSites = form.selectedRole === 'leading_hand' || form.selectedRole === 'general_scaffolder';
+            const existingEmployee = inviteAfterSave
+                ? employees.find((employee) => (
+                    (employee.email || '').trim().toLowerCase() === normalizedEmail
+                    && (employee.firstName || '').trim() === form.firstName.trim()
+                    && (employee.lastName || '').trim() === form.lastName.trim()
+                ))
+                : null;
             const saveForm = {
                 ...form,
+                id: form.id || existingEmployee?.id || null,
                 leadingHand: form.selectedRole === 'leading_hand',
                 preferredSiteIds: showPreferredSites ? form.preferredSiteIds : []
             };
@@ -845,11 +856,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             }
 
             if (inviteAfterSave) {
-                const normalizedEmail = (form.email || '').trim().toLowerCase();
-                if (!normalizedEmail) throw new Error('Enter an email address before sending an invite.');
-
                 const savedEmployee = employeeRows.find((employee) =>
-                    (form.id ? employee.id === form.id : true)
+                    (saveForm.id ? employee.id === saveForm.id : true)
                     && (employee.email || '').trim().toLowerCase() === normalizedEmail
                     && (employee.firstName || '').trim() === form.firstName.trim()
                     && (employee.lastName || '').trim() === form.lastName.trim()
@@ -870,14 +878,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 setShowModal(false);
                 setSelectedInfoEntry(null);
                 setForm(emptyEmployeeForm());
-                setSaveAndInvite(false);
                 return;
             }
 
             setShowModal(false);
             setSelectedInfoEntry(null);
             setForm(emptyEmployeeForm());
-            setSaveAndInvite(false);
         } catch (err) {
             setError(err.message || 'Could not save employee');
         } finally {
@@ -1055,7 +1061,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <TreeIcon />
                             Add Truck Device
                         </button>
-                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); setSaveAndInvite(false); }}>
+                        <button className="module-primary-btn" onClick={() => { setForm(emptyEmployeeForm()); setEmployeeFullNameInput(''); setShowModal(true); setInviteMessage(''); setError(''); }}>
                             <Plus size={18} />
                             Add Employee
                         </button>
@@ -1365,7 +1371,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             </div>
                         </header>
 
-                        <form className="employee-details-edit-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: false })}>
+                        <form className="employee-details-edit-form" onSubmit={saveEmployee}>
                             <div className="employee-details-content">
                                 <section className="employee-details-section">
                                     <h3>Employee information</h3>
@@ -1486,13 +1492,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                             <div className="employee-form-icon" aria-hidden="true">
                                 <UserPlus size={24} />
                             </div>
-                            <h3>{form.id ? 'Edit Employee' : 'Add Employee'}</h3>
-                            <p>Complete the form below to {form.id ? 'update this employee.' : 'add a new employee.'}</p>
+                            <h3>Add Employee</h3>
+                            <p>Save the employee to send their registration email automatically.</p>
                         </div>
-                        <form className="module-form employee-form" onSubmit={(event) => saveEmployee(event, { inviteAfterSave: saveAndInvite })}>
+                        <form className="module-form employee-form" onSubmit={saveEmployee}>
                             <div className="module-field">
                                 <label>Full name</label>
-                                <input value={employeeFullNameInput} onChange={(e) => updateEmployeeFullName(e.target.value)} placeholder="Employee name" />
+                                <input value={employeeFullNameInput} onChange={(e) => updateEmployeeFullName(e.target.value)} placeholder="Employee name" required />
                             </div>
                             <div className="module-field">
                                 <label>Email</label>
@@ -1501,6 +1507,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     value={form.email}
                                     onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
                                     placeholder="employee@company.com"
+                                    required
                                 />
                             </div>
                             <div className="employee-form-grid">
@@ -1520,58 +1527,14 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     </select>
                                 </div>
                             </div>
-                            {form.id && form.selectedRole === 'leading_hand' ? (
-                                <button
-                                    type="button"
-                                    className="module-secondary-btn"
-                                    onClick={() => { setShowModal(false); onOpenLeadingHandRelationships?.(form); }}
-                                >
-                                    Leading Hand Relationships
-                                </button>
-                            ) : null}
-                            {form.id ? (
-                                <div className="employee-account-link-panel">
-                                    <div className="employee-account-link-copy">
-                                        <div className="employee-account-link-title">Employee Account</div>
-                                        <div className="employee-account-link-sub">
-                                            Send an account setup email using the stored name and email. The invite page will only ask for password and confirmation.
-                                        </div>
-                                    </div>
-                                    <div className="employee-account-link-actions">
-                                        {form.verifiedAt ? (
-                                            <div className="employee-status-pill employee-status-pill-verified">Verified</div>
-                                        ) : null}
-                                        <button
-                                            type="button"
-                                            className="module-primary-btn compact"
-                                            onClick={sendEmployeeInvite}
-                                            disabled={inviteSending || !form.email.trim()}
-                                        >
-                                            {inviteSending ? 'Sending...' : 'Invite User'}
-                                        </button>
-                                    </div>
-                                    {inviteMessage ? <div className="module-success">{inviteMessage}</div> : null}
-                                </div>
-                            ) : null}
                             {error ? <div className="module-error">{error}</div> : null}
                             <div className="module-form-actions">
-                                {!form.id ? (
-                                    <button
-                                        type="button"
-                                        className="module-secondary-btn"
-                                        disabled={saving}
-                                        onClick={(event) => { setSaveAndInvite(true); saveEmployee(event, { inviteAfterSave: true }); }}
-                                    >
-                                        {saving && saveAndInvite ? 'Saving...' : 'Save & Invite'}
-                                    </button>
-                                ) : null}
                                 <button
                                     type="submit"
                                     className="module-primary-btn"
                                     disabled={saving}
-                                    onClick={() => setSaveAndInvite(false)}
                                 >
-                                    {saving && !saveAndInvite ? 'Saving...' : 'Save Employee'}
+                                    {saving ? 'Saving & sending invite...' : 'Save Employee'}
                                 </button>
                             </div>
                         </form>
