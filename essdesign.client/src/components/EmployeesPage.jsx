@@ -120,6 +120,37 @@ function formatEmployeeDate(value) {
     });
 }
 
+function formatEmployeeBirthDate(value) {
+    if (!value) return '-';
+    const datePart = String(value).split('T')[0];
+    const date = new Date(`${datePart}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleDateString('en-AU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function formatEmployeeGender(value) {
+    if (!value) return '-';
+    return String(value)
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatEmployeeAddress(profile) {
+    if (!profile) return '-';
+    const structuredAddress = [
+        profile.addressStreet,
+        profile.addressCity,
+        profile.addressState,
+        profile.addressPostalCode,
+        profile.addressCountry
+    ].filter(Boolean).join(', ');
+    return structuredAddress || profile.personalAddress || '-';
+}
+
 function TreeIcon() {
     return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -388,8 +419,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 employee: emp,
                 appUser,
                 displayName: `${emp.firstName} ${emp.lastName}`,
-                displayPhone: emp.phoneNumber || null,
-                displayEmail: emp.email || null,
+                displayPhone: emp.phoneNumber || appUser?.phoneNumber || null,
+                displayEmail: emp.email || appUser?.email || null,
                 isVerified: !!emp.verifiedAt,
                 role: effectiveRole,
                 leadingHand: effectiveRole === 'leading_hand',
@@ -734,6 +765,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     const selectedInfoStatus = selectedInfoEntry ? getAccountStatus(selectedInfoEntry) : null;
+    const selectedEmployeeProfile = selectedInfoEntry?.appUser || null;
 
     return (
         <div className="module-page employees-page">
@@ -982,37 +1014,77 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         </header>
 
                         <div className="employee-details-content">
-                            <h3>Employee information</h3>
-                            <div className="employee-details-grid">
-                                <div className="employee-details-field">
-                                    <span>Full Name</span>
-                                    <strong>{selectedInfoEntry.displayName}</strong>
+                            <section className="employee-details-section">
+                                <h3>Personal details</h3>
+                                <div className="employee-details-grid">
+                                    <div className="employee-details-field">
+                                        <span>Full Name</span>
+                                        <strong>{selectedInfoEntry.displayName}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Preferred Name</span>
+                                        <strong>{selectedEmployeeProfile?.preferredName || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Date of Birth</span>
+                                        <strong>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Gender</span>
+                                        <strong>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Role</span>
+                                        <strong>{getRoleLabel(selectedInfoEntry.role)}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Phone</span>
+                                        <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Email</span>
+                                        <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Account Status</span>
+                                        <strong>{selectedInfoStatus.label}</strong>
+                                    </div>
+                                    <div className="employee-details-field employee-details-field-wide">
+                                        <span>Residential Address</span>
+                                        <strong>{formatEmployeeAddress(selectedEmployeeProfile)}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Invite Sent</span>
+                                        <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
+                                    </div>
                                 </div>
-                                <div className="employee-details-field">
-                                    <span>Role</span>
-                                    <strong>{getRoleLabel(selectedInfoEntry.role)}</strong>
+                            </section>
+
+                            <section className="employee-details-section">
+                                <h3>Emergency contact</h3>
+                                <div className="employee-details-grid">
+                                    <div className="employee-details-field">
+                                        <span>Contact Name</span>
+                                        <strong>{selectedEmployeeProfile?.emergencyContactName || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Relationship</span>
+                                        <strong>{selectedEmployeeProfile?.emergencyRelationship || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Phone</span>
+                                        <strong>{selectedEmployeeProfile?.emergencyPhoneNumber || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field">
+                                        <span>Email</span>
+                                        <strong>{selectedEmployeeProfile?.emergencyEmail || '-'}</strong>
+                                    </div>
+                                    <div className="employee-details-field employee-details-field-wide">
+                                        <span>Address</span>
+                                        <strong>{selectedEmployeeProfile?.emergencyAddress || '-'}</strong>
+                                    </div>
                                 </div>
-                                <div className="employee-details-field">
-                                    <span>Phone</span>
-                                    <strong>{selectedInfoEntry.displayPhone || '-'}</strong>
-                                </div>
-                                <div className="employee-details-field">
-                                    <span>Email</span>
-                                    <strong>{selectedInfoEntry.displayEmail || '-'}</strong>
-                                </div>
-                                <div className="employee-details-field">
-                                    <span>Account Status</span>
-                                    <strong>{selectedInfoStatus.label}</strong>
-                                </div>
-                                <div className="employee-details-field">
-                                    <span>Invite Sent</span>
-                                    <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
-                                </div>
-                                <div className="employee-details-field employee-details-field-wide">
-                                    <span>Verified At</span>
-                                    <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
-                                </div>
-                            </div>
+                            </section>
                         </div>
 
                         <footer className="employee-details-footer">
@@ -1129,10 +1201,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <div className="employee-details-field">
                                         <span>Invite Sent</span>
                                         <strong>{formatEmployeeDate(form.inviteSentAt)}</strong>
-                                    </div>
-                                    <div className="employee-details-field employee-details-field-wide">
-                                        <span>Verified At</span>
-                                        <strong>{formatEmployeeDate(form.verifiedAt)}</strong>
                                     </div>
                                 </div>
 
@@ -1386,10 +1454,6 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <div className="employee-details-field">
                                         <span>Invite Sent</span>
                                         <strong>{formatEmployeeDate(selectedInfoEntry.employee?.inviteSentAt)}</strong>
-                                    </div>
-                                    <div className="employee-details-field employee-details-field-wide">
-                                        <span>Verified At</span>
-                                        <strong>{formatEmployeeDate(selectedInfoEntry.employee?.verifiedAt)}</strong>
                                     </div>
                                 </div>
 

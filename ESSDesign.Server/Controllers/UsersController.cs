@@ -34,7 +34,7 @@ namespace ESSDesign.Server.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
                 }
 
-                var users = await _supabaseService.GetAllUsersAsync();
+                var users = await _supabaseService.GetAllUsersAsync(includeProfileDetails: true);
                 return Ok(users);
             }
             catch (Exception ex)

@@ -2809,12 +2809,15 @@ namespace ESSDesign.Server.Services
             return DateTime.TryParse(value, out var parsed) ? parsed : null;
         }
 
-        public async Task<List<UserInfo>> GetAllUsersAsync()
+        public async Task<List<UserInfo>> GetAllUsersAsync(bool includeProfileDetails = false)
         {
             try
             {
+                var userSelect = includeProfileDetails
+                    ? UserProfileSelect
+                    : "id,email,fullName:full_name,phoneNumber:phone_number";
                 var usersTask = GetRestRowsAsync<UserInfo>(
-                    $"user_names?select={Uri.EscapeDataString("id,email,fullName:full_name,phoneNumber:phone_number")}&order=full_name.asc");
+                    $"user_names?select={Uri.EscapeDataString(userSelect)}&order=full_name.asc");
                 var rolesTask = GetAllUserRolesAsync();
                 var employeeRowsTask = GetEmployeeRoleRowsAsync();
 
