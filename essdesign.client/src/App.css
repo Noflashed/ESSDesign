@@ -20581,7 +20581,7 @@ button.stat-card {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 38px;
+    padding: 38px 38px 38px 262px;
 }
 
 .employees-page .employee-credential-viewer-backdrop {
@@ -20683,7 +20683,7 @@ button.stat-card {
 }
 
 .employees-page .employee-details-field > span {
-    color: #172554;
+    color: #475569;
     font-size: 11px;
     font-weight: 750;
 }
@@ -20694,8 +20694,9 @@ button.stat-card {
     align-items: center;
     padding: 7px 10px;
     overflow-wrap: anywhere;
+    border: 1px solid #d8e1ec;
     border-radius: 5px;
-    background: #f0f6ff;
+    background: #ffffff;
     color: #172033;
     font-size: 13px;
     font-weight: 500;
@@ -20864,6 +20865,10 @@ button.stat-card {
         max-height: none;
     }
 
+    .employees-page .employee-credential-viewer {
+        padding: 14px;
+    }
+
     .employees-page .employee-details-header,
     .employees-page .employee-details-content {
         padding-left: 18px;
@@ -20889,10 +20894,6 @@ button.stat-card {
 }
 
 @media (max-width: 560px) {
-    .employees-page .employee-credential-viewer {
-        padding: 14px;
-    }
-
     .employees-page .employee-credential-viewer-panel {
         max-height: calc(100vh - 28px);
     }
