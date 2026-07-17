@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Info, Plus, Search, UserPlus, X } from 'lucide-react';
+import { Info, Maximize2, Plus, Search, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -189,7 +189,7 @@ async function loadEmployeeCredentialImage(userId, credential) {
     }
 }
 
-function EmployeeCredentialImage({ credential, title }) {
+function EmployeeCredentialImage({ credential, title, onOpen }) {
     const [imageFailed, setImageFailed] = useState(false);
 
     useEffect(() => {
@@ -209,10 +209,15 @@ function EmployeeCredentialImage({ credential, title }) {
     }
 
     return (
-        <a href={credential.frontImageUrl} target="_blank" rel="noreferrer" className="employee-details-credential-image">
+        <button
+            type="button"
+            className="employee-details-credential-image"
+            onClick={() => onOpen?.({ url: credential.frontImageUrl, title })}
+            aria-label={`Enlarge front of ${title}`}
+        >
             <img src={credential.frontImageUrl} alt={`Front of ${title}`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} />
-            <span>View image</span>
-        </a>
+            <span><Maximize2 size={11} aria-hidden="true" /> Enlarge</span>
+        </button>
     );
 }
 
@@ -273,6 +278,17 @@ function EmployeeProfileSections({ profile, readOnly = false }) {
 }
 
 function EmployeeCredentialsSection({ credentials, loading = false, error = '', readOnly = false }) {
+    const [expandedImage, setExpandedImage] = useState(null);
+
+    useEffect(() => {
+        if (!expandedImage) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') setExpandedImage(null);
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [expandedImage]);
+
     return (
         <section className="employee-details-section employee-details-credentials-section">
             <h3>
@@ -298,10 +314,30 @@ function EmployeeCredentialsSection({ credentials, loading = false, error = '', 
                                     {config.showIssueDate ? <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span> : null}
                                     {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
                                 </div>
-                                <EmployeeCredentialImage credential={credential} title={config.title} />
+                                <EmployeeCredentialImage credential={credential} title={config.title} onOpen={setExpandedImage} />
                             </article>
                         );
                     })}
+                </div>
+            ) : null}
+
+            {expandedImage ? (
+                <div className="employee-credential-viewer" role="presentation">
+                    <button
+                        type="button"
+                        className="employee-credential-viewer-backdrop"
+                        aria-label="Close enlarged licence image"
+                        onClick={() => setExpandedImage(null)}
+                    />
+                    <div className="employee-credential-viewer-panel" role="dialog" aria-modal="true" aria-label={`${expandedImage.title} image`}>
+                        <div className="employee-credential-viewer-head">
+                            <strong>{expandedImage.title}</strong>
+                            <button type="button" onClick={() => setExpandedImage(null)} aria-label="Close enlarged licence image">
+                                <X size={17} aria-hidden="true" />
+                            </button>
+                        </div>
+                        <img src={expandedImage.url} alt={`Front of ${expandedImage.title}`} decoding="async" />
+                    </div>
                 </div>
             ) : null}
         </section>
@@ -515,7 +551,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         }
 
         const closeOnEscape = (event) => {
-            if (event.key === 'Escape') {
+            if (event.key === 'Escape' && !document.querySelector('.employee-credential-viewer')) {
                 setSelectedInfoEntry(null);
                 setShowModal(false);
                 setShowAppUserModal(false);
