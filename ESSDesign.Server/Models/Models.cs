@@ -554,6 +554,19 @@ namespace ESSDesign.Server.Models
         public string? UserId { get; set; }
     }
 
+    public class EnsureSiteRegistryProjectFolderRequest
+    {
+        public Guid? BuilderFolderId { get; set; }
+        public string BuilderName { get; set; } = string.Empty;
+        public string ProjectName { get; set; } = string.Empty;
+    }
+
+    public class EnsureSiteRegistryProjectFolderResponse
+    {
+        public DesignFolderOption BuilderFolder { get; set; } = new();
+        public DesignFolderOption ProjectFolder { get; set; } = new();
+    }
+
     public class RenameFolderRequest
     {
         public string NewName { get; set; } = string.Empty;

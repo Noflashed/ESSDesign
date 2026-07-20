@@ -885,6 +885,15 @@ async function createDesignFolderOption(name, parent = null) {
     return buildDesignFolderOption(response.data, parent);
 }
 
+async function ensureSiteRegistryProjectFolder(builder, project) {
+    const response = await apiClient.post('/folders/site-registry-project-folder', {
+        builderFolderId: builder?.designFolderId || null,
+        builderName: builder?.name || '',
+        projectName: project?.name || ''
+    });
+    return response.data;
+}
+
 const sanitizeStorageFileName = (value, fallback = 'logo') => {
     const clean = String(value || '')
         .trim()
@@ -1396,6 +1405,37 @@ export const safetyProjectsAPI = {
         doc.updatedAt = timestamp;
         await saveSafetyProjectsDocument(doc);
         return resolveDrawingRegisterEntries(doc);
+    }),
+
+    provisionProjectDesignFolder: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
+        await ensureSafetyBucketAccess();
+        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        const doc = parseSafetyProjects(json);
+        const builder = doc.builders.find(item => item.id === builderId);
+        const project = builder?.projects.find(item => item.id === projectId);
+        if (!builder || !project) {
+            throw new Error('The saved project could not be found for ESS Design folder creation');
+        }
+
+        const ensured = await ensureSiteRegistryProjectFolder(builder, project);
+        const builderFolder = ensured?.builderFolder;
+        const projectFolder = ensured?.projectFolder;
+        if (!builderFolder?.id || !projectFolder?.id) {
+            throw new Error('ESS Design did not return the created project folder');
+        }
+
+        const timestamp = nowIso();
+        Object.assign(builder, folderLinkPayload(builderFolder));
+        Object.assign(project, folderLinkPayload(projectFolder));
+        builder.updatedAt = timestamp;
+        project.updatedAt = timestamp;
+        doc.updatedAt = timestamp;
+        await saveSafetyProjectsDocument(doc);
+
+        return {
+            builders: cloneSafetyBuilders(doc.builders, { includeArchived: true }),
+            folders: [builderFolder, projectFolder]
+        };
     }),
 
     autoLinkDesignFolders: async (designFolders = [], { createMissing = false, createMissingBuilderId = '', createMissingProjectId = '' } = {}) => withSafetyProjectsWriteLock(async () => {

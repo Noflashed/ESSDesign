@@ -169,6 +169,7 @@ namespace ESSDesign.Server.Services
         private static readonly ConcurrentDictionary<string, (string Value, DateTime Expiry)> _userNameCache = new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, (string Url, DateTimeOffset ExpiresAt)> _signedUrlCache = new(StringComparer.Ordinal);
         private static readonly SemaphoreSlim _signedUrlLock = new(1, 1);
+        private static readonly SemaphoreSlim _siteRegistryFolderLock = new(1, 1);
         private static readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(5);
 
         // Root folders cache
@@ -1633,6 +1634,78 @@ namespace ESSDesign.Server.Services
                 })
                 .OrderBy(option => option.Path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        public async Task<EnsureSiteRegistryProjectFolderResponse> EnsureSiteRegistryProjectFolderAsync(
+            Guid? builderFolderId,
+            string builderName,
+            string projectName,
+            string userId)
+        {
+            var cleanBuilderName = builderName.Trim().ToUpperInvariant();
+            var cleanProjectName = projectName.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(cleanBuilderName) || string.IsNullOrWhiteSpace(cleanProjectName))
+            {
+                throw new ArgumentException("Builder and project names are required.");
+            }
+
+            await _siteRegistryFolderLock.WaitAsync();
+            try
+            {
+                var options = await GetDesignFolderOptionsAsync();
+                var builderFolder = builderFolderId.HasValue
+                    ? options.FirstOrDefault(folder => folder.Id == builderFolderId.Value && folder.Depth == 1)
+                    : null;
+                builderFolder ??= options.FirstOrDefault(folder =>
+                    folder.Depth == 1 &&
+                    string.Equals(folder.Name.Trim(), cleanBuilderName, StringComparison.OrdinalIgnoreCase));
+
+                if (builderFolder == null)
+                {
+                    var createdBuilder = await CreateFolderAsync(cleanBuilderName, null, userId);
+                    builderFolder = new DesignFolderOption
+                    {
+                        Id = createdBuilder.Id,
+                        Name = createdBuilder.Name,
+                        ParentFolderId = null,
+                        Path = createdBuilder.Name,
+                        Depth = 1,
+                        BuilderName = createdBuilder.Name,
+                        UpdatedAt = createdBuilder.UpdatedAt
+                    };
+                }
+
+                var projectFolder = options.FirstOrDefault(folder =>
+                    folder.Depth == 2 &&
+                    folder.ParentFolderId == builderFolder.Id &&
+                    string.Equals(folder.Name.Trim(), cleanProjectName, StringComparison.OrdinalIgnoreCase));
+
+                if (projectFolder == null)
+                {
+                    var createdProject = await CreateFolderAsync(cleanProjectName, builderFolder.Id, userId);
+                    projectFolder = new DesignFolderOption
+                    {
+                        Id = createdProject.Id,
+                        Name = createdProject.Name,
+                        ParentFolderId = builderFolder.Id,
+                        Path = $"{builderFolder.Path} / {createdProject.Name}",
+                        Depth = 2,
+                        BuilderName = builderFolder.Name,
+                        ProjectName = createdProject.Name,
+                        UpdatedAt = createdProject.UpdatedAt
+                    };
+                }
+
+                return new EnsureSiteRegistryProjectFolderResponse
+                {
+                    BuilderFolder = builderFolder,
+                    ProjectFolder = projectFolder
+                };
+            }
+            finally
+            {
+                _siteRegistryFolderLock.Release();
+            }
         }
 
         public async Task<FolderHierarchy> GetFolderHierarchyAsync(Guid folderId)

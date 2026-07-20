@@ -811,18 +811,6 @@ export default function SiteInformationPage() {
                     .find(project => project.name.trim().toLowerCase() === projectForm.projectName.trim().toLowerCase())
                     ?.id
                 || '';
-            if (designFolders.length || savedProjectId) {
-                try {
-                    nextBuilders = await safetyProjectsAPI.autoLinkDesignFolders(designFolders, {
-                        createMissing: !projectForm.editingProjectId,
-                        createMissingProjectId: !projectForm.editingProjectId ? savedProjectId : ''
-                    });
-                    const nextOptions = await foldersAPI.getDesignFolderOptions();
-                    setDesignFolders(Array.isArray(nextOptions) ? nextOptions : []);
-                } catch (folderError) {
-                    setError(`Project saved, but its ESS Design folder could not be created: ${folderError.message || 'Unknown folder error'}`);
-                }
-            }
             setBuilders(nextBuilders);
             const savedBuilder = nextBuilders.find(builder => builder.id === projectForm.builderId);
             const savedProject = savedBuilder?.projects.find(project => project.id === savedProjectId);
@@ -830,6 +818,26 @@ export default function SiteInformationPage() {
                 setSelectedInfoProject({ ...savedProject, builder: savedBuilder });
             }
             closeProjectModal();
+
+            if (!projectDesignFolder.designFolderId && savedProjectId) {
+                safetyProjectsAPI.provisionProjectDesignFolder(projectForm.builderId, savedProjectId)
+                    .then(({ builders: linkedBuilders, folders: provisionedFolders }) => {
+                        setBuilders(linkedBuilders);
+                        setDesignFolders(currentFolders => {
+                            const byId = new Map(currentFolders.map(folder => [folder.id, folder]));
+                            provisionedFolders.forEach(folder => byId.set(folder.id, folder));
+                            return Array.from(byId.values()).sort((left, right) => designFolderLabel(left).localeCompare(designFolderLabel(right)));
+                        });
+                        const linkedBuilder = linkedBuilders.find(builder => builder.id === projectForm.builderId);
+                        const linkedProject = linkedBuilder?.projects.find(project => project.id === savedProjectId);
+                        if (linkedBuilder && linkedProject) {
+                            setSelectedInfoProject({ ...linkedProject, builder: linkedBuilder });
+                        }
+                    })
+                    .catch(folderError => {
+                        setError(`Project saved, but its ESS Design folder could not be created: ${folderError.message || 'Unknown folder error'}`);
+                    });
+            }
         } catch (err) {
             setError(err.message || 'Could not save project');
         } finally {

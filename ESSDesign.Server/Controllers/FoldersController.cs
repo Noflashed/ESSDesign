@@ -150,6 +150,37 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("site-registry-project-folder")]
+        public async Task<ActionResult<EnsureSiteRegistryProjectFolderResponse>> EnsureSiteRegistryProjectFolder(
+            [FromBody] EnsureSiteRegistryProjectFolderRequest request)
+        {
+            try
+            {
+                var accessResult = await RequireSiteRegistryFolderManagerAsync();
+                if (accessResult.Error != null)
+                {
+                    return accessResult.Error;
+                }
+
+                if (string.IsNullOrWhiteSpace(request.BuilderName) || string.IsNullOrWhiteSpace(request.ProjectName))
+                {
+                    return BadRequest(new { error = "Builder and project names are required" });
+                }
+
+                var response = await _supabaseService.EnsureSiteRegistryProjectFolderAsync(
+                    request.BuilderFolderId,
+                    request.BuilderName,
+                    request.ProjectName,
+                    accessResult.User!.Id);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring Site Registry project folder");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPut("{folderId}/rename")]
         public async Task<ActionResult> RenameFolder(Guid folderId, [FromBody] RenameFolderRequest request)
         {
@@ -1354,6 +1385,29 @@ namespace ESSDesign.Server.Controllers
             if (!canManageDesign)
             {
                 return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Design manager access required" }));
+            }
+
+            return (currentUser, null);
+        }
+
+        private async Task<(UserInfo? User, ActionResult? Error)> RequireSiteRegistryFolderManagerAsync()
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return (null, Unauthorized(new { error = "Not authenticated" }));
+            }
+
+            var canManageSiteRegistry =
+                string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.Viewer, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.ProjectManager, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.SiteSupervisor, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.ScaffoldDesigner, StringComparison.OrdinalIgnoreCase);
+
+            if (!canManageSiteRegistry)
+            {
+                return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Site Registry management access required" }));
             }
 
             return (currentUser, null);
