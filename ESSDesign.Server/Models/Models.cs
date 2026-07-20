@@ -308,6 +308,20 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
+        public string? PreferredName { get; set; }
+        public string PhoneNumber { get; set; } = string.Empty;
+        public DateTime? DateOfBirth { get; set; }
+        public string Gender { get; set; } = string.Empty;
+        public string AddressStreet { get; set; } = string.Empty;
+        public string AddressCity { get; set; } = string.Empty;
+        public string AddressState { get; set; } = string.Empty;
+        public string AddressPostalCode { get; set; } = string.Empty;
+        public string AddressCountry { get; set; } = "Australia";
+        public string EmergencyContactName { get; set; } = string.Empty;
+        public string EmergencyRelationship { get; set; } = string.Empty;
+        public string EmergencyPhoneNumber { get; set; } = string.Empty;
+        public string? EmergencyEmail { get; set; }
+        public string? EmergencyAddress { get; set; }
         public Guid? EmployeeId { get; set; }
     }
 
@@ -342,6 +356,7 @@ namespace ESSDesign.Server.Models
         public string Email { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
+        public string Role { get; set; } = AppRoles.GeneralScaffolder;
     }
 
     public class LinkEmployeeRequest

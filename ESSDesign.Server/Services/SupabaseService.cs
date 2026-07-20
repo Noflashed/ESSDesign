@@ -25,6 +25,7 @@ namespace ESSDesign.Server.Services
             public Guid? LinkedAuthUserId { get; set; }
             public DateTime? InviteSentAt { get; set; }
             public DateTime? VerifiedAt { get; set; }
+            public string? InvitedRole { get; set; }
         }
 
         private sealed class EmployeeRoleRow
@@ -35,6 +36,7 @@ namespace ESSDesign.Server.Services
             public string? LastName { get; set; }
             public string? PhoneNumber { get; set; }
             public bool LeadingHand { get; set; }
+            public string? InvitedRole { get; set; }
             public Guid? LinkedAuthUserId { get; set; }
             public DateTime? VerifiedAt { get; set; }
         }
@@ -122,6 +124,7 @@ namespace ESSDesign.Server.Services
             public Guid? LinkedAuthUserId { get; set; }
             public DateTime? InviteSentAt { get; set; }
             public DateTime? VerifiedAt { get; set; }
+            public string InvitedRole { get; set; } = AppRoles.GeneralScaffolder;
         }
 
         private readonly Supabase.Client _supabase;
@@ -574,6 +577,54 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task UpsertSignUpProfileAsync(string userId, SignUpRequest request)
+        {
+            if (!Guid.TryParse(userId, out var userGuid))
+            {
+                throw new ArgumentException("Invalid user ID", nameof(userId));
+            }
+
+            var addressParts = new[]
+            {
+                CleanOptional(request.AddressStreet),
+                CleanOptional(request.AddressCity),
+                CleanOptional(request.AddressState),
+                CleanOptional(request.AddressPostalCode),
+                CleanOptional(request.AddressCountry)
+            }.Where(value => !string.IsNullOrWhiteSpace(value));
+
+            var payload = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = userGuid,
+                    ["email"] = CleanEmail(request.Email),
+                    ["full_name"] = CleanOptional(request.FullName),
+                    ["preferred_name"] = CleanOptional(request.PreferredName),
+                    ["phone_number"] = CleanOptional(request.PhoneNumber),
+                    ["date_of_birth"] = request.DateOfBirth?.Date,
+                    ["gender"] = CleanOptional(request.Gender),
+                    ["personal_address"] = string.Join(", ", addressParts),
+                    ["address_street"] = CleanOptional(request.AddressStreet),
+                    ["address_city"] = CleanOptional(request.AddressCity),
+                    ["address_state"] = CleanOptional(request.AddressState),
+                    ["address_postal_code"] = CleanOptional(request.AddressPostalCode),
+                    ["address_country"] = CleanOptional(request.AddressCountry),
+                    ["emergency_contact_name"] = CleanOptional(request.EmergencyContactName),
+                    ["emergency_relationship"] = CleanOptional(request.EmergencyRelationship),
+                    ["emergency_phone_number"] = CleanOptional(request.EmergencyPhoneNumber),
+                    ["emergency_email"] = CleanEmail(request.EmergencyEmail),
+                    ["emergency_address"] = CleanOptional(request.EmergencyAddress),
+                    ["updated_at"] = DateTime.UtcNow
+                }
+            };
+
+            await PostRestRowsAsync<object>(
+                "user_names?on_conflict=id",
+                payload,
+                "resolution=merge-duplicates");
+        }
+
         private const string UserProfileSelect =
             "id,email,fullName:full_name,phoneNumber:phone_number,preferredName:preferred_name,dateOfBirth:date_of_birth,gender,personalAddress:personal_address,addressStreet:address_street,addressCity:address_city,addressState:address_state,addressPostalCode:address_postal_code,addressCountry:address_country,emergencyContactName:emergency_contact_name,emergencyRelationship:emergency_relationship,emergencyPhoneNumber:emergency_phone_number,emergencyEmail:emergency_email,emergencyAddress:emergency_address";
 
@@ -644,6 +695,17 @@ namespace ESSDesign.Server.Services
         {
             var normalized = role?.Trim().ToLowerInvariant() ?? "";
             return AppRoles.All.Contains(normalized) ? normalized : AppRoles.Viewer;
+        }
+
+        private static string ResolveEmployeeInvitedRole(string? role, bool leadingHand = false)
+        {
+            var normalized = role?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (AppRoles.All.Contains(normalized) && !normalized.StartsWith("truck_", StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized;
+            }
+
+            return leadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
         }
 
         private static string GetBootstrapRole(string normalizedUserId)
@@ -738,6 +800,14 @@ namespace ESSDesign.Server.Services
             if (existing != null)
             {
                 var storedRole = NormalizeRole(existing.Role);
+                var requestedRole = string.IsNullOrWhiteSpace(desiredRole) ? null : NormalizeRole(desiredRole);
+                if (storedRole == AppRoles.Viewer && requestedRole != null && requestedRole != AppRoles.Viewer)
+                {
+                    existing.Role = requestedRole;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await _supabase.From<UserRoleRecord>().Upsert(existing);
+                    return requestedRole;
+                }
                 if (storedRole != AppRoles.Viewer)
                 {
                     return storedRole;
@@ -805,9 +875,7 @@ namespace ESSDesign.Server.Services
                 return AppRoles.Viewer;
             }
 
-            return employee.LeadingHand
-                ? AppRoles.LeadingHand
-                : AppRoles.GeneralScaffolder;
+            return ResolveEmployeeInvitedRole(employee.InvitedRole, employee.LeadingHand);
         }
 
         private async Task<EmployeeRoleRow?> GetLinkedEmployeeRoleInfoAsync(string? userId, string? email)
@@ -815,7 +883,7 @@ namespace ESSDesign.Server.Services
             if (TryNormalizeUserId(userId, out var normalizedUserId))
             {
                 var linkedRows = await GetRestRowsAsync<EmployeeRoleRow>(
-                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&linked_auth_user_id=eq.{normalizedUserId}&limit=1");
+                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,invitedRole:invited_role,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&linked_auth_user_id=eq.{normalizedUserId}&limit=1");
 
                 var linkedEmployee = linkedRows.FirstOrDefault();
                 if (linkedEmployee != null)
@@ -831,7 +899,7 @@ namespace ESSDesign.Server.Services
             }
 
             var emailRows = await GetRestRowsAsync<EmployeeRoleRow>(
-                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&email=eq.{Uri.EscapeDataString(normalizedEmail)}&limit=1");
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,invitedRole:invited_role,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}&email=eq.{Uri.EscapeDataString(normalizedEmail)}&limit=1");
 
             return emailRows.FirstOrDefault();
         }
@@ -861,7 +929,7 @@ namespace ESSDesign.Server.Services
 
             if (!isExplicitRole)
             {
-                user.Role = employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
+                user.Role = ResolveEmployeeInvitedRole(employee.InvitedRole, employee.LeadingHand);
             }
 
             user.EmployeeTitle = GetRoleDisplayName(user.Role);
@@ -871,7 +939,7 @@ namespace ESSDesign.Server.Services
         private async Task<List<EmployeeRoleRow>> GetEmployeeRoleRowsAsync()
         {
             return await GetRestRowsAsync<EmployeeRoleRow>(
-                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}");
+                $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,phoneNumber:phone_number,leadingHand:leading_hand,invitedRole:invited_role,linkedAuthUserId:linked_auth_user_id,verifiedAt:verified_at")}");
         }
 
         private static (Dictionary<string, EmployeeRoleRow> ByLinkedUserId, Dictionary<string, EmployeeRoleRow> ByEmail) BuildEmployeeRoleLookup(IEnumerable<EmployeeRoleRow> employees)
@@ -933,7 +1001,7 @@ namespace ESSDesign.Server.Services
 
             if (employee != null)
             {
-                return employee.LeadingHand ? AppRoles.LeadingHand : AppRoles.GeneralScaffolder;
+                return ResolveEmployeeInvitedRole(employee.InvitedRole, employee.LeadingHand);
             }
 
             return roles.TryGetValue(normalizedUserId, out var fallbackRole)
@@ -3107,7 +3175,7 @@ namespace ESSDesign.Server.Services
             try
             {
                 var rows = await GetRestRowsAsync<EmployeeAuthRow>(
-                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,linkedAuthUserId:linked_auth_user_id,inviteSentAt:invite_sent_at,verifiedAt:verified_at")}&id=eq.{employeeId:D}&limit=1");
+                    $"ess_rostering_employees?select={Uri.EscapeDataString("id,email,firstName:first_name,lastName:last_name,invitedRole:invited_role,linkedAuthUserId:linked_auth_user_id,inviteSentAt:invite_sent_at,verifiedAt:verified_at")}&id=eq.{employeeId:D}&limit=1");
 
                 var row = rows.FirstOrDefault();
                 if (row == null)
@@ -3123,7 +3191,8 @@ namespace ESSDesign.Server.Services
                     LastName = row.LastName?.Trim() ?? string.Empty,
                     LinkedAuthUserId = row.LinkedAuthUserId,
                     InviteSentAt = row.InviteSentAt,
-                    VerifiedAt = row.VerifiedAt
+                    VerifiedAt = row.VerifiedAt,
+                    InvitedRole = ResolveEmployeeInvitedRole(row.InvitedRole)
                 };
             }
             catch (Exception ex)
@@ -3374,8 +3443,14 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        public async Task UpdateEmployeeInviteAsync(Guid employeeId, string email)
+        public async Task UpdateEmployeeInviteAsync(Guid employeeId, string email, string role)
         {
+            var normalizedRole = role?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (!AppRoles.All.Contains(normalizedRole) || normalizedRole.StartsWith("truck_", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Invalid employee role", nameof(role));
+            }
+
             try
             {
                 await PatchRestRowsAsync<object>(
@@ -3383,6 +3458,8 @@ namespace ESSDesign.Server.Services
                     new
                     {
                         email = email.Trim().ToLowerInvariant(),
+                        invited_role = normalizedRole,
+                        leading_hand = normalizedRole == AppRoles.LeadingHand,
                         invite_sent_at = DateTime.UtcNow,
                         updated_at = DateTime.UtcNow
                     });

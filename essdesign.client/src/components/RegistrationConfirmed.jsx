@@ -1,7 +1,6 @@
 import React from 'react';
+import AuthShell from './AuthShell';
 import './Auth.css';
-
-const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function RegistrationConfirmed({
     email = '',
@@ -9,30 +8,24 @@ function RegistrationConfirmed({
     onContinue
 }) {
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="auth-header">
-                    <div className="auth-logo">
-                        <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
-                    </div>
-                    <h2>Account Confirmed</h2>
-                    <p>Your email has been verified successfully.</p>
-                </div>
-
-                <div className="auth-success-panel">
-                    <div className="auth-success-message">
-                        {email ? (
-                            <>The account for <strong>{email}</strong> has been confirmed. You can now access ESS Design.</>
-                        ) : (
-                            <>Your account has been confirmed. You can now access ESS Design.</>
-                        )}
-                    </div>
-                    <button type="button" className="auth-button" onClick={onContinue}>
-                        {isAuthenticated ? 'Continue to ESS Design' : 'Go To Login'}
-                    </button>
-                </div>
+        <AuthShell
+            eyebrow="Verification complete"
+            title="Your account is ready"
+            description="Your email and employee access have been verified successfully."
+            size="compact"
+        >
+            <div className="auth-status-card auth-status-success">
+                <span className="auth-status-icon" aria-hidden="true">✓</span>
+                <h3>Welcome to ESS Design</h3>
+                <p>
+                    {email ? <>The account for <strong>{email}</strong> is active.</> : <>Your account is active.</>}
+                    {' '}Your assigned access will be available when you continue.
+                </p>
             </div>
-        </div>
+            <button type="button" className="auth-primary-button" onClick={onContinue}>
+                {isAuthenticated ? 'Continue to ESS Design' : 'Go to sign in'}
+            </button>
+        </AuthShell>
     );
 }
 

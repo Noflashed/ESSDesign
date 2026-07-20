@@ -1,34 +1,30 @@
 import React from 'react';
+import AuthShell from './AuthShell';
 import './Auth.css';
-
-const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
 
 function RegistrationSuccess({ email = '', onContinueToLogin }) {
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="auth-header">
-                    <div className="auth-logo">
-                        <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="auth-logo-image" />
-                    </div>
-                    <h2>Check Your Email</h2>
-                    <p>Your registration was successful.</p>
-                </div>
-
-                <div className="auth-success-panel">
-                    <div className="auth-success-message">
-                        {email ? (
-                            <>Your account has been created for <strong>{email}</strong>. We&apos;ve sent a confirmation email. Open that link to activate your account, then sign in.</>
-                        ) : (
-                            <>Your account has been created successfully. We&apos;ve sent a confirmation email. Open that link to activate your account, then sign in.</>
-                        )}
-                    </div>
-                    <button type="button" className="auth-button" onClick={onContinueToLogin}>
-                        Go To Login
-                    </button>
-                </div>
+        <AuthShell
+            eyebrow="Profile submitted"
+            title="Check your inbox"
+            description="Your employee profile is saved. One final step is required to activate access."
+            size="compact"
+        >
+            <div className="auth-status-card">
+                <span className="auth-status-icon" aria-hidden="true">✉</span>
+                <h3>Confirmation email sent</h3>
+                <p>
+                    Open the secure link sent to {email ? <strong>{email}</strong> : 'your email address'}.
+                    The link will verify your identity and activate your ESS Design account.
+                </p>
+                <ol className="auth-next-steps">
+                    <li><span>1</span> Open the email from ESS Design</li>
+                    <li><span>2</span> Select “Confirm account”</li>
+                    <li><span>3</span> Return here and sign in</li>
+                </ol>
             </div>
-        </div>
+            <button type="button" className="auth-primary-button" onClick={onContinueToLogin}>Return to sign in</button>
+        </AuthShell>
     );
 }
 

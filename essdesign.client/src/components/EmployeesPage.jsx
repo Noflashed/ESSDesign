@@ -623,7 +623,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             const linkedAppUser = emp.linkedAuthUserId ? (appUserById[emp.linkedAuthUserId] ?? null) : null;
             const appUser = linkedAppUser ?? appUserByEmail[emailKey] ?? null;
             if (appUser) linkedUserIds.add(appUser.id);
-            const effectiveRole = appUser?.role || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder');
+            const effectiveRole = appUser?.role || emp.invitedRole || (emp.leadingHand ? 'leading_hand' : 'general_scaffolder');
             const appUserAvatars = getAvatarCandidates(appUser);
             const linkedProfileImageUrl = profileImageUrls[appUser?.id] || profileImageUrls[emp.linkedAuthUserId] || '';
             const storageAvatars = linkedProfileImageUrl ? [linkedProfileImageUrl] : [];
@@ -857,7 +857,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     employeeId: savedEmployee.id,
                     email: normalizedEmail,
                     firstName: form.firstName.trim(),
-                    lastName: form.lastName.trim()
+                    lastName: form.lastName.trim(),
+                    role: form.selectedRole
                 });
 
                 const refreshedEmployees = await rosteringAPI.getEmployees();
@@ -980,7 +981,8 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 employeeId: form.id,
                 email: form.email.trim(),
                 firstName: form.firstName.trim(),
-                lastName: form.lastName.trim()
+                lastName: form.lastName.trim(),
+                role: form.selectedRole
             });
             const nextEmployees = await rosteringAPI.getEmployees();
             setEmployees(nextEmployees);

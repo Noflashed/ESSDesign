@@ -815,6 +815,8 @@ function App() {
             setLinkingEmployee(true);
             try {
                 await authAPI.linkEmployee(inviteEmployeeId);
+                const refreshedUser = await authAPI.refreshCurrentUser();
+                setUser(refreshedUser);
             } catch (error) {
                 console.error('Error linking employee account:', error);
             } finally {

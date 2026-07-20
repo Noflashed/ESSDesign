@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { authAPI } from '../services/api';
+import AuthShell from './AuthShell';
 import './Auth.css';
-
-const LOGO_URL = '/logo.png';
-const LOGIN_IMAGE_URL = '/login-scaffold.png';
 
 function Login({ onLoginSuccess }) {
     const [formData, setFormData] = useState({
@@ -37,57 +35,52 @@ function Login({ onLoginSuccess }) {
     };
 
     return (
-        <div className="auth-container login-auth-container">
-            <div className="auth-card login-auth-shell">
-                <section className="login-auth-left">
-                    <div className="login-auth-panel">
-                        <div className="auth-header login-auth-header">
-                            <div className="login-auth-logo">
-                                <img src={LOGO_URL} alt="ErectSafe Scaffolding" />
-                            </div>
-                            <h2>Login to your account</h2>
-                            <p>Enter your email below to login to your account</p>
-                        </div>
+        <AuthShell
+            eyebrow="Welcome back"
+            title="Sign in to ESS Design"
+            description="Use your work email or assigned device ID to continue."
+            size="compact"
+            footer={<>Need access? Contact your ESS Design administrator for an invitation.</>}
+        >
+            <form onSubmit={handleSubmit} className="auth-form">
+                <div className="auth-field">
+                    <label htmlFor="login-identifier">Email or device ID</label>
+                    <input
+                        id="login-identifier"
+                        type="text"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        placeholder="name@erectsafe.com.au"
+                        autoComplete="username"
+                        required
+                        autoFocus
+                    />
+                </div>
 
-                        <form onSubmit={handleSubmit} className="auth-form login-auth-form">
-                            <div className="form-field login-auth-field">
-                                <label>Email</label>
-                                <input
-                                    type="text"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    placeholder="email@example.com"
-                                    required
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="form-field login-auth-field">
-                                <label>Password</label>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    required
-                                />
-                            </div>
-
-                            {error && <div className="error-message login-auth-error">{error}</div>}
-
-                            <button type="submit" className="auth-button login-auth-submit" disabled={loading}>
-                                {loading ? 'Signing in...' : 'Login'}
-                            </button>
-                        </form>
+                <div className="auth-field">
+                    <div className="auth-label-row">
+                        <label htmlFor="login-password">Password</label>
+                        <span>Case sensitive</span>
                     </div>
-                </section>
+                    <input
+                        id="login-password"
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        autoComplete="current-password"
+                        required
+                    />
+                </div>
 
-                <section className="login-auth-visual" aria-label="Scaffold project image">
-                    <img src={LOGIN_IMAGE_URL} alt="Scaffold structure" />
-                </section>
-            </div>
-        </div>
+                {error && <div className="auth-alert auth-alert-error" role="alert">{error}</div>}
+
+                <button type="submit" className="auth-primary-button" disabled={loading}>
+                    {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+            </form>
+        </AuthShell>
     );
 }
 

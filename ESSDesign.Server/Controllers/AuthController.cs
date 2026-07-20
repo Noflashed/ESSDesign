@@ -37,12 +37,36 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
+                var validationError = ValidateSignUpRequest(request);
+                if (validationError != null)
+                {
+                    return BadRequest(new { error = validationError });
+                }
+
                 var serviceRoleKey = _configuration["Supabase:ServiceRoleKey"];
                 if (string.IsNullOrWhiteSpace(serviceRoleKey))
                 {
                     _logger.LogError("Signup error: Supabase service role key is not configured");
                     return StatusCode(500, new { error = "Signup is not configured correctly." });
                 }
+
+                SupabaseService.EmployeeAuthLinkInfo? invitedEmployee = null;
+                if (request.EmployeeId.HasValue)
+                {
+                    invitedEmployee = await _supabaseService.GetEmployeeAuthLinkInfoAsync(request.EmployeeId.Value);
+                    if (invitedEmployee == null)
+                    {
+                        return BadRequest(new { error = "This employee invitation is no longer valid." });
+                    }
+
+                    if (!string.Equals(invitedEmployee.Email, request.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return BadRequest(new { error = "The registration email does not match this employee invitation." });
+                    }
+                }
+
+                request.Email = request.Email.Trim().ToLowerInvariant();
+                request.FullName = request.FullName.Trim();
 
                 var frontendUrl = (_configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app").TrimEnd('/');
                 var confirmationRedirect = $"{frontendUrl}/?auth=signup-confirmed&email={Uri.EscapeDataString(request.Email)}";
@@ -67,19 +91,13 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Failed to create account" });
                 }
 
-                try
-                {
-                    await _supabaseService.UpsertUserNameAsync(generatedLink.Id, generatedLink.Email ?? request.Email, request.FullName);
-                    await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
-                }
-                catch (Exception nameEx)
-                {
-                    _logger.LogWarning(nameEx, "Failed to initialize user profile records for {UserId}", generatedLink.Id);
-                }
+                await _supabaseService.UpsertSignUpProfileAsync(generatedLink.Id, request);
+
+                var role = await _supabaseService.EnsureUserRoleAsync(
+                    generatedLink.Id,
+                    invitedEmployee?.InvitedRole);
 
                 await _emailService.SendRegistrationConfirmationAsync(request.Email, request.FullName, generatedLink.ActionLink);
-
-                var role = await _supabaseService.EnsureUserRoleAsync(generatedLink.Id);
 
                 var userInfo = BuildUserInfo(generatedLink, request.FullName, role);
                 await _supabaseService.EnrichUserInfoWithProfileAsync(userInfo);
@@ -262,6 +280,12 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Email is required" });
                 }
 
+                var role = request.Role?.Trim().ToLowerInvariant() ?? string.Empty;
+                if (!AppRoles.All.Contains(role) || role.StartsWith("truck_", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "A valid employee role is required" });
+                }
+
                 var currentUser = await GetCurrentUserFromRequestAsync();
                 if (currentUser == null)
                 {
@@ -279,7 +303,7 @@ namespace ESSDesign.Server.Controllers
                     return NotFound(new { error = "Employee not found" });
                 }
 
-                await _supabaseService.UpdateEmployeeInviteAsync(request.EmployeeId, email);
+                await _supabaseService.UpdateEmployeeInviteAsync(request.EmployeeId, email, role);
                 await _emailService.SendEmployeeInviteAsync(
                     email,
                     currentUser.FullName ?? currentUser.Email,
@@ -329,6 +353,7 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 await _supabaseService.LinkEmployeeAuthUserAsync(request.EmployeeId, currentUser.Email, currentUser.Id);
+                await _supabaseService.EnsureUserRoleAsync(currentUser.Id, employee.InvitedRole);
                 return Ok(new { message = "Employee account linked successfully" });
             }
             catch (Exception ex)
@@ -451,6 +476,37 @@ namespace ESSDesign.Server.Controllers
 
             var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
             return await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
+        }
+
+        private static string? ValidateSignUpRequest(SignUpRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@', StringComparison.Ordinal))
+                return "A valid email address is required.";
+            if (string.IsNullOrWhiteSpace(request.FullName))
+                return "Your full name is required.";
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+                return "Password must be at least 8 characters.";
+            if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+                return "A phone number is required.";
+            if (!request.DateOfBirth.HasValue || request.DateOfBirth.Value.Date >= DateTime.UtcNow.Date)
+                return "A valid date of birth is required.";
+            if (string.IsNullOrWhiteSpace(request.Gender))
+                return "Gender is required.";
+            if (string.IsNullOrWhiteSpace(request.AddressStreet)
+                || string.IsNullOrWhiteSpace(request.AddressCity)
+                || string.IsNullOrWhiteSpace(request.AddressState)
+                || string.IsNullOrWhiteSpace(request.AddressPostalCode)
+                || string.IsNullOrWhiteSpace(request.AddressCountry))
+                return "A complete residential address is required.";
+            if (string.IsNullOrWhiteSpace(request.EmergencyContactName)
+                || string.IsNullOrWhiteSpace(request.EmergencyRelationship)
+                || string.IsNullOrWhiteSpace(request.EmergencyPhoneNumber))
+                return "Emergency contact name, relationship, and phone number are required.";
+            if (!string.IsNullOrWhiteSpace(request.EmergencyEmail)
+                && !request.EmergencyEmail.Contains('@', StringComparison.Ordinal))
+                return "Emergency contact email address is invalid.";
+
+            return null;
         }
 
         private static UserInfo BuildUserInfo(User user, string? fallbackFullName, string role)

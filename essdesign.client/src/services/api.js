@@ -284,8 +284,8 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-    signUp: async (email, password, fullName, employeeId = null) => {
-        const response = await apiClient.post('/auth/signup', { email, password, fullName, employeeId });
+    signUp: async (profile) => {
+        const response = await apiClient.post('/auth/signup', profile);
         const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data.user);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         return { ...response.data, user: hydratedUser };
@@ -370,8 +370,8 @@ export const authAPI = {
         return response.data;
     },
 
-    inviteEmployee: async ({ employeeId, email, firstName, lastName }) => {
-        const response = await apiClient.post('/auth/invite-employee', { employeeId, email, firstName, lastName });
+    inviteEmployee: async ({ employeeId, email, firstName, lastName, role }) => {
+        const response = await apiClient.post('/auth/invite-employee', { employeeId, email, firstName, lastName, role });
         return response.data;
     },
 
@@ -1322,6 +1322,7 @@ function mapEmployeeRow(row) {
         phoneNumber: row.phone_number || '',
         email: row.email || '',
         leadingHand: Boolean(row.leading_hand),
+        invitedRole: row.invited_role || (row.leading_hand ? 'leading_hand' : 'general_scaffolder'),
         linkedAuthUserId: row.linked_auth_user_id || null,
         inviteSentAt: row.invite_sent_at || null,
         verifiedAt: row.verified_at || null,
@@ -4114,7 +4115,7 @@ export const rosteringAPI = {
         return rows.map(mapEmployeeRow);
     },
 
-    saveEmployee: async ({ id, firstName, lastName, phoneNumber, email, preferredSiteIds, leadingHand, linkedAuthUserId, verifiedAt, inviteSentAt, currentEmail }) => {
+    saveEmployee: async ({ id, firstName, lastName, phoneNumber, email, preferredSiteIds, leadingHand, selectedRole, invitedRole, linkedAuthUserId, verifiedAt, inviteSentAt, currentEmail }) => {
         const cleanPreferred = preferredSiteIds.filter(Boolean).slice(0, 3);
         const cleanEmail = (email || '').trim().toLowerCase();
         const preservedLink = cleanEmail && cleanEmail === (currentEmail || '').trim().toLowerCase();
@@ -4124,6 +4125,7 @@ export const rosteringAPI = {
             phone_number: phoneNumber.trim() || null,
             email: cleanEmail || null,
             leading_hand: Boolean(leadingHand),
+            invited_role: selectedRole || invitedRole || (leadingHand ? 'leading_hand' : 'general_scaffolder'),
             preferred_site_1: cleanPreferred[0] || null,
             preferred_site_2: cleanPreferred[1] || null,
             preferred_site_3: cleanPreferred[2] || null,
