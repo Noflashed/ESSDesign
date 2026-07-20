@@ -1409,12 +1409,24 @@ export const safetyProjectsAPI = {
 
     provisionProjectDesignFolder: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
         await ensureSafetyBucketAccess();
-        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        const doc = parseSafetyProjects(json);
-        const builder = doc.builders.find(item => item.id === builderId);
-        const project = builder?.projects.find(item => item.id === projectId);
+        let json = await readStorageJson(SAFETY_PROJECTS_PATH, { ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+        let doc = parseSafetyProjects(json);
+        let builder = doc.builders.find(item => item.id === builderId);
+        let project = builder?.projects.find(item => item.id === projectId);
+
+        for (const delayMs of [250, 750, 1500]) {
+            if (builder && project) {
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
+            doc = parseSafetyProjects(json);
+            builder = doc.builders.find(item => item.id === builderId);
+            project = builder?.projects.find(item => item.id === projectId);
+        }
+
         if (!builder || !project) {
-            throw new Error('The saved project could not be found for ESS Design folder creation');
+            throw new Error('The saved project did not become available for ESS Design folder creation');
         }
 
         const ensured = await ensureSiteRegistryProjectFolder(builder, project);
