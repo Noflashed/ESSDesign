@@ -7,10 +7,189 @@ const STEPS = [
     { key: 'personal', label: 'Personal' },
     { key: 'address', label: 'Address' },
     { key: 'emergency', label: 'Emergency' },
+    { key: 'documents', label: 'Documents' },
     { key: 'security', label: 'Account' }
 ];
 
 const AUSTRALIAN_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
+const DRIVER_LICENCE_CLASSES = [
+    { value: 'C', label: 'C (Car)' },
+    { value: 'R', label: 'R (Rider)' },
+    { value: 'LR', label: 'LR (Light Rigid)' },
+    { value: 'MR', label: 'MR (Medium Rigid)' },
+    { value: 'HR', label: 'HR (Heavy Rigid)' },
+    { value: 'HC', label: 'HC (Heavy Combination)' },
+    { value: 'MC', label: 'MC (Multi Combination)' }
+];
+
+const CREDENTIAL_CONFIG = [
+    {
+        key: 'whiteCard',
+        title: 'White Card',
+        description: 'General construction induction card',
+        numberLabel: 'White Card number',
+        numberField: 'whiteCardCredentialNumber',
+        stateField: 'whiteCardIssuingState',
+        issueDateField: 'whiteCardIssueDate',
+        fileField: 'whiteCardFrontImage'
+    },
+    {
+        key: 'driverLicence',
+        title: 'Driver Licence',
+        description: 'Australian driver licence details',
+        numberLabel: 'Licence number',
+        numberField: 'driverLicenceCredentialNumber',
+        stateField: 'driverLicenceIssuingState',
+        classesField: 'driverLicenceClasses',
+        classOptions: DRIVER_LICENCE_CLASSES,
+        expiryDateField: 'driverLicenceExpiryDate',
+        fileField: 'driverLicenceFrontImage'
+    },
+    {
+        key: 'highRiskWorkLicence',
+        title: 'High Risk Work Licence',
+        description: 'SafeWork high risk work licence',
+        numberLabel: 'Licence number',
+        numberField: 'highRiskWorkLicenceCredentialNumber',
+        stateField: 'highRiskWorkLicenceIssuingState',
+        classesField: 'highRiskWorkLicenceClasses',
+        issueDateField: 'highRiskWorkLicenceIssueDate',
+        expiryDateField: 'highRiskWorkLicenceExpiryDate',
+        fileField: 'highRiskWorkLicenceFrontImage'
+    }
+];
+
+function ImageUpload({ id, file, onChange, title, description, maxSizeLabel = '10 MB', profile = false }) {
+    const [previewUrl, setPreviewUrl] = useState('');
+
+    useEffect(() => {
+        if (!file) {
+            setPreviewUrl('');
+            return undefined;
+        }
+
+        const nextUrl = URL.createObjectURL(file);
+        setPreviewUrl(nextUrl);
+        return () => URL.revokeObjectURL(nextUrl);
+    }, [file]);
+
+    return (
+        <label className={`auth-upload-zone${file ? ' has-file' : ''}${profile ? ' profile-upload' : ''}`} htmlFor={id}>
+            <input
+                id={id}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                capture={profile ? 'user' : 'environment'}
+                onChange={onChange}
+            />
+            {previewUrl ? (
+                <img src={previewUrl} alt="Selected upload preview" />
+            ) : (
+                <span className="auth-upload-icon" aria-hidden="true">+</span>
+            )}
+            <span className="auth-upload-copy">
+                <strong>{file ? file.name : title}</strong>
+                <small>{file ? 'Select a different image to replace this one.' : `${description} Up to ${maxSizeLabel}.`}</small>
+            </span>
+            <span className="auth-upload-action">{file ? 'Replace' : 'Choose image'}</span>
+        </label>
+    );
+}
+
+function CredentialUploadCard({ config, enabled, values, file, onToggle, onFieldChange, onFileChange }) {
+    return (
+        <article className={`auth-credential-card${enabled ? ' enabled' : ''}`}>
+            <label className="auth-credential-toggle">
+                <span>
+                    <strong>{config.title}</strong>
+                    <small>{config.description}</small>
+                </span>
+                <span className="auth-toggle-control">
+                    <input type="checkbox" checked={enabled} onChange={(event) => onToggle(event.target.checked)} />
+                    <i aria-hidden="true" />
+                    <b>{enabled ? 'Included' : 'Add'}</b>
+                </span>
+            </label>
+
+            {enabled ? (
+                <div className="auth-credential-fields">
+                    <div className="auth-field-grid two-columns">
+                        <div className="auth-field">
+                            <label htmlFor={`${config.key}-number`}>{config.numberLabel} <b>*</b></label>
+                            <input
+                                id={`${config.key}-number`}
+                                value={values[config.numberField]}
+                                onChange={(event) => onFieldChange(config.numberField, event.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="auth-field">
+                            <label htmlFor={`${config.key}-state`}>Issuing state / territory</label>
+                            <select
+                                id={`${config.key}-state`}
+                                value={values[config.stateField]}
+                                onChange={(event) => onFieldChange(config.stateField, event.target.value)}
+                            >
+                                {AUSTRALIAN_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+                            </select>
+                        </div>
+                        {config.classesField ? (
+                            <div className={`auth-field${config.classOptions ? '' : ' full-width'}`}>
+                                <label htmlFor={`${config.key}-classes`}>Licence class{config.classOptions ? '' : '(es)'}</label>
+                                {config.classOptions ? (
+                                    <select
+                                        id={`${config.key}-classes`}
+                                        value={values[config.classesField]}
+                                        onChange={(event) => onFieldChange(config.classesField, event.target.value)}
+                                    >
+                                        <option value="">Select licence class</option>
+                                        {config.classOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                ) : (
+                                    <input
+                                        id={`${config.key}-classes`}
+                                        value={values[config.classesField]}
+                                        onChange={(event) => onFieldChange(config.classesField, event.target.value)}
+                                        placeholder="e.g. SB, SI, DG"
+                                    />
+                                )}
+                            </div>
+                        ) : null}
+                        {config.issueDateField ? (
+                            <div className="auth-field">
+                                <label htmlFor={`${config.key}-issue-date`}>Issue date</label>
+                                <input
+                                    id={`${config.key}-issue-date`}
+                                    type="date"
+                                    value={values[config.issueDateField]}
+                                    onChange={(event) => onFieldChange(config.issueDateField, event.target.value)}
+                                />
+                            </div>
+                        ) : null}
+                        {config.expiryDateField ? (
+                            <div className="auth-field">
+                                <label htmlFor={`${config.key}-expiry-date`}>Expiry date</label>
+                                <input
+                                    id={`${config.key}-expiry-date`}
+                                    type="date"
+                                    value={values[config.expiryDateField]}
+                                    onChange={(event) => onFieldChange(config.expiryDateField, event.target.value)}
+                                />
+                            </div>
+                        ) : null}
+                    </div>
+                    <ImageUpload
+                        id={`${config.key}-front-image`}
+                        file={file}
+                        onChange={onFileChange}
+                        title={`Upload front of ${config.title}`}
+                        description="Take a clear photo or select JPEG, PNG, WebP, HEIC or HEIF."
+                    />
+                </div>
+            ) : null}
+        </article>
+    );
+}
 
 function SignUp({
     onSignUpSuccess,
@@ -39,8 +218,31 @@ function SignUp({
         emergencyPhoneNumber: '',
         emergencyEmail: '',
         emergencyAddress: '',
+        whiteCardCredentialNumber: '',
+        whiteCardIssuingState: 'NSW',
+        whiteCardIssueDate: '',
+        driverLicenceCredentialNumber: '',
+        driverLicenceClasses: '',
+        driverLicenceIssuingState: 'NSW',
+        driverLicenceExpiryDate: '',
+        highRiskWorkLicenceCredentialNumber: '',
+        highRiskWorkLicenceClasses: '',
+        highRiskWorkLicenceIssuingState: 'NSW',
+        highRiskWorkLicenceIssueDate: '',
+        highRiskWorkLicenceExpiryDate: '',
         password: '',
         confirmPassword: ''
+    });
+    const [enabledCredentials, setEnabledCredentials] = useState({
+        whiteCard: false,
+        driverLicence: false,
+        highRiskWorkLicence: false
+    });
+    const [files, setFiles] = useState({
+        profileImage: null,
+        whiteCardFrontImage: null,
+        driverLicenceFrontImage: null,
+        highRiskWorkLicenceFrontImage: null
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -60,10 +262,33 @@ function SignUp({
         yesterday.setDate(yesterday.getDate() - 1);
         return yesterday.toISOString().slice(0, 10);
     }, []);
+    const includedCredentialCount = Object.values(enabledCredentials).filter(Boolean).length;
 
     const updateField = (event) => {
         const { name, value } = event.target;
         setFormData((current) => ({ ...current, [name]: value }));
+        setError('');
+    };
+
+    const updateCredentialField = (name, value) => {
+        setFormData((current) => ({ ...current, [name]: value }));
+        setError('');
+    };
+
+    const selectImage = (key, maxBytes, label) => (event) => {
+        const file = event.target.files?.[0] || null;
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            setError(`${label} must be an image file.`);
+            event.target.value = '';
+            return;
+        }
+        if (file.size > maxBytes) {
+            setError(`${label} must not exceed ${Math.round(maxBytes / (1024 * 1024))} MB.`);
+            event.target.value = '';
+            return;
+        }
+        setFiles((current) => ({ ...current, [key]: file }));
         setError('');
     };
 
@@ -75,22 +300,30 @@ function SignUp({
             if (!formData.dateOfBirth) return 'Enter your date of birth.';
             if (!formData.gender) return 'Select a gender option.';
         }
-        if (stepIndex === 1) {
-            if (!formData.addressStreet.trim() || !formData.addressCity.trim() || !formData.addressState.trim()
-                || !formData.addressPostalCode.trim() || !formData.addressCountry.trim()) {
-                return 'Complete every field in your residential address.';
-            }
+        if (stepIndex === 1 && (!formData.addressStreet.trim() || !formData.addressCity.trim()
+            || !formData.addressState.trim() || !formData.addressPostalCode.trim() || !formData.addressCountry.trim())) {
+            return 'Complete every field in your residential address.';
         }
         if (stepIndex === 2) {
             if (!formData.emergencyContactName.trim() || !formData.emergencyRelationship.trim()
                 || !formData.emergencyPhoneNumber.trim()) {
                 return 'Provide an emergency contact name, relationship, and phone number.';
             }
-            if (formData.emergencyEmail && !formData.emergencyEmail.includes('@')) {
-                return 'Enter a valid emergency contact email address.';
-            }
+            if (formData.emergencyEmail && !formData.emergencyEmail.includes('@')) return 'Enter a valid emergency contact email address.';
         }
         if (stepIndex === 3) {
+            for (const config of CREDENTIAL_CONFIG) {
+                if (!enabledCredentials[config.key]) continue;
+                if (!formData[config.numberField].trim()) return `Enter the ${config.numberLabel.toLowerCase()}.`;
+                if (!files[config.fileField]) return `Upload a clear photo of the front of the ${config.title}.`;
+                if (config.issueDateField && config.expiryDateField
+                    && formData[config.issueDateField] && formData[config.expiryDateField]
+                    && formData[config.expiryDateField] < formData[config.issueDateField]) {
+                    return `${config.title} expiry date cannot be earlier than its issue date.`;
+                }
+            }
+        }
+        if (stepIndex === 4) {
             if (formData.password.length < 8) return 'Password must be at least 8 characters.';
             if (formData.password !== formData.confirmPassword) return 'Passwords do not match.';
         }
@@ -125,6 +358,15 @@ function SignUp({
         setError('');
         try {
             const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+            const uploadPayload = CREDENTIAL_CONFIG.reduce((payload, config) => {
+                if (!enabledCredentials[config.key]) return payload;
+                [config.numberField, config.stateField, config.classesField, config.issueDateField, config.expiryDateField]
+                    .filter(Boolean)
+                    .forEach((field) => { payload[field] = formData[field]; });
+                payload[config.fileField] = files[config.fileField];
+                return payload;
+            }, {});
+
             await authAPI.signUp({
                 email: formData.email.trim().toLowerCase(),
                 password: formData.password,
@@ -143,7 +385,9 @@ function SignUp({
                 emergencyPhoneNumber: formData.emergencyPhoneNumber.trim(),
                 emergencyEmail: formData.emergencyEmail.trim() || null,
                 emergencyAddress: formData.emergencyAddress.trim() || null,
-                employeeId: employeeId || null
+                employeeId: employeeId || null,
+                profileImage: files.profileImage,
+                ...uploadPayload
             });
             onSignUpSuccess?.(formData.email.trim());
         } catch (err) {
@@ -157,13 +401,11 @@ function SignUp({
         <AuthShell
             eyebrow={isEmployeeInvite ? 'Employee invitation' : 'New account'}
             title={isEmployeeInvite ? 'Complete your employee profile' : 'Set up your ESS profile'}
-            description="We’ll collect the details required for your employee record before securing your account."
+            description="We'll collect the details required for your employee record before securing your account."
             size="wide"
-            footer={(
-                <span>Already registered? <button type="button" className="auth-text-button" onClick={onSwitchToLogin}>Sign in</button></span>
-            )}
+            footer={<span>Already registered? <button type="button" className="auth-text-button" onClick={onSwitchToLogin}>Sign in</button></span>}
         >
-            <nav className="auth-stepper" aria-label="Registration progress">
+            <nav className="auth-stepper" style={{ '--auth-step-count': STEPS.length }} aria-label="Registration progress">
                 {STEPS.map((item, index) => (
                     <button
                         key={item.key}
@@ -288,6 +530,45 @@ function SignUp({
 
                 {step === 3 ? (
                     <fieldset className="auth-form-section">
+                        <legend>Photo and credentials <span className="auth-optional-badge">Optional</span></legend>
+                        <p>Add these now to arrive at your employee profile with your photo and licence records already complete. You can also add or update them later.</p>
+                        <section className="auth-profile-photo-section">
+                            <div>
+                                <h3>Profile icon</h3>
+                                <p>Use a clear head-and-shoulders photo so your team can identify you.</p>
+                            </div>
+                            <ImageUpload
+                                id="signup-profile-image"
+                                file={files.profileImage}
+                                onChange={selectImage('profileImage', 8 * 1024 * 1024, 'Profile image')}
+                                title="Upload profile photo"
+                                description="Select JPEG, PNG, WebP, HEIC or HEIF."
+                                maxSizeLabel="8 MB"
+                                profile
+                            />
+                        </section>
+                        <div className="auth-credential-list">
+                            {CREDENTIAL_CONFIG.map((config) => (
+                                <CredentialUploadCard
+                                    key={config.key}
+                                    config={config}
+                                    enabled={enabledCredentials[config.key]}
+                                    values={formData}
+                                    file={files[config.fileField]}
+                                    onToggle={(checked) => {
+                                        setEnabledCredentials((current) => ({ ...current, [config.key]: checked }));
+                                        setError('');
+                                    }}
+                                    onFieldChange={updateCredentialField}
+                                    onFileChange={selectImage(config.fileField, 10 * 1024 * 1024, `${config.title} image`)}
+                                />
+                            ))}
+                        </div>
+                    </fieldset>
+                ) : null}
+
+                {step === 4 ? (
+                    <fieldset className="auth-form-section">
                         <legend>Secure your account</legend>
                         <p>Create your password and review the employee record that will be submitted.</p>
                         <div className="auth-review-card">
@@ -295,6 +576,8 @@ function SignUp({
                             <div><span>Contact</span><strong>{formData.email}<br />{formData.phoneNumber}</strong></div>
                             <div><span>Address</span><strong>{formData.addressStreet}, {formData.addressCity} {formData.addressState} {formData.addressPostalCode}</strong></div>
                             <div><span>Emergency contact</span><strong>{formData.emergencyContactName} · {formData.emergencyPhoneNumber}</strong></div>
+                            <div><span>Profile photo</span><strong>{files.profileImage ? 'Ready to upload' : 'Not supplied'}</strong></div>
+                            <div><span>Credentials</span><strong>{includedCredentialCount ? `${includedCredentialCount} ready to upload` : 'None supplied'}</strong></div>
                         </div>
                         <div className="auth-field-grid two-columns">
                             <div className="auth-field">
@@ -317,7 +600,7 @@ function SignUp({
                         <button type="button" className="auth-secondary-button" onClick={() => { setStep((current) => current - 1); setError(''); }} disabled={loading}>Back</button>
                     ) : <span />}
                     <button type="submit" className="auth-primary-button" disabled={loading}>
-                        {loading ? 'Creating account…' : step === STEPS.length - 1 ? 'Create account' : 'Continue'}
+                        {loading ? 'Creating account…' : step === STEPS.length - 1 ? 'Create account' : step === 3 ? 'Continue or skip' : 'Continue'}
                     </button>
                 </div>
             </form>

@@ -125,6 +125,75 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("signup-with-documents")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(40 * 1024 * 1024)]
+        public async Task<ActionResult<AuthResponse>> SignUpWithDocuments([FromForm] CompleteSignUpRequest request)
+        {
+            var uploadValidationError = ValidateOptionalSignUpUploads(request);
+            if (uploadValidationError != null)
+            {
+                return BadRequest(new { error = uploadValidationError });
+            }
+
+            var signUpResult = await SignUp(request);
+            if (signUpResult.Result is not OkObjectResult { Value: AuthResponse authResponse })
+            {
+                return signUpResult;
+            }
+
+            try
+            {
+                if (request.ProfileImage is { Length: > 0 })
+                {
+                    authResponse.User.AvatarUrl = await _supabaseService.UploadProfileImageAsync(
+                        authResponse.User.Id,
+                        request.ProfileImage);
+                }
+
+                await SaveOptionalSignUpCredentialAsync(
+                    authResponse.User.Id,
+                    EmployeeCredentialTypes.WhiteCard,
+                    request.WhiteCardCredentialNumber,
+                    null,
+                    request.WhiteCardIssuingState,
+                    request.WhiteCardIssueDate,
+                    null,
+                    request.WhiteCardFrontImage);
+
+                await SaveOptionalSignUpCredentialAsync(
+                    authResponse.User.Id,
+                    EmployeeCredentialTypes.DriverLicence,
+                    request.DriverLicenceCredentialNumber,
+                    request.DriverLicenceClasses,
+                    request.DriverLicenceIssuingState,
+                    null,
+                    request.DriverLicenceExpiryDate,
+                    request.DriverLicenceFrontImage);
+
+                await SaveOptionalSignUpCredentialAsync(
+                    authResponse.User.Id,
+                    EmployeeCredentialTypes.HighRiskWorkLicence,
+                    request.HighRiskWorkLicenceCredentialNumber,
+                    request.HighRiskWorkLicenceClasses,
+                    request.HighRiskWorkLicenceIssuingState,
+                    request.HighRiskWorkLicenceIssueDate,
+                    request.HighRiskWorkLicenceExpiryDate,
+                    request.HighRiskWorkLicenceFrontImage);
+
+                return Ok(authResponse);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save optional onboarding uploads for user {UserId}", authResponse.User.Id);
+                return StatusCode(500, new { error = "Your account was created, but one or more optional uploads could not be saved. Please sign in and add them from your profile." });
+            }
+        }
+
         [HttpPost("signin")]
         public async Task<ActionResult<AuthResponse>> SignIn([FromBody] SignInRequest request)
         {
@@ -507,6 +576,94 @@ namespace ESSDesign.Server.Controllers
                 return "Emergency contact email address is invalid.";
 
             return null;
+        }
+
+        private static string? ValidateOptionalSignUpUploads(CompleteSignUpRequest request)
+        {
+            if (request.ProfileImage is { Length: > 8 * 1024 * 1024 })
+                return "Profile image must not exceed 8 MB.";
+            if (request.ProfileImage is { Length: > 0 }
+                && !request.ProfileImage.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return "Profile image must be an image file.";
+
+            return ValidateOptionalCredential(
+                    "White Card",
+                    request.WhiteCardCredentialNumber,
+                    null,
+                    request.WhiteCardIssueDate,
+                    null,
+                    request.WhiteCardFrontImage)
+                ?? ValidateOptionalCredential(
+                    "driver licence",
+                    request.DriverLicenceCredentialNumber,
+                    request.DriverLicenceClasses,
+                    null,
+                    request.DriverLicenceExpiryDate,
+                    request.DriverLicenceFrontImage)
+                ?? ValidateOptionalCredential(
+                    "HRW licence",
+                    request.HighRiskWorkLicenceCredentialNumber,
+                    request.HighRiskWorkLicenceClasses,
+                    request.HighRiskWorkLicenceIssueDate,
+                    request.HighRiskWorkLicenceExpiryDate,
+                    request.HighRiskWorkLicenceFrontImage);
+        }
+
+        private static string? ValidateOptionalCredential(
+            string label,
+            string? credentialNumber,
+            string? licenceClasses,
+            DateTime? issueDate,
+            DateTime? expiryDate,
+            IFormFile? frontImage)
+        {
+            var hasCredential = !string.IsNullOrWhiteSpace(credentialNumber)
+                || !string.IsNullOrWhiteSpace(licenceClasses)
+                || issueDate.HasValue
+                || expiryDate.HasValue
+                || frontImage is { Length: > 0 };
+
+            if (!hasCredential)
+                return null;
+            if (string.IsNullOrWhiteSpace(credentialNumber))
+                return $"{label} number is required when adding that credential.";
+            if (frontImage is not { Length: > 0 })
+                return $"A photo of the front of the {label} is required when adding that credential.";
+            if (frontImage.Length > 10 * 1024 * 1024)
+                return $"{label} image must not exceed 10 MB.";
+            if (issueDate.HasValue && expiryDate.HasValue && expiryDate.Value.Date < issueDate.Value.Date)
+                return $"{label} expiry date cannot be earlier than its issue date.";
+
+            return null;
+        }
+
+        private async Task SaveOptionalSignUpCredentialAsync(
+            string userId,
+            string credentialType,
+            string? credentialNumber,
+            string? licenceClasses,
+            string? issuingState,
+            DateTime? issueDate,
+            DateTime? expiryDate,
+            IFormFile? frontImage)
+        {
+            if (string.IsNullOrWhiteSpace(credentialNumber) && frontImage is not { Length: > 0 })
+            {
+                return;
+            }
+
+            await _supabaseService.UpsertEmployeeCredentialAsync(
+                userId,
+                credentialType,
+                new UpsertEmployeeCredentialRequest
+                {
+                    CredentialNumber = credentialNumber,
+                    LicenceClasses = licenceClasses,
+                    IssuingState = string.IsNullOrWhiteSpace(issuingState) ? "NSW" : issuingState,
+                    IssueDate = issueDate,
+                    ExpiryDate = expiryDate,
+                    FrontImage = frontImage
+                });
         }
 
         private static UserInfo BuildUserInfo(User user, string? fallbackFullName, string role)

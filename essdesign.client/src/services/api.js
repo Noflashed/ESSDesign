@@ -285,7 +285,14 @@ apiClient.interceptors.response.use(
 
 export const authAPI = {
     signUp: async (profile) => {
-        const response = await apiClient.post('/auth/signup', profile);
+        const formData = new FormData();
+        Object.entries(profile || {}).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === '') return;
+            formData.append(key, value);
+        });
+        const response = await apiClient.post('/auth/signup-with-documents', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
         const resolvedProfileImageUrl = await hydrateProfileImageUrl(response.data.user);
         const hydratedUser = { ...response.data.user, profileImageUrl: resolvedProfileImageUrl };
         return { ...response.data, user: hydratedUser };

@@ -325,6 +325,29 @@ namespace ESSDesign.Server.Models
         public Guid? EmployeeId { get; set; }
     }
 
+    public class CompleteSignUpRequest : SignUpRequest
+    {
+        public IFormFile? ProfileImage { get; set; }
+
+        public string? WhiteCardCredentialNumber { get; set; }
+        public string? WhiteCardIssuingState { get; set; }
+        public DateTime? WhiteCardIssueDate { get; set; }
+        public IFormFile? WhiteCardFrontImage { get; set; }
+
+        public string? DriverLicenceCredentialNumber { get; set; }
+        public string? DriverLicenceClasses { get; set; }
+        public string? DriverLicenceIssuingState { get; set; }
+        public DateTime? DriverLicenceExpiryDate { get; set; }
+        public IFormFile? DriverLicenceFrontImage { get; set; }
+
+        public string? HighRiskWorkLicenceCredentialNumber { get; set; }
+        public string? HighRiskWorkLicenceClasses { get; set; }
+        public string? HighRiskWorkLicenceIssuingState { get; set; }
+        public DateTime? HighRiskWorkLicenceIssueDate { get; set; }
+        public DateTime? HighRiskWorkLicenceExpiryDate { get; set; }
+        public IFormFile? HighRiskWorkLicenceFrontImage { get; set; }
+    }
+
     public class SignInRequest
     {
         public string Email { get; set; } = string.Empty;
