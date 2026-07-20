@@ -138,10 +138,9 @@ namespace ESSDesign.Server.Controllers
                     return BadRequest(new { error = "Folder name is required" });
                 }
 
-                var folderId = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, adminResult.User!.Id);
-                var folderResponse = await _supabaseService.GetFolderByIdAsync(folderId);
+                var folderResponse = await _supabaseService.CreateFolderAsync(request.Name, request.ParentFolderId, adminResult.User!.Id);
 
-                _logger.LogInformation("Created folder {FolderId} with name {Name}", folderId, request.Name);
+                _logger.LogInformation("Created folder {FolderId} with name {Name}", folderResponse.Id, request.Name);
                 return Ok(folderResponse);
             }
             catch (Exception ex)

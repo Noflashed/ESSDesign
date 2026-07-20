@@ -1491,7 +1491,7 @@ export const safetyProjectsAPI = {
         return cloneSafetyBuilders(doc.builders, { includeArchived: true });
     }),
 
-    createBuilderAndProject: async (builderName, projectName) => {
+    createBuilderAndProject: async (builderName, projectName) => withSafetyProjectsWriteLock(async () => {
         const cleanBuilder = builderName.trim();
         const cleanProject = projectName.trim();
         if (!cleanBuilder || !cleanProject) {
@@ -1547,9 +1547,9 @@ export const safetyProjectsAPI = {
 
         await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
         return builders;
-    },
+    }),
 
-    createBuilder: async (builderName, options = {}) => {
+    createBuilder: async (builderName, options = {}) => withSafetyProjectsWriteLock(async () => {
         const cleanBuilder = builderName.trim();
         if (!cleanBuilder) {
             throw new Error('Builder name is required');
@@ -1578,9 +1578,9 @@ export const safetyProjectsAPI = {
         builders.sort((a, b) => a.name.localeCompare(b.name));
         await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
         return builders;
-    },
+    }),
 
-    createProject: async (builderId, projectName, siteLocation = '', options = {}) => {
+    createProject: async (builderId, projectName, siteLocation = '', options = {}) => withSafetyProjectsWriteLock(async () => {
         const cleanProject = projectName.trim();
         const cleanLocation = siteLocation.trim();
         if (!builderId) {
@@ -1628,9 +1628,9 @@ export const safetyProjectsAPI = {
         builder.updatedAt = timestamp;
         await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
         return builders;
-    },
+    }),
 
-    renameBuilder: async (builderId, nextName, options = {}) => {
+    renameBuilder: async (builderId, nextName, options = {}) => withSafetyProjectsWriteLock(async () => {
         const clean = nextName.trim();
         if (!clean) {
             throw new Error('Builder name is required');
@@ -1669,11 +1669,11 @@ export const safetyProjectsAPI = {
         builders.sort((a, b) => a.name.localeCompare(b.name));
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    },
+    }),
 
     resolveBuilderLogoUrl,
 
-    renameProject: async (builderId, projectId, nextName, siteLocation = '', options = {}) => {
+    renameProject: async (builderId, projectId, nextName, siteLocation = '', options = {}) => withSafetyProjectsWriteLock(async () => {
         const clean = nextName.trim();
         const cleanLocation = siteLocation.trim();
         if (!clean) {
@@ -1734,9 +1734,9 @@ export const safetyProjectsAPI = {
         builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    },
+    }),
 
-    deleteBuilder: async (builderId) => {
+    deleteBuilder: async (builderId) => withSafetyProjectsWriteLock(async () => {
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
@@ -1748,21 +1748,24 @@ export const safetyProjectsAPI = {
         const nextBuilders = builders.filter(builder => builder.id !== builderId);
         await saveSafetyProjectsDocument({ builders: nextBuilders, updatedAt: nowIso() });
         return nextBuilders;
-    },
+    }),
 
-    deleteProject: async (builderId, projectId) => {
+    deleteProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
         if (!target) {
             throw new Error('Builder not found');
         }
+        if (!target.projects.some(project => project.id === projectId)) {
+            throw new Error('Project not found');
+        }
         target.projects = target.projects.filter(project => project.id !== projectId);
         target.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    },
+    }),
 
-    archiveProject: async (builderId, projectId) => {
+    archiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
@@ -1778,9 +1781,9 @@ export const safetyProjectsAPI = {
         builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    },
+    }),
 
-    unarchiveProject: async (builderId, projectId) => {
+    unarchiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const builder = builders.find(item => item.id === builderId);
         if (!builder) {
@@ -1796,7 +1799,7 @@ export const safetyProjectsAPI = {
         builder.updatedAt = nowIso();
         await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
         return builders;
-    }
+    })
 };
 
 function mapMaterialOrderRow(row) {

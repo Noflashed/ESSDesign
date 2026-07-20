@@ -68,6 +68,30 @@ namespace ESSDesign.Server.Services
             public DateTime UpdatedAt { get; set; }
         }
 
+        private sealed class FolderWriteRow
+        {
+            [JsonPropertyName("id")]
+            public Guid Id { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; } = string.Empty;
+
+            [JsonPropertyName("parent_folder_id")]
+            public Guid? ParentFolderId { get; set; }
+
+            [JsonPropertyName("user_id")]
+            public string? UserId { get; set; }
+
+            [JsonPropertyName("total_file_size")]
+            public long TotalFileSize { get; set; }
+
+            [JsonPropertyName("created_at")]
+            public DateTime CreatedAt { get; set; }
+
+            [JsonPropertyName("updated_at")]
+            public DateTime UpdatedAt { get; set; }
+        }
+
         private sealed class PreparedDocumentUpload
         {
             public string TempFilePath { get; init; } = string.Empty;
@@ -1440,24 +1464,28 @@ namespace ESSDesign.Server.Services
             return tree;
         }
 
-        public async Task<Guid> CreateFolderAsync(string name, Guid? parentFolderId, string? userId = null)
+        public async Task<FolderResponse> CreateFolderAsync(string name, Guid? parentFolderId, string? userId = null)
         {
             try
             {
                 var now = DateTime.UtcNow;
-                var folder = new Folder
+                var folderId = Guid.NewGuid();
+                var payload = new Dictionary<string, object?>
                 {
-                    Id = Guid.NewGuid(),
-                    Name = name,
-                    ParentFolderId = parentFolderId,
-                    UserId = userId,
-                    CreatedAt = now,
-                    UpdatedAt = now
+                    ["id"] = folderId,
+                    ["name"] = name,
+                    ["parent_folder_id"] = parentFolderId,
+                    ["user_id"] = userId,
+                    ["total_file_size"] = 0,
+                    ["created_at"] = now,
+                    ["updated_at"] = now
                 };
 
-                var response = await _supabase.From<Folder>().Insert(folder);
-                var created = response.Models.FirstOrDefault();
-                if (created == null) throw new Exception("Failed to create folder");
+                var created = (await PostRestRowsAsync<FolderWriteRow>(
+                    "folders",
+                    new[] { payload },
+                    "return=representation")).FirstOrDefault()
+                    ?? throw new InvalidOperationException("Failed to create folder");
 
                 if (parentFolderId.HasValue)
                 {
@@ -1469,7 +1497,16 @@ namespace ESSDesign.Server.Services
                 }
 
                 _logger.LogInformation("Created folder: {Name}", name);
-                return created.Id;
+                return new FolderResponse
+                {
+                    Id = created.Id,
+                    Name = created.Name,
+                    ParentFolderId = created.ParentFolderId,
+                    UserId = created.UserId,
+                    CreatedAt = created.CreatedAt,
+                    UpdatedAt = created.UpdatedAt,
+                    FileSize = created.TotalFileSize > 0 ? created.TotalFileSize : null
+                };
             }
             catch (Exception ex)
             {
@@ -2678,10 +2715,9 @@ namespace ESSDesign.Server.Services
 
             while (currentId.HasValue)
             {
-                var folder = await _supabase
-                    .From<Folder>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, currentId.Value.ToString())
-                    .Single();
+                var folder = (await GetRestRowsAsync<FolderWriteRow>(
+                    $"folders?select=id,name,parent_folder_id,user_id,total_file_size,created_at,updated_at&id=eq.{currentId.Value:D}&limit=1"))
+                    .FirstOrDefault();
 
                 if (folder == null)
                 {
@@ -2689,8 +2725,9 @@ namespace ESSDesign.Server.Services
                     return;
                 }
 
-                folder.UpdatedAt = timestamp;
-                await _supabase.From<Folder>().Update(folder);
+                await PatchRestRowsAsync<object>(
+                    $"folders?id=eq.{folder.Id:D}",
+                    new Dictionary<string, object?> { ["updated_at"] = timestamp });
 
                 _folderCache.TryRemove(folder.Id, out _);
                 if (!folder.ParentFolderId.HasValue)

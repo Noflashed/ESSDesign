@@ -819,8 +819,8 @@ export default function SiteInformationPage() {
                     });
                     const nextOptions = await foldersAPI.getDesignFolderOptions();
                     setDesignFolders(Array.isArray(nextOptions) ? nextOptions : []);
-                } catch {
-                    // Manual linking remains available if ESS Design folder creation is not permitted.
+                } catch (folderError) {
+                    setError(`Project saved, but its ESS Design folder could not be created: ${folderError.message || 'Unknown folder error'}`);
                 }
             }
             setBuilders(nextBuilders);
