@@ -48,7 +48,7 @@
 .drawing-register-page .register-table-select-wrap > svg { position: absolute; top: 50%; right: 7px; width: 13px; height: 13px; transform: translateY(-50%); fill: none; stroke: var(--text-secondary); stroke-width: 2; pointer-events: none; visibility: visible; opacity: .85; }
 .register-table-select:hover, .register-table-select:focus { border-color: var(--border-color); background: var(--card-bg); outline: none; } .register-table-select:disabled { color: var(--text-secondary); cursor: not-allowed; }
 .register-table-select:disabled + svg { opacity: .35; }
-.register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-align: left; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
 .register-drawing-number-wrap { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; }
 .register-drawing-number-wrap > .register-drawing-link, .register-drawing-number-wrap > .register-drawing-unavailable { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
