@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ChevronDown, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Clipboard, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -80,6 +80,28 @@ const formatFullDrawingNumber = row => {
     const revisionMatch = String(row.revisionNo || '').match(/\d+/);
     const revision = revisionMatch ? revisionMatch[0].replace(/^0+(?=\d)/, '') : '';
     return `${baseNumber}${useCode ? `(${useCode})` : ''}${revision ? `(REV${revision})` : ''}`;
+};
+
+const copyTextToClipboard = async text => {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch {
+            // Fall back for browsers that expose the Clipboard API but deny access.
+        }
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        if (!document.execCommand('copy')) throw new Error('Copy command was rejected.');
+    } finally {
+        textarea.remove();
+    }
 };
 
 const drawingDocumentMatchesRow = (row, document) => {
@@ -226,6 +248,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [addingRow, setAddingRow] = useState(false);
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
     const [documentOpenError, setDocumentOpenError] = useState('');
+    const [copyError, setCopyError] = useState('');
+    const [copiedDrawingId, setCopiedDrawingId] = useState(null);
     const [drawingDocuments, setDrawingDocuments] = useState({});
     const [drawingDocumentsLoading, setDrawingDocumentsLoading] = useState(true);
     const [registryReconciled, setRegistryReconciled] = useState(false);
@@ -233,6 +257,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const registryReconciledRef = useRef(false);
     const rowsRef = useRef([]);
     const sharedSaveEnabledRef = useRef(false);
+    const copyResetTimerRef = useRef(null);
 
     useEffect(() => {
         const load = async () => {
@@ -271,6 +296,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, [canEdit, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
     useEffect(() => () => {
+        window.clearTimeout(copyResetTimerRef.current);
         if (sharedSaveEnabledRef.current) {
             safetyProjectsAPI.saveDrawingRegisterEntries(rowsRef.current).catch(error => {
                 console.error('Final shared Drawing Register save failed', error);
@@ -547,6 +573,20 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             setOpeningDrawingId(null);
         }
     };
+    const copyDrawingNumber = async row => {
+        const fullDrawingNumber = formatFullDrawingNumber(row).trim();
+        if (!fullDrawingNumber) return;
+        setCopyError('');
+        try {
+            await copyTextToClipboard(fullDrawingNumber);
+            setCopiedDrawingId(row.id);
+            window.clearTimeout(copyResetTimerRef.current);
+            copyResetTimerRef.current = window.setTimeout(() => setCopiedDrawingId(current => current === row.id ? null : current), 1800);
+        } catch (error) {
+            console.error('Drawing number copy failed', error);
+            setCopyError(`The drawing number ${fullDrawingNumber} could not be copied.`);
+        }
+    };
     const getBuilderProjects = client => (builders.find(builder => builder.name === client)?.projects || []).filter(project => !project.archived);
     const handleColumnSort = field => {
         if (sortField === field) {
@@ -569,9 +609,24 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
         if (key === 'drawingNo') {
             const document = drawingDocuments[getBaseDrawingNumber(row[key])];
-            return drawingDocumentMatchesRow(row, document)
-                ? <button type="button" className="register-drawing-link" onClick={() => openLatestDrawing(row)} disabled={openingDrawingId === row.id} title={`Open ${formatFullDrawingNumber(row)}`}>{openingDrawingId === row.id ? 'Opening...' : formatFullDrawingNumber(row)}</button>
-                : <span className="register-drawing-unavailable">{formatFullDrawingNumber(row)}</span>;
+            const fullDrawingNumber = formatFullDrawingNumber(row);
+            const isCopied = copiedDrawingId === row.id;
+            return (
+                <span className="register-drawing-number-wrap">
+                    {drawingDocumentMatchesRow(row, document)
+                        ? <button type="button" className="register-drawing-link" onClick={() => openLatestDrawing(row)} disabled={openingDrawingId === row.id} title={`Open ${fullDrawingNumber}`}>{openingDrawingId === row.id ? 'Opening...' : fullDrawingNumber}</button>
+                        : <span className="register-drawing-unavailable" title={fullDrawingNumber}>{fullDrawingNumber}</span>}
+                    <button
+                        type="button"
+                        className={`register-copy-drawing-number${isCopied ? ' is-copied' : ''}`}
+                        onClick={() => copyDrawingNumber(row)}
+                        title={isCopied ? 'Copied' : `Copy ${fullDrawingNumber}`}
+                        aria-label={isCopied ? `${fullDrawingNumber} copied` : `Copy ${fullDrawingNumber}`}
+                    >
+                        {isCopied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
+                    </button>
+                </span>
+            );
         }
         if (key === 'designUse') {
             if (!canEdit) return <span className="register-read-only-value" title={cleanStatus(row[key])}>{cleanStatus(row[key])}</span>;
@@ -592,6 +647,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 {canEdit && <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>}
             </div>
             {documentOpenError && <div className="register-navigation-error" role="alert">{documentOpenError}</div>}
+            {copyError && <div className="register-navigation-error" role="alert">{copyError}</div>}
             {siteLinkError && <div className="register-navigation-error" role="alert">{siteLinkError}</div>}
 
             {canEdit && showAddRow && (

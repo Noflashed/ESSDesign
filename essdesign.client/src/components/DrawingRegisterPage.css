@@ -50,7 +50,15 @@
 .register-table-select:disabled + svg { opacity: .35; }
 .register-drawing-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--primary-color); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .register-drawing-link:hover { color: var(--primary-hover); } .register-drawing-link:disabled { opacity: .6; cursor: wait; }
-.register-drawing-unavailable { color: var(--text-primary); }
+.register-drawing-number-wrap { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; }
+.register-drawing-number-wrap > .register-drawing-link, .register-drawing-number-wrap > .register-drawing-unavailable { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.register-drawing-unavailable { display: block; flex: 1 1 auto; color: var(--text-primary); white-space: nowrap; }
+.drawing-register-page .register-copy-drawing-number { flex: 0 0 24px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: pointer; opacity: 0; visibility: hidden; transform: translateX(3px); transition: opacity .14s ease, transform .14s ease, background-color .14s ease, color .14s ease; }
+.drawing-register-page .register-copy-drawing-number svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+.register-drawing-number-wrap:hover .register-copy-drawing-number, .register-drawing-number-wrap:focus-within .register-copy-drawing-number, .drawing-register-page .register-copy-drawing-number.is-copied { opacity: 1; visibility: visible; transform: translateX(0); }
+.drawing-register-page .register-copy-drawing-number:hover, .drawing-register-page .register-copy-drawing-number:focus-visible { outline: none; background: var(--hover-bg); color: var(--primary-color); }
+.drawing-register-page .register-copy-drawing-number:focus-visible { box-shadow: 0 0 0 2px rgba(26, 115, 232, .25); }
+.drawing-register-page .register-copy-drawing-number.is-copied { color: #188038; }
 .drawing-register-table th.row-actions, .drawing-register-table td.row-actions { position: sticky !important; right: 0; z-index: 6; width: 4% !important; min-width: 38px; max-width: 46px; padding: 0 4px; text-align: center !important; overflow: visible !important; background: var(--card-bg); box-shadow: -1px 0 0 var(--border-color); }
 .drawing-register-table th.row-actions { top: 0; z-index: 12; background: var(--bg-secondary) !important; background-clip: padding-box; }
 .drawing-register-table tbody tr:hover td.row-actions { background: var(--hover-bg); }
