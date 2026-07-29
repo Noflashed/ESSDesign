@@ -9,7 +9,6 @@ public sealed class EssAssistantDataService
 {
     private const string ProjectBucket = "project-information";
     private const string DesignBucket = "design-pdfs";
-    private const string ProjectsPath = "projects.json";
     private static readonly Regex DrawingNumberPattern = new(@"[A-Z0-9]+-[A-Z0-9]+-ESD\d+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly SemaphoreSlim SitesCacheLock = new(1, 1);
     private static readonly SemaphoreSlim PeopleCacheLock = new(1, 1);
@@ -18,6 +17,7 @@ public sealed class EssAssistantDataService
     private static (List<PersonRecord> Value, DateTimeOffset ExpiresAt)? PeopleCache;
 
     private readonly EssAssistantSupabaseGateway _gateway;
+    private readonly SiteRegistryService _siteRegistryService;
     private readonly SupabaseService _supabaseService;
     private readonly DeliveryAnalysisService _deliveryAnalysisService;
     private readonly TransportRouteEstimateService _routeEstimates;
@@ -25,12 +25,14 @@ public sealed class EssAssistantDataService
 
     public EssAssistantDataService(
         EssAssistantSupabaseGateway gateway,
+        SiteRegistryService siteRegistryService,
         SupabaseService supabaseService,
         DeliveryAnalysisService deliveryAnalysisService,
         TransportRouteEstimateService routeEstimates,
         ILogger<EssAssistantDataService> logger)
     {
         _gateway = gateway;
+        _siteRegistryService = siteRegistryService;
         _supabaseService = supabaseService;
         _deliveryAnalysisService = deliveryAnalysisService;
         _routeEstimates = routeEstimates;
@@ -660,9 +662,9 @@ public sealed class EssAssistantDataService
         int limit,
         CancellationToken cancellationToken)
     {
-        using var projects = await _gateway.ReadStorageJsonAsync(ProjectBucket, ProjectsPath, cancellationToken);
+        var projects = await _siteRegistryService.GetDocumentAsync(true, cancellationToken);
         var entries = new List<DrawingRegisterRecord>();
-        if (projects?.RootElement.TryGetProperty("drawingRegisterEntries", out var register) == true && register.ValueKind == JsonValueKind.Array)
+        if (projects.TryGetProperty("drawingRegisterEntries", out var register) && register.ValueKind == JsonValueKind.Array)
         {
             foreach (var row in register.EnumerateArray())
             {
@@ -1195,8 +1197,8 @@ public sealed class EssAssistantDataService
         var plansTask = _gateway.GetRowsAsync("ess_rostering_plans?select=plan_date&order=plan_date.desc&limit=365", cancellationToken);
         await Task.WhenAll(sitesTask, peopleTask, designsTask, requestsTask, newsTask, plansTask);
 
-        using var projects = await _gateway.ReadStorageJsonAsync(ProjectBucket, ProjectsPath, cancellationToken);
-        var drawingCount = projects?.RootElement.TryGetProperty("drawingRegisterEntries", out var register) == true && register.ValueKind == JsonValueKind.Array
+        var projects = await _siteRegistryService.GetDocumentAsync(true, cancellationToken);
+        var drawingCount = projects.TryGetProperty("drawingRegisterEntries", out var register) && register.ValueKind == JsonValueKind.Array
             ? register.GetArrayLength()
             : 0;
         var sites = sitesTask.Result;
@@ -1328,9 +1330,9 @@ public sealed class EssAssistantDataService
 
     private async Task<List<SiteRecord>> LoadSitesUncachedAsync(CancellationToken cancellationToken)
     {
-        using var projects = await _gateway.ReadStorageJsonAsync(ProjectBucket, ProjectsPath, cancellationToken);
+        var projects = await _siteRegistryService.GetDocumentAsync(true, cancellationToken);
         var sites = new List<SiteRecord>();
-        if (projects?.RootElement.TryGetProperty("builders", out var builders) != true || builders.ValueKind != JsonValueKind.Array)
+        if (!projects.TryGetProperty("builders", out var builders) || builders.ValueKind != JsonValueKind.Array)
             return sites;
 
         foreach (var builder in builders.EnumerateArray())

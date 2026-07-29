@@ -425,8 +425,6 @@ const anonStorageHeaders = (contentType = false) => ({
 const nowIso = () => new Date().toISOString();
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const safetyProjectsObjectUrl = () => `${SUPABASE_URL}/storage/v1/object/${SAFETY_BUCKET}/${SAFETY_PROJECTS_PATH}`;
-const safetyProjectsObjectUpsertUrl = () => `${safetyProjectsObjectUrl()}?upsert=true`;
 const safetyBucketListUrl = () => `${SUPABASE_URL}/storage/v1/object/list/${SAFETY_BUCKET}`;
 const builderLogoUrlCache = new Map();
 const BUILDER_LOGO_URL_CACHE_KEY = 'ess-builder-logo-url-cache-v1';
@@ -453,6 +451,9 @@ const seenStorageJsonSyncMessages = new Set();
 let storageJsonBroadcastChannel = null;
 let materialRequestIndexWriteQueue = Promise.resolve();
 let safetyProjectsWriteQueue = Promise.resolve();
+let siteRegistryDocumentCache = null;
+let siteRegistryDocumentCacheExpiresAt = 0;
+let siteRegistryDrawingRevision = null;
 let materialOrderRequestsTableAvailable = null;
 let materialOrderRequestsTableSeedPromise = null;
 
@@ -564,6 +565,11 @@ function handleExternalStorageJsonSyncMessage(message) {
         return;
     }
     invalidateStorageJsonCache(message.path);
+    if (message.path === SAFETY_PROJECTS_PATH) {
+        siteRegistryDocumentCache = null;
+        siteRegistryDocumentCacheExpiresAt = 0;
+        siteRegistryDrawingRevision = null;
+    }
     emitStorageJsonLocalChange(message.path);
 }
 
@@ -990,40 +996,6 @@ async function resolveBuilderLogoUrl(builder, { expiresIn = 86400 } = {}) {
     return url;
 }
 
-async function saveSafetyProjectsDocument(doc) {
-    await ensureSafetyBucketAccess();
-    let nextDocument = doc;
-    if (!Object.prototype.hasOwnProperty.call(doc, 'drawingRegisterEntries')) {
-        const current = parseSafetyProjects(await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS }));
-        nextDocument = { ...doc, drawingRegisterEntries: current.drawingRegisterEntries };
-    }
-    const payload = JSON.stringify(nextDocument);
-    const attempts = [
-        { method: 'POST', url: safetyProjectsObjectUrl(), headers: { ...storageHeaders(true), 'x-upsert': 'true' } },
-        { method: 'POST', url: safetyProjectsObjectUpsertUrl(), headers: storageHeaders(true) },
-        { method: 'PUT', url: safetyProjectsObjectUrl(), headers: { ...storageHeaders(true), 'x-upsert': 'true' } }
-    ];
-
-    let lastError = '';
-    for (const attempt of attempts) {
-        const response = await fetch(attempt.url, {
-            method: attempt.method,
-            headers: attempt.headers,
-            body: payload
-        });
-
-        if (response.ok) {
-            setStorageJsonCache(SAFETY_PROJECTS_PATH, nextDocument, SAFETY_PROJECTS_CACHE_TTL_MS);
-            emitStorageJsonChanged(SAFETY_PROJECTS_PATH);
-            return;
-        }
-
-        lastError = await response.text();
-    }
-
-    throw new Error(lastError || 'Failed to save safety projects');
-}
-
 async function withSafetyProjectsWriteLock(callback) {
     const runLocked = async () => {
         if (typeof navigator !== 'undefined' && navigator.locks?.request) {
@@ -1349,26 +1321,78 @@ function mapEmployeeRow(row) {
     };
 }
 
+async function readSiteRegistryDocument({ force = false } = {}) {
+    if (!force && siteRegistryDocumentCache && siteRegistryDocumentCacheExpiresAt > Date.now()) {
+        return cloneJsonValue(siteRegistryDocumentCache);
+    }
+
+    try {
+        const response = await apiClient.get('/site-registry', {
+            params: {
+                includeArchived: true,
+                ...(force ? { refresh: Date.now() } : {})
+            },
+            headers: force ? { 'Cache-Control': 'no-cache' } : undefined
+        });
+        siteRegistryDocumentCache = response.data;
+        siteRegistryDocumentCacheExpiresAt = Date.now() + 30 * 1000;
+        siteRegistryDrawingRevision = Number.isFinite(Number(response.data?.drawingRevision))
+            ? Number(response.data.drawingRevision)
+            : null;
+        return cloneJsonValue(response.data);
+    } catch (error) {
+        const status = error?.response?.status;
+        if (status !== 404 && status !== 503) {
+            throw error;
+        }
+
+        // Read-only deployment fallback while migration 038 is being installed.
+        await ensureSafetyBucketAccess();
+        const legacy = await readStorageJson(SAFETY_PROJECTS_PATH, {
+            force,
+            ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS
+        });
+        return legacy || { builders: [], drawingRegisterEntries: [], updatedAt: nowIso() };
+    }
+}
+
+async function applySiteRegistryChange(operation, payload) {
+    try {
+        const response = await apiClient.post('/site-registry/changes', { operation, payload });
+        siteRegistryDocumentCache = response.data;
+        siteRegistryDocumentCacheExpiresAt = Date.now() + 30 * 1000;
+        siteRegistryDrawingRevision = Number.isFinite(Number(response.data?.drawingRevision))
+            ? Number(response.data.drawingRevision)
+            : siteRegistryDrawingRevision;
+        emitStorageJsonChanged(SAFETY_PROJECTS_PATH);
+        return cloneJsonValue(response.data);
+    } catch (error) {
+        const detail = error?.response?.data?.error;
+        if (detail) {
+            throw new Error(detail);
+        }
+        throw error;
+    }
+}
+
+function buildersFromSiteRegistryDocument(document, includeArchived = true) {
+    return cloneSafetyBuilders(parseSafetyProjects(document).builders, { includeArchived });
+}
+
 export const safetyProjectsAPI = {
     getBuilders: async ({ includeArchived = false, force = false } = {}) => {
-        await ensureSafetyBucketAccess();
-        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        if (!json) return [];
-        return cloneSafetyBuilders(parseSafetyProjects(json).builders, { includeArchived });
+        const document = await readSiteRegistryDocument({ force });
+        return buildersFromSiteRegistryDocument(document, includeArchived);
     },
 
     getDrawingRegisterEntries: async ({ force = false } = {}) => {
-        await ensureSafetyBucketAccess();
-        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        if (!json) return [];
-        return resolveDrawingRegisterEntries(parseSafetyProjects(json));
+        const document = await readSiteRegistryDocument({ force });
+        return resolveDrawingRegisterEntries(parseSafetyProjects(document));
     },
 
     saveDrawingRegisterEntries: async (entries = []) => withSafetyProjectsWriteLock(async () => {
-        await ensureSafetyBucketAccess();
-        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        const doc = parseSafetyProjects(json);
-        const timestamp = nowIso();
+        const document = await readSiteRegistryDocument();
+        const doc = parseSafetyProjects(document);
         const normalizedEntries = entries.map((entry, index) => {
             const exactBuilder = doc.builders.find(builder => builder.id === entry?.builderId)
                 || doc.builders.find(builder => builder.name.toLowerCase() === String(entry?.client || '').trim().toLowerCase());
@@ -1388,45 +1412,20 @@ export const safetyProjectsAPI = {
             };
         });
 
-        doc.builders.forEach(builder => builder.projects.forEach(project => {
-            project.drawingNumbers = [];
-        }));
-        normalizedEntries.forEach(entry => {
-            const drawingNumber = String(entry.drawingNo || '').trim().match(/^[A-Z0-9]+-[A-Z0-9]+-ESD\d+/i)?.[0]?.toUpperCase();
-            const builder = doc.builders.find(item => item.id === entry.builderId);
-            const project = builder?.projects.find(item => item.id === entry.projectId);
-            if (!drawingNumber || !project) return;
-            project.drawingNumbers = Array.from(new Set([...(project.drawingNumbers || []), drawingNumber]));
-            project.updatedAt = timestamp;
-            builder.updatedAt = timestamp;
+        const saved = await applySiteRegistryChange('replace_drawing_register', {
+            entries: normalizedEntries,
+            expectedDrawingRevision: siteRegistryDrawingRevision
         });
-
-        doc.drawingRegisterEntries = normalizedEntries;
-        doc.updatedAt = timestamp;
-        await saveSafetyProjectsDocument(doc);
-        return resolveDrawingRegisterEntries(doc);
+        return resolveDrawingRegisterEntries(parseSafetyProjects(saved));
     }),
 
     provisionProjectDesignFolder: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
-        await ensureSafetyBucketAccess();
-        let json = await readStorageJson(SAFETY_PROJECTS_PATH, { ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        let doc = parseSafetyProjects(json);
-        let builder = doc.builders.find(item => item.id === builderId);
-        let project = builder?.projects.find(item => item.id === projectId);
-
-        for (const delayMs of [250, 750, 1500]) {
-            if (builder && project) {
-                break;
-            }
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-            json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-            doc = parseSafetyProjects(json);
-            builder = doc.builders.find(item => item.id === builderId);
-            project = builder?.projects.find(item => item.id === projectId);
-        }
-
+        const document = await readSiteRegistryDocument({ force: true });
+        const doc = parseSafetyProjects(document);
+        const builder = doc.builders.find(item => item.id === builderId);
+        const project = builder?.projects.find(item => item.id === projectId);
         if (!builder || !project) {
-            throw new Error('The saved project did not become available for ESS Design folder creation');
+            throw new Error('The saved project is not available for ESS Design folder creation');
         }
 
         const ensured = await ensureSiteRegistryProjectFolder(builder, project);
@@ -1436,28 +1435,22 @@ export const safetyProjectsAPI = {
             throw new Error('ESS Design did not return the created project folder');
         }
 
-        const timestamp = nowIso();
-        Object.assign(builder, folderLinkPayload(builderFolder));
-        Object.assign(project, folderLinkPayload(projectFolder));
-        builder.updatedAt = timestamp;
-        project.updatedAt = timestamp;
-        doc.updatedAt = timestamp;
-        await saveSafetyProjectsDocument(doc);
-
+        const saved = await applySiteRegistryChange('update_folder_links', {
+            builders: [{ id: builder.id, ...folderLinkPayload(builderFolder) }],
+            projects: [{ id: project.id, ...folderLinkPayload(projectFolder) }]
+        });
         return {
-            builders: cloneSafetyBuilders(doc.builders, { includeArchived: true }),
+            builders: buildersFromSiteRegistryDocument(saved, true),
             folders: [builderFolder, projectFolder]
         };
     }),
 
     autoLinkDesignFolders: async (designFolders = [], { createMissing = false, createMissingBuilderId = '', createMissingProjectId = '' } = {}) => withSafetyProjectsWriteLock(async () => {
         const folderOptions = Array.isArray(designFolders) ? [...designFolders] : [];
-
-        await ensureSafetyBucketAccess();
-        const json = await readStorageJson(SAFETY_PROJECTS_PATH, { force: true, ttlMs: SAFETY_PROJECTS_CACHE_TTL_MS });
-        const doc = parseSafetyProjects(json);
-        const timestamp = nowIso();
-        let changed = false;
+        const document = await readSiteRegistryDocument({ force: true });
+        const doc = parseSafetyProjects(document);
+        const builderLinks = [];
+        const projectLinks = [];
 
         const getBuilderFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) <= 1);
         const getSiteFolders = () => folderOptions.filter(folder => Number(folder.depth || 0) === 2);
@@ -1466,7 +1459,6 @@ export const safetyProjectsAPI = {
             let builderFolder = builder.designFolderId
                 ? folderOptions.find(folder => folder.id === builder.designFolderId) || null
                 : null;
-
             if (!builderFolder) {
                 builderFolder = findBestDesignFolderMatch(
                     builder.name,
@@ -1478,69 +1470,62 @@ export const safetyProjectsAPI = {
             const canCreateBuilderFolder = createMissing
                 && (builder.id === createMissingBuilderId
                     || builder.projects.some(project => project.id === createMissingProjectId));
-            if (!builderFolder) {
-                if (!canCreateBuilderFolder) {
-                    continue;
-                }
+            if (!builderFolder && canCreateBuilderFolder) {
                 builderFolder = await createDesignFolderOption(builder.name);
                 folderOptions.push(builderFolder);
             }
+            if (!builderFolder) continue;
 
-            if (!builder.designFolderId) {
-                Object.assign(builder, folderLinkPayload(builderFolder));
-                builder.updatedAt = timestamp;
-                changed = true;
+            const builderPayload = folderLinkPayload(builderFolder);
+            if (builder.designFolderId !== builderPayload.designFolderId
+                || builder.designFolderPath !== builderPayload.designFolderPath) {
+                Object.assign(builder, builderPayload);
+                builderLinks.push({ id: builder.id, ...builderPayload });
             }
 
             for (const project of builder.projects) {
                 if (project.designFolderId) {
                     const existingProjectFolder = folderOptions.find(folder => folder.id === project.designFolderId) || null;
-                    if (isProjectDesignFolder(existingProjectFolder)) {
-                        continue;
-                    }
+                    if (isProjectDesignFolder(existingProjectFolder)) continue;
                     project.designFolderId = '';
                     project.designFolderPath = '';
-                    project.updatedAt = timestamp;
-                    builder.updatedAt = timestamp;
-                    changed = true;
-                }
-
-                if (project.designFolderId) {
-                    continue;
+                    projectLinks.push({ id: project.id, designFolderId: '', designFolderPath: '' });
                 }
 
                 const siteFolders = getSiteFolders();
-                const scopedSiteFolders = builderFolder
-                    ? siteFolders.filter(folder => folder.path?.startsWith(`${optionPath(builderFolder)} /`))
-                    : siteFolders.filter(folder => scoreDesignFolderNameMatch(builder.name, folder.builderName || folder.path) >= 0.78);
+                const scopedSiteFolders = siteFolders.filter(folder =>
+                    folder.path?.startsWith(`${optionPath(builderFolder)} /`));
                 const candidates = scopedSiteFolders.length ? scopedSiteFolders : siteFolders;
                 let projectFolder = findBestDesignFolderMatch(
                     project.name,
                     candidates,
                     folder => [folder.projectName, folder.path].filter(Boolean).join(' '),
                     0.78);
-
-                if (!projectFolder) {
-                    if (!createMissing || project.id !== createMissingProjectId) {
-                        continue;
-                    }
+                if (!projectFolder && createMissing && project.id === createMissingProjectId) {
                     projectFolder = await createDesignFolderOption(project.name, builderFolder);
                     folderOptions.push(projectFolder);
                 }
+                if (!projectFolder) continue;
 
-                Object.assign(project, folderLinkPayload(projectFolder));
-                project.updatedAt = timestamp;
-                builder.updatedAt = timestamp;
-                changed = true;
+                const projectPayload = folderLinkPayload(projectFolder);
+                Object.assign(project, projectPayload);
+                const existingLink = projectLinks.find(link => link.id === project.id);
+                if (existingLink) {
+                    Object.assign(existingLink, projectPayload);
+                } else {
+                    projectLinks.push({ id: project.id, ...projectPayload });
+                }
             }
         }
 
-        if (changed) {
-            doc.updatedAt = timestamp;
-            await saveSafetyProjectsDocument(doc);
+        if (!builderLinks.length && !projectLinks.length) {
+            return cloneSafetyBuilders(doc.builders, { includeArchived: true });
         }
-
-        return cloneSafetyBuilders(doc.builders, { includeArchived: true });
+        const saved = await applySiteRegistryChange('update_folder_links', {
+            builders: builderLinks,
+            projects: projectLinks
+        });
+        return buildersFromSiteRegistryDocument(saved, true);
     }),
 
     createBuilderAndProject: async (builderName, projectName) => withSafetyProjectsWriteLock(async () => {
@@ -1549,309 +1534,164 @@ export const safetyProjectsAPI = {
         if (!cleanBuilder || !cleanProject) {
             throw new Error('Builder and project names are required');
         }
-
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const existingBuilder = builders.find(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
         const timestamp = nowIso();
-
-        if (existingBuilder) {
-            const duplicateProject = existingBuilder.projects.some(project => project.name.toLowerCase() === cleanProject.toLowerCase());
-            if (duplicateProject) {
-                throw new Error('This project already exists under that builder');
-            }
-            existingBuilder.projects.push({
+        const saved = await applySiteRegistryChange('create_builder_and_project', {
+            builder: { id: makeId(), name: cleanBuilder, createdAt: timestamp },
+            project: {
                 id: makeId(),
                 name: cleanProject,
-                drawingNumbers: [],
-                archived: false,
-                archivedAt: null,
-                designFolderId: '',
-                designFolderPath: '',
-                createdAt: timestamp,
-                updatedAt: timestamp
-            });
-            existingBuilder.projects.sort((a, b) => a.name.localeCompare(b.name));
-            existingBuilder.updatedAt = timestamp;
-        } else {
-            builders.push({
-                id: makeId(),
-                name: cleanBuilder,
-                logoUrl: '',
-                logoPath: '',
-                designFolderId: '',
-                designFolderPath: '',
-                projects: [{
-                    id: makeId(),
-                    name: cleanProject,
-                    drawingNumbers: [],
-                    archived: false,
-                    archivedAt: null,
-                    designFolderId: '',
-                    designFolderPath: '',
-                    createdAt: timestamp,
-                    updatedAt: timestamp
-                }],
-                createdAt: timestamp,
-                updatedAt: timestamp
-            });
-            builders.sort((a, b) => a.name.localeCompare(b.name));
-        }
-
-        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
-        return builders;
+                scaffoldEntity: DEFAULT_SCAFFOLD_ENTITY,
+                createdAt: timestamp
+            }
+        });
+        return buildersFromSiteRegistryDocument(saved, true);
     }),
 
     createBuilder: async (builderName, options = {}) => withSafetyProjectsWriteLock(async () => {
         const cleanBuilder = builderName.trim();
-        if (!cleanBuilder) {
-            throw new Error('Builder name is required');
-        }
-
+        if (!cleanBuilder) throw new Error('Builder name is required');
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const duplicate = builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase());
-        if (duplicate) {
+        if (builders.some(builder => builder.name.toLowerCase() === cleanBuilder.toLowerCase())) {
             throw new Error('A builder with that name already exists');
         }
-
         const timestamp = nowIso();
         const builderId = makeId();
         const logoPath = options.logoFile ? await uploadBuilderLogoFile(builderId, options.logoFile) : '';
-        builders.push({
-            id: builderId,
-            name: cleanBuilder,
-            logoUrl: '',
-            logoPath,
-            designFolderId: options.designFolderId || '',
-            designFolderPath: options.designFolderPath || '',
-            projects: [],
-            createdAt: timestamp,
-            updatedAt: timestamp
+        const saved = await applySiteRegistryChange('create_builder', {
+            builder: {
+                id: builderId,
+                name: cleanBuilder,
+                logoUrl: '',
+                logoPath,
+                designFolderId: options.designFolderId || '',
+                designFolderPath: options.designFolderPath || '',
+                createdAt: timestamp
+            }
         });
-        builders.sort((a, b) => a.name.localeCompare(b.name));
-        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
-        return builders;
+        return buildersFromSiteRegistryDocument(saved, true);
     }),
 
     createProject: async (builderId, projectName, siteLocation = '', options = {}) => withSafetyProjectsWriteLock(async () => {
         const cleanProject = projectName.trim();
-        const cleanLocation = siteLocation.trim();
-        if (!builderId) {
-            throw new Error('Builder is required');
-        }
-        if (!cleanProject) {
-            throw new Error('Project site name is required');
-        }
-
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const builder = builders.find(item => item.id === builderId);
-        if (!builder) {
-            throw new Error('Builder not found');
-        }
-
-        const duplicate = builder.projects.some(project => project.name.toLowerCase() === cleanProject.toLowerCase());
-        if (duplicate) {
-            throw new Error('A project with that name already exists under this builder');
-        }
-
+        if (!builderId) throw new Error('Builder is required');
+        if (!cleanProject) throw new Error('Project site name is required');
         const timestamp = nowIso();
-        builder.projects.push({
-            id: makeId(),
-            name: cleanProject,
-            drawingNumbers: [],
-            archived: false,
-            archivedAt: null,
-            siteLocation: cleanLocation,
-            designFolderId: options.designFolderId || '',
-            designFolderPath: options.designFolderPath || '',
-            scaffoldEntity: normalizeScaffoldEntity(options.scaffoldEntity),
-            projectManagerUserId: options.projectManagerUserId || '',
-            siteSupervisorUserId: options.siteSupervisorUserId || '',
-            leadingHandUserId: options.leadingHandUserId || '',
-            projectManagerEmployeeId: options.projectManagerEmployeeId || '',
-            siteSupervisorEmployeeId: options.siteSupervisorEmployeeId || '',
-            leadingHandEmployeeId: options.leadingHandEmployeeId || '',
-            inductedEmployeeIds: Array.isArray(options.inductedEmployeeIds)
-                ? Array.from(new Set(options.inductedEmployeeIds.filter(Boolean)))
-                : [],
-            createdAt: timestamp,
-            updatedAt: timestamp
+        const saved = await applySiteRegistryChange('create_project', {
+            project: {
+                id: makeId(),
+                builderId,
+                name: cleanProject,
+                siteLocation: siteLocation.trim(),
+                designFolderId: options.designFolderId || '',
+                designFolderPath: options.designFolderPath || '',
+                scaffoldEntity: normalizeScaffoldEntity(options.scaffoldEntity),
+                projectManagerUserId: options.projectManagerUserId || '',
+                siteSupervisorUserId: options.siteSupervisorUserId || '',
+                leadingHandUserId: options.leadingHandUserId || '',
+                projectManagerEmployeeId: options.projectManagerEmployeeId || '',
+                siteSupervisorEmployeeId: options.siteSupervisorEmployeeId || '',
+                leadingHandEmployeeId: options.leadingHandEmployeeId || '',
+                inductedEmployeeIds: Array.from(new Set((options.inductedEmployeeIds || []).filter(Boolean))),
+                createdAt: timestamp
+            }
         });
-        builder.projects.sort((a, b) => a.name.localeCompare(b.name));
-        builder.updatedAt = timestamp;
-        await saveSafetyProjectsDocument({ builders, updatedAt: timestamp });
-        return builders;
+        return buildersFromSiteRegistryDocument(saved, true);
     }),
 
     renameBuilder: async (builderId, nextName, options = {}) => withSafetyProjectsWriteLock(async () => {
         const clean = nextName.trim();
-        if (!clean) {
-            throw new Error('Builder name is required');
-        }
+        if (!clean) throw new Error('Builder name is required');
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
         const target = builders.find(builder => builder.id === builderId);
-        if (!target) {
-            throw new Error('Builder not found');
-        }
-        const duplicate = builders.some(builder => builder.id !== builderId && builder.name.toLowerCase() === clean.toLowerCase());
-        if (duplicate) {
-            throw new Error('A builder with that name already exists');
-        }
-        target.name = clean;
-        if (Object.prototype.hasOwnProperty.call(options, 'designFolderId')) {
-            target.designFolderId = options.designFolderId || '';
-            target.designFolderPath = options.designFolderPath || '';
-        } else if (!target.designFolderId) {
-            target.designFolderId = '';
-            target.designFolderPath = target.designFolderPath || '';
-        }
+        if (!target) throw new Error('Builder not found');
+
+        const payload = {
+            builderId,
+            name: clean,
+            logoUrl: target.logoUrl || '',
+            logoPath: target.logoPath || '',
+            designFolderId: Object.prototype.hasOwnProperty.call(options, 'designFolderId')
+                ? options.designFolderId || ''
+                : target.designFolderId || '',
+            designFolderPath: Object.prototype.hasOwnProperty.call(options, 'designFolderId')
+                ? options.designFolderPath || ''
+                : target.designFolderPath || ''
+        };
         if (options.removeLogo) {
-            target.logoUrl = '';
-            target.logoPath = '';
+            payload.logoUrl = '';
+            payload.logoPath = '';
         } else if (options.logoFile) {
-            target.logoUrl = '';
-            target.logoPath = await uploadBuilderLogoFile(builderId, options.logoFile);
+            payload.logoUrl = '';
+            payload.logoPath = await uploadBuilderLogoFile(builderId, options.logoFile);
         } else if (Object.prototype.hasOwnProperty.call(options, 'logoUrl')) {
-            target.logoUrl = typeof options.logoUrl === 'string' ? options.logoUrl : '';
-            target.logoPath = '';
+            payload.logoUrl = options.logoUrl || '';
+            payload.logoPath = '';
         } else if (Object.prototype.hasOwnProperty.call(options, 'logoPath')) {
-            target.logoUrl = '';
-            target.logoPath = typeof options.logoPath === 'string' ? options.logoPath : '';
+            payload.logoUrl = '';
+            payload.logoPath = options.logoPath || '';
         }
-        target.updatedAt = nowIso();
-        builders.sort((a, b) => a.name.localeCompare(b.name));
-        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
-        return builders;
+        return buildersFromSiteRegistryDocument(
+            await applySiteRegistryChange('update_builder', payload),
+            true);
     }),
 
     resolveBuilderLogoUrl,
 
     renameProject: async (builderId, projectId, nextName, siteLocation = '', options = {}) => withSafetyProjectsWriteLock(async () => {
         const clean = nextName.trim();
-        const cleanLocation = siteLocation.trim();
-        if (!clean) {
-            throw new Error('Project name is required');
-        }
+        if (!clean) throw new Error('Project name is required');
         const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const builder = builders.find(item => item.id === builderId);
-        if (!builder) {
-            throw new Error('Builder not found');
-        }
-        const project = builder.projects.find(item => item.id === projectId);
-        if (!project) {
-            throw new Error('Project not found');
-        }
-        const duplicate = builder.projects.some(item => item.id !== projectId && item.name.toLowerCase() === clean.toLowerCase());
-        if (duplicate) {
-            throw new Error('A project with that name already exists under this builder');
-        }
-        project.name = clean;
-        project.siteLocation = cleanLocation;
-        if (Object.prototype.hasOwnProperty.call(options, 'designFolderId')) {
-            project.designFolderId = options.designFolderId || '';
-            project.designFolderPath = options.designFolderPath || '';
-        } else if (!project.designFolderId) {
-            project.designFolderId = '';
-            project.designFolderPath = project.designFolderPath || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'scaffoldEntity')) {
-            project.scaffoldEntity = normalizeScaffoldEntity(options.scaffoldEntity);
-        } else if (!project.scaffoldEntity) {
-            project.scaffoldEntity = DEFAULT_SCAFFOLD_ENTITY;
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'projectManagerUserId')) {
-            project.projectManagerUserId = options.projectManagerUserId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorUserId')) {
-            project.siteSupervisorUserId = options.siteSupervisorUserId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'leadingHandUserId')) {
-            project.leadingHandUserId = options.leadingHandUserId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'projectManagerEmployeeId')) {
-            project.projectManagerEmployeeId = options.projectManagerEmployeeId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'siteSupervisorEmployeeId')) {
-            project.siteSupervisorEmployeeId = options.siteSupervisorEmployeeId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'leadingHandEmployeeId')) {
-            project.leadingHandEmployeeId = options.leadingHandEmployeeId || '';
-        }
-        if (Object.prototype.hasOwnProperty.call(options, 'inductedEmployeeIds')) {
-            project.inductedEmployeeIds = Array.isArray(options.inductedEmployeeIds)
-                ? Array.from(new Set(options.inductedEmployeeIds.filter(Boolean)))
-                : [];
-        }
-        project.updatedAt = nowIso();
-        builder.projects.sort((a, b) => a.name.localeCompare(b.name));
-        builder.updatedAt = nowIso();
-        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
-        return builders;
+        const project = builders.find(item => item.id === builderId)?.projects.find(item => item.id === projectId);
+        if (!project) throw new Error('Project not found');
+        const saved = await applySiteRegistryChange('update_project', {
+            project: {
+                ...project,
+                id: projectId,
+                builderId,
+                name: clean,
+                siteLocation: siteLocation.trim(),
+                designFolderId: Object.prototype.hasOwnProperty.call(options, 'designFolderId')
+                    ? options.designFolderId || ''
+                    : project.designFolderId || '',
+                designFolderPath: Object.prototype.hasOwnProperty.call(options, 'designFolderId')
+                    ? options.designFolderPath || ''
+                    : project.designFolderPath || '',
+                scaffoldEntity: Object.prototype.hasOwnProperty.call(options, 'scaffoldEntity')
+                    ? normalizeScaffoldEntity(options.scaffoldEntity)
+                    : normalizeScaffoldEntity(project.scaffoldEntity),
+                projectManagerUserId: options.projectManagerUserId ?? project.projectManagerUserId ?? '',
+                siteSupervisorUserId: options.siteSupervisorUserId ?? project.siteSupervisorUserId ?? '',
+                leadingHandUserId: options.leadingHandUserId ?? project.leadingHandUserId ?? '',
+                projectManagerEmployeeId: options.projectManagerEmployeeId ?? project.projectManagerEmployeeId ?? '',
+                siteSupervisorEmployeeId: options.siteSupervisorEmployeeId ?? project.siteSupervisorEmployeeId ?? '',
+                leadingHandEmployeeId: options.leadingHandEmployeeId ?? project.leadingHandEmployeeId ?? '',
+                inductedEmployeeIds: Object.prototype.hasOwnProperty.call(options, 'inductedEmployeeIds')
+                    ? Array.from(new Set((options.inductedEmployeeIds || []).filter(Boolean)))
+                    : project.inductedEmployeeIds || []
+            }
+        });
+        return buildersFromSiteRegistryDocument(saved, true);
     }),
 
-    deleteBuilder: async (builderId) => withSafetyProjectsWriteLock(async () => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const target = builders.find(builder => builder.id === builderId);
-        if (!target) {
-            throw new Error('Builder not found');
-        }
-        if (target.projects.length > 0) {
-            throw new Error('This builder still has projects attached. Remove those first.');
-        }
-        const nextBuilders = builders.filter(builder => builder.id !== builderId);
-        await saveSafetyProjectsDocument({ builders: nextBuilders, updatedAt: nowIso() });
-        return nextBuilders;
-    }),
+    deleteBuilder: async (builderId) => withSafetyProjectsWriteLock(async () =>
+        buildersFromSiteRegistryDocument(
+            await applySiteRegistryChange('delete_builder', { builderId }),
+            true)),
 
-    deleteProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const target = builders.find(builder => builder.id === builderId);
-        if (!target) {
-            throw new Error('Builder not found');
-        }
-        if (!target.projects.some(project => project.id === projectId)) {
-            throw new Error('Project not found');
-        }
-        target.projects = target.projects.filter(project => project.id !== projectId);
-        target.updatedAt = nowIso();
-        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
-        return builders;
-    }),
+    deleteProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () =>
+        buildersFromSiteRegistryDocument(
+            await applySiteRegistryChange('delete_project', { builderId, projectId }),
+            true)),
 
-    archiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const builder = builders.find(item => item.id === builderId);
-        if (!builder) {
-            throw new Error('Builder not found');
-        }
-        const project = builder.projects.find(item => item.id === projectId);
-        if (!project) {
-            throw new Error('Project not found');
-        }
-        project.archived = true;
-        project.archivedAt = nowIso();
-        project.updatedAt = nowIso();
-        builder.updatedAt = nowIso();
-        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
-        return builders;
-    }),
+    archiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () =>
+        buildersFromSiteRegistryDocument(
+            await applySiteRegistryChange('set_project_archived', { builderId, projectId, archived: true }),
+            true)),
 
-    unarchiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () => {
-        const builders = await safetyProjectsAPI.getBuilders({ includeArchived: true, force: true });
-        const builder = builders.find(item => item.id === builderId);
-        if (!builder) {
-            throw new Error('Builder not found');
-        }
-        const project = builder.projects.find(item => item.id === projectId);
-        if (!project) {
-            throw new Error('Project not found');
-        }
-        project.archived = false;
-        project.archivedAt = null;
-        project.updatedAt = nowIso();
-        builder.updatedAt = nowIso();
-        await saveSafetyProjectsDocument({ builders, updatedAt: nowIso() });
-        return builders;
-    })
+    unarchiveProject: async (builderId, projectId) => withSafetyProjectsWriteLock(async () =>
+        buildersFromSiteRegistryDocument(
+            await applySiteRegistryChange('set_project_archived', { builderId, projectId, archived: false }),
+            true))
 };
 
 function mapMaterialOrderRow(row) {
