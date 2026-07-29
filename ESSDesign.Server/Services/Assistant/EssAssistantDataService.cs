@@ -779,15 +779,6 @@ public sealed class EssAssistantDataService
 
         var isProjectDocumentList = !string.IsNullOrWhiteSpace(normalizedKind);
         var includeFormDetails = !isProjectDocumentList;
-        foreach (var record in matches.Where(record => includeFormDetails && !string.IsNullOrWhiteSpace(record.FormPath)).Take(12))
-        {
-            using var details = await _gateway.ReadStorageJsonAsync(ProjectBucket, record.FormPath!, cancellationToken);
-            record.Details = details?.RootElement.Clone();
-            if (record.Details is JsonElement detailElement)
-            {
-                record.PdfPath = GetStringAny(detailElement, "pdfPath", "pdf_path") ?? record.PdfPath;
-            }
-        }
 
         var links = isProjectDocumentList
             ? await BuildProjectDataLinksAsync(matches, cancellationToken)
@@ -1510,17 +1501,20 @@ public sealed class EssAssistantDataService
         ICollection<ProjectDataRecord> records,
         CancellationToken cancellationToken)
     {
-        var prefix = $"site-data/{site.BuilderId}/{site.ProjectId}/{kind}";
-        var objects = await _gateway.ListStorageObjectsAsync(ProjectBucket, prefix, 1000, cancellationToken);
-        foreach (var item in objects)
+        var rows = await _gateway.GetRowsAsync(
+            "ess_safety_files"
+            + "?select=storage_path,file_name,updated_at"
+            + $"&builder_id=eq.{Uri.EscapeDataString(site.BuilderId)}"
+            + $"&project_id=eq.{Uri.EscapeDataString(site.ProjectId)}"
+            + $"&module_kind=eq.{Uri.EscapeDataString(kind)}"
+            + "&order=updated_at.desc&limit=1000",
+            cancellationToken);
+        foreach (var row in rows)
         {
-            var name = GetString(item, "name");
-            if (string.IsNullOrWhiteSpace(name) || name.EndsWith(".emptyFolderPlaceholder", StringComparison.OrdinalIgnoreCase))
+            var storagePath = GetStringAny(row, "storage_path");
+            var fileName = GetStringAny(row, "file_name");
+            if (string.IsNullOrWhiteSpace(storagePath))
                 continue;
-
-            var storagePath = name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? name
-                : $"{prefix}/{name.TrimStart('/')}";
             if (!storagePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -1532,11 +1526,11 @@ public sealed class EssAssistantDataService
                 BuilderName = site.BuilderName,
                 ProjectName = site.Name,
                 Kind = kind,
-                Name = Path.GetFileNameWithoutExtension(storagePath),
+                Name = Path.GetFileNameWithoutExtension(fileName ?? storagePath),
                 Reference = DrawingNumberPattern.Match(storagePath).Value,
                 StoragePath = storagePath,
                 PdfPath = storagePath,
-                UpdatedAt = GetStringAny(item, "updated_at", "updatedAt", "created_at", "createdAt"),
+                UpdatedAt = GetString(row, "updated_at"),
             });
         }
     }
@@ -1547,35 +1541,30 @@ public sealed class EssAssistantDataService
         ICollection<ProjectDataRecord> records,
         CancellationToken cancellationToken)
     {
-        var prefix = $"site-data/{site.BuilderId}/{site.ProjectId}/{kind}";
-        using var index = await _gateway.ReadStorageJsonAsync(ProjectBucket, $"{prefix}/index.json", cancellationToken);
-        if (index == null)
-            return;
-
-        var root = index.RootElement;
-        var forms = root.ValueKind == JsonValueKind.Array
-            ? root
-            : root.TryGetProperty("forms", out var formArray) && formArray.ValueKind == JsonValueKind.Array
-                ? formArray
-                : default;
-        if (forms.ValueKind != JsonValueKind.Array)
-            return;
-
-        foreach (var form in forms.EnumerateArray())
+        var rows = await _gateway.GetRowsAsync(
+            "ess_safety_forms"
+            + "?select=id,title,reference_number,pdf_path,updated_at,payload"
+            + $"&form_type=eq.{Uri.EscapeDataString(kind)}"
+            + $"&builder_id=eq.{Uri.EscapeDataString(site.BuilderId)}"
+            + $"&project_id=eq.{Uri.EscapeDataString(site.ProjectId)}"
+            + "&order=updated_at.desc&limit=1000",
+            cancellationToken);
+        foreach (var row in rows)
         {
-            var id = GetStringAny(form, "id", "formId", "form_id");
+            var id = GetString(row, "id");
             if (string.IsNullOrWhiteSpace(id))
                 continue;
 
-            var name = GetStringAny(form,
+            var payload = GetObject(row, "payload");
+            var name = GetStringAny(row, "title") ?? GetStringAny(payload,
                 "formReferenceName", "form_reference_name", "scaffoldName", "scaffold_name",
                 "title", "variationNumber", "variation_number", "inspectionNumber", "inspection_number",
                 "scaffoldNo", "scaffold_no") ?? $"{kind} {id}";
-            var reference = GetStringAny(form,
+            var reference = GetStringAny(row, "reference_number") ?? GetStringAny(payload,
                 "reference", "formReference", "form_reference", "variationNumber", "variation_number",
                 "inspectionNumber", "inspection_number", "scaffoldNo", "scaffold_no");
-            var formPath = GetStringAny(form, "formPath", "form_path") ?? $"{prefix}/forms/{id}.json";
-            var pdfPath = GetStringAny(form, "pdfPath", "pdf_path") ?? $"{prefix}/pdf/{id}.pdf";
+            var pdfPath = GetStringAny(row, "pdf_path") ?? GetStringAny(payload, "pdfPath", "pdf_path")
+                ?? $"site-data/{site.BuilderId}/{site.ProjectId}/{kind}/pdf/{id}.pdf";
 
             records.Add(new ProjectDataRecord
             {
@@ -1589,9 +1578,9 @@ public sealed class EssAssistantDataService
                 Name = name,
                 Reference = reference,
                 StoragePath = pdfPath,
-                FormPath = formPath,
                 PdfPath = pdfPath,
-                UpdatedAt = GetStringAny(form, "updatedAt", "updated_at", "createdAt", "created_at"),
+                UpdatedAt = GetString(row, "updated_at"),
+                Details = payload,
             });
         }
     }
@@ -1992,7 +1981,6 @@ public sealed class EssAssistantDataService
         public string Name { get; init; } = string.Empty;
         public string? Reference { get; init; }
         public string StoragePath { get; init; } = string.Empty;
-        public string? FormPath { get; init; }
         public string? PdfPath { get; set; }
         public string? UpdatedAt { get; init; }
         public JsonElement? Details { get; set; }

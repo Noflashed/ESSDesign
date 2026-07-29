@@ -68,6 +68,24 @@ namespace ESSDesign.Server.Services
             public DateTime UpdatedAt { get; set; }
         }
 
+        private sealed class SafetyFormRow
+        {
+            [JsonPropertyName("pdf_path")]
+            public string? PdfPath { get; set; }
+
+            [JsonPropertyName("photo_paths")]
+            public List<string> PhotoPaths { get; set; } = new();
+
+            [JsonPropertyName("title")]
+            public string? Title { get; set; }
+
+            [JsonPropertyName("project_label")]
+            public string? ProjectLabel { get; set; }
+
+            [JsonPropertyName("payload")]
+            public JsonElement Payload { get; set; }
+        }
+
         private sealed class FolderWriteRow
         {
             [JsonPropertyName("id")]
@@ -2585,59 +2603,50 @@ namespace ESSDesign.Server.Services
 
         public async Task<ScaffTagFormDetails?> GetScaffTagFormDetailsAsync(string builderId, string projectId, string formId)
         {
-            var formPath = $"site-data/{builderId}/{projectId}/scaff-tags/forms/{formId}.json";
-            var json = await DownloadStorageObjectAsync(_safetyBucketName, formPath);
-            if (string.IsNullOrWhiteSpace(json))
+            var rows = await GetRestRowsAsync<SafetyFormRow>(
+                "ess_safety_forms"
+                + "?select=pdf_path,photo_paths,title,project_label,payload"
+                + "&form_type=eq.scaff-tags"
+                + $"&id=eq.{Uri.EscapeDataString(formId)}"
+                + $"&builder_id=eq.{Uri.EscapeDataString(builderId)}"
+                + $"&project_id=eq.{Uri.EscapeDataString(projectId)}"
+                + "&limit=1");
+            var row = rows.FirstOrDefault();
+            if (row == null || string.IsNullOrWhiteSpace(row.PdfPath))
             {
                 return null;
             }
 
-            try
+            static string? PayloadString(JsonElement payload, params string[] names)
             {
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                var details = new ScaffTagFormDetails();
-
-                if (root.TryGetProperty("pdfPath", out var pdfPathElement))
+                if (payload.ValueKind != JsonValueKind.Object)
                 {
-                    details.PdfPath = pdfPathElement.GetString();
-                }
-                else if (root.TryGetProperty("pdf_path", out var pdfPathSnakeElement))
-                {
-                    details.PdfPath = pdfPathSnakeElement.GetString();
+                    return null;
                 }
 
-                if (root.TryGetProperty("photoPaths", out var photoPathsElement) &&
-                    photoPathsElement.ValueKind == JsonValueKind.Array)
+                foreach (var name in names)
                 {
-                    foreach (var item in photoPathsElement.EnumerateArray())
+                    if (payload.TryGetProperty(name, out var value) &&
+                        value.ValueKind == JsonValueKind.String)
                     {
-                        var value = item.GetString();
-                        if (!string.IsNullOrWhiteSpace(value))
-                        {
-                            details.PhotoPaths.Add(value);
-                        }
+                        return value.GetString();
                     }
                 }
-
-                if (root.TryGetProperty("scaffoldNo", out var scaffoldElement))
-                {
-                    details.ScaffoldName = scaffoldElement.GetString();
-                }
-
-                if (root.TryGetProperty("jobLocation", out var jobLocationElement))
-                {
-                    details.JobLocation = jobLocationElement.GetString();
-                }
-
-                return string.IsNullOrWhiteSpace(details.PdfPath) ? null : details;
+                return null;
             }
-            catch (JsonException ex)
+
+            return new ScaffTagFormDetails
             {
-                _logger.LogWarning(ex, "Failed to parse scaff-tag form JSON at {Path}", formPath);
-            }
-
-            return null;
+                PdfPath = row.PdfPath,
+                PhotoPaths = row.PhotoPaths
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                ScaffoldName = PayloadString(row.Payload, "scaffoldNo", "tagNumber")
+                    ?? row.Title,
+                JobLocation = PayloadString(row.Payload, "jobLocation")
+                    ?? row.ProjectLabel,
+            };
         }
 
         public async Task<string> GetSafetyStorageSignedUrlAsync(string path, int expiresInSeconds = 60 * 60 * 24 * 14)

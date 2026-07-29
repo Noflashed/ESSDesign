@@ -438,6 +438,8 @@ const MATERIAL_REQUEST_INDEX_PATH = 'material-order-requests/index.json';
 const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
 const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
 const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
+const SAFETY_FORMS_TABLE = 'ess_safety_forms';
+const SAFETY_FILES_TABLE = 'ess_safety_files';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 60 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORAGE_JSON_CACHE_TTL_MS = 60 * 1000;
@@ -453,8 +455,6 @@ let materialRequestIndexWriteQueue = Promise.resolve();
 let safetyProjectsWriteQueue = Promise.resolve();
 let siteRegistryDocumentCache = null;
 let siteRegistryDocumentCacheExpiresAt = 0;
-let materialOrderRequestsTableAvailable = null;
-let materialOrderRequestsTableSeedPromise = null;
 
 function getStorageJsonCacheTtl(path) {
     if (path === MATERIAL_REQUEST_INDEX_PATH) {
@@ -2343,17 +2343,15 @@ function isMissingMaterialOrderRequestsTableError(error) {
 }
 
 async function tryMaterialOrderRequestsTable(operation) {
-    if (materialOrderRequestsTableAvailable === false) {
-        return null;
-    }
     try {
-        const result = await operation();
-        materialOrderRequestsTableAvailable = true;
-        return result;
+        return await operation();
     } catch (error) {
         if (isMissingMaterialOrderRequestsTableError(error)) {
-            materialOrderRequestsTableAvailable = false;
-            return null;
+            throw new Error(
+                'The relational Material Requests migration is not installed. '
+                + 'Run database/migrations/020_add_material_order_requests.sql '
+                + 'and database/migrations/040_migrate_safety_modules_to_relational.sql in Supabase.'
+            );
         }
         throw error;
     }
@@ -2504,51 +2502,14 @@ function mergeTransportRouteSnapshots(record, snapshots) {
     };
 }
 
-async function seedMaterialOrderRequestsTableFromStorage() {
-    if (materialOrderRequestsTableSeedPromise) {
-        return materialOrderRequestsTableSeedPromise;
-    }
-
-    materialOrderRequestsTableSeedPromise = (async () => {
-        const rawIndex = await readStorageJson(MATERIAL_REQUEST_INDEX_PATH, { force: true }).catch(() => null);
-        const storageItems = Array.isArray(rawIndex?.requests) ? rawIndex.requests : [];
-        const records = storageItems
-            .map(normalizeMaterialOrderRequestRecord)
-            .filter(item => item?.id);
-        if (records.length === 0) {
-            return [];
-        }
-        const rows = await postRestRows(
-            MATERIAL_ORDER_REQUESTS_TABLE,
-            records.map(mapMaterialOrderRequestRecordToRow),
-            'id'
-        );
-        return (Array.isArray(rows) ? rows : []).map(mapMaterialOrderRequestRow).filter(Boolean);
-    })().finally(() => {
-        materialOrderRequestsTableSeedPromise = null;
-    });
-
-    return materialOrderRequestsTableSeedPromise;
-}
-
-async function readMaterialOrderRequestTableRecords({ seed = true, force = false } = {}) {
-    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc', { force });
-    if (seed && rows.length === 0) {
-        const seeded = await seedMaterialOrderRequestsTableFromStorage();
-        if (seeded.length > 0) {
-            rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc', { force });
-        }
-    }
+async function readMaterialOrderRequestTableRecords({ force = false } = {}) {
+    const rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, '?select=*&order=submitted_at.desc', { force });
     return rows.map(mapMaterialOrderRequestRow).filter(Boolean);
 }
 
-async function readMaterialOrderRequestTableRecord(requestId, { seed = true } = {}) {
+async function readMaterialOrderRequestTableRecord(requestId) {
     const query = `?select=*&id=eq.${encodeURIComponent(requestId)}&limit=1`;
-    let rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, query);
-    if (seed && rows.length === 0) {
-        await seedMaterialOrderRequestsTableFromStorage();
-        rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, query);
-    }
+    const rows = await readRestRows(MATERIAL_ORDER_REQUESTS_TABLE, query);
     return mapMaterialOrderRequestRow(rows[0]) || null;
 }
 
@@ -2823,7 +2784,7 @@ async function deleteMaterialOrderRequestInTable(requestId) {
     return tryMaterialOrderRequestsTable(async () => {
         const record = await readMaterialOrderRequestTableRecord(requestId);
         if (!record) throw new Error('Request not found');
-        const existingRecords = await readMaterialOrderRequestTableRecords({ seed: false });
+        const existingRecords = await readMaterialOrderRequestTableRecords();
         const pdfPath = record.pdfPath || materialOrderRequestPdfPath(requestId);
         const pdfStillReferenced = Boolean(pdfPath && existingRecords.some(item => item.id !== requestId && item.pdfPath === pdfPath));
         await deleteMaterialOrderRequestTableRecord(requestId);
@@ -2866,7 +2827,7 @@ async function setSecondaryMaterialOrderRouteInTable(requestId, secondaryRoute, 
             throw new Error('Selected material order is no longer available to add as a secondary route');
         }
         const linkedRecord = linkedIndexItem?.id
-            ? await readMaterialOrderRequestTableRecord(linkedIndexItem.id, { seed: false }).catch(() => null)
+            ? await readMaterialOrderRequestTableRecord(linkedIndexItem.id).catch(() => null)
             : null;
         if (linkedRequestId && (linkedRecord?.scheduledDate || linkedRecord?.scheduledAtIso)) {
             throw new Error('Selected material order is no longer available to add as a secondary route');
@@ -2877,7 +2838,7 @@ async function setSecondaryMaterialOrderRouteInTable(requestId, secondaryRoute, 
             || `secondary-${requestId}-${makeId()}`;
         const existingSecondaryRecord = linkedSourceRecord || (existingSecondaryIndexItem?.id
             && !shouldInsertBeforeExistingSecondary
-            ? await readMaterialOrderRequestTableRecord(existingSecondaryIndexItem.id, { seed: false }).catch(() => null)
+            ? await readMaterialOrderRequestTableRecord(existingSecondaryIndexItem.id).catch(() => null)
             : null);
         const scheduledDate = schedule.date || schedule.scheduledDate || record.scheduledDate || null;
         const scheduledHour = typeof schedule.hour === 'number'
@@ -3105,10 +3066,16 @@ export const materialOrderRequestsAPI = {
             'application/pdf'
         );
 
-        const tableRecord = await tryMaterialOrderRequestsTable(async () => {
-            const [saved] = await upsertMaterialOrderRequestTableRecords(record);
-            return saved || normalizeMaterialOrderRequestRecord(record);
-        });
+        let tableRecord;
+        try {
+            tableRecord = await tryMaterialOrderRequestsTable(async () => {
+                const [saved] = await upsertMaterialOrderRequestTableRecords(record);
+                return saved || normalizeMaterialOrderRequestRecord(record);
+            });
+        } catch (error) {
+            await deleteStorageObject(pdfPath).catch(() => {});
+            throw error;
+        }
         if (tableRecord) {
             return tableRecord;
         }
@@ -3198,15 +3165,8 @@ export const materialOrderRequestsAPI = {
             .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
     },
 
-    getRequest: async (requestId) => {
-        const tableRecord = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecord(requestId));
-        if (tableRecord) {
-            return tableRecord;
-        }
-
-        const request = await readStorageJson(`material-order-requests/requests/${requestId}.json`);
-        return normalizeMaterialOrderRequestRecord(request);
-    },
+    getRequest: async (requestId) =>
+        tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecord(requestId)),
 
     getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
 
@@ -4347,80 +4307,225 @@ async function deleteStorageObject(path) {
     emitStorageJsonChanged(path);
 }
 
+function mapSafetyFileRow(row) {
+    return {
+        name: row.file_name || '',
+        path: row.storage_path || '',
+        kind: row.module_kind || '',
+        updatedAt: row.updated_at || row.created_at || nowIso(),
+        size: Number.isFinite(Number(row.file_size)) ? Number(row.file_size) : null
+    };
+}
+
 export const safetyFilesAPI = {
     listModuleFiles: async (builderId, projectId, kind) => {
-        const prefix = safetyModulePrefix(builderId, projectId, kind);
-        const response = await fetch(safetyBucketListUrl(), {
-            method: 'POST',
-            headers: storageHeaders(true),
-            body: JSON.stringify({ prefix, limit: 200, offset: 0 })
-        });
-
-        if (!response.ok) {
-            const details = await response.text();
-            throw new Error(details || 'Failed to list files');
-        }
-
-        const rows = await response.json();
-        return rows
-            .filter(row => typeof row.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
-            .map(row => ({
-                name: row.name,
-                path: `${prefix}/${row.name}`,
-                updatedAt: row.updated_at || nowIso(),
-                size: row.metadata?.size ?? null
-            }))
-            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        const query = `?select=*&builder_id=eq.${encodeURIComponent(builderId)}`
+            + `&project_id=eq.${encodeURIComponent(projectId)}`
+            + `&module_kind=eq.${encodeURIComponent(kind)}`
+            + '&order=updated_at.desc';
+        const rows = await readRestRows(SAFETY_FILES_TABLE, query, { force: true });
+        return rows.map(mapSafetyFileRow);
     },
 
     uploadModulePdf: async (builderId, projectId, kind, file) => {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const objectPath = `${safetyModulePrefix(builderId, projectId, kind)}/${Date.now()}-${safeName}`;
         await uploadStorageObject(objectPath, file, 'application/pdf');
+        try {
+            await postRestRows(SAFETY_FILES_TABLE, [{
+                storage_path: objectPath,
+                builder_id: builderId,
+                project_id: projectId,
+                module_kind: kind,
+                file_name: file.name,
+                content_type: file.type || 'application/pdf',
+                file_size: Number.isFinite(file.size) ? file.size : null,
+                uploaded_by_user_id: authAPI.getCurrentUser()?.id || null,
+                updated_at: nowIso()
+            }], 'storage_path');
+        } catch (error) {
+            await deleteStorageObject(objectPath).catch(() => {});
+            throw error;
+        }
     },
 
     getSignedModuleFileUrl: async (path) => signedStorageUrl(path, 3600),
 
     deleteModuleFile: async (path) => {
-        await deleteStorageObject(path);
+        await deleteRestRows(
+            SAFETY_FILES_TABLE,
+            `?storage_path=eq.${encodeURIComponent(path)}`
+        );
+        await deleteStorageObject(path).catch(() => {});
     }
 };
 
 const handoverPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'handover-certificates')}`;
-const handoverIndexPath = (builderId, projectId) => `${handoverPrefix(builderId, projectId)}/index.json`;
-const handoverFormPath = (builderId, projectId, formId) => `${handoverPrefix(builderId, projectId)}/forms/${formId}.json`;
 const handoverPdfPath = (builderId, projectId, formId) => `${handoverPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
 
-function parseHandoverIndex(raw) {
-    if (!raw || !Array.isArray(raw.forms)) {
-        return { forms: [], updatedAt: nowIso() };
-    }
+function safetyFormPhotoPaths(form) {
+    return Array.from(new Set([
+        ...(Array.isArray(form?.photoPaths) ? form.photoPaths : []),
+        ...(Array.isArray(form?.photoSlots)
+            ? form.photoSlots.map(item => item?.path)
+            : [])
+    ].map(path => String(path || '').trim()).filter(Boolean)));
+}
 
+function safetyFormMetadata(formType, form) {
+    if (formType === 'scaff-tags') {
+        return {
+            title: form.scaffoldNo || form.tagNumber || '',
+            referenceNumber: form.scaffoldNo || form.tagNumber || '',
+            requestedBy: form.inspectedBy || form.competentPerson || '',
+            projectLabel: form.jobLocation || '',
+            eventDate: form.latestInspectionDate || ''
+        };
+    }
+    if (formType === 'handover-certificates') {
+        return {
+            title: form.formReferenceName || '',
+            referenceNumber: form.inspectionNumber || '',
+            requestedBy: form.essRepresentativeName || '',
+            projectLabel: form.projectNumberClient || '',
+            eventDate: form.inspectionDateTime || ''
+        };
+    }
     return {
-        forms: raw.forms
-            .filter(item => item && typeof item.id === 'string')
-            .map(item => ({
-                id: item.id,
-                formReferenceName: item.formReferenceName || '',
-                inspectionNumber: item.inspectionNumber || '',
-                essRepresentativeName: item.essRepresentativeName || '',
-                projectNumberClient: item.projectNumberClient || '',
-                inspectionDateTime: item.inspectionDateTime || '',
-                updatedAt: item.updatedAt || nowIso()
-            }))
-            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-        updatedAt: raw.updatedAt || nowIso()
+        title: form.formReferenceName || '',
+        referenceNumber: form.variationNumber || '',
+        requestedBy: form.requestedBy || '',
+        projectLabel: form.clientProjectName || form.handoverDocumentTitle || '',
+        eventDate: form.date || ''
     };
+}
+
+function mapSafetyFormRow(row) {
+    if (!row) {
+        return null;
+    }
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const formType = row.form_type || payload.formType || '';
+    const id = row.id || payload.id || '';
+    const builderId = row.builder_id || payload.builderId || '';
+    const projectId = row.project_id || payload.projectId || '';
+    const defaultPdfPath = id && formType
+        ? `${safetyModulePrefix(builderId, projectId, formType)}/pdf/${id}.pdf`
+        : '';
+    const defaultSharePath = formType === 'scaff-tags' && id
+        ? `${safetyModulePrefix(builderId, projectId, formType)}/share/${id}.html`
+        : '';
+    return {
+        ...payload,
+        id,
+        formType,
+        builderId,
+        projectId,
+        title: row.title || payload.title || '',
+        referenceNumber: row.reference_number || payload.referenceNumber || '',
+        requestedBy: row.requested_by || payload.requestedBy || '',
+        projectLabel: row.project_label || payload.projectLabel || '',
+        eventDate: row.event_date || payload.eventDate || '',
+        pdfPath: row.pdf_path || payload.pdfPath || defaultPdfPath,
+        sharePath: row.share_path || payload.sharePath || defaultSharePath,
+        photoPaths: Array.isArray(row.photo_paths)
+            ? row.photo_paths
+            : safetyFormPhotoPaths(payload),
+        createdAt: row.created_at || payload.createdAt || nowIso(),
+        updatedAt: row.updated_at || payload.updatedAt || nowIso()
+    };
+}
+
+async function listSafetyFormRecords(formType, builderId, projectId) {
+    const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
+        + `&builder_id=eq.${encodeURIComponent(builderId)}`
+        + `&project_id=eq.${encodeURIComponent(projectId)}`
+        + '&order=updated_at.desc';
+    const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
+    return rows.map(mapSafetyFormRow).filter(Boolean);
+}
+
+async function getSafetyFormRecord(formType, builderId, projectId, formId) {
+    const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
+        + `&id=eq.${encodeURIComponent(formId)}`
+        + `&builder_id=eq.${encodeURIComponent(builderId)}`
+        + `&project_id=eq.${encodeURIComponent(projectId)}`
+        + '&limit=1';
+    const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
+    return mapSafetyFormRow(rows[0]);
+}
+
+async function saveSafetyFormRecord(formType, builderId, projectId, form) {
+    const id = String(form?.id || '').trim();
+    if (!id) {
+        throw new Error('A form ID is required');
+    }
+    const metadata = safetyFormMetadata(formType, form);
+    const payload = {
+        ...form,
+        id,
+        formType,
+        builderId,
+        projectId,
+        updatedAt: nowIso()
+    };
+    const rows = await postRestRows(SAFETY_FORMS_TABLE, [{
+        form_type: formType,
+        id,
+        builder_id: builderId,
+        project_id: projectId,
+        title: metadata.title,
+        reference_number: metadata.referenceNumber,
+        requested_by: metadata.requestedBy,
+        project_label: metadata.projectLabel,
+        event_date: metadata.eventDate,
+        pdf_path: form.pdfPath || `${safetyModulePrefix(builderId, projectId, formType)}/pdf/${id}.pdf`,
+        share_path: form.sharePath || '',
+        photo_paths: safetyFormPhotoPaths(form),
+        payload,
+        created_by_user_id: authAPI.getCurrentUser()?.id || null,
+        updated_at: nowIso()
+    }], 'form_type,id');
+    return mapSafetyFormRow(rows[0]);
+}
+
+async function deleteSafetyFormRecord(formType, builderId, projectId, formId) {
+    const existing = await getSafetyFormRecord(formType, builderId, projectId, formId);
+    await deleteRestRows(
+        SAFETY_FORMS_TABLE,
+        `?form_type=eq.${encodeURIComponent(formType)}`
+            + `&id=eq.${encodeURIComponent(formId)}`
+            + `&builder_id=eq.${encodeURIComponent(builderId)}`
+            + `&project_id=eq.${encodeURIComponent(projectId)}`
+    );
+    const cleanupPaths = Array.from(new Set([
+        existing?.pdfPath,
+        existing?.sharePath,
+        ...safetyFormPhotoPaths(existing)
+    ].filter(Boolean)));
+    await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
 }
 
 export const handoverCertificatesAPI = {
     listForms: async (builderId, projectId) => {
-        const index = await readStorageJson(handoverIndexPath(builderId, projectId));
-        return parseHandoverIndex(index).forms;
+        const forms = await listSafetyFormRecords('handover-certificates', builderId, projectId);
+        return forms.map(form => ({
+            ...form,
+            inspectionNumber: form.inspectionNumber || form.referenceNumber || '',
+            formReferenceName: form.formReferenceName || form.title || '',
+            essRepresentativeName: form.essRepresentativeName || form.requestedBy || '',
+            projectNumberClient: form.projectNumberClient || form.projectLabel || '',
+            inspectionDateTime: form.inspectionDateTime || form.eventDate || ''
+        }));
     },
 
     getForm: async (builderId, projectId, formId) => {
-        const form = await readStorageJson(handoverFormPath(builderId, projectId, formId));
+        const form = await getSafetyFormRecord(
+            'handover-certificates',
+            builderId,
+            projectId,
+            formId
+        );
         if (!form) {
             return null;
         }
@@ -4446,150 +4551,45 @@ export const handoverCertificatesAPI = {
         };
     },
 
+    saveForm: async (builderId, projectId, form) =>
+        saveSafetyFormRecord('handover-certificates', builderId, projectId, form),
+
     getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14),
 
-    deleteForm: async (builderId, projectId, formId) => {
-        const existing = await handoverCertificatesAPI.getForm(builderId, projectId, formId);
-        const indexRaw = await readStorageJson(handoverIndexPath(builderId, projectId), { force: true });
-        const nextIndex = {
-            forms: parseHandoverIndex(indexRaw).forms.filter(item => item.id !== formId),
-            updatedAt: nowIso()
-        };
-
-        await uploadStorageObject(handoverIndexPath(builderId, projectId), JSON.stringify(nextIndex), 'application/json');
-
-        const cleanupPaths = [
-            handoverFormPath(builderId, projectId, formId),
-            existing?.pdfPath || handoverPdfPath(builderId, projectId, formId),
-            ...((existing?.photoSlots || []).map(item => item.path).filter(Boolean))
-        ];
-
-        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
-    }
+    deleteForm: async (builderId, projectId, formId) =>
+        deleteSafetyFormRecord('handover-certificates', builderId, projectId, formId)
 };
 
 const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
-const dayLabourVariationIndexPath = (builderId, projectId) => `${dayLabourVariationPrefix(builderId, projectId)}/index.json`;
-const dayLabourVariationFormPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/forms/${formId}.json`;
 const dayLabourVariationPdfPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
-
-async function readDayLabourVariationJson(path) {
-    return readStorageJson(path);
-}
 
 async function signedDayLabourVariationUrl(path, expiresIn = 60 * 60 * 24 * 14) {
     return signedStorageUrl(path, expiresIn);
 }
 
-async function listDayLabourVariationPdfFiles(builderId, projectId) {
-    const prefix = `${dayLabourVariationPrefix(builderId, projectId)}/pdf`;
-    const cacheKey = `storage-list:${prefix}`;
-    const cached = storageJsonCache.get(cacheKey);
-    if (cached?.expiresAt > Date.now() && Array.isArray(cached.value)) {
-        return cloneJsonValue(cached.value);
-    }
-    const response = await fetch(safetyBucketListUrl(), {
-        method: 'POST',
-        headers: anonStorageHeaders(true),
-        body: JSON.stringify({ prefix, limit: 200, offset: 0 })
-    });
-
-    if (!response.ok) {
-        return [];
-    }
-
-    const rows = await response.json();
-    const entries = Array.isArray(rows) ? rows : rows?.value || [];
-    const files = entries
-        .filter(row => typeof row.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
-        .map(row => {
-            const formId = row.name.replace(/\.pdf$/i, '');
-            return {
-                id: formId,
-                name: row.name,
-                pdfPath: `${prefix}/${row.name}`,
-                updatedAt: row.updated_at || row.created_at || nowIso(),
-                size: row.metadata?.size ?? null
-            };
-        });
-    setStorageJsonCache(cacheKey, files, 5 * 60 * 1000);
-    return files;
-}
-
-function parseDayLabourVariationIndex(raw) {
-    if (!raw || !Array.isArray(raw.forms)) {
-        return { forms: [], updatedAt: nowIso() };
-    }
-
-    return {
-        forms: raw.forms
-            .filter(item => item && typeof item.id === 'string')
-            .map(item => ({
-                id: item.id,
-                variationNumber: item.variationNumber || '',
-                formReferenceName: item.formReferenceName || '',
-                requestedBy: item.requestedBy || '',
-                clientProjectName: item.clientProjectName || '',
-                date: item.date || '',
-                handoverDocumentNumber: item.handoverDocumentNumber || '',
-                handoverDocumentId: item.handoverDocumentId || '',
-                handoverDocumentTitle: item.handoverDocumentTitle || '',
-                pdfPath: item.pdfPath || '',
-                updatedAt: item.updatedAt || nowIso()
-            }))
-            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-        updatedAt: raw.updatedAt || nowIso()
-    };
-}
-
 export const dayLabourVariationsAPI = {
     listForms: async (builderId, projectId) => {
-        const [index, pdfFiles] = await Promise.all([
-            readDayLabourVariationJson(dayLabourVariationIndexPath(builderId, projectId)).catch(() => null),
-            listDayLabourVariationPdfFiles(builderId, projectId)
-        ]);
-        const formsById = new Map(
-            parseDayLabourVariationIndex(index).forms.map(form => [
-                form.id,
-                {
-                    ...form,
-                    pdfPath: form.pdfPath || dayLabourVariationPdfPath(builderId, projectId, form.id)
-                }
-            ])
-        );
-
-        pdfFiles.forEach(file => {
-            const existing = formsById.get(file.id);
-            if (existing) {
-                formsById.set(file.id, {
-                    ...existing,
-                    pdfPath: existing.pdfPath || file.pdfPath,
-                    size: file.size ?? existing.size ?? null
-                });
-                return;
-            }
-
-            formsById.set(file.id, {
-                id: file.id,
-                variationNumber: '',
-                formReferenceName: file.name.replace(/\.pdf$/i, ''),
-                requestedBy: 'Site team',
-                clientProjectName: '',
-                date: '',
-                handoverDocumentNumber: '',
-                handoverDocumentId: '',
-                handoverDocumentTitle: '',
-                pdfPath: file.pdfPath,
-                size: file.size,
-                updatedAt: file.updatedAt
-            });
-        });
-
-        return Array.from(formsById.values()).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+        const forms = await listSafetyFormRecords('day-labour-variations', builderId, projectId);
+        return forms.map(form => ({
+            ...form,
+            variationNumber: form.variationNumber || form.referenceNumber || '',
+            formReferenceName: form.formReferenceName || form.title || '',
+            requestedBy: form.requestedBy || '',
+            clientProjectName: form.clientProjectName || form.projectLabel || '',
+            date: form.date || form.eventDate || '',
+            handoverDocumentNumber: form.handoverDocumentNumber || '',
+            handoverDocumentId: form.handoverDocumentId || '',
+            handoverDocumentTitle: form.handoverDocumentTitle || ''
+        }));
     },
 
     getForm: async (builderId, projectId, formId) => {
-        const form = await readDayLabourVariationJson(dayLabourVariationFormPath(builderId, projectId, formId));
+        const form = await getSafetyFormRecord(
+            'day-labour-variations',
+            builderId,
+            projectId,
+            formId
+        );
         if (!form) {
             return null;
         }
@@ -4616,58 +4616,29 @@ export const dayLabourVariationsAPI = {
         };
     },
 
+    saveForm: async (builderId, projectId, form) =>
+        saveSafetyFormRecord('day-labour-variations', builderId, projectId, form),
+
     getPdfUrl: async (form) => signedDayLabourVariationUrl(form.pdfPath, 60 * 60 * 24 * 14),
     getPhotoUrl: async (path) => signedDayLabourVariationUrl(path, 60 * 60 * 24 * 14),
 
-    deleteForm: async (builderId, projectId, formId) => {
-        const existing = await dayLabourVariationsAPI.getForm(builderId, projectId, formId);
-        const indexRaw = await readDayLabourVariationJson(dayLabourVariationIndexPath(builderId, projectId)).catch(() => null);
-        const nextIndex = {
-            forms: parseDayLabourVariationIndex(indexRaw).forms.filter(item => item.id !== formId),
-            updatedAt: nowIso()
-        };
-
-        await uploadStorageObject(dayLabourVariationIndexPath(builderId, projectId), JSON.stringify(nextIndex), 'application/json');
-
-        const cleanupPaths = [
-            dayLabourVariationFormPath(builderId, projectId, formId),
-            existing?.pdfPath || dayLabourVariationPdfPath(builderId, projectId, formId),
-            ...((existing?.photoSlots || []).map(item => item.path).filter(Boolean))
-        ];
-
-        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
-    }
+    deleteForm: async (builderId, projectId, formId) =>
+        deleteSafetyFormRecord('day-labour-variations', builderId, projectId, formId)
 };
-
-function parseScaffIndex(raw) {
-    if (!raw || !Array.isArray(raw.forms)) {
-        return { forms: [], updatedAt: nowIso() };
-    }
-
-    return {
-        forms: raw.forms
-            .filter(item => item && typeof item.id === 'string')
-            .map(item => ({
-                ...item,
-                scaffoldNo: item.scaffoldNo || item.tagNumber || '',
-                jobLocation: item.jobLocation || '',
-                latestInspectionDate: item.latestInspectionDate || '',
-                qrTargetUrl: item.qrTargetUrl || '',
-                updatedAt: item.updatedAt || nowIso()
-            }))
-            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-        updatedAt: raw.updatedAt || nowIso()
-    };
-}
 
 export const scaffTagsAPI = {
     listForms: async (builderId, projectId) => {
-        const index = await readStorageJson(`site-data/${builderId}/${projectId}/scaff-tags/index.json`);
-        return parseScaffIndex(index).forms;
+        const forms = await listSafetyFormRecords('scaff-tags', builderId, projectId);
+        return forms.map(form => ({
+            ...form,
+            scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
+            jobLocation: form.jobLocation || form.projectLabel || '',
+            latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
+        }));
     },
 
     getForm: async (builderId, projectId, formId) => {
-        const form = await readStorageJson(`site-data/${builderId}/${projectId}/scaff-tags/forms/${formId}.json`);
+        const form = await getSafetyFormRecord('scaff-tags', builderId, projectId, formId);
         if (!form) {
             return null;
         }
@@ -4679,29 +4650,15 @@ export const scaffTagsAPI = {
         };
     },
 
+    saveForm: async (builderId, projectId, form) =>
+        saveSafetyFormRecord('scaff-tags', builderId, projectId, form),
+
     getPhotoUrl: async (path) => signedStorageUrl(path, 60 * 60 * 24 * 14),
     getPdfUrl: async (form) => signedStorageUrl(form.pdfPath, 60 * 60 * 24 * 14),
     getShareUrl: async (form) => signedStorageUrl(form.sharePath, 60 * 60 * 24 * 365),
 
-    deleteForm: async (builderId, projectId, formId) => {
-        const existing = await scaffTagsAPI.getForm(builderId, projectId, formId);
-        const indexPath = `site-data/${builderId}/${projectId}/scaff-tags/index.json`;
-        const indexRaw = await readStorageJson(indexPath);
-        const nextIndex = {
-            forms: parseScaffIndex(indexRaw).forms.filter(item => item.id !== formId),
-            updatedAt: nowIso()
-        };
-        await uploadStorageObject(indexPath, JSON.stringify(nextIndex), 'application/json');
-
-        const cleanupPaths = [
-            `site-data/${builderId}/${projectId}/scaff-tags/forms/${formId}.json`,
-            existing?.sharePath || `site-data/${builderId}/${projectId}/scaff-tags/share/${formId}.html`,
-            existing?.pdfPath || `site-data/${builderId}/${projectId}/scaff-tags/pdf/${formId}.pdf`,
-            ...(existing?.photoPaths || [])
-        ];
-
-        await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));
-    }
+    deleteForm: async (builderId, projectId, formId) =>
+        deleteSafetyFormRecord('scaff-tags', builderId, projectId, formId)
 };
 
 let searchAbortController = null;
