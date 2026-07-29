@@ -2993,11 +2993,49 @@ async function listStorageObjects(prefix) {
     return Array.isArray(rows) ? rows : [];
 }
 
+async function mergeLegacyMaterialOrderRequests(tableRecords, { force = false } = {}) {
+    const recordsById = new Map(
+        tableRecords
+            .map(normalizeMaterialOrderRequestRecord)
+            .filter(record => record?.id)
+            .map(record => [record.id, record])
+    );
+    const legacyIndex = await readStorageJson(
+        MATERIAL_REQUEST_INDEX_PATH,
+        { force }
+    ).catch(() => null);
+    const missingItems = (Array.isArray(legacyIndex?.requests) ? legacyIndex.requests : [])
+        .filter(item => item?.id && !recordsById.has(item.id));
+    if (missingItems.length === 0) {
+        return Array.from(recordsById.values());
+    }
+
+    const missingRecords = (await Promise.all(missingItems.map(async item => {
+        const fullRecord = await readStorageJson(
+            `material-order-requests/requests/${item.id}.json`,
+            { force: true }
+        ).catch(() => null);
+        return normalizeMaterialOrderRequestRecord(fullRecord || item);
+    }))).filter(record => record?.id);
+
+    let importedRecords = missingRecords;
+    if (missingRecords.length > 0) {
+        try {
+            importedRecords = await upsertMaterialOrderRequestTableRecords(missingRecords);
+        } catch {
+            // Keep legacy-only records visible if an individual old record cannot be imported.
+        }
+    }
+    importedRecords.forEach(record => recordsById.set(record.id, record));
+    return Array.from(recordsById.values());
+}
+
 export const materialOrderRequestsAPI = {
     listActiveRequests: async ({ includeArchived = false, force = false } = {}) => {
         const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords({ force }));
         if (tableRecords) {
-            return tableRecords
+            const mergedRecords = await mergeLegacyMaterialOrderRequests(tableRecords, { force });
+            return mergedRecords
                 .map(normalizeMaterialOrderRequestListItem)
                 .filter(item => item.id && (includeArchived || !item.archivedAt))
                 .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
@@ -3136,7 +3174,8 @@ export const materialOrderRequestsAPI = {
     listArchivedRequests: async ({ force = false } = {}) => {
         const tableRecords = await tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecords({ force }));
         if (tableRecords) {
-            return tableRecords
+            const mergedRecords = await mergeLegacyMaterialOrderRequests(tableRecords, { force });
+            return mergedRecords
                 .map(normalizeMaterialOrderRequestListItem)
                 .filter(item => item.id && item.archivedAt)
                 .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
@@ -3165,8 +3204,29 @@ export const materialOrderRequestsAPI = {
             .sort((a, b) => String(b.archivedAt || b.submittedAt).localeCompare(String(a.archivedAt || a.submittedAt)));
     },
 
-    getRequest: async (requestId) =>
-        tryMaterialOrderRequestsTable(() => readMaterialOrderRequestTableRecord(requestId)),
+    getRequest: async (requestId) => {
+        const tableRecord = await tryMaterialOrderRequestsTable(
+            () => readMaterialOrderRequestTableRecord(requestId)
+        );
+        if (tableRecord) {
+            return tableRecord;
+        }
+        const legacyRecord = normalizeMaterialOrderRequestRecord(
+            await readStorageJson(
+                `material-order-requests/requests/${requestId}.json`,
+                { force: true }
+            ).catch(() => null)
+        );
+        if (!legacyRecord) {
+            return null;
+        }
+        try {
+            const [saved] = await upsertMaterialOrderRequestTableRecords(legacyRecord);
+            return saved || legacyRecord;
+        } catch {
+            return legacyRecord;
+        }
+    },
 
     getPdfUrl: async (request) => signedStorageUrl(request.pdfPath, 60 * 60 * 24 * 14),
 
@@ -4319,12 +4379,33 @@ function mapSafetyFileRow(row) {
 
 export const safetyFilesAPI = {
     listModuleFiles: async (builderId, projectId, kind) => {
+        const prefix = safetyModulePrefix(builderId, projectId, kind);
         const query = `?select=*&builder_id=eq.${encodeURIComponent(builderId)}`
             + `&project_id=eq.${encodeURIComponent(projectId)}`
             + `&module_kind=eq.${encodeURIComponent(kind)}`
             + '&order=updated_at.desc';
         const rows = await readRestRows(SAFETY_FILES_TABLE, query, { force: true });
-        return rows.map(mapSafetyFileRow);
+        const tableFiles = rows.map(mapSafetyFileRow);
+        const legacyRows = await listStorageObjects(prefix).catch(() => []);
+        const filesByPath = new Map(tableFiles.map(file => [file.path, file]));
+        legacyRows
+            .filter(row => typeof row?.name === 'string' && row.name.toLowerCase().endsWith('.pdf'))
+            .forEach(row => {
+                const path = `${prefix}/${row.name}`;
+                if (!filesByPath.has(path)) {
+                    filesByPath.set(path, {
+                        name: row.name,
+                        path,
+                        kind,
+                        updatedAt: row.updated_at || row.created_at || nowIso(),
+                        size: Number.isFinite(Number(row.metadata?.size))
+                            ? Number(row.metadata.size)
+                            : null
+                    });
+                }
+            });
+        return Array.from(filesByPath.values())
+            .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
     },
 
     uploadModulePdf: async (builderId, projectId, kind, file) => {
@@ -4436,13 +4517,99 @@ function mapSafetyFormRow(row) {
     };
 }
 
+function legacySafetyFormIndexPath(formType, builderId, projectId) {
+    return `${safetyModulePrefix(builderId, projectId, formType)}/index.json`;
+}
+
+function legacySafetyFormObjectPath(formType, builderId, projectId, formId) {
+    return `${safetyModulePrefix(builderId, projectId, formType)}/forms/${formId}.json`;
+}
+
+function normalizeLegacySafetyForm(formType, builderId, projectId, raw, formId = '') {
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+    const id = String(raw.id || formId || '').trim();
+    if (!id) {
+        return null;
+    }
+    return mapSafetyFormRow({
+        form_type: formType,
+        id,
+        builder_id: builderId,
+        project_id: projectId,
+        payload: {
+            ...raw,
+            id,
+            formType,
+            builderId,
+            projectId
+        },
+        title: raw.title || '',
+        reference_number: raw.referenceNumber || '',
+        requested_by: raw.requestedBy || '',
+        project_label: raw.projectLabel || '',
+        event_date: raw.eventDate || '',
+        pdf_path: raw.pdfPath || '',
+        share_path: raw.sharePath || '',
+        photo_paths: safetyFormPhotoPaths(raw),
+        created_at: raw.createdAt || nowIso(),
+        updated_at: raw.updatedAt || nowIso()
+    });
+}
+
+async function readLegacySafetyForms(formType, builderId, projectId, knownIds = new Set()) {
+    const index = await readStorageJson(
+        legacySafetyFormIndexPath(formType, builderId, projectId),
+        { force: true }
+    ).catch(() => null);
+    const items = Array.isArray(index?.forms) ? index.forms : [];
+    return Promise.all(items.map(async item => {
+        const formId = String(item?.id || '').trim();
+        if (!formId || knownIds.has(formId)) {
+            return null;
+        }
+        const fullRecord = await readStorageJson(
+            legacySafetyFormObjectPath(formType, builderId, projectId, formId),
+            { force: true }
+        ).catch(() => null);
+        return normalizeLegacySafetyForm(
+            formType,
+            builderId,
+            projectId,
+            fullRecord || item,
+            formId
+        );
+    }));
+}
+
 async function listSafetyFormRecords(formType, builderId, projectId) {
     const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
         + `&builder_id=eq.${encodeURIComponent(builderId)}`
         + `&project_id=eq.${encodeURIComponent(projectId)}`
         + '&order=updated_at.desc';
     const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
-    return rows.map(mapSafetyFormRow).filter(Boolean);
+    const tableForms = rows.map(mapSafetyFormRow).filter(Boolean);
+    const formsById = new Map(tableForms.map(form => [form.id, form]));
+    const legacyForms = (await readLegacySafetyForms(
+        formType,
+        builderId,
+        projectId,
+        new Set(formsById.keys())
+    ))
+        .filter(Boolean)
+        .filter(form => !formsById.has(form.id));
+
+    const imported = await Promise.all(legacyForms.map(async form => {
+        try {
+            return await saveSafetyFormRecord(formType, builderId, projectId, form);
+        } catch {
+            return form;
+        }
+    }));
+    imported.forEach(form => formsById.set(form.id, form));
+    return Array.from(formsById.values())
+        .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
 }
 
 async function getSafetyFormRecord(formType, builderId, projectId, formId) {
@@ -4452,7 +4619,29 @@ async function getSafetyFormRecord(formType, builderId, projectId, formId) {
         + `&project_id=eq.${encodeURIComponent(projectId)}`
         + '&limit=1';
     const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
-    return mapSafetyFormRow(rows[0]);
+    const tableForm = mapSafetyFormRow(rows[0]);
+    if (tableForm) {
+        return tableForm;
+    }
+
+    const legacy = normalizeLegacySafetyForm(
+        formType,
+        builderId,
+        projectId,
+        await readStorageJson(
+            legacySafetyFormObjectPath(formType, builderId, projectId, formId),
+            { force: true }
+        ).catch(() => null),
+        formId
+    );
+    if (!legacy) {
+        return null;
+    }
+    try {
+        return await saveSafetyFormRecord(formType, builderId, projectId, legacy);
+    } catch {
+        return legacy;
+    }
 }
 
 async function saveSafetyFormRecord(formType, builderId, projectId, form) {
@@ -4491,6 +4680,19 @@ async function saveSafetyFormRecord(formType, builderId, projectId, form) {
 
 async function deleteSafetyFormRecord(formType, builderId, projectId, formId) {
     const existing = await getSafetyFormRecord(formType, builderId, projectId, formId);
+    const legacyIndexPath = legacySafetyFormIndexPath(formType, builderId, projectId);
+    const legacyIndex = await readStorageJson(legacyIndexPath, { force: true }).catch(() => null);
+    if (Array.isArray(legacyIndex?.forms) && legacyIndex.forms.some(form => form?.id === formId)) {
+        await uploadStorageObject(
+            legacyIndexPath,
+            JSON.stringify({
+                ...legacyIndex,
+                forms: legacyIndex.forms.filter(form => form?.id !== formId),
+                updatedAt: nowIso()
+            }),
+            'application/json'
+        );
+    }
     await deleteRestRows(
         SAFETY_FORMS_TABLE,
         `?form_type=eq.${encodeURIComponent(formType)}`
@@ -4501,6 +4703,7 @@ async function deleteSafetyFormRecord(formType, builderId, projectId, formId) {
     const cleanupPaths = Array.from(new Set([
         existing?.pdfPath,
         existing?.sharePath,
+        legacySafetyFormObjectPath(formType, builderId, projectId, formId),
         ...safetyFormPhotoPaths(existing)
     ].filter(Boolean)));
     await Promise.all(cleanupPaths.map(path => deleteStorageObject(path).catch(() => {})));

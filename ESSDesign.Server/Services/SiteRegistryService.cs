@@ -65,7 +65,7 @@ public sealed class SiteRegistryService
             normalizedOperation.Equals("upsert_drawing_entry", StringComparison.OrdinalIgnoreCase)
             || normalizedOperation.Equals("upsert_drawing_entries", StringComparison.OrdinalIgnoreCase)
             || normalizedOperation.Equals("delete_drawing_entry", StringComparison.OrdinalIgnoreCase);
-        return await InvokeRpcAsync(
+        var savedDocument = await InvokeRpcAsync(
             isRowLevelDrawingOperation
                 ? "ess_apply_drawing_register_change"
                 : "ess_apply_site_registry_change",
@@ -80,6 +80,8 @@ public sealed class SiteRegistryService
             isRowLevelDrawingOperation
                 ? "database/migrations/039_add_row_level_drawing_register_writes.sql"
                 : "database/migrations/038_migrate_site_registry_to_relational.sql");
+        await TryWriteLegacyMirrorAsync(savedDocument, cancellationToken);
+        return savedDocument;
     }
 
     private async Task EnsureLegacyImportedAsync(CancellationToken cancellationToken)
@@ -167,6 +169,41 @@ public sealed class SiteRegistryService
             throw new SiteRegistryUnavailableException(
                 "The existing projects.json backup is not valid JSON.",
                 ex);
+        }
+    }
+
+    private async Task TryWriteLegacyMirrorAsync(
+        JsonElement document,
+        CancellationToken cancellationToken)
+    {
+        var escapedPath = string.Join(
+            '/',
+            LegacyPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+        var url = $"{_supabaseUrl}/storage/v1/object/{Uri.EscapeDataString(LegacyBucket)}/{escapedPath}";
+
+        try
+        {
+            using var request = CreateRequest(HttpMethod.Post, url);
+            request.Headers.TryAddWithoutValidation("x-upsert", "true");
+            request.Content = new StringContent(
+                document.GetRawText(),
+                Encoding.UTF8,
+                "application/json");
+            using var response = await _httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning(
+                    "The relational Site Registry was saved, but its temporary legacy mirror could not be updated ({StatusCode}): {Details}",
+                    (int)response.StatusCode,
+                    TrimForLog(body));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "The relational Site Registry was saved, but its temporary legacy mirror could not be updated.");
         }
     }
 
