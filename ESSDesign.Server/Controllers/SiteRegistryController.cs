@@ -20,6 +20,9 @@ public sealed class SiteRegistryController : ControllerBase
         "delete_project",
         "set_project_archived",
         "update_folder_links",
+        "upsert_drawing_entry",
+        "upsert_drawing_entries",
+        "delete_drawing_entry",
         "replace_drawing_register"
     };
 

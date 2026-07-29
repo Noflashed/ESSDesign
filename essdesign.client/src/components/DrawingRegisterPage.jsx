@@ -257,6 +257,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const registryReconciledRef = useRef(false);
     const rowsRef = useRef([]);
     const sharedSaveEnabledRef = useRef(false);
+    const dirtyRowIdsRef = useRef(new Set());
+    const deletedRowIdsRef = useRef(new Set());
     const copyResetTimerRef = useRef(null);
 
     useEffect(() => {
@@ -297,8 +299,11 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
 
     useEffect(() => () => {
         window.clearTimeout(copyResetTimerRef.current);
-        if (sharedSaveEnabledRef.current) {
-            safetyProjectsAPI.saveDrawingRegisterEntries(rowsRef.current).catch(error => {
+        if (sharedSaveEnabledRef.current && dirtyRowIdsRef.current.size > 0) {
+            const activeDirtyRows = rowsRef.current.filter(row =>
+                dirtyRowIdsRef.current.has(row.id)
+                && !deletedRowIdsRef.current.has(row.id));
+            safetyProjectsAPI.saveDrawingRegisterEntries(activeDirtyRows).catch(error => {
                 console.error('Final shared Drawing Register save failed', error);
             });
         }
@@ -369,6 +374,16 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 project: project?.name || ''
             };
         });
+        reconciledRows.forEach((row, index) => {
+            const previous = rows[index];
+            const changed = row.builderId !== previous.builderId
+                || row.projectId !== previous.projectId
+                || row.client !== previous.client
+                || row.project !== previous.project;
+            if (changed) {
+                dirtyRowIdsRef.current.add(row.id);
+            }
+        });
         setRows(reconciledRows);
         setRegistryReconciled(true);
     }, [builders, buildersError, buildersLoading, loading]);
@@ -418,12 +433,22 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 setDrawingDocuments(resolutions);
                 setRows(current => current.map(row => {
                     const resolution = resolutions[getBaseDrawingNumber(row.drawingNo)];
-                    if (!resolution) return { ...row, designUse: cleanStatus(row.designUse) };
-                    return {
+                    if (!resolution) {
+                        const designUse = cleanStatus(row.designUse);
+                        if (designUse !== row.designUse) {
+                            dirtyRowIdsRef.current.add(row.id);
+                        }
+                        return { ...row, designUse };
+                    }
+                    const nextRow = {
                         ...row,
                         revisionNo: resolution.revisionNo || row.revisionNo,
                         designUse: cleanStatus(resolution.designUse || row.designUse)
                     };
+                    if (nextRow.revisionNo !== row.revisionNo || nextRow.designUse !== row.designUse) {
+                        dirtyRowIdsRef.current.add(row.id);
+                    }
+                    return nextRow;
                 }));
             })
             .catch(error => {
@@ -439,16 +464,39 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, [drawingNumberKey, loading]);
 
     useEffect(() => {
-        if (!canEdit || !sharedRegisterAvailable || loading || !registryReconciled || drawingDocumentsLoading) return;
+        if (!canEdit
+            || !sharedRegisterAvailable
+            || loading
+            || !registryReconciled
+            || drawingDocumentsLoading
+            || dirtyRowIdsRef.current.size === 0) return;
         let cancelled = false;
         const saveTimer = window.setTimeout(() => {
-            safetyProjectsAPI.saveDrawingRegisterEntries(rows)
+            const dirtyIds = new Set(dirtyRowIdsRef.current);
+            dirtyIds.forEach(id => dirtyRowIdsRef.current.delete(id));
+            const activeDirtyRows = rows.filter(row =>
+                dirtyIds.has(row.id)
+                && !deletedRowIdsRef.current.has(row.id));
+            if (activeDirtyRows.length === 0) {
+                return;
+            }
+            safetyProjectsAPI.saveDrawingRegisterEntries(activeDirtyRows)
                 .then(() => {
                     if (!cancelled) setSiteLinkError('');
                 })
                 .catch(error => {
                     console.error('Shared Drawing Register save failed', error);
-                    if (!cancelled) setSiteLinkError('Changes could not be saved to the shared Drawing Register.');
+                    dirtyIds.forEach(id => {
+                        if (!deletedRowIdsRef.current.has(id)) {
+                            dirtyRowIdsRef.current.add(id);
+                        }
+                    });
+                    if (!cancelled) {
+                        const detail = String(error?.message || '').trim();
+                        setSiteLinkError(detail
+                            ? `Changes could not be saved to the shared Drawing Register. ${detail}`
+                            : 'Changes could not be saved to the shared Drawing Register.');
+                    }
                 });
         }, 500);
         return () => {
@@ -490,7 +538,9 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 await foldersAPI.createFolder(scaffoldFolderName, projectFolderId);
             }
 
-            setRows(current => [{ ...draft, design: designName, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) }, ...current]);
+            const newRow = { ...draft, design: designName, builderId: builder.id, projectId: project.id, drawingNo: generatedDrawingNo, dateIssued: formatDateIssued(draft.dateIssued), id: `manual-${Date.now()}`, designUse: cleanStatus(draft.designUse) };
+            dirtyRowIdsRef.current.add(newRow.id);
+            setRows(current => [newRow, ...current]);
             setDraft(EMPTY_ROW);
             setShowAddRow(false);
         } catch (error) {
@@ -502,11 +552,13 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     };
     const updateRow = (id, key, value) => {
         if (!canEdit) return;
+        dirtyRowIdsRef.current.add(id);
         setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
     };
     const updateRowClient = (id, client) => {
         if (!canEdit) return;
         const builder = builders.find(item => item.name === client);
+        dirtyRowIdsRef.current.add(id);
         setRows(current => current.map(row => row.id === id ? { ...row, builderId: builder?.id || '', projectId: '', client, project: '' } : row));
         setSiteLinkError('');
     };
@@ -516,13 +568,31 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         const builder = builders.find(item => item.name === row?.client);
         const project = builder?.projects.find(item => item.name === projectName);
         if (!row || !builder || projectName && !project) return;
+        dirtyRowIdsRef.current.add(id);
         setRows(current => current.map(item => item.id === id ? { ...item, projectId: project?.id || '', project: projectName } : item));
         setSiteLinkError('');
     };
     const deleteRow = id => {
         if (!canEdit) return;
         setSiteLinkError('');
-        setRows(current => current.filter(item => item.id !== id));
+        dirtyRowIdsRef.current.delete(id);
+        deletedRowIdsRef.current.add(id);
+        safetyProjectsAPI.deleteDrawingRegisterEntry(id)
+            .then(() => {
+                setRows(current => current.filter(item => item.id !== id));
+            })
+            .catch(error => {
+                const detail = String(error?.message || '').trim();
+                if (detail.toLowerCase().includes('entry not found')) {
+                    setRows(current => current.filter(item => item.id !== id));
+                    return;
+                }
+                deletedRowIdsRef.current.delete(id);
+                console.error('Shared Drawing Register delete failed', error);
+                setSiteLinkError(detail
+                    ? `The drawing could not be deleted from the shared Drawing Register. ${detail}`
+                    : 'The drawing could not be deleted from the shared Drawing Register.');
+            });
     };
     const openAddRow = () => {
         if (!canEdit) return;

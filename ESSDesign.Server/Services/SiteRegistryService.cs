@@ -60,16 +60,26 @@ public sealed class SiteRegistryService
         }
 
         await GetDocumentAsync(true, cancellationToken);
+        var normalizedOperation = operation.Trim();
+        var isRowLevelDrawingOperation =
+            normalizedOperation.Equals("upsert_drawing_entry", StringComparison.OrdinalIgnoreCase)
+            || normalizedOperation.Equals("upsert_drawing_entries", StringComparison.OrdinalIgnoreCase)
+            || normalizedOperation.Equals("delete_drawing_entry", StringComparison.OrdinalIgnoreCase);
         return await InvokeRpcAsync(
-            "ess_apply_site_registry_change",
+            isRowLevelDrawingOperation
+                ? "ess_apply_drawing_register_change"
+                : "ess_apply_site_registry_change",
             new
             {
-                p_operation = operation.Trim(),
+                p_operation = normalizedOperation,
                 p_payload = payload.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
                     ? JsonSerializer.SerializeToElement(new { }, _jsonOptions)
                     : payload
             },
-            cancellationToken);
+            cancellationToken,
+            isRowLevelDrawingOperation
+                ? "database/migrations/039_add_row_level_drawing_register_writes.sql"
+                : "database/migrations/038_migrate_site_registry_to_relational.sql");
     }
 
     private async Task EnsureLegacyImportedAsync(CancellationToken cancellationToken)
@@ -163,7 +173,8 @@ public sealed class SiteRegistryService
     private async Task<JsonElement> InvokeRpcAsync(
         string functionName,
         object payload,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string requiredMigration = "database/migrations/038_migrate_site_registry_to_relational.sql")
     {
         var url = $"{_supabaseUrl}/rest/v1/rpc/{Uri.EscapeDataString(functionName)}";
         using var request = CreateRequest(HttpMethod.Post, url);
@@ -195,7 +206,7 @@ public sealed class SiteRegistryService
             if (migrationHint)
             {
                 throw new SiteRegistryUnavailableException(
-                    "The Site Registry database migration has not been installed. Run database/migrations/038_migrate_site_registry_to_relational.sql in Supabase.");
+                    $"The required Site Registry database migration has not been installed. Run {requiredMigration} in Supabase.");
             }
 
             throw new InvalidOperationException(

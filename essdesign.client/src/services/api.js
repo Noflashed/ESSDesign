@@ -453,7 +453,6 @@ let materialRequestIndexWriteQueue = Promise.resolve();
 let safetyProjectsWriteQueue = Promise.resolve();
 let siteRegistryDocumentCache = null;
 let siteRegistryDocumentCacheExpiresAt = 0;
-let siteRegistryDrawingRevision = null;
 let materialOrderRequestsTableAvailable = null;
 let materialOrderRequestsTableSeedPromise = null;
 
@@ -568,7 +567,6 @@ function handleExternalStorageJsonSyncMessage(message) {
     if (message.path === SAFETY_PROJECTS_PATH) {
         siteRegistryDocumentCache = null;
         siteRegistryDocumentCacheExpiresAt = 0;
-        siteRegistryDrawingRevision = null;
     }
     emitStorageJsonLocalChange(message.path);
 }
@@ -1335,9 +1333,6 @@ async function readSiteRegistryDocument({ force = false } = {}) {
         });
         siteRegistryDocumentCache = response.data;
         siteRegistryDocumentCacheExpiresAt = Date.now() + 30 * 1000;
-        siteRegistryDrawingRevision = Number.isFinite(Number(response.data?.drawingRevision))
-            ? Number(response.data.drawingRevision)
-            : null;
         return cloneJsonValue(response.data);
     } catch (error) {
         const status = error?.response?.status;
@@ -1360,9 +1355,6 @@ async function applySiteRegistryChange(operation, payload) {
         const response = await apiClient.post('/site-registry/changes', { operation, payload });
         siteRegistryDocumentCache = response.data;
         siteRegistryDocumentCacheExpiresAt = Date.now() + 30 * 1000;
-        siteRegistryDrawingRevision = Number.isFinite(Number(response.data?.drawingRevision))
-            ? Number(response.data.drawingRevision)
-            : siteRegistryDrawingRevision;
         emitStorageJsonChanged(SAFETY_PROJECTS_PATH);
         return cloneJsonValue(response.data);
     } catch (error) {
@@ -1411,9 +1403,15 @@ export const safetyProjectsAPI = {
             };
         });
 
-        const saved = await applySiteRegistryChange('replace_drawing_register', {
-            entries: normalizedEntries,
-            expectedDrawingRevision: siteRegistryDrawingRevision
+        const saved = await applySiteRegistryChange('upsert_drawing_entries', {
+            entries: normalizedEntries
+        });
+        return resolveDrawingRegisterEntries(parseSafetyProjects(saved));
+    }),
+
+    deleteDrawingRegisterEntry: async (entryId) => withSafetyProjectsWriteLock(async () => {
+        const saved = await applySiteRegistryChange('delete_drawing_entry', {
+            entryId: String(entryId || '').trim()
         });
         return resolveDrawingRegisterEntries(parseSafetyProjects(saved));
     }),
