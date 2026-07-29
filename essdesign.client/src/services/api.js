@@ -3004,8 +3004,31 @@ async function mergeLegacyMaterialOrderRequests(tableRecords, { force = false } 
         MATERIAL_REQUEST_INDEX_PATH,
         { force }
     ).catch(() => null);
+    const legacyStorageRows = await listStorageObjects(
+        'material-order-requests/requests'
+    ).catch(() => []);
+    const legacyObjectUpdatedAt = new Map(
+        legacyStorageRows
+            .filter(row => typeof row?.name === 'string' && row.name.toLowerCase().endsWith('.json'))
+            .map(row => [
+                row.name.replace(/\.json$/i, ''),
+                row.updated_at || row.created_at || ''
+            ])
+    );
     const missingItems = (Array.isArray(legacyIndex?.requests) ? legacyIndex.requests : [])
-        .filter(item => item?.id && !recordsById.has(item.id));
+        .filter(item => {
+            if (!item?.id) {
+                return false;
+            }
+            const tableRecord = recordsById.get(item.id);
+            if (!tableRecord) {
+                return true;
+            }
+            const legacyUpdatedMs = Date.parse(legacyObjectUpdatedAt.get(item.id) || '');
+            const tableUpdatedMs = Date.parse(tableRecord.updatedAt || '');
+            return Number.isFinite(legacyUpdatedMs)
+                && (!Number.isFinite(tableUpdatedMs) || legacyUpdatedMs > tableUpdatedMs);
+        });
     if (missingItems.length === 0) {
         return Array.from(recordsById.values());
     }
@@ -3015,7 +3038,14 @@ async function mergeLegacyMaterialOrderRequests(tableRecords, { force = false } 
             `material-order-requests/requests/${item.id}.json`,
             { force: true }
         ).catch(() => null);
-        return normalizeMaterialOrderRequestRecord(fullRecord || item);
+        return normalizeMaterialOrderRequestRecord({
+            ...(fullRecord || item),
+            updatedAt: legacyObjectUpdatedAt.get(item.id)
+                || fullRecord?.updatedAt
+                || item?.updatedAt
+                || legacyIndex?.updatedAt
+                || null
+        });
     }))).filter(record => record?.id);
 
     let importedRecords = missingRecords;
@@ -3208,17 +3238,34 @@ export const materialOrderRequestsAPI = {
         const tableRecord = await tryMaterialOrderRequestsTable(
             () => readMaterialOrderRequestTableRecord(requestId)
         );
-        if (tableRecord) {
+        const legacyStorageRows = await listStorageObjects(
+            'material-order-requests/requests'
+        ).catch(() => []);
+        const legacyStorageRow = legacyStorageRows.find(
+            row => row?.name === `${requestId}.json`
+        );
+        const legacyUpdatedAt = legacyStorageRow?.updated_at
+            || legacyStorageRow?.created_at
+            || '';
+        const legacyUpdatedMs = Date.parse(legacyUpdatedAt);
+        const tableUpdatedMs = Date.parse(tableRecord?.updatedAt || '');
+        if (tableRecord && (
+            !Number.isFinite(legacyUpdatedMs)
+            || (Number.isFinite(tableUpdatedMs) && legacyUpdatedMs <= tableUpdatedMs)
+        )) {
             return tableRecord;
         }
         const legacyRecord = normalizeMaterialOrderRequestRecord(
-            await readStorageJson(
-                `material-order-requests/requests/${requestId}.json`,
-                { force: true }
-            ).catch(() => null)
+            {
+                ...(await readStorageJson(
+                    `material-order-requests/requests/${requestId}.json`,
+                    { force: true }
+                ).catch(() => null)),
+                updatedAt: legacyUpdatedAt || null
+            }
         );
         if (!legacyRecord) {
-            return null;
+            return tableRecord;
         }
         try {
             const [saved] = await upsertMaterialOrderRequestTableRecords(legacyRecord);
@@ -4558,7 +4605,22 @@ function normalizeLegacySafetyForm(formType, builderId, projectId, raw, formId =
     });
 }
 
-async function readLegacySafetyForms(formType, builderId, projectId, knownIds = new Set()) {
+function isLegacySafetyFormNewer(legacy, current) {
+    if (!current) {
+        return true;
+    }
+    const legacyUpdatedMs = Date.parse(legacy?.updatedAt || '');
+    const currentUpdatedMs = Date.parse(current?.updatedAt || '');
+    return Number.isFinite(legacyUpdatedMs)
+        && (!Number.isFinite(currentUpdatedMs) || legacyUpdatedMs > currentUpdatedMs);
+}
+
+async function readLegacySafetyForms(
+    formType,
+    builderId,
+    projectId,
+    knownFormsById = new Map()
+) {
     const index = await readStorageJson(
         legacySafetyFormIndexPath(formType, builderId, projectId),
         { force: true }
@@ -4566,7 +4628,7 @@ async function readLegacySafetyForms(formType, builderId, projectId, knownIds = 
     const items = Array.isArray(index?.forms) ? index.forms : [];
     return Promise.all(items.map(async item => {
         const formId = String(item?.id || '').trim();
-        if (!formId || knownIds.has(formId)) {
+        if (!formId || !isLegacySafetyFormNewer(item, knownFormsById.get(formId))) {
             return null;
         }
         const fullRecord = await readStorageJson(
@@ -4595,10 +4657,9 @@ async function listSafetyFormRecords(formType, builderId, projectId) {
         formType,
         builderId,
         projectId,
-        new Set(formsById.keys())
+        formsById
     ))
-        .filter(Boolean)
-        .filter(form => !formsById.has(form.id));
+        .filter(Boolean);
 
     const imported = await Promise.all(legacyForms.map(async form => {
         try {
@@ -4620,10 +4681,6 @@ async function getSafetyFormRecord(formType, builderId, projectId, formId) {
         + '&limit=1';
     const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
     const tableForm = mapSafetyFormRow(rows[0]);
-    if (tableForm) {
-        return tableForm;
-    }
-
     const legacy = normalizeLegacySafetyForm(
         formType,
         builderId,
@@ -4634,8 +4691,8 @@ async function getSafetyFormRecord(formType, builderId, projectId, formId) {
         ).catch(() => null),
         formId
     );
-    if (!legacy) {
-        return null;
+    if (!legacy || !isLegacySafetyFormNewer(legacy, tableForm)) {
+        return tableForm;
     }
     try {
         return await saveSafetyFormRecord(formType, builderId, projectId, legacy);
