@@ -1331,8 +1331,7 @@ async function readSiteRegistryDocument({ force = false } = {}) {
             params: {
                 includeArchived: true,
                 ...(force ? { refresh: Date.now() } : {})
-            },
-            headers: force ? { 'Cache-Control': 'no-cache' } : undefined
+            }
         });
         siteRegistryDocumentCache = response.data;
         siteRegistryDocumentCacheExpiresAt = Date.now() + 30 * 1000;
