@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle,
     Building2,
@@ -648,15 +648,17 @@ export default function ESSSafetyPage() {
         closeDocumentPreview();
     };
 
-    const loadDocuments = async () => {
+    const loadDocuments = useCallback(async ({ silent = false, preserveSelection = false } = {}) => {
         if (!selectedBuilder || !selectedProject) {
             setDocuments([]);
             setSelectedDocumentId('');
             return;
         }
 
-        setDocumentsLoading(true);
-        setError('');
+        if (!silent) {
+            setDocumentsLoading(true);
+            setError('');
+        }
         try {
             let rows;
             if (activeTab.key === 'scaff-tags') {
@@ -670,21 +672,41 @@ export default function ESSSafetyPage() {
             }
 
             setDocuments(rows);
-            setSelectedDocumentId('');
-            setPreviewOpen(false);
+            if (!preserveSelection) {
+                setSelectedDocumentId('');
+                setPreviewOpen(false);
+            }
         } catch (err) {
-            setDocuments([]);
-            setSelectedDocumentId('');
-            setPreviewOpen(false);
-            setError(err.message || `Failed to load ${activeTab.noun}`);
+            if (!silent) {
+                setDocuments([]);
+                setSelectedDocumentId('');
+                setPreviewOpen(false);
+                setError(err.message || `Failed to load ${activeTab.noun}`);
+            }
         } finally {
-            setDocumentsLoading(false);
+            if (!silent) {
+                setDocumentsLoading(false);
+            }
         }
-    };
+    }, [activeTab, selectedBuilder, selectedProject]);
 
     useEffect(() => {
         loadDocuments().catch(() => {});
-    }, [selectedBuilder?.id, selectedProject?.id, activeTab.key]);
+    }, [loadDocuments]);
+
+    useEffect(() => {
+        const refreshVisibleDocuments = () => {
+            if (document.visibilityState === 'visible') {
+                loadDocuments({ silent: true, preserveSelection: true }).catch(() => {});
+            }
+        };
+        window.addEventListener('focus', refreshVisibleDocuments);
+        document.addEventListener('visibilitychange', refreshVisibleDocuments);
+        return () => {
+            window.removeEventListener('focus', refreshVisibleDocuments);
+            document.removeEventListener('visibilitychange', refreshVisibleDocuments);
+        };
+    }, [loadDocuments]);
 
     const selectedDocument = useMemo(
         () => documents.find(document => document.id === selectedDocumentId) || null,
@@ -855,6 +877,12 @@ export default function ESSSafetyPage() {
 
         setDeletingDocumentId(doc.id);
         setError('');
+        setDocuments(current => current.filter(document => document.id !== doc.id));
+        if (selectedDocumentId === doc.id) {
+            closeDocumentPreview();
+        }
+        setContextMenu(null);
+        setPendingDeleteDocument(null);
         try {
             if (doc.kind === 'scaff-tags') {
                 await scaffTagsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
@@ -866,14 +894,9 @@ export default function ESSSafetyPage() {
                 await safetyFilesAPI.deleteModuleFile(doc.raw.path);
             }
 
-            if (selectedDocumentId === doc.id) {
-                closeDocumentPreview();
-            }
-            setContextMenu(null);
-            setPendingDeleteDocument(null);
-            await loadDocuments();
         } catch (err) {
             setError(err.message || 'Failed to delete document');
+            await loadDocuments({ silent: true, preserveSelection: true }).catch(() => {});
         } finally {
             setDeletingDocumentId('');
         }

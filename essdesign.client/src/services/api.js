@@ -4572,104 +4572,18 @@ function legacySafetyFormObjectPath(formType, builderId, projectId, formId) {
     return `${safetyModulePrefix(builderId, projectId, formType)}/forms/${formId}.json`;
 }
 
-function normalizeLegacySafetyForm(formType, builderId, projectId, raw, formId = '') {
-    if (!raw || typeof raw !== 'object') {
-        return null;
-    }
-    const id = String(raw.id || formId || '').trim();
-    if (!id) {
-        return null;
-    }
-    return mapSafetyFormRow({
-        form_type: formType,
-        id,
-        builder_id: builderId,
-        project_id: projectId,
-        payload: {
-            ...raw,
-            id,
-            formType,
-            builderId,
-            projectId
-        },
-        title: raw.title || '',
-        reference_number: raw.referenceNumber || '',
-        requested_by: raw.requestedBy || '',
-        project_label: raw.projectLabel || '',
-        event_date: raw.eventDate || '',
-        pdf_path: raw.pdfPath || '',
-        share_path: raw.sharePath || '',
-        photo_paths: safetyFormPhotoPaths(raw),
-        created_at: raw.createdAt || nowIso(),
-        updated_at: raw.updatedAt || nowIso()
-    });
-}
-
-function isLegacySafetyFormNewer(legacy, current) {
-    if (!current) {
-        return true;
-    }
-    const legacyUpdatedMs = Date.parse(legacy?.updatedAt || '');
-    const currentUpdatedMs = Date.parse(current?.updatedAt || '');
-    return Number.isFinite(legacyUpdatedMs)
-        && (!Number.isFinite(currentUpdatedMs) || legacyUpdatedMs > currentUpdatedMs);
-}
-
-async function readLegacySafetyForms(
-    formType,
-    builderId,
-    projectId,
-    knownFormsById = new Map()
-) {
-    const index = await readStorageJson(
-        legacySafetyFormIndexPath(formType, builderId, projectId),
-        { force: true }
-    ).catch(() => null);
-    const items = Array.isArray(index?.forms) ? index.forms : [];
-    return Promise.all(items.map(async item => {
-        const formId = String(item?.id || '').trim();
-        if (!formId || !isLegacySafetyFormNewer(item, knownFormsById.get(formId))) {
-            return null;
-        }
-        const fullRecord = await readStorageJson(
-            legacySafetyFormObjectPath(formType, builderId, projectId, formId),
-            { force: true }
-        ).catch(() => null);
-        return normalizeLegacySafetyForm(
-            formType,
-            builderId,
-            projectId,
-            fullRecord || item,
-            formId
-        );
-    }));
-}
-
 async function listSafetyFormRecords(formType, builderId, projectId) {
+    // Migration 040 copied the legacy Storage JSON records into this table.
+    // The relational table is now authoritative: importing a missing legacy
+    // record here would recreate forms that another client intentionally deleted.
     const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
         + `&builder_id=eq.${encodeURIComponent(builderId)}`
         + `&project_id=eq.${encodeURIComponent(projectId)}`
         + '&order=updated_at.desc';
     const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
-    const tableForms = rows.map(mapSafetyFormRow).filter(Boolean);
-    const formsById = new Map(tableForms.map(form => [form.id, form]));
-    const legacyForms = (await readLegacySafetyForms(
-        formType,
-        builderId,
-        projectId,
-        formsById
-    ))
-        .filter(Boolean);
-
-    const imported = await Promise.all(legacyForms.map(async form => {
-        try {
-            return await saveSafetyFormRecord(formType, builderId, projectId, form);
-        } catch {
-            return form;
-        }
-    }));
-    imported.forEach(form => formsById.set(form.id, form));
-    return Array.from(formsById.values())
+    return rows
+        .map(mapSafetyFormRow)
+        .filter(Boolean)
         .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
 }
 
@@ -4680,25 +4594,7 @@ async function getSafetyFormRecord(formType, builderId, projectId, formId) {
         + `&project_id=eq.${encodeURIComponent(projectId)}`
         + '&limit=1';
     const rows = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
-    const tableForm = mapSafetyFormRow(rows[0]);
-    const legacy = normalizeLegacySafetyForm(
-        formType,
-        builderId,
-        projectId,
-        await readStorageJson(
-            legacySafetyFormObjectPath(formType, builderId, projectId, formId),
-            { force: true }
-        ).catch(() => null),
-        formId
-    );
-    if (!legacy || !isLegacySafetyFormNewer(legacy, tableForm)) {
-        return tableForm;
-    }
-    try {
-        return await saveSafetyFormRecord(formType, builderId, projectId, legacy);
-    } catch {
-        return legacy;
-    }
+    return mapSafetyFormRow(rows[0]);
 }
 
 async function saveSafetyFormRecord(formType, builderId, projectId, form) {
