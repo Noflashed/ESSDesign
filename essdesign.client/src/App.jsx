@@ -1551,6 +1551,7 @@ function App() {
                 <EmployeeProfilePage
                     user={user}
                     onUserUpdated={handleCurrentUserUpdated}
+                    onLogout={handleLogout}
                 />
             );
         }

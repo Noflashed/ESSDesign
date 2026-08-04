@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Briefcase, Check, ChevronDown, Mail, Phone } from 'lucide-react';
+import { Briefcase, Check, ChevronDown, LogOut, Mail, Phone } from 'lucide-react';
 import { analysisAPI, preferencesAPI, usersAPI } from '../services/api';
 
 function getRoleDisplayName(role) {
@@ -361,7 +361,7 @@ function CredentialCard({
 
 const SECTION_KEYS = ['personal', 'emergency', 'notifications', 'address'];
 
-export default function EmployeeProfilePage({ user, onUserUpdated }) {
+export default function EmployeeProfilePage({ user, onUserUpdated, onLogout }) {
     const photoInputRef = useRef(null);
     const credentialImageUrlsRef = useRef(new Map());
     const [form, setForm] = useState(() => buildForm(user));
@@ -868,9 +868,14 @@ export default function EmployeeProfilePage({ user, onUserUpdated }) {
                             <span><Mail size={14} /> {form.email || 'No email saved'}</span>
                         </div>
                     </div>
-
                 </div>
 
+                {onLogout ? (
+                    <button type="button" className="employee-profile-logout" onClick={onLogout}>
+                        <LogOut size={16} />
+                        Log out
+                    </button>
+                ) : null}
             </section>
 
             <div className="employee-profile-grid">

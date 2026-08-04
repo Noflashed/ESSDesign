@@ -18156,6 +18156,12 @@ button.stat-card {
     background: #ffffff;
 }
 
+.employee-profile-page > .employee-profile-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 20px;
+}
+
 .employee-profile-summary-main {
     display: grid;
     grid-template-columns: 126px minmax(280px, 520px);
@@ -18212,6 +18218,35 @@ button.stat-card {
 .employee-profile-link:disabled {
     cursor: wait;
     opacity: 0.64;
+}
+
+.employee-profile-logout {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #fecaca;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #b91c1c;
+    padding: 0 13px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.employee-profile-logout:hover {
+    border-color: #fca5a5;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.employee-profile-logout:focus-visible {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
 }
 
 .employee-profile-photo-input {
@@ -18872,8 +18907,16 @@ button.stat-card {
         padding: 16px;
     }
 
+    .employee-profile-page > .employee-profile-summary {
+        grid-template-columns: 1fr;
+    }
+
     .employee-profile-summary {
         padding-bottom: 16px;
+    }
+
+    .employee-profile-logout {
+        width: max-content;
     }
 
     .employee-profile-avatar-block {
