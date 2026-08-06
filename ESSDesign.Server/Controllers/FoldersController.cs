@@ -1098,6 +1098,73 @@ namespace ESSDesign.Server.Controllers
             return Ok(new { folders });
         }
 
+        [HttpPost("drawing-register-folder/resolve")]
+        public async Task<ActionResult<DrawingRegisterFolderMatch?>> ResolveDrawingRegisterFolder(
+            [FromBody] DrawingRegisterFolderResolveRequest request)
+        {
+            var access = await RequireDesignManagerAsync();
+            if (access.Error != null)
+            {
+                return access.Error;
+            }
+
+            try
+            {
+                var folder = await _supabaseService.ResolveDrawingRegisterFolderAsync(
+                    request.ProjectFolderId,
+                    request.DesignName,
+                    request.DrawingNumber);
+                return Ok(folder);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving Drawing Register folder");
+                return StatusCode(500, new { error = "The ESS Design folder could not be resolved." });
+            }
+        }
+
+        [HttpPut("drawing-register-folder/rename")]
+        public async Task<ActionResult<DrawingRegisterFolderMatch>> RenameDrawingRegisterFolder(
+            [FromBody] DrawingRegisterFolderRenameRequest request)
+        {
+            var access = await RequireDesignManagerAsync();
+            if (access.Error != null)
+            {
+                return access.Error;
+            }
+            if (string.IsNullOrWhiteSpace(request.NewDesignName))
+            {
+                return BadRequest(new { error = "The drawing name is required." });
+            }
+
+            try
+            {
+                var folder = await _supabaseService.ResolveDrawingRegisterFolderAsync(
+                    request.ProjectFolderId,
+                    request.DesignName,
+                    request.DrawingNumber,
+                    includePdfCount: false);
+                if (folder == null)
+                {
+                    return NotFound(new { error = "The existing ESS Design folder could not be found." });
+                }
+
+                var newFolderName = request.NewDesignName.Trim().ToUpperInvariant();
+                await _supabaseService.RenameFolderAsync(folder.FolderId, newFolderName);
+                folder.FolderName = newFolderName;
+                return Ok(folder);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error renaming Drawing Register folder");
+                return StatusCode(500, new { error = "The drawing name and ESS Design folder could not be updated." });
+            }
+        }
+
         [HttpGet("health")]
         public ActionResult Health()
         {

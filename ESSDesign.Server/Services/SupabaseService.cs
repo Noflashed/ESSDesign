@@ -1545,6 +1545,17 @@ namespace ESSDesign.Server.Services
 
                 if (folder == null) throw new Exception("Folder not found");
 
+                var siblings = await GetRestRowsAsync<DesignFolderOptionRow>(
+                    folder.ParentFolderId.HasValue
+                        ? $"folders?select=id,name,parent_folder_id,updated_at&parent_folder_id=eq.{folder.ParentFolderId.Value:D}&limit=1000"
+                        : "folders?select=id,name,parent_folder_id,updated_at&parent_folder_id=is.null&limit=1000");
+                if (siblings.Any(sibling =>
+                    sibling.Id != folderId
+                    && NormalizeDesignFolderName(sibling.Name) == NormalizeDesignFolderName(newName)))
+                {
+                    throw new InvalidOperationException($"A folder named {newName.Trim()} already exists in this location.");
+                }
+
                 folder.Name = newName;
                 var now = DateTime.UtcNow;
                 folder.UpdatedAt = now;
@@ -1574,18 +1585,28 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var folder = await GetFolderByIdAsync(folderId, forceRefresh: true);
+                var folderTask = _supabase
+                    .From<Folder>()
+                    .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Single();
+                var subfoldersTask = _supabase
+                    .From<Folder>()
+                    .Filter("parent_folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Get();
+                var documentsTask = _supabase
+                    .From<DesignDocument>()
+                    .Filter("folder_id", Postgrest.Constants.Operator.Equals, folderId.ToString())
+                    .Get();
+
+                await Task.WhenAll(folderTask, subfoldersTask, documentsTask);
+                var folder = await folderTask ?? throw new Exception("Folder not found");
 
                 // Delete through the document cleanup path so PDFs are removed from
                 // storage before their database records and containing folders go away.
-                foreach (var subfolder in folder.SubFolders)
-                {
-                    await DeleteFolderAsync(subfolder.Id);
-                }
-                foreach (var document in folder.Documents)
-                {
-                    await DeleteDocumentAsync(document.Id);
-                }
+                var cleanupTasks = (await subfoldersTask).Models
+                    .Select(subfolder => DeleteFolderAsync(subfolder.Id))
+                    .Concat((await documentsTask).Models.Select(DeleteFolderDocumentAsync));
+                await Task.WhenAll(cleanupTasks);
 
                 await _supabase
                     .From<Folder>()
@@ -1609,6 +1630,25 @@ namespace ESSDesign.Server.Services
                 _logger.LogError(ex, "Error deleting folder");
                 throw;
             }
+        }
+
+        private async Task DeleteFolderDocumentAsync(DesignDocument document)
+        {
+            var fileDeletes = new List<Task>(2);
+            if (!string.IsNullOrWhiteSpace(document.EssDesignIssuePath))
+            {
+                fileDeletes.Add(DeleteFileAsync(document.EssDesignIssuePath));
+            }
+            if (!string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath))
+            {
+                fileDeletes.Add(DeleteFileAsync(document.ThirdPartyDesignPath));
+            }
+            await Task.WhenAll(fileDeletes);
+
+            await _supabase
+                .From<DesignDocument>()
+                .Filter("id", Postgrest.Constants.Operator.Equals, document.Id.ToString())
+                .Delete();
         }
 
         public async Task<List<BreadcrumbItem>> GetBreadcrumbsAsync(Guid folderId)
@@ -2880,6 +2920,72 @@ namespace ESSDesign.Server.Services
                 .FirstOrDefault(folder => folder.Name.Contains(baseNumber, StringComparison.OrdinalIgnoreCase));
             return folderMatch?.Id;
         }
+
+        public async Task<DrawingRegisterFolderMatch?> ResolveDrawingRegisterFolderAsync(
+            Guid? projectFolderId,
+            string? designName,
+            string? drawingNumber,
+            bool includePdfCount = true)
+        {
+            DesignFolderOptionRow? folder = null;
+            var normalizedDesignName = NormalizeDesignFolderName(designName);
+
+            if (projectFolderId.HasValue && normalizedDesignName.Length > 0)
+            {
+                var projectFolders = await GetRestRowsAsync<DesignFolderOptionRow>(
+                    $"folders?select=id,name,parent_folder_id,updated_at&parent_folder_id=eq.{projectFolderId.Value:D}&limit=1000");
+                folder = projectFolders.FirstOrDefault(candidate =>
+                    NormalizeDesignFolderName(candidate.Name) == normalizedDesignName);
+            }
+
+            var baseDrawingNumber = drawingNumber?.Trim().ToUpperInvariant() ?? string.Empty;
+            if (folder == null && Regex.IsMatch(baseDrawingNumber, @"^[A-Z0-9]+-[A-Z0-9]+-ESD\d+$"))
+            {
+                var documentFolderId = await FindDrawingFolderAsync(baseDrawingNumber);
+                if (documentFolderId.HasValue)
+                {
+                    var documentFolder = (await GetRestRowsAsync<DesignFolderOptionRow>(
+                        $"folders?select=id,name,parent_folder_id,updated_at&id=eq.{documentFolderId.Value:D}&limit=1"))
+                        .FirstOrDefault();
+                    if (documentFolder != null
+                        && (!projectFolderId.HasValue || documentFolder.ParentFolderId == projectFolderId))
+                    {
+                        folder = documentFolder;
+                    }
+                }
+            }
+
+            if (folder == null)
+            {
+                return null;
+            }
+
+            return new DrawingRegisterFolderMatch
+            {
+                FolderId = folder.Id,
+                FolderName = folder.Name,
+                PdfCount = includePdfCount ? await CountFolderPdfsAsync(folder.Id) : 0
+            };
+        }
+
+        private async Task<int> CountFolderPdfsAsync(Guid folderId)
+        {
+            var documentsTask = GetRestRowsAsync<DrawingDocumentLookupRow>(
+                $"design_documents?select=ess_design_issue_path,third_party_design_path&folder_id=eq.{folderId:D}&limit=10000");
+            var subfoldersTask = GetRestRowsAsync<DesignFolderOptionRow>(
+                $"folders?select=id,name,parent_folder_id,updated_at&parent_folder_id=eq.{folderId:D}&limit=1000");
+            await Task.WhenAll(documentsTask, subfoldersTask);
+
+            var localCount = (await documentsTask).Sum(document =>
+                (string.IsNullOrWhiteSpace(document.EssDesignIssuePath) ? 0 : 1)
+                + (string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath) ? 0 : 1));
+            var childCounts = await Task.WhenAll(
+                (await subfoldersTask).Select(subfolder => CountFolderPdfsAsync(subfolder.Id)));
+            return localCount + childCounts.Sum();
+        }
+
+        private static string NormalizeDesignFolderName(string? value) =>
+            Regex.Replace(value?.Trim() ?? string.Empty, @"\s+", " ").ToUpperInvariant();
 
         public async Task<Dictionary<string, DrawingFolderResolution>> FindDrawingFoldersAsync(IEnumerable<string> drawingNumbers)
         {

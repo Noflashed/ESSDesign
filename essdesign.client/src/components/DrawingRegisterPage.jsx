@@ -274,39 +274,11 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         return normalizeFolderId(project?.designFolderId);
     };
 
-    const resolveExistingDrawingFolder = async (row, designName = row.design) => {
-        const folderOptions = await foldersAPI.getDesignFolderOptions();
-        const projectFolderId = getProjectFolderIdForRow(row);
-        const matchingName = normalizeFolderName(designName);
-        const projectChild = projectFolderId && matchingName
-            ? folderOptions.find(folder =>
-                normalizeFolderId(folder.parentFolderId) === projectFolderId
-                && normalizeFolderName(folder.name) === matchingName)
-            : null;
-        if (projectChild) return projectChild;
-
-        const documentFolderId = normalizeFolderId(drawingDocuments[getBaseDrawingNumber(row.drawingNo)]?.folderId);
-        const documentFolder = documentFolderId
-            ? folderOptions.find(folder => normalizeFolderId(folder.id) === documentFolderId)
-            : null;
-        if (!documentFolder) return null;
-        return !projectFolderId || normalizeFolderId(documentFolder.parentFolderId) === projectFolderId
-            ? documentFolder
-            : null;
-    };
-
-    const loadFolderDeletionImpact = async folderId => {
-        const folder = await foldersAPI.getFolder(folderId, { refresh: true });
-        const localPdfCount = (folder.documents || []).reduce((count, document) =>
-            count
-            + (document.essDesignIssuePath ? 1 : 0)
-            + (document.thirdPartyDesignPath ? 1 : 0), 0);
-        const childImpacts = await Promise.all((folder.subFolders || []).map(child => loadFolderDeletionImpact(child.id)));
-        return {
-            folder,
-            pdfCount: localPdfCount + childImpacts.reduce((count, impact) => count + impact.pdfCount, 0)
-        };
-    };
+    const drawingFolderLookup = (row, designName = row.design) => ({
+        projectFolderId: getProjectFolderIdForRow(row) || null,
+        designName,
+        drawingNumber: getBaseDrawingNumber(row.drawingNo)
+    });
 
     useEffect(() => {
         const load = async () => {
@@ -629,19 +601,10 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             }
 
             if (normalizeFolderName(previousDesign) !== normalizeFolderName(nextDesign)) {
-                const folder = await resolveExistingDrawingFolder(row, previousDesign);
-                if (!folder) {
-                    throw new Error(`The existing ESS Design folder for ${previousDesign || row.drawingNo} could not be found.`);
-                }
-                const folderOptions = await foldersAPI.getDesignFolderOptions();
-                const conflictingFolder = folderOptions.find(option =>
-                    normalizeFolderId(option.id) !== normalizeFolderId(folder.id)
-                    && normalizeFolderId(option.parentFolderId) === normalizeFolderId(folder.parentFolderId)
-                    && normalizeFolderName(option.name) === normalizeFolderName(nextDesign));
-                if (conflictingFolder) {
-                    throw new Error(`An ESS Design folder named ${nextDesign.toUpperCase()} already exists in this project.`);
-                }
-                await foldersAPI.renameFolder(folder.id, nextDesign.toUpperCase());
+                await foldersAPI.renameDrawingRegisterFolder({
+                    ...drawingFolderLookup(row, previousDesign),
+                    newDesignName: nextDesign
+                });
             }
 
             setRows(current => current.map(item => item.id === row.id ? { ...item, design: nextDesign } : item));
@@ -719,7 +682,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         setSiteLinkError('');
         setPreparingDeleteId(row.id);
         try {
-            const folder = await resolveExistingDrawingFolder(row);
+            const folder = await foldersAPI.resolveDrawingRegisterFolder(drawingFolderLookup(row));
             if (!folder) {
                 if (getProjectFolderIdForRow(row)) {
                     throw new Error(`The existing ESS Design folder for ${row.design || row.drawingNo} could not be found, so the row was not deleted.`);
@@ -728,12 +691,11 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 return;
             }
 
-            const { pdfCount } = await loadFolderDeletionImpact(folder.id);
-            if (pdfCount > 0) {
-                setPendingDelete({ row, folderId: folder.id, folderName: folder.name, pdfCount });
+            if (folder.pdfCount > 0) {
+                setPendingDelete({ row, folderId: folder.folderId });
                 return;
             }
-            await deleteRow(row, folder.id);
+            await deleteRow(row, folder.folderId);
         } catch (error) {
             const detail = String(error?.response?.data?.error || error?.message || '').trim();
             setSiteLinkError(detail
@@ -891,19 +853,16 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             {pendingDelete && (
                 <div className="register-modal-backdrop" role="presentation" onMouseDown={() => { if (!deletingRowId) setPendingDelete(null); }}>
                     <section className="drawing-register-modal register-delete-modal" onMouseDown={event => event.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="delete-drawing-title" aria-describedby="delete-drawing-description">
-                        <div className="register-delete-icon" aria-hidden="true"><AlertTriangle size={24} /></div>
-                        <div className="register-modal-header">
+                        <div className="register-delete-heading">
+                            <div className="register-delete-icon" aria-hidden="true"><AlertTriangle size={20} /></div>
                             <div>
-                                <h2 id="delete-drawing-title">Active drawings will be deleted</h2>
-                                <p id="delete-drawing-description">
-                                    The ESS Design folder <strong>{pendingDelete.folderName}</strong> contains {pendingDelete.pdfCount} active PDF{pendingDelete.pdfCount === 1 ? '' : 's'}. Deleting this row will permanently delete the folder and {pendingDelete.pdfCount === 1 ? 'that drawing' : 'those drawings'}.
-                                </p>
+                                <h2 id="delete-drawing-title">Delete drawing?</h2>
+                                <p id="delete-drawing-description">This will permanently delete the drawing and its PDF files.</p>
                             </div>
-                            <button type="button" className="register-icon-button" onClick={() => setPendingDelete(null)} title="Close" disabled={Boolean(deletingRowId)}><X size={18} /></button>
                         </div>
                         <div className="register-modal-actions">
-                            <button type="button" className="register-secondary-button" onClick={() => setPendingDelete(null)} disabled={Boolean(deletingRowId)}>Cancel</button>
-                            <button type="button" className="register-danger-button" onClick={() => deleteRow(pendingDelete.row, pendingDelete.folderId)} disabled={Boolean(deletingRowId)}><Trash2 size={16} />{deletingRowId ? 'Deleting...' : 'Delete active drawings'}</button>
+                            <button type="button" className="register-secondary-button" onClick={() => setPendingDelete(null)} disabled={Boolean(deletingRowId)} autoFocus>Cancel</button>
+                            <button type="button" className="register-danger-button" onClick={() => deleteRow(pendingDelete.row, pendingDelete.folderId)} disabled={Boolean(deletingRowId)}>{deletingRowId ? 'Deleting...' : 'Delete'}</button>
                         </div>
                     </section>
                 </div>

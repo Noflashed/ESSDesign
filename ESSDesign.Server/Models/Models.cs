@@ -602,6 +602,25 @@ namespace ESSDesign.Server.Models
         public List<string> DrawingNumbers { get; set; } = new();
     }
 
+    public class DrawingRegisterFolderResolveRequest
+    {
+        public Guid? ProjectFolderId { get; set; }
+        public string DesignName { get; set; } = string.Empty;
+        public string DrawingNumber { get; set; } = string.Empty;
+    }
+
+    public class DrawingRegisterFolderRenameRequest : DrawingRegisterFolderResolveRequest
+    {
+        public string NewDesignName { get; set; } = string.Empty;
+    }
+
+    public class DrawingRegisterFolderMatch
+    {
+        public Guid FolderId { get; set; }
+        public string FolderName { get; set; } = string.Empty;
+        public int PdfCount { get; set; }
+    }
+
     public class DrawingFolderResolution
     {
         public Guid FolderId { get; set; }

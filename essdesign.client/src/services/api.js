@@ -5047,6 +5047,25 @@ export const foldersAPI = {
             drawingNumbers
         });
         return response.data?.folders || {};
+    },
+
+    resolveDrawingRegisterFolder: async ({ projectFolderId = null, designName = '', drawingNumber = '' } = {}) => {
+        const response = await apiClient.post('/folders/drawing-register-folder/resolve', {
+            projectFolderId,
+            designName,
+            drawingNumber
+        });
+        return response.data || null;
+    },
+
+    renameDrawingRegisterFolder: async ({ projectFolderId = null, designName = '', drawingNumber = '', newDesignName = '' } = {}) => {
+        const response = await apiClient.put('/folders/drawing-register-folder/rename', {
+            projectFolderId,
+            designName,
+            drawingNumber,
+            newDesignName
+        });
+        return response.data;
     }
 };
 
