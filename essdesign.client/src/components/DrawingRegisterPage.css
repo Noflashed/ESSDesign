@@ -26,6 +26,13 @@
 .register-field-error { color: #d93025; }
 .register-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-color); }
 .register-modal-actions .register-primary-button:disabled { opacity: .55; cursor: not-allowed; }
+.register-delete-modal { width: min(520px, 100%); position: relative; padding-left: 76px; }
+.register-delete-modal .register-modal-header { margin-bottom: 0; }
+.register-delete-modal .register-modal-header p { max-width: 390px; line-height: 1.55; }
+.register-delete-modal .register-modal-header strong { color: var(--text-primary); }
+.register-delete-icon { position: absolute; top: 22px; left: 22px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: rgba(217, 48, 37, .1); color: #d93025; }
+.register-danger-button { height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid #d93025; border-radius: 6px; background: #d93025; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.register-danger-button:disabled { opacity: .55; cursor: not-allowed; }
 .drawing-register-table-wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); }
 .drawing-register-table-wrap.is-loading { overflow: hidden; scrollbar-width: none; }
 .drawing-register-table-wrap.is-loading::-webkit-scrollbar { display: none; }

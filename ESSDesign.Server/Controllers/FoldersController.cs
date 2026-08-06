@@ -81,7 +81,7 @@ namespace ESSDesign.Server.Controllers
         }
 
         [HttpGet("{folderId}")]
-        public async Task<ActionResult<FolderResponse>> GetFolder(Guid folderId)
+        public async Task<ActionResult<FolderResponse>> GetFolder(Guid folderId, [FromQuery] bool refresh = false)
         {
             try
             {
@@ -91,7 +91,7 @@ namespace ESSDesign.Server.Controllers
                     return Unauthorized(new { error = "Not authenticated" });
                 }
 
-                var folder = await _supabaseService.GetFolderByIdAsync(folderId);
+                var folder = await _supabaseService.GetFolderByIdAsync(folderId, refresh);
                 return Ok(folder);
             }
             catch (Exception ex)

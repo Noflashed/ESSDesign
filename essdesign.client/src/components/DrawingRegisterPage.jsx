@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, ChevronDown, Clipboard, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, Clipboard, MoreVertical, Plus, Search, Trash2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { foldersAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
@@ -254,12 +254,59 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [drawingDocumentsLoading, setDrawingDocumentsLoading] = useState(true);
     const [registryReconciled, setRegistryReconciled] = useState(false);
     const [sharedRegisterAvailable, setSharedRegisterAvailable] = useState(false);
+    const [folderSyncingRowIds, setFolderSyncingRowIds] = useState(new Set());
+    const [preparingDeleteId, setPreparingDeleteId] = useState(null);
+    const [deletingRowId, setDeletingRowId] = useState(null);
+    const [pendingDelete, setPendingDelete] = useState(null);
     const registryReconciledRef = useRef(false);
     const rowsRef = useRef([]);
     const sharedSaveEnabledRef = useRef(false);
     const dirtyRowIdsRef = useRef(new Set());
     const deletedRowIdsRef = useRef(new Set());
+    const originalDesignNamesRef = useRef(new Map());
     const copyResetTimerRef = useRef(null);
+
+    const getProjectFolderIdForRow = row => {
+        const builder = builders.find(item => item.id === row.builderId)
+            || builders.find(item => normalizeName(item.name) === normalizeName(row.client));
+        const project = builder?.projects.find(item => item.id === row.projectId)
+            || builder?.projects.find(item => normalizeName(item.name) === normalizeName(row.project));
+        return normalizeFolderId(project?.designFolderId);
+    };
+
+    const resolveExistingDrawingFolder = async (row, designName = row.design) => {
+        const folderOptions = await foldersAPI.getDesignFolderOptions();
+        const projectFolderId = getProjectFolderIdForRow(row);
+        const matchingName = normalizeFolderName(designName);
+        const projectChild = projectFolderId && matchingName
+            ? folderOptions.find(folder =>
+                normalizeFolderId(folder.parentFolderId) === projectFolderId
+                && normalizeFolderName(folder.name) === matchingName)
+            : null;
+        if (projectChild) return projectChild;
+
+        const documentFolderId = normalizeFolderId(drawingDocuments[getBaseDrawingNumber(row.drawingNo)]?.folderId);
+        const documentFolder = documentFolderId
+            ? folderOptions.find(folder => normalizeFolderId(folder.id) === documentFolderId)
+            : null;
+        if (!documentFolder) return null;
+        return !projectFolderId || normalizeFolderId(documentFolder.parentFolderId) === projectFolderId
+            ? documentFolder
+            : null;
+    };
+
+    const loadFolderDeletionImpact = async folderId => {
+        const folder = await foldersAPI.getFolder(folderId, { refresh: true });
+        const localPdfCount = (folder.documents || []).reduce((count, document) =>
+            count
+            + (document.essDesignIssuePath ? 1 : 0)
+            + (document.thirdPartyDesignPath ? 1 : 0), 0);
+        const childImpacts = await Promise.all((folder.subFolders || []).map(child => loadFolderDeletionImpact(child.id)));
+        return {
+            folder,
+            pdfCount: localPdfCount + childImpacts.reduce((count, impact) => count + impact.pdfCount, 0)
+        };
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -469,6 +516,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             || loading
             || !registryReconciled
             || drawingDocumentsLoading
+            || folderSyncingRowIds.size > 0
             || dirtyRowIdsRef.current.size === 0) return;
         let cancelled = false;
         const saveTimer = window.setTimeout(() => {
@@ -503,7 +551,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             cancelled = true;
             window.clearTimeout(saveTimer);
         };
-    }, [canEdit, drawingDocumentsLoading, loading, registryReconciled, rows, sharedRegisterAvailable]);
+    }, [canEdit, drawingDocumentsLoading, folderSyncingRowIds, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
     const addRow = async event => {
@@ -552,8 +600,67 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     };
     const updateRow = (id, key, value) => {
         if (!canEdit) return;
+        if (key === 'design') {
+            if (!originalDesignNamesRef.current.has(id)) {
+                const currentRow = rows.find(row => row.id === id);
+                originalDesignNamesRef.current.set(id, currentRow?.design || '');
+                setFolderSyncingRowIds(current => new Set(current).add(id));
+            }
+            setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
+            return;
+        }
         dirtyRowIdsRef.current.add(id);
         setRows(current => current.map(row => row.id === id ? { ...row, [key]: value } : row));
+    };
+
+    const finishRowEdit = async (row, key, value) => {
+        setEditingId(null);
+        if (key === 'dateIssued') {
+            updateRow(row.id, key, formatDateIssued(value));
+            return;
+        }
+        if (key !== 'design' || !originalDesignNamesRef.current.has(row.id)) return;
+
+        const previousDesign = originalDesignNamesRef.current.get(row.id) || '';
+        const nextDesign = cleanFolderName(value);
+        try {
+            if (!nextDesign) {
+                throw new Error('The drawing name cannot be empty.');
+            }
+
+            if (normalizeFolderName(previousDesign) !== normalizeFolderName(nextDesign)) {
+                const folder = await resolveExistingDrawingFolder(row, previousDesign);
+                if (!folder) {
+                    throw new Error(`The existing ESS Design folder for ${previousDesign || row.drawingNo} could not be found.`);
+                }
+                const folderOptions = await foldersAPI.getDesignFolderOptions();
+                const conflictingFolder = folderOptions.find(option =>
+                    normalizeFolderId(option.id) !== normalizeFolderId(folder.id)
+                    && normalizeFolderId(option.parentFolderId) === normalizeFolderId(folder.parentFolderId)
+                    && normalizeFolderName(option.name) === normalizeFolderName(nextDesign));
+                if (conflictingFolder) {
+                    throw new Error(`An ESS Design folder named ${nextDesign.toUpperCase()} already exists in this project.`);
+                }
+                await foldersAPI.renameFolder(folder.id, nextDesign.toUpperCase());
+            }
+
+            setRows(current => current.map(item => item.id === row.id ? { ...item, design: nextDesign } : item));
+            dirtyRowIdsRef.current.add(row.id);
+            setSiteLinkError('');
+        } catch (error) {
+            setRows(current => current.map(item => item.id === row.id ? { ...item, design: previousDesign } : item));
+            const detail = error?.response?.data?.error || error.message;
+            setSiteLinkError(detail
+                ? `The drawing name was not changed. ${detail}`
+                : 'The drawing name and ESS Design folder could not be updated.');
+        } finally {
+            originalDesignNamesRef.current.delete(row.id);
+            setFolderSyncingRowIds(current => {
+                const next = new Set(current);
+                next.delete(row.id);
+                return next;
+            });
+        }
     };
     const updateRowClient = (id, client) => {
         if (!canEdit) return;
@@ -572,27 +679,69 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         setRows(current => current.map(item => item.id === id ? { ...item, projectId: project?.id || '', project: projectName } : item));
         setSiteLinkError('');
     };
-    const deleteRow = id => {
-        if (!canEdit) return;
+    const deleteRow = async (row, folderId = null) => {
+        if (!canEdit || deletingRowId) return;
         setSiteLinkError('');
-        dirtyRowIdsRef.current.delete(id);
-        deletedRowIdsRef.current.add(id);
-        safetyProjectsAPI.deleteDrawingRegisterEntry(id)
-            .then(() => {
-                setRows(current => current.filter(item => item.id !== id));
-            })
-            .catch(error => {
-                const detail = String(error?.message || '').trim();
-                if (detail.toLowerCase().includes('entry not found')) {
-                    setRows(current => current.filter(item => item.id !== id));
-                    return;
+        setPendingDelete(null);
+        setDeletingRowId(row.id);
+        dirtyRowIdsRef.current.delete(row.id);
+        deletedRowIdsRef.current.add(row.id);
+        let folderDeleted = false;
+        try {
+            if (folderId) {
+                await foldersAPI.deleteFolder(folderId);
+                folderDeleted = true;
+            }
+            await safetyProjectsAPI.deleteDrawingRegisterEntry(row.id);
+            setRows(current => current.filter(item => item.id !== row.id));
+        } catch (error) {
+            const detail = String(error?.response?.data?.error || error?.message || '').trim();
+            if (detail.toLowerCase().includes('entry not found')) {
+                setRows(current => current.filter(item => item.id !== row.id));
+                return;
+            }
+            deletedRowIdsRef.current.delete(row.id);
+            console.error('Shared Drawing Register and folder delete failed', error);
+            setSiteLinkError(folderDeleted
+                ? `The ESS Design folder was deleted, but the Drawing Register row could not be removed. Try deleting the row again. ${detail}`.trim()
+                : detail
+                    ? `The drawing and its ESS Design folder could not be deleted. ${detail}`
+                    : 'The drawing and its ESS Design folder could not be deleted.');
+        } finally {
+            setDeletingRowId(null);
+        }
+    };
+
+    const requestDeleteRow = async row => {
+        if (!row || !canEdit || preparingDeleteId || deletingRowId) return;
+        setOpenMenuId(null);
+        setMenuPosition(null);
+        setSiteLinkError('');
+        setPreparingDeleteId(row.id);
+        try {
+            const folder = await resolveExistingDrawingFolder(row);
+            if (!folder) {
+                if (getProjectFolderIdForRow(row)) {
+                    throw new Error(`The existing ESS Design folder for ${row.design || row.drawingNo} could not be found, so the row was not deleted.`);
                 }
-                deletedRowIdsRef.current.delete(id);
-                console.error('Shared Drawing Register delete failed', error);
-                setSiteLinkError(detail
-                    ? `The drawing could not be deleted from the shared Drawing Register. ${detail}`
-                    : 'The drawing could not be deleted from the shared Drawing Register.');
-            });
+                await deleteRow(row);
+                return;
+            }
+
+            const { pdfCount } = await loadFolderDeletionImpact(folder.id);
+            if (pdfCount > 0) {
+                setPendingDelete({ row, folderId: folder.id, folderName: folder.name, pdfCount });
+                return;
+            }
+            await deleteRow(row, folder.id);
+        } catch (error) {
+            const detail = String(error?.response?.data?.error || error?.message || '').trim();
+            setSiteLinkError(detail
+                ? `The drawing could not be prepared for deletion. ${detail}`
+                : 'The drawing could not be prepared for deletion.');
+        } finally {
+            setPreparingDeleteId(null);
+        }
     };
     const openAddRow = () => {
         if (!canEdit) return;
@@ -703,7 +852,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             return <select className="register-status-select" value={cleanStatus(row[key]) || 'CONSTRUCTION'} onChange={event => updateRow(row.id, key, event.target.value)}>{[...new Set([...DESIGN_USE_OPTIONS, cleanStatus(row[key])].filter(Boolean))].map(option => <option key={option}>{option}</option>)}</select>;
         }
         return canEdit && editingId === row.id
-            ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => { if (key === 'dateIssued') updateRow(row.id, key, formatDateIssued(event.target.value)); setEditingId(null); }} />
+            ? <input value={row[key]} onChange={event => updateRow(row.id, key, event.target.value)} onBlur={event => finishRowEdit(row, key, event.target.value)} />
             : <span className="register-read-only-value" title={row[key]}>{row[key]}</span>;
     };
     const registerLoading = loading || buildersLoading || !registryReconciled || drawingDocumentsLoading;
@@ -739,6 +888,27 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 </div>
             )}
 
+            {pendingDelete && (
+                <div className="register-modal-backdrop" role="presentation" onMouseDown={() => { if (!deletingRowId) setPendingDelete(null); }}>
+                    <section className="drawing-register-modal register-delete-modal" onMouseDown={event => event.stopPropagation()} role="alertdialog" aria-modal="true" aria-labelledby="delete-drawing-title" aria-describedby="delete-drawing-description">
+                        <div className="register-delete-icon" aria-hidden="true"><AlertTriangle size={24} /></div>
+                        <div className="register-modal-header">
+                            <div>
+                                <h2 id="delete-drawing-title">Active drawings will be deleted</h2>
+                                <p id="delete-drawing-description">
+                                    The ESS Design folder <strong>{pendingDelete.folderName}</strong> contains {pendingDelete.pdfCount} active PDF{pendingDelete.pdfCount === 1 ? '' : 's'}. Deleting this row will permanently delete the folder and {pendingDelete.pdfCount === 1 ? 'that drawing' : 'those drawings'}.
+                                </p>
+                            </div>
+                            <button type="button" className="register-icon-button" onClick={() => setPendingDelete(null)} title="Close" disabled={Boolean(deletingRowId)}><X size={18} /></button>
+                        </div>
+                        <div className="register-modal-actions">
+                            <button type="button" className="register-secondary-button" onClick={() => setPendingDelete(null)} disabled={Boolean(deletingRowId)}>Cancel</button>
+                            <button type="button" className="register-danger-button" onClick={() => deleteRow(pendingDelete.row, pendingDelete.folderId)} disabled={Boolean(deletingRowId)}><Trash2 size={16} />{deletingRowId ? 'Deleting...' : 'Delete active drawings'}</button>
+                        </div>
+                    </section>
+                </div>
+            )}
+
             <section className={`drawing-register-table-wrap${registerLoading ? ' is-loading' : ''}`}>
                 {registerLoading ? <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading drawing register" /></div> : (
                     <table className={`drawing-register-table${canEdit ? '' : ' is-read-only'}`}>
@@ -762,7 +932,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             {openMenuId && menuPosition && createPortal(
                 <div className="register-context-menu" role="menu" style={{ top: menuPosition.top, left: menuPosition.left }} onClick={event => event.stopPropagation()}>
                     <button type="button" role="menuitem" onClick={openAddRow}><Plus size={16} /> Add drawing</button>
-                    <button type="button" role="menuitem" className="danger" onClick={() => { deleteRow(openMenuId); setOpenMenuId(null); setMenuPosition(null); }}><Trash2 size={16} /> Delete drawing</button>
+                    <button type="button" role="menuitem" className="danger" disabled={preparingDeleteId === openMenuId || Boolean(deletingRowId) || folderSyncingRowIds.has(openMenuId)} onClick={() => requestDeleteRow(rows.find(row => row.id === openMenuId))}><Trash2 size={16} />{preparingDeleteId === openMenuId ? 'Checking folder...' : folderSyncingRowIds.has(openMenuId) ? 'Updating folder...' : 'Delete drawing'}</button>
                 </div>,
                 document.body)}
         </main>

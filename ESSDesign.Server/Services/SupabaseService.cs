@@ -247,11 +247,11 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        public async Task<FolderResponse> GetFolderByIdAsync(Guid folderId)
+        public async Task<FolderResponse> GetFolderByIdAsync(Guid folderId, bool forceRefresh = false)
         {
             try
             {
-                if (_folderCache.TryGetValue(folderId, out var cached))
+                if (!forceRefresh && _folderCache.TryGetValue(folderId, out var cached))
                 {
                     if (cached.Expiry > DateTime.UtcNow)
                     {
@@ -1574,10 +1574,18 @@ namespace ESSDesign.Server.Services
         {
             try
             {
-                var folder = await _supabase
-                    .From<Folder>()
-                    .Filter("id", Postgrest.Constants.Operator.Equals, folderId.ToString())
-                    .Single();
+                var folder = await GetFolderByIdAsync(folderId, forceRefresh: true);
+
+                // Delete through the document cleanup path so PDFs are removed from
+                // storage before their database records and containing folders go away.
+                foreach (var subfolder in folder.SubFolders)
+                {
+                    await DeleteFolderAsync(subfolder.Id);
+                }
+                foreach (var document in folder.Documents)
+                {
+                    await DeleteDocumentAsync(document.Id);
+                }
 
                 await _supabase
                     .From<Folder>()
@@ -1585,7 +1593,7 @@ namespace ESSDesign.Server.Services
                     .Delete();
 
                 _folderCache.TryRemove(folderId, out _);
-                if (folder?.ParentFolderId != null)
+                if (folder.ParentFolderId != null)
                 {
                     await TouchFolderModifiedAsync(folder.ParentFolderId.Value);
                 }

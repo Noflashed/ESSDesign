@@ -4825,8 +4825,10 @@ export const foldersAPI = {
         return response.data;
     },
 
-    getFolder: async (folderId) => {
-        const response = await apiClient.get(`/folders/${folderId}`);
+    getFolder: async (folderId, { refresh = false } = {}) => {
+        const response = await apiClient.get(`/folders/${folderId}`, {
+            params: refresh ? { refresh: true } : undefined
+        });
         return response.data;
     },
 
