@@ -140,8 +140,6 @@ const formatCompactRevisionNumber = (revisionNumber) => {
     return `Rev ${String(revisionNumber).padStart(2, '0')}`;
 };
 
-const REVISION_LIBRARY_GRID_TEMPLATE = 'minmax(280px, 2.35fr) minmax(104px, 0.72fr) minmax(118px, 0.86fr) minmax(150px, 1.08fr) minmax(116px, 0.82fr) minmax(76px, 0.52fr) minmax(142px, 0.9fr)';
-
 const DRAWING_STATUS_LABELS = new Set(['Construction', 'Preliminary', 'Concept', 'As-Built']);
 
 const inferDrawingStatusFromDocumentName = (item) => {
@@ -689,16 +687,12 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
         });
     }, []);
 
-    const isRevisionLibrary = breadcrumbs.length === 3;
-    const showRevisionColumn = isRevisionLibrary || folders.some(item => item.isDocument);
+    const showRevisionColumn = folders.some(item => item.isDocument);
     const showRootBuilderLogos = currentFolder === null;
     const showSiteLocationIcons = breadcrumbs.length === 1;
 
     // Build a defensive grid-template-columns string so stale localStorage values cannot break the layout
     const gridTemplateColumns = buildGridTemplateColumns(colWidths, showRevisionColumn, showRootBuilderLogos);
-    const activeGridTemplateColumns = isRevisionLibrary
-        ? REVISION_LIBRARY_GRID_TEMPLATE
-        : gridTemplateColumns;
 
     // Column resize handlers
     const colKeys = showRevisionColumn
@@ -1543,26 +1537,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
         }, 0)
     ), [visibleItems]);
 
-    const revisionLibrarySummary = useMemo(() => {
-        const documents = visibleItems.filter(item => item.isDocument);
-        const latestDocument = documents.reduce((latest, item) => {
-            if (!latest || Number(item.revisionNumber) > Number(latest.revisionNumber)) {
-                return item;
-            }
-            return latest;
-        }, null);
-        const lastUpdated = documents.reduce((latestTimestamp, item) => {
-            const timestamp = new Date(item.updatedAt || item.createdAt || 0).getTime();
-            return Number.isFinite(timestamp) ? Math.max(latestTimestamp, timestamp) : latestTimestamp;
-        }, 0);
-
-        return {
-            documentCount: documents.length,
-            latestDocument,
-            lastUpdated,
-        };
-    }, [visibleItems]);
-
     useEffect(() => {
         const handleClick = () => setContextMenu(null);
         document.addEventListener('click', handleClick);
@@ -1583,7 +1557,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
         <div className="folder-browser">
             <section className="document-page">
                 <div className={`document-content ${selectedPreviewItem ? 'has-details' : ''}`}>
-                    <div className={`document-items-panel${isRevisionLibrary ? ' revision-library' : ''}`}>
+                    <div className="document-items-panel">
                         <div className="document-table-toolbar">
                             <nav className="document-path-row" aria-label="Folder path">
                                 <ol className="contained-breadcrumbs">
@@ -1641,7 +1615,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                             }
                                         }}
                                         onBlur={() => window.setTimeout(() => setShowSearchSuggestions(false), 140)}
-                                        placeholder={isRevisionLibrary ? 'Search revisions or PDF names' : 'Search folders'}
+                                        placeholder="Search folders"
                                     />
                                     <SearchIcon size={18} />
                                     {showSearchSuggestions && (
@@ -1675,7 +1649,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                     )}
                                 </label>
                                 <div className="document-toolbar-spacer"></div>
-                                {canManage && !isRevisionLibrary && (
+                                {canManage && (
                                     <button className="btn-new" onClick={() => setShowNewFolderModal(true)}>
                                         <FolderPlusIcon size={16} /> New Folder
                                     </button>
@@ -1686,9 +1660,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                             className="btn-upload"
                                             onClick={() => currentFolder && setShowUploadModal(true)}
                                             disabled={!currentFolder}
-                                            title={currentFolder ? (isRevisionLibrary ? 'Upload PDF revision' : 'Upload Document') : 'Open a folder to upload documents'}
+                                            title={currentFolder ? 'Upload Document' : 'Open a folder to upload documents'}
                                         >
-                                            <UploadIcon size={16} /> {isRevisionLibrary ? 'Upload Revision' : 'Upload Document'}
+                                            <UploadIcon size={16} /> Upload Document
                                         </button>
                                         <button
                                             type="button"
@@ -1703,39 +1677,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                 )}
                             </div>
                         </div>
-                        {isRevisionLibrary && !loading && (
-                            <section className="revision-library-overview" aria-labelledby="revision-library-title">
-                                <div className="revision-library-heading">
-                                    <span className="revision-library-eyebrow">Scaffold drawing register</span>
-                                    <h2 id="revision-library-title">
-                                        {breadcrumbs[breadcrumbs.length - 1]?.name || 'Scaffold'} revisions
-                                    </h2>
-                                    <p>Review every issued PDF, compare revision details and open the latest drawing from one register.</p>
-                                </div>
-                                <div className="revision-library-stats" aria-label="Revision summary">
-                                    <div className="revision-library-stat">
-                                        <span>Total revisions</span>
-                                        <strong>{revisionLibrarySummary.documentCount}</strong>
-                                    </div>
-                                    <div className="revision-library-stat">
-                                        <span>Latest issue</span>
-                                        <strong>
-                                            {revisionLibrarySummary.latestDocument
-                                                ? formatCompactRevisionNumber(revisionLibrarySummary.latestDocument.revisionNumber)
-                                                : 'None'}
-                                        </strong>
-                                    </div>
-                                    <div className="revision-library-stat">
-                                        <span>Last updated</span>
-                                        <strong>
-                                            {revisionLibrarySummary.lastUpdated
-                                                ? formatDate(new Date(revisionLibrarySummary.lastUpdated).toISOString())
-                                                : '-'}
-                                        </strong>
-                                    </div>
-                                </div>
-                            </section>
-                        )}
                         {loading ? (
                             <div className="folder-browser-loading page-loading-brandmark">
                                 <LoadingBrandmark label="Loading ESS Design" />
@@ -1743,13 +1684,13 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                         ) : (
                             <>
                                 {viewMode === 'list' && (
-                                    <div className="list-header" ref={headerRef} style={{ gridTemplateColumns: activeGridTemplateColumns }}>
+                                    <div className="list-header" ref={headerRef} style={{ gridTemplateColumns }}>
                                         <div
                                             className={`list-header-cell sortable ${sortField === 'name' ? 'active' : ''}`}
                                             onClick={() => handleSort('name')}
                                             data-col-key="name"
                                         >
-                                            <span>{isRevisionLibrary ? 'Drawing PDF' : 'Name'}</span>
+                                            <span>Name</span>
                                             {sortField === 'name' && (
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
@@ -1825,7 +1766,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                 <SortArrowIcon direction={sortDirection} />
                                             )}
                                         </div>
-                                        <div className="list-header-actions">{isRevisionLibrary ? 'Actions' : 'File'}</div>
+                                        <div className="list-header-actions">File</div>
                                     </div>
                                 )}
 
@@ -1937,8 +1878,8 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                             ) : (
                                                 <div
                                                     key={item.id}
-                                                    className={`list-item ${item.isDocument ? 'document' : 'folder'}${isSelected ? ' selected' : ''}${isRevisionLibrary && isLatest ? ' is-latest' : ''}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
-                                                    style={{ gridTemplateColumns: activeGridTemplateColumns }}
+                                                    className={`list-item ${item.isDocument ? 'document' : 'folder'}${isSelected ? ' selected' : ''}${!item.isDocument && dragOverFolderId === item.id ? ' drag-over' : ''}`}
+                                                    style={{ gridTemplateColumns }}
                                                     draggable={canManage && !!item.isDocument}
                                                     onClick={() => {
                                                         setSelectedItemId(item.isDocument ? item.id : null);
@@ -1952,24 +1893,15 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                     onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
                                                     onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
-                                                    <div className={`list-item-name${isRevisionLibrary && item.isDocument ? ' revision-file-identity' : ''}`}>
+                                                    <div className="list-item-name">
                                                         {item.isDocument ? (
-                                                            <span className={isRevisionLibrary ? 'revision-pdf-icon' : undefined}>
-                                                                <DocumentIcon size={isRevisionLibrary ? 22 : 20} />
-                                                            </span>
+                                                            <DocumentIcon size={20} />
                                                         ) : showSiteLocationIcons ? (
                                                             <SiteLocationIcon size={20} color="#334155" />
                                                         ) : (
                                                             <FolderIcon size={20} />
                                                         )}
-                                                        {isRevisionLibrary && item.isDocument ? (
-                                                            <span className="revision-file-copy">
-                                                                <strong>{getItemDisplayName(item)}</strong>
-                                                                <small>{item.description || 'ESS Design revision PDF'}</small>
-                                                            </span>
-                                                        ) : (
-                                                            <span>{getItemDisplayName(item)}</span>
-                                                        )}
+                                                        <span>{getItemDisplayName(item)}</span>
                                                     </div>
                                                     {showRootBuilderLogos && (
                                                         <div className="list-item-builder-logo">
@@ -2015,9 +1947,9 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                                             e.stopPropagation();
                                                                             handleViewPDF(item, 'ess');
                                                                         }}
-                                                                        className={`file-btn-small${isRevisionLibrary ? ' revision-open-btn' : ''}`}
+                                                                        className="file-btn-small"
                                                                     >
-                                                                        {isRevisionLibrary ? 'Open PDF' : 'Open'} <CheckCircleIcon />
+                                                                        Open <CheckCircleIcon />
                                                                     </button>
                                                                 ) : (
                                                                     <div className="file-btn-placeholder"></div>
@@ -2549,3 +2481,6 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
 }
 
 export default FolderBrowser;
+
+
+
