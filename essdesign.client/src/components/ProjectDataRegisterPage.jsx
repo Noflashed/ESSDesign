@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, ExternalLink, FileText, Search } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, Search } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -16,6 +16,7 @@ const REGISTER_CONFIG = {
         searchPlaceholder: 'Search handovers...',
         api: handoverCertificatesAPI,
         defaultSort: 'inspectionDate',
+        linkKey: 'title',
         columns: [
             { key: 'builder', label: 'CLIENT' },
             { key: 'project', label: 'PROJECT' },
@@ -31,6 +32,7 @@ const REGISTER_CONFIG = {
         searchPlaceholder: 'Search day labour forms...',
         api: dayLabourVariationsAPI,
         defaultSort: 'formDate',
+        linkKey: 'title',
         columns: [
             { key: 'builder', label: 'CLIENT' },
             { key: 'project', label: 'PROJECT' },
@@ -47,6 +49,7 @@ const REGISTER_CONFIG = {
         searchPlaceholder: 'Search scaff-tags...',
         api: scaffTagsAPI,
         defaultSort: 'inspectionDate',
+        linkKey: 'reference',
         columns: [
             { key: 'builder', label: 'CLIENT' },
             { key: 'project', label: 'PROJECT' },
@@ -195,6 +198,11 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [sortField, setSortField] = useState(config.defaultSort);
     const [sortDirection, setSortDirection] = useState('desc');
     const [openingId, setOpeningId] = useState('');
+    const [filterMenu, setFilterMenu] = useState('');
+    const [excludedFilters, setExcludedFilters] = useState({
+        builder: new Set(),
+        project: new Set()
+    });
 
     useEffect(() => {
         let active = true;
@@ -222,13 +230,41 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setSortField(config.defaultSort);
         setSortDirection('desc');
         setQuery('');
+        setFilterMenu('');
+        setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
+
+    useEffect(() => {
+        if (!filterMenu) return undefined;
+
+        const closeFilterMenu = event => {
+            if (!event.target.closest?.('.project-register-header-filter')) {
+                setFilterMenu('');
+            }
+        };
+        const closeFilterMenuWithKeyboard = event => {
+            if (event.key === 'Escape') setFilterMenu('');
+        };
+        document.addEventListener('pointerdown', closeFilterMenu);
+        document.addEventListener('keydown', closeFilterMenuWithKeyboard);
+        return () => {
+            document.removeEventListener('pointerdown', closeFilterMenu);
+            document.removeEventListener('keydown', closeFilterMenuWithKeyboard);
+        };
+    }, [filterMenu]);
+
+    const filterOptions = useMemo(() => ({
+        builder: [...new Set(rows.map(row => row.builder).filter(Boolean))].sort((left, right) => left.localeCompare(right)),
+        project: [...new Set(rows.map(row => row.project).filter(Boolean))].sort((left, right) => left.localeCompare(right))
+    }), [rows]);
 
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
-        const next = normalizedQuery
-            ? rows.filter(row => config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
-            : [...rows];
+        const next = rows.filter(row => (
+            !excludedFilters.builder.has(row.builder)
+            && !excludedFilters.project.has(row.project)
+            && (!normalizedQuery || config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
+        ));
         const direction = sortDirection === 'asc' ? 1 : -1;
         return next.sort((left, right) => {
             const leftValue = sortValue(left, sortField);
@@ -237,9 +273,29 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, query, rows, sortDirection, sortField]);
+    }, [config.columns, excludedFilters, query, rows, sortDirection, sortField]);
+
+    const toggleFilterValue = (key, value) => {
+        setExcludedFilters(current => {
+            const nextValues = new Set(current[key]);
+            if (nextValues.has(value)) {
+                nextValues.delete(value);
+            } else {
+                nextValues.add(value);
+            }
+            return { ...current, [key]: nextValues };
+        });
+    };
+
+    const setAllFilterValues = (key, selected) => {
+        setExcludedFilters(current => ({
+            ...current,
+            [key]: selected ? new Set() : new Set(filterOptions[key])
+        }));
+    };
 
     const changeSort = key => {
+        setFilterMenu('');
         if (sortField === key) {
             setSortDirection(current => current === 'asc' ? 'desc' : 'asc');
             return;
@@ -300,31 +356,75 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                         <thead>
                             <tr>
                                 {config.columns.map(column => (
-                                    <th key={column.key}>
-                                        <button type="button" className={`project-register-column-sort${sortField === column.key ? ' active' : ''}`} onClick={() => changeSort(column.key)}>
-                                            <span>{column.label}</span>
-                                            <ChevronDown className={sortField === column.key && sortDirection === 'asc' ? 'ascending' : ''} aria-hidden="true" />
-                                        </button>
+                                    <th key={column.key} className={column.key === 'builder' || column.key === 'project' ? 'has-filter-menu' : undefined}>
+                                        {column.key === 'builder' || column.key === 'project' ? (
+                                            <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
+                                                <button
+                                                    type="button"
+                                                    className="project-register-column-sort project-register-filter-trigger"
+                                                    onClick={event => {
+                                                        event.stopPropagation();
+                                                        setFilterMenu(current => current === column.key ? '' : column.key);
+                                                    }}
+                                                    aria-haspopup="menu"
+                                                    aria-expanded={filterMenu === column.key}
+                                                >
+                                                    <span>{column.label}</span>
+                                                    <ChevronDown aria-hidden="true" />
+                                                </button>
+                                                {filterMenu === column.key ? (
+                                                    <div className="project-register-filter-menu" role="menu" onClick={event => event.stopPropagation()}>
+                                                        <div className="project-register-filter-menu-actions">
+                                                            <button type="button" onClick={() => setAllFilterValues(column.key, true)}>Select all</button>
+                                                            <button type="button" onClick={() => setAllFilterValues(column.key, false)}>Clear</button>
+                                                        </div>
+                                                        <div className="project-register-filter-options">
+                                                            {filterOptions[column.key].map(value => (
+                                                                <label key={value}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!excludedFilters[column.key].has(value)}
+                                                                        onChange={() => toggleFilterValue(column.key, value)}
+                                                                    />
+                                                                    <span title={value}>{value}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        ) : (
+                                            <button type="button" className={`project-register-column-sort${sortField === column.key ? ' active' : ''}`} onClick={() => changeSort(column.key)}>
+                                                <span>{column.label}</span>
+                                                <ChevronDown className={sortField === column.key && sortDirection === 'asc' ? 'ascending' : ''} aria-hidden="true" />
+                                            </button>
+                                        )}
                                     </th>
                                 ))}
-                                <th className="project-register-open-column" aria-label="Open PDF" />
                             </tr>
                         </thead>
                         <tbody>
                             {filteredRows.map(row => (
-                                <tr key={row.id} onDoubleClick={() => openPdf(row)}>
+                                <tr key={row.id}>
                                     {config.columns.map(column => (
                                         <td key={column.key} title={String(row[column.key] || '')}>
                                             {column.key === 'status'
                                                 ? <StatusBadge value={row.status} />
-                                                : row[column.key] || '-'}
+                                                : column.key === config.linkKey
+                                                    ? (
+                                                        <button
+                                                            type="button"
+                                                            className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`}
+                                                            disabled={Boolean(openingId)}
+                                                            onClick={() => openPdf(row)}
+                                                            title={`Open PDF for ${row[column.key] || row.reference}`}
+                                                        >
+                                                            {row[column.key] || '-'}
+                                                        </button>
+                                                    )
+                                                    : row[column.key] || '-'}
                                         </td>
                                     ))}
-                                    <td className="project-register-open-column">
-                                        <button type="button" className="project-register-open-button" disabled={Boolean(openingId)} onClick={() => openPdf(row)} title="Open PDF" aria-label={`Open PDF for ${row.title || row.reference}`}>
-                                            {openingId === row.id ? <span className="project-register-button-spinner" /> : <><FileText size={15} /><ExternalLink size={12} /></>}
-                                        </button>
-                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -333,7 +433,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                 {!loading && filteredRows.length === 0 ? (
                     <div className="project-register-empty">
                         <FileText size={28} />
-                        <span>{query ? `No ${config.noun} match your search.` : `No ${config.noun} have been created yet.`}</span>
+                        <span>{query || excludedFilters.builder.size || excludedFilters.project.size ? `No ${config.noun} match the current filters.` : `No ${config.noun} have been created yet.`}</span>
                     </div>
                 ) : null}
             </section>

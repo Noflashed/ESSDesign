@@ -38,8 +38,7 @@
     letter-spacing: -0.2px;
 }
 
-.project-register-icon-button,
-.project-register-open-button {
+.project-register-icon-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -59,8 +58,7 @@
     color: var(--text-primary);
 }
 
-.project-register-back-button:hover,
-.project-register-open-button:hover {
+.project-register-back-button:hover {
     border-color: var(--primary-color);
     background: var(--hover-bg);
     color: var(--primary-color);
@@ -152,6 +150,19 @@
     background: var(--bg-secondary);
 }
 
+.project-data-register-table th.has-filter-menu {
+    overflow: visible;
+}
+
+.project-data-register-table th.has-filter-menu:has(.project-register-header-filter.open) {
+    z-index: 12;
+}
+
+.project-data-register-table th:last-child,
+.project-data-register-table td:last-child {
+    border-right: 0;
+}
+
 .project-data-register-table tbody td {
     background: var(--card-bg);
 }
@@ -205,6 +216,130 @@
     transform: rotate(180deg);
 }
 
+.project-register-header-filter {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.project-register-filter-trigger svg {
+    opacity: 0.65;
+}
+
+.project-register-header-filter.filtered .project-register-filter-trigger,
+.project-register-header-filter.open .project-register-filter-trigger {
+    color: var(--primary-color);
+}
+
+.project-register-header-filter.filtered .project-register-filter-trigger svg,
+.project-register-header-filter.open .project-register-filter-trigger svg {
+    opacity: 1;
+}
+
+.project-register-filter-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 5px;
+    z-index: 20;
+    width: min(250px, calc(100vw - 48px));
+    padding: 7px;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    background: var(--card-bg);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.project-register-filter-menu-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    padding: 0 0 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.project-register-filter-menu-actions button {
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--primary-color);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.project-register-filter-menu-actions button:hover {
+    background: var(--hover-bg);
+}
+
+.project-register-filter-options {
+    max-height: 238px;
+    overflow-y: auto;
+    padding-top: 5px;
+}
+
+.project-register-filter-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.project-register-filter-options label:hover {
+    background: var(--hover-bg);
+}
+
+.project-register-filter-options input {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
+.project-register-filter-options span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-register-pdf-link {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 4px 5px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: 750;
+    line-height: 1.35;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.project-register-pdf-link:hover {
+    background: rgba(246, 114, 0, 0.09);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.project-register-pdf-link:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
 .project-data-register-table.type-handovers th:nth-child(1) { width: 16%; }
 .project-data-register-table.type-handovers th:nth-child(2) { width: 20%; }
 .project-data-register-table.type-handovers th:nth-child(3) { width: 22%; }
@@ -227,61 +362,6 @@
 .project-data-register-table.type-scaff-tags th:nth-child(5) { width: 16%; }
 .project-data-register-table.type-scaff-tags th:nth-child(6) { width: 13%; }
 .project-data-register-table.type-scaff-tags th:nth-child(7) { width: 8%; }
-
-.project-data-register-table th.project-register-open-column,
-.project-data-register-table td.project-register-open-column {
-    position: sticky;
-    right: 0;
-    z-index: 5;
-    width: 48px;
-    min-width: 48px;
-    max-width: 48px;
-    padding: 0 6px;
-    border-right: 0;
-    background: var(--card-bg);
-    box-shadow: -1px 0 0 var(--border-color);
-    text-align: center;
-}
-
-.project-data-register-table th.project-register-open-column {
-    z-index: 8;
-    background: var(--bg-secondary);
-}
-
-.project-data-register-table tbody tr:hover td.project-register-open-column {
-    background: var(--hover-bg);
-}
-
-.project-register-open-button {
-    position: relative;
-    width: 30px;
-    height: 28px;
-    margin: 0 auto;
-    gap: 1px;
-}
-
-.project-register-open-button svg:last-child {
-    position: absolute;
-    right: 3px;
-    top: 3px;
-    padding: 1px;
-    border-radius: 50%;
-    background: inherit;
-}
-
-.project-register-open-button:disabled {
-    cursor: wait;
-    opacity: 0.62;
-}
-
-.project-register-button-spinner {
-    width: 13px;
-    height: 13px;
-    border: 2px solid rgba(71, 85, 105, 0.25);
-    border-top-color: var(--primary-color);
-    border-radius: 50%;
-    animation: project-register-spin 0.8s linear infinite;
-}
 
 .project-register-status {
     display: inline-flex;
@@ -319,10 +399,6 @@
     gap: 9px;
     color: var(--text-secondary);
     font-size: 13px;
-}
-
-@keyframes project-register-spin {
-    to { transform: rotate(360deg); }
 }
 
 @media (max-width: 800px) {
