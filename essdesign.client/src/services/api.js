@@ -439,6 +439,7 @@ const MATERIAL_ORDER_REQUESTS_TABLE = 'ess_material_order_requests';
 const TRUCK_LIVE_LOCATIONS_TABLE = 'ess_truck_live_locations';
 const TRUCK_LOCATION_HISTORY_TABLE = 'ess_truck_location_history';
 const SAFETY_FORMS_TABLE = 'ess_safety_forms';
+const DELETED_SAFETY_FORMS_TABLE = 'ess_deleted_safety_forms';
 const SAFETY_FILES_TABLE = 'ess_safety_files';
 const MATERIAL_REQUEST_CACHE_TTL_MS = 60 * 1000;
 const SAFETY_PROJECTS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -4549,6 +4550,8 @@ function mapSafetyFormRow(row) {
         formType,
         builderId,
         projectId,
+        builderName: row.builder_name || payload.builderName || '',
+        projectName: row.project_name || payload.projectName || '',
         title: row.title || payload.title || '',
         referenceNumber: row.reference_number || payload.referenceNumber || '',
         requestedBy: row.requested_by || payload.requestedBy || '',
@@ -4559,6 +4562,9 @@ function mapSafetyFormRow(row) {
         photoPaths: Array.isArray(row.photo_paths)
             ? row.photo_paths
             : safetyFormPhotoPaths(payload),
+        isDeleted: Boolean(row.deleted_at || payload.isDeleted),
+        deletedAt: row.deleted_at || payload.deletedAt || null,
+        deletedByUserId: row.deleted_by_user_id || payload.deletedByUserId || null,
         createdAt: row.created_at || payload.createdAt || nowIso(),
         updatedAt: row.updated_at || payload.updatedAt || nowIso()
     };
@@ -4587,17 +4593,17 @@ async function listSafetyFormRecords(formType, builderId, projectId) {
         .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
 }
 
-async function listAllSafetyFormRecords(formType) {
+async function listAllSafetyFormTableRecords(table, formType, orderColumn = 'updated_at') {
     const pageSize = 1000;
     const allRows = [];
     let offset = 0;
 
     while (true) {
         const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
-            + '&order=updated_at.desc'
+            + `&order=${orderColumn}.desc`
             + `&limit=${pageSize}`
             + `&offset=${offset}`;
-        const page = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
+        const page = await readRestRows(table, query, { force: true });
         allRows.push(...page);
         if (page.length < pageSize) {
             break;
@@ -4605,10 +4611,17 @@ async function listAllSafetyFormRecords(formType) {
         offset += pageSize;
     }
 
-    return allRows
-        .map(mapSafetyFormRow)
-        .filter(Boolean)
-        .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+    return allRows.map(mapSafetyFormRow).filter(Boolean);
+}
+
+async function listAllSafetyFormRecords(formType, { includeDeleted = false } = {}) {
+    const activeForms = await listAllSafetyFormTableRecords(SAFETY_FORMS_TABLE, formType);
+    const deletedForms = includeDeleted
+        ? await listAllSafetyFormTableRecords(DELETED_SAFETY_FORMS_TABLE, formType, 'deleted_at')
+        : [];
+
+    return [...activeForms, ...deletedForms]
+        .sort((left, right) => String(right.deletedAt || right.updatedAt || '').localeCompare(String(left.deletedAt || left.updatedAt || '')));
 }
 
 async function getSafetyFormRecord(formType, builderId, projectId, formId) {
@@ -4699,8 +4712,8 @@ export const handoverCertificatesAPI = {
         }));
     },
 
-    listAllForms: async () => {
-        const forms = await listAllSafetyFormRecords('handover-certificates');
+    listAllForms: async ({ includeDeleted = false } = {}) => {
+        const forms = await listAllSafetyFormRecords('handover-certificates', { includeDeleted });
         return forms.map(form => ({
             ...form,
             inspectionNumber: form.inspectionNumber || form.referenceNumber || '',
@@ -4775,8 +4788,8 @@ export const dayLabourVariationsAPI = {
         }));
     },
 
-    listAllForms: async () => {
-        const forms = await listAllSafetyFormRecords('day-labour-variations');
+    listAllForms: async ({ includeDeleted = false } = {}) => {
+        const forms = await listAllSafetyFormRecords('day-labour-variations', { includeDeleted });
         return forms.map(form => ({
             ...form,
             variationNumber: form.variationNumber || form.referenceNumber || '',
@@ -4844,8 +4857,8 @@ export const scaffTagsAPI = {
         }));
     },
 
-    listAllForms: async () => {
-        const forms = await listAllSafetyFormRecords('scaff-tags');
+    listAllForms: async ({ includeDeleted = false } = {}) => {
+        const forms = await listAllSafetyFormRecords('scaff-tags', { includeDeleted });
         return forms.map(form => ({
             ...form,
             scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',

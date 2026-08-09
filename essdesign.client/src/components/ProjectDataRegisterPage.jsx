@@ -127,13 +127,18 @@ const resolveProjectNames = (form, projectLookup) => {
 
 const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
     const names = resolveProjectNames(form, projectLookup);
+    const deletion = {
+        deleted: Boolean(form.isDeleted),
+        deletedAt: form.deletedAt || null
+    };
     if (registerType === 'handovers') {
         return {
-            id: `${form.builderId}:${form.projectId}:${form.id}`,
+            id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
             builderId: form.builderId,
             projectId: form.projectId,
             form,
             ...names,
+            ...deletion,
             title: form.formReferenceName || 'Untitled handover',
             reference: form.inspectionNumber || '-',
             inspectionDate: formatDate(form.inspectionDateTime || form.updatedAt, true),
@@ -143,11 +148,12 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
     }
     if (registerType === 'day-labour') {
         return {
-            id: `${form.builderId}:${form.projectId}:${form.id}`,
+            id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
             builderId: form.builderId,
             projectId: form.projectId,
             form,
             ...names,
+            ...deletion,
             title: form.formReferenceName || 'Untitled day labour form',
             reference: form.variationNumber || '-',
             formDate: formatDate(form.date || form.updatedAt),
@@ -159,17 +165,18 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
     const latestInspection = latestScaffTagInspection(form);
     const latestInspectionDate = form.latestInspectionDate || latestInspection?.date || form.updatedAt;
     return {
-        id: `${form.builderId}:${form.projectId}:${form.id}`,
+        id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
         builderId: form.builderId,
         projectId: form.projectId,
         form,
         ...names,
+        ...deletion,
         reference: form.scaffoldNo || form.tagNumber || '-',
         location: form.jobLocation || '-',
         inspectionDate: formatDate(latestInspectionDate, true),
         inspectionDateSort: parseDate(latestInspectionDate)?.getTime() || 0,
         representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
-        status: getScaffTagStatus({ ...form, latestInspectionDate })
+        status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
     };
 });
 
@@ -198,6 +205,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [sortField, setSortField] = useState(config.defaultSort);
     const [sortDirection, setSortDirection] = useState('desc');
     const [openingId, setOpeningId] = useState('');
+    const [showDeleted, setShowDeleted] = useState(false);
     const [filterMenu, setFilterMenu] = useState('');
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
@@ -210,7 +218,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setError('');
         Promise.all([
             safetyProjectsAPI.getBuilders({ includeArchived: true, force: true }),
-            config.api.listAllForms()
+            config.api.listAllForms({ includeDeleted: true })
         ]).then(([builders, forms]) => {
             if (!active) return;
             setRows(mapRows(registerType, forms, buildProjectLookup(builders)));
@@ -230,6 +238,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setSortField(config.defaultSort);
         setSortDirection('desc');
         setQuery('');
+        setShowDeleted(false);
         setFilterMenu('');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
@@ -261,7 +270,8 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            !excludedFilters.builder.has(row.builder)
+            (showDeleted || !row.deleted)
+            && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
             && (!normalizedQuery || config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
         ));
@@ -273,7 +283,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, sortDirection, sortField]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField]);
 
     const toggleFilterValue = (key, value) => {
         setExcludedFilters(current => {
@@ -338,6 +348,10 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                 <div className="project-data-register-heading">
                     <h1>{config.title}</h1>
                 </div>
+                <label className="project-register-deleted-filter">
+                    <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
+                    <span>Show deleted</span>
+                </label>
                 <label className="project-register-search">
                     <Search size={17} />
                     <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
@@ -405,12 +419,14 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                         </thead>
                         <tbody>
                             {filteredRows.map(row => (
-                                <tr key={row.id}>
+                                <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
                                     {config.columns.map(column => (
                                         <td key={column.key} title={String(row[column.key] || '')}>
                                             {column.key === 'status'
                                                 ? <StatusBadge value={row.status} />
-                                                : column.key === config.linkKey
+                                                : column.key === config.linkKey && row.deleted
+                                                    ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
+                                                    : column.key === config.linkKey
                                                     ? (
                                                         <button
                                                             type="button"
@@ -433,7 +449,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                 {!loading && filteredRows.length === 0 ? (
                     <div className="project-register-empty">
                         <FileText size={28} />
-                        <span>{query || excludedFilters.builder.size || excludedFilters.project.size ? `No ${config.noun} match the current filters.` : `No ${config.noun} have been created yet.`}</span>
+                        <span>{query || excludedFilters.builder.size || excludedFilters.project.size || showDeleted ? `No ${config.noun} match the current filters.` : `No active ${config.noun} have been created yet.`}</span>
                     </div>
                 ) : null}
             </section>

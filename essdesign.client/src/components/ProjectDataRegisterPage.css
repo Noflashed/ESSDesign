@@ -93,6 +93,26 @@
     font-size: 13px;
 }
 
+.project-register-deleted-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 0 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.project-register-deleted-filter input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: #c62828;
+}
+
 .project-register-error {
     flex: 0 0 auto;
     margin: -6px 0 12px;
@@ -169,6 +189,15 @@
 
 .project-data-register-table tbody tr:hover td {
     background: var(--hover-bg);
+}
+
+.project-data-register-table tbody tr.is-deleted td {
+    background: rgba(198, 40, 40, 0.075);
+    color: #a61b1b;
+}
+
+.project-data-register-table tbody tr.is-deleted:hover td {
+    background: rgba(198, 40, 40, 0.13);
 }
 
 .project-data-register-table tbody tr:last-child td {
@@ -340,6 +369,18 @@
     opacity: 0.55;
 }
 
+.project-register-deleted-title {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 4px 5px;
+    color: #b42318;
+    font-weight: 750;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .project-data-register-table.type-handovers th:nth-child(1) { width: 16%; }
 .project-data-register-table.type-handovers th:nth-child(2) { width: 20%; }
 .project-data-register-table.type-handovers th:nth-child(3) { width: 22%; }
@@ -385,6 +426,11 @@
     color: #b42318;
 }
 
+.project-register-status.deleted {
+    background: #fde8e8;
+    color: #a61b1b;
+}
+
 .project-register-loading,
 .project-register-empty {
     position: absolute;
@@ -405,5 +451,6 @@
     .project-data-register-page { padding: 14px; }
     .project-data-register-toolbar { flex-wrap: wrap; margin-bottom: 14px; }
     .project-data-register-heading { flex: 1; }
+    .project-register-deleted-filter { margin-left: 46px; }
     .project-register-search { order: 3; width: 100%; }
 }
