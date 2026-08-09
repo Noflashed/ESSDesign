@@ -4587,6 +4587,30 @@ async function listSafetyFormRecords(formType, builderId, projectId) {
         .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
 }
 
+async function listAllSafetyFormRecords(formType) {
+    const pageSize = 1000;
+    const allRows = [];
+    let offset = 0;
+
+    while (true) {
+        const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
+            + '&order=updated_at.desc'
+            + `&limit=${pageSize}`
+            + `&offset=${offset}`;
+        const page = await readRestRows(SAFETY_FORMS_TABLE, query, { force: true });
+        allRows.push(...page);
+        if (page.length < pageSize) {
+            break;
+        }
+        offset += pageSize;
+    }
+
+    return allRows
+        .map(mapSafetyFormRow)
+        .filter(Boolean)
+        .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+}
+
 async function getSafetyFormRecord(formType, builderId, projectId, formId) {
     const query = `?select=*&form_type=eq.${encodeURIComponent(formType)}`
         + `&id=eq.${encodeURIComponent(formId)}`
@@ -4675,6 +4699,18 @@ export const handoverCertificatesAPI = {
         }));
     },
 
+    listAllForms: async () => {
+        const forms = await listAllSafetyFormRecords('handover-certificates');
+        return forms.map(form => ({
+            ...form,
+            inspectionNumber: form.inspectionNumber || form.referenceNumber || '',
+            formReferenceName: form.formReferenceName || form.title || '',
+            essRepresentativeName: form.essRepresentativeName || form.requestedBy || '',
+            projectNumberClient: form.projectNumberClient || form.projectLabel || '',
+            inspectionDateTime: form.inspectionDateTime || form.eventDate || ''
+        }));
+    },
+
     getForm: async (builderId, projectId, formId) => {
         const form = await getSafetyFormRecord(
             'handover-certificates',
@@ -4739,6 +4775,21 @@ export const dayLabourVariationsAPI = {
         }));
     },
 
+    listAllForms: async () => {
+        const forms = await listAllSafetyFormRecords('day-labour-variations');
+        return forms.map(form => ({
+            ...form,
+            variationNumber: form.variationNumber || form.referenceNumber || '',
+            formReferenceName: form.formReferenceName || form.title || '',
+            requestedBy: form.requestedBy || '',
+            clientProjectName: form.clientProjectName || form.projectLabel || '',
+            date: form.date || form.eventDate || '',
+            handoverDocumentNumber: form.handoverDocumentNumber || '',
+            handoverDocumentId: form.handoverDocumentId || '',
+            handoverDocumentTitle: form.handoverDocumentTitle || ''
+        }));
+    },
+
     getForm: async (builderId, projectId, formId) => {
         const form = await getSafetyFormRecord(
             'day-labour-variations',
@@ -4785,6 +4836,16 @@ export const dayLabourVariationsAPI = {
 export const scaffTagsAPI = {
     listForms: async (builderId, projectId) => {
         const forms = await listSafetyFormRecords('scaff-tags', builderId, projectId);
+        return forms.map(form => ({
+            ...form,
+            scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
+            jobLocation: form.jobLocation || form.projectLabel || '',
+            latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
+        }));
+    },
+
+    listAllForms: async () => {
+        const forms = await listAllSafetyFormRecords('scaff-tags');
         return forms.map(form => ({
             ...form,
             scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
