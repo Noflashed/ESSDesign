@@ -342,9 +342,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     return (
         <main className="project-data-register-page">
             <div className="project-data-register-toolbar">
-                <button type="button" className="project-register-icon-button project-register-back-button" onClick={onBack} title="Back to Project Data" aria-label="Back to Project Data">
-                    <ArrowLeft size={20} aria-hidden="true" />
-                </button>
                 <label className="project-register-search">
                     <Search size={18} />
                     <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
@@ -354,6 +351,9 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                     <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
                     <span>Show deleted</span>
                 </label>
+                <button type="button" className="project-register-icon-button project-register-back-button" onClick={onBack} title="Back to Project Data" aria-label="Back to Project Data">
+                    <ArrowLeft size={20} aria-hidden="true" />
+                </button>
             </div>
 
             {error ? <div className="project-register-error" role="alert">{error}</div> : null}

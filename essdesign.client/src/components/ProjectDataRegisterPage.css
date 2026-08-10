@@ -441,6 +441,6 @@
 @media (max-width: 800px) {
     .project-data-register-page { padding: 14px; }
     .project-data-register-toolbar { margin-bottom: 14px; }
-    .project-register-search { width: calc(100% - 46px); }
-    .project-register-deleted-filter { margin-left: 46px; }
+    .project-register-search { width: 100%; }
+    .project-register-deleted-filter { margin-left: auto; }
 }
