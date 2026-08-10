@@ -205,7 +205,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [sortField, setSortField] = useState(config.defaultSort);
     const [sortDirection, setSortDirection] = useState('desc');
     const [openingId, setOpeningId] = useState('');
-    const [showDeleted, setShowDeleted] = useState(false);
+    const [showDeleted, setShowDeleted] = useState(true);
     const [filterMenu, setFilterMenu] = useState('');
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
@@ -238,7 +238,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setSortField(config.defaultSort);
         setSortDirection('desc');
         setQuery('');
-        setShowDeleted(false);
+        setShowDeleted(true);
         setFilterMenu('');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
