@@ -106,7 +106,9 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                         <div className="module-list-header">
                                             <div>
                                                 <div className="module-item-title">{item.scaffoldNo || 'Untitled Scaffold'}</div>
-                                                <div className="module-item-sub">{item.jobLocation || project.name}</div>
+                                                <div className="module-item-sub">
+                                                    Ref. No. {item.tagNumber || 'Not allocated'} · {item.jobLocation || project.name}
+                                                </div>
                                             </div>
                                             <div className="module-list-actions">
                                                 <button className="module-secondary-btn" onClick={() => openForm(item)}>View</button>
@@ -128,6 +130,10 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                             <div className="module-empty-inline">Select a scaff-tag to inspect its shared form details.</div>
                         ) : (
                             <div className="module-details-grid">
+                                <div className="module-detail-block">
+                                    <span className="module-pill-label">Reference Number</span>
+                                    <span className="module-pill-value">{selectedForm.tagNumber || '-'}</span>
+                                </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Scaffold Name</span>
                                     <span className="module-pill-value">{selectedForm.scaffoldNo || '-'}</span>

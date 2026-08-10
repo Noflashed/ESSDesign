@@ -4501,11 +4501,22 @@ function safetyFormPhotoPaths(form) {
     ].map(path => String(path || '').trim()).filter(Boolean)));
 }
 
+function normalizeScaffTagNumber(value) {
+    const text = String(value || '').trim();
+    return /^\d{5,}$/.test(text) ? text : '';
+}
+
+function scaffTagName(form) {
+    return form.scaffoldNo
+        || (!normalizeScaffTagNumber(form.tagNumber) ? form.tagNumber : '')
+        || '';
+}
+
 function safetyFormMetadata(formType, form) {
     if (formType === 'scaff-tags') {
         return {
-            title: form.scaffoldNo || form.tagNumber || '',
-            referenceNumber: form.scaffoldNo || form.tagNumber || '',
+            title: scaffTagName(form),
+            referenceNumber: normalizeScaffTagNumber(form.tagNumber),
             requestedBy: form.inspectedBy || form.competentPerson || '',
             projectLabel: form.jobLocation || '',
             eventDate: form.latestInspectionDate || ''
@@ -4851,7 +4862,8 @@ export const scaffTagsAPI = {
         const forms = await listSafetyFormRecords('scaff-tags', builderId, projectId);
         return forms.map(form => ({
             ...form,
-            scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
+            tagNumber: normalizeScaffTagNumber(form.tagNumber),
+            scaffoldNo: scaffTagName(form),
             jobLocation: form.jobLocation || form.projectLabel || '',
             latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
         }));
@@ -4861,7 +4873,8 @@ export const scaffTagsAPI = {
         const forms = await listAllSafetyFormRecords('scaff-tags', { includeDeleted });
         return forms.map(form => ({
             ...form,
-            scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
+            tagNumber: normalizeScaffTagNumber(form.tagNumber),
+            scaffoldNo: scaffTagName(form),
             jobLocation: form.jobLocation || form.projectLabel || '',
             latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
         }));
@@ -4874,7 +4887,8 @@ export const scaffTagsAPI = {
         }
         return {
             ...form,
-            scaffoldNo: form.scaffoldNo || form.tagNumber || '',
+            tagNumber: normalizeScaffTagNumber(form.tagNumber),
+            scaffoldNo: scaffTagName(form),
             inspectionRecords: Array.isArray(form.inspectionRecords) ? form.inspectionRecords : [],
             photoPaths: Array.isArray(form.photoPaths) ? form.photoPaths : []
         };

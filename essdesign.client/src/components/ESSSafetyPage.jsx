@@ -127,13 +127,14 @@ function getScaffTagStatus(item) {
 }
 
 function mapScaffTagRows(items) {
-    return items.map((item, index) => {
-        const tagNo = item.scaffoldNo || item.tagNumber || makeFileRef('TAG', index);
+    return items.map(item => {
+        const scaffoldName = item.scaffoldNo || 'Untitled Scaffold';
+        const tagNo = item.tagNumber || '-';
         const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
         return {
             id: item.id,
             kind: 'scaff-tags',
-            name: `${tagNo}.pdf`,
+            name: `${scaffoldName}.pdf`,
             ref: tagNo,
             status: getScaffTagStatus(item),
             uploadedAt: item.updatedAt || item.latestInspectionDate || '',
@@ -379,7 +380,7 @@ function getPreviewDetails(doc, tab, builder, project) {
 
     if (tab.key === 'scaff-tags') {
         return [
-            ['Scaffold reference', doc.raw?.scaffoldNo || doc.raw?.tagNumber || doc.ref],
+            ['Scaffold reference', doc.raw?.scaffoldNo || '-'],
             ['Tag / Ref No.', doc.ref],
             ['Structure location', doc.location || project?.siteLocation || '-'],
             ['Last inspection', formatDateTime(doc.raw?.latestInspectionDate || doc.uploadedAt)],
