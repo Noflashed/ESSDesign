@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Mail;
 using System.Text.Json;
 using ESSDesign.Server.Models;
 using ESSDesign.Server.Services;
@@ -190,20 +191,47 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(request.RecipientUserId) ||
-                    string.IsNullOrWhiteSpace(request.FormType) ||
+                var requestedRecipientIds = (request.RecipientUserIds ?? new List<string>())
+                    .Append(request.RecipientUserId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var externalEmails = (request.ExternalEmails ?? new List<string>())
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Select(email => email.Trim().ToLowerInvariant())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (string.IsNullOrWhiteSpace(request.FormType) ||
                     string.IsNullOrWhiteSpace(request.FormTitle) ||
                     string.IsNullOrWhiteSpace(request.BuilderName) ||
                     string.IsNullOrWhiteSpace(request.ProjectName) ||
                     string.IsNullOrWhiteSpace(request.PdfUrl))
                 {
-                    return BadRequest(new { error = "Recipient, form details, project, and PDF URL are required" });
+                    return BadRequest(new { error = "Form details, project, and PDF URL are required" });
+                }
+
+                if (!requestedRecipientIds.Any() && !externalEmails.Any())
+                {
+                    return BadRequest(new { error = "At least one recipient is required" });
+                }
+
+                var invalidExternalEmails = externalEmails
+                    .Where(email => !IsValidEmailAddress(email))
+                    .ToList();
+                if (invalidExternalEmails.Any())
+                {
+                    return BadRequest(new
+                    {
+                        error = $"Invalid external email address(es): {string.Join(", ", invalidExternalEmails)}"
+                    });
                 }
 
                 var actorUserId = GetUserIdOptional();
                 var actorName = "ESS Design";
                 var actorAvatarUrl = (string?)null;
-                var userIds = new List<string> { request.RecipientUserId };
+                var userIds = new List<string>(requestedRecipientIds);
 
                 if (actorUserId != Guid.Empty)
                 {
@@ -211,10 +239,12 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var users = await _supabaseService.GetUsersByIdsAsync(userIds.Distinct(StringComparer.OrdinalIgnoreCase));
-                var recipient = users.FirstOrDefault(u => string.Equals(u.Id, request.RecipientUserId, StringComparison.OrdinalIgnoreCase));
-                if (recipient == null)
+                var internalRecipients = users
+                    .Where(user => requestedRecipientIds.Contains(user.Id, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                if (internalRecipients.Count != requestedRecipientIds.Count)
                 {
-                    return BadRequest(new { error = "Recipient was not found" });
+                    return BadRequest(new { error = "One or more selected recipients were not found" });
                 }
 
                 if (actorUserId != Guid.Empty)
@@ -234,30 +264,48 @@ namespace ESSDesign.Server.Controllers
                     $"Shared By: {actorName}",
                 });
 
-                await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                var internalRecipientIds = internalRecipients
+                    .Select(recipient => recipient.Id)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (internalRecipientIds.Any())
                 {
-                    RecipientUserIds = new List<string> { request.RecipientUserId },
-                    Title = "Project data form shared",
-                    Message = message,
-                    Type = "project_data_form_shared",
-                    ActorName = actorName,
-                    ActorImageUrl = actorAvatarUrl,
-                });
+                    await _supabaseService.CreateUserNotificationsAsync(new CreateUserNotificationRequest
+                    {
+                        RecipientUserIds = internalRecipientIds,
+                        Title = "Project data form shared",
+                        Message = message,
+                        Type = "project_data_form_shared",
+                        ActorName = actorName,
+                        ActorImageUrl = actorAvatarUrl,
+                    });
+                }
 
-                var pushSent = await _pushNotificationService.SendProjectDataFormSharePushAsync(
-                    new[] { request.RecipientUserId },
-                    actorName,
-                    request.BuilderName,
-                    request.ProjectName,
-                    request.FormType,
-                    request.FormTitle,
-                    request.FormNumber,
-                    request.PdfUrl);
+                var pushSent = internalRecipientIds.Any()
+                    ? await _pushNotificationService.SendProjectDataFormSharePushAsync(
+                        internalRecipientIds,
+                        actorName,
+                        request.BuilderName,
+                        request.ProjectName,
+                        request.FormType,
+                        request.FormTitle,
+                        request.FormNumber,
+                        request.PdfUrl)
+                    : 0;
 
-                if (!string.IsNullOrWhiteSpace(recipient.Email))
+                var recipientEmails = internalRecipients
+                    .Select(recipient => recipient.Email?.Trim().ToLowerInvariant())
+                    .Where(email => !string.IsNullOrWhiteSpace(email))
+                    .Cast<string>()
+                    .Concat(externalEmails)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (recipientEmails.Any())
                 {
                     await _emailService.SendProjectDataFormShareNotificationAsync(
-                        new List<string> { recipient.Email },
+                        recipientEmails,
                         request.FormType,
                         request.FormTitle,
                         request.FormNumber,
@@ -267,7 +315,13 @@ namespace ESSDesign.Server.Controllers
                         request.PdfUrl);
                 }
 
-                return Ok(new { message = "Project data form shared", pushSent });
+                return Ok(new
+                {
+                    message = "Project data form shared",
+                    pushSent,
+                    internalRecipientCount = internalRecipientIds.Count,
+                    emailRecipientCount = recipientEmails.Count,
+                });
             }
             catch (Exception ex)
             {
@@ -329,6 +383,19 @@ namespace ESSDesign.Server.Controllers
             return Guid.TryParse(fallbackUserId, out var parsedUserId)
                 ? parsedUserId
                 : Guid.Empty;
+        }
+
+        private static bool IsValidEmailAddress(string email)
+        {
+            try
+            {
+                var address = new MailAddress(email);
+                return string.Equals(address.Address, email, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private Guid GetUserIdOptional()

@@ -539,6 +539,8 @@ namespace ESSDesign.Server.Models
     public class ProjectDataFormShareNotificationRequest
     {
         public string RecipientUserId { get; set; } = string.Empty;
+        public List<string> RecipientUserIds { get; set; } = new();
+        public List<string> ExternalEmails { get; set; } = new();
         public string FormType { get; set; } = string.Empty;
         public string FormTitle { get; set; } = string.Empty;
         public string FormNumber { get; set; } = string.Empty;
