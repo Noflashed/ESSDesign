@@ -393,7 +393,8 @@ namespace ESSDesign.Server.Services
                 return;
             }
 
-            var subject = $"Project Data Form Shared: {builderName} - {projectName} - {formType}";
+            var emailFormName = GetProjectDataFormEmailName(formType);
+            var subject = $"{formTitle} - {emailFormName} Form";
             var htmlContent = BuildProjectDataFormShareEmailContent(
                 formType,
                 formTitle,
@@ -669,8 +670,12 @@ namespace ESSDesign.Server.Services
             string pdfUrl)
         {
             var logoUrl = "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo-white.png";
+            var emailFormName = GetProjectDataFormEmailName(formType);
+            var sentenceFormName = char.ToLowerInvariant(emailFormName[0]) + emailFormName[1..];
             var safeFormType = HttpUtility.HtmlEncode(formType);
             var safeFormTitle = HttpUtility.HtmlEncode(formTitle);
+            var safeFormNameLabel = HttpUtility.HtmlEncode($"{emailFormName} Form Name");
+            var safeSharedHeading = HttpUtility.HtmlEncode($"A {sentenceFormName} form was shared with you.");
             var safeFormNumber = HttpUtility.HtmlEncode(string.IsNullOrWhiteSpace(formNumber) ? "-" : formNumber);
             var safeSharer = HttpUtility.HtmlEncode(sharedByName);
             var safeBuilder = HttpUtility.HtmlEncode(builderName);
@@ -692,7 +697,7 @@ namespace ESSDesign.Server.Services
                     <tr>
                         <td align=""center"" style=""background-color:#1a1a2e;padding:36px 32px 32px;"">
                             <img src=""{logoUrl}"" alt=""ErectSafe Scaffolding"" height=""52"" style=""display:block;height:52px;width:auto;margin:0 auto 20px;"" />
-                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">A Project Data Form Was Shared With You</h1>
+                            <h1 style=""color:#ffffff;font-size:21px;font-weight:600;letter-spacing:-0.2px;margin:0 0 6px;"">{safeSharedHeading}</h1>
                             <p style=""color:#9a9ab0;font-size:13px;margin:6px 0 0;font-weight:400;"">Open the PDF using the link below</p>
                         </td>
                     </tr>
@@ -703,6 +708,7 @@ namespace ESSDesign.Server.Services
                             </p>
                             <table role=""presentation"" cellpadding=""0"" cellspacing=""0"" border=""0"" width=""100%"" style=""background-color:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;margin:0 0 24px;"">
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Form Type</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFormType}</p></td></tr>
+                                <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">{safeFormNameLabel}</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFormTitle}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Form Number</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeFormNumber}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;border-bottom:1px solid #e2e8f0;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Client</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeBuilder}</p></td></tr>
                                 <tr><td style=""padding:14px 20px;""><p style=""font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:#a0aec0;font-weight:600;margin:0 0 3px;"">Project</p><p style=""font-size:15px;color:#2d3748;font-weight:500;margin:0;"">{safeProject}</p></td></tr>
@@ -734,6 +740,35 @@ namespace ESSDesign.Server.Services
     </table>
 </body>
 </html>";
+        }
+
+        private static string GetProjectDataFormEmailName(string formType)
+        {
+            var normalized = formType?.Trim() ?? string.Empty;
+            if (normalized.Contains("handover", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Handover";
+            }
+
+            if (normalized.Contains("day labour", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("day labor", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("variation", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Day Labour";
+            }
+
+            if (normalized.Contains("scaff", StringComparison.OrdinalIgnoreCase) &&
+                normalized.Contains("tag", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Scaff-Tag";
+            }
+
+            if (normalized.EndsWith(" form", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized[..^5].TrimEnd();
+            }
+
+            return string.IsNullOrWhiteSpace(normalized) ? "Project Data" : normalized;
         }
 
         private string BuildDocumentShareEmailContent(
@@ -1237,5 +1272,4 @@ namespace ESSDesign.Server.Services
         }
     }
 }
-
 
