@@ -345,16 +345,14 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                 <button type="button" className="project-register-icon-button project-register-back-button" onClick={onBack} title="Back to Project Data" aria-label="Back to Project Data">
                     <ArrowLeft size={20} aria-hidden="true" />
                 </button>
-                <div className="project-data-register-heading">
-                    <h1>{config.title}</h1>
-                </div>
+                <label className="project-register-search">
+                    <Search size={18} />
+                    <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
+                </label>
+                <span className="project-register-toolbar-spacer" />
                 <label className="project-register-deleted-filter">
                     <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
                     <span>Show deleted</span>
-                </label>
-                <label className="project-register-search">
-                    <Search size={17} />
-                    <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
                 </label>
             </div>
 

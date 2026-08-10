@@ -24,20 +24,6 @@
     margin-bottom: 18px;
 }
 
-.project-data-register-heading {
-    min-width: 0;
-    margin-right: auto;
-}
-
-.project-data-register-heading h1 {
-    margin: 0;
-    color: var(--text-primary);
-    font-size: 18px;
-    line-height: 1.25;
-    font-weight: 750;
-    letter-spacing: -0.2px;
-}
-
 .project-register-icon-button {
     display: inline-flex;
     align-items: center;
@@ -65,12 +51,12 @@
 }
 
 .project-register-search {
-    width: min(340px, 42vw);
-    height: 36px;
+    width: min(560px, 52vw);
+    height: 42px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 11px;
+    gap: 10px;
+    padding: 0 13px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     background: var(--card-bg);
@@ -91,6 +77,10 @@
     color: var(--text-primary);
     font: inherit;
     font-size: 13px;
+}
+
+.project-register-toolbar-spacer {
+    flex: 1;
 }
 
 .project-register-deleted-filter {
@@ -443,10 +433,14 @@
     font-size: 13px;
 }
 
+@media (max-width: 1100px) {
+    .project-data-register-toolbar { flex-wrap: wrap; }
+    .project-register-toolbar-spacer { display: none; }
+}
+
 @media (max-width: 800px) {
     .project-data-register-page { padding: 14px; }
-    .project-data-register-toolbar { flex-wrap: wrap; margin-bottom: 14px; }
-    .project-data-register-heading { flex: 1; }
+    .project-data-register-toolbar { margin-bottom: 14px; }
+    .project-register-search { width: calc(100% - 46px); }
     .project-register-deleted-filter { margin-left: 46px; }
-    .project-register-search { order: 3; width: 100%; }
 }
