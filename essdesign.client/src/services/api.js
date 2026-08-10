@@ -4519,7 +4519,7 @@ function safetyFormMetadata(formType, form) {
             referenceNumber: normalizeScaffTagNumber(form.tagNumber),
             requestedBy: form.inspectedBy || form.competentPerson || '',
             projectLabel: form.jobLocation || '',
-            eventDate: form.latestInspectionDate || ''
+            eventDate: form.latestInspectionAt || form.latestInspectionDate || ''
         };
     }
     if (formType === 'handover-certificates') {
@@ -4865,7 +4865,8 @@ export const scaffTagsAPI = {
             tagNumber: normalizeScaffTagNumber(form.tagNumber),
             scaffoldNo: scaffTagName(form),
             jobLocation: form.jobLocation || form.projectLabel || '',
-            latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
+            latestInspectionAt: form.latestInspectionAt || form.eventDate || '',
+            latestInspectionDate: form.latestInspectionAt || form.latestInspectionDate || form.eventDate || ''
         }));
     },
 
@@ -4876,7 +4877,8 @@ export const scaffTagsAPI = {
             tagNumber: normalizeScaffTagNumber(form.tagNumber),
             scaffoldNo: scaffTagName(form),
             jobLocation: form.jobLocation || form.projectLabel || '',
-            latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
+            latestInspectionAt: form.latestInspectionAt || form.eventDate || '',
+            latestInspectionDate: form.latestInspectionAt || form.latestInspectionDate || form.eventDate || ''
         }));
     },
 
@@ -4889,6 +4891,7 @@ export const scaffTagsAPI = {
             ...form,
             tagNumber: normalizeScaffTagNumber(form.tagNumber),
             scaffoldNo: scaffTagName(form),
+            latestInspectionAt: form.latestInspectionAt || form.eventDate || '',
             inspectionRecords: Array.isArray(form.inspectionRecords) ? form.inspectionRecords : [],
             photoPaths: Array.isArray(form.photoPaths) ? form.photoPaths : []
         };
