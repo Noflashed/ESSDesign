@@ -160,7 +160,7 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
         location: form.jobLocation || '-',
         inspectionDate: formatSydneyDateTime(latestInspectionDate),
         inspectionDateSort: parseSydneyDate(latestInspectionDate)?.getTime() || 0,
-        representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
+        representative: latestInspection?.competentPerson || form.inspectedBy || form.erectedBy || 'Not recorded',
         status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
     };
 });

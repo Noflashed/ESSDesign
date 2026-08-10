@@ -4517,7 +4517,7 @@ function safetyFormMetadata(formType, form) {
         return {
             title: scaffTagName(form),
             referenceNumber: normalizeScaffTagNumber(form.tagNumber),
-            requestedBy: form.inspectedBy || form.competentPerson || '',
+            requestedBy: form.inspectedBy || form.competentPerson || form.erectedBy || '',
             projectLabel: form.jobLocation || '',
             eventDate: form.latestInspectionAt || form.latestInspectionDate || ''
         };

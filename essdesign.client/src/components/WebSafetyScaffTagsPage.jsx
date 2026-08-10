@@ -156,6 +156,14 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                     <span className="module-pill-value">{selectedForm.erectedBy || '-'}</span>
                                 </div>
                                 <div className="module-detail-block">
+                                    <span className="module-pill-label">Requested By</span>
+                                    <span className="module-pill-value">{selectedForm.requestedBy || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
+                                    <span className="module-pill-label">Inspected By</span>
+                                    <span className="module-pill-value">{selectedForm.inspectedBy || selectedForm.erectedBy || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
                                     <span className="module-pill-label">Load Rating</span>
                                     <span className="module-pill-value">{selectedForm.loadRating || '-'}</span>
                                 </div>
