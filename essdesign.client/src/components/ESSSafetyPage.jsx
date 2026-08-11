@@ -114,8 +114,9 @@ function mapScaffTagRows(items) {
             ref: tagNo,
             status: getScaffTagStatus(item),
             uploadedAt: item.updatedAt || latestInspection || '',
+            latestInspection,
             expiresAt: expiry ? expiry.toISOString() : '',
-            uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
+            uploadedBy: item.inspectedBy || item.competentPerson || item.erectedBy || 'Not recorded',
             location: item.jobLocation || '',
             size: '',
             raw: item
@@ -942,51 +943,60 @@ export default function ESSSafetyPage() {
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
                         <div className="project-data-table-card">
-                            <div className="project-data-table-head">
-                                <span className="project-data-checkbox" aria-hidden="true" />
-                                <span>Document name</span>
-                                <span>{activeTab.refLabel}</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label="Status"
-                                        active={statusFilter !== 'all'}
-                                        open={columnFilterMenu === 'status'}
-                                        onToggle={() => toggleColumnFilterMenu('status')}
-                                    >
-                                        <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setStatusFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All statuses</button>
-                                        {statusOptions.map(status => (
-                                            <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
-                                                setStatusFilter(status);
+                            {activeTab.key === 'scaff-tags' ? (
+                                <div className="project-data-table-head scaff-tags-simple">
+                                    <span>Scaffold</span>
+                                    <span>Latest Inspection</span>
+                                    <span>Inspected By</span>
+                                    <span />
+                                </div>
+                            ) : (
+                                <div className="project-data-table-head">
+                                    <span className="project-data-checkbox" aria-hidden="true" />
+                                    <span>Document name</span>
+                                    <span>{activeTab.refLabel}</span>
+                                    <span>
+                                        <TableHeaderFilter
+                                            label="Status"
+                                            active={statusFilter !== 'all'}
+                                            open={columnFilterMenu === 'status'}
+                                            onToggle={() => toggleColumnFilterMenu('status')}
+                                        >
+                                            <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                                setStatusFilter('all');
                                                 setColumnFilterMenu('');
-                                            }}>{status}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                <span>Uploaded</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label="Uploaded by"
-                                        active={uploadedByFilter !== 'all'}
-                                        open={columnFilterMenu === 'uploadedBy'}
-                                        onToggle={() => toggleColumnFilterMenu('uploadedBy')}
-                                    >
-                                        <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setUploadedByFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All uploaders</button>
-                                        {uploadedByOptions.map(uploadedBy => (
-                                            <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
-                                                setUploadedByFilter(uploadedBy);
+                                            }}>All statuses</button>
+                                            {statusOptions.map(status => (
+                                                <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
+                                                    setStatusFilter(status);
+                                                    setColumnFilterMenu('');
+                                                }}>{status}</button>
+                                            ))}
+                                        </TableHeaderFilter>
+                                    </span>
+                                    <span>Uploaded</span>
+                                    <span>
+                                        <TableHeaderFilter
+                                            label="Uploaded by"
+                                            active={uploadedByFilter !== 'all'}
+                                            open={columnFilterMenu === 'uploadedBy'}
+                                            onToggle={() => toggleColumnFilterMenu('uploadedBy')}
+                                        >
+                                            <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                                setUploadedByFilter('all');
                                                 setColumnFilterMenu('');
-                                            }}>{uploadedBy}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                <span />
-                            </div>
+                                            }}>All uploaders</button>
+                                            {uploadedByOptions.map(uploadedBy => (
+                                                <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
+                                                    setUploadedByFilter(uploadedBy);
+                                                    setColumnFilterMenu('');
+                                                }}>{uploadedBy}</button>
+                                            ))}
+                                        </TableHeaderFilter>
+                                    </span>
+                                    <span />
+                                </div>
+                            )}
 
                             {documentsLoading ? (
                                 <div className="project-data-table-state">
@@ -1004,12 +1014,12 @@ export default function ESSSafetyPage() {
                                         <button
                                             key={document.id}
                                             type="button"
-                                            className={`project-data-table-row${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
+                                            className={`project-data-table-row${activeTab.key === 'scaff-tags' ? ' scaff-tags-simple' : ''}${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
                                             onClick={() => openDocumentPreview(document.id)}
                                             onDoubleClick={() => openSelectedDocument(document)}
                                             onContextMenu={(event) => openRowMenu(event, document)}
                                         >
-                                            <span className="project-data-checkbox" aria-hidden="true" />
+                                            {activeTab.key !== 'scaff-tags' ? <span className="project-data-checkbox" aria-hidden="true" /> : null}
                                             <span className="project-data-doc-name">
                                                 <span
                                                     className="project-data-pdf-icon"
@@ -1026,12 +1036,25 @@ export default function ESSSafetyPage() {
                                                 >
                                                     <FileText size={15} />
                                                 </span>
-                                                <span title={document.name}>{document.name}</span>
+                                                <span title={activeTab.key === 'scaff-tags' ? document.raw?.scaffoldNo : document.name}>
+                                                    {activeTab.key === 'scaff-tags'
+                                                        ? document.raw?.scaffoldNo || 'Untitled Scaffold'
+                                                        : document.name}
+                                                </span>
                                             </span>
-                                            <span>{document.ref}</span>
-                                            <span><StatusChip status={document.status} /></span>
-                                            <span>{formatSydneyDate(document.uploadedAt)}</span>
-                                            <span>{document.uploadedBy}</span>
+                                            {activeTab.key === 'scaff-tags' ? (
+                                                <>
+                                                    <span>{document.latestInspection ? formatSydneyDateTime(document.latestInspection) : '-'}</span>
+                                                    <span>{document.uploadedBy || '-'}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>{document.ref}</span>
+                                                    <span><StatusChip status={document.status} /></span>
+                                                    <span>{formatSydneyDate(document.uploadedAt)}</span>
+                                                    <span>{document.uploadedBy}</span>
+                                                </>
+                                            )}
                                             <span
                                                 className="project-data-row-actions"
                                                 role="button"

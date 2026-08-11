@@ -19475,6 +19475,11 @@ button.stat-card {
     column-gap: 12px;
 }
 
+.project-data-table-head.scaff-tags-simple,
+.project-data-table-row.scaff-tags-simple {
+    grid-template-columns: minmax(260px, 1.4fr) minmax(190px, 0.8fr) minmax(190px, 0.8fr) 34px;
+}
+
 .project-data-table-head {
     position: relative;
     padding: 0 14px;
@@ -20345,6 +20350,11 @@ button.stat-card {
     .project-data-table-head,
     .project-data-table-row {
         min-width: 760px;
+    }
+
+    .project-data-table-head.scaff-tags-simple,
+    .project-data-table-row.scaff-tags-simple {
+        min-width: 680px;
     }
 
     .project-data-pagination {

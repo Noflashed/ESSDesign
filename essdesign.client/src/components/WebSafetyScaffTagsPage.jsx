@@ -107,9 +107,6 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                         <div className="module-list-header">
                                             <div>
                                                 <div className="module-item-title">{item.scaffoldNo || 'Untitled Scaffold'}</div>
-                                                <div className="module-item-sub">
-                                                    Ref. No. {item.tagNumber || 'Not allocated'} · {item.jobLocation || project.name}
-                                                </div>
                                             </div>
                                             <div className="module-list-actions">
                                                 <button className="module-secondary-btn" onClick={() => openForm(item)}>View</button>
@@ -122,6 +119,9 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                             Last inspection: {(item.latestInspectionAt || item.latestInspectionDate)
                                                 ? formatSydneyDateTime(item.latestInspectionAt || item.latestInspectionDate)
                                                 : 'None recorded'}
+                                        </div>
+                                        <div className="module-item-sub">
+                                            Inspected by: {item.inspectedBy || item.erectedBy || 'Not recorded'}
                                         </div>
                                     </div>
                                 ))}
