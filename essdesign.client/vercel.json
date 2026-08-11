@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/scaff-tag/:path*",
+      "destination": "https://essdesign-production.up.railway.app/t/:path*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
