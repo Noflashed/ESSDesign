@@ -271,9 +271,16 @@ public static class ScaffTagPublicPageRenderer
     .note-date { width:27%; }
     .photos-title { min-height:39px; display:flex; align-items:center; justify-content:center; border-top:1px solid #d6b100; background:var(--yellow); font-size:13px; letter-spacing:.45px; font-weight:900; }
     .photos { min-height:150px; display:grid; grid-template-columns:1fr 1fr; border-top:1px solid #d6b100; background:var(--yellow); }
-    .photo { min-height:150px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-right:1px solid #d6b100; background:#fff9cf; color:#6b5a00; font-size:11px; font-weight:800; }
+    .photo { width:100%; min-height:150px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0; border:0; border-right:1px solid #d6b100; background:#fff9cf; color:#6b5a00; font:inherit; font-size:11px; font-weight:800; }
+    button.photo { cursor:zoom-in; }
+    button.photo:focus-visible { outline:3px solid rgba(255,255,255,.9); outline-offset:-4px; }
     .photo:last-child { border-right:0; }
     .photo img { width:100%; height:100%; min-height:150px; object-fit:cover; display:block; }
+    .photo-viewer { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; padding:max(24px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left)); background:rgba(8,10,12,.94); opacity:0; visibility:hidden; pointer-events:none; transition:opacity .2s ease,visibility 0s linear .2s; }
+    .photo-viewer.is-open { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
+    .photo-viewer-image { max-width:100%; max-height:100%; display:block; object-fit:contain; border-radius:4px; }
+    .photo-viewer-close { position:absolute; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); z-index:1; width:44px; height:44px; display:flex; align-items:center; justify-content:center; padding:0; border:1px solid rgba(255,255,255,.32); border-radius:50%; background:rgba(17,24,39,.72); color:#fff; font-size:30px; line-height:1; font-weight:400; cursor:pointer; }
+    .photo-viewer-close:focus-visible { outline:3px solid #fff; outline-offset:2px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (min-width:700px) { .app { padding:18px; } }
     @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flipper.is-hinting { animation:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } }
@@ -293,6 +300,10 @@ public static class ScaffTagPublicPageRenderer
     </div>
     <div id="announce" class="sr-only" aria-live="polite"></div>
   </main>
+  <div id="photoViewer" class="photo-viewer" role="dialog" aria-modal="true" aria-label="Enlarged site photo" aria-hidden="true">
+    <button id="photoViewerClose" class="photo-viewer-close" type="button" aria-label="Close enlarged photo">&times;</button>
+    <img id="photoViewerImage" class="photo-viewer-image" alt="" />
+  </div>
   <script>
     const initialTag = {{{initialJson}}};
     const dataUrl = `${window.location.pathname.replace(/\/$/, '')}/data`;
@@ -364,7 +375,7 @@ public static class ScaffTagPublicPageRenderer
     function renderBack() {
       const rows = inspectionRows(8).map(row => `<tr><td>${esc(row.date)}</td><td>${esc(row.note)}</td></tr>`).join('');
       const photos = Array.from({length:2}, (_, index) => tag.photoUrls?.[index]
-        ? `<a class="photo" href="${esc(tag.photoUrls[index])}" target="_blank" rel="noopener noreferrer"><img src="${esc(tag.photoUrls[index])}" alt="Scaff-Tag site photo ${index + 1}" loading="lazy" /></a>`
+        ? `<button class="photo" type="button" data-photo-url="${esc(tag.photoUrls[index])}" data-photo-alt="Scaff-Tag site photo ${index + 1}" aria-label="Enlarge Scaff-Tag site photo ${index + 1}"><img src="${esc(tag.photoUrls[index])}" alt="Scaff-Tag site photo ${index + 1}" loading="lazy" /></button>`
         : `<div class="photo">Photo ${index + 1}</div>`).join('');
       return `<article class="tag back-tag">
         <header class="warning"><span class="warning-box">!</span><div class="warning-title">WARNING</div><div class="warning-text">UNLAWFUL REMOVAL OR INTERFERENCE WITH THIS TAG COULD MAKE YOU LIABLE TO PROSECUTION AND FINES</div></header>
@@ -468,8 +479,38 @@ public static class ScaffTagPublicPageRenderer
     }
 
     const stage = document.getElementById('stage');
+    const photoViewer = document.getElementById('photoViewer');
+    const photoViewerImage = document.getElementById('photoViewerImage');
+    const photoViewerClose = document.getElementById('photoViewerClose');
+    let photoViewerLastFocus = null;
+
+    function openPhotoViewer(photoButton) {
+      const url = photoButton?.dataset?.photoUrl;
+      if (!url) return;
+      photoViewerLastFocus = photoButton;
+      photoViewerImage.src = url;
+      photoViewerImage.alt = photoButton.dataset.photoAlt || 'Enlarged Scaff-Tag site photo';
+      photoViewer.classList.add('is-open');
+      photoViewer.setAttribute('aria-hidden', 'false');
+      photoViewerClose.focus({preventScroll:true});
+    }
+
+    function closePhotoViewer() {
+      if (!photoViewer.classList.contains('is-open')) return;
+      photoViewer.classList.remove('is-open');
+      photoViewer.setAttribute('aria-hidden', 'true');
+      photoViewerImage.removeAttribute('src');
+      photoViewerImage.alt = '';
+      photoViewerLastFocus?.focus?.({preventScroll:true});
+      photoViewerLastFocus = null;
+    }
+
+    stage.addEventListener('click', event => {
+      const photoButton = event.target.closest('button.photo[data-photo-url]');
+      if (photoButton) openPhotoViewer(photoButton);
+    });
     stage.addEventListener('pointerdown', event => {
-      if (event.target.closest('a')) return;
+      if (event.target.closest('.photo')) { pointerStart = null; return; }
       activePointers.add(event.pointerId);
       if (activePointers.size > 1) {
         pinchInProgress = true;
@@ -485,7 +526,7 @@ public static class ScaffTagPublicPageRenderer
         if (activePointers.size === 0) pinchInProgress = false;
         return;
       }
-      if (!pointerStart || event.target.closest('a')) { pointerStart = null; return; }
+      if (!pointerStart || event.target.closest('.photo')) { pointerStart = null; return; }
       const dx = event.clientX - pointerStart.x;
       const dy = event.clientY - pointerStart.y;
       pointerStart = null;
@@ -498,7 +539,15 @@ public static class ScaffTagPublicPageRenderer
       if (activePointers.size === 0) pinchInProgress = false;
     });
     stage.addEventListener('keydown', event => {
+      if (event.target.closest('.photo')) return;
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
+    });
+    photoViewerClose.addEventListener('click', closePhotoViewer);
+    photoViewer.addEventListener('click', event => {
+      if (event.target === photoViewer) closePhotoViewer();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closePhotoViewer();
     });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     window.addEventListener('resize', scheduleFit);
