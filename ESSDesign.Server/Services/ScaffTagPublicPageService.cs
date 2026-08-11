@@ -196,21 +196,21 @@ public static class ScaffTagPublicPageRenderer
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
   <meta name="theme-color" content="#0b4f2f" />
   <title>Interactive Scaff-Tag</title>
   <style>
     :root { color-scheme: light; --green:#0b4f2f; --green-2:#0b7f45; --line:#8da9be; --yellow:#f7d319; --ink:#111827; }
     * { box-sizing:border-box; }
     html, body { margin:0; min-height:100%; }
-    body { min-height:100dvh; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:radial-gradient(circle at 50% -15%,#e5f2eb 0,#eef3f0 35%,#dbe5df 100%); }
+    body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:radial-gradient(circle at 50% -15%,#e5f2eb 0,#eef3f0 35%,#dbe5df 100%); }
     button, a { font:inherit; }
     .app { min-height:100dvh; display:flex; flex-direction:column; align-items:center; padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); }
     .topbar { width:min(100%,430px); height:42px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex:0 0 auto; }
     .live { display:flex; align-items:center; gap:7px; min-width:0; color:#315344; font-size:12px; font-weight:800; }
     .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.13); }
     .updated { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#587064; font-size:11px; text-align:right; }
-    .stage { width:min(100%,430px); height:calc(100dvh - 104px); min-height:520px; max-height:930px; perspective:1600px; touch-action:pan-y; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
+    .stage { width:min(100%,430px); height:calc(100dvh - 104px); min-height:520px; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
     .stage:focus-visible { border-radius:14px; box-shadow:0 0 0 4px rgba(11,127,69,.28); }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
@@ -248,6 +248,7 @@ public static class ScaffTagPublicPageRenderer
     th:last-child, td:last-child { border-right:0; }
     .auth-date { width:20%; } .auth-time { width:18%; } .auth-name { width:29%; } .auth-sign { width:33%; }
     .signature { width:100%; height:31px; display:block; }
+    .signature-inline { width:min(120px,100%); }
     .signature polyline { fill:none; stroke:#000; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
     .caution { min-height:76px; display:flex; align-items:center; justify-content:space-around; gap:10px; padding:10px 15px; border-top:1px solid #d6b100; background:var(--yellow); }
     .warning-box { width:34px; height:34px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--ink); font-size:23px; font-weight:900; }
@@ -312,11 +313,13 @@ public static class ScaffTagPublicPageRenderer
     let tag = initialTag;
     let isBack = false;
     let pointerStart = null;
+    let pinchInProgress = false;
     let fitFrame = 0;
+    const activePointers = new Set();
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
-    const signature = strokes => {
+    const signature = (strokes, inline = false) => {
       if (!Array.isArray(strokes) || strokes.length === 0) return '<span></span>';
       const lines = strokes.map(stroke => {
         if (!Array.isArray(stroke) || stroke.length === 0) return '';
@@ -327,7 +330,9 @@ public static class ScaffTagPublicPageRenderer
         }).join(' ');
         return `<polyline points="${points}"></polyline>`;
       }).join('');
-      return `<svg class="signature" viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Digital signature">${lines}</svg>`;
+      const className = inline ? 'signature signature-inline' : 'signature';
+      const alignment = inline ? 'xMinYMid meet' : 'xMidYMid meet';
+      return `<svg class="${className}" viewBox="0 0 100 40" preserveAspectRatio="${alignment}" aria-label="Digital signature">${lines}</svg>`;
     };
     const company = () => tag.companyEntityId === 'maloo'
       ? { logo:malooLogo, legal:'Maloo Access Group Pty Ltd', address:'130 Gilba Road, Girraween NSW 2145', phone:'(02) 8818 3690' }
@@ -369,7 +374,7 @@ public static class ScaffTagPublicPageRenderer
           <div class="reverse-row"><span class="reverse-label">BUILT BY:</span><span class="reverse-value">${esc(tag.erectedBy)}</span></div>
           <div class="reverse-row"><span class="reverse-label">DATE:</span><span class="reverse-value">${esc(tag.dateErected)}</span></div>
           <div class="reverse-row"><span class="reverse-label">INSPECTED BY:</span><span class="reverse-value">${esc(tag.inspectedBy)}</span></div>
-          <div class="reverse-row signature-row"><span class="reverse-label">SIGNATURE:</span><span class="reverse-value">${signature(tag.erectedBySignatureStrokes)}</span></div>
+          <div class="reverse-row signature-row"><span class="reverse-label">SIGNATURE:</span><span class="reverse-value">${signature(tag.erectedBySignatureStrokes, true)}</span></div>
           <div class="standard">Built in accordance with AS/NZS 1576 &amp; AS/NZS 4576</div>
         </section>
         <div class="section-title">COMPLIANCE NOTE</div>
@@ -455,9 +460,21 @@ public static class ScaffTagPublicPageRenderer
     const stage = document.getElementById('stage');
     stage.addEventListener('pointerdown', event => {
       if (event.target.closest('a')) return;
+      activePointers.add(event.pointerId);
+      if (activePointers.size > 1) {
+        pinchInProgress = true;
+        pointerStart = null;
+        return;
+      }
       pointerStart = {x:event.clientX,y:event.clientY};
     });
     stage.addEventListener('pointerup', event => {
+      activePointers.delete(event.pointerId);
+      if (pinchInProgress) {
+        pointerStart = null;
+        if (activePointers.size === 0) pinchInProgress = false;
+        return;
+      }
       if (!pointerStart || event.target.closest('a')) { pointerStart = null; return; }
       const dx = event.clientX - pointerStart.x;
       const dy = event.clientY - pointerStart.y;
@@ -465,7 +482,11 @@ public static class ScaffTagPublicPageRenderer
       if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) setBack(dx < 0);
       else if (Math.hypot(dx,dy) < 10) setBack(!isBack);
     });
-    stage.addEventListener('pointercancel', () => { pointerStart = null; });
+    stage.addEventListener('pointercancel', event => {
+      activePointers.delete(event.pointerId);
+      pointerStart = null;
+      if (activePointers.size === 0) pinchInProgress = false;
+    });
     stage.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
     });
