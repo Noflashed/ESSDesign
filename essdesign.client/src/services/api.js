@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_BASE_URL, API_ORIGIN_URL } from '../config/api';
 import {
     PICKING_CARD_ROWS,
     formatDayLabel,
@@ -9,8 +10,6 @@ import {
     shouldSkipMaterialEntry,
 } from './materialOrderSchema';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7001/api';
-const API_ORIGIN_URL = API_BASE_URL.replace(/\/api\/?$/i, '');
 const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const PROFILE_IMAGES_BUCKET = 'profile-images';

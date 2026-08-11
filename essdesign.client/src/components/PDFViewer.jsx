@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import './PDFViewer.css';
 
 const pdfUrlCache = new Map();
@@ -27,7 +28,7 @@ function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose })
             }
 
             const response = await fetch(
-                `${import.meta.env.VITE_API_URL || 'https://localhost:7001/api'}/folders/documents/${documentId}/download/${fileType}`,
+                `${API_BASE_URL}/folders/documents/${documentId}/download/${fileType}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`

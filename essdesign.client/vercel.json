@@ -16,6 +16,10 @@
       "destination": "https://essdesign-production.up.railway.app/t/:path*"
     },
     {
+      "source": "/api/:path*",
+      "destination": "https://essdesign-production.up.railway.app/api/:path*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
