@@ -84,6 +84,9 @@ namespace ESSDesign.Server.Services
 
             [JsonPropertyName("payload")]
             public JsonElement Payload { get; set; }
+
+            [JsonPropertyName("updated_at")]
+            public DateTimeOffset? UpdatedAt { get; set; }
         }
 
         private sealed class FolderWriteRow
@@ -2653,7 +2656,7 @@ namespace ESSDesign.Server.Services
         {
             var rows = await GetRestRowsAsync<SafetyFormRow>(
                 "ess_safety_forms"
-                + "?select=pdf_path,photo_paths,title,project_label,payload"
+                + "?select=pdf_path,photo_paths,title,project_label,payload,updated_at"
                 + "&form_type=eq.scaff-tags"
                 + $"&id=eq.{Uri.EscapeDataString(formId)}"
                 + $"&builder_id=eq.{Uri.EscapeDataString(builderId)}"
@@ -2665,37 +2668,28 @@ namespace ESSDesign.Server.Services
                 return null;
             }
 
-            static string? PayloadString(JsonElement payload, params string[] names)
-            {
-                if (payload.ValueKind != JsonValueKind.Object)
+            var details = row.Payload.ValueKind == JsonValueKind.Object
+                ? row.Payload.Deserialize<ScaffTagFormDetails>(new JsonSerializerOptions
                 {
-                    return null;
-                }
+                    PropertyNameCaseInsensitive = true
+                }) ?? new ScaffTagFormDetails()
+                : new ScaffTagFormDetails();
 
-                foreach (var name in names)
-                {
-                    if (payload.TryGetProperty(name, out var value) &&
-                        value.ValueKind == JsonValueKind.String)
-                    {
-                        return value.GetString();
-                    }
-                }
-                return null;
-            }
-
-            return new ScaffTagFormDetails
-            {
-                PdfPath = row.PdfPath,
-                PhotoPaths = row.PhotoPaths
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
-                ScaffoldName = PayloadString(row.Payload, "scaffoldNo", "tagNumber")
-                    ?? row.Title,
-                JobLocation = PayloadString(row.Payload, "jobLocation")
-                    ?? row.ProjectLabel,
-            };
+            details.PdfPath = row.PdfPath;
+            details.PhotoPaths = row.PhotoPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
+            details.ScaffoldName = FirstNotBlank(details.ScaffoldName, details.TagNumber, row.Title);
+            details.JobLocation = FirstNotBlank(details.JobLocation, details.ProjectName, row.ProjectLabel);
+            details.UpdatedAt = details.UpdatedAt ?? row.UpdatedAt;
+            details.InspectionRecords = details.InspectionRecords.Take(10).ToList();
+            return details;
         }
+
+        private static string? FirstNotBlank(params string?[] values) =>
+            values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
         public async Task<string> GetSafetyStorageSignedUrlAsync(string path, int expiresInSeconds = 60 * 60 * 24 * 14)
         {
@@ -4215,9 +4209,103 @@ namespace ESSDesign.Server.Services
 
     public class ScaffTagFormDetails
     {
-        public string? PdfPath { get; set; }
+        [JsonPropertyName("builderName")]
+        public string? BuilderName { get; set; }
+
+        [JsonPropertyName("projectName")]
+        public string? ProjectName { get; set; }
+
+        [JsonPropertyName("companyEntityId")]
+        public string? CompanyEntityId { get; set; }
+
+        [JsonPropertyName("tagNumber")]
+        public string? TagNumber { get; set; }
+
+        [JsonPropertyName("scaffoldNo")]
         public string? ScaffoldName { get; set; }
+
+        [JsonPropertyName("jobLocation")]
         public string? JobLocation { get; set; }
+
+        [JsonPropertyName("dateErected")]
+        public string? DateErected { get; set; }
+
+        [JsonPropertyName("requestedBy")]
+        public string? RequestedBy { get; set; }
+
+        [JsonPropertyName("erectedBy")]
+        public string? ErectedBy { get; set; }
+
+        [JsonPropertyName("inspectedBy")]
+        public string? InspectedBy { get; set; }
+
+        [JsonPropertyName("erectedBySignatureStrokes")]
+        public List<List<ScaffTagSignaturePoint>> ErectedBySignatureStrokes { get; set; } = new();
+
+        [JsonPropertyName("fallProtectionRequired")]
+        public string? FallProtectionRequired { get; set; }
+
+        [JsonPropertyName("loadRating")]
+        public string? LoadRating { get; set; }
+
+        [JsonPropertyName("loadRatingOther")]
+        public string? LoadRatingOther { get; set; }
+
+        [JsonPropertyName("checkHandrails")]
+        public bool CheckHandrails { get; set; }
+
+        [JsonPropertyName("checkPlatform")]
+        public bool CheckPlatform { get; set; }
+
+        [JsonPropertyName("checkMidRails")]
+        public bool CheckMidRails { get; set; }
+
+        [JsonPropertyName("checkLadder")]
+        public bool CheckLadder { get; set; }
+
+        [JsonPropertyName("checkToeBoards")]
+        public bool CheckToeBoards { get; set; }
+
+        [JsonPropertyName("checkOther")]
+        public bool CheckOther { get; set; }
+
+        [JsonPropertyName("checkOtherText")]
+        public string? CheckOtherText { get; set; }
+
+        [JsonPropertyName("inspectionRecords")]
+        public List<ScaffTagInspectionRecord> InspectionRecords { get; set; } = new();
+
+        public string? PdfPath { get; set; }
         public List<string> PhotoPaths { get; set; } = new();
+
+        [JsonPropertyName("updatedAt")]
+        public DateTimeOffset? UpdatedAt { get; set; }
+    }
+
+    public class ScaffTagInspectionRecord
+    {
+        [JsonPropertyName("date")]
+        public string? Date { get; set; }
+
+        [JsonPropertyName("time")]
+        public string? Time { get; set; }
+
+        [JsonPropertyName("competentPerson")]
+        public string? CompetentPerson { get; set; }
+
+        [JsonPropertyName("note")]
+        public string? Note { get; set; }
+
+        [JsonPropertyName("signatureStrokes")]
+        public List<List<ScaffTagSignaturePoint>> SignatureStrokes { get; set; } = new();
+    }
+
+    public class ScaffTagSignaturePoint
+    {
+        [JsonPropertyName("x")]
+        public double X { get; set; }
+
+        [JsonPropertyName("y")]
+        public double Y { get; set; }
     }
 }
