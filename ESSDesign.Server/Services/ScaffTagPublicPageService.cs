@@ -205,13 +205,19 @@ public static class ScaffTagPublicPageRenderer
     body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:transparent; }
     button, a { font:inherit; }
     .app { width:100%; height:100dvh; min-height:0; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:transparent; }
-    .stage { width:min(100%,430px); height:100%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
+    .stage { position:relative; width:min(100%,430px); height:100%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
     .flipper.is-hinting { animation:flip-peek 1.25s cubic-bezier(.2,.72,.18,1) both; }
     @keyframes flip-peek { 0%,100% { transform:rotateY(0deg); } 38% { transform:rotateY(-24deg); } 64% { transform:rotateY(9deg); } 82% { transform:rotateY(-3deg); } }
     .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; background:transparent; }
     .back { transform:rotateY(180deg); background:transparent; }
+    .flip-hint { position:absolute; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border-radius:10px; background:rgba(255,255,255,.76); -webkit-backdrop-filter:blur(1.5px); backdrop-filter:blur(1.5px); opacity:0; visibility:hidden; pointer-events:none; }
+    .flip-hint.is-visible { visibility:visible; animation:flip-hint-veil 2.15s ease both; }
+    .flip-hint-icon { width:82px; height:82px; display:block; object-fit:contain; filter:contrast(1.25); animation:flip-hint-touch 1.05s ease-in-out 2; }
+    .flip-hint-label { color:#111827; font-size:17px; line-height:1.2; letter-spacing:.15px; font-weight:850; text-align:center; }
+    @keyframes flip-hint-veil { 0% { opacity:0; } 12%,72% { opacity:1; } 100% { opacity:0; } }
+    @keyframes flip-hint-touch { 0%,100% { transform:scale(1); } 46% { transform:scale(.9); } 68% { transform:scale(1.04); } }
     .tag { position:absolute; top:0; left:0; width:100%; overflow:hidden; transform-origin:top left; border:2px solid var(--green); border-radius:10px; background:var(--green); }
     .tag.back-tag { border-color:#d6b100; background:var(--yellow); }
     .brand { min-height:76px; display:flex; align-items:center; gap:12px; padding:8px 13px; background:#fff; }
@@ -270,7 +276,7 @@ public static class ScaffTagPublicPageRenderer
     .photo img { width:100%; height:100%; min-height:150px; object-fit:cover; display:block; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (min-width:700px) { .app { padding:18px; } }
-    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flipper.is-hinting { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flipper.is-hinting { animation:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } }
   </style>
 </head>
 <body>
@@ -279,6 +285,10 @@ public static class ScaffTagPublicPageRenderer
       <div id="flipper" class="flipper">
         <section id="front" class="face front" aria-label="Scaff-Tag front"></section>
         <section id="back" class="face back" aria-label="Scaff-Tag back"></section>
+      </div>
+      <div id="flipHint" class="flip-hint" aria-hidden="true">
+        <img class="flip-hint-icon" src="data:image/png;base64,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" alt="" />
+        <div class="flip-hint-label">Tap to flip</div>
       </div>
     </div>
     <div id="announce" class="sr-only" aria-live="polite"></div>
@@ -425,6 +435,7 @@ public static class ScaffTagPublicPageRenderer
     function setBack(nextBack) {
       isBack = Boolean(nextBack);
       const flipper = document.getElementById('flipper');
+      document.getElementById('flipHint').classList.remove('is-visible');
       flipper.classList.remove('is-hinting');
       flipper.classList.toggle('is-back', isBack);
       const stage = document.getElementById('stage');
@@ -434,13 +445,17 @@ public static class ScaffTagPublicPageRenderer
     }
 
     function playFlipHint() {
-      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+      const hint = document.getElementById('flipHint');
       const flipper = document.getElementById('flipper');
       window.setTimeout(() => {
         if (isBack || document.hidden) return;
+        hint.classList.add('is-visible');
         flipper.classList.add('is-hinting');
-        flipper.addEventListener('animationend', () => flipper.classList.remove('is-hinting'), {once:true});
-      }, 350);
+        window.setTimeout(() => {
+          hint.classList.remove('is-visible');
+          flipper.classList.remove('is-hinting');
+        }, 2200);
+      }, 120);
     }
 
     async function refresh() {
