@@ -268,20 +268,21 @@ public static class ScaffTagPublicPageRenderer
     .standard { margin-top:7px; color:#fff; font-size:9px; line-height:1.35; font-weight:800; text-align:center; }
     .note-date { width:27%; }
     .photos-title { min-height:39px; display:flex; align-items:center; justify-content:center; border-top:1px solid #d6b100; background:var(--yellow); font-size:13px; letter-spacing:.45px; font-weight:900; }
-    .photos { min-height:150px; display:grid; grid-template-columns:1fr 1fr; border-top:1px solid #d6b100; background:var(--yellow); }
-    .photo { width:100%; min-height:150px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0; border:0; border-right:1px solid #d6b100; background:#fff9cf; color:#6b5a00; font:inherit; font-size:11px; font-weight:800; }
+    .photos { height:150px; min-height:150px; display:grid; grid-template-columns:1fr 1fr; border-top:1px solid #d6b100; background:var(--yellow); overflow:hidden; }
+    .photo { width:100%; height:150px; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0; border:0; border-right:1px solid #d6b100; background:#fff9cf; color:#6b5a00; font:inherit; font-size:11px; font-weight:800; }
     button.photo { cursor:zoom-in; }
     button.photo:focus-visible { outline:3px solid rgba(255,255,255,.9); outline-offset:-4px; }
     .photo:last-child { border-right:0; }
-    .photo img { width:100%; height:100%; min-height:150px; object-fit:cover; display:block; }
+    .photo img { width:100%; height:150px; min-height:0; object-fit:cover; display:block; }
     .photo-viewer { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; padding:max(24px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left)); background:rgba(8,10,12,.94); opacity:0; visibility:hidden; pointer-events:none; transition:opacity .2s ease,visibility 0s linear .2s; }
     .photo-viewer.is-open { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
-    .photo-viewer-image { max-width:100%; max-height:100%; display:block; object-fit:contain; border-radius:4px; }
+    .photo-viewer-image { max-width:100%; max-height:100%; display:block; object-fit:contain; border-radius:4px; opacity:0; transform:scale(.84); transition:opacity .18s ease,transform .24s cubic-bezier(.2,.78,.2,1); }
+    .photo-viewer.is-open .photo-viewer-image { opacity:1; transform:scale(1); }
     .photo-viewer-close { position:absolute; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); z-index:1; width:44px; height:44px; display:flex; align-items:center; justify-content:center; padding:0; border:1px solid rgba(255,255,255,.32); border-radius:50%; background:rgba(17,24,39,.72); color:#fff; font-size:30px; line-height:1; font-weight:400; cursor:pointer; }
     .photo-viewer-close:focus-visible { outline:3px solid #fff; outline-offset:2px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (min-width:700px) { .app { padding:18px; } }
-    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image { transition:none; } }
   </style>
 </head>
 <body>
@@ -479,10 +480,12 @@ public static class ScaffTagPublicPageRenderer
     const photoViewerImage = document.getElementById('photoViewerImage');
     const photoViewerClose = document.getElementById('photoViewerClose');
     let photoViewerLastFocus = null;
+    let photoViewerCleanupTimer = 0;
 
     function openPhotoViewer(photoButton) {
       const url = photoButton?.dataset?.photoUrl;
       if (!url) return;
+      window.clearTimeout(photoViewerCleanupTimer);
       photoViewerLastFocus = photoButton;
       photoViewerImage.src = url;
       photoViewerImage.alt = photoButton.dataset.photoAlt || 'Enlarged Scaff-Tag site photo';
@@ -495,10 +498,14 @@ public static class ScaffTagPublicPageRenderer
       if (!photoViewer.classList.contains('is-open')) return;
       photoViewer.classList.remove('is-open');
       photoViewer.setAttribute('aria-hidden', 'true');
-      photoViewerImage.removeAttribute('src');
-      photoViewerImage.alt = '';
       photoViewerLastFocus?.focus?.({preventScroll:true});
       photoViewerLastFocus = null;
+      window.clearTimeout(photoViewerCleanupTimer);
+      photoViewerCleanupTimer = window.setTimeout(() => {
+        if (photoViewer.classList.contains('is-open')) return;
+        photoViewerImage.removeAttribute('src');
+        photoViewerImage.alt = '';
+      }, 260);
     }
 
     stage.addEventListener('click', event => {
