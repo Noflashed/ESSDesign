@@ -214,9 +214,9 @@ public static class ScaffTagPublicPageRenderer
     .stage:focus-visible { border-radius:14px; box-shadow:0 0 0 4px rgba(11,127,69,.28); }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
-    .face { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; box-shadow:0 18px 48px rgba(18,45,32,.24),0 2px 7px rgba(18,45,32,.17); background:#fff; scrollbar-width:thin; }
+    .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; box-shadow:0 18px 48px rgba(18,45,32,.24),0 2px 7px rgba(18,45,32,.17); background:#fff; }
     .back { transform:rotateY(180deg); background:var(--yellow); }
-    .tag { width:100%; min-height:100%; overflow:hidden; border:2px solid var(--green); border-radius:10px; background:var(--green); }
+    .tag { position:absolute; top:0; left:0; width:100%; overflow:hidden; transform-origin:top left; border:2px solid var(--green); border-radius:10px; background:var(--green); }
     .tag.back-tag { border-color:#d6b100; background:var(--yellow); }
     .brand { min-height:76px; display:flex; align-items:center; gap:12px; padding:8px 13px; background:#fff; }
     .brand img { width:88px; height:54px; object-fit:contain; }
@@ -312,6 +312,7 @@ public static class ScaffTagPublicPageRenderer
     let tag = initialTag;
     let isBack = false;
     let pointerStart = null;
+    let fitFrame = 0;
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
@@ -385,6 +386,50 @@ public static class ScaffTagPublicPageRenderer
       document.getElementById('updated').textContent = updated && !Number.isNaN(updated.getTime())
         ? `Updated ${new Intl.DateTimeFormat('en-AU',{dateStyle:'medium',timeStyle:'short',timeZone:'Australia/Sydney'}).format(updated)}`
         : 'Latest saved information';
+      scheduleFit();
+    }
+
+    function fitFace(face) {
+      const card = face.querySelector('.tag');
+      if (!card || !face.clientWidth || !face.clientHeight) return;
+
+      card.style.top = '0px';
+      card.style.width = `${face.clientWidth}px`;
+      card.style.transform = 'none';
+
+      let low = 0.35;
+      let high = 1;
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        const candidate = (low + high) / 2;
+        card.style.width = `${face.clientWidth / candidate}px`;
+        const fittedHeight = card.offsetHeight * candidate;
+        if (fittedHeight <= face.clientHeight) low = candidate;
+        else high = candidate;
+      }
+
+      let scale = low * 0.998;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        card.style.width = `${face.clientWidth / scale}px`;
+        const fittedHeight = card.offsetHeight * scale;
+        if (fittedHeight <= face.clientHeight) break;
+        scale *= (face.clientHeight / fittedHeight) * 0.995;
+      }
+      card.style.width = `${face.clientWidth / scale}px`;
+      card.style.transform = `scale(${scale})`;
+      const fittedHeight = card.offsetHeight * scale;
+      card.style.top = `${Math.max(0, (face.clientHeight - fittedHeight) / 2)}px`;
+      face.dataset.fitScale = scale.toFixed(4);
+    }
+
+    function fitCards() {
+      fitFrame = 0;
+      fitFace(document.getElementById('front'));
+      fitFace(document.getElementById('back'));
+    }
+
+    function scheduleFit() {
+      if (fitFrame) cancelAnimationFrame(fitFrame);
+      fitFrame = requestAnimationFrame(fitCards);
     }
 
     function setBack(nextBack) {
@@ -426,6 +471,8 @@ public static class ScaffTagPublicPageRenderer
     });
     document.getElementById('flipButton').addEventListener('click', () => setBack(!isBack));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    window.addEventListener('resize', scheduleFit);
+    document.fonts?.ready.then(scheduleFit).catch(() => {});
     render();
     window.setInterval(refresh, 30000);
   </script>
