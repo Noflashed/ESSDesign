@@ -248,7 +248,7 @@ public static class ScaffTagPublicPageRenderer
     th:last-child, td:last-child { border-right:0; }
     .auth-date { width:20%; } .auth-time { width:18%; } .auth-name { width:29%; } .auth-sign { width:33%; }
     .signature { width:100%; height:31px; display:block; }
-    .signature-inline { width:min(120px,100%); }
+    .signature-inline { width:100%; }
     .signature polyline { fill:none; stroke:#000; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
     .caution { min-height:76px; display:flex; align-items:center; justify-content:space-around; gap:10px; padding:10px 15px; border-top:1px solid #d6b100; background:var(--yellow); }
     .warning-box { width:34px; height:34px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--ink); font-size:23px; font-weight:900; }
@@ -321,17 +321,25 @@ public static class ScaffTagPublicPageRenderer
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
     const signature = (strokes, inline = false) => {
       if (!Array.isArray(strokes) || strokes.length === 0) return '<span></span>';
+      const validPoints = strokes
+        .flatMap(stroke => Array.isArray(stroke) ? stroke : [])
+        .filter(point => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)));
+      const minimumX = inline && validPoints.length > 0
+        ? Math.min(...validPoints.map(point => Math.max(0, Math.min(1, Number(point.x)))))
+        : 0;
+      const leftPadding = inline ? 1 : 0;
       const lines = strokes.map(stroke => {
         if (!Array.isArray(stroke) || stroke.length === 0) return '';
         const points = stroke.map(point => {
-          const x = Math.max(0, Math.min(1, Number(point?.x) || 0)) * 100;
+          const normalizedX = Math.max(0, Math.min(1, Number(point?.x) || 0));
+          const x = leftPadding + (normalizedX - minimumX) * (100 - leftPadding);
           const y = Math.max(0, Math.min(1, Number(point?.y) || 0)) * 40;
           return `${x.toFixed(2)},${y.toFixed(2)}`;
         }).join(' ');
         return `<polyline points="${points}"></polyline>`;
       }).join('');
       const className = inline ? 'signature signature-inline' : 'signature';
-      const alignment = inline ? 'xMinYMid meet' : 'xMidYMid meet';
+      const alignment = inline ? 'none' : 'xMidYMid meet';
       return `<svg class="${className}" viewBox="0 0 100 40" preserveAspectRatio="${alignment}" aria-label="Digital signature">${lines}</svg>`;
     };
     const company = () => tag.companyEntityId === 'maloo'
