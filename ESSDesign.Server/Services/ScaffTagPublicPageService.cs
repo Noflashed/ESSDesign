@@ -197,25 +197,21 @@ public static class ScaffTagPublicPageRenderer
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b4f2f" />
   <title>Interactive Scaff-Tag</title>
   <style>
     :root { color-scheme: light; --green:#0b4f2f; --green-2:#0b7f45; --line:#8da9be; --yellow:#f7d319; --ink:#111827; }
     * { box-sizing:border-box; }
     html, body { margin:0; min-height:100%; }
-    body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:radial-gradient(circle at 50% -15%,#e5f2eb 0,#eef3f0 35%,#dbe5df 100%); }
+    body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:transparent; }
     button, a { font:inherit; }
-    .app { min-height:100dvh; display:flex; flex-direction:column; align-items:center; padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); }
-    .topbar { width:min(100%,430px); height:42px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex:0 0 auto; }
-    .live { display:flex; align-items:center; gap:7px; min-width:0; color:#315344; font-size:12px; font-weight:800; }
-    .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.13); }
-    .updated { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#587064; font-size:11px; text-align:right; }
-    .stage { width:min(100%,430px); height:calc(100dvh - 104px); min-height:520px; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
-    .stage:focus-visible { border-radius:14px; box-shadow:0 0 0 4px rgba(11,127,69,.28); }
+    .app { width:100%; height:100dvh; min-height:0; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:transparent; }
+    .stage { width:min(100%,430px); height:100%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
-    .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; box-shadow:0 18px 48px rgba(18,45,32,.24),0 2px 7px rgba(18,45,32,.17); background:#fff; }
-    .back { transform:rotateY(180deg); background:var(--yellow); }
+    .flipper.is-hinting { animation:flip-peek 1.25s cubic-bezier(.2,.72,.18,1) both; }
+    @keyframes flip-peek { 0%,100% { transform:rotateY(0deg); } 38% { transform:rotateY(-24deg); } 64% { transform:rotateY(9deg); } 82% { transform:rotateY(-3deg); } }
+    .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; background:transparent; }
+    .back { transform:rotateY(180deg); background:transparent; }
     .tag { position:absolute; top:0; left:0; width:100%; overflow:hidden; transform-origin:top left; border:2px solid var(--green); border-radius:10px; background:var(--green); }
     .tag.back-tag { border-color:#d6b100; background:var(--yellow); }
     .brand { min-height:76px; display:flex; align-items:center; gap:12px; padding:8px 13px; background:#fff; }
@@ -272,32 +268,18 @@ public static class ScaffTagPublicPageRenderer
     .photo { min-height:150px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-right:1px solid #d6b100; background:#fff9cf; color:#6b5a00; font-size:11px; font-weight:800; }
     .photo:last-child { border-right:0; }
     .photo img { width:100%; height:100%; min-height:150px; object-fit:cover; display:block; }
-    .controls { width:min(100%,430px); height:52px; display:flex; align-items:center; justify-content:center; gap:10px; flex:0 0 auto; }
-    .flip-btn { min-width:150px; min-height:38px; display:flex; align-items:center; justify-content:center; gap:8px; padding:8px 17px; border:1px solid rgba(11,79,47,.24); border-radius:999px; color:#fff; background:var(--green); box-shadow:0 6px 16px rgba(11,79,47,.18); font-size:12px; font-weight:850; cursor:pointer; }
-    .flip-icon { display:inline-block; font-size:17px; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
-    .flip-btn.is-back .flip-icon { transform:rotate(180deg); }
-    .pdf-link { color:var(--green); font-size:11px; font-weight:850; text-underline-offset:3px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (max-height:690px) { .topbar { height:34px; } .stage { height:calc(100dvh - 86px); min-height:500px; } .controls { height:42px; } .flip-btn { min-height:34px; } }
-    @media (min-width:700px) { .app { padding-top:18px; } .topbar { height:46px; } .stage { height:min(84dvh,930px); } }
-    @media (prefers-reduced-motion:reduce) { .flipper, .flip-icon { transition:none; } }
+    @media (min-width:700px) { .app { padding:18px; } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flipper.is-hinting { animation:none; } }
   </style>
 </head>
 <body>
   <main class="app">
-    <div class="topbar">
-      <div class="live"><span class="live-dot" aria-hidden="true"></span><span>Live Scaff-Tag</span></div>
-      <div id="updated" class="updated" aria-live="polite">Loading latest information...</div>
-    </div>
     <div id="stage" class="stage" role="button" tabindex="0" aria-label="Flip Scaff-Tag to view the back" aria-pressed="false">
       <div id="flipper" class="flipper">
         <section id="front" class="face front" aria-label="Scaff-Tag front"></section>
         <section id="back" class="face back" aria-label="Scaff-Tag back"></section>
       </div>
-    </div>
-    <div class="controls">
-      <button id="flipButton" class="flip-btn" type="button"><span class="flip-icon" aria-hidden="true">↻</span><span id="sideText">Tap to view back</span></button>
-      <a id="pdfLink" class="pdf-link" target="_blank" rel="noopener noreferrer">PDF</a>
     </div>
     <div id="announce" class="sr-only" aria-live="polite"></div>
   </main>
@@ -394,11 +376,6 @@ public static class ScaffTagPublicPageRenderer
     function render() {
       document.getElementById('front').innerHTML = renderFront();
       document.getElementById('back').innerHTML = renderBack();
-      document.getElementById('pdfLink').href = tag.pdfUrl || '#';
-      const updated = tag.updatedAt ? new Date(tag.updatedAt) : null;
-      document.getElementById('updated').textContent = updated && !Number.isNaN(updated.getTime())
-        ? `Updated ${new Intl.DateTimeFormat('en-AU',{dateStyle:'medium',timeStyle:'short',timeZone:'Australia/Sydney'}).format(updated)}`
-        : 'Latest saved information';
       scheduleFit();
     }
 
@@ -447,13 +424,23 @@ public static class ScaffTagPublicPageRenderer
 
     function setBack(nextBack) {
       isBack = Boolean(nextBack);
-      document.getElementById('flipper').classList.toggle('is-back', isBack);
-      document.getElementById('flipButton').classList.toggle('is-back', isBack);
+      const flipper = document.getElementById('flipper');
+      flipper.classList.remove('is-hinting');
+      flipper.classList.toggle('is-back', isBack);
       const stage = document.getElementById('stage');
       stage.setAttribute('aria-pressed', String(isBack));
       stage.setAttribute('aria-label', isBack ? 'Flip Scaff-Tag to view the front' : 'Flip Scaff-Tag to view the back');
-      document.getElementById('sideText').textContent = isBack ? 'Tap to view front' : 'Tap to view back';
       document.getElementById('announce').textContent = isBack ? 'Showing the back of the Scaff-Tag' : 'Showing the front of the Scaff-Tag';
+    }
+
+    function playFlipHint() {
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+      const flipper = document.getElementById('flipper');
+      window.setTimeout(() => {
+        if (isBack || document.hidden) return;
+        flipper.classList.add('is-hinting');
+        flipper.addEventListener('animationend', () => flipper.classList.remove('is-hinting'), {once:true});
+      }, 350);
     }
 
     async function refresh() {
@@ -498,11 +485,11 @@ public static class ScaffTagPublicPageRenderer
     stage.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setBack(!isBack); }
     });
-    document.getElementById('flipButton').addEventListener('click', () => setBack(!isBack));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     window.addEventListener('resize', scheduleFit);
     document.fonts?.ready.then(scheduleFit).catch(() => {});
     render();
+    playFlipHint();
     window.setInterval(refresh, 30000);
   </script>
 </body>
