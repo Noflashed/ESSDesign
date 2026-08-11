@@ -205,17 +205,15 @@ public static class ScaffTagPublicPageRenderer
     body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:rgba(32,35,39,.96); }
     button, a { font:inherit; }
     .app { width:100%; height:100dvh; min-height:0; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:rgba(32,35,39,.96); }
-    .stage { position:relative; width:min(85%,430px); height:85%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
+    .stage { position:relative; width:min(92%,460px); height:92%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
-    .flipper.is-hinting { animation:flip-peek 1.25s cubic-bezier(.2,.72,.18,1) both; }
-    @keyframes flip-peek { 0%,100% { transform:rotateY(0deg); } 38% { transform:rotateY(-24deg); } 64% { transform:rotateY(9deg); } 82% { transform:rotateY(-3deg); } }
     .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; background:transparent; }
     .back { transform:rotateY(180deg); background:transparent; }
-    .flip-hint { position:absolute; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border-radius:10px; background:rgba(255,255,255,.76); -webkit-backdrop-filter:blur(1.5px); backdrop-filter:blur(1.5px); opacity:0; visibility:hidden; pointer-events:none; }
+    .flip-hint { position:absolute; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border-radius:10px; background:rgba(5,8,10,.78); -webkit-backdrop-filter:blur(1.5px); backdrop-filter:blur(1.5px); opacity:0; visibility:hidden; pointer-events:none; }
     .flip-hint.is-visible { visibility:visible; animation:flip-hint-veil 2.15s ease both; }
-    .flip-hint-icon { width:82px; height:82px; display:block; object-fit:contain; filter:contrast(1.25); animation:flip-hint-touch 1.05s ease-in-out 2; }
-    .flip-hint-label { color:#111827; font-size:17px; line-height:1.2; letter-spacing:.15px; font-weight:850; text-align:center; }
+    .flip-hint-icon { width:82px; height:82px; display:block; object-fit:contain; filter:invert(1) brightness(1.18) contrast(1.1); animation:flip-hint-touch 1.05s ease-in-out 2; }
+    .flip-hint-label { color:#fff; font-size:17px; line-height:1.2; letter-spacing:.15px; font-weight:850; text-align:center; }
     @keyframes flip-hint-veil { 0% { opacity:0; } 12%,72% { opacity:1; } 100% { opacity:0; } }
     @keyframes flip-hint-touch { 0%,100% { transform:scale(1); } 46% { transform:scale(.9); } 68% { transform:scale(1.04); } }
     .tag { position:absolute; top:0; left:0; width:100%; overflow:hidden; transform-origin:top left; border:2px solid var(--green); border-radius:10px; background:var(--green); }
@@ -283,7 +281,7 @@ public static class ScaffTagPublicPageRenderer
     .photo-viewer-close:focus-visible { outline:3px solid #fff; outline-offset:2px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (min-width:700px) { .app { padding:18px; } }
-    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flipper.is-hinting { animation:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } }
   </style>
 </head>
 <body>
@@ -397,6 +395,9 @@ public static class ScaffTagPublicPageRenderer
     function render() {
       document.getElementById('front').innerHTML = renderFront();
       document.getElementById('back').innerHTML = renderBack();
+      document.querySelectorAll('.tag img').forEach(image => {
+        if (!image.complete) image.addEventListener('load', scheduleFit, {once:true});
+      });
       scheduleFit();
     }
 
@@ -408,22 +409,23 @@ public static class ScaffTagPublicPageRenderer
       card.style.width = `${face.clientWidth}px`;
       card.style.transform = 'none';
 
-      let low = 0.35;
+      const availableHeight = Math.max(1, face.clientHeight - 10);
+      let low = 0.1;
       let high = 1;
       for (let attempt = 0; attempt < 18; attempt += 1) {
         const candidate = (low + high) / 2;
         card.style.width = `${face.clientWidth / candidate}px`;
         const fittedHeight = card.offsetHeight * candidate;
-        if (fittedHeight <= face.clientHeight) low = candidate;
+        if (fittedHeight <= availableHeight) low = candidate;
         else high = candidate;
       }
 
-      let scale = low * 0.998;
+      let scale = low * 0.995;
       for (let attempt = 0; attempt < 8; attempt += 1) {
         card.style.width = `${face.clientWidth / scale}px`;
         const fittedHeight = card.offsetHeight * scale;
-        if (fittedHeight <= face.clientHeight) break;
-        scale *= (face.clientHeight / fittedHeight) * 0.995;
+        if (fittedHeight <= availableHeight) break;
+        scale *= (availableHeight / fittedHeight) * 0.995;
       }
       card.style.width = `${face.clientWidth / scale}px`;
       card.style.transform = `scale(${scale})`;
@@ -447,7 +449,6 @@ public static class ScaffTagPublicPageRenderer
       isBack = Boolean(nextBack);
       const flipper = document.getElementById('flipper');
       document.getElementById('flipHint').classList.remove('is-visible');
-      flipper.classList.remove('is-hinting');
       flipper.classList.toggle('is-back', isBack);
       const stage = document.getElementById('stage');
       stage.setAttribute('aria-pressed', String(isBack));
@@ -457,15 +458,10 @@ public static class ScaffTagPublicPageRenderer
 
     function playFlipHint() {
       const hint = document.getElementById('flipHint');
-      const flipper = document.getElementById('flipper');
       window.setTimeout(() => {
         if (isBack || document.hidden) return;
         hint.classList.add('is-visible');
-        flipper.classList.add('is-hinting');
-        window.setTimeout(() => {
-          hint.classList.remove('is-visible');
-          flipper.classList.remove('is-hinting');
-        }, 2200);
+        window.setTimeout(() => hint.classList.remove('is-visible'), 2200);
       }, 120);
     }
 
