@@ -7,6 +7,13 @@ import {
     safetyProjectsAPI
 } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import {
+    addSydneyMonths,
+    formatSydneyDate,
+    formatSydneyDateTime,
+    inspectionTimestamp,
+    parseSydneyDate
+} from '../utils/sydneyTime';
 import './ProjectDataRegisterPage.css';
 
 const REGISTER_CONFIG = {
@@ -49,11 +56,12 @@ const REGISTER_CONFIG = {
         searchPlaceholder: 'Search scaff-tags...',
         api: scaffTagsAPI,
         defaultSort: 'inspectionDate',
-        linkKey: 'reference',
+        linkKey: 'title',
         columns: [
             { key: 'builder', label: 'CLIENT' },
             { key: 'project', label: 'PROJECT' },
-            { key: 'reference', label: 'SCAFFOLD NO.' },
+            { key: 'title', label: 'SCAFFOLD' },
+            { key: 'reference', label: 'REF. NO.' },
             { key: 'location', label: 'LOCATION' },
             { key: 'inspectionDate', label: 'LAST INSPECTION' },
             { key: 'representative', label: 'INSPECTED BY' },
@@ -62,48 +70,21 @@ const REGISTER_CONFIG = {
     }
 };
 
-const parseDate = value => {
-    const text = String(value || '').trim();
-    if (!text) return null;
-
-    const localMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(am|pm)?)?/i);
-    if (localMatch) {
-        const [, day, month, yearText, hourText = '0', minuteText = '0', period = ''] = localMatch;
-        const year = Number(yearText) < 100 ? 2000 + Number(yearText) : Number(yearText);
-        let hour = Number(hourText);
-        if (period.toLowerCase() === 'pm' && hour < 12) hour += 12;
-        if (period.toLowerCase() === 'am' && hour === 12) hour = 0;
-        const candidate = new Date(year, Number(month) - 1, Number(day), hour, Number(minuteText));
-        return Number.isNaN(candidate.getTime()) ? null : candidate;
-    }
-
-    const candidate = new Date(text);
-    return Number.isNaN(candidate.getTime()) ? null : candidate;
-};
-
-const formatDate = (value, includeTime = false) => {
-    const date = parseDate(value);
-    if (!date) return '-';
-    return new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        ...(includeTime ? { hour: 'numeric', minute: '2-digit' } : {})
-    }).format(date);
-};
-
 const getScaffTagStatus = form => {
-    const latestInspection = parseDate(form.latestInspectionDate);
+    const latestInspection = parseSydneyDate(form.latestInspectionAt || form.latestInspectionDate);
     if (!latestInspection) return 'Draft';
-    const expiry = parseDate(form.expiresAt) || new Date(latestInspection);
-    if (!form.expiresAt) expiry.setMonth(expiry.getMonth() + 3);
+    const expiry = parseSydneyDate(form.expiresAt)
+        || addSydneyMonths(form.latestInspectionAt || form.latestInspectionDate, 3);
     return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
 };
 
 const latestScaffTagInspection = form => (
     [...(Array.isArray(form.inspectionRecords) ? form.inspectionRecords : [])]
-        .filter(record => parseDate(record?.date))
-        .sort((left, right) => parseDate(right.date).getTime() - parseDate(left.date).getTime())[0]
+        .filter(record => parseSydneyDate(inspectionTimestamp(record)))
+        .sort((left, right) => (
+            parseSydneyDate(inspectionTimestamp(right)).getTime()
+            - parseSydneyDate(inspectionTimestamp(left)).getTime()
+        ))[0]
     || null
 );
 
@@ -141,8 +122,8 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
             ...deletion,
             title: form.formReferenceName || 'Untitled handover',
             reference: form.inspectionNumber || '-',
-            inspectionDate: formatDate(form.inspectionDateTime || form.updatedAt, true),
-            inspectionDateSort: parseDate(form.inspectionDateTime || form.updatedAt)?.getTime() || 0,
+            inspectionDate: formatSydneyDateTime(form.inspectionDateTime || form.updatedAt),
+            inspectionDateSort: parseSydneyDate(form.inspectionDateTime || form.updatedAt)?.getTime() || 0,
             representative: form.essRepresentativeName || 'Not recorded'
         };
     }
@@ -156,14 +137,17 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
             ...deletion,
             title: form.formReferenceName || 'Untitled day labour form',
             reference: form.variationNumber || '-',
-            formDate: formatDate(form.date || form.updatedAt),
-            formDateSort: parseDate(form.date || form.updatedAt)?.getTime() || 0,
+            formDate: formatSydneyDate(form.date || form.updatedAt),
+            formDateSort: parseSydneyDate(form.date || form.updatedAt)?.getTime() || 0,
             requestedBy: form.requestedBy || 'Not recorded',
             handoverNumber: form.handoverDocumentNumber || '-'
         };
     }
     const latestInspection = latestScaffTagInspection(form);
-    const latestInspectionDate = form.latestInspectionDate || latestInspection?.date || form.updatedAt;
+    const latestInspectionDate = form.latestInspectionAt
+        || form.latestInspectionDate
+        || inspectionTimestamp(latestInspection)
+        || form.updatedAt;
     return {
         id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
         builderId: form.builderId,
@@ -171,11 +155,12 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
         form,
         ...names,
         ...deletion,
-        reference: form.scaffoldNo || form.tagNumber || '-',
+        title: form.scaffoldNo || 'Untitled scaffold',
+        reference: form.tagNumber || '-',
         location: form.jobLocation || '-',
-        inspectionDate: formatDate(latestInspectionDate, true),
-        inspectionDateSort: parseDate(latestInspectionDate)?.getTime() || 0,
-        representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
+        inspectionDate: formatSydneyDateTime(latestInspectionDate),
+        inspectionDateSort: parseSydneyDate(latestInspectionDate)?.getTime() || 0,
+        representative: latestInspection?.competentPerson || form.inspectedBy || form.erectedBy || 'Not recorded',
         status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
     };
 });
@@ -417,7 +402,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                         </thead>
                         <tbody>
                             {filteredRows.map(row => (
-                                <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
+                                <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatSydneyDateTime(row.deletedAt)}` : undefined}>
                                     {config.columns.map(column => (
                                         <td key={column.key} title={String(row[column.key] || '')}>
                                             {column.key === 'status'

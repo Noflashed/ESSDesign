@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { scaffTagsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import { formatSydneyDate, formatSydneyDateTime, inspectionTimestamp } from '../utils/sydneyTime';
 
 export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [loading, setLoading] = useState(true);
@@ -106,7 +107,6 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                         <div className="module-list-header">
                                             <div>
                                                 <div className="module-item-title">{item.scaffoldNo || 'Untitled Scaffold'}</div>
-                                                <div className="module-item-sub">{item.jobLocation || project.name}</div>
                                             </div>
                                             <div className="module-list-actions">
                                                 <button className="module-secondary-btn" onClick={() => openForm(item)}>View</button>
@@ -115,7 +115,14 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                                 <button className="module-danger-btn" onClick={() => deleteForm(item)}>Delete</button>
                                             </div>
                                         </div>
-                                        <div className="module-item-sub">Last inspection: {item.latestInspectionDate || 'None recorded'}</div>
+                                        <div className="module-item-sub">
+                                            Last inspection: {(item.latestInspectionAt || item.latestInspectionDate)
+                                                ? formatSydneyDateTime(item.latestInspectionAt || item.latestInspectionDate)
+                                                : 'None recorded'}
+                                        </div>
+                                        <div className="module-item-sub">
+                                            Inspected by: {item.inspectedBy || item.erectedBy || 'Not recorded'}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -129,6 +136,10 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                         ) : (
                             <div className="module-details-grid">
                                 <div className="module-detail-block">
+                                    <span className="module-pill-label">Reference Number</span>
+                                    <span className="module-pill-value">{selectedForm.tagNumber || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
                                     <span className="module-pill-label">Scaffold Name</span>
                                     <span className="module-pill-value">{selectedForm.scaffoldNo || '-'}</span>
                                 </div>
@@ -138,11 +149,19 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Date Erected</span>
-                                    <span className="module-pill-value">{selectedForm.dateErected || '-'}</span>
+                                    <span className="module-pill-value">{selectedForm.dateErected ? formatSydneyDate(selectedForm.dateErected) : '-'}</span>
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Erected By</span>
                                     <span className="module-pill-value">{selectedForm.erectedBy || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
+                                    <span className="module-pill-label">Requested By</span>
+                                    <span className="module-pill-value">{selectedForm.requestedBy || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
+                                    <span className="module-pill-label">Inspected By</span>
+                                    <span className="module-pill-value">{selectedForm.inspectedBy || selectedForm.erectedBy || '-'}</span>
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Load Rating</span>
@@ -162,7 +181,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                                 .filter(row => row.date || row.competentPerson)
                                                 .map((row, index) => (
                                                     <div key={`${row.date}-${index}`} className="module-record-row">
-                                                        <span>{row.date || '-'}</span>
+                                                        <span>{formatSydneyDateTime(inspectionTimestamp(row))}</span>
                                                         <span>{row.competentPerson || '-'}</span>
                                                     </div>
                                                 ))

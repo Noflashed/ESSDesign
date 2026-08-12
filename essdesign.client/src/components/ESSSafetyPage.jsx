@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import {
+    addSydneyMonths,
+    formatSydneyDate,
+    formatSydneyDateTime,
+    parseSydneyDate
+} from '../utils/sydneyTime';
 
 const PROJECT_DATA_TABS = [
     {
@@ -68,40 +74,8 @@ const STATUS_META = {
     Draft: { className: 'draft', icon: FileText }
 };
 
-const toDate = (value) => {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatDate = (value) => {
-    const date = toDate(value);
-    if (!date) return '-';
-    return new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-    }).format(date);
-};
-
-const formatDateTime = (value) => {
-    const date = toDate(value);
-    if (!date) return '-';
-    return new Intl.DateTimeFormat('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }).format(date);
-};
-
 const addMonths = (value, months) => {
-    const date = toDate(value);
-    if (!date) return null;
-    const next = new Date(date);
-    next.setMonth(next.getMonth() + months);
-    return next;
+    return addSydneyMonths(value, months);
 };
 
 const formatBytes = (value) => {
@@ -121,24 +95,28 @@ const withPdfExtension = (value) => {
 };
 
 function getScaffTagStatus(item) {
-    const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
-    if (!item.latestInspectionDate) return 'Draft';
+    const latestInspection = item.latestInspectionAt || item.latestInspectionDate;
+    const expiry = parseSydneyDate(item.expiresAt) || addMonths(latestInspection, 3);
+    if (!latestInspection) return 'Draft';
     return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
 }
 
 function mapScaffTagRows(items) {
-    return items.map((item, index) => {
-        const tagNo = item.scaffoldNo || item.tagNumber || makeFileRef('TAG', index);
-        const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
+    return items.map(item => {
+        const scaffoldName = item.scaffoldNo || 'Untitled Scaffold';
+        const tagNo = item.tagNumber || '-';
+        const latestInspection = item.latestInspectionAt || item.latestInspectionDate;
+        const expiry = parseSydneyDate(item.expiresAt) || addMonths(latestInspection, 3);
         return {
             id: item.id,
             kind: 'scaff-tags',
-            name: `${tagNo}.pdf`,
+            name: `${scaffoldName}.pdf`,
             ref: tagNo,
             status: getScaffTagStatus(item),
-            uploadedAt: item.updatedAt || item.latestInspectionDate || '',
+            uploadedAt: item.updatedAt || latestInspection || '',
+            latestInspection,
             expiresAt: expiry ? expiry.toISOString() : '',
-            uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
+            uploadedBy: item.inspectedBy || item.competentPerson || item.erectedBy || 'Not recorded',
             location: item.jobLocation || '',
             size: '',
             raw: item
@@ -373,16 +351,16 @@ function getPreviewDetails(doc, tab, builder, project) {
         ['Builder', builder?.name || '-'],
         ['Project', project?.name || '-'],
         ['Uploaded by', doc.uploadedBy || '-'],
-        ['Date uploaded', formatDateTime(doc.uploadedAt)],
+        ['Date uploaded', formatSydneyDateTime(doc.uploadedAt)],
         ['Status', doc.status || '-']
     ];
 
     if (tab.key === 'scaff-tags') {
         return [
-            ['Scaffold reference', doc.raw?.scaffoldNo || doc.raw?.tagNumber || doc.ref],
+            ['Scaffold reference', doc.raw?.scaffoldNo || '-'],
             ['Tag / Ref No.', doc.ref],
             ['Structure location', doc.location || project?.siteLocation || '-'],
-            ['Last inspection', formatDateTime(doc.raw?.latestInspectionDate || doc.uploadedAt)],
+            ['Last inspection', formatSydneyDateTime(doc.raw?.latestInspectionAt || doc.raw?.latestInspectionDate || doc.uploadedAt)],
             ...baseDetails
         ];
     }
@@ -392,7 +370,7 @@ function getPreviewDetails(doc, tab, builder, project) {
             ['Form reference', doc.raw?.formReferenceName || doc.name],
             ['Inspection no.', doc.raw?.inspectionNumber || doc.ref],
             ['ESS representative', doc.raw?.essRepresentativeName || doc.uploadedBy || '-'],
-            ['Inspection date', formatDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
+            ['Inspection date', formatSydneyDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
             ['Client project no.', doc.raw?.projectNumberClient || '-'],
             ...baseDetails
         ];
@@ -403,7 +381,7 @@ function getPreviewDetails(doc, tab, builder, project) {
             ['Form reference', doc.raw?.formReferenceName || doc.name],
             ['Variation no.', doc.raw?.variationNumber || doc.ref],
             ['Requested by', doc.raw?.requestedBy || doc.uploadedBy || '-'],
-            ['Form date', formatDate(doc.raw?.date || doc.uploadedAt)],
+            ['Form date', formatSydneyDate(doc.raw?.date || doc.uploadedAt)],
             ['Linked handover', doc.raw?.handoverDocumentNumber || doc.raw?.handoverDocumentTitle || '-'],
             ['Client project', doc.raw?.clientProjectName || '-'],
             ...baseDetails
@@ -965,51 +943,60 @@ export default function ESSSafetyPage() {
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
                         <div className="project-data-table-card">
-                            <div className="project-data-table-head">
-                                <span className="project-data-checkbox" aria-hidden="true" />
-                                <span>Document name</span>
-                                <span>{activeTab.refLabel}</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label="Status"
-                                        active={statusFilter !== 'all'}
-                                        open={columnFilterMenu === 'status'}
-                                        onToggle={() => toggleColumnFilterMenu('status')}
-                                    >
-                                        <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setStatusFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All statuses</button>
-                                        {statusOptions.map(status => (
-                                            <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
-                                                setStatusFilter(status);
+                            {activeTab.key === 'scaff-tags' ? (
+                                <div className="project-data-table-head scaff-tags-simple">
+                                    <span>Scaffold</span>
+                                    <span>Latest Inspection</span>
+                                    <span>Inspected By</span>
+                                    <span />
+                                </div>
+                            ) : (
+                                <div className="project-data-table-head">
+                                    <span className="project-data-checkbox" aria-hidden="true" />
+                                    <span>Document name</span>
+                                    <span>{activeTab.refLabel}</span>
+                                    <span>
+                                        <TableHeaderFilter
+                                            label="Status"
+                                            active={statusFilter !== 'all'}
+                                            open={columnFilterMenu === 'status'}
+                                            onToggle={() => toggleColumnFilterMenu('status')}
+                                        >
+                                            <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                                setStatusFilter('all');
                                                 setColumnFilterMenu('');
-                                            }}>{status}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                <span>Uploaded</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label="Uploaded by"
-                                        active={uploadedByFilter !== 'all'}
-                                        open={columnFilterMenu === 'uploadedBy'}
-                                        onToggle={() => toggleColumnFilterMenu('uploadedBy')}
-                                    >
-                                        <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setUploadedByFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All uploaders</button>
-                                        {uploadedByOptions.map(uploadedBy => (
-                                            <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
-                                                setUploadedByFilter(uploadedBy);
+                                            }}>All statuses</button>
+                                            {statusOptions.map(status => (
+                                                <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
+                                                    setStatusFilter(status);
+                                                    setColumnFilterMenu('');
+                                                }}>{status}</button>
+                                            ))}
+                                        </TableHeaderFilter>
+                                    </span>
+                                    <span>Uploaded</span>
+                                    <span>
+                                        <TableHeaderFilter
+                                            label="Uploaded by"
+                                            active={uploadedByFilter !== 'all'}
+                                            open={columnFilterMenu === 'uploadedBy'}
+                                            onToggle={() => toggleColumnFilterMenu('uploadedBy')}
+                                        >
+                                            <button type="button" className={uploadedByFilter === 'all' ? 'selected' : ''} onClick={() => {
+                                                setUploadedByFilter('all');
                                                 setColumnFilterMenu('');
-                                            }}>{uploadedBy}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                <span />
-                            </div>
+                                            }}>All uploaders</button>
+                                            {uploadedByOptions.map(uploadedBy => (
+                                                <button type="button" key={uploadedBy} className={uploadedByFilter === uploadedBy ? 'selected' : ''} onClick={() => {
+                                                    setUploadedByFilter(uploadedBy);
+                                                    setColumnFilterMenu('');
+                                                }}>{uploadedBy}</button>
+                                            ))}
+                                        </TableHeaderFilter>
+                                    </span>
+                                    <span />
+                                </div>
+                            )}
 
                             {documentsLoading ? (
                                 <div className="project-data-table-state">
@@ -1027,12 +1014,12 @@ export default function ESSSafetyPage() {
                                         <button
                                             key={document.id}
                                             type="button"
-                                            className={`project-data-table-row${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
+                                            className={`project-data-table-row${activeTab.key === 'scaff-tags' ? ' scaff-tags-simple' : ''}${previewOpen && selectedDocument?.id === document.id ? ' selected' : ''}`}
                                             onClick={() => openDocumentPreview(document.id)}
                                             onDoubleClick={() => openSelectedDocument(document)}
                                             onContextMenu={(event) => openRowMenu(event, document)}
                                         >
-                                            <span className="project-data-checkbox" aria-hidden="true" />
+                                            {activeTab.key !== 'scaff-tags' ? <span className="project-data-checkbox" aria-hidden="true" /> : null}
                                             <span className="project-data-doc-name">
                                                 <span
                                                     className="project-data-pdf-icon"
@@ -1049,12 +1036,25 @@ export default function ESSSafetyPage() {
                                                 >
                                                     <FileText size={15} />
                                                 </span>
-                                                <span title={document.name}>{document.name}</span>
+                                                <span title={activeTab.key === 'scaff-tags' ? document.raw?.scaffoldNo : document.name}>
+                                                    {activeTab.key === 'scaff-tags'
+                                                        ? document.raw?.scaffoldNo || 'Untitled Scaffold'
+                                                        : document.name}
+                                                </span>
                                             </span>
-                                            <span>{document.ref}</span>
-                                            <span><StatusChip status={document.status} /></span>
-                                            <span>{formatDate(document.uploadedAt)}</span>
-                                            <span>{document.uploadedBy}</span>
+                                            {activeTab.key === 'scaff-tags' ? (
+                                                <>
+                                                    <span>{document.latestInspection ? formatSydneyDateTime(document.latestInspection) : '-'}</span>
+                                                    <span>{document.uploadedBy || '-'}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>{document.ref}</span>
+                                                    <span><StatusChip status={document.status} /></span>
+                                                    <span>{formatSydneyDate(document.uploadedAt)}</span>
+                                                    <span>{document.uploadedBy}</span>
+                                                </>
+                                            )}
                                             <span
                                                 className="project-data-row-actions"
                                                 role="button"

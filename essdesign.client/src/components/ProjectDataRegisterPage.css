@@ -382,13 +382,14 @@
 .project-data-register-table.type-day-labour th:nth-child(6) { width: 14%; }
 .project-data-register-table.type-day-labour th:nth-child(7) { width: 11%; }
 
-.project-data-register-table.type-scaff-tags th:nth-child(1) { width: 14%; }
-.project-data-register-table.type-scaff-tags th:nth-child(2) { width: 18%; }
-.project-data-register-table.type-scaff-tags th:nth-child(3) { width: 13%; }
-.project-data-register-table.type-scaff-tags th:nth-child(4) { width: 18%; }
-.project-data-register-table.type-scaff-tags th:nth-child(5) { width: 16%; }
-.project-data-register-table.type-scaff-tags th:nth-child(6) { width: 13%; }
-.project-data-register-table.type-scaff-tags th:nth-child(7) { width: 8%; }
+.project-data-register-table.type-scaff-tags th:nth-child(1) { width: 12%; }
+.project-data-register-table.type-scaff-tags th:nth-child(2) { width: 15%; }
+.project-data-register-table.type-scaff-tags th:nth-child(3) { width: 16%; }
+.project-data-register-table.type-scaff-tags th:nth-child(4) { width: 8%; }
+.project-data-register-table.type-scaff-tags th:nth-child(5) { width: 15%; }
+.project-data-register-table.type-scaff-tags th:nth-child(6) { width: 14%; }
+.project-data-register-table.type-scaff-tags th:nth-child(7) { width: 12%; }
+.project-data-register-table.type-scaff-tags th:nth-child(8) { width: 8%; }
 
 .project-register-status {
     display: inline-flex;
