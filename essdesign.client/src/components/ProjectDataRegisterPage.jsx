@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
+import QRCode from 'qrcode';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -206,6 +207,34 @@ function StatusBadge({ value }) {
     return <span className={`project-register-status ${String(value || '').toLowerCase()}`}>{value || 'Draft'}</span>;
 }
 
+function QrLabelPreview({ label }) {
+    const [imageUrl, setImageUrl] = useState('');
+
+    useEffect(() => {
+        let active = true;
+        QRCode.toDataURL(label.publicUrl, {
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 112,
+            color: { dark: '#07110C', light: '#FFFFFF' }
+        }).then(url => {
+            if (active) setImageUrl(url);
+        }).catch(() => {
+            if (active) setImageUrl('');
+        });
+        return () => {
+            active = false;
+        };
+    }, [label.publicUrl]);
+
+    return (
+        <div className="project-qr-code-preview" aria-label={`QR preview for ${label.displayNumber}`}>
+            {imageUrl ? <img src={imageUrl} alt="" /> : <QrCode size={28} />}
+            <span>{label.displayNumber}</span>
+        </div>
+    );
+}
+
 export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
     const [rows, setRows] = useState([]);
@@ -223,6 +252,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [qrCompany, setQrCompany] = useState('ess');
     const [generatingQr, setGeneratingQr] = useState(false);
     const [printingQr, setPrintingQr] = useState(false);
+    const [scaffRegisterView, setScaffRegisterView] = useState('scaff-tags');
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
         project: new Set()
@@ -258,6 +288,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setQuery('');
         setShowDeleted(registerType !== 'scaff-tags');
         setFilterMenu('');
+        setScaffRegisterView('scaff-tags');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
 
@@ -302,6 +333,30 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
             return left.id.localeCompare(right.id);
         });
     }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField]);
+
+    const qrRegisterRows = useMemo(() => {
+        const normalizedQuery = query.trim().toLowerCase();
+        return qrLabels.map(label => {
+            const assignedRow = rows.find(row => (
+                row.builderId === label.assignedBuilderId
+                && row.projectId === label.assignedProjectId
+                && row.form?.id === label.assignedFormId
+            ));
+            const values = [
+                label.displayNumber,
+                label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding',
+                label.status,
+                assignedRow?.reference,
+                assignedRow?.builder,
+                assignedRow?.project
+            ];
+            return {
+                label,
+                assignedRow,
+                searchable: values.filter(Boolean).join(' ').toLowerCase()
+            };
+        }).filter(item => !normalizedQuery || item.searchable.includes(normalizedQuery));
+    }, [qrLabels, query, rows]);
 
     const toggleFilterValue = (key, value) => {
         setExcludedFilters(current => {
@@ -404,178 +459,152 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
 
     const unassignedQrLabels = qrLabels.filter(label => label.status === 'unassigned');
 
+    const showingQrRegister = registerType === 'scaff-tags' && scaffRegisterView === 'qr-labels';
+
     return (
         <main className="project-data-register-page">
             <div className="project-data-register-toolbar">
                 <label className="project-register-search">
                     <Search size={18} />
-                    <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
+                    <input
+                        type="search"
+                        value={query}
+                        onChange={event => setQuery(event.target.value)}
+                        placeholder={showingQrRegister ? 'Search QR labels...' : config.searchPlaceholder}
+                    />
                 </label>
                 <span className="project-register-toolbar-spacer" />
-                {registerType === 'scaff-tags' ? (
-                    <button type="button" className="project-register-primary-button" onClick={() => setShowQrGenerator(true)}>
-                        <QrCode size={17} />
-                        <span>Generate QR labels</span>
-                    </button>
+                {showingQrRegister ? (
+                    <>
+                        {unassignedQrLabels.length ? (
+                            <button type="button" className="project-register-secondary-button" disabled={printingQr} onClick={() => printQrLabels(unassignedQrLabels)}>
+                                <Printer size={16} />
+                                <span>{printingQr ? 'Preparing…' : 'Print ready labels'}</span>
+                            </button>
+                        ) : null}
+                        <button type="button" className="project-register-primary-button" onClick={() => setShowQrGenerator(true)}>
+                            <QrCode size={17} />
+                            <span>Generate QR labels</span>
+                        </button>
+                    </>
                 ) : null}
-                <label className="project-register-deleted-filter">
-                    <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
-                    <span>Show deleted</span>
-                </label>
+                {!showingQrRegister ? (
+                    <label className="project-register-deleted-filter">
+                        <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
+                        <span>Show deleted</span>
+                    </label>
+                ) : null}
                 <button type="button" className="project-register-icon-button project-register-back-button" onClick={onBack} title="Back to Project Data" aria-label="Back to Project Data">
                     <ArrowLeft size={20} aria-hidden="true" />
                 </button>
             </div>
 
-            {error ? <div className="project-register-error" role="alert">{error}</div> : null}
-
             {registerType === 'scaff-tags' ? (
-                <section className="project-qr-label-register" aria-label="Pre-printed QR label register">
-                    <div className="project-qr-label-register-head">
-                        <div>
-                            <span className="project-qr-label-eyebrow">PRE-PRINTED LABELS</span>
-                            <h2>Scaff-Tag QR Labels</h2>
-                            <p>Permanent 63 × 100 mm labels ready to print and link from the ESS mobile app.</p>
-                        </div>
-                        <div className="project-qr-label-summary">
-                            <span><strong>{unassignedQrLabels.length}</strong> ready</span>
-                            <span><strong>{qrLabels.filter(label => label.status === 'assigned').length}</strong> linked</span>
-                            <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> retired</span>
-                            {unassignedQrLabels.length ? (
-                                <button type="button" disabled={printingQr} onClick={() => printQrLabels(unassignedQrLabels)}>
-                                    <Printer size={15} />
-                                    {printingQr ? 'Preparing…' : 'Print ready labels'}
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
-                    {qrLabels.length ? (
-                        <div className="project-qr-label-list">
-                            {qrLabels.map(label => (
-                                <article key={label.id} className={`project-qr-label-item is-${label.status}`}>
-                                    <div className="project-qr-label-icon"><QrCode size={21} /></div>
-                                    <div className="project-qr-label-identity">
-                                        <strong>{label.displayNumber}</strong>
-                                        <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
-                                    </div>
-                                    <span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span>
-                                    <button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}>
-                                        <Printer size={15} />
-                                    </button>
-                                </article>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="project-qr-label-empty">
-                            <QrCode size={30} />
-                            <div><strong>No QR labels generated yet</strong><span>Generate the first printable batch to begin.</span></div>
-                            <button type="button" onClick={() => setShowQrGenerator(true)}>Generate labels</button>
-                        </div>
-                    )}
-                </section>
+                <div className="project-register-view-tabs" role="tablist" aria-label="Scaff-Tag register views">
+                    <button type="button" role="tab" aria-selected={scaffRegisterView === 'scaff-tags'} className={scaffRegisterView === 'scaff-tags' ? 'active' : ''} onClick={() => { setScaffRegisterView('scaff-tags'); setQuery(''); }}>
+                        <FileText size={16} />
+                        <span>Scaff-Tags</span>
+                        <strong>{rows.filter(row => !row.deleted).length}</strong>
+                    </button>
+                    <button type="button" role="tab" aria-selected={scaffRegisterView === 'qr-labels'} className={scaffRegisterView === 'qr-labels' ? 'active' : ''} onClick={() => { setScaffRegisterView('qr-labels'); setQuery(''); }}>
+                        <QrCode size={16} />
+                        <span>QR Code Register</span>
+                        <strong>{qrLabels.length}</strong>
+                    </button>
+                </div>
             ) : null}
 
-            <section className={`project-data-register-table-wrap${loading ? ' is-loading' : ''}`}>
-                {loading ? (
-                    <div className="project-register-loading page-loading-brandmark">
-                        <LoadingBrandmark label={`Loading ${config.title.toLowerCase()}`} />
-                    </div>
-                ) : (
-                    <table className={`project-data-register-table type-${registerType}`}>
-                        <thead>
-                            <tr>
-                                {config.columns.map(column => (
-                                    <th key={column.key} className={column.key === 'builder' || column.key === 'project' ? 'has-filter-menu' : undefined}>
-                                        {column.key === 'builder' || column.key === 'project' ? (
-                                            <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
-                                                <button
-                                                    type="button"
-                                                    className="project-register-column-sort project-register-filter-trigger"
-                                                    onClick={event => {
-                                                        event.stopPropagation();
-                                                        setFilterMenu(current => current === column.key ? '' : column.key);
-                                                    }}
-                                                    aria-haspopup="menu"
-                                                    aria-expanded={filterMenu === column.key}
-                                                >
-                                                    <span>{column.label}</span>
-                                                    <ChevronDown aria-hidden="true" />
-                                                </button>
-                                                {filterMenu === column.key ? (
-                                                    <div className="project-register-filter-menu" role="menu" onClick={event => event.stopPropagation()}>
-                                                        <div className="project-register-filter-menu-actions">
-                                                            <button type="button" onClick={() => setAllFilterValues(column.key, true)}>Select all</button>
-                                                            <button type="button" onClick={() => setAllFilterValues(column.key, false)}>Clear</button>
-                                                        </div>
-                                                        <div className="project-register-filter-options">
-                                                            {filterOptions[column.key].map(value => (
-                                                                <label key={value}>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!excludedFilters[column.key].has(value)}
-                                                                        onChange={() => toggleFilterValue(column.key, value)}
-                                                                    />
-                                                                    <span title={value}>{value}</span>
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                        ) : (
-                                            <button type="button" className={`project-register-column-sort${sortField === column.key ? ' active' : ''}`} onClick={() => changeSort(column.key)}>
-                                                <span>{column.label}</span>
-                                                <ChevronDown className={sortField === column.key && sortDirection === 'asc' ? 'ascending' : ''} aria-hidden="true" />
-                                            </button>
-                                        )}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRows.map(row => (
-                                <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
+            {error ? <div className="project-register-error" role="alert">{error}</div> : null}
+
+            {showingQrRegister ? (
+                <section className={`project-data-register-table-wrap project-qr-register-table-wrap${loading ? ' is-loading' : ''}`}>
+                    {loading ? (
+                        <div className="project-register-loading page-loading-brandmark"><LoadingBrandmark label="Loading QR code register" /></div>
+                    ) : (
+                        <>
+                            <div className="project-qr-register-summary-bar">
+                                <span><strong>{unassignedQrLabels.length}</strong> Ready to link</span>
+                                <span><strong>{qrLabels.filter(label => label.status === 'assigned').length}</strong> Assigned</span>
+                                <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> Retired</span>
+                            </div>
+                            <table className="project-qr-register-table">
+                                <thead><tr><th>QR CODE</th><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
+                                <tbody>
+                                    {qrRegisterRows.map(({ label, assignedRow }) => (
+                                        <tr key={label.id} className={label.status === 'retired' ? 'is-retired' : undefined}>
+                                            <td><QrLabelPreview label={label} /></td>
+                                            <td><strong className="project-qr-register-label-number">{label.displayNumber}</strong></td>
+                                            <td>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</td>
+                                            <td>{assignedRow?.reference || 'Not assigned'}</td>
+                                            <td>{assignedRow?.builder || '-'}</td>
+                                            <td>{assignedRow?.project || '-'}</td>
+                                            <td>{formatDate(label.createdAt)}</td>
+                                            <td><span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span></td>
+                                            <td><button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}><Printer size={15} /></button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </>
+                    )}
+                    {!loading && qrRegisterRows.length === 0 ? (
+                        <div className="project-register-empty"><QrCode size={30} /><strong>{qrLabels.length ? 'No QR labels match your search.' : 'No QR labels have been generated yet.'}</strong>{!qrLabels.length ? <button type="button" onClick={() => setShowQrGenerator(true)}>Generate the first labels</button> : null}</div>
+                    ) : null}
+                </section>
+            ) : (
+                <section className={`project-data-register-table-wrap${loading ? ' is-loading' : ''}`}>
+                    {loading ? (
+                        <div className="project-register-loading page-loading-brandmark"><LoadingBrandmark label={`Loading ${config.title.toLowerCase()}`} /></div>
+                    ) : (
+                        <table className={`project-data-register-table type-${registerType}`}>
+                            <thead>
+                                <tr>
                                     {config.columns.map(column => (
-                                        <td key={column.key} title={String(row[column.key] || '')}>
-                                            {column.key === 'status'
-                                                ? <StatusBadge value={row.status} />
-                                                : column.key === config.linkKey && row.deleted
-                                                    ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
-                                                    : column.key === config.linkKey
-                                                    ? (
-                                                        <button
-                                                            type="button"
-                                                            className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`}
-                                                            disabled={Boolean(openingId)}
-                                                            onClick={() => openPdf(row)}
-                                                            title={`Open PDF for ${row[column.key] || row.reference}`}
-                                                        >
-                                                            {row[column.key] || '-'}
-                                                        </button>
-                                                    )
-                                                    : row[column.key] || '-'}
-                                        </td>
+                                        <th key={column.key} className={column.key === 'builder' || column.key === 'project' ? 'has-filter-menu' : undefined}>
+                                            {column.key === 'builder' || column.key === 'project' ? (
+                                                <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
+                                                    <button type="button" className="project-register-column-sort project-register-filter-trigger" onClick={event => { event.stopPropagation(); setFilterMenu(current => current === column.key ? '' : column.key); }} aria-haspopup="menu" aria-expanded={filterMenu === column.key}>
+                                                        <span>{column.label}</span><ChevronDown aria-hidden="true" />
+                                                    </button>
+                                                    {filterMenu === column.key ? (
+                                                        <div className="project-register-filter-menu" role="menu" onClick={event => event.stopPropagation()}>
+                                                            <div className="project-register-filter-menu-actions"><button type="button" onClick={() => setAllFilterValues(column.key, true)}>Select all</button><button type="button" onClick={() => setAllFilterValues(column.key, false)}>Clear</button></div>
+                                                            <div className="project-register-filter-options">{filterOptions[column.key].map(value => <label key={value}><input type="checkbox" checked={!excludedFilters[column.key].has(value)} onChange={() => toggleFilterValue(column.key, value)} /><span title={value}>{value}</span></label>)}</div>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            ) : (
+                                                <button type="button" className={`project-register-column-sort${sortField === column.key ? ' active' : ''}`} onClick={() => changeSort(column.key)}><span>{column.label}</span><ChevronDown className={sortField === column.key && sortDirection === 'asc' ? 'ascending' : ''} aria-hidden="true" /></button>
+                                            )}
+                                        </th>
                                     ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-                {!loading && filteredRows.length === 0 ? (
-                    <div className="project-register-empty">
-                        <FileText size={28} />
-                        <span>{query || excludedFilters.builder.size || excludedFilters.project.size || showDeleted ? `No ${config.noun} match the current filters.` : `No active ${config.noun} have been created yet.`}</span>
-                    </div>
-                ) : null}
-            </section>
+                            </thead>
+                            <tbody>
+                                {filteredRows.map(row => (
+                                    <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
+                                        {config.columns.map(column => (
+                                            <td key={column.key} title={String(row[column.key] || '')}>
+                                                {column.key === 'status' ? <StatusBadge value={row.status} />
+                                                    : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment${row.qrLabel === 'Unassigned' ? ' is-unassigned' : ''}`}><QrCode size={12} />{row.qrLabel}</span>
+                                                    : column.key === config.linkKey && row.deleted ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
+                                                    : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => openPdf(row)} title={`Open PDF for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
+                                                    : row[column.key] || '-'}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                    {!loading && filteredRows.length === 0 ? <div className="project-register-empty"><FileText size={28} /><span>{query || excludedFilters.builder.size || excludedFilters.project.size || showDeleted ? `No ${config.noun} match the current filters.` : `No active ${config.noun} have been created yet.`}</span></div> : null}
+                </section>
+            )}
 
             {showQrGenerator ? (
                 <div className="project-register-modal-backdrop" onMouseDown={() => !generatingQr && setShowQrGenerator(false)}>
                     <form className="project-register-modal" onSubmit={generateQrLabels} onMouseDown={event => event.stopPropagation()}>
-                        <div className="project-register-modal-title">
-                            <div><span>PRINT BATCH</span><h2>Generate QR Labels</h2></div>
-                            <button type="button" onClick={() => setShowQrGenerator(false)} aria-label="Close"><X size={19} /></button>
-                        </div>
+                        <div className="project-register-modal-title"><div><span>PRINT BATCH</span><h2>Generate QR Labels</h2></div><button type="button" onClick={() => setShowQrGenerator(false)} aria-label="Close"><X size={19} /></button></div>
                         <p>Each label receives a permanent number and an exact-size 63 × 100 mm PDF page.</p>
                         <label><span>Number of labels</span><input type="number" min="1" max="500" value={qrQuantity} onChange={event => setQrQuantity(event.target.value)} autoFocus /></label>
                         <label><span>Label branding</span><select value={qrCompany} onChange={event => setQrCompany(event.target.value)}><option value="ess">Erect Safe Scaffolding</option><option value="maloo">Maloo Access Group</option></select></label>
