@@ -10,6 +10,7 @@ import {
     shouldSkipMaterialEntry,
 } from './materialOrderSchema';
 
+const PUBLIC_APP_ORIGIN = import.meta.env.VITE_PUBLIC_APP_URL || 'https://essdesign.app';
 const SUPABASE_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_3oESnoF2yG5rix4SSQj8cQ_1aoavcCw';
 const PROFILE_IMAGES_BUCKET = 'profile-images';
@@ -4771,6 +4772,51 @@ async function signedDayLabourVariationUrl(path, expiresIn = 60 * 60 * 24 * 14) 
     return signedStorageUrl(path, expiresIn);
 }
 
+const mapScaffTagQrLabel = (row) => ({
+    id: row.id,
+    labelNumber: Number(row.label_number),
+    displayNumber: `ST-${String(row.label_number).padStart(5, '0')}`,
+    publicToken: row.public_token,
+    companyEntityId: row.company_entity_id === 'maloo' ? 'maloo' : 'ess',
+    status: row.status,
+    assignedBuilderId: row.assigned_builder_id || '',
+    assignedProjectId: row.assigned_project_id || '',
+    assignedFormId: row.assigned_form_id || '',
+    assignedAt: row.assigned_at || '',
+    retiredAt: row.retired_at || '',
+    retiredReason: row.retired_reason || '',
+    publicUrl: `${PUBLIC_APP_ORIGIN.replace(/\/$/, '')}/q/${encodeURIComponent(row.public_token)}`,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+});
+
+export const scaffTagQrLabelsAPI = {
+    list: async () => {
+        const rows = await readRestRows(
+            'ess_scaff_tag_qr_labels',
+            '?select=*&order=label_number.desc&limit=2000',
+            { force: true }
+        );
+        return rows.map(mapScaffTagQrLabel);
+    },
+
+    generate: async (quantity, companyEntityId = 'ess') => {
+        const response = await fetch(restEndpoint('rpc/generate_scaff_tag_qr_labels'), {
+            method: 'POST',
+            headers: supabaseRestHeaders(true),
+            body: JSON.stringify({
+                p_quantity: quantity,
+                p_company_entity_id: companyEntityId,
+            })
+        });
+        if (!response.ok) {
+            const details = await response.text();
+            throw new Error(details || 'Failed to generate Scaff-Tag QR labels');
+        }
+        return (await response.json()).map(mapScaffTagQrLabel);
+    }
+};
+
 export const dayLabourVariationsAPI = {
     listForms: async (builderId, projectId) => {
         const forms = await listSafetyFormRecords('day-labour-variations', builderId, projectId);
@@ -4847,13 +4893,28 @@ export const dayLabourVariationsAPI = {
 
 export const scaffTagsAPI = {
     listForms: async (builderId, projectId) => {
-        const forms = await listSafetyFormRecords('scaff-tags', builderId, projectId);
-        return forms.map(form => ({
-            ...form,
-            scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
-            jobLocation: form.jobLocation || form.projectLabel || '',
-            latestInspectionDate: form.latestInspectionDate || form.eventDate || ''
-        }));
+        const [forms, labels] = await Promise.all([
+            listSafetyFormRecords('scaff-tags', builderId, projectId),
+            scaffTagQrLabelsAPI.list(),
+        ]);
+        return forms.map(form => {
+            const label = labels.find(candidate =>
+                candidate.status === 'assigned' &&
+                candidate.assignedBuilderId === builderId &&
+                candidate.assignedProjectId === projectId &&
+                candidate.assignedFormId === form.id
+            );
+            return {
+                ...form,
+                scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
+                jobLocation: form.jobLocation || form.projectLabel || '',
+                latestInspectionDate: form.latestInspectionDate || form.eventDate || '',
+                qrLabelId: label?.id || '',
+                qrLabelNumber: label?.displayNumber || '',
+                qrLabelStatus: label?.status || 'unassigned',
+                qrTargetUrl: label?.publicUrl || '',
+            };
+        });
     },
 
     listAllForms: async ({ includeDeleted = false } = {}) => {

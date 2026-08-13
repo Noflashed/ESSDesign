@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { scaffTagsAPI } from '../services/api';
+import { scaffTagQrLabelsAPI, scaffTagsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
 
 export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [loading, setLoading] = useState(true);
@@ -8,16 +9,27 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [items, setItems] = useState([]);
     const [selectedForm, setSelectedForm] = useState(null);
     const [photoUrls, setPhotoUrls] = useState([]);
+    const [labels, setLabels] = useState([]);
+    const [showGenerator, setShowGenerator] = useState(false);
+    const [labelQuantity, setLabelQuantity] = useState('10');
+    const [labelCompany, setLabelCompany] = useState('ess');
+    const [generating, setGenerating] = useState(false);
+    const [printing, setPrinting] = useState(false);
 
     const loadForms = async () => {
         setLoading(true);
         setError('');
         try {
-            const next = await scaffTagsAPI.listForms(builder.id, project.id);
+            const [next, nextLabels] = await Promise.all([
+                scaffTagsAPI.listForms(builder.id, project.id),
+                scaffTagQrLabelsAPI.list(),
+            ]);
             setItems(next);
+            setLabels(nextLabels);
         } catch (err) {
             setError(err.message || 'Failed to load scaff-tags');
             setItems([]);
+            setLabels([]);
         } finally {
             setLoading(false);
         }
@@ -57,6 +69,10 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
 
     const openQrTarget = async (item) => {
         try {
+            if (item.qrTargetUrl) {
+                window.open(item.qrTargetUrl, '_blank', 'noopener,noreferrer');
+                return;
+            }
             const form = await scaffTagsAPI.getForm(builder.id, project.id, item.id);
             if (!form) {
                 throw new Error('Scaff-tag form not found');
@@ -81,6 +97,54 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
         }
     };
 
+    const generateLabels = async (event) => {
+        event.preventDefault();
+        const quantity = Number(labelQuantity);
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+            setError('Choose a whole number between 1 and 500.');
+            return;
+        }
+        setGenerating(true);
+        setError('');
+        try {
+            const created = await scaffTagQrLabelsAPI.generate(quantity, labelCompany);
+            const printBatch = [...created].sort((left, right) => left.labelNumber - right.labelNumber);
+            setLabels(current => [...created, ...current].sort((left, right) => right.labelNumber - left.labelNumber));
+            setShowGenerator(false);
+            setPrinting(true);
+            await downloadScaffTagLabelPdf(printBatch);
+        } catch (err) {
+            setError(err.message || 'Failed to generate QR labels');
+        } finally {
+            setGenerating(false);
+            setPrinting(false);
+        }
+    };
+
+    const printLabels = async (selectedLabels) => {
+        setPrinting(true);
+        setError('');
+        try {
+            await downloadScaffTagLabelPdf(selectedLabels);
+        } catch (err) {
+            setError(err.message || 'Failed to create the label PDF');
+        } finally {
+            setPrinting(false);
+        }
+    };
+
+    const assignedHere = (label) => label.status === 'assigned' &&
+        label.assignedBuilderId === builder.id && label.assignedProjectId === project.id;
+
+    const labelStatusText = (label) => {
+        if (label.status === 'unassigned') return 'Unassigned';
+        if (label.status === 'retired') return 'Retired';
+        if (assignedHere(label)) {
+            return items.find(item => item.id === label.assignedFormId)?.scaffoldNo || 'Assigned to this site';
+        }
+        return 'Assigned to another site';
+    };
+
     return (
         <div className="module-page">
             <div className="module-shell">
@@ -89,9 +153,59 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                         <h2>Scaff-Tags</h2>
                         <p>{builder.name} — {project.name}</p>
                     </div>
-                    <button className="module-secondary-btn" onClick={onBack}>Back</button>
+                    <div className="module-list-actions">
+                        <button className="module-primary-btn" onClick={() => setShowGenerator(true)}>Generate QR Labels</button>
+                        <button className="module-secondary-btn" onClick={onBack}>Back</button>
+                    </div>
                 </div>
                 {error ? <div className="module-error">{error}</div> : null}
+                <section className="module-card scaff-qr-register-card">
+                    <div className="scaff-qr-register-heading">
+                        <div>
+                            <div className="module-card-title">Pre-Printed QR Label Register</div>
+                            <div className="module-item-sub">Permanent 63 × 100 mm labels ready to print, assign, or retire.</div>
+                        </div>
+                        <div className="scaff-qr-register-actions">
+                            <div className="scaff-qr-summary">
+                                <span><strong>{labels.filter(label => label.status === 'unassigned').length}</strong> unassigned</span>
+                                <span><strong>{labels.filter(label => label.status === 'assigned').length}</strong> assigned</span>
+                                <span><strong>{labels.filter(label => label.status === 'retired').length}</strong> retired</span>
+                            </div>
+                            {labels.some(label => label.status === 'unassigned') ? (
+                                <button
+                                    className="module-secondary-btn compact"
+                                    disabled={printing}
+                                    onClick={() => printLabels(labels.filter(label => label.status === 'unassigned').reverse())}>
+                                    {printing ? 'Preparing PDF…' : 'Print All Unassigned'}
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                    {loading ? (
+                        <div className="page-loading-brandmark compact"><LoadingBrandmark label="Loading QR labels" /></div>
+                    ) : labels.length === 0 ? (
+                        <div className="module-empty-inline">No pre-printed QR labels exist yet. Generate the first batch to begin.</div>
+                    ) : (
+                        <div className="scaff-qr-label-grid">
+                            {labels.map(label => (
+                                <article key={label.id} className={`scaff-qr-label-row status-${label.status}`}>
+                                    <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
+                                    <div className="scaff-qr-label-copy">
+                                        <strong>{label.displayNumber}</strong>
+                                        <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
+                                    </div>
+                                    <span className={`scaff-qr-status status-${label.status}`}>{labelStatusText(label)}</span>
+                                    <button
+                                        className="module-secondary-btn compact"
+                                        disabled={printing}
+                                        onClick={() => printLabels([label])}>
+                                        Print
+                                    </button>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                </section>
                 <div className="module-grid module-grid-two">
                     <section className="module-card">
                         <div className="module-card-title">Shared Scaffold Inspection Forms</div>
@@ -111,7 +225,11 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                             <div className="module-list-actions">
                                                 <button className="module-secondary-btn" onClick={() => openForm(item)}>View</button>
                                                 <button className="module-secondary-btn" onClick={() => openPdf(item)}>PDF</button>
-                                                <button className="module-secondary-btn" onClick={() => openQrTarget(item)}>QR</button>
+                                                {item.qrLabelStatus === 'assigned' ? (
+                                                    <button className="module-secondary-btn" onClick={() => openQrTarget(item)}>{item.qrLabelNumber || 'QR'}</button>
+                                                ) : (
+                                                    <span className="scaff-qr-status status-unassigned">Awaiting QR link</span>
+                                                )}
                                                 <button className="module-danger-btn" onClick={() => deleteForm(item)}>Delete</button>
                                             </div>
                                         </div>
@@ -184,6 +302,45 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                     </section>
                 </div>
             </div>
+            {showGenerator ? (
+                <div className="module-modal-backdrop" onClick={() => !generating && setShowGenerator(false)}>
+                    <form className="module-modal compact scaff-qr-generator" onSubmit={generateLabels} onClick={event => event.stopPropagation()}>
+                        <div>
+                            <h3>Generate Scaff-Tag QR Labels</h3>
+                            <p>Each generated label receives a permanent identity and one exact-size 63 × 100 mm PDF page.</p>
+                        </div>
+                        <label className="module-field">
+                            <span>Number of labels</span>
+                            <input
+                                type="number"
+                                min="1"
+                                max="500"
+                                step="1"
+                                value={labelQuantity}
+                                onChange={event => setLabelQuantity(event.target.value)}
+                                autoFocus
+                            />
+                        </label>
+                        <label className="module-field">
+                            <span>Label branding</span>
+                            <select value={labelCompany} onChange={event => setLabelCompany(event.target.value)}>
+                                <option value="ess">Erect Safe Scaffolding</option>
+                                <option value="maloo">Maloo Access Group</option>
+                            </select>
+                        </label>
+                        <div className="scaff-qr-size-note">
+                            <strong>Print specification</strong>
+                            <span>63 mm wide × 100 mm high · one label per PDF page · print at 100% scale.</span>
+                        </div>
+                        <div className="module-list-actions scaff-qr-generator-actions">
+                            <button type="button" className="module-secondary-btn" disabled={generating} onClick={() => setShowGenerator(false)}>Cancel</button>
+                            <button type="submit" className="module-primary-btn" disabled={generating || printing}>
+                                {generating ? 'Generating…' : `Generate ${labelQuantity || 0} Labels`}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            ) : null}
         </div>
     );
 }

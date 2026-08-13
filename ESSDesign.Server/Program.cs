@@ -265,6 +265,81 @@ app.MapGet("/open/document/{documentId}", (string documentId, string? folder, st
 
     return Results.Content(html, "text/html; charset=utf-8");
 });
+app.MapGet("/q/{publicToken:guid}", async (Guid publicToken, HttpContext context, SupabaseService supabaseService, ILogger<Program> logger) =>
+{
+    try
+    {
+        var label = await supabaseService.GetScaffTagQrLabelByTokenAsync(publicToken);
+        if (label == null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Results.Content("Scaff-Tag QR label not found.", "text/plain; charset=utf-8");
+        }
+
+        if (string.Equals(label.Status, "assigned", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(label.AssignedBuilderId) &&
+            !string.IsNullOrWhiteSpace(label.AssignedProjectId) &&
+            !string.IsNullOrWhiteSpace(label.AssignedFormId))
+        {
+            var tagRef = Uri.EscapeDataString($"{label.AssignedBuilderId}:{label.AssignedProjectId}:{label.AssignedFormId}");
+            return Results.Redirect($"/t/{tagRef}", permanent: false);
+        }
+
+        var retired = string.Equals(label.Status, "retired", StringComparison.OrdinalIgnoreCase);
+        if (retired)
+            context.Response.StatusCode = StatusCodes.Status410Gone;
+
+        var safeNumber = System.Net.WebUtility.HtmlEncode(label.DisplayNumber);
+        var heading = retired ? "QR label retired" : "Ready to be assigned";
+        var message = retired
+            ? "This physical label has been replaced or retired and no longer opens a Scaff-Tag."
+            : "This pre-printed QR label has not yet been linked to a Scaff-Tag. Open the ESS mobile app and use Link QR Code after creating the form.";
+        var stateClass = retired ? "retired" : "ready";
+        var html = $$"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{safeNumber}} · ESS Scaff-Tag</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 22px; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; background: #f2f6f3; color: #111827; }
+    .card { width: min(430px, 100%); overflow: hidden; border: 2px solid #087a45; border-radius: 24px; background: #fff; box-shadow: 0 18px 55px rgba(15, 23, 42, .13); text-align: center; }
+    .brand { background: #087a45; color: #fff; padding: 17px; font-size: 13px; font-weight: 800; letter-spacing: 1.1px; }
+    .body { padding: 30px 26px 26px; }
+    .number { display: inline-flex; border-radius: 999px; background: #111827; color: #fff; padding: 10px 18px; font-size: 20px; font-weight: 800; letter-spacing: .6px; }
+    h1 { margin: 23px 0 10px; font-size: 24px; line-height: 1.15; }
+    p { margin: 0; color: #667085; font-size: 15px; line-height: 1.55; }
+    .state { display: inline-flex; margin-top: 24px; padding: 9px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+    .state.ready { color: #7a4a00; background: #fff4b8; }
+    .state.retired { color: #667085; background: #eef0f3; }
+    .banner { margin-top: 28px; padding: 11px; border-radius: 999px; background: #ffd326; color: #193324; font-size: 12px; font-weight: 900; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">ESS · LIVE DIGITAL SCAFF-TAG</div>
+    <div class="body">
+      <div class="number">{{safeNumber}}</div>
+      <h1>{{heading}}</h1>
+      <p>{{message}}</p>
+      <div class="state {{stateClass}}">{{(retired ? "Retired" : "Unassigned")}}</div>
+      <div class="banner">LIVE DIGITAL SCAFF-TAG</div>
+    </div>
+  </main>
+</body>
+</html>
+""";
+        return Results.Content(html, "text/html; charset=utf-8");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to resolve Scaff-Tag QR label {PublicToken}", publicToken);
+        return Results.Problem("Unable to resolve this Scaff-Tag QR label.", statusCode: 500);
+    }
+});
+
 app.MapGet("/t/{tagRef}", async (
     string tagRef,
     HttpContext context,

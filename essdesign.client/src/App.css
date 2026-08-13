@@ -4557,6 +4557,191 @@ body {
     gap: 8px;
 }
 
+.scaff-qr-register-card {
+    gap: 18px;
+}
+
+.scaff-qr-register-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.scaff-qr-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.scaff-qr-register-actions {
+    display: grid;
+    justify-items: end;
+    gap: 9px;
+}
+
+.scaff-qr-summary span,
+.scaff-qr-status {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.scaff-qr-summary span {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.scaff-qr-label-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 10px;
+    max-height: 360px;
+    overflow: auto;
+    padding-right: 3px;
+}
+
+.scaff-qr-label-row {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 11px;
+    min-height: 68px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-primary);
+    padding: 10px;
+}
+
+.scaff-qr-label-row.status-retired {
+    opacity: 0.68;
+}
+
+.scaff-qr-label-mark {
+    width: 44px;
+    height: 48px;
+    border: 2px solid #087a45;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    color: #087a45;
+    background: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: inset 0 -7px #ffd326;
+}
+
+.scaff-qr-label-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.scaff-qr-label-copy strong {
+    color: var(--text-primary);
+    font-size: 15px;
+    letter-spacing: 0.15px;
+}
+
+.scaff-qr-label-copy span {
+    color: var(--text-secondary);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scaff-qr-status.status-unassigned {
+    color: #8a5200;
+    background: rgba(255, 211, 38, 0.2);
+    border: 1px solid rgba(180, 121, 0, 0.24);
+}
+
+.scaff-qr-status.status-assigned {
+    color: #087a45;
+    background: rgba(8, 122, 69, 0.1);
+    border: 1px solid rgba(8, 122, 69, 0.2);
+}
+
+.scaff-qr-status.status-retired {
+    color: #667085;
+    background: rgba(102, 112, 133, 0.1);
+    border: 1px solid rgba(102, 112, 133, 0.2);
+}
+
+.scaff-qr-generator {
+    display: grid;
+    gap: 18px;
+}
+
+.scaff-qr-generator h3 {
+    margin: 0 0 6px;
+    color: var(--text-primary);
+    font-size: 20px;
+}
+
+.scaff-qr-generator p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.scaff-qr-size-note {
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(8, 122, 69, 0.2);
+    border-radius: 14px;
+    background: rgba(8, 122, 69, 0.07);
+    padding: 13px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.scaff-qr-size-note span {
+    color: var(--text-secondary);
+}
+
+.scaff-qr-generator-actions {
+    justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+    .scaff-qr-register-heading {
+        display: grid;
+    }
+
+    .scaff-qr-summary {
+        justify-content: flex-start;
+    }
+
+    .scaff-qr-register-actions {
+        justify-items: start;
+    }
+
+    .scaff-qr-label-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .scaff-qr-label-row {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+    }
+
+    .scaff-qr-label-row .module-secondary-btn {
+        grid-column: 2 / -1;
+        justify-self: start;
+    }
+}
+
 .module-modal-backdrop {
     position: fixed;
     inset: 0;

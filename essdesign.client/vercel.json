@@ -12,6 +12,14 @@
   ],
   "rewrites": [
     {
+      "source": "/q/:token",
+      "destination": "https://essdesign-production.up.railway.app/q/:token"
+    },
+    {
+      "source": "/t/:tagRef",
+      "destination": "https://essdesign-production.up.railway.app/t/:tagRef"
+    },
+    {
       "source": "/scaff-tag/:path*",
       "destination": "https://essdesign-production.up.railway.app/t/:path*"
     },

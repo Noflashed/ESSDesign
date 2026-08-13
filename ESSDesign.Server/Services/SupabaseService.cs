@@ -2652,6 +2652,15 @@ namespace ESSDesign.Server.Services
             return details?.PdfPath;
         }
 
+        public async Task<ScaffTagQrLabelRecord?> GetScaffTagQrLabelByTokenAsync(Guid publicToken)
+        {
+            var select = Uri.EscapeDataString(
+                "id,label_number,public_token,company_entity_id,status,assigned_builder_id,assigned_project_id,assigned_form_id,assigned_at,retired_at,retired_reason,created_at,updated_at");
+            var rows = await GetRestRowsAsync<ScaffTagQrLabelRecord>(
+                $"ess_scaff_tag_qr_labels?select={select}&public_token=eq.{publicToken:D}&limit=1");
+            return rows.FirstOrDefault();
+        }
+
         public async Task<ScaffTagFormDetails?> GetScaffTagFormDetailsAsync(string builderId, string projectId, string formId)
         {
             var rows = await GetRestRowsAsync<SafetyFormRow>(
@@ -4308,4 +4317,36 @@ namespace ESSDesign.Server.Services
         [JsonPropertyName("y")]
         public double Y { get; set; }
     }
+
+    public class ScaffTagQrLabelRecord
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public Guid Id { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("label_number")]
+        public long LabelNumber { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("public_token")]
+        public Guid PublicToken { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("company_entity_id")]
+        public string CompanyEntityId { get; set; } = "ess";
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
+        public string Status { get; set; } = "unassigned";
+        [System.Text.Json.Serialization.JsonPropertyName("assigned_builder_id")]
+        public string? AssignedBuilderId { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("assigned_project_id")]
+        public string? AssignedProjectId { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("assigned_form_id")]
+        public string? AssignedFormId { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("assigned_at")]
+        public DateTime? AssignedAt { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("retired_at")]
+        public DateTime? RetiredAt { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("retired_reason")]
+        public string? RetiredReason { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("created_at")]
+        public DateTime CreatedAt { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("updated_at")]
+        public DateTime UpdatedAt { get; set; }
+        public string DisplayNumber => $"ST-{LabelNumber:00000}";
+    }
+
 }
