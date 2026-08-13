@@ -3,13 +3,10 @@ import { jsPDF } from 'jspdf';
 
 const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
-const CONTENT_LEFT_MM = 3.3;
-const CONTENT_WIDTH_MM = 58.2;
 const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
 
 const ESS_GREEN = [12, 127, 75];
 const ESS_YELLOW = [255, 202, 24];
-const BORDER_GREEN_GREY = [218, 228, 222];
 const DEEP_GREEN = [49, 68, 58];
 
 const imageDataCache = new Map();
@@ -91,40 +88,18 @@ function drawCenteredSpacedText(pdf, text, centerX, y, charSpace) {
     pdf.setCharSpace(0);
 }
 
-function drawLabelFrame(pdf) {
+function drawLabelBase(pdf) {
     pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, LABEL_WIDTH_MM, LABEL_HEIGHT_MM, 'F');
 
-    // Keep every colour layer inside the same rounded silhouette as the final
-    // border so square fill corners cannot protrude at the label edges.
-    pdf.saveGraphicsState();
-    pdf.roundedRect(1.5, 1.5, 60, 97, 2.7, 2.7, null);
-    pdf.clip();
-    pdf.discardPath();
-
-    // Industrial side rail. The light end caps mirror the header and keep the
-    // darker section clear of the QR's required white quiet zone.
+    // Two clean brand bands replace the former decorative frame and side rail.
     pdf.setFillColor(...ESS_GREEN);
-    pdf.rect(1.5, 1.5, 2, 97, 'F');
+    pdf.rect(0, 0, LABEL_WIDTH_MM, 1.8, 'F');
     pdf.setFillColor(...ESS_YELLOW);
-    pdf.rect(1.5, 1.5, 2, 17.2, 'F');
-    pdf.rect(1.5, 81.1, 2, 17.4, 'F');
-
-    pdf.setFillColor(...ESS_YELLOW);
-    pdf.rect(CONTENT_LEFT_MM, 1.5, CONTENT_WIDTH_MM, 5.4, 'F');
-    pdf.setTextColor(...DEEP_GREEN);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(4.6);
-    drawCenteredSpacedText(pdf, 'PRE-PRINTED DIGITAL LABEL', LABEL_CENTER_X_MM, 4.9, 0.25);
+    pdf.rect(0, 1.8, LABEL_WIDTH_MM, 0.9, 'F');
 
     pdf.setFillColor(...ESS_GREEN);
-    pdf.rect(CONTENT_LEFT_MM, 87.1, CONTENT_WIDTH_MM, 11.4, 'F');
-
-    pdf.restoreGraphicsState();
-
-    pdf.setDrawColor(...ESS_GREEN);
-    pdf.setLineWidth(0.8);
-    pdf.roundedRect(1.5, 1.5, 60, 97, 2.7, 2.7, 'S');
+    pdf.rect(0, 90, LABEL_WIDTH_MM, 10, 'F');
 }
 
 async function drawLabel(pdf, label) {
@@ -137,48 +112,44 @@ async function drawLabel(pdf, label) {
         color: { dark: '#000000', light: '#FFFFFF' },
     });
 
-    drawLabelFrame(pdf);
+    drawLabelBase(pdf);
 
     drawCenteredImage(
         pdf,
         logo,
         LABEL_CENTER_X_MM,
-        8.4,
-        company.logoMaxWidth,
-        company.logoMaxHeight
+        3.6,
+        Math.max(company.logoMaxWidth, 39),
+        14.4
     );
 
     pdf.setTextColor(...ESS_GREEN);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(4.6);
-    drawCenteredSpacedText(pdf, company.name, LABEL_CENTER_X_MM, 24.6, 0.24);
+    pdf.setFontSize(4.3);
+    drawCenteredSpacedText(pdf, company.name, LABEL_CENTER_X_MM, 20.8, 0.2);
 
-    // The QR itself is deliberately untouched. A 4.2 mm physical quiet zone
-    // surrounds the code to improve scanning when the label is on a curved tube.
+    // The unobstructed symbol now uses 53 mm of the 63 mm label width. The
+    // surrounding 4 mm white quiet zone is part of a 61 mm scan field.
     pdf.setFillColor(255, 255, 255);
-    pdf.setDrawColor(...BORDER_GREEN_GREY);
-    pdf.setLineWidth(0.2);
-    pdf.roundedRect(7.7, 33, 47.6, 47.6, 1, 1, 'FD');
-    pdf.addImage(qrData, 'PNG', 11.9, 37.2, 39.2, 39.2, undefined, 'FAST');
+    pdf.rect(1, 24.5, 61, 61, 'F');
+    pdf.addImage(qrData, 'PNG', 5, 28.5, 53, 53, undefined, 'FAST');
 
     pdf.setFillColor(...ESS_YELLOW);
-    pdf.roundedRect(51.2, 84.8, 5.8, 1.2, 0.6, 0.6, 'F');
+    pdf.rect(0, 87.5, LABEL_WIDTH_MM, 1.2, 'F');
 
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(6.1);
-    pdf.setCharSpace(0.2);
-    pdf.text('DIGITAL SCAFF-TAG', 6.4, 93.7);
+    pdf.setFontSize(5.6);
+    pdf.setCharSpace(0.15);
+    pdf.text('DIGITAL SCAFF-TAG', 3.2, 96.2);
     pdf.setCharSpace(0);
 
     pdf.setFillColor(248, 248, 248);
-    pdf.setDrawColor(...ESS_GREEN);
-    pdf.setLineWidth(0.18);
-    pdf.roundedRect(44.2, 90.1, 14.1, 5.2, 2.6, 2.6, 'FD');
+    pdf.roundedRect(45.2, 92.2, 15.6, 5.7, 2.85, 2.85, 'F');
     pdf.setTextColor(...DEEP_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.8);
-    drawCenteredSpacedText(pdf, label.displayNumber, 51.25, 93.35, 0.15);
+    drawCenteredSpacedText(pdf, label.displayNumber, 53, 95.7, 0.15);
 }
 
 export async function createScaffTagLabelPdf(labels) {
