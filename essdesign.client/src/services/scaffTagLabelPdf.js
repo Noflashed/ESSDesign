@@ -5,17 +5,16 @@ const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
 const CONTENT_LEFT_MM = 3.3;
 const CONTENT_WIDTH_MM = 58.2;
-const CONTENT_CENTER_X_MM = CONTENT_LEFT_MM + (CONTENT_WIDTH_MM / 2);
+const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
 
-const DARK_GREY = [102, 102, 102];
-const MID_GREY = [126, 126, 126];
-const LIGHT_GREY = [196, 196, 196];
-const BORDER_GREY = [218, 218, 218];
-const TEXT_GREY = [61, 61, 61];
+const ESS_GREEN = [12, 127, 75];
+const ESS_YELLOW = [255, 202, 24];
+const BORDER_GREEN_GREY = [218, 228, 222];
+const DEEP_GREEN = [49, 68, 58];
 
 const imageDataCache = new Map();
 
-async function loadGrayscaleLogo(url) {
+async function loadLogo(url) {
     if (imageDataCache.has(url)) return imageDataCache.get(url);
 
     const promise = fetch(url)
@@ -34,19 +33,6 @@ async function loadGrayscaleLogo(url) {
                     const context = canvas.getContext('2d', { willReadFrequently: true });
                     context.drawImage(image, 0, 0);
 
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    const pixels = imageData.data;
-                    for (let index = 0; index < pixels.length; index += 4) {
-                        const luminance = Math.round(
-                            (pixels[index] * 0.299) +
-                            (pixels[index + 1] * 0.587) +
-                            (pixels[index + 2] * 0.114)
-                        );
-                        pixels[index] = luminance;
-                        pixels[index + 1] = luminance;
-                        pixels[index + 2] = luminance;
-                    }
-                    context.putImageData(imageData, 0, 0);
                     resolve({
                         dataUrl: canvas.toDataURL('image/png'),
                         width: image.naturalWidth,
@@ -101,32 +87,32 @@ function drawLabelFrame(pdf) {
 
     // Industrial side rail. The light end caps mirror the header and keep the
     // darker section clear of the QR's required white quiet zone.
-    pdf.setFillColor(...DARK_GREY);
+    pdf.setFillColor(...ESS_GREEN);
     pdf.rect(1.5, 1.5, 2, 97, 'F');
-    pdf.setFillColor(...LIGHT_GREY);
+    pdf.setFillColor(...ESS_YELLOW);
     pdf.rect(1.5, 1.5, 2, 17.2, 'F');
     pdf.rect(1.5, 81.1, 2, 17.4, 'F');
 
-    pdf.setFillColor(...LIGHT_GREY);
+    pdf.setFillColor(...ESS_YELLOW);
     pdf.rect(CONTENT_LEFT_MM, 1.5, CONTENT_WIDTH_MM, 5.4, 'F');
-    pdf.setTextColor(28, 28, 28);
+    pdf.setTextColor(...DEEP_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.6);
     pdf.setCharSpace(0.25);
-    pdf.text('PRE-PRINTED DIGITAL LABEL', CONTENT_CENTER_X_MM, 4.9, { align: 'center' });
+    pdf.text('PRE-PRINTED DIGITAL LABEL', LABEL_CENTER_X_MM, 4.9, { align: 'center' });
     pdf.setCharSpace(0);
 
-    pdf.setFillColor(...DARK_GREY);
+    pdf.setFillColor(...ESS_GREEN);
     pdf.rect(CONTENT_LEFT_MM, 87.1, CONTENT_WIDTH_MM, 11.4, 'F');
 
-    pdf.setDrawColor(...DARK_GREY);
+    pdf.setDrawColor(...ESS_GREEN);
     pdf.setLineWidth(0.8);
     pdf.roundedRect(1.5, 1.5, 60, 97, 2.7, 2.7, 'S');
 }
 
 async function drawLabel(pdf, label) {
     const company = companyDetails(label.companyEntityId);
-    const logo = await loadGrayscaleLogo(company.logoUrl);
+    const logo = await loadLogo(company.logoUrl);
     const qrData = await QRCode.toDataURL(label.publicUrl, {
         errorCorrectionLevel: 'H',
         margin: 0,
@@ -139,28 +125,28 @@ async function drawLabel(pdf, label) {
     drawCenteredImage(
         pdf,
         logo,
-        CONTENT_CENTER_X_MM,
+        LABEL_CENTER_X_MM,
         8.4,
         company.logoMaxWidth,
         company.logoMaxHeight
     );
 
-    pdf.setTextColor(...TEXT_GREY);
+    pdf.setTextColor(...ESS_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.6);
     pdf.setCharSpace(0.24);
-    pdf.text(company.name, CONTENT_CENTER_X_MM, 24.6, { align: 'center' });
+    pdf.text(company.name, LABEL_CENTER_X_MM, 24.6, { align: 'center' });
     pdf.setCharSpace(0);
 
     // The QR itself is deliberately untouched. A 4.2 mm physical quiet zone
     // surrounds the code to improve scanning when the label is on a curved tube.
     pdf.setFillColor(255, 255, 255);
-    pdf.setDrawColor(...BORDER_GREY);
+    pdf.setDrawColor(...BORDER_GREEN_GREY);
     pdf.setLineWidth(0.2);
-    pdf.roundedRect(8.6, 33, 47.6, 47.6, 1, 1, 'FD');
-    pdf.addImage(qrData, 'PNG', 12.8, 37.2, 39.2, 39.2, undefined, 'FAST');
+    pdf.roundedRect(7.7, 33, 47.6, 47.6, 1, 1, 'FD');
+    pdf.addImage(qrData, 'PNG', 11.9, 37.2, 39.2, 39.2, undefined, 'FAST');
 
-    pdf.setFillColor(...LIGHT_GREY);
+    pdf.setFillColor(...ESS_YELLOW);
     pdf.roundedRect(51.2, 84.8, 5.8, 1.2, 0.6, 0.6, 'F');
 
     pdf.setTextColor(255, 255, 255);
@@ -171,10 +157,10 @@ async function drawLabel(pdf, label) {
     pdf.setCharSpace(0);
 
     pdf.setFillColor(248, 248, 248);
-    pdf.setDrawColor(...MID_GREY);
+    pdf.setDrawColor(...ESS_GREEN);
     pdf.setLineWidth(0.18);
     pdf.roundedRect(44.2, 90.1, 14.1, 5.2, 2.6, 2.6, 'FD');
-    pdf.setTextColor(...TEXT_GREY);
+    pdf.setTextColor(...DEEP_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.8);
     pdf.setCharSpace(0.15);
