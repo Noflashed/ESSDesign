@@ -81,9 +81,26 @@ function drawCenteredImage(pdf, image, centerX, top, maxWidth, maxHeight) {
     pdf.addImage(image.dataUrl, 'PNG', left, y, width, height, undefined, 'FAST');
 }
 
+function drawCenteredSpacedText(pdf, text, centerX, y, charSpace) {
+    // jsPDF's built-in center alignment measures the glyphs but does not add
+    // character spacing to that width. Offset by half of the added spacing so
+    // the rendered text, rather than only its unspaced glyph box, is centred.
+    const spacingWidth = charSpace * Math.max(0, text.length - 1);
+    pdf.setCharSpace(charSpace);
+    pdf.text(text, centerX - (spacingWidth / 2), y, { align: 'center' });
+    pdf.setCharSpace(0);
+}
+
 function drawLabelFrame(pdf) {
     pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, LABEL_WIDTH_MM, LABEL_HEIGHT_MM, 'F');
+
+    // Keep every colour layer inside the same rounded silhouette as the final
+    // border so square fill corners cannot protrude at the label edges.
+    pdf.saveGraphicsState();
+    pdf.roundedRect(1.5, 1.5, 60, 97, 2.7, 2.7, null);
+    pdf.clip();
+    pdf.discardPath();
 
     // Industrial side rail. The light end caps mirror the header and keep the
     // darker section clear of the QR's required white quiet zone.
@@ -98,12 +115,12 @@ function drawLabelFrame(pdf) {
     pdf.setTextColor(...DEEP_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.6);
-    pdf.setCharSpace(0.25);
-    pdf.text('PRE-PRINTED DIGITAL LABEL', LABEL_CENTER_X_MM, 4.9, { align: 'center' });
-    pdf.setCharSpace(0);
+    drawCenteredSpacedText(pdf, 'PRE-PRINTED DIGITAL LABEL', LABEL_CENTER_X_MM, 4.9, 0.25);
 
     pdf.setFillColor(...ESS_GREEN);
     pdf.rect(CONTENT_LEFT_MM, 87.1, CONTENT_WIDTH_MM, 11.4, 'F');
+
+    pdf.restoreGraphicsState();
 
     pdf.setDrawColor(...ESS_GREEN);
     pdf.setLineWidth(0.8);
@@ -134,9 +151,7 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...ESS_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.6);
-    pdf.setCharSpace(0.24);
-    pdf.text(company.name, LABEL_CENTER_X_MM, 24.6, { align: 'center' });
-    pdf.setCharSpace(0);
+    drawCenteredSpacedText(pdf, company.name, LABEL_CENTER_X_MM, 24.6, 0.24);
 
     // The QR itself is deliberately untouched. A 4.2 mm physical quiet zone
     // surrounds the code to improve scanning when the label is on a curved tube.
@@ -163,9 +178,7 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...DEEP_GREEN);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(4.8);
-    pdf.setCharSpace(0.15);
-    pdf.text(label.displayNumber, 51.25, 93.35, { align: 'center' });
-    pdf.setCharSpace(0);
+    drawCenteredSpacedText(pdf, label.displayNumber, 51.25, 93.35, 0.15);
 }
 
 export async function createScaffTagLabelPdf(labels) {
