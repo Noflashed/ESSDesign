@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, FileText, Search } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
+    scaffTagQrLabelsAPI,
     scaffTagsAPI,
     safetyProjectsAPI
 } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
 import './ProjectDataRegisterPage.css';
 
 const REGISTER_CONFIG = {
@@ -57,6 +59,7 @@ const REGISTER_CONFIG = {
             { key: 'location', label: 'LOCATION' },
             { key: 'inspectionDate', label: 'LAST INSPECTION' },
             { key: 'representative', label: 'INSPECTED BY' },
+            { key: 'qrLabel', label: 'QR LABEL' },
             { key: 'status', label: 'STATUS' }
         ]
     }
@@ -125,7 +128,7 @@ const resolveProjectNames = (form, projectLookup) => {
     };
 };
 
-const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
+const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map(form => {
     const names = resolveProjectNames(form, projectLookup);
     const deletion = {
         deleted: Boolean(form.isDeleted),
@@ -164,6 +167,12 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
     }
     const latestInspection = latestScaffTagInspection(form);
     const latestInspectionDate = form.latestInspectionDate || latestInspection?.date || form.updatedAt;
+    const qrLabel = qrLabels.find(label => (
+        label.status === 'assigned'
+        && label.assignedBuilderId === form.builderId
+        && label.assignedProjectId === form.projectId
+        && label.assignedFormId === form.id
+    ));
     return {
         id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
         builderId: form.builderId,
@@ -176,6 +185,7 @@ const mapRows = (registerType, forms, projectLookup) => forms.map(form => {
         inspectionDate: formatDate(latestInspectionDate, true),
         inspectionDateSort: parseDate(latestInspectionDate)?.getTime() || 0,
         representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
+        qrLabel: qrLabel?.displayNumber || 'Unassigned',
         status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
     };
 });
@@ -205,8 +215,14 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [sortField, setSortField] = useState(config.defaultSort);
     const [sortDirection, setSortDirection] = useState('desc');
     const [openingId, setOpeningId] = useState('');
-    const [showDeleted, setShowDeleted] = useState(true);
+    const [showDeleted, setShowDeleted] = useState(registerType !== 'scaff-tags');
     const [filterMenu, setFilterMenu] = useState('');
+    const [qrLabels, setQrLabels] = useState([]);
+    const [showQrGenerator, setShowQrGenerator] = useState(false);
+    const [qrQuantity, setQrQuantity] = useState('10');
+    const [qrCompany, setQrCompany] = useState('ess');
+    const [generatingQr, setGeneratingQr] = useState(false);
+    const [printingQr, setPrintingQr] = useState(false);
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
         project: new Set()
@@ -218,10 +234,12 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setError('');
         Promise.all([
             safetyProjectsAPI.getBuilders({ includeArchived: true, force: true }),
-            config.api.listAllForms({ includeDeleted: true })
-        ]).then(([builders, forms]) => {
+            config.api.listAllForms({ includeDeleted: true }),
+            registerType === 'scaff-tags' ? scaffTagQrLabelsAPI.list() : Promise.resolve([])
+        ]).then(([builders, forms, labels]) => {
             if (!active) return;
-            setRows(mapRows(registerType, forms, buildProjectLookup(builders)));
+            setQrLabels(labels);
+            setRows(mapRows(registerType, forms, buildProjectLookup(builders), labels));
         }).catch(loadError => {
             if (!active) return;
             setRows([]);
@@ -238,7 +256,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setSortField(config.defaultSort);
         setSortDirection('desc');
         setQuery('');
-        setShowDeleted(true);
+        setShowDeleted(registerType !== 'scaff-tags');
         setFilterMenu('');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
@@ -339,6 +357,53 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         }
     };
 
+    const printQrLabels = async labels => {
+        if (!labels.length || printingQr) return;
+        setPrintingQr(true);
+        setError('');
+        try {
+            await downloadScaffTagLabelPdf([...labels].sort((left, right) => left.labelNumber - right.labelNumber));
+        } catch (printError) {
+            setError(printError?.message || 'Could not create the QR label PDF.');
+        } finally {
+            setPrintingQr(false);
+        }
+    };
+
+    const generateQrLabels = async event => {
+        event.preventDefault();
+        const quantity = Number(qrQuantity);
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+            setError('Choose a whole number between 1 and 500.');
+            return;
+        }
+        setGeneratingQr(true);
+        setError('');
+        try {
+            const created = await scaffTagQrLabelsAPI.generate(quantity, qrCompany);
+            setQrLabels(current => [...created, ...current].sort((left, right) => right.labelNumber - left.labelNumber));
+            setShowQrGenerator(false);
+            await printQrLabels(created);
+        } catch (generateError) {
+            setError(generateError?.message || 'Could not generate the QR labels.');
+        } finally {
+            setGeneratingQr(false);
+        }
+    };
+
+    const qrStatusText = label => {
+        if (label.status === 'unassigned') return 'Ready to link';
+        if (label.status === 'retired') return 'Retired';
+        const assignedRow = rows.find(row => (
+            row.builderId === label.assignedBuilderId
+            && row.projectId === label.assignedProjectId
+            && row.form?.id === label.assignedFormId
+        ));
+        return assignedRow ? `Linked to ${assignedRow.reference}` : 'Assigned';
+    };
+
+    const unassignedQrLabels = qrLabels.filter(label => label.status === 'unassigned');
+
     return (
         <main className="project-data-register-page">
             <div className="project-data-register-toolbar">
@@ -347,6 +412,12 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                     <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={config.searchPlaceholder} />
                 </label>
                 <span className="project-register-toolbar-spacer" />
+                {registerType === 'scaff-tags' ? (
+                    <button type="button" className="project-register-primary-button" onClick={() => setShowQrGenerator(true)}>
+                        <QrCode size={17} />
+                        <span>Generate QR labels</span>
+                    </button>
+                ) : null}
                 <label className="project-register-deleted-filter">
                     <input type="checkbox" checked={showDeleted} onChange={event => setShowDeleted(event.target.checked)} />
                     <span>Show deleted</span>
@@ -357,6 +428,52 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
             </div>
 
             {error ? <div className="project-register-error" role="alert">{error}</div> : null}
+
+            {registerType === 'scaff-tags' ? (
+                <section className="project-qr-label-register" aria-label="Pre-printed QR label register">
+                    <div className="project-qr-label-register-head">
+                        <div>
+                            <span className="project-qr-label-eyebrow">PRE-PRINTED LABELS</span>
+                            <h2>Scaff-Tag QR Labels</h2>
+                            <p>Permanent 63 × 100 mm labels ready to print and link from the ESS mobile app.</p>
+                        </div>
+                        <div className="project-qr-label-summary">
+                            <span><strong>{unassignedQrLabels.length}</strong> ready</span>
+                            <span><strong>{qrLabels.filter(label => label.status === 'assigned').length}</strong> linked</span>
+                            <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> retired</span>
+                            {unassignedQrLabels.length ? (
+                                <button type="button" disabled={printingQr} onClick={() => printQrLabels(unassignedQrLabels)}>
+                                    <Printer size={15} />
+                                    {printingQr ? 'Preparing…' : 'Print ready labels'}
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+                    {qrLabels.length ? (
+                        <div className="project-qr-label-list">
+                            {qrLabels.map(label => (
+                                <article key={label.id} className={`project-qr-label-item is-${label.status}`}>
+                                    <div className="project-qr-label-icon"><QrCode size={21} /></div>
+                                    <div className="project-qr-label-identity">
+                                        <strong>{label.displayNumber}</strong>
+                                        <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
+                                    </div>
+                                    <span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span>
+                                    <button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}>
+                                        <Printer size={15} />
+                                    </button>
+                                </article>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="project-qr-label-empty">
+                            <QrCode size={30} />
+                            <div><strong>No QR labels generated yet</strong><span>Generate the first printable batch to begin.</span></div>
+                            <button type="button" onClick={() => setShowQrGenerator(true)}>Generate labels</button>
+                        </div>
+                    )}
+                </section>
+            ) : null}
 
             <section className={`project-data-register-table-wrap${loading ? ' is-loading' : ''}`}>
                 {loading ? (
@@ -451,6 +568,22 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                     </div>
                 ) : null}
             </section>
+
+            {showQrGenerator ? (
+                <div className="project-register-modal-backdrop" onMouseDown={() => !generatingQr && setShowQrGenerator(false)}>
+                    <form className="project-register-modal" onSubmit={generateQrLabels} onMouseDown={event => event.stopPropagation()}>
+                        <div className="project-register-modal-title">
+                            <div><span>PRINT BATCH</span><h2>Generate QR Labels</h2></div>
+                            <button type="button" onClick={() => setShowQrGenerator(false)} aria-label="Close"><X size={19} /></button>
+                        </div>
+                        <p>Each label receives a permanent number and an exact-size 63 × 100 mm PDF page.</p>
+                        <label><span>Number of labels</span><input type="number" min="1" max="500" value={qrQuantity} onChange={event => setQrQuantity(event.target.value)} autoFocus /></label>
+                        <label><span>Label branding</span><select value={qrCompany} onChange={event => setQrCompany(event.target.value)}><option value="ess">Erect Safe Scaffolding</option><option value="maloo">Maloo Access Group</option></select></label>
+                        <div className="project-register-modal-note"><strong>Print at 100% scale</strong><span>63 mm wide × 100 mm high · one label per PDF page.</span></div>
+                        <div className="project-register-modal-actions"><button type="button" onClick={() => setShowQrGenerator(false)} disabled={generatingQr}>Cancel</button><button type="submit" className="primary" disabled={generatingQr}>{generatingQr ? 'Generating…' : `Generate ${qrQuantity || 0} labels`}</button></div>
+                    </form>
+                </div>
+            ) : null}
         </main>
     );
 }
