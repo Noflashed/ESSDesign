@@ -4777,6 +4777,7 @@ const mapScaffTagQrLabel = (row) => ({
     labelNumber: Number(row.label_number),
     displayNumber: `ST-${String(row.label_number).padStart(5, '0')}`,
     publicToken: row.public_token,
+    shortCode: row.short_code || '',
     companyEntityId: row.company_entity_id === 'maloo' ? 'maloo' : 'ess',
     status: row.status,
     assignedBuilderId: row.assigned_builder_id || '',
@@ -4785,7 +4786,7 @@ const mapScaffTagQrLabel = (row) => ({
     assignedAt: row.assigned_at || '',
     retiredAt: row.retired_at || '',
     retiredReason: row.retired_reason || '',
-    publicUrl: `${PUBLIC_APP_ORIGIN.replace(/\/$/, '')}/q/${encodeURIComponent(row.public_token)}`,
+    publicUrl: `${PUBLIC_APP_ORIGIN.replace(/\/$/, '')}/q/${encodeURIComponent(row.short_code || row.public_token)}`,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
 });

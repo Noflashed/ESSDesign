@@ -106,9 +106,11 @@ async function drawLabel(pdf, label) {
     const company = companyDetails(label.companyEntityId);
     const logo = await loadLogo(company.logoUrl);
     const qrData = await QRCode.toDataURL(label.publicUrl, {
-        errorCorrectionLevel: 'H',
+        errorCorrectionLevel: 'Q',
         margin: 0,
-        width: 1000,
+        // Short label URLs produce a 33-module Version 4 symbol. Rendering at
+        // an exact multiple of 33 keeps every printed module equally sized.
+        width: 990,
         color: { dark: '#000000', light: '#FFFFFF' },
     });
 
@@ -128,11 +130,12 @@ async function drawLabel(pdf, label) {
     pdf.setFontSize(4.3);
     drawCenteredSpacedText(pdf, company.name, LABEL_CENTER_X_MM, 20.8, 0.2);
 
-    // The unobstructed symbol now uses 53 mm of the 63 mm label width. The
-    // surrounding 4 mm white quiet zone is part of a 61 mm scan field.
+    // A 28 mm symbol spans about 66 degrees of a 48.8 mm scaffold tube rather
+    // than the 124 degrees covered by the former 53 mm symbol. This keeps all
+    // three finder patterns visible while retaining a four-module quiet zone.
     pdf.setFillColor(255, 255, 255);
-    pdf.rect(1, 24.5, 61, 61, 'F');
-    pdf.addImage(qrData, 'PNG', 5, 28.5, 53, 53, undefined, 'FAST');
+    pdf.rect(14, 32.5, 35, 35, 'F');
+    pdf.addImage(qrData, 'PNG', 17.5, 36, 28, 28, undefined, 'FAST');
 
     pdf.setFillColor(...ESS_YELLOW);
     pdf.rect(0, 87.5, LABEL_WIDTH_MM, 1.2, 'F');

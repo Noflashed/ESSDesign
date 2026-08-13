@@ -2652,12 +2652,15 @@ namespace ESSDesign.Server.Services
             return details?.PdfPath;
         }
 
-        public async Task<ScaffTagQrLabelRecord?> GetScaffTagQrLabelByTokenAsync(Guid publicToken)
+        public async Task<ScaffTagQrLabelRecord?> GetScaffTagQrLabelByCodeAsync(string code)
         {
             var select = Uri.EscapeDataString(
-                "id,label_number,public_token,company_entity_id,status,assigned_builder_id,assigned_project_id,assigned_form_id,assigned_at,retired_at,retired_reason,created_at,updated_at");
+                "id,label_number,public_token,short_code,company_entity_id,status,assigned_builder_id,assigned_project_id,assigned_form_id,assigned_at,retired_at,retired_reason,created_at,updated_at");
+            var filter = Guid.TryParse(code, out var publicToken)
+                ? $"public_token=eq.{publicToken:D}"
+                : $"short_code=eq.{Uri.EscapeDataString(code.Trim())}";
             var rows = await GetRestRowsAsync<ScaffTagQrLabelRecord>(
-                $"ess_scaff_tag_qr_labels?select={select}&public_token=eq.{publicToken:D}&limit=1");
+                $"ess_scaff_tag_qr_labels?select={select}&{filter}&limit=1");
             return rows.FirstOrDefault();
         }
 
@@ -4326,6 +4329,8 @@ namespace ESSDesign.Server.Services
         public long LabelNumber { get; set; }
         [System.Text.Json.Serialization.JsonPropertyName("public_token")]
         public Guid PublicToken { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("short_code")]
+        public string ShortCode { get; set; } = string.Empty;
         [System.Text.Json.Serialization.JsonPropertyName("company_entity_id")]
         public string CompanyEntityId { get; set; } = "ess";
         [System.Text.Json.Serialization.JsonPropertyName("status")]

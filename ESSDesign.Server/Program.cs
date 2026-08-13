@@ -265,11 +265,11 @@ app.MapGet("/open/document/{documentId}", (string documentId, string? folder, st
 
     return Results.Content(html, "text/html; charset=utf-8");
 });
-app.MapGet("/q/{publicToken:guid}", async (Guid publicToken, HttpContext context, SupabaseService supabaseService, ILogger<Program> logger) =>
+app.MapGet("/q/{code}", async (string code, HttpContext context, SupabaseService supabaseService, ILogger<Program> logger) =>
 {
     try
     {
-        var label = await supabaseService.GetScaffTagQrLabelByTokenAsync(publicToken);
+        var label = await supabaseService.GetScaffTagQrLabelByCodeAsync(code);
         if (label == null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -335,7 +335,7 @@ app.MapGet("/q/{publicToken:guid}", async (Guid publicToken, HttpContext context
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Failed to resolve Scaff-Tag QR label {PublicToken}", publicToken);
+        logger.LogError(ex, "Failed to resolve Scaff-Tag QR label {Code}", code);
         return Results.Problem("Unable to resolve this Scaff-Tag QR label.", statusCode: 500);
     }
 });
