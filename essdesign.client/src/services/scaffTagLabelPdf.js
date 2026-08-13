@@ -3,19 +3,68 @@ import { jsPDF } from 'jspdf';
 
 const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
-const ESS_GREEN = [5, 116, 64];
-const ESS_YELLOW = [255, 211, 38];
+const CONTENT_LEFT_MM = 3.3;
+const CONTENT_WIDTH_MM = 58.2;
+const CONTENT_CENTER_X_MM = CONTENT_LEFT_MM + (CONTENT_WIDTH_MM / 2);
+
+const DARK_GREY = [102, 102, 102];
+const MID_GREY = [126, 126, 126];
+const LIGHT_GREY = [196, 196, 196];
+const BORDER_GREY = [218, 218, 218];
+const TEXT_GREY = [61, 61, 61];
 
 const imageDataCache = new Map();
 
-async function loadImageData(url) {
+async function loadGrayscaleLogo(url) {
     if (imageDataCache.has(url)) return imageDataCache.get(url);
+
     const promise = fetch(url)
         .then(response => {
             if (!response.ok) throw new Error(`Could not load label logo (${response.status})`);
-            return response.arrayBuffer();
+            return response.blob();
         })
-        .then(buffer => new Uint8Array(buffer));
+        .then(blob => new Promise((resolve, reject) => {
+            const objectUrl = URL.createObjectURL(blob);
+            const image = new Image();
+            image.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = image.naturalWidth;
+                    canvas.height = image.naturalHeight;
+                    const context = canvas.getContext('2d', { willReadFrequently: true });
+                    context.drawImage(image, 0, 0);
+
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+                    for (let index = 0; index < pixels.length; index += 4) {
+                        const luminance = Math.round(
+                            (pixels[index] * 0.299) +
+                            (pixels[index + 1] * 0.587) +
+                            (pixels[index + 2] * 0.114)
+                        );
+                        pixels[index] = luminance;
+                        pixels[index + 1] = luminance;
+                        pixels[index + 2] = luminance;
+                    }
+                    context.putImageData(imageData, 0, 0);
+                    resolve({
+                        dataUrl: canvas.toDataURL('image/png'),
+                        width: image.naturalWidth,
+                        height: image.naturalHeight,
+                    });
+                } catch (error) {
+                    reject(error);
+                } finally {
+                    URL.revokeObjectURL(objectUrl);
+                }
+            };
+            image.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error('Could not decode the label logo.'));
+            };
+            image.src = objectUrl;
+        }));
+
     imageDataCache.set(url, promise);
     return promise;
 }
@@ -25,62 +74,112 @@ function companyDetails(companyEntityId) {
         return {
             name: 'MALOO ACCESS GROUP',
             logoUrl: 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png',
+            logoMaxWidth: 36.8,
+            logoMaxHeight: 13.2,
         };
     }
     return {
         name: 'ERECT SAFE SCAFFOLDING',
         logoUrl: 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png',
+        logoMaxWidth: 35.2,
+        logoMaxHeight: 12.8,
     };
+}
+
+function drawCenteredImage(pdf, image, centerX, top, maxWidth, maxHeight) {
+    const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+    const width = image.width * scale;
+    const height = image.height * scale;
+    const left = centerX - (width / 2);
+    const y = top + ((maxHeight - height) / 2);
+    pdf.addImage(image.dataUrl, 'PNG', left, y, width, height, undefined, 'FAST');
+}
+
+function drawLabelFrame(pdf) {
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, LABEL_WIDTH_MM, LABEL_HEIGHT_MM, 'F');
+
+    // Industrial side rail. The light end caps mirror the header and keep the
+    // darker section clear of the QR's required white quiet zone.
+    pdf.setFillColor(...DARK_GREY);
+    pdf.rect(1.5, 1.5, 2, 97, 'F');
+    pdf.setFillColor(...LIGHT_GREY);
+    pdf.rect(1.5, 1.5, 2, 17.2, 'F');
+    pdf.rect(1.5, 81.1, 2, 17.4, 'F');
+
+    pdf.setFillColor(...LIGHT_GREY);
+    pdf.rect(CONTENT_LEFT_MM, 1.5, CONTENT_WIDTH_MM, 5.4, 'F');
+    pdf.setTextColor(28, 28, 28);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(4.6);
+    pdf.setCharSpace(0.25);
+    pdf.text('PRE-PRINTED DIGITAL LABEL', CONTENT_CENTER_X_MM, 4.9, { align: 'center' });
+    pdf.setCharSpace(0);
+
+    pdf.setFillColor(...DARK_GREY);
+    pdf.rect(CONTENT_LEFT_MM, 87.1, CONTENT_WIDTH_MM, 11.4, 'F');
+
+    pdf.setDrawColor(...DARK_GREY);
+    pdf.setLineWidth(0.8);
+    pdf.roundedRect(1.5, 1.5, 60, 97, 2.7, 2.7, 'S');
 }
 
 async function drawLabel(pdf, label) {
     const company = companyDetails(label.companyEntityId);
-    const logoData = await loadImageData(company.logoUrl);
+    const logo = await loadGrayscaleLogo(company.logoUrl);
     const qrData = await QRCode.toDataURL(label.publicUrl, {
         errorCorrectionLevel: 'H',
-        margin: 1,
-        width: 900,
-        color: { dark: '#07110C', light: '#FFFFFF' },
+        margin: 0,
+        width: 1000,
+        color: { dark: '#000000', light: '#FFFFFF' },
     });
 
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(0, 0, LABEL_WIDTH_MM, LABEL_HEIGHT_MM, 'F');
-    pdf.setDrawColor(...ESS_GREEN);
-    pdf.setLineWidth(1.1);
-    pdf.roundedRect(1.7, 1.7, LABEL_WIDTH_MM - 3.4, LABEL_HEIGHT_MM - 3.4, 2.8, 2.8, 'S');
+    drawLabelFrame(pdf);
 
-    pdf.setFillColor(246, 249, 247);
-    pdf.roundedRect(4.5, 4.5, 54, 13.2, 2.2, 2.2, 'F');
-    const isMaloo = label.companyEntityId === 'maloo';
-    pdf.addImage(logoData, 'PNG', isMaloo ? 20 : 18, 6.3, isMaloo ? 23 : 27, 7.2, undefined, 'FAST');
+    drawCenteredImage(
+        pdf,
+        logo,
+        CONTENT_CENTER_X_MM,
+        8.4,
+        company.logoMaxWidth,
+        company.logoMaxHeight
+    );
 
-    pdf.setTextColor(...ESS_GREEN);
+    pdf.setTextColor(...TEXT_GREY);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(7.2);
-    pdf.text(company.name, LABEL_WIDTH_MM / 2, 21.8, { align: 'center' });
+    pdf.setFontSize(4.6);
+    pdf.setCharSpace(0.24);
+    pdf.text(company.name, CONTENT_CENTER_X_MM, 24.6, { align: 'center' });
+    pdf.setCharSpace(0);
 
-    pdf.setDrawColor(212, 221, 216);
+    // The QR itself is deliberately untouched. A 4.2 mm physical quiet zone
+    // surrounds the code to improve scanning when the label is on a curved tube.
     pdf.setFillColor(255, 255, 255);
-    pdf.roundedRect(6.2, 25, 50.6, 50.6, 2, 2, 'FD');
-    pdf.addImage(qrData, 'PNG', 7.7, 26.5, 47.6, 47.6, undefined, 'FAST');
+    pdf.setDrawColor(...BORDER_GREY);
+    pdf.setLineWidth(0.2);
+    pdf.roundedRect(8.6, 33, 47.6, 47.6, 1, 1, 'FD');
+    pdf.addImage(qrData, 'PNG', 12.8, 37.2, 39.2, 39.2, undefined, 'FAST');
 
-    pdf.setFillColor(15, 23, 42);
-    pdf.roundedRect(12.8, 77.4, 37.4, 8.5, 2.1, 2.1, 'F');
+    pdf.setFillColor(...LIGHT_GREY);
+    pdf.roundedRect(51.2, 84.8, 5.8, 1.2, 0.6, 0.6, 'F');
+
     pdf.setTextColor(255, 255, 255);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(13.5);
-    pdf.text(label.displayNumber, LABEL_WIDTH_MM / 2, 83.1, { align: 'center' });
+    pdf.setFontSize(6.1);
+    pdf.setCharSpace(0.2);
+    pdf.text('DIGITAL SCAFF-TAG', 6.4, 93.7);
+    pdf.setCharSpace(0);
 
-    pdf.setFillColor(...ESS_YELLOW);
-    pdf.roundedRect(6.2, 88, 50.6, 7.2, 3.6, 3.6, 'F');
-    pdf.setTextColor(22, 43, 32);
-    pdf.setFontSize(7.1);
-    pdf.text('LIVE DIGITAL SCAFF-TAG', LABEL_WIDTH_MM / 2, 92.7, { align: 'center' });
-
-    pdf.setTextColor(94, 108, 100);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(4.4);
-    pdf.text('Scan to view the current scaffold status and inspection record', LABEL_WIDTH_MM / 2, 97.1, { align: 'center' });
+    pdf.setFillColor(248, 248, 248);
+    pdf.setDrawColor(...MID_GREY);
+    pdf.setLineWidth(0.18);
+    pdf.roundedRect(44.2, 90.1, 14.1, 5.2, 2.6, 2.6, 'FD');
+    pdf.setTextColor(...TEXT_GREY);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(4.8);
+    pdf.setCharSpace(0.15);
+    pdf.text(label.displayNumber, 51.25, 93.35, { align: 'center' });
+    pdf.setCharSpace(0);
 }
 
 export async function createScaffTagLabelPdf(labels) {
