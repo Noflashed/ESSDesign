@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
-import QRCode from 'qrcode';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -205,34 +204,6 @@ const sortValue = (row, key) => {
 
 function StatusBadge({ value }) {
     return <span className={`project-register-status ${String(value || '').toLowerCase()}`}>{value || 'Draft'}</span>;
-}
-
-function QrLabelPreview({ label }) {
-    const [imageUrl, setImageUrl] = useState('');
-
-    useEffect(() => {
-        let active = true;
-        QRCode.toDataURL(label.publicUrl, {
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 112,
-            color: { dark: '#07110C', light: '#FFFFFF' }
-        }).then(url => {
-            if (active) setImageUrl(url);
-        }).catch(() => {
-            if (active) setImageUrl('');
-        });
-        return () => {
-            active = false;
-        };
-    }, [label.publicUrl]);
-
-    return (
-        <div className="project-qr-code-preview" aria-label={`QR preview for ${label.displayNumber}`}>
-            {imageUrl ? <img src={imageUrl} alt="" /> : <QrCode size={28} />}
-            <span>{label.displayNumber}</span>
-        </div>
-    );
 }
 
 export default function ProjectDataRegisterPage({ registerType, onBack }) {
@@ -528,11 +499,10 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                                 <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> Retired</span>
                             </div>
                             <table className="project-qr-register-table">
-                                <thead><tr><th>QR CODE</th><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
+                                <thead><tr><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
                                 <tbody>
                                     {qrRegisterRows.map(({ label, assignedRow }) => (
                                         <tr key={label.id} className={label.status === 'retired' ? 'is-retired' : undefined}>
-                                            <td><QrLabelPreview label={label} /></td>
                                             <td><strong className="project-qr-register-label-number">{label.displayNumber}</strong></td>
                                             <td>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</td>
                                             <td>{assignedRow?.reference || 'Not assigned'}</td>

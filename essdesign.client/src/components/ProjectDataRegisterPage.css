@@ -263,7 +263,7 @@
 
 .project-qr-register-table {
     width: 100%;
-    min-width: 1120px;
+    min-width: 1035px;
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
@@ -296,7 +296,7 @@
 }
 
 .project-qr-register-table td {
-    height: 76px;
+    height: 48px;
     background: var(--card-bg);
 }
 
@@ -313,51 +313,14 @@
     border-right: 0;
 }
 
-.project-qr-register-table th:nth-child(1) { width: 92px; }
-.project-qr-register-table th:nth-child(2) { width: 95px; }
-.project-qr-register-table th:nth-child(3) { width: 155px; }
-.project-qr-register-table th:nth-child(4) { width: 145px; }
-.project-qr-register-table th:nth-child(5) { width: 160px; }
-.project-qr-register-table th:nth-child(6) { width: 180px; }
-.project-qr-register-table th:nth-child(7) { width: 105px; }
-.project-qr-register-table th:nth-child(8) { width: 145px; }
-.project-qr-register-table th:nth-child(9) { width: 48px; }
-
-.project-qr-code-preview {
-    width: 58px;
-    height: 62px;
-    position: relative;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    border: 1px solid #cfd8d2;
-    border-radius: 7px;
-    background: #fff;
-    color: #087a45;
-}
-
-.project-qr-code-preview img {
-    width: 49px;
-    height: 49px;
-    display: block;
-    margin-top: -7px;
-    image-rendering: pixelated;
-}
-
-.project-qr-code-preview span {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 15px;
-    display: grid;
-    place-items: center;
-    background: #ffd326;
-    color: #173426;
-    font-size: 6.5px;
-    font-weight: 850;
-    letter-spacing: 0.2px;
-}
+.project-qr-register-table th:nth-child(1) { width: 95px; }
+.project-qr-register-table th:nth-child(2) { width: 155px; }
+.project-qr-register-table th:nth-child(3) { width: 145px; }
+.project-qr-register-table th:nth-child(4) { width: 160px; }
+.project-qr-register-table th:nth-child(5) { width: 180px; }
+.project-qr-register-table th:nth-child(6) { width: 105px; }
+.project-qr-register-table th:nth-child(7) { width: 145px; }
+.project-qr-register-table th:nth-child(8) { width: 48px; }
 
 .project-qr-register-label-number {
     color: var(--text-primary);
