@@ -130,13 +130,13 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...LABEL_INK);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11.4);
-    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', LABEL_CENTER_X_MM, 25.05, 0.1);
+    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', LABEL_CENTER_X_MM, 24.05, 0.1);
 
     pdf.setFillColor(...LABEL_INK);
     pdf.roundedRect(15.7, 25.4, 31.6, 4.7, 2.35, 2.35, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(7.5);
-    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', LABEL_CENTER_X_MM, 29.45, 0.12);
+    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', LABEL_CENTER_X_MM, 28.75, 0.12);
 
     // A 28 mm symbol spans about 66 degrees of a 48.8 mm scaffold tube rather
     // than the 124 degrees covered by the former 53 mm symbol. This keeps all
@@ -156,11 +156,11 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...LABEL_ORANGE);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15.5);
-    drawCenteredSpacedText(pdf, label.displayNumber, LABEL_CENTER_X_MM, 96.75, 0.37);
+    drawCenteredSpacedText(pdf, label.displayNumber, LABEL_CENTER_X_MM, 95.45, 0.37);
 
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(4.9);
-    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', LABEL_CENTER_X_MM, 98.39, 0.35);
+    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', LABEL_CENTER_X_MM, 97.82, 0.35);
 
     pdf.setDrawColor(...LABEL_BORDER);
     pdf.setLineWidth(0.18);
