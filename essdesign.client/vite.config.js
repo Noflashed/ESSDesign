@@ -21,7 +21,15 @@ export default defineConfig({
     },
     build: {
         rollupOptions: {
+            input: {
+                app: path.resolve(__dirname, 'index.html'),
+                scaffPdfViewer: path.resolve(__dirname, 'src/scaffPdfViewer.js'),
+            },
             output: {
+                entryFileNames: chunkInfo =>
+                    chunkInfo.name === 'scaffPdfViewer'
+                        ? 'assets/scaff-pdf-viewer.js'
+                        : 'assets/[name]-[hash].js',
                 manualChunks: {
                     vendor: ['react', 'react-dom'],
                 }
