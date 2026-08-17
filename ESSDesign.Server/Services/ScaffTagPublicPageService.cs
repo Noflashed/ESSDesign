@@ -6,10 +6,14 @@ namespace ESSDesign.Server.Services;
 public sealed class ScaffTagPublicPageService
 {
     private readonly SupabaseService _supabaseService;
+    private readonly ILogger<ScaffTagPublicPageService> _logger;
 
-    public ScaffTagPublicPageService(SupabaseService supabaseService)
+    public ScaffTagPublicPageService(
+        SupabaseService supabaseService,
+        ILogger<ScaffTagPublicPageService> logger)
     {
         _supabaseService = supabaseService;
+        _logger = logger;
     }
 
     public async Task<ScaffTagPublicViewModel?> GetAsync(string tagRef)
@@ -30,9 +34,94 @@ public sealed class ScaffTagPublicPageService
             .Take(2)
             .Select(path => _supabaseService.GetSafetyStorageSignedUrlAsync(path, 60 * 60 * 24 * 7))
             .ToArray();
+        var linkedDocumentsTask = _supabaseService.GetScaffTagLinkedDocumentsAsync(
+            builderId,
+            projectId,
+            formId,
+            details.HandoverFormId);
         var photoUrls = await Task.WhenAll(photoUrlTasks);
 
-        return ScaffTagPublicViewModel.From(details, await pdfUrlTask, photoUrls);
+        var linkedDocuments = new ScaffTagLinkedDocuments();
+        try
+        {
+            linkedDocuments = await linkedDocumentsTask;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Scaff-Tag {FormId} opened without linked-document navigation",
+                formId);
+        }
+
+        var resolvedTagRef = Uri.EscapeDataString($"{builderId}:{projectId}:{formId}");
+        var designUrl = linkedDocuments.DesignDocument == null
+            ? string.Empty
+            : $"/t/{resolvedTagRef}/design";
+        var handoverUrl = string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath)
+            ? string.Empty
+            : $"/t/{resolvedTagRef}/handover";
+
+        return ScaffTagPublicViewModel.From(
+            details,
+            await pdfUrlTask,
+            photoUrls,
+            designUrl,
+            handoverUrl);
+    }
+
+    public async Task<string?> GetLatestDesignUrlAsync(string tagRef)
+    {
+        if (!TryParseReference(tagRef, out var builderId, out var projectId, out var formId))
+        {
+            return null;
+        }
+
+        var details = await _supabaseService.GetScaffTagFormDetailsAsync(builderId, projectId, formId);
+        if (details == null)
+        {
+            return null;
+        }
+
+        var linkedDocuments = await _supabaseService.GetScaffTagLinkedDocumentsAsync(
+            builderId,
+            projectId,
+            formId,
+            details.HandoverFormId);
+        if (linkedDocuments.DesignDocument == null)
+        {
+            return null;
+        }
+
+        var download = await _supabaseService.GetDocumentDownloadUrlAsync(
+            linkedDocuments.DesignDocument.DocumentId,
+            linkedDocuments.DesignDocument.DocumentType);
+        return download.Url;
+    }
+
+    public async Task<string?> GetLatestHandoverUrlAsync(string tagRef)
+    {
+        if (!TryParseReference(tagRef, out var builderId, out var projectId, out var formId))
+        {
+            return null;
+        }
+
+        var details = await _supabaseService.GetScaffTagFormDetailsAsync(builderId, projectId, formId);
+        if (details == null)
+        {
+            return null;
+        }
+
+        var linkedDocuments = await _supabaseService.GetScaffTagLinkedDocumentsAsync(
+            builderId,
+            projectId,
+            formId,
+            details.HandoverFormId);
+        return string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath)
+            ? null
+            : await _supabaseService.GetSafetyStorageSignedUrlAsync(
+                linkedDocuments.HandoverPdfPath,
+                60 * 60 * 24 * 14);
     }
 
     public static bool TryParseReference(
@@ -146,13 +235,21 @@ public sealed class ScaffTagPublicViewModel
     [JsonPropertyName("pdfUrl")]
     public string PdfUrl { get; init; } = string.Empty;
 
+    [JsonPropertyName("designUrl")]
+    public string DesignUrl { get; init; } = string.Empty;
+
+    [JsonPropertyName("handoverUrl")]
+    public string HandoverUrl { get; init; } = string.Empty;
+
     [JsonPropertyName("updatedAt")]
     public DateTimeOffset? UpdatedAt { get; init; }
 
     public static ScaffTagPublicViewModel From(
         ScaffTagFormDetails details,
         string pdfUrl,
-        IEnumerable<string> photoUrls) => new()
+        IEnumerable<string> photoUrls,
+        string designUrl,
+        string handoverUrl) => new()
     {
         BuilderName = details.BuilderName ?? string.Empty,
         ProjectName = details.ProjectName ?? string.Empty,
@@ -180,6 +277,8 @@ public sealed class ScaffTagPublicViewModel
         InspectionRecords = details.InspectionRecords.Take(10).ToList(),
         PhotoUrls = photoUrls.Where(url => !string.IsNullOrWhiteSpace(url)).Take(2).ToList(),
         PdfUrl = pdfUrl,
+        DesignUrl = designUrl,
+        HandoverUrl = handoverUrl,
         UpdatedAt = details.UpdatedAt,
     };
 }
@@ -280,12 +379,26 @@ public static class ScaffTagPublicPageRenderer
     .photo-viewer.is-open .photo-viewer-image { opacity:1; transform:scale(1); }
     .photo-viewer-close { position:absolute; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); z-index:1; width:44px; height:44px; display:flex; align-items:center; justify-content:center; padding:0; border:1px solid rgba(255,255,255,.32); border-radius:50%; background:rgba(17,24,39,.72); color:#fff; font-size:30px; line-height:1; font-weight:400; cursor:pointer; }
     .photo-viewer-close:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+    .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
+    .document-nav { position:absolute; top:50%; width:46px; height:46px; display:grid; place-items:center; padding:0; border:2px solid rgba(255,255,255,.92); border-radius:50%; background:rgba(15,35,59,.94); color:#fff; box-shadow:0 9px 28px rgba(0,0,0,.34),0 0 0 5px rgba(242,140,40,.16); text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; }
+    .document-nav svg { width:27px; height:27px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+    .document-nav-left { left:max(6px,env(safe-area-inset-left)); animation:document-nudge-left 2.3s ease-in-out infinite; }
+    .document-nav-right { right:max(6px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
+    .document-nav:focus-visible { outline:3px solid #f28c28; outline-offset:3px; }
+    .document-nav:active { background:#f28c28; }
+    @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-4px); } }
+    @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(4px); } }
+    @keyframes leave-to-design { to { opacity:0; transform:translateX(24px); } }
+    @keyframes leave-to-handover { to { opacity:0; transform:translateX(-24px); } }
+    body.is-leaving-left .stage { animation:leave-to-design .18s ease-in forwards; }
+    body.is-leaving-right .stage { animation:leave-to-handover .18s ease-in forwards; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (min-width:700px) { .app { padding:18px; } }
-    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image { transition:none; } }
+    @media (min-width:700px) { .app { padding:18px; } .document-nav { width:54px; height:54px; } .document-nav svg { width:31px; height:31px; } .document-nav-left { left:max(14px,env(safe-area-inset-left)); } .document-nav-right { right:max(14px,env(safe-area-inset-right)); } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image { transition:none; } .document-nav { animation:none; transform:translateY(-50%); } body.is-leaving-left .stage,body.is-leaving-right .stage { animation:none; } }
   </style>
 </head>
 <body>
+  <nav id="documentNavigation" class="document-navigation" aria-label="Linked scaffold documents"></nav>
   <main class="app">
     <div id="stage" class="stage" role="button" tabindex="0" aria-label="Flip Scaff-Tag to view the back" aria-pressed="false">
       <div id="flipper" class="flipper">
@@ -351,6 +464,17 @@ public static class ScaffTagPublicPageRenderer
     const loadRow = (key, label) => `<div class="load-row"><span>${label}</span>${checked(tag.loadRating === key)}</div>`;
     const component = (label, value) => `<div class="component">${checked(value)}<span>${label}</span></div>`;
 
+    function renderDocumentNavigation() {
+      const navigation = document.getElementById('documentNavigation');
+      const design = tag.designUrl
+        ? `<a class="document-nav document-nav-left" href="${esc(tag.designUrl)}" data-direction="left" aria-label="Open latest design document" title="Latest design"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>`
+        : '';
+      const handover = tag.handoverUrl
+        ? `<a class="document-nav document-nav-right" href="${esc(tag.handoverUrl)}" data-direction="right" aria-label="Open latest handover form" title="Latest handover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>`
+        : '';
+      navigation.innerHTML = design + handover;
+    }
+
     function renderFront() {
       const entity = company();
       const rows = inspectionRows(10).map(row => `<tr><td>${esc(row.date)}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
@@ -394,6 +518,7 @@ public static class ScaffTagPublicPageRenderer
     }
 
     function render() {
+      renderDocumentNavigation();
       document.getElementById('front').innerHTML = renderFront();
       document.getElementById('back').innerHTML = renderBack();
       document.querySelectorAll('.tag img').forEach(image => {
@@ -476,11 +601,21 @@ public static class ScaffTagPublicPageRenderer
     }
 
     const stage = document.getElementById('stage');
+    const documentNavigation = document.getElementById('documentNavigation');
     const photoViewer = document.getElementById('photoViewer');
     const photoViewerImage = document.getElementById('photoViewerImage');
     const photoViewerClose = document.getElementById('photoViewerClose');
     let photoViewerLastFocus = null;
     let photoViewerCleanupTimer = 0;
+
+    documentNavigation.addEventListener('click', event => {
+      const link = event.target.closest('a.document-nav');
+      if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      event.preventDefault();
+      document.body.classList.add(`is-leaving-${link.dataset.direction}`);
+      window.setTimeout(() => window.location.assign(link.href), 180);
+    });
 
     function openPhotoViewer(photoButton) {
       const url = photoButton?.dataset?.photoUrl;

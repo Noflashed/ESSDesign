@@ -401,6 +401,62 @@ app.MapGet("/t/{tagRef}/data", async (
     }
 });
 
+app.MapGet("/t/{tagRef}/design", async (
+    string tagRef,
+    HttpContext context,
+    ScaffTagPublicPageService scaffTagPageService,
+    ILogger<Program> logger) =>
+{
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+    if (!ScaffTagPublicPageService.TryParseReference(tagRef, out _, out _, out _))
+    {
+        return Results.BadRequest("Invalid tag reference.");
+    }
+
+    try
+    {
+        var url = await scaffTagPageService.GetLatestDesignUrlAsync(tagRef);
+        return string.IsNullOrWhiteSpace(url)
+            ? Results.NotFound("No design document is linked to this Scaff-Tag.")
+            : Results.Redirect(url, permanent: false);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to open the latest design for Scaff-Tag {TagRef}", tagRef);
+        return Results.Problem("Unable to open the linked design document.", statusCode: 500);
+    }
+});
+
+app.MapGet("/t/{tagRef}/handover", async (
+    string tagRef,
+    HttpContext context,
+    ScaffTagPublicPageService scaffTagPageService,
+    ILogger<Program> logger) =>
+{
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+    if (!ScaffTagPublicPageService.TryParseReference(tagRef, out _, out _, out _))
+    {
+        return Results.BadRequest("Invalid tag reference.");
+    }
+
+    try
+    {
+        var url = await scaffTagPageService.GetLatestHandoverUrlAsync(tagRef);
+        return string.IsNullOrWhiteSpace(url)
+            ? Results.NotFound("No handover form is linked to this Scaff-Tag.")
+            : Results.Redirect(url, permanent: false);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to open the latest handover for Scaff-Tag {TagRef}", tagRef);
+        return Results.Problem("Unable to open the linked handover form.", statusCode: 500);
+    }
+});
+
 // Controllers
 app.MapControllers();
 

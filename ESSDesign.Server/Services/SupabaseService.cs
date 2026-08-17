@@ -70,6 +70,9 @@ namespace ESSDesign.Server.Services
 
         private sealed class SafetyFormRow
         {
+            [JsonPropertyName("id")]
+            public string Id { get; set; } = string.Empty;
+
             [JsonPropertyName("pdf_path")]
             public string? PdfPath { get; set; }
 
@@ -2700,6 +2703,116 @@ namespace ESSDesign.Server.Services
             return details;
         }
 
+        private static string? GetPayloadString(JsonElement payload, string propertyName)
+        {
+            if (payload.ValueKind != JsonValueKind.Object ||
+                !payload.TryGetProperty(propertyName, out var value) ||
+                value.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            return value.GetString()?.Trim();
+        }
+
+        private static int GetDesignRevisionSortValue(DesignDocument document)
+        {
+            var revisionMatch = Regex.Match(document.RevisionNumber ?? string.Empty, @"\d+");
+            if (revisionMatch.Success && int.TryParse(revisionMatch.Value, out var revisionNumber))
+            {
+                return revisionNumber;
+            }
+
+            var displayName = document.EssDesignIssueName
+                ?? document.ThirdPartyDesignName
+                ?? document.Description
+                ?? string.Empty;
+            var nameMatch = Regex.Match(displayName, @"\bREV(?:ISION)?\s*[-_]*\s*(\d+)\b", RegexOptions.IgnoreCase);
+            return nameMatch.Success && int.TryParse(nameMatch.Groups[1].Value, out var nameRevision)
+                ? nameRevision
+                : -1;
+        }
+
+        private async Task<ScaffTagLinkedDesignDocument?> ResolveLatestLinkedDesignDocumentAsync(Guid linkedDocumentId)
+        {
+            var linkedDocument = await _supabase
+                .From<DesignDocument>()
+                .Filter("id", Postgrest.Constants.Operator.Equals, linkedDocumentId.ToString())
+                .Single();
+            if (linkedDocument == null)
+            {
+                return null;
+            }
+
+            var folderDocuments = await _supabase
+                .From<DesignDocument>()
+                .Filter("folder_id", Postgrest.Constants.Operator.Equals, linkedDocument.FolderId.ToString())
+                .Get();
+            var latestDocument = folderDocuments.Models
+                .Where(document =>
+                    !string.IsNullOrWhiteSpace(document.EssDesignIssuePath) ||
+                    !string.IsNullOrWhiteSpace(document.ThirdPartyDesignPath))
+                .OrderByDescending(GetDesignRevisionSortValue)
+                .ThenByDescending(document => document.UpdatedAt)
+                .ThenByDescending(document => document.CreatedAt)
+                .FirstOrDefault() ?? linkedDocument;
+
+            var documentType = !string.IsNullOrWhiteSpace(latestDocument.EssDesignIssuePath)
+                ? "ess"
+                : !string.IsNullOrWhiteSpace(latestDocument.ThirdPartyDesignPath)
+                    ? "thirdparty"
+                    : null;
+            return documentType == null
+                ? null
+                : new ScaffTagLinkedDesignDocument
+                {
+                    DocumentId = latestDocument.Id,
+                    DocumentType = documentType
+                };
+        }
+
+        public async Task<ScaffTagLinkedDocuments> GetScaffTagLinkedDocumentsAsync(
+            string builderId,
+            string projectId,
+            string scaffTagFormId,
+            string? preferredHandoverFormId = null)
+        {
+            var result = new ScaffTagLinkedDocuments();
+            var select = Uri.EscapeDataString("id,pdf_path,payload,updated_at");
+            var handovers = await GetRestRowsAsync<SafetyFormRow>(
+                "ess_safety_forms" +
+                $"?select={select}" +
+                "&form_type=eq.handover-certificates" +
+                $"&builder_id=eq.{Uri.EscapeDataString(builderId)}" +
+                $"&project_id=eq.{Uri.EscapeDataString(projectId)}" +
+                "&order=updated_at.desc");
+
+            var handover = handovers.FirstOrDefault(candidate =>
+                    string.Equals(
+                        GetPayloadString(candidate.Payload, "scaffTagFormId"),
+                        scaffTagFormId,
+                        StringComparison.Ordinal))
+                ?? handovers.FirstOrDefault(candidate =>
+                    !string.IsNullOrWhiteSpace(preferredHandoverFormId) &&
+                    string.Equals(candidate.Id, preferredHandoverFormId, StringComparison.Ordinal));
+            if (handover == null)
+            {
+                return result;
+            }
+
+            result.HandoverPdfPath = !string.IsNullOrWhiteSpace(handover.PdfPath)
+                ? handover.PdfPath
+                : GetPayloadString(handover.Payload, "pdfPath");
+
+            var drawingDocumentId = GetPayloadString(handover.Payload, "drawingDocumentId");
+            if (Guid.TryParse(drawingDocumentId, out var parsedDrawingDocumentId))
+            {
+                result.DesignDocument = await ResolveLatestLinkedDesignDocumentAsync(parsedDrawingDocumentId);
+            }
+
+            return result;
+        }
+
         private static string? FirstNotBlank(params string?[] values) =>
             values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
@@ -4239,6 +4352,9 @@ namespace ESSDesign.Server.Services
         [JsonPropertyName("jobLocation")]
         public string? JobLocation { get; set; }
 
+        [JsonPropertyName("handoverFormId")]
+        public string? HandoverFormId { get; set; }
+
         [JsonPropertyName("dateErected")]
         public string? DateErected { get; set; }
 
@@ -4292,6 +4408,18 @@ namespace ESSDesign.Server.Services
 
         [JsonPropertyName("updatedAt")]
         public DateTimeOffset? UpdatedAt { get; set; }
+    }
+
+    public class ScaffTagLinkedDocuments
+    {
+        public string? HandoverPdfPath { get; set; }
+        public ScaffTagLinkedDesignDocument? DesignDocument { get; set; }
+    }
+
+    public class ScaffTagLinkedDesignDocument
+    {
+        public Guid DocumentId { get; set; }
+        public string DocumentType { get; set; } = string.Empty;
     }
 
     public class ScaffTagInspectionRecord
