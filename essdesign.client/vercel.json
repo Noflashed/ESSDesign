@@ -20,6 +20,10 @@
       "destination": "https://essdesign-production.up.railway.app/t/:tagRef"
     },
     {
+      "source": "/t/:path*",
+      "destination": "https://essdesign-production.up.railway.app/t/:path*"
+    },
+    {
       "source": "/scaff-tag/:path*",
       "destination": "https://essdesign-production.up.railway.app/t/:path*"
     },
