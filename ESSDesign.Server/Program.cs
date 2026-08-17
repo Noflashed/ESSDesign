@@ -417,10 +417,12 @@ app.MapGet("/t/{tagRef}/design", async (
 
     try
     {
-        var url = await scaffTagPageService.GetLatestDesignUrlAsync(tagRef);
-        return string.IsNullOrWhiteSpace(url)
+        var model = await scaffTagPageService.GetLinkedDocumentViewAsync(tagRef, "design");
+        return model == null
             ? Results.NotFound("No design document is linked to this Scaff-Tag.")
-            : Results.Redirect(url, permanent: false);
+            : Results.Content(
+                ScaffTagLinkedDocumentPageRenderer.Render(model),
+                "text/html; charset=utf-8");
     }
     catch (Exception ex)
     {
@@ -445,10 +447,12 @@ app.MapGet("/t/{tagRef}/handover", async (
 
     try
     {
-        var url = await scaffTagPageService.GetLatestHandoverUrlAsync(tagRef);
-        return string.IsNullOrWhiteSpace(url)
+        var model = await scaffTagPageService.GetLinkedDocumentViewAsync(tagRef, "handover");
+        return model == null
             ? Results.NotFound("No handover form is linked to this Scaff-Tag.")
-            : Results.Redirect(url, permanent: false);
+            : Results.Content(
+                ScaffTagLinkedDocumentPageRenderer.Render(model),
+                "text/html; charset=utf-8");
     }
     catch (Exception ex)
     {

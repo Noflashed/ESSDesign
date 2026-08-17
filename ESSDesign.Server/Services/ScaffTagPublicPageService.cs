@@ -124,6 +124,69 @@ public sealed class ScaffTagPublicPageService
                 60 * 60 * 24 * 14);
     }
 
+    public async Task<ScaffTagLinkedDocumentViewModel?> GetLinkedDocumentViewAsync(
+        string tagRef,
+        string documentKind)
+    {
+        if (!TryParseReference(tagRef, out var builderId, out var projectId, out var formId))
+        {
+            return null;
+        }
+
+        var details = await _supabaseService.GetScaffTagFormDetailsAsync(builderId, projectId, formId);
+        if (details == null)
+        {
+            return null;
+        }
+
+        var linkedDocuments = await _supabaseService.GetScaffTagLinkedDocumentsAsync(
+            builderId,
+            projectId,
+            formId,
+            details.HandoverFormId);
+        var resolvedTagRef = Uri.EscapeDataString($"{builderId}:{projectId}:{formId}");
+        var scaffTagUrl = $"/t/{resolvedTagRef}";
+
+        if (string.Equals(documentKind, "design", StringComparison.OrdinalIgnoreCase))
+        {
+            if (linkedDocuments.DesignDocument == null)
+            {
+                return null;
+            }
+
+            var download = await _supabaseService.GetDocumentDownloadUrlAsync(
+                linkedDocuments.DesignDocument.DocumentId,
+                linkedDocuments.DesignDocument.DocumentType);
+            return new ScaffTagLinkedDocumentViewModel
+            {
+                PageTitle = "Design Drawing",
+                DocumentName = download.FileName,
+                DocumentUrl = download.Url,
+                RightUrl = scaffTagUrl,
+                RightLabel = "Scaff-Tag"
+            };
+        }
+
+        if (!string.Equals(documentKind, "handover", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath))
+        {
+            return null;
+        }
+
+        return new ScaffTagLinkedDocumentViewModel
+        {
+            PageTitle = "Handover Form",
+            DocumentName = string.IsNullOrWhiteSpace(details.ScaffoldName)
+                ? "Latest linked handover"
+                : details.ScaffoldName,
+            DocumentUrl = await _supabaseService.GetSafetyStorageSignedUrlAsync(
+                linkedDocuments.HandoverPdfPath,
+                60 * 60 * 24 * 14),
+            LeftUrl = scaffTagUrl,
+            LeftLabel = "Scaff-Tag"
+        };
+    }
+
     public static bool TryParseReference(
         string tagRef,
         out string builderId,
@@ -158,6 +221,125 @@ public sealed class ScaffTagPublicPageService
         projectId = parts[1];
         formId = parts[2];
         return true;
+    }
+}
+
+public sealed class ScaffTagLinkedDocumentViewModel
+{
+    public string PageTitle { get; init; } = string.Empty;
+    public string DocumentName { get; init; } = string.Empty;
+    public string DocumentUrl { get; init; } = string.Empty;
+    public string LeftUrl { get; init; } = string.Empty;
+    public string LeftLabel { get; init; } = string.Empty;
+    public string RightUrl { get; init; } = string.Empty;
+    public string RightLabel { get; init; } = string.Empty;
+}
+
+public static class ScaffTagLinkedDocumentPageRenderer
+{
+    public static string Render(ScaffTagLinkedDocumentViewModel model)
+    {
+        var pageTitle = System.Net.WebUtility.HtmlEncode(model.PageTitle);
+        var documentName = System.Net.WebUtility.HtmlEncode(model.DocumentName);
+        var documentUrl = System.Net.WebUtility.HtmlEncode(model.DocumentUrl);
+        var leftUrl = System.Net.WebUtility.HtmlEncode(model.LeftUrl);
+        var leftLabel = System.Net.WebUtility.HtmlEncode(model.LeftLabel);
+        var rightUrl = System.Net.WebUtility.HtmlEncode(model.RightUrl);
+        var rightLabel = System.Net.WebUtility.HtmlEncode(model.RightLabel);
+        var leftNavigation = string.IsNullOrWhiteSpace(model.LeftUrl)
+            ? string.Empty
+            : $"""
+              <a class="document-nav document-nav-left" href="{leftUrl}" data-direction="left" aria-label="Open {leftLabel}">
+                <span class="document-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                <span class="document-nav-label">{leftLabel}</span>
+              </a>
+              """;
+        var rightNavigation = string.IsNullOrWhiteSpace(model.RightUrl)
+            ? string.Empty
+            : $"""
+              <a class="document-nav document-nav-right" href="{rightUrl}" data-direction="right" aria-label="Open {rightLabel}">
+                <span class="document-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></span>
+                <span class="document-nav-label">{rightLabel}</span>
+              </a>
+              """;
+
+        return $$"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
+  <title>{{pageTitle}} · ESS</title>
+  <style>
+    * { box-sizing:border-box; }
+    html, body { width:100%; height:100%; margin:0; }
+    body { min-height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
+    .viewer { position:relative; width:100%; height:100dvh; display:flex; align-items:center; justify-content:center; padding:max(52px,calc(env(safe-area-inset-top) + 44px)) max(48px,env(safe-area-inset-right)) max(34px,env(safe-area-inset-bottom)) max(48px,env(safe-area-inset-left)); background:rgba(32,35,39,.96); }
+    .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
+    .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
+    .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+    .document-shell { position:relative; width:min(calc(100vw - 96px),82vw,1060px); height:min(88dvh,920px); flex:0 0 auto; overflow:hidden; border:1px solid rgba(255,255,255,.7); border-radius:9px; background:#fff; box-shadow:0 18px 54px rgba(0,0,0,.45); transition:opacity .18s ease,transform .18s ease; }
+    .document-frame { width:100%; height:100%; display:block; border:0; background:#fff; }
+    .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
+    .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
+    .document-nav:hover,.document-nav:focus-visible,.document-nav:active { opacity:.94; }
+    .document-nav:focus-visible { outline:0; }
+    .document-nav-icon { width:44px; height:44px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.68); border-radius:50%; background:rgba(7,18,31,.58); box-shadow:0 7px 22px rgba(0,0,0,.24); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); }
+    .document-nav svg { width:25px; height:25px; fill:none; stroke:currentColor; stroke-width:2.35; stroke-linecap:round; stroke-linejoin:round; }
+    .document-nav-label { max-width:64px; padding:4px 6px; overflow:hidden; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(7,12,18,.5); font-size:8px; line-height:1; font-weight:800; letter-spacing:.35px; text-align:center; text-overflow:ellipsis; white-space:nowrap; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+    .document-nav-left { left:max(1px,env(safe-area-inset-left)); animation:document-nudge-left 2.3s ease-in-out infinite; }
+    .document-nav-right { right:max(1px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
+    @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-3px); } }
+    @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(3px); } }
+    body.is-leaving-left .document-shell { opacity:0; transform:translateX(22px) scale(.985); }
+    body.is-leaving-right .document-shell { opacity:0; transform:translateX(-22px) scale(.985); }
+    .document-fallback { display:flex; width:100%; height:100%; align-items:center; justify-content:center; padding:24px; color:#111827; text-align:center; }
+    .document-fallback a { color:#1268c4; font-weight:750; }
+    @media (min-width:700px) {
+      .viewer { padding-right:max(78px,env(safe-area-inset-right)); padding-left:max(78px,env(safe-area-inset-left)); }
+      .document-shell { width:min(calc(100vw - 152px),84vw,1060px); height:min(90dvh,920px); }
+      .document-nav { width:76px; }
+      .document-nav-icon { width:52px; height:52px; }
+      .document-nav svg { width:29px; height:29px; }
+      .document-nav-label { max-width:76px; padding:5px 8px; font-size:9px; }
+      .document-nav-left { left:max(5px,env(safe-area-inset-left)); }
+      .document-nav-right { right:max(5px,env(safe-area-inset-right)); }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      .document-nav { animation:none; transform:translateY(-50%); }
+      .document-shell { transition:none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="viewer-heading" aria-label="Current document">
+    <div class="viewer-title">{{pageTitle}}</div>
+    <div class="viewer-name">{{documentName}}</div>
+  </header>
+  <nav id="documentNavigation" class="document-navigation" aria-label="Linked scaffold documents">
+    {{leftNavigation}}
+    {{rightNavigation}}
+  </nav>
+  <main class="viewer">
+    <section class="document-shell" aria-label="{{pageTitle}} preview">
+      <iframe class="document-frame" src="{{documentUrl}}#view=FitH" title="{{pageTitle}}">
+        <div class="document-fallback">This document cannot be previewed here. <a href="{{documentUrl}}">Open {{pageTitle}}</a>.</div>
+      </iframe>
+    </section>
+  </main>
+  <script>
+    document.getElementById('documentNavigation').addEventListener('click', event => {
+      const link = event.target.closest('a.document-nav');
+      if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      event.preventDefault();
+      document.body.classList.add(`is-leaving-${link.dataset.direction}`);
+      window.setTimeout(() => window.location.assign(link.href), 180);
+    });
+  </script>
+</body>
+</html>
+""";
     }
 }
 
@@ -304,7 +486,7 @@ public static class ScaffTagPublicPageRenderer
     body { min-height:100dvh; overflow:hidden; touch-action:pan-x pan-y pinch-zoom; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; color:var(--ink); background:rgba(32,35,39,.96); }
     button, a { font:inherit; }
     .app { width:100%; height:100dvh; min-height:0; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); background:rgba(32,35,39,.96); }
-    .stage { position:relative; width:min(92%,460px); height:92%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
+    .stage { position:relative; width:min(calc(100% - 96px),460px); height:90%; min-height:0; max-height:930px; perspective:1600px; touch-action:pan-y pinch-zoom; user-select:none; -webkit-user-select:none; cursor:pointer; outline:none; }
     .flipper { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .68s cubic-bezier(.2,.72,.18,1); }
     .flipper.is-back { transform:rotateY(180deg); }
     .face { position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; background:transparent; }
@@ -380,12 +562,14 @@ public static class ScaffTagPublicPageRenderer
     .photo-viewer-close { position:absolute; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); z-index:1; width:44px; height:44px; display:flex; align-items:center; justify-content:center; padding:0; border:1px solid rgba(255,255,255,.32); border-radius:50%; background:rgba(17,24,39,.72); color:#fff; font-size:30px; line-height:1; font-weight:400; cursor:pointer; }
     .photo-viewer-close:focus-visible { outline:3px solid #fff; outline-offset:2px; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
-    .document-nav { position:absolute; top:50%; width:46px; height:46px; display:grid; place-items:center; padding:0; border:2px solid rgba(255,255,255,.92); border-radius:50%; background:rgba(15,35,59,.94); color:#fff; box-shadow:0 9px 28px rgba(0,0,0,.34),0 0 0 5px rgba(242,140,40,.16); text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; }
-    .document-nav svg { width:27px; height:27px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
-    .document-nav-left { left:max(6px,env(safe-area-inset-left)); animation:document-nudge-left 2.3s ease-in-out infinite; }
-    .document-nav-right { right:max(6px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
-    .document-nav:focus-visible { outline:3px solid #f28c28; outline-offset:3px; }
-    .document-nav:active { background:#f28c28; }
+    .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
+    .document-nav:hover,.document-nav:focus-visible,.document-nav:active { opacity:.94; }
+    .document-nav:focus-visible { outline:0; }
+    .document-nav-icon { width:44px; height:44px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.68); border-radius:50%; background:rgba(7,18,31,.58); box-shadow:0 7px 22px rgba(0,0,0,.24); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); }
+    .document-nav svg { width:25px; height:25px; fill:none; stroke:currentColor; stroke-width:2.35; stroke-linecap:round; stroke-linejoin:round; }
+    .document-nav-label { max-width:64px; padding:4px 6px; overflow:hidden; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(7,12,18,.5); font-size:8px; line-height:1; font-weight:800; letter-spacing:.35px; text-align:center; text-overflow:ellipsis; white-space:nowrap; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+    .document-nav-left { left:max(1px,env(safe-area-inset-left)); animation:document-nudge-left 2.3s ease-in-out infinite; }
+    .document-nav-right { right:max(1px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
     @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-4px); } }
     @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(4px); } }
     @keyframes leave-to-design { to { opacity:0; transform:translateX(24px); } }
@@ -393,7 +577,7 @@ public static class ScaffTagPublicPageRenderer
     body.is-leaving-left .stage { animation:leave-to-design .18s ease-in forwards; }
     body.is-leaving-right .stage { animation:leave-to-handover .18s ease-in forwards; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-    @media (min-width:700px) { .app { padding:18px; } .document-nav { width:54px; height:54px; } .document-nav svg { width:31px; height:31px; } .document-nav-left { left:max(14px,env(safe-area-inset-left)); } .document-nav-right { right:max(14px,env(safe-area-inset-right)); } }
+    @media (min-width:700px) { .app { padding:18px; } .stage { width:min(92%,460px); height:92%; } .document-nav { width:76px; } .document-nav-icon { width:52px; height:52px; } .document-nav svg { width:29px; height:29px; } .document-nav-label { max-width:76px; padding:5px 8px; font-size:9px; } .document-nav-left { left:max(5px,env(safe-area-inset-left)); } .document-nav-right { right:max(5px,env(safe-area-inset-right)); } }
     @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image { transition:none; } .document-nav { animation:none; transform:translateY(-50%); } body.is-leaving-left .stage,body.is-leaving-right .stage { animation:none; } }
   </style>
 </head>
@@ -467,10 +651,10 @@ public static class ScaffTagPublicPageRenderer
     function renderDocumentNavigation() {
       const navigation = document.getElementById('documentNavigation');
       const design = tag.designUrl
-        ? `<a class="document-nav document-nav-left" href="${esc(tag.designUrl)}" data-direction="left" aria-label="Open latest design document" title="Latest design"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>`
+        ? `<a class="document-nav document-nav-left" href="${esc(tag.designUrl)}" data-direction="left" aria-label="Open latest design document"><span class="document-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg></span><span class="document-nav-label">Design</span></a>`
         : '';
       const handover = tag.handoverUrl
-        ? `<a class="document-nav document-nav-right" href="${esc(tag.handoverUrl)}" data-direction="right" aria-label="Open latest handover form" title="Latest handover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>`
+        ? `<a class="document-nav document-nav-right" href="${esc(tag.handoverUrl)}" data-direction="right" aria-label="Open latest handover form"><span class="document-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></span><span class="document-nav-label">Handover</span></a>`
         : '';
       navigation.innerHTML = design + handover;
     }
