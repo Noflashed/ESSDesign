@@ -23,13 +23,28 @@ if (viewer) {
     let renderGeneration = 0;
     let resizeTimer = 0;
     let scrollFrame = 0;
+    let pinchState = null;
+    const activeTouchPointers = new Map();
 
     const clampZoom = value => Math.min(3, Math.max(1, value));
+
+    function getRenderPixelRatio(cssViewport) {
+        const deviceRatio = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
+        const dimensionLimit = Math.min(
+            8192 / Math.max(1, cssViewport.width),
+            8192 / Math.max(1, cssViewport.height),
+        );
+        const pixelLimit = Math.sqrt(
+            10_000_000 / Math.max(1, cssViewport.width * cssViewport.height),
+        );
+        return Math.max(1, Math.min(deviceRatio, dimensionLimit, pixelLimit));
+    }
 
     function updateZoomControls() {
         zoomIndicator.textContent = zoom === 1 ? 'Fit' : `${Math.round(zoom * 100)}%`;
         zoomOutButton.disabled = zoom <= 1;
         zoomInButton.disabled = zoom >= 3;
+        viewer.classList.toggle('is-zoomed', zoom > 1.001);
     }
 
     function updateCurrentPage() {
@@ -59,7 +74,6 @@ if (viewer) {
             : 1;
         const availableWidth = Math.max(80, viewer.clientWidth - 16);
         const availableHeight = Math.max(120, viewer.clientHeight - 16);
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
 
         loadingElement.hidden = false;
         errorElement.hidden = true;
@@ -76,6 +90,7 @@ if (viewer) {
             );
             const cssScale = fitScale * zoom;
             const cssViewport = page.getViewport({ scale: cssScale });
+            const pixelRatio = getRenderPixelRatio(cssViewport);
             const renderViewport = page.getViewport({ scale: cssScale * pixelRatio });
 
             const slot = document.createElement('section');
@@ -132,6 +147,81 @@ if (viewer) {
         if (scrollFrame) return;
         scrollFrame = window.requestAnimationFrame(updateCurrentPage);
     }, { passive: true });
+
+    const pointerDistance = pointers => Math.hypot(
+        pointers[0].x - pointers[1].x,
+        pointers[0].y - pointers[1].y,
+    );
+
+    function beginPinch() {
+        if (pinchState || activeTouchPointers.size !== 2) return;
+        const pointers = Array.from(activeTouchPointers.values());
+        const startDistance = pointerDistance(pointers);
+        if (startDistance <= 0) return;
+        const bounds = viewer.getBoundingClientRect();
+        const midpointX = ((pointers[0].x + pointers[1].x) / 2) - bounds.left + viewer.scrollLeft;
+        const midpointY = ((pointers[0].y + pointers[1].y) / 2) - bounds.top + viewer.scrollTop;
+        pinchState = {
+            startDistance,
+            startZoom: zoom,
+            draftZoom: zoom,
+        };
+        pagesElement.style.transformOrigin = `${midpointX}px ${midpointY}px`;
+        pagesElement.style.willChange = 'transform';
+        viewer.classList.add('is-pinching');
+    }
+
+    function updatePinch() {
+        if (!pinchState || activeTouchPointers.size < 2) return;
+        const pointers = Array.from(activeTouchPointers.values()).slice(0, 2);
+        const distance = pointerDistance(pointers);
+        pinchState.draftZoom = clampZoom(
+            pinchState.startZoom * (distance / pinchState.startDistance),
+        );
+        const previewScale = pinchState.draftZoom / pinchState.startZoom;
+        pagesElement.style.transform = `scale(${previewScale})`;
+        zoomIndicator.textContent = pinchState.draftZoom === 1
+            ? 'Fit'
+            : `${Math.round(pinchState.draftZoom * 100)}%`;
+    }
+
+    function finishPinch() {
+        if (!pinchState) return;
+        const nextZoom = pinchState.draftZoom;
+        pinchState = null;
+        viewer.classList.remove('is-pinching');
+        pagesElement.style.transform = '';
+        pagesElement.style.transformOrigin = '';
+        pagesElement.style.willChange = '';
+        if (Math.abs(nextZoom - zoom) < 0.02) {
+            updateZoomControls();
+            return;
+        }
+        setZoom(nextZoom);
+    }
+
+    viewer.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'touch') return;
+        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        try { viewer.setPointerCapture(event.pointerId); } catch { /* Safari can decline capture. */ }
+        beginPinch();
+    });
+
+    viewer.addEventListener('pointermove', event => {
+        if (!activeTouchPointers.has(event.pointerId)) return;
+        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (!pinchState) beginPinch();
+        if (!pinchState) return;
+        event.preventDefault();
+        updatePinch();
+    }, { passive: false });
+
+    const endTouchPointer = event => {
+        activeTouchPointers.delete(event.pointerId);
+        if (pinchState && activeTouchPointers.size < 2) finishPinch();
+    };
+    viewer.addEventListener('pointerup', endTouchPointer);
+    viewer.addEventListener('pointercancel', endTouchPointer);
 
     window.addEventListener('resize', () => {
         window.clearTimeout(resizeTimer);
