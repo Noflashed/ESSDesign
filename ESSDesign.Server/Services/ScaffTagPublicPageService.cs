@@ -278,12 +278,14 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .pdf-viewport { position:absolute; top:max(52px,calc(env(safe-area-inset-top) + 44px)); right:max(48px,env(safe-area-inset-right)); bottom:max(50px,calc(env(safe-area-inset-bottom) + 42px)); left:max(48px,env(safe-area-inset-left)); overflow:auto; overscroll-behavior:contain; background:transparent; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:y mandatory; transition:opacity .18s ease,transform .18s ease; }
+    .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; background:transparent; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:y mandatory; transition:opacity .18s ease,transform .18s ease; }
     .pdf-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
-    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching { scroll-snap-type:none; }
+    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
     .pdf-pages { min-width:100%; min-height:100%; transform-origin:center center; }
-    .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; padding:8px; scroll-snap-align:center; scroll-snap-stop:always; }
+    .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; scroll-snap-stop:always; }
     .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
+    .pdf-page-placeholder { width:52px; height:52px; display:grid; flex:0 0 auto; place-items:center; }
+    .pdf-page-spinner { width:22px; height:22px; border:2px solid rgba(255,255,255,.13); border-top-color:rgba(255,255,255,.58); border-radius:50%; animation:viewer-spin .78s linear infinite; }
     .pdf-status { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; color:rgba(255,255,255,.82); font-size:11px; font-weight:750; letter-spacing:.45px; text-align:center; }
     .pdf-status[hidden] { display:none; }
     .pdf-spinner,.navigation-spinner { width:34px; height:34px; border:3px solid rgba(255,255,255,.2); border-top-color:rgba(255,255,255,.92); border-radius:50%; animation:viewer-spin .78s linear infinite; }
@@ -292,6 +294,8 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .pdf-toolbar button { width:30px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:650; }
     .pdf-toolbar button:disabled { opacity:.28; }
     .pdf-toolbar button:active { background:rgba(255,255,255,.14); }
+    .pdf-toolbar .pdf-toolbar-compact { font-size:10px; font-weight:800; }
+    .pdf-toolbar .pdf-fit-mode { width:auto; min-width:39px; padding:0 7px; border-radius:999px; font-size:8px; font-weight:800; letter-spacing:.1px; }
     .pdf-toolbar-label { min-width:36px; color:rgba(255,255,255,.86); font-size:8px; line-height:1; font-weight:800; text-align:center; }
     .pdf-page-indicator { min-width:34px; padding:0 5px; border-left:1px solid rgba(255,255,255,.14); color:rgba(255,255,255,.72); font-size:8px; line-height:1; font-weight:750; text-align:center; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
@@ -311,9 +315,10 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .navigation-loading { position:fixed; inset:0; z-index:90; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; background:rgba(18,21,24,.78); color:rgba(255,255,255,.9); font-size:11px; font-weight:800; letter-spacing:.5px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease,visibility 0s linear .14s; -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
     .navigation-loading.is-visible { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     @media (min-width:700px) {
-      .pdf-viewport { right:max(78px,env(safe-area-inset-right)); left:max(78px,env(safe-area-inset-left)); }
       .pdf-toolbar { height:42px; padding:4px; }
       .pdf-toolbar button { width:36px; height:32px; font-size:20px; }
+      .pdf-toolbar .pdf-toolbar-compact { font-size:11px; }
+      .pdf-toolbar .pdf-fit-mode { min-width:46px; padding:0 9px; font-size:9px; }
       .pdf-toolbar-label,.pdf-page-indicator { font-size:9px; }
       .document-nav { width:76px; }
       .document-nav-icon { width:52px; height:52px; }
@@ -325,7 +330,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     @media (prefers-reduced-motion:reduce) {
       .document-nav { animation:none; transform:translateY(-50%); }
       .pdf-viewport,.navigation-loading { transition:none; }
-      .pdf-spinner,.navigation-spinner { animation:none; }
+      .pdf-spinner,.pdf-page-spinner,.navigation-spinner { animation:none; }
     }
   </style>
 </head>
@@ -347,9 +352,11 @@ public static class ScaffTagLinkedDocumentPageRenderer
   </main>
   <div class="pdf-toolbar" aria-label="PDF zoom controls">
     <button id="pdfZoomOut" type="button" aria-label="Zoom out">&minus;</button>
-    <span id="pdfZoomIndicator" class="pdf-toolbar-label">Fit</span>
-    <button id="pdfZoomFit" type="button" aria-label="Fit whole PDF page">&#8634;</button>
+    <span id="pdfZoomIndicator" class="pdf-toolbar-label">100%</span>
+    <button id="pdfZoomFit" class="pdf-toolbar-compact" type="button" aria-label="Reset zoom to fitted size" title="Reset zoom">1&times;</button>
     <button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button>
+    <button id="pdfFitMode" class="pdf-fit-mode" type="button" aria-label="Fit PDF to screen width" title="Fit width">Page</button>
+    <button id="pdfRotate" type="button" aria-label="Rotate PDF clockwise" title="Rotate clockwise">&#8635;</button>
     <span id="pdfPageIndicator" class="pdf-page-indicator" aria-live="polite">1 / 1</span>
   </div>
   <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="navigation-spinner" aria-hidden="true"></span><span id="navigationLoadingLabel">Opening document</span></div>
@@ -366,7 +373,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=2"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=3"></script>
 </body>
 </html>
 """;
