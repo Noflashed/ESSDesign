@@ -159,6 +159,7 @@ public sealed class ScaffTagPublicPageService
                 linkedDocuments.DesignDocument.DocumentType);
             return new ScaffTagLinkedDocumentViewModel
             {
+                CompanyEntityId = NormalizeCompanyEntityId(details.CompanyEntityId),
                 PageTitle = "Design Drawing",
                 DocumentName = download.FileName,
                 DocumentUrl = download.Url,
@@ -175,6 +176,7 @@ public sealed class ScaffTagPublicPageService
 
         return new ScaffTagLinkedDocumentViewModel
         {
+            CompanyEntityId = NormalizeCompanyEntityId(details.CompanyEntityId),
             PageTitle = "Handover Form",
             DocumentName = string.IsNullOrWhiteSpace(details.ScaffoldName)
                 ? "Latest linked handover"
@@ -186,6 +188,11 @@ public sealed class ScaffTagPublicPageService
             LeftLabel = "Scaff-Tag"
         };
     }
+
+    private static string NormalizeCompanyEntityId(string? companyEntityId) =>
+        string.Equals(companyEntityId, "maloo", StringComparison.OrdinalIgnoreCase)
+            ? "maloo"
+            : "ess";
 
     public static bool TryParseReference(
         string tagRef,
@@ -226,6 +233,7 @@ public sealed class ScaffTagPublicPageService
 
 public sealed class ScaffTagLinkedDocumentViewModel
 {
+    public string CompanyEntityId { get; init; } = "ess";
     public string PageTitle { get; init; } = string.Empty;
     public string DocumentName { get; init; } = string.Empty;
     public string DocumentUrl { get; init; } = string.Empty;
@@ -239,6 +247,11 @@ public static class ScaffTagLinkedDocumentPageRenderer
 {
     public static string Render(ScaffTagLinkedDocumentViewModel model)
     {
+        var isMaloo = string.Equals(model.CompanyEntityId, "maloo", StringComparison.OrdinalIgnoreCase);
+        var brandLogoUrl = isMaloo
+            ? "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png"
+            : "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
+        var brandName = isMaloo ? "Maloo Access Group" : "Erect Safe Scaffolding";
         var pageTitle = System.Net.WebUtility.HtmlEncode(model.PageTitle);
         var documentName = System.Net.WebUtility.HtmlEncode(model.DocumentName);
         var documentUrl = System.Net.WebUtility.HtmlEncode(model.DocumentUrl);
@@ -285,11 +298,16 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; scroll-snap-stop:always; }
     .pdf-viewport.is-zoomed .pdf-page-slot:not(.is-current-page),.pdf-viewport.is-pinching .pdf-page-slot:not(.is-current-page) { visibility:hidden; }
     .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
-    .pdf-page-placeholder { width:52px; height:52px; display:grid; flex:0 0 auto; place-items:center; }
-    .pdf-page-spinner { width:22px; height:22px; border:2px solid rgba(255,255,255,.13); border-top-color:rgba(255,255,255,.58); border-radius:50%; animation:viewer-spin .78s linear infinite; }
+    .pdf-page-placeholder { width:58px; height:58px; display:grid; flex:0 0 auto; place-items:center; }
     .pdf-status { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; color:rgba(255,255,255,.82); font-size:11px; font-weight:750; letter-spacing:.45px; text-align:center; }
     .pdf-status[hidden] { display:none; }
-    .pdf-spinner,.navigation-spinner { width:34px; height:34px; border:3px solid rgba(255,255,255,.2); border-top-color:rgba(255,255,255,.92); border-radius:50%; animation:viewer-spin .78s linear infinite; }
+    .brand-loader { position:relative; width:104px; height:104px; display:grid; flex:0 0 auto; place-items:center; }
+    .brand-loader-ring { position:absolute; inset:0; border:7px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:viewer-spin .9s linear infinite; }
+    .brand-loader-core { position:absolute; inset:10px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.28); }
+    .brand-loader-logo { width:100%; height:100%; display:block; object-fit:contain; }
+    .brand-loader.compact { width:52px; height:52px; }
+    .brand-loader.compact .brand-loader-ring { border-width:4px; }
+    .brand-loader.compact .brand-loader-core { inset:6px; padding:3px; }
     .pdf-error a { display:inline-block; margin-top:10px; color:#fff; font-weight:850; text-underline-offset:3px; }
     .pdf-toolbar { position:fixed; bottom:max(7px,env(safe-area-inset-bottom)); left:50%; z-index:35; height:36px; display:flex; align-items:center; gap:3px; padding:3px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(7,12,18,.48); opacity:.68; transform:translateX(-50%); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
     .pdf-toolbar button { width:30px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:650; }
@@ -331,7 +349,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     @media (prefers-reduced-motion:reduce) {
       .document-nav { animation:none; transform:translateY(-50%); }
       .pdf-viewport,.navigation-loading { transition:none; }
-      .pdf-spinner,.pdf-page-spinner,.navigation-spinner { animation:none; }
+      .brand-loader-ring { animation:none; }
     }
   </style>
 </head>
@@ -345,9 +363,9 @@ public static class ScaffTagLinkedDocumentPageRenderer
     {{rightNavigation}}
   </nav>
   <main class="viewer">
-    <section id="pdfViewer" class="pdf-viewport" data-pdf-url="{{documentUrl}}" aria-label="{{pageTitle}} preview">
+    <section id="pdfViewer" class="pdf-viewport" data-pdf-url="{{documentUrl}}" data-loader-logo="{{brandLogoUrl}}" data-loader-name="{{brandName}}" aria-label="{{pageTitle}} preview">
       <div id="pdfPages" class="pdf-pages" aria-live="polite" aria-busy="true"></div>
-      <div id="pdfLoading" class="pdf-status" role="status"><span class="pdf-spinner" aria-hidden="true"></span><span>Preparing PDF preview</span></div>
+      <div id="pdfLoading" class="pdf-status" role="status"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span>Preparing PDF preview</span></div>
       <div id="pdfError" class="pdf-status pdf-error" hidden><span>We could not render this PDF preview.</span><a href="{{documentUrl}}">Open the PDF directly</a></div>
     </section>
   </main>
@@ -360,7 +378,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     <button id="pdfRotate" type="button" aria-label="Rotate PDF clockwise" title="Rotate clockwise">&#8635;</button>
     <span id="pdfPageIndicator" class="pdf-page-indicator" aria-live="polite">1 / 1</span>
   </div>
-  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="navigation-spinner" aria-hidden="true"></span><span id="navigationLoadingLabel">Opening document</span></div>
+  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span id="navigationLoadingLabel">Opening document</span></div>
   <script>
     document.getElementById('documentNavigation').addEventListener('click', event => {
       const link = event.target.closest('a.document-nav');
@@ -374,7 +392,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=5"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=6"></script>
 </body>
 </html>
 """;
@@ -510,6 +528,9 @@ public static class ScaffTagPublicPageRenderer
     public static string Render(ScaffTagPublicViewModel model)
     {
         var initialJson = JsonSerializer.Serialize(model, JsonOptions);
+        var loaderLogoUrl = string.Equals(model.CompanyEntityId, "maloo", StringComparison.OrdinalIgnoreCase)
+            ? "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png"
+            : "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
         return $$$"""
 <!doctype html>
 <html lang="en">
@@ -616,16 +637,19 @@ public static class ScaffTagPublicPageRenderer
     body.is-leaving-right .stage { animation:leave-to-handover .18s ease-in forwards; }
     .navigation-loading { position:fixed; inset:0; z-index:110; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; background:rgba(18,21,24,.78); color:rgba(255,255,255,.9); font-size:11px; font-weight:800; letter-spacing:.5px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease,visibility 0s linear .14s; -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
     .navigation-loading.is-visible { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
-    .navigation-spinner { width:34px; height:34px; border:3px solid rgba(255,255,255,.2); border-top-color:rgba(255,255,255,.92); border-radius:50%; animation:navigation-spin .78s linear infinite; }
+    .brand-loader { position:relative; width:104px; height:104px; display:grid; flex:0 0 auto; place-items:center; }
+    .brand-loader-ring { position:absolute; inset:0; border:7px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:navigation-spin .9s linear infinite; }
+    .brand-loader-core { position:absolute; inset:10px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.28); }
+    .brand-loader-logo { width:100%; height:100%; display:block; object-fit:contain; }
     @keyframes navigation-spin { to { transform:rotate(360deg); } }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (min-width:700px) { .app { padding:18px; } .stage { width:min(92%,460px); height:92%; } .document-nav { width:76px; } .document-nav-icon { width:52px; height:52px; } .document-nav svg { width:29px; height:29px; } .document-nav-label { max-width:76px; padding:5px 8px; font-size:9px; } .document-nav-left { left:max(5px,env(safe-area-inset-left)); } .document-nav-right { right:max(5px,env(safe-area-inset-right)); } }
-    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image,.navigation-loading { transition:none; } .document-nav { animation:none; transform:translateY(-50%); } .navigation-spinner { animation:none; } body.is-leaving-left .stage,body.is-leaving-right .stage { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .flipper { transition:none; } .flip-hint.is-visible { animation:none; opacity:1; } .flip-hint-icon { animation:none; } .photo-viewer,.photo-viewer-image,.navigation-loading { transition:none; } .document-nav { animation:none; transform:translateY(-50%); } .brand-loader-ring { animation:none; } body.is-leaving-left .stage,body.is-leaving-right .stage { animation:none; } }
   </style>
 </head>
 <body>
   <nav id="documentNavigation" class="document-navigation" aria-label="Linked scaffold documents"></nav>
-  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="navigation-spinner" aria-hidden="true"></span><span id="navigationLoadingLabel">Opening document</span></div>
+  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{{loaderLogoUrl}}}" alt="" /></span></span><span id="navigationLoadingLabel">Opening document</span></div>
   <main class="app">
     <div id="stage" class="stage" role="button" tabindex="0" aria-label="Flip Scaff-Tag to view the back" aria-pressed="false">
       <div id="flipper" class="flipper">

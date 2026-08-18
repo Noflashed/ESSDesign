@@ -9,6 +9,8 @@ const viewer = document.getElementById('pdfViewer');
 
 if (viewer) {
     const documentUrl = viewer.dataset.pdfUrl || '';
+    const brandLogoUrl = viewer.dataset.loaderLogo || '';
+    const brandName = viewer.dataset.loaderName || 'company';
     const pagesElement = document.getElementById('pdfPages');
     const loadingElement = document.getElementById('pdfLoading');
     const errorElement = document.getElementById('pdfError');
@@ -163,8 +165,21 @@ if (viewer) {
         const placeholder = document.createElement('div');
         placeholder.className = 'pdf-page-placeholder';
         placeholder.setAttribute('aria-hidden', 'true');
-        placeholder.innerHTML = '<span class="pdf-page-spinner"></span>';
         placeholder.dataset.pageNumber = String(pageNumber);
+        const loader = document.createElement('span');
+        loader.className = 'brand-loader compact';
+        const ring = document.createElement('span');
+        ring.className = 'brand-loader-ring';
+        const core = document.createElement('span');
+        core.className = 'brand-loader-core';
+        const logo = document.createElement('img');
+        logo.className = 'brand-loader-logo';
+        logo.src = brandLogoUrl;
+        logo.alt = '';
+        logo.setAttribute('aria-label', `${brandName} loading`);
+        core.appendChild(logo);
+        loader.append(ring, core);
+        placeholder.appendChild(loader);
         return placeholder;
     }
 
