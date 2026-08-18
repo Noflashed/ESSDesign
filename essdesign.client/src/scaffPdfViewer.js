@@ -31,10 +31,11 @@ if (viewer) {
     let scrollFrame = 0;
     let geometryUpdateInProgress = false;
     let pinchState = null;
-    const activeTouchPointers = new Map();
     const pageCache = new Map();
 
-    const clampZoom = value => Math.min(3, Math.max(1, value));
+    const minimumZoom = 1;
+    const maximumZoom = 5;
+    const clampZoom = value => Math.min(maximumZoom, Math.max(minimumZoom, value));
 
     function getPage(pageNumber) {
         if (!pageCache.has(pageNumber)) {
@@ -66,8 +67,8 @@ if (viewer) {
 
     function updateControls() {
         zoomIndicator.textContent = `${Math.round(zoom * 100)}%`;
-        zoomOutButton.disabled = zoom <= 1;
-        zoomInButton.disabled = zoom >= 3;
+        zoomOutButton.disabled = zoom <= minimumZoom;
+        zoomInButton.disabled = zoom >= maximumZoom;
         fitModeButton.textContent = fitMode === 'page' ? 'Page' : 'Width';
         fitModeButton.setAttribute(
             'aria-label',
@@ -243,6 +244,10 @@ if (viewer) {
                 viewport: renderViewport,
                 background: '#ffffff',
             }).promise;
+            if (pinchState && existingCanvas) {
+                slot.dataset.renderRequest = '';
+                return;
+            }
             if (
                 generation !== renderGeneration
                 || !slot.isConnected
@@ -408,7 +413,7 @@ if (viewer) {
         pageIndicator.textContent = `${currentPageNumber} / ${pdfDocument.numPages}`;
         restoreViewAnchor(savedAnchor);
         clampToCurrentPage();
-        scheduleSharpRender();
+        if (!pinchState) scheduleSharpRender();
         window.requestAnimationFrame(() => {
             geometryUpdateInProgress = false;
             viewer.classList.remove('is-adjusting');
@@ -441,19 +446,22 @@ if (viewer) {
         scrollFrame = window.requestAnimationFrame(updateCurrentPage);
     }, { passive: true });
 
-    const pointerDistance = pointers => Math.hypot(
-        pointers[0].x - pointers[1].x,
-        pointers[0].y - pointers[1].y,
+    const touchDistance = touches => Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY,
     );
 
-    function beginPinch() {
-        if (pinchState || activeTouchPointers.size !== 2) return;
-        const pointers = Array.from(activeTouchPointers.values());
-        const startDistance = pointerDistance(pointers);
+    function beginPinch(touches) {
+        if (pinchState || touches.length < 2) return;
+        const startDistance = touchDistance(touches);
         if (startDistance <= 0) return;
+        window.clearTimeout(sharpRenderTimer);
+        pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
+            if (slot.querySelector('.pdf-page')) slot.dataset.renderRequest = '';
+        });
         const bounds = viewer.getBoundingClientRect();
-        const clientX = ((pointers[0].x + pointers[1].x) / 2) - bounds.left;
-        const clientY = ((pointers[0].y + pointers[1].y) / 2) - bounds.top;
+        const clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
+        const clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
         pinchState = {
             startDistance,
             startZoom: zoom,
@@ -463,16 +471,15 @@ if (viewer) {
         viewer.classList.add('is-pinching');
     }
 
-    function updatePinch() {
-        if (!pinchState || activeTouchPointers.size < 2) return;
-        const pointers = Array.from(activeTouchPointers.values()).slice(0, 2);
-        const distance = pointerDistance(pointers);
+    function updatePinch(touches) {
+        if (!pinchState || touches.length < 2) return;
+        const distance = touchDistance(touches);
         pinchState.draftZoom = clampZoom(
             pinchState.startZoom * (distance / pinchState.startDistance),
         );
         const bounds = viewer.getBoundingClientRect();
-        const clientX = ((pointers[0].x + pointers[1].x) / 2) - bounds.left;
-        const clientY = ((pointers[0].y + pointers[1].y) / 2) - bounds.top;
+        const clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
+        const clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
         applyZoomGeometry(pinchState.draftZoom, {
             ...pinchState.anchor,
             clientX,
@@ -490,28 +497,24 @@ if (viewer) {
         scheduleSharpRender(60);
     }
 
-    viewer.addEventListener('pointerdown', event => {
-        if (event.pointerType !== 'touch') return;
-        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        try { viewer.setPointerCapture(event.pointerId); } catch { /* Safari can decline capture. */ }
-        beginPinch();
-    });
-
-    viewer.addEventListener('pointermove', event => {
-        if (!activeTouchPointers.has(event.pointerId)) return;
-        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        if (!pinchState) beginPinch();
-        if (!pinchState) return;
+    document.addEventListener('touchstart', event => {
+        if (event.touches.length < 2) return;
         event.preventDefault();
-        updatePinch();
-    }, { passive: false });
+        beginPinch(event.touches);
+    }, { passive: false, capture: true });
 
-    const endTouchPointer = event => {
-        activeTouchPointers.delete(event.pointerId);
-        if (pinchState && activeTouchPointers.size < 2) finishPinch();
+    document.addEventListener('touchmove', event => {
+        if (event.touches.length < 2) return;
+        event.preventDefault();
+        if (!pinchState) beginPinch(event.touches);
+        updatePinch(event.touches);
+    }, { passive: false, capture: true });
+
+    const endTouchGesture = event => {
+        if (pinchState && event.touches.length < 2) finishPinch();
     };
-    viewer.addEventListener('pointerup', endTouchPointer);
-    viewer.addEventListener('pointercancel', endTouchPointer);
+    document.addEventListener('touchend', endTouchGesture, { capture: true });
+    document.addEventListener('touchcancel', endTouchGesture, { capture: true });
 
     window.addEventListener('resize', () => {
         window.clearTimeout(resizeTimer);
