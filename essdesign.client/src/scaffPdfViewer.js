@@ -23,6 +23,7 @@ if (viewer) {
     const rotateButton = document.getElementById('pdfRotate');
 
     let pdfDocument = null;
+    let loadingTask = null;
     let zoom = 1;
     let fitMode = 'page';
     let userRotation = 0;
@@ -33,17 +34,75 @@ if (viewer) {
     let scrollFrame = 0;
     let geometryUpdateInProgress = false;
     let pinchState = null;
+    let documentGeneration = 0;
+    let resumeTimer = 0;
     const pageCache = new Map();
+    const pageRenderTasks = new Map();
 
     const minimumZoom = 1;
     const maximumZoom = 5;
+    const pageLoadTimeoutMs = 10000;
+    const pageRenderTimeoutMs = 10000;
+    const documentLoadTimeoutMs = 25000;
+    const sharpCanvasPixelBudget = 8_000_000;
+    const previewCanvasPixelBudget = 1_500_000;
+    const maximumCanvasDimension = 4096;
+    const canvasSentinel = [17, 19, 23, 255];
     const clampZoom = value => Math.min(maximumZoom, Math.max(minimumZoom, value));
 
-    function getPage(pageNumber) {
+    function waitFor(promise, timeoutMs, message, onTimeout = null) {
+        let timeout = 0;
+        const timeoutPromise = new Promise((_resolve, reject) => {
+            timeout = window.setTimeout(() => {
+                try {
+                    onTimeout?.();
+                } finally {
+                    reject(new Error(message));
+                }
+            }, timeoutMs);
+        });
+        return Promise.race([promise, timeoutPromise])
+            .finally(() => window.clearTimeout(timeout));
+    }
+
+    async function getPage(pageNumber) {
         if (!pageCache.has(pageNumber)) {
             pageCache.set(pageNumber, pdfDocument.getPage(pageNumber));
         }
-        return pageCache.get(pageNumber);
+        try {
+            return await waitFor(
+                pageCache.get(pageNumber),
+                pageLoadTimeoutMs,
+                `Timed out while loading PDF page ${pageNumber}.`,
+            );
+        } catch (error) {
+            pageCache.delete(pageNumber);
+            throw error;
+        }
+    }
+
+    function isRenderCancellation(error) {
+        return error?.name === 'RenderingCancelledException';
+    }
+
+    function cancelPageRender(pageNumber) {
+        const activeRender = pageRenderTasks.get(pageNumber);
+        if (!activeRender) return;
+        pageRenderTasks.delete(pageNumber);
+        try {
+            activeRender.task.cancel();
+        } catch {
+            // PDF.js may already have completed the task between lookup and cancellation.
+        }
+        const canvas = activeRender.canvas;
+        if (canvas && !canvas.isConnected) {
+            canvas.width = 1;
+            canvas.height = 1;
+        }
+    }
+
+    function cancelAllPageRenders() {
+        Array.from(pageRenderTasks.keys()).forEach(cancelPageRender);
     }
 
     function getPageMargins() {
@@ -55,16 +114,18 @@ if (viewer) {
         };
     }
 
-    function getRenderPixelRatio(cssViewport) {
+    function getRenderPixelRatio(cssViewport, pixelBudget) {
         const deviceRatio = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
         const dimensionLimit = Math.min(
-            8192 / Math.max(1, cssViewport.width),
-            8192 / Math.max(1, cssViewport.height),
+            maximumCanvasDimension / Math.max(1, cssViewport.width),
+            maximumCanvasDimension / Math.max(1, cssViewport.height),
         );
         const pixelLimit = Math.sqrt(
-            10_000_000 / Math.max(1, cssViewport.width * cssViewport.height),
+            pixelBudget / Math.max(1, cssViewport.width * cssViewport.height),
         );
-        return Math.max(1, Math.min(deviceRatio, dimensionLimit, pixelLimit));
+        // Ratios below one are intentional at extreme zoom. They keep Safari below
+        // its canvas backing-store limit while CSS still provides fluid pinch zoom.
+        return Math.max(0.25, Math.min(deviceRatio, dimensionLimit, pixelLimit));
     }
 
     function updateControls() {
@@ -183,6 +244,41 @@ if (viewer) {
         return placeholder;
     }
 
+    function disposeCanvas(canvas) {
+        if (!canvas) return;
+        // Explicitly release the backing store; waiting for GC is unreliable on iOS.
+        canvas.width = 1;
+        canvas.height = 1;
+        canvas.remove();
+    }
+
+    function replaceSlotContents(slot, child) {
+        slot.querySelectorAll('canvas.pdf-page').forEach(disposeCanvas);
+        slot.replaceChildren(child);
+    }
+
+    function createPageFailure(pageNumber) {
+        const failure = document.createElement('div');
+        failure.className = 'pdf-page-failure';
+        const message = document.createElement('span');
+        message.textContent = 'Page preview paused';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Retry page';
+        retry.addEventListener('click', () => {
+            const slot = pagesElement.querySelector(`[data-page-number="${pageNumber}"]`);
+            if (!slot) return;
+            pageCache.delete(pageNumber);
+            slot.dataset.renderState = 'idle';
+            slot.dataset.renderSignature = '';
+            slot.dataset.renderRequest = '';
+            replaceSlotContents(slot, createPlaceholder(pageNumber));
+            void renderPageCanvas(pageNumber, renderGeneration, 'sharp', 0);
+        });
+        failure.append(message, retry);
+        return failure;
+    }
+
     async function calculatePageLayout(page) {
         const margins = getPageMargins();
         const rotation = (page.rotate + userRotation + 360) % 360;
@@ -212,9 +308,10 @@ if (viewer) {
         };
     }
 
-    function renderSignature(page, layout) {
+    function renderSignature(page, layout, quality) {
         const rotation = (page.rotate + userRotation + 360) % 360;
         return [
+            quality,
             fitMode,
             rotation,
             zoom.toFixed(4),
@@ -225,27 +322,88 @@ if (viewer) {
         ].join(':');
     }
 
-    async function renderPageCanvas(pageNumber, generation = renderGeneration) {
-        if (generation !== renderGeneration) return;
+    function recoverLostCanvas(pageNumber, canvas) {
+        window.setTimeout(() => {
+            if (!canvas.isConnected || !pdfDocument) return;
+            const slot = canvas.closest('.pdf-page-slot');
+            if (!slot) return;
+            cancelPageRender(pageNumber);
+            slot.dataset.renderState = 'idle';
+            slot.dataset.renderSignature = '';
+            slot.dataset.renderRequest = '';
+            replaceSlotContents(slot, createPlaceholder(pageNumber));
+            if (pageNumber === currentPageNumber) {
+                void renderPageCanvas(pageNumber, renderGeneration, 'sharp', 0);
+            }
+        }, 0);
+    }
+
+    function stampCanvas(canvas, context) {
+        context.save();
+        context.fillStyle = `rgb(${canvasSentinel[0]},${canvasSentinel[1]},${canvasSentinel[2]})`;
+        context.fillRect(canvas.width - 1, canvas.height - 1, 1, 1);
+        context.restore();
+    }
+
+    function canvasIsIntact(canvas) {
+        try {
+            const context = canvas.getContext('2d');
+            if (!context || context.isContextLost?.()) return false;
+            const pixel = context.getImageData(canvas.width - 1, canvas.height - 1, 1, 1).data;
+            return canvasSentinel.every((value, index) => pixel[index] === value);
+        } catch {
+            return false;
+        }
+    }
+
+    function scheduleCanvasIntegrityCheck(pageNumber, canvas, delay) {
+        window.setTimeout(() => {
+            if (!canvas.isConnected) return;
+            if (!canvasIsIntact(canvas)) {
+                recoverLostCanvas(pageNumber, canvas);
+                return;
+            }
+            if (pageNumber === currentPageNumber) {
+                scheduleCanvasIntegrityCheck(pageNumber, canvas, 3000);
+            }
+        }, delay);
+    }
+
+    async function renderPageCanvas(
+        pageNumber,
+        generation = renderGeneration,
+        quality = 'sharp',
+        attempt = 0,
+    ) {
+        if (generation !== renderGeneration || !pdfDocument) return;
         const slot = pagesElement.querySelector(`[data-page-number="${pageNumber}"]`);
         if (!slot) return;
+        let ownedRenderTask = null;
+        let ownedCanvas = null;
+        let requestedSignature = '';
 
         try {
             const page = await getPage(pageNumber);
             if (generation !== renderGeneration || !slot.isConnected) return;
             const layout = await calculatePageLayout(page);
-            const signature = renderSignature(page, layout);
+            const signature = renderSignature(page, layout, quality);
+            requestedSignature = signature;
             if (slot.dataset.renderSignature === signature || slot.dataset.renderRequest === signature) return;
+            cancelPageRender(pageNumber);
             const existingCanvas = slot.querySelector('.pdf-page');
             slot.dataset.renderRequest = signature;
             if (!existingCanvas) slot.dataset.renderState = 'rendering';
-            const pixelRatio = getRenderPixelRatio(layout.cssViewport);
+            const pixelBudget = quality === 'sharp'
+                ? sharpCanvasPixelBudget
+                : previewCanvasPixelBudget;
+            const pixelRatio = getRenderPixelRatio(layout.cssViewport, pixelBudget);
             const rotation = (page.rotate + userRotation + 360) % 360;
             const renderViewport = page.getViewport({
                 scale: layout.cssViewport.scale * pixelRatio,
                 rotation,
             });
             const canvas = document.createElement('canvas');
+            ownedCanvas = canvas;
             canvas.className = 'pdf-page';
             canvas.width = Math.max(1, Math.floor(renderViewport.width));
             canvas.height = Math.max(1, Math.floor(renderViewport.height));
@@ -254,28 +412,66 @@ if (viewer) {
             canvas.setAttribute('role', 'img');
             canvas.setAttribute('aria-label', `Rendered PDF page ${pageNumber}`);
             const context = canvas.getContext('2d', { alpha: false });
-            await page.render({
+            if (!context) throw new Error(`Unable to create a canvas for PDF page ${pageNumber}.`);
+            const renderTask = page.render({
                 canvasContext: context,
                 viewport: renderViewport,
                 background: '#ffffff',
-            }).promise;
+            });
+            ownedRenderTask = renderTask;
+            pageRenderTasks.set(pageNumber, { task: renderTask, canvas, signature });
+            await waitFor(
+                renderTask.promise,
+                pageRenderTimeoutMs,
+                `Timed out while rendering PDF page ${pageNumber}.`,
+                () => renderTask.cancel(),
+            );
+            stampCanvas(canvas, context);
+            const activeRender = pageRenderTasks.get(pageNumber);
+            if (activeRender?.task === renderTask) pageRenderTasks.delete(pageNumber);
             if (pinchState && existingCanvas) {
-                slot.dataset.renderRequest = '';
+                if (slot.dataset.renderRequest === signature) slot.dataset.renderRequest = '';
+                disposeCanvas(canvas);
                 return;
             }
             if (
                 generation !== renderGeneration
                 || !slot.isConnected
                 || slot.dataset.renderRequest !== signature
-            ) return;
+            ) {
+                disposeCanvas(canvas);
+                return;
+            }
+            canvas.addEventListener('contextlost', event => {
+                event.preventDefault();
+                recoverLostCanvas(pageNumber, canvas);
+            });
             slot.replaceChildren(canvas);
+            disposeCanvas(existingCanvas);
             slot.dataset.renderState = 'rendered';
             slot.dataset.renderSignature = signature;
             slot.dataset.renderRequest = '';
+            scheduleCanvasIntegrityCheck(pageNumber, canvas, 800);
         } catch (error) {
-            if (generation !== renderGeneration) return;
-            if (!slot.querySelector('.pdf-page')) slot.dataset.renderState = 'error';
-            slot.dataset.renderRequest = '';
+            const activeRender = pageRenderTasks.get(pageNumber);
+            if (activeRender?.task === ownedRenderTask) {
+                pageRenderTasks.delete(pageNumber);
+            }
+            if (ownedCanvas && !ownedCanvas.isConnected) disposeCanvas(ownedCanvas);
+            if (generation !== renderGeneration || isRenderCancellation(error)) return;
+            if (slot.dataset.renderRequest === requestedSignature) slot.dataset.renderRequest = '';
+            if (attempt < 1 && slot.isConnected) {
+                pageCache.delete(pageNumber);
+                await new Promise(resolve => window.setTimeout(resolve, 180));
+                if (generation === renderGeneration) {
+                    return renderPageCanvas(pageNumber, generation, quality, attempt + 1);
+                }
+                return;
+            }
+            if (!slot.querySelector('.pdf-page')) {
+                slot.dataset.renderState = 'error';
+                replaceSlotContents(slot, createPageFailure(pageNumber));
+            }
             console.error(`Unable to render PDF page ${pageNumber}:`, error);
         }
     }
@@ -284,7 +480,8 @@ if (viewer) {
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             const pageNumber = Number(slot.dataset.pageNumber);
             if (Math.abs(pageNumber - centerPage) <= 1 || slot.dataset.renderState !== 'rendered') return;
-            slot.replaceChildren(createPlaceholder(pageNumber));
+            cancelPageRender(pageNumber);
+            replaceSlotContents(slot, createPlaceholder(pageNumber));
             slot.dataset.renderState = 'idle';
             slot.dataset.renderSignature = '';
             slot.dataset.renderRequest = '';
@@ -292,12 +489,12 @@ if (viewer) {
     }
 
     async function renderVisiblePages(pageNumber, generation = renderGeneration) {
-        await renderPageCanvas(pageNumber, generation);
-        if (generation !== renderGeneration) return;
+        await renderPageCanvas(pageNumber, generation, 'sharp');
+        if (generation !== renderGeneration || pageNumber !== currentPageNumber) return;
         releaseDistantPages(pageNumber);
         [pageNumber - 1, pageNumber + 1]
             .filter(candidate => candidate >= 1 && candidate <= pdfDocument.numPages)
-            .forEach(candidate => { void renderPageCanvas(candidate, generation); });
+            .forEach(candidate => { void renderPageCanvas(candidate, generation, 'preview'); });
     }
 
     function updateCurrentPage() {
@@ -327,6 +524,7 @@ if (viewer) {
     async function renderPages({ preservePosition = true, anchor = null } = {}) {
         if (!pdfDocument) return;
         const generation = ++renderGeneration;
+        cancelAllPageRenders();
         const savedAnchor = anchor || (preservePosition ? captureViewAnchor() : null);
         const targetPage = Math.min(
             Math.max(savedAnchor?.pageNumber || currentPageNumber, 1),
@@ -335,6 +533,7 @@ if (viewer) {
 
         loadingElement.hidden = false;
         errorElement.hidden = true;
+        pagesElement.querySelectorAll('canvas.pdf-page').forEach(disposeCanvas);
         pagesElement.replaceChildren();
         pagesElement.setAttribute('aria-busy', 'true');
 
@@ -403,6 +602,7 @@ if (viewer) {
         const savedAnchor = anchor || captureViewAnchor();
         geometryUpdateInProgress = true;
         viewer.classList.add('is-adjusting');
+        cancelAllPageRenders();
         zoom = normalizedZoom;
         updateControls();
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
@@ -471,6 +671,7 @@ if (viewer) {
         const startDistance = touchDistance(touches);
         if (startDistance <= 0) return;
         window.clearTimeout(sharpRenderTimer);
+        cancelAllPageRenders();
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             if (slot.querySelector('.pdf-page')) slot.dataset.renderRequest = '';
         });
@@ -537,19 +738,97 @@ if (viewer) {
         resizeTimer = window.setTimeout(() => renderPages({ anchor }), 180);
     });
 
+    function resetNavigationState() {
+        document.body.classList.remove('is-leaving-left', 'is-leaving-right');
+        document.getElementById('navigationLoading')?.classList.remove('is-visible');
+    }
+
+    function invalidateRenderedCanvases() {
+        if (!pdfDocument) return;
+        cancelAllPageRenders();
+        pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
+            const pageNumber = Number(slot.dataset.pageNumber);
+            if (!slot.querySelector('.pdf-page')) return;
+            replaceSlotContents(slot, createPlaceholder(pageNumber));
+            slot.dataset.renderState = 'idle';
+            slot.dataset.renderSignature = '';
+            slot.dataset.renderRequest = '';
+        });
+        void renderVisiblePages(currentPageNumber);
+    }
+
+    function suspendDocument() {
+        documentGeneration += 1;
+        renderGeneration += 1;
+        window.clearTimeout(sharpRenderTimer);
+        window.clearTimeout(resizeTimer);
+        window.clearTimeout(resumeTimer);
+        cancelAllPageRenders();
+        pageCache.clear();
+        pagesElement.querySelectorAll('canvas.pdf-page').forEach(disposeCanvas);
+        const task = loadingTask;
+        loadingTask = null;
+        pdfDocument = null;
+        if (task) {
+            void task.destroy().catch(() => {
+                // Navigation teardown can race a worker that has already stopped.
+            });
+        }
+    }
+
     async function loadDocument() {
         if (!documentUrl) throw new Error('No PDF URL was supplied.');
-        const loadingTask = pdfjsLib.getDocument({
+        const generation = ++documentGeneration;
+        loadingElement.hidden = false;
+        errorElement.hidden = true;
+        const task = pdfjsLib.getDocument({
             url: documentUrl,
-            disableAutoFetch: true,
+            disableAutoFetch: false,
             isEvalSupported: false,
         });
-        pdfDocument = await loadingTask.promise;
+        loadingTask = task;
+        const loadedDocument = await waitFor(
+            task.promise,
+            documentLoadTimeoutMs,
+            'Timed out while opening this PDF.',
+            () => {
+                void task.destroy().catch(() => {
+                    // The worker may already be stopping when the timeout wins.
+                });
+            },
+        );
+        if (generation !== documentGeneration) {
+            void loadedDocument.destroy().catch(() => {
+                // A superseded loading task may already have released its worker.
+            });
+            return;
+        }
+        pdfDocument = loadedDocument;
         pageIndicator.textContent = `1 / ${pdfDocument.numPages}`;
         await renderPages({ preservePosition: false });
     }
 
+    window.addEventListener('pagehide', suspendDocument);
+    window.addEventListener('pageshow', event => {
+        resetNavigationState();
+        if (!event.persisted) return;
+        loadDocument().catch(error => {
+            console.error('Unable to restore linked scaffold PDF:', error);
+            loadingElement.hidden = true;
+            errorElement.hidden = false;
+        });
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        resetNavigationState();
+        window.clearTimeout(resumeTimer);
+        resumeTimer = window.setTimeout(() => {
+            if (pdfDocument) invalidateRenderedCanvases();
+        }, 120);
+    });
+
     updateControls();
+    resetNavigationState();
     loadDocument().catch(error => {
         console.error('Unable to render linked scaffold PDF:', error);
         loadingElement.hidden = true;
