@@ -299,9 +299,6 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .pdf-viewport.is-zoomed .pdf-page-slot:not(.is-current-page),.pdf-viewport.is-pinching .pdf-page-slot:not(.is-current-page) { visibility:hidden; }
     .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
     .pdf-page-placeholder { width:58px; height:58px; display:grid; flex:0 0 auto; place-items:center; }
-    .pdf-page-failure { display:flex; flex-direction:column; align-items:center; gap:9px; padding:14px 16px; border:1px solid rgba(255,255,255,.18); border-radius:12px; background:rgba(7,12,18,.58); color:rgba(255,255,255,.82); font-size:10px; font-weight:750; letter-spacing:.25px; text-align:center; }
-    .pdf-page-failure button { min-height:32px; padding:0 13px; border:1px solid rgba(255,255,255,.28); border-radius:999px; background:rgba(255,255,255,.1); color:#fff; font:inherit; font-weight:850; }
-    .pdf-page-failure button:active { background:rgba(255,255,255,.2); }
     .pdf-status { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; color:rgba(255,255,255,.82); font-size:11px; font-weight:750; letter-spacing:.45px; text-align:center; }
     .pdf-status[hidden] { display:none; }
     .brand-loader { position:relative; width:104px; height:104px; display:grid; flex:0 0 auto; place-items:center; }
@@ -395,7 +392,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=8"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=6"></script>
 </body>
 </html>
 """;
