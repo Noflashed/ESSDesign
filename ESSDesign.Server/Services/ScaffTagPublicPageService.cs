@@ -280,9 +280,10 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
     .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; background:transparent; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:y mandatory; transition:opacity .18s ease,transform .18s ease; }
     .pdf-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
-    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
+    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-adjusting,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
     .pdf-pages { min-width:100%; min-height:100%; transform-origin:center center; }
     .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; scroll-snap-stop:always; }
+    .pdf-viewport.is-zoomed .pdf-page-slot:not(.is-current-page),.pdf-viewport.is-pinching .pdf-page-slot:not(.is-current-page) { visibility:hidden; }
     .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
     .pdf-page-placeholder { width:52px; height:52px; display:grid; flex:0 0 auto; place-items:center; }
     .pdf-page-spinner { width:22px; height:22px; border:2px solid rgba(255,255,255,.13); border-top-color:rgba(255,255,255,.58); border-radius:50%; animation:viewer-spin .78s linear infinite; }
@@ -373,7 +374,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=3"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=4"></script>
 </body>
 </html>
 """;

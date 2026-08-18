@@ -27,7 +27,9 @@ if (viewer) {
     let currentPageNumber = 1;
     let renderGeneration = 0;
     let resizeTimer = 0;
+    let sharpRenderTimer = 0;
     let scrollFrame = 0;
+    let geometryUpdateInProgress = false;
     let pinchState = null;
     const activeTouchPointers = new Map();
     const pageCache = new Map();
@@ -76,6 +78,28 @@ if (viewer) {
         viewer.classList.toggle('is-fit-width', fitMode === 'width');
     }
 
+    function markCurrentPage(pageNumber) {
+        pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
+            slot.classList.toggle(
+                'is-current-page',
+                Number(slot.dataset.pageNumber) === pageNumber,
+            );
+        });
+    }
+
+    function clampToCurrentPage() {
+        if (zoom <= 1.001 && !pinchState) return false;
+        const slot = pagesElement.querySelector(`[data-page-number="${currentPageNumber}"]`);
+        if (!slot) return true;
+        const minimumTop = slot.offsetTop;
+        const maximumTop = Math.max(minimumTop, slot.offsetTop + slot.offsetHeight - viewer.clientHeight);
+        const clampedTop = Math.min(maximumTop, Math.max(minimumTop, viewer.scrollTop));
+        if (Math.abs(clampedTop - viewer.scrollTop) > 0.5) {
+            viewer.scrollTo({ left: viewer.scrollLeft, top: clampedTop, behavior: 'auto' });
+        }
+        return true;
+    }
+
     function getSlotAtPoint(contentX, contentY) {
         const slots = Array.from(pagesElement.querySelectorAll('.pdf-page-slot'));
         return slots.find(slot => (
@@ -91,13 +115,21 @@ if (viewer) {
         const contentY = viewer.scrollTop + clientY;
         const slot = getSlotAtPoint(contentX, contentY);
         if (!slot) return null;
-        return {
+        const canvas = slot.querySelector('.pdf-page');
+        const anchor = {
             pageNumber: Number(slot.dataset.pageNumber) || currentPageNumber,
             xRatio: (contentX - slot.offsetLeft) / Math.max(1, slot.offsetWidth),
             yRatio: (contentY - slot.offsetTop) / Math.max(1, slot.offsetHeight),
             clientX,
             clientY,
         };
+        if (canvas) {
+            const pageLeft = slot.offsetLeft + canvas.offsetLeft;
+            const pageTop = slot.offsetTop + canvas.offsetTop;
+            anchor.pageXRatio = (contentX - pageLeft) / Math.max(1, canvas.offsetWidth);
+            anchor.pageYRatio = (contentY - pageTop) / Math.max(1, canvas.offsetHeight);
+        }
+        return anchor;
     }
 
     function restoreViewAnchor(anchor) {
@@ -107,13 +139,21 @@ if (viewer) {
         );
         const slot = pagesElement.querySelector(`[data-page-number="${pageNumber}"]`);
         if (!slot) return;
-        const xRatio = Number.isFinite(anchor?.xRatio) ? anchor.xRatio : 0.5;
-        const yRatio = Number.isFinite(anchor?.yRatio) ? anchor.yRatio : 0.5;
         const clientX = Number.isFinite(anchor?.clientX) ? anchor.clientX : viewer.clientWidth / 2;
         const clientY = Number.isFinite(anchor?.clientY) ? anchor.clientY : viewer.clientHeight / 2;
+        const canvas = slot.querySelector('.pdf-page');
+        const hasPageAnchor = canvas
+            && Number.isFinite(anchor?.pageXRatio)
+            && Number.isFinite(anchor?.pageYRatio);
+        const contentX = hasPageAnchor
+            ? slot.offsetLeft + canvas.offsetLeft + (canvas.offsetWidth * anchor.pageXRatio)
+            : slot.offsetLeft + (slot.offsetWidth * (Number.isFinite(anchor?.xRatio) ? anchor.xRatio : 0.5));
+        const contentY = hasPageAnchor
+            ? slot.offsetTop + canvas.offsetTop + (canvas.offsetHeight * anchor.pageYRatio)
+            : slot.offsetTop + (slot.offsetHeight * (Number.isFinite(anchor?.yRatio) ? anchor.yRatio : 0.5));
         viewer.scrollTo({
-            left: Math.max(0, slot.offsetLeft + (slot.offsetWidth * xRatio) - clientX),
-            top: Math.max(0, slot.offsetTop + (slot.offsetHeight * yRatio) - clientY),
+            left: Math.max(0, contentX - clientX),
+            top: Math.max(0, contentY - clientY),
             behavior: 'auto',
         });
     }
@@ -140,7 +180,9 @@ if (viewer) {
                 availableHeight / naturalViewport.height,
             );
         const cssViewport = page.getViewport({ scale: fitScale * zoom, rotation });
+        const baseViewport = page.getViewport({ scale: fitScale, rotation });
         return {
+            baseViewport,
             cssViewport,
             margins,
             slotWidth: Math.max(
@@ -154,16 +196,33 @@ if (viewer) {
         };
     }
 
+    function renderSignature(page, layout) {
+        const rotation = (page.rotate + userRotation + 360) % 360;
+        return [
+            fitMode,
+            rotation,
+            zoom.toFixed(4),
+            Math.round(layout.cssViewport.width),
+            Math.round(layout.cssViewport.height),
+            viewer.clientWidth,
+            viewer.clientHeight,
+        ].join(':');
+    }
+
     async function renderPageCanvas(pageNumber, generation = renderGeneration) {
         if (generation !== renderGeneration) return;
         const slot = pagesElement.querySelector(`[data-page-number="${pageNumber}"]`);
-        if (!slot || slot.dataset.renderState === 'rendered' || slot.dataset.renderState === 'rendering') return;
-        slot.dataset.renderState = 'rendering';
+        if (!slot) return;
 
         try {
             const page = await getPage(pageNumber);
             if (generation !== renderGeneration || !slot.isConnected) return;
             const layout = await calculatePageLayout(page);
+            const signature = renderSignature(page, layout);
+            if (slot.dataset.renderSignature === signature || slot.dataset.renderRequest === signature) return;
+            const existingCanvas = slot.querySelector('.pdf-page');
+            slot.dataset.renderRequest = signature;
+            if (!existingCanvas) slot.dataset.renderState = 'rendering';
             const pixelRatio = getRenderPixelRatio(layout.cssViewport);
             const rotation = (page.rotate + userRotation + 360) % 360;
             const renderViewport = page.getViewport({
@@ -184,12 +243,19 @@ if (viewer) {
                 viewport: renderViewport,
                 background: '#ffffff',
             }).promise;
-            if (generation !== renderGeneration || !slot.isConnected) return;
+            if (
+                generation !== renderGeneration
+                || !slot.isConnected
+                || slot.dataset.renderRequest !== signature
+            ) return;
             slot.replaceChildren(canvas);
             slot.dataset.renderState = 'rendered';
+            slot.dataset.renderSignature = signature;
+            slot.dataset.renderRequest = '';
         } catch (error) {
             if (generation !== renderGeneration) return;
-            slot.dataset.renderState = 'error';
+            if (!slot.querySelector('.pdf-page')) slot.dataset.renderState = 'error';
+            slot.dataset.renderRequest = '';
             console.error(`Unable to render PDF page ${pageNumber}:`, error);
         }
     }
@@ -200,6 +266,8 @@ if (viewer) {
             if (Math.abs(pageNumber - centerPage) <= 1 || slot.dataset.renderState !== 'rendered') return;
             slot.replaceChildren(createPlaceholder(pageNumber));
             slot.dataset.renderState = 'idle';
+            slot.dataset.renderSignature = '';
+            slot.dataset.renderRequest = '';
         });
     }
 
@@ -214,7 +282,7 @@ if (viewer) {
 
     function updateCurrentPage() {
         scrollFrame = 0;
-        if (!pdfDocument) return;
+        if (!pdfDocument || geometryUpdateInProgress || pinchState) return;
         const slots = Array.from(pagesElement.querySelectorAll('.pdf-page-slot'));
         if (slots.length === 0) return;
         const viewerCenter = viewer.scrollTop + (viewer.clientHeight / 2);
@@ -231,6 +299,7 @@ if (viewer) {
         pageIndicator.textContent = `${closestPage} / ${pdfDocument.numPages}`;
         if (closestPage !== currentPageNumber) {
             currentPageNumber = closestPage;
+            markCurrentPage(closestPage);
             void renderVisiblePages(closestPage);
         }
     }
@@ -258,6 +327,11 @@ if (viewer) {
                 slot.className = 'pdf-page-slot';
                 slot.dataset.pageNumber = String(pageNumber);
                 slot.dataset.renderState = 'idle';
+                slot.dataset.basePageWidth = String(layout.baseViewport.width);
+                slot.dataset.basePageHeight = String(layout.baseViewport.height);
+                slot.dataset.marginHorizontal = String(layout.margins.horizontal);
+                slot.dataset.marginTop = String(layout.margins.top);
+                slot.dataset.marginBottom = String(layout.margins.bottom);
                 slot.setAttribute('aria-label', `Page ${pageNumber} of ${pdfDocument.numPages}`);
                 slot.style.width = `${layout.slotWidth}px`;
                 slot.style.height = `${layout.slotHeight}px`;
@@ -268,6 +342,7 @@ if (viewer) {
 
             if (generation !== renderGeneration) return;
             currentPageNumber = targetPage;
+            markCurrentPage(targetPage);
             restoreViewAnchor(savedAnchor || {
                 pageNumber: targetPage,
                 xRatio: 0.5,
@@ -279,6 +354,7 @@ if (viewer) {
             updateControls();
             await renderVisiblePages(targetPage, generation);
             if (generation !== renderGeneration) return;
+            restoreViewAnchor(savedAnchor);
             pagesElement.setAttribute('aria-busy', 'false');
             loadingElement.hidden = true;
         } catch (error) {
@@ -287,17 +363,61 @@ if (viewer) {
         }
     }
 
-    async function setZoom(nextZoom, anchor = null) {
-        const normalizedZoom = clampZoom(nextZoom);
-        if (Math.abs(normalizedZoom - zoom) < 0.001 || !pdfDocument) return;
-        zoom = normalizedZoom;
-        updateControls();
-        await renderPages({ anchor: anchor || captureViewAnchor() });
+    function scheduleSharpRender(delay = 140) {
+        window.clearTimeout(sharpRenderTimer);
+        sharpRenderTimer = window.setTimeout(() => {
+            void renderVisiblePages(currentPageNumber);
+        }, delay);
     }
 
-    zoomOutButton.addEventListener('click', () => setZoom(zoom - 0.25));
-    zoomFitButton.addEventListener('click', () => setZoom(1));
-    zoomInButton.addEventListener('click', () => setZoom(zoom + 0.25));
+    function applyZoomGeometry(nextZoom, anchor = null) {
+        const normalizedZoom = clampZoom(nextZoom);
+        if (!pdfDocument) return;
+        if (Math.abs(normalizedZoom - zoom) < 0.001) {
+            if (anchor) {
+                restoreViewAnchor(anchor);
+                clampToCurrentPage();
+            }
+            return;
+        }
+        const savedAnchor = anchor || captureViewAnchor();
+        geometryUpdateInProgress = true;
+        viewer.classList.add('is-adjusting');
+        zoom = normalizedZoom;
+        updateControls();
+        pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
+            const baseWidth = Number(slot.dataset.basePageWidth);
+            const baseHeight = Number(slot.dataset.basePageHeight);
+            const marginHorizontal = Number(slot.dataset.marginHorizontal);
+            const marginTop = Number(slot.dataset.marginTop);
+            const marginBottom = Number(slot.dataset.marginBottom);
+            if (![baseWidth, baseHeight, marginHorizontal, marginTop, marginBottom].every(Number.isFinite)) return;
+            const pageWidth = baseWidth * zoom;
+            const pageHeight = baseHeight * zoom;
+            slot.style.width = `${Math.max(viewer.clientWidth, Math.ceil(pageWidth + (marginHorizontal * 2)))}px`;
+            slot.style.height = `${Math.max(viewer.clientHeight, Math.ceil(pageHeight + marginTop + marginBottom))}px`;
+            const canvas = slot.querySelector('.pdf-page');
+            if (canvas) {
+                canvas.style.width = `${pageWidth}px`;
+                canvas.style.height = `${pageHeight}px`;
+            }
+            slot.dataset.renderRequest = '';
+        });
+        if (savedAnchor?.pageNumber) currentPageNumber = savedAnchor.pageNumber;
+        markCurrentPage(currentPageNumber);
+        pageIndicator.textContent = `${currentPageNumber} / ${pdfDocument.numPages}`;
+        restoreViewAnchor(savedAnchor);
+        clampToCurrentPage();
+        scheduleSharpRender();
+        window.requestAnimationFrame(() => {
+            geometryUpdateInProgress = false;
+            viewer.classList.remove('is-adjusting');
+        });
+    }
+
+    zoomOutButton.addEventListener('click', () => applyZoomGeometry(zoom - 0.25));
+    zoomFitButton.addEventListener('click', () => applyZoomGeometry(1));
+    zoomInButton.addEventListener('click', () => applyZoomGeometry(zoom + 0.25));
     fitModeButton.addEventListener('click', async () => {
         if (!pdfDocument) return;
         const anchor = captureViewAnchor();
@@ -316,6 +436,7 @@ if (viewer) {
     });
 
     viewer.addEventListener('scroll', () => {
+        if (clampToCurrentPage()) return;
         if (scrollFrame) return;
         scrollFrame = window.requestAnimationFrame(updateCurrentPage);
     }, { passive: true });
@@ -339,10 +460,6 @@ if (viewer) {
             draftZoom: zoom,
             anchor: captureViewAnchor(clientX, clientY),
         };
-        const midpointX = clientX + viewer.scrollLeft;
-        const midpointY = clientY + viewer.scrollTop;
-        pagesElement.style.transformOrigin = `${midpointX}px ${midpointY}px`;
-        pagesElement.style.willChange = 'transform';
         viewer.classList.add('is-pinching');
     }
 
@@ -353,24 +470,24 @@ if (viewer) {
         pinchState.draftZoom = clampZoom(
             pinchState.startZoom * (distance / pinchState.startDistance),
         );
-        const previewScale = pinchState.draftZoom / pinchState.startZoom;
-        pagesElement.style.transform = `scale(${previewScale})`;
-        zoomIndicator.textContent = `${Math.round(pinchState.draftZoom * 100)}%`;
+        const bounds = viewer.getBoundingClientRect();
+        const clientX = ((pointers[0].x + pointers[1].x) / 2) - bounds.left;
+        const clientY = ((pointers[0].y + pointers[1].y) / 2) - bounds.top;
+        applyZoomGeometry(pinchState.draftZoom, {
+            ...pinchState.anchor,
+            clientX,
+            clientY,
+        });
     }
 
     function finishPinch() {
         if (!pinchState) return;
-        const { draftZoom: nextZoom, anchor } = pinchState;
         pinchState = null;
         viewer.classList.remove('is-pinching');
-        pagesElement.style.transform = '';
-        pagesElement.style.transformOrigin = '';
-        pagesElement.style.willChange = '';
-        if (Math.abs(nextZoom - zoom) < 0.02) {
-            updateControls();
-            return;
-        }
-        void setZoom(nextZoom, anchor);
+        geometryUpdateInProgress = false;
+        viewer.classList.remove('is-adjusting');
+        updateControls();
+        scheduleSharpRender(60);
     }
 
     viewer.addEventListener('pointerdown', event => {
