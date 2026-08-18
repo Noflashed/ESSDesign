@@ -395,7 +395,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=7"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=8"></script>
 </body>
 </html>
 """;

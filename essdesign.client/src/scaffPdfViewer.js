@@ -36,6 +36,7 @@ if (viewer) {
     let pinchState = null;
     let documentGeneration = 0;
     let resumeTimer = 0;
+    let hiddenAt = 0;
     const pageCache = new Map();
     const pageRenderTasks = new Map();
 
@@ -47,7 +48,6 @@ if (viewer) {
     const sharpCanvasPixelBudget = 8_000_000;
     const previewCanvasPixelBudget = 1_500_000;
     const maximumCanvasDimension = 4096;
-    const canvasSentinel = [17, 19, 23, 255];
     const clampZoom = value => Math.min(maximumZoom, Math.max(minimumZoom, value));
 
     function waitFor(promise, timeoutMs, message, onTimeout = null) {
@@ -327,6 +327,13 @@ if (viewer) {
             if (!canvas.isConnected || !pdfDocument) return;
             const slot = canvas.closest('.pdf-page-slot');
             if (!slot) return;
+            if (pinchState || geometryUpdateInProgress) {
+                slot.dataset.renderState = 'idle';
+                slot.dataset.renderSignature = '';
+                slot.dataset.renderRequest = '';
+                slot.dataset.needsRecovery = 'true';
+                return;
+            }
             cancelPageRender(pageNumber);
             slot.dataset.renderState = 'idle';
             slot.dataset.renderSignature = '';
@@ -336,37 +343,6 @@ if (viewer) {
                 void renderPageCanvas(pageNumber, renderGeneration, 'sharp', 0);
             }
         }, 0);
-    }
-
-    function stampCanvas(canvas, context) {
-        context.save();
-        context.fillStyle = `rgb(${canvasSentinel[0]},${canvasSentinel[1]},${canvasSentinel[2]})`;
-        context.fillRect(canvas.width - 1, canvas.height - 1, 1, 1);
-        context.restore();
-    }
-
-    function canvasIsIntact(canvas) {
-        try {
-            const context = canvas.getContext('2d');
-            if (!context || context.isContextLost?.()) return false;
-            const pixel = context.getImageData(canvas.width - 1, canvas.height - 1, 1, 1).data;
-            return canvasSentinel.every((value, index) => pixel[index] === value);
-        } catch {
-            return false;
-        }
-    }
-
-    function scheduleCanvasIntegrityCheck(pageNumber, canvas, delay) {
-        window.setTimeout(() => {
-            if (!canvas.isConnected) return;
-            if (!canvasIsIntact(canvas)) {
-                recoverLostCanvas(pageNumber, canvas);
-                return;
-            }
-            if (pageNumber === currentPageNumber) {
-                scheduleCanvasIntegrityCheck(pageNumber, canvas, 3000);
-            }
-        }, delay);
     }
 
     async function renderPageCanvas(
@@ -426,10 +402,9 @@ if (viewer) {
                 `Timed out while rendering PDF page ${pageNumber}.`,
                 () => renderTask.cancel(),
             );
-            stampCanvas(canvas, context);
             const activeRender = pageRenderTasks.get(pageNumber);
             if (activeRender?.task === renderTask) pageRenderTasks.delete(pageNumber);
-            if (pinchState && existingCanvas) {
+            if (pinchState) {
                 if (slot.dataset.renderRequest === signature) slot.dataset.renderRequest = '';
                 disposeCanvas(canvas);
                 return;
@@ -451,7 +426,6 @@ if (viewer) {
             slot.dataset.renderState = 'rendered';
             slot.dataset.renderSignature = signature;
             slot.dataset.renderRequest = '';
-            scheduleCanvasIntegrityCheck(pageNumber, canvas, 800);
         } catch (error) {
             const activeRender = pageRenderTasks.get(pageNumber);
             if (activeRender?.task === ownedRenderTask) {
@@ -602,7 +576,6 @@ if (viewer) {
         const savedAnchor = anchor || captureViewAnchor();
         geometryUpdateInProgress = true;
         viewer.classList.add('is-adjusting');
-        cancelAllPageRenders();
         zoom = normalizedZoom;
         updateControls();
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
@@ -671,7 +644,6 @@ if (viewer) {
         const startDistance = touchDistance(touches);
         if (startDistance <= 0) return;
         window.clearTimeout(sharpRenderTimer);
-        cancelAllPageRenders();
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             if (slot.querySelector('.pdf-page')) slot.dataset.renderRequest = '';
         });
@@ -709,6 +681,11 @@ if (viewer) {
         viewer.classList.remove('is-pinching');
         geometryUpdateInProgress = false;
         viewer.classList.remove('is-adjusting');
+        pagesElement.querySelectorAll('[data-needs-recovery="true"]').forEach(slot => {
+            slot.dataset.needsRecovery = '';
+            slot.dataset.renderSignature = '';
+            slot.dataset.renderRequest = '';
+        });
         updateControls();
         scheduleSharpRender(60);
     }
@@ -733,6 +710,9 @@ if (viewer) {
     document.addEventListener('touchcancel', endTouchGesture, { capture: true });
 
     window.addEventListener('resize', () => {
+        // iOS can emit visual-viewport resize events while a pinch is in progress.
+        // Rebuilding every page at that point interrupts the gesture and moves its anchor.
+        if (pinchState) return;
         window.clearTimeout(resizeTimer);
         const anchor = captureViewAnchor();
         resizeTimer = window.setTimeout(() => renderPages({ anchor }), 180);
@@ -819,11 +799,18 @@ if (viewer) {
         });
     });
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState !== 'visible') return;
+        if (document.visibilityState !== 'visible') {
+            hiddenAt = Date.now();
+            return;
+        }
         resetNavigationState();
         window.clearTimeout(resumeTimer);
         resumeTimer = window.setTimeout(() => {
-            if (pdfDocument) invalidateRenderedCanvases();
+            const wasMeaningfullyBackgrounded = hiddenAt > 0 && Date.now() - hiddenAt > 1000;
+            hiddenAt = 0;
+            if (pdfDocument && wasMeaningfullyBackgrounded && !pinchState) {
+                invalidateRenderedCanvases();
+            }
         }, 120);
     });
 
