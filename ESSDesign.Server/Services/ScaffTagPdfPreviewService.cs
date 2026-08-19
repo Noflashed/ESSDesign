@@ -188,6 +188,13 @@ public sealed class ScaffTagPdfPreviewService
 
             var client = _httpClientFactory.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MaxAge = TimeSpan.Zero
+            };
+            request.Headers.Pragma.ParseAdd("no-cache");
             using var response = await client.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
@@ -263,9 +270,27 @@ public sealed class ScaffTagPdfPreviewService
 
     private static string CreateDocumentKey(string documentUrl)
     {
-        var stableAddress = Uri.TryCreate(documentUrl, UriKind.Absolute, out var uri)
-            ? uri.GetLeftPart(UriPartial.Path)
-            : documentUrl;
+        var stableAddress = documentUrl;
+        if (Uri.TryCreate(documentUrl, UriKind.Absolute, out var uri))
+        {
+            stableAddress = uri.GetLeftPart(UriPartial.Path);
+
+            // Signed Supabase URLs change whenever they are issued, so their token
+            // cannot be part of the cache key. The explicit version is different:
+            // it comes from ess_safety_forms.updated_at and changes whenever a
+            // mutable handover PDF is rebuilt. Retaining it prevents an edited
+            // handover from reusing the previously rendered PDF bytes/pages.
+            var versionParameter = uri.Query
+                .TrimStart('?')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault(parameter =>
+                    parameter.StartsWith("v=", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(versionParameter))
+            {
+                stableAddress = $"{stableAddress}?{versionParameter}";
+            }
+        }
+
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stableAddress)));
     }
 
