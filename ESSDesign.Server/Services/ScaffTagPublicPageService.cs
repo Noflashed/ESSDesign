@@ -251,6 +251,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
         var brandLogoUrl = isMaloo
             ? "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png"
             : "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
+        var brandName = isMaloo ? "Maloo Access Group" : "Erect Safe Scaffolding";
         var pageTitle = System.Net.WebUtility.HtmlEncode(model.PageTitle);
         var documentName = System.Net.WebUtility.HtmlEncode(model.DocumentName);
         var documentUrl = System.Net.WebUtility.HtmlEncode(model.DocumentUrl);
@@ -286,38 +287,39 @@ public static class ScaffTagLinkedDocumentPageRenderer
     * { box-sizing:border-box; }
     html, body { width:100%; height:100%; margin:0; }
     body { min-height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
-    button { font:inherit; }
-    .viewer { position:relative; width:100%; height:100dvh; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); overflow:hidden; background:rgba(32,35,39,.96); }
+    .viewer { position:relative; width:100%; height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); }
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .document-shell { position:relative; width:calc(100% - 96px); height:90%; min-width:0; min-height:0; overflow:hidden; border-radius:9px; background:#090b0d; user-select:none; -webkit-user-select:none; transition:opacity .18s ease,transform .18s ease; }
-    .pdf-stage { position:absolute; inset:0; overflow-x:hidden; overflow-y:auto; background:#090b0d; scroll-snap-type:y mandatory; scroll-behavior:smooth; overscroll-behavior-y:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
-    .pdf-stage::-webkit-scrollbar { display:none; }
-    .pdf-stage.is-zoomed { overflow:hidden; scroll-snap-type:none; touch-action:none; }
-    .pdf-page-slot { position:relative; width:100%; height:100%; min-height:100%; display:grid; place-items:center; flex:none; padding:12px; overflow:hidden; background:#090b0d; scroll-snap-align:start; scroll-snap-stop:always; }
-    .pdf-page { position:relative; z-index:2; grid-area:1/1; display:block; width:auto; height:auto; max-width:100%; max-height:100%; object-fit:contain; transform-origin:center center; opacity:1; will-change:transform,opacity; transition:opacity .14s ease,transform .18s ease; -webkit-user-drag:none; user-select:none; -webkit-user-select:none; }
-    .pdf-page.is-loading { opacity:0; }
-    .pdf-page-placeholder { z-index:1; grid-area:1/1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:rgba(255,255,255,.42); font-size:10px; font-weight:750; letter-spacing:.35px; }
-    .pdf-page-placeholder[hidden] { display:none; }
-    .pdf-page-retry { padding:8px 12px; border:1px solid rgba(255,255,255,.24); border-radius:999px; background:rgba(255,255,255,.08); color:#fff; font-size:10px; font-weight:800; }
-    .pdf-stage.is-interacting .pdf-page { transition:none; }
-    .pdf-status { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; background:#090b0d; color:rgba(255,255,255,.84); font-size:11px; line-height:1.4; font-weight:750; letter-spacing:.35px; text-align:center; }
+    .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; background:transparent; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:y mandatory; transition:opacity .18s ease,transform .18s ease; }
+    .pdf-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
+    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-adjusting,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
+    .pdf-pages { min-width:100%; min-height:100%; transform-origin:center center; }
+    .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; scroll-snap-stop:always; }
+    .pdf-viewport.is-zoomed .pdf-page-slot:not(.is-current-page),.pdf-viewport.is-pinching .pdf-page-slot:not(.is-current-page) { visibility:hidden; }
+    .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
+    .pdf-page-placeholder { width:58px; height:58px; display:grid; flex:0 0 auto; place-items:center; }
+    .pdf-page-failure { display:flex; flex-direction:column; align-items:center; gap:9px; padding:14px 16px; border:1px solid rgba(255,255,255,.18); border-radius:12px; background:rgba(7,12,18,.58); color:rgba(255,255,255,.82); font-size:10px; font-weight:750; letter-spacing:.25px; text-align:center; }
+    .pdf-page-failure button { min-height:32px; padding:0 13px; border:1px solid rgba(255,255,255,.28); border-radius:999px; background:rgba(255,255,255,.1); color:#fff; font:inherit; font-weight:850; }
+    .pdf-page-failure button:active { background:rgba(255,255,255,.2); }
+    .pdf-status { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; color:rgba(255,255,255,.82); font-size:11px; font-weight:750; letter-spacing:.45px; text-align:center; }
     .pdf-status[hidden] { display:none; }
-    .brand-loader { position:relative; width:92px; height:92px; display:grid; flex:0 0 auto; place-items:center; }
-    .brand-loader-ring { position:absolute; inset:0; border:6px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:viewer-spin .9s linear infinite; }
-    .brand-loader-core { position:absolute; inset:9px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.32); }
+    .brand-loader { position:relative; width:104px; height:104px; display:grid; flex:0 0 auto; place-items:center; }
+    .brand-loader-ring { position:absolute; inset:0; border:7px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:viewer-spin .9s linear infinite; }
+    .brand-loader-core { position:absolute; inset:10px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.28); }
     .brand-loader-logo { width:100%; height:100%; display:block; object-fit:contain; }
-    .pdf-error { z-index:8; }
-    .pdf-error a { display:inline-block; margin-top:7px; color:#fff; font-weight:850; text-underline-offset:3px; }
-    .pdf-controls { position:fixed; bottom:max(7px,env(safe-area-inset-bottom)); left:50%; z-index:45; min-height:38px; display:flex; align-items:center; gap:3px; padding:3px 5px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.68); color:#fff; transform:translateX(-50%); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
-    .pdf-controls[hidden] { display:none; }
-    .pdf-controls button { min-width:31px; height:30px; display:grid; place-items:center; padding:0 7px; border:0; border-radius:999px; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:750; }
-    .pdf-controls button:disabled { opacity:.28; }
-    .pdf-controls button:active { background:rgba(255,255,255,.14); }
-    .pdf-controls .pdf-fit { min-width:38px; font-size:9px; letter-spacing:.2px; }
-    .pdf-zoom-label { min-width:38px; font-size:9px; font-weight:800; text-align:center; }
-    .pdf-page-label { min-width:42px; padding:0 6px; border-left:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.78); font-size:9px; font-weight:800; text-align:center; }
+    .brand-loader.compact { width:52px; height:52px; }
+    .brand-loader.compact .brand-loader-ring { border-width:4px; }
+    .brand-loader.compact .brand-loader-core { inset:6px; padding:3px; }
+    .pdf-error a { display:inline-block; margin-top:10px; color:#fff; font-weight:850; text-underline-offset:3px; }
+    .pdf-toolbar { position:fixed; bottom:max(7px,env(safe-area-inset-bottom)); left:50%; z-index:35; height:36px; display:flex; align-items:center; gap:3px; padding:3px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(7,12,18,.48); opacity:.68; transform:translateX(-50%); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+    .pdf-toolbar button { width:30px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:650; }
+    .pdf-toolbar button:disabled { opacity:.28; }
+    .pdf-toolbar button:active { background:rgba(255,255,255,.14); }
+    .pdf-toolbar .pdf-toolbar-compact { font-size:10px; font-weight:800; }
+    .pdf-toolbar .pdf-fit-mode { width:auto; min-width:39px; padding:0 7px; border-radius:999px; font-size:8px; font-weight:800; letter-spacing:.1px; }
+    .pdf-toolbar-label { min-width:36px; color:rgba(255,255,255,.86); font-size:8px; line-height:1; font-weight:800; text-align:center; }
+    .pdf-page-indicator { min-width:34px; padding:0 5px; border-left:1px solid rgba(255,255,255,.14); color:rgba(255,255,255,.72); font-size:8px; line-height:1; font-weight:750; text-align:center; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
     .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
     .document-nav:hover,.document-nav:focus-visible,.document-nav:active { opacity:.94; }
@@ -330,11 +332,16 @@ public static class ScaffTagLinkedDocumentPageRenderer
     @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-3px); } }
     @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(3px); } }
     @keyframes viewer-spin { to { transform:rotate(360deg); } }
-    body.is-leaving-left .document-shell { opacity:0; transform:translateX(22px) scale(.985); }
-    body.is-leaving-right .document-shell { opacity:0; transform:translateX(-22px) scale(.985); }
+    body.is-leaving-left .pdf-viewport { opacity:0; transform:translateX(22px) scale(.985); }
+    body.is-leaving-right .pdf-viewport { opacity:0; transform:translateX(-22px) scale(.985); }
+    .navigation-loading { position:fixed; inset:0; z-index:90; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; background:rgba(18,21,24,.78); color:rgba(255,255,255,.9); font-size:11px; font-weight:800; letter-spacing:.5px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease,visibility 0s linear .14s; -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
+    .navigation-loading.is-visible { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     @media (min-width:700px) {
-      .viewer { padding:18px; }
-      .document-shell { width:calc(100% - 152px); height:92%; }
+      .pdf-toolbar { height:42px; padding:4px; }
+      .pdf-toolbar button { width:36px; height:32px; font-size:20px; }
+      .pdf-toolbar .pdf-toolbar-compact { font-size:11px; }
+      .pdf-toolbar .pdf-fit-mode { min-width:46px; padding:0 9px; font-size:9px; }
+      .pdf-toolbar-label,.pdf-page-indicator { font-size:9px; }
       .document-nav { width:76px; }
       .document-nav-icon { width:52px; height:52px; }
       .document-nav svg { width:29px; height:29px; }
@@ -344,8 +351,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     }
     @media (prefers-reduced-motion:reduce) {
       .document-nav { animation:none; transform:translateY(-50%); }
-      .document-shell,.pdf-page { transition:none; }
-      .pdf-stage { scroll-behavior:auto; }
+      .pdf-viewport,.navigation-loading { transition:none; }
       .brand-loader-ring { animation:none; }
     }
   </style>
@@ -360,455 +366,36 @@ public static class ScaffTagLinkedDocumentPageRenderer
     {{rightNavigation}}
   </nav>
   <main class="viewer">
-    <section id="pdfViewer" class="document-shell" data-original-url="{{documentUrl}}" aria-label="{{pageTitle}} preview">
-      <div id="pdfStage" class="pdf-stage" aria-live="polite"></div>
-      <div id="pdfLoading" class="pdf-status" role="status">
-        <span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span>
-        <span id="pdfLoadingLabel">Preparing page preview</span>
-      </div>
-      <div id="pdfError" class="pdf-status pdf-error" hidden>
-        <span id="pdfErrorLabel">This PDF preview could not be prepared.</span>
-        <a href="{{documentUrl}}">Open the original PDF</a>
-      </div>
+    <section id="pdfViewer" class="pdf-viewport" data-pdf-url="{{documentUrl}}" data-loader-logo="{{brandLogoUrl}}" data-loader-name="{{brandName}}" aria-label="{{pageTitle}} preview">
+      <div id="pdfPages" class="pdf-pages" aria-live="polite" aria-busy="true"></div>
+      <div id="pdfLoading" class="pdf-status" role="status"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span>Preparing PDF preview</span></div>
+      <div id="pdfError" class="pdf-status pdf-error" hidden><span>We could not render this PDF preview.</span><a href="{{documentUrl}}">Open the PDF directly</a></div>
     </section>
   </main>
-  <div id="pdfControls" class="pdf-controls" aria-label="PDF controls" hidden>
+  <div class="pdf-toolbar" aria-label="PDF zoom controls">
     <button id="pdfZoomOut" type="button" aria-label="Zoom out">&minus;</button>
-    <span id="pdfZoomLabel" class="pdf-zoom-label">100%</span>
+    <span id="pdfZoomIndicator" class="pdf-toolbar-label">100%</span>
+    <button id="pdfZoomFit" class="pdf-toolbar-compact" type="button" aria-label="Reset zoom to fitted size" title="Reset zoom">1&times;</button>
     <button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button>
-    <button id="pdfZoomFit" class="pdf-fit" type="button" aria-label="Fit the complete page to the screen">Fit</button>
-    <span id="pdfPageLabel" class="pdf-page-label" aria-live="polite">1 / 1</span>
+    <button id="pdfFitMode" class="pdf-fit-mode" type="button" aria-label="Fit PDF to screen width" title="Fit width">Page</button>
+    <button id="pdfRotate" type="button" aria-label="Rotate PDF clockwise" title="Rotate clockwise">&#8635;</button>
+    <span id="pdfPageIndicator" class="pdf-page-indicator" aria-live="polite">1 / 1</span>
   </div>
+  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span id="navigationLoadingLabel">Opening document</span></div>
   <script>
     document.getElementById('documentNavigation').addEventListener('click', event => {
       const link = event.target.closest('a.document-nav');
       if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       event.preventDefault();
+      const label = link.querySelector('.document-nav-label')?.textContent?.trim() || 'document';
+      document.getElementById('navigationLoadingLabel').textContent = `Opening ${label}`;
+      document.getElementById('navigationLoading').classList.add('is-visible');
       document.body.classList.add(`is-leaving-${link.dataset.direction}`);
-      window.setTimeout(() => window.location.assign(link.href), 180);
+      const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 140;
+      window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script>
-    (() => {
-      const viewer = document.getElementById('pdfViewer');
-      const stage = document.getElementById('pdfStage');
-      const loading = document.getElementById('pdfLoading');
-      const loadingLabel = document.getElementById('pdfLoadingLabel');
-      const errorPanel = document.getElementById('pdfError');
-      const errorLabel = document.getElementById('pdfErrorLabel');
-      const controls = document.getElementById('pdfControls');
-      const zoomOut = document.getElementById('pdfZoomOut');
-      const zoomIn = document.getElementById('pdfZoomIn');
-      const zoomFit = document.getElementById('pdfZoomFit');
-      const zoomLabel = document.getElementById('pdfZoomLabel');
-      const pageLabel = document.getElementById('pdfPageLabel');
-      const previewBase = `${window.location.pathname.replace(/\/$/, '')}/preview`;
-      const pointers = new Map();
-      const state = {
-        pages: [],
-        slots: [],
-        page: 1,
-        scale: 1,
-        x: 0,
-        y: 0,
-        scrollFrame: 0,
-        settleTimer: 0
-      };
-      let singleGesture = null;
-      let pinchGesture = null;
-
-      const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
-      const distance = (first, second) => Math.hypot(second.x - first.x, second.y - first.y);
-      const midpoint = (first, second) => ({x:(first.x + second.x) / 2, y:(first.y + second.y) / 2});
-
-      function activeSlot() {
-        return state.slots[state.page - 1] || null;
-      }
-
-      function activeImage() {
-        return activeSlot()?._image || null;
-      }
-
-      function pageBounds() {
-        const image = activeImage();
-        const width = image?.offsetWidth || stage.clientWidth;
-        const height = image?.offsetHeight || stage.clientHeight;
-        return {
-          x:Math.max(0,((width * state.scale) - stage.clientWidth) / 2),
-          y:Math.max(0,((height * state.scale) - stage.clientHeight) / 2)
-        };
-      }
-
-      function constrainPan() {
-        if (state.scale <= 1.001) {
-          state.scale = 1;
-          state.x = 0;
-          state.y = 0;
-          return;
-        }
-        const bounds = pageBounds();
-        state.x = clamp(state.x,-bounds.x,bounds.x);
-        state.y = clamp(state.y,-bounds.y,bounds.y);
-      }
-
-      function applyTransform(animate = false) {
-        const image = activeImage();
-        stage.classList.toggle('is-interacting',!animate);
-        stage.classList.toggle('is-zoomed',state.scale > 1.001);
-        viewer.classList.toggle('is-zoomed',state.scale > 1.001);
-        if (image) image.style.transform = `translate3d(${state.x}px,${state.y}px,0) scale(${state.scale})`;
-        zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
-        zoomOut.disabled = state.scale <= 1.001;
-        zoomFit.disabled = state.scale <= 1.001;
-      }
-
-      function resetZoom(animate = true) {
-        const image = activeImage();
-        state.scale = 1;
-        state.x = 0;
-        state.y = 0;
-        if (image) image.style.transform = '';
-        applyTransform(animate);
-      }
-
-      function setZoom(nextScale, clientX, clientY) {
-        if (!activeImage()) return;
-        stage.scrollTop = (state.page - 1) * stage.clientHeight;
-        const previousScale = state.scale;
-        const next = clamp(nextScale,1,6);
-        const bounds = stage.getBoundingClientRect();
-        const pointX = (clientX ?? (bounds.left + (bounds.width / 2))) - bounds.left - (bounds.width / 2);
-        const pointY = (clientY ?? (bounds.top + (bounds.height / 2))) - bounds.top - (bounds.height / 2);
-        state.x = pointX - (((pointX - state.x) / previousScale) * next);
-        state.y = pointY - (((pointY - state.y) / previousScale) * next);
-        state.scale = next;
-        constrainPan();
-        applyTransform(true);
-      }
-
-      function updatePageLabel() {
-        pageLabel.textContent = `${state.page} / ${state.pages.length || 1}`;
-      }
-
-      function showError(message) {
-        loading.hidden = true;
-        controls.hidden = true;
-        errorLabel.textContent = message || 'This PDF preview could not be prepared.';
-        errorPanel.hidden = false;
-      }
-
-      function setPlaceholder(slot, text) {
-        slot._placeholder.replaceChildren(document.createTextNode(text));
-        slot._placeholder.hidden = false;
-      }
-
-      function showPageError(slot, pageNumber) {
-        slot._placeholder.replaceChildren();
-        const message = document.createElement('span');
-        message.textContent = `Page ${pageNumber} could not be loaded.`;
-        const retry = document.createElement('button');
-        retry.type = 'button';
-        retry.className = 'pdf-page-retry';
-        retry.textContent = 'Retry';
-        retry.addEventListener('click',() => loadPage(pageNumber).catch(() => {}));
-        slot._placeholder.append(message,retry);
-        slot._placeholder.hidden = false;
-        if (pageNumber === 1) loading.hidden = true;
-      }
-
-      function createSlots() {
-        const fragment = document.createDocumentFragment();
-        state.slots = state.pages.map((page,index) => {
-          const pageNumber = index + 1;
-          const slot = document.createElement('section');
-          slot.className = 'pdf-page-slot';
-          slot.dataset.page = String(pageNumber);
-          slot.setAttribute('aria-label',`Page ${pageNumber} of ${state.pages.length}`);
-          const placeholder = document.createElement('div');
-          placeholder.className = 'pdf-page-placeholder';
-          placeholder.textContent = `Page ${pageNumber}`;
-          slot._placeholder = placeholder;
-          slot._image = null;
-          slot._loadPromise = null;
-          slot._generation = 0;
-          slot.append(placeholder);
-          fragment.append(slot);
-          return slot;
-        });
-        stage.replaceChildren(fragment);
-      }
-
-      function loadPage(pageNumber) {
-        if (pageNumber < 1 || pageNumber > state.pages.length) return Promise.resolve(null);
-        const slot = state.slots[pageNumber - 1];
-        if (slot._image?.complete && slot._image.naturalWidth) return Promise.resolve(slot._image);
-        if (slot._loadPromise) return slot._loadPromise;
-
-        const generation = ++slot._generation;
-        setPlaceholder(slot,`Preparing page ${pageNumber}`);
-        const image = document.createElement('img');
-        image.className = 'pdf-page is-loading';
-        image.alt = `{{pageTitle}}, page ${pageNumber} of ${state.pages.length}`;
-        image.draggable = false;
-        image.decoding = 'async';
-        slot._image = image;
-        slot.append(image);
-
-        slot._loadPromise = new Promise((resolve,reject) => {
-          image.onload = () => {
-            if (slot._generation !== generation || slot._image !== image) return;
-            slot._loadPromise = null;
-            slot._placeholder.hidden = true;
-            requestAnimationFrame(() => image.classList.remove('is-loading'));
-            if (pageNumber === 1) loading.hidden = true;
-            resolve(image);
-            if (Math.abs(pageNumber - state.page) > 1) {
-              requestAnimationFrame(() => releasePage(pageNumber));
-            }
-          };
-          image.onerror = () => {
-            if (slot._generation !== generation || slot._image !== image) return;
-            slot._loadPromise = null;
-            slot._image = null;
-            image.remove();
-            showPageError(slot,pageNumber);
-            reject(new Error(`Page ${pageNumber} could not be loaded.`));
-          };
-          image.src = `${previewBase}/pages/${pageNumber}.webp`;
-        });
-        return slot._loadPromise;
-      }
-
-      function releasePage(pageNumber) {
-        const slot = state.slots[pageNumber - 1];
-        const image = slot?._image;
-        if (!slot || !image) return;
-        slot._generation += 1;
-        slot._loadPromise = null;
-        slot._image = null;
-        image.onload = null;
-        image.onerror = null;
-        image.removeAttribute('src');
-        image.remove();
-        setPlaceholder(slot,`Page ${pageNumber}`);
-      }
-
-      function loadPageWindow(pageNumber) {
-        loadPage(pageNumber)
-          .then(() => {
-            if (pageNumber > 1) loadPage(pageNumber - 1).catch(() => {});
-            if (pageNumber < state.pages.length) loadPage(pageNumber + 1).catch(() => {});
-          })
-          .catch(() => {});
-      }
-
-      function trimPageWindow(pageNumber) {
-        state.slots.forEach((slot,index) => {
-          const candidate = index + 1;
-          if (Math.abs(candidate - pageNumber) > 1 && slot._image?.complete && !slot._loadPromise) {
-            releasePage(candidate);
-          }
-        });
-      }
-
-      function setCurrentPage(pageNumber) {
-        const nextPage = clamp(pageNumber,1,state.pages.length);
-        if (nextPage === state.page) return;
-        resetZoom(false);
-        state.page = nextPage;
-        updatePageLabel();
-        loadPageWindow(nextPage);
-      }
-
-      function nearestPage() {
-        if (!stage.clientHeight) return state.page;
-        return clamp(Math.round(stage.scrollTop / stage.clientHeight) + 1,1,state.pages.length);
-      }
-
-      function settleScroll() {
-        const pageNumber = nearestPage();
-        setCurrentPage(pageNumber);
-        window.clearTimeout(state.settleTimer);
-        state.settleTimer = window.setTimeout(() => trimPageWindow(state.page),260);
-      }
-
-      function changePage(delta) {
-        if (state.scale > 1.01) return;
-        const nextPage = clamp(state.page + delta,1,state.pages.length);
-        loadPageWindow(nextPage);
-        stage.scrollTo({top:(nextPage - 1) * stage.clientHeight,behavior:'smooth'});
-      }
-
-      function beginSingleGesture(pointer) {
-        singleGesture = {
-          id:pointer.id,
-          x:pointer.x,
-          y:pointer.y,
-          pageX:state.x,
-          pageY:state.y
-        };
-        pinchGesture = null;
-      }
-
-      function beginPinchGesture() {
-        const active = [...pointers.values()];
-        if (active.length < 2) return;
-        const center = midpoint(active[0],active[1]);
-        const bounds = stage.getBoundingClientRect();
-        const relativeX = center.x - bounds.left - (bounds.width / 2);
-        const relativeY = center.y - bounds.top - (bounds.height / 2);
-        pinchGesture = {
-          distance:Math.max(1,distance(active[0],active[1])),
-          scale:state.scale,
-          anchorX:(relativeX - state.x) / state.scale,
-          anchorY:(relativeY - state.y) / state.scale
-        };
-        singleGesture = null;
-        stage.classList.add('is-interacting');
-        for (const pointer of active) stage.setPointerCapture?.(pointer.id);
-      }
-
-      stage.addEventListener('scroll',() => {
-        if (state.scale > 1.01 || state.scrollFrame) return;
-        state.scrollFrame = requestAnimationFrame(() => {
-          state.scrollFrame = 0;
-          setCurrentPage(nearestPage());
-          window.clearTimeout(state.settleTimer);
-          state.settleTimer = window.setTimeout(settleScroll,140);
-        });
-      },{passive:true});
-
-      stage.addEventListener('pointerdown', event => {
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        pointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
-        if (pointers.size >= 2) {
-          event.preventDefault();
-          beginPinchGesture();
-        } else if (state.scale > 1.01) {
-          event.preventDefault();
-          stage.setPointerCapture?.(event.pointerId);
-          stage.classList.add('is-interacting');
-          beginSingleGesture([...pointers.values()][0]);
-        }
-      });
-
-      stage.addEventListener('pointermove', event => {
-        if (!pointers.has(event.pointerId)) return;
-        pointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
-
-        if (pointers.size >= 2) {
-          event.preventDefault();
-          if (!pinchGesture) beginPinchGesture();
-          const active = [...pointers.values()];
-          const center = midpoint(active[0],active[1]);
-          const bounds = stage.getBoundingClientRect();
-          const relativeX = center.x - bounds.left - (bounds.width / 2);
-          const relativeY = center.y - bounds.top - (bounds.height / 2);
-          state.scale = clamp(
-            pinchGesture.scale * (distance(active[0],active[1]) / pinchGesture.distance),
-            1,
-            6);
-          state.x = relativeX - (pinchGesture.anchorX * state.scale);
-          state.y = relativeY - (pinchGesture.anchorY * state.scale);
-          constrainPan();
-          applyTransform(false);
-          return;
-        }
-
-        if (state.scale <= 1.01) return;
-        event.preventDefault();
-        const pointer = [...pointers.values()][0];
-        if (!singleGesture || singleGesture.id !== pointer.id) beginSingleGesture(pointer);
-        const deltaX = pointer.x - singleGesture.x;
-        const deltaY = pointer.y - singleGesture.y;
-        state.x = singleGesture.pageX + deltaX;
-        state.y = singleGesture.pageY + deltaY;
-        constrainPan();
-        applyTransform(false);
-      },{passive:false});
-
-      function finishPointer(event) {
-        if (!pointers.has(event.pointerId)) return;
-        pointers.delete(event.pointerId);
-        if (pointers.size >= 2) {
-          beginPinchGesture();
-          return;
-        }
-        if (pointers.size === 1) {
-          beginSingleGesture([...pointers.values()][0]);
-          return;
-        }
-
-        stage.classList.remove('is-interacting');
-        pinchGesture = null;
-        singleGesture = null;
-        constrainPan();
-        applyTransform(true);
-      }
-
-      stage.addEventListener('pointerup',finishPointer);
-      stage.addEventListener('pointercancel',finishPointer);
-      stage.addEventListener('lostpointercapture',finishPointer);
-      stage.addEventListener('gesturestart',event => event.preventDefault(),{passive:false});
-      stage.addEventListener('gesturechange',event => event.preventDefault(),{passive:false});
-
-      stage.addEventListener('dblclick',event => {
-        event.preventDefault();
-        if (state.scale > 1.01) resetZoom(true);
-        else setZoom(2.25,event.clientX,event.clientY);
-      });
-
-      stage.addEventListener('wheel',event => {
-        if (event.ctrlKey || event.metaKey) {
-          event.preventDefault();
-          setZoom(state.scale * Math.exp(-event.deltaY * .01),event.clientX,event.clientY);
-          return;
-        }
-        if (state.scale > 1.01) {
-          event.preventDefault();
-          state.x -= event.deltaX;
-          state.y -= event.deltaY;
-          constrainPan();
-          applyTransform(false);
-        }
-      },{passive:false});
-
-      zoomOut.addEventListener('click',() => setZoom(state.scale / 1.35));
-      zoomIn.addEventListener('click',() => setZoom(state.scale * 1.35));
-      zoomFit.addEventListener('click',() => resetZoom(true));
-      window.addEventListener('resize',() => {
-        stage.scrollTop = (state.page - 1) * stage.clientHeight;
-        constrainPan();
-        applyTransform(false);
-      });
-      document.addEventListener('keydown',event => {
-        if (event.key === 'ArrowDown' || event.key === 'PageDown') changePage(1);
-        if (event.key === 'ArrowUp' || event.key === 'PageUp') changePage(-1);
-        if (event.key === '+' || event.key === '=') setZoom(state.scale * 1.35);
-        if (event.key === '-') setZoom(state.scale / 1.35);
-        if (event.key === '0') resetZoom(true);
-      });
-
-      fetch(previewBase,{cache:'no-store',credentials:'same-origin'})
-        .then(response => {
-          if (!response.ok) throw new Error(`Preview request failed (${response.status})`);
-          return response.json();
-        })
-        .then(manifest => {
-          if (!Array.isArray(manifest.pages) || manifest.pages.length === 0) {
-            throw new Error('This PDF has no previewable pages.');
-          }
-          state.pages = manifest.pages;
-          createSlots();
-          controls.hidden = false;
-          updatePageLabel();
-          loadingLabel.textContent = `Preparing page 1 of ${state.pages.length}`;
-          loadPageWindow(1);
-        })
-        .catch(error => showError(error?.message || 'This PDF preview could not be prepared.'));
-    })();
-  </script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=a89cd82"></script>
 </body>
 </html>
 """;
