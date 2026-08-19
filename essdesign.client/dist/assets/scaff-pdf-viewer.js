@@ -1,1 +1,293 @@
-import{GlobalWorkerOptions as mt,getDocument as gt}from"./pdf-BnPRJEQ6.js";mt.workerSrc=new URL("/assets/pdf.worker.min-yatZIOMy.mjs",import.meta.url).toString();const r=document.getElementById("pdfViewer");if(r){let _=function(t){return q.has(t)||q.set(t,u.getPage(t)),q.get(t)},it=function(){const t=r.clientWidth>=700;return{horizontal:t?22:12,top:t?72:58,bottom:t?64:54}},ot=function(t){const a=Math.min(Math.max(window.devicePixelRatio||1,2),3),e=Math.min(8192/Math.max(1,t.width),8192/Math.max(1,t.height)),n=Math.sqrt(1e7/Math.max(1,t.width*t.height));return Math.max(1,Math.min(a,e,n))},M=function(){at.textContent=`${Math.round(l*100)}%`,V.disabled=l<=Y,D.disabled=l>=X,E.textContent=b==="page"?"Page":"Width",E.setAttribute("aria-label",b==="page"?"Fit PDF to screen width":"Fit whole PDF page"),E.title=b==="page"?"Fit width":"Fit page",r.classList.toggle("is-zoomed",l>1.001),r.classList.toggle("is-fit-width",b==="width")},F=function(t){m.querySelectorAll(".pdf-page-slot").forEach(a=>{a.classList.toggle("is-current-page",Number(a.dataset.pageNumber)===t)})},H=function(){if(l<=1.001&&!f)return!1;const t=m.querySelector(`[data-page-number="${g}"]`);if(!t)return!0;const a=t.offsetTop,e=Math.max(a,t.offsetTop+t.offsetHeight-r.clientHeight),n=Math.min(e,Math.max(a,r.scrollTop));return Math.abs(n-r.scrollTop)>.5&&r.scrollTo({left:r.scrollLeft,top:n,behavior:"auto"}),!0},rt=function(t,a){const e=Array.from(m.querySelectorAll(".pdf-page-slot"));return e.find(n=>a>=n.offsetTop&&a<=n.offsetTop+n.offsetHeight&&t>=n.offsetLeft&&t<=n.offsetLeft+n.offsetWidth)||e.find(n=>Number(n.dataset.pageNumber)===g)||e[0]},y=function(t=r.clientWidth/2,a=r.clientHeight/2){const e=r.scrollLeft+t,n=r.scrollTop+a,i=rt(e,n);if(!i)return null;const o=i.querySelector(".pdf-page"),d={pageNumber:Number(i.dataset.pageNumber)||g,xRatio:(e-i.offsetLeft)/Math.max(1,i.offsetWidth),yRatio:(n-i.offsetTop)/Math.max(1,i.offsetHeight),clientX:t,clientY:a};if(o){const c=i.offsetLeft+o.offsetLeft,s=i.offsetTop+o.offsetTop;d.pageXRatio=(e-c)/Math.max(1,o.offsetWidth),d.pageYRatio=(n-s)/Math.max(1,o.offsetHeight)}return d},L=function(t){const a=Math.min(Math.max((t==null?void 0:t.pageNumber)||g,1),u.numPages),e=m.querySelector(`[data-page-number="${a}"]`);if(!e)return;const n=Number.isFinite(t==null?void 0:t.clientX)?t.clientX:r.clientWidth/2,i=Number.isFinite(t==null?void 0:t.clientY)?t.clientY:r.clientHeight/2,o=e.querySelector(".pdf-page"),d=o&&Number.isFinite(t==null?void 0:t.pageXRatio)&&Number.isFinite(t==null?void 0:t.pageYRatio),c=d?e.offsetLeft+o.offsetLeft+o.offsetWidth*t.pageXRatio:e.offsetLeft+e.offsetWidth*(Number.isFinite(t==null?void 0:t.xRatio)?t.xRatio:.5),s=d?e.offsetTop+o.offsetTop+o.offsetHeight*t.pageYRatio:e.offsetTop+e.offsetHeight*(Number.isFinite(t==null?void 0:t.yRatio)?t.yRatio:.5);r.scrollTo({left:Math.max(0,c-n),top:Math.max(0,s-i),behavior:"auto"})},U=function(t){const a=document.createElement("div");a.className="pdf-page-placeholder",a.setAttribute("aria-hidden","true"),a.dataset.pageNumber=String(t);const e=document.createElement("span");e.className="brand-loader compact";const n=document.createElement("span");n.className="brand-loader-ring";const i=document.createElement("span");i.className="brand-loader-core";const o=document.createElement("img");return o.className="brand-loader-logo",o.src=tt,o.alt="",o.setAttribute("aria-label",`${et} loading`),i.appendChild(o),e.append(n,i),a.appendChild(e),a},st=function(t,a){const e=(t.rotate+w+360)%360;return[b,e,l.toFixed(4),Math.round(a.cssViewport.width),Math.round(a.cssViewport.height),r.clientWidth,r.clientHeight].join(":")},ct=function(t){m.querySelectorAll(".pdf-page-slot").forEach(a=>{const e=Number(a.dataset.pageNumber);Math.abs(e-t)<=1||a.dataset.renderState!=="rendered"||(a.replaceChildren(U(e)),a.dataset.renderState="idle",a.dataset.renderSignature="",a.dataset.renderRequest="")})},dt=function(){if($=0,!u||S||f)return;const t=Array.from(m.querySelectorAll(".pdf-page-slot"));if(t.length===0)return;const a=r.scrollTop+r.clientHeight/2;let e=1,n=Number.POSITIVE_INFINITY;t.forEach(i=>{const o=i.offsetTop+i.offsetHeight/2,d=Math.abs(o-a);d<n&&(n=d,e=Number(i.dataset.pageNumber)||1)}),P.textContent=`${e} / ${u.numPages}`,e!==g&&(g=e,F(e),I(e))},G=function(t=140){window.clearTimeout(C),C=window.setTimeout(()=>{I(g)},t)},R=function(t,a=null){const e=Z(t);if(!u)return;if(Math.abs(e-l)<.001){a&&(L(a),H());return}const n=a||y();S=!0,r.classList.add("is-adjusting"),l=e,M(),m.querySelectorAll(".pdf-page-slot").forEach(i=>{const o=Number(i.dataset.basePageWidth),d=Number(i.dataset.basePageHeight),c=Number(i.dataset.marginHorizontal),s=Number(i.dataset.marginTop),x=Number(i.dataset.marginBottom);if(![o,d,c,s,x].every(Number.isFinite))return;const h=o*l,v=d*l;i.style.width=`${Math.max(r.clientWidth,Math.ceil(h+c*2))}px`,i.style.height=`${Math.max(r.clientHeight,Math.ceil(v+s+x))}px`;const W=i.querySelector(".pdf-page");W&&(W.style.width=`${h}px`,W.style.height=`${v}px`),i.dataset.renderRequest=""}),n!=null&&n.pageNumber&&(g=n.pageNumber),F(g),P.textContent=`${g} / ${u.numPages}`,L(n),H(),f||G(),window.requestAnimationFrame(()=>{S=!1,r.classList.remove("is-adjusting")})},K=function(t){if(f||t.length<2)return;const a=J(t);if(a<=0)return;window.clearTimeout(C),m.querySelectorAll(".pdf-page-slot").forEach(o=>{o.querySelector(".pdf-page")&&(o.dataset.renderRequest="")});const e=r.getBoundingClientRect(),n=(t[0].clientX+t[1].clientX)/2-e.left,i=(t[0].clientY+t[1].clientY)/2-e.top;f={startDistance:a,startZoom:l,draftZoom:l,anchor:y(n,i)},r.classList.add("is-pinching")},lt=function(t){if(!f||t.length<2)return;const a=J(t);f.draftZoom=Z(f.startZoom*(a/f.startDistance));const e=r.getBoundingClientRect(),n=(t[0].clientX+t[1].clientX)/2-e.left,i=(t[0].clientY+t[1].clientY)/2-e.top;R(f.draftZoom,{...f.anchor,clientX:n,clientY:i})},ut=function(){f&&(f=null,r.classList.remove("is-pinching"),S=!1,r.classList.remove("is-adjusting"),M(),G(60))};const A=r.dataset.pdfUrl||"",tt=r.dataset.loaderLogo||"",et=r.dataset.loaderName||"company",m=document.getElementById("pdfPages"),T=document.getElementById("pdfLoading"),B=document.getElementById("pdfError"),P=document.getElementById("pdfPageIndicator"),at=document.getElementById("pdfZoomIndicator"),V=document.getElementById("pdfZoomOut"),nt=document.getElementById("pdfZoomFit"),D=document.getElementById("pdfZoomIn"),E=document.getElementById("pdfFitMode"),k=document.getElementById("pdfRotate");let u=null,l=1,b="page",w=0,g=1,p=0,z=0,C=0,$=0,S=!1,f=null;const q=new Map,Y=1,X=5,Z=t=>Math.min(X,Math.max(Y,t));async function O(t){const a=it(),e=(t.rotate+w+360)%360,n=t.getViewport({scale:1,rotation:e}),i=Math.max(80,r.clientWidth-a.horizontal*2),o=Math.max(120,r.clientHeight-a.top-a.bottom),d=b==="width"?i/n.width:Math.min(i/n.width,o/n.height),c=t.getViewport({scale:d*l,rotation:e});return{baseViewport:t.getViewport({scale:d,rotation:e}),cssViewport:c,margins:a,slotWidth:Math.max(r.clientWidth,Math.ceil(c.width+a.horizontal*2)),slotHeight:Math.max(r.clientHeight,Math.ceil(c.height+a.top+a.bottom))}}async function j(t,a=p){if(a!==p)return;const e=m.querySelector(`[data-page-number="${t}"]`);if(e)try{const n=await _(t);if(a!==p||!e.isConnected)return;const i=await O(n),o=st(n,i);if(e.dataset.renderSignature===o||e.dataset.renderRequest===o)return;const d=e.querySelector(".pdf-page");e.dataset.renderRequest=o,d||(e.dataset.renderState="rendering");const c=ot(i.cssViewport),s=(n.rotate+w+360)%360,x=n.getViewport({scale:i.cssViewport.scale*c,rotation:s}),h=document.createElement("canvas");h.className="pdf-page",h.width=Math.max(1,Math.floor(x.width)),h.height=Math.max(1,Math.floor(x.height)),h.style.width=`${i.cssViewport.width}px`,h.style.height=`${i.cssViewport.height}px`,h.setAttribute("role","img"),h.setAttribute("aria-label",`Rendered PDF page ${t}`);const v=h.getContext("2d",{alpha:!1});if(await n.render({canvasContext:v,viewport:x,background:"#ffffff"}).promise,f&&d){e.dataset.renderRequest="";return}if(a!==p||!e.isConnected||e.dataset.renderRequest!==o)return;e.replaceChildren(h),e.dataset.renderState="rendered",e.dataset.renderSignature=o,e.dataset.renderRequest=""}catch(n){if(a!==p)return;e.querySelector(".pdf-page")||(e.dataset.renderState="error"),e.dataset.renderRequest="",console.error(`Unable to render PDF page ${t}:`,n)}}async function I(t,a=p){await j(t,a),a===p&&(ct(t),[t-1,t+1].filter(e=>e>=1&&e<=u.numPages).forEach(e=>{j(e,a)}))}async function N({preservePosition:t=!0,anchor:a=null}={}){if(!u)return;const e=++p,n=a||(t?y():null),i=Math.min(Math.max((n==null?void 0:n.pageNumber)||g,1),u.numPages);T.hidden=!1,B.hidden=!0,m.replaceChildren(),m.setAttribute("aria-busy","true");try{for(let o=1;o<=u.numPages;o+=1){if(e!==p)return;const d=await _(o),c=await O(d),s=document.createElement("section");s.className="pdf-page-slot",s.dataset.pageNumber=String(o),s.dataset.renderState="idle",s.dataset.basePageWidth=String(c.baseViewport.width),s.dataset.basePageHeight=String(c.baseViewport.height),s.dataset.marginHorizontal=String(c.margins.horizontal),s.dataset.marginTop=String(c.margins.top),s.dataset.marginBottom=String(c.margins.bottom),s.setAttribute("aria-label",`Page ${o} of ${u.numPages}`),s.style.width=`${c.slotWidth}px`,s.style.height=`${c.slotHeight}px`,s.style.padding=`${c.margins.top}px ${c.margins.horizontal}px ${c.margins.bottom}px`,s.appendChild(U(o)),m.appendChild(s)}if(e!==p||(g=i,F(i),L(n||{pageNumber:i,xRatio:.5,yRatio:.5,clientX:r.clientWidth/2,clientY:r.clientHeight/2}),P.textContent=`${i} / ${u.numPages}`,M(),await I(i,e),e!==p))return;L(n),m.setAttribute("aria-busy","false"),T.hidden=!0}catch(o){if(e!==p)return;throw o}}V.addEventListener("click",()=>R(l-.25)),nt.addEventListener("click",()=>R(1)),D.addEventListener("click",()=>R(l+.25)),E.addEventListener("click",async()=>{if(!u)return;const t=y();b=b==="page"?"width":"page",l=1,M(),await N({anchor:t})}),k.addEventListener("click",async()=>{if(!u)return;const t=y();w=(w+90)%360,l=1,k.setAttribute("aria-label",`Rotate PDF clockwise. Current rotation ${w} degrees`),await N({anchor:t})}),r.addEventListener("scroll",()=>{H()||$||($=window.requestAnimationFrame(dt))},{passive:!0});const J=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);document.addEventListener("touchstart",t=>{t.touches.length<2||(t.preventDefault(),K(t.touches))},{passive:!1,capture:!0}),document.addEventListener("touchmove",t=>{t.touches.length<2||(t.preventDefault(),f||K(t.touches),lt(t.touches))},{passive:!1,capture:!0});const Q=t=>{f&&t.touches.length<2&&ut()};document.addEventListener("touchend",Q,{capture:!0}),document.addEventListener("touchcancel",Q,{capture:!0}),window.addEventListener("resize",()=>{window.clearTimeout(z);const t=y();z=window.setTimeout(()=>N({anchor:t}),180)});async function ft(){if(!A)throw new Error("No PDF URL was supplied.");u=await gt({url:A,disableAutoFetch:!0,isEvalSupported:!1}).promise,P.textContent=`1 / ${u.numPages}`,await N({preservePosition:!1})}M(),ft().catch(t=>{console.error("Unable to render linked scaffold PDF:",t),T.hidden=!0,B.hidden=!1})}
+import {
+  GlobalWorkerOptions,
+  getDocument,
+} from './pdf-BnPRJEQ6.js';
+
+GlobalWorkerOptions.workerSrc = new URL(
+  '/assets/pdf.worker.min-yatZIOMy.mjs',
+  import.meta.url,
+).toString();
+
+const viewer = document.getElementById('pdfViewer');
+
+if (viewer) {
+  const pdfUrl = viewer.dataset.pdfUrl || '';
+  const pagesContainer = document.getElementById('pdfPages');
+  const loading = document.getElementById('pdfLoading');
+  const error = document.getElementById('pdfError');
+  const pageIndicator = document.getElementById('pdfPageIndicator');
+  const zoomOutButton = document.getElementById('pdfZoomOut');
+  const zoomFitButton = document.getElementById('pdfZoomFit');
+  const zoomInButton = document.getElementById('pdfZoomIn');
+  const fitModeButton = document.getElementById('pdfFitMode');
+  const rotateButton = document.getElementById('pdfRotate');
+  const zoomIndicator = document.getElementById('pdfZoomIndicator');
+
+  let pdfDocument = null;
+  let loadingTask = null;
+  let renderTask = null;
+  let activePage = null;
+  let currentPage = 1;
+  let zoom = 1;
+  let rotation = 0;
+  let fitMode = 'page';
+  let renderGeneration = 0;
+  let resizeTimer = 0;
+  let touchStart = null;
+
+  const clamp = (value, minimum, maximum) =>
+    Math.min(maximum, Math.max(minimum, value));
+
+  const nextFrame = () => new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
+  function updateToolbar() {
+    const pageCount = pdfDocument?.numPages || 0;
+    pageIndicator.textContent = `${currentPage} / ${pageCount || 1}`;
+    zoomIndicator.textContent = `${Math.round(zoom * 100)}%`;
+    zoomOutButton.disabled = zoom <= 1.001;
+    zoomInButton.disabled = zoom >= 4;
+    fitModeButton.textContent = fitMode === 'page' ? 'Page' : 'Width';
+    fitModeButton.setAttribute(
+      'aria-label',
+      fitMode === 'page' ? 'Fit PDF to screen width' : 'Fit whole PDF page',
+    );
+    fitModeButton.title = fitMode === 'page' ? 'Fit width' : 'Fit page';
+  }
+
+  function releasePage() {
+    if (renderTask) {
+      try {
+        renderTask.cancel();
+      } catch (_) {
+        // The render may already have completed.
+      }
+      renderTask = null;
+    }
+    if (activePage) {
+      try {
+        activePage.cleanup();
+      } catch (_) {
+        // PDF.js may have already released this page.
+      }
+      activePage = null;
+    }
+    pagesContainer.replaceChildren();
+  }
+
+  function showLoading() {
+    loading.hidden = false;
+    error.hidden = true;
+    pagesContainer.setAttribute('aria-busy', 'true');
+  }
+
+  function showError(renderError) {
+    console.error('Unable to render linked scaffold PDF:', renderError);
+    loading.hidden = true;
+    error.hidden = false;
+    pagesContainer.setAttribute('aria-busy', 'false');
+  }
+
+  function getRenderScale(cssViewport) {
+    const tablet = Math.min(window.innerWidth, window.innerHeight) >= 700;
+    const pixelBudget = tablet ? 6_400_000 : 3_800_000;
+    let outputScale = Math.min(
+      window.devicePixelRatio || 1,
+      tablet ? 2.2 : 2.35,
+    );
+    const requestedPixels =
+      cssViewport.width * outputScale * cssViewport.height * outputScale;
+    if (requestedPixels > pixelBudget) {
+      outputScale *= Math.sqrt(pixelBudget / requestedPixels);
+    }
+    const dimensionLimit = Math.min(
+      8192 / Math.max(1, cssViewport.width),
+      8192 / Math.max(1, cssViewport.height),
+    );
+    return Math.max(1, Math.min(outputScale, dimensionLimit));
+  }
+
+  async function renderPage(pageNumber, {preserveCanvas = false} = {}) {
+    if (!pdfDocument) return;
+
+    const boundedPage = clamp(pageNumber, 1, pdfDocument.numPages);
+    const generation = ++renderGeneration;
+    showLoading();
+    releasePage();
+    await nextFrame();
+
+    try {
+      const page = await pdfDocument.getPage(boundedPage);
+      if (generation !== renderGeneration) {
+        page.cleanup();
+        return;
+      }
+      activePage = page;
+
+      const effectiveRotation = (page.rotate + rotation + 360) % 360;
+      const unitViewport = page.getViewport({scale: 1, rotation: effectiveRotation});
+      const tablet = viewer.clientWidth >= 700;
+      const horizontalPadding = tablet ? 44 : 24;
+      const verticalPadding = tablet ? 136 : 112;
+      const availableWidth = Math.max(220, viewer.clientWidth - horizontalPadding);
+      const availableHeight = Math.max(220, viewer.clientHeight - verticalPadding);
+      const fittedScale = fitMode === 'width'
+        ? availableWidth / unitViewport.width
+        : Math.min(
+            availableWidth / unitViewport.width,
+            availableHeight / unitViewport.height,
+          );
+      const cssViewport = page.getViewport({
+        scale: fittedScale * zoom,
+        rotation: effectiveRotation,
+      });
+      const outputScale = getRenderScale(cssViewport);
+      const renderViewport = page.getViewport({
+        scale: fittedScale * zoom * outputScale,
+        rotation: effectiveRotation,
+      });
+
+      const slot = document.createElement('section');
+      slot.className = 'pdf-page-slot is-current-page';
+      slot.dataset.pageNumber = String(boundedPage);
+      slot.setAttribute('aria-label', `Page ${boundedPage} of ${pdfDocument.numPages}`);
+      slot.style.width = `${Math.max(viewer.clientWidth, Math.ceil(cssViewport.width + horizontalPadding))}px`;
+      slot.style.height = `${Math.max(viewer.clientHeight, Math.ceil(cssViewport.height + verticalPadding))}px`;
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'pdf-page';
+      canvas.width = Math.max(1, Math.floor(renderViewport.width));
+      canvas.height = Math.max(1, Math.floor(renderViewport.height));
+      canvas.style.width = `${Math.max(1, Math.floor(cssViewport.width))}px`;
+      canvas.style.height = `${Math.max(1, Math.floor(cssViewport.height))}px`;
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `Rendered PDF page ${boundedPage}`);
+      slot.appendChild(canvas);
+      pagesContainer.appendChild(slot);
+
+      const context = canvas.getContext('2d', {
+        alpha: false,
+        desynchronized: true,
+      });
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      renderTask = page.render({
+        canvasContext: context,
+        viewport: renderViewport,
+        background: '#ffffff',
+        intent: 'display',
+      });
+      await renderTask.promise;
+      if (generation !== renderGeneration) return;
+
+      renderTask = null;
+      currentPage = boundedPage;
+      updateToolbar();
+      if (!preserveCanvas) {
+        viewer.scrollTo({left: 0, top: 0, behavior: 'auto'});
+      }
+      pagesContainer.setAttribute('aria-busy', 'false');
+      loading.hidden = true;
+
+      // The completed bitmap stays visible while the page's vector operator
+      // list and temporary resources are released.
+      page.cleanup();
+      activePage = null;
+    } catch (renderError) {
+      if (renderError?.name === 'RenderingCancelledException') return;
+      if (generation === renderGeneration) showError(renderError);
+    }
+  }
+
+  function changePage(offset) {
+    if (!pdfDocument) return;
+    const nextPage = clamp(currentPage + offset, 1, pdfDocument.numPages);
+    if (nextPage !== currentPage) {
+      zoom = 1;
+      renderPage(nextPage);
+    }
+  }
+
+  function setZoom(nextZoom) {
+    const boundedZoom = clamp(nextZoom, 1, 4);
+    if (Math.abs(boundedZoom - zoom) < 0.001) return;
+    zoom = boundedZoom;
+    updateToolbar();
+    renderPage(currentPage);
+  }
+
+  zoomOutButton.addEventListener('click', () => setZoom(zoom - 0.25));
+  zoomFitButton.addEventListener('click', () => setZoom(1));
+  zoomInButton.addEventListener('click', () => setZoom(zoom + 0.25));
+  fitModeButton.addEventListener('click', () => {
+    fitMode = fitMode === 'page' ? 'width' : 'page';
+    zoom = 1;
+    updateToolbar();
+    renderPage(currentPage);
+  });
+  rotateButton.addEventListener('click', () => {
+    rotation = (rotation + 90) % 360;
+    zoom = 1;
+    renderPage(currentPage);
+  });
+
+  viewer.addEventListener('touchstart', event => {
+    const browserScale = window.visualViewport?.scale || 1;
+    if (event.touches.length !== 1 || browserScale > 1.05 || zoom > 1.001) {
+      touchStart = null;
+      return;
+    }
+    touchStart = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+    };
+  }, {passive: true});
+
+  viewer.addEventListener('touchend', event => {
+    if (!touchStart || event.changedTouches.length !== 1) return;
+    const dx = event.changedTouches[0].clientX - touchStart.x;
+    const dy = event.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 64) return;
+    const forward = Math.abs(dy) >= Math.abs(dx) ? dy < 0 : dx < 0;
+    changePage(forward ? 1 : -1);
+  }, {passive: true});
+
+  window.addEventListener('resize', () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      if ((window.visualViewport?.scale || 1) <= 1.05) {
+        renderPage(currentPage);
+      }
+    }, 220);
+  });
+
+  window.addEventListener('pagehide', () => {
+    renderGeneration += 1;
+    releasePage();
+    try {
+      pdfDocument?.cleanup();
+      loadingTask?.destroy();
+    } catch (_) {
+      // The document may already be closed by Safari.
+    }
+  }, {once: true});
+
+  async function openDocument() {
+    if (!pdfUrl) throw new Error('No PDF URL was supplied.');
+    updateToolbar();
+    loadingTask = getDocument({
+      url: pdfUrl,
+      disableAutoFetch: true,
+      isEvalSupported: false,
+      verbosity: 0,
+    });
+    pdfDocument = await loadingTask.promise;
+    updateToolbar();
+    await renderPage(1);
+  }
+
+  openDocument().catch(showError);
+}
