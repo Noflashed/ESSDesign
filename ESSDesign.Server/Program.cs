@@ -494,6 +494,7 @@ app.MapGet("/t/{tagRef}/{documentKind}/preview", async (
         var preview = await previewService.GetInfoAsync(model.DocumentUrl, context.RequestAborted);
         return Results.Json(new
         {
+            version = model.DocumentVersion,
             pageCount = preview.Pages.Count,
             pages = preview.Pages.Select((page, index) => new
             {

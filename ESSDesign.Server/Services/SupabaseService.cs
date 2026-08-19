@@ -2767,7 +2767,8 @@ namespace ESSDesign.Server.Services
                 : new ScaffTagLinkedDesignDocument
                 {
                     DocumentId = latestDocument.Id,
-                    DocumentType = documentType
+                    DocumentType = documentType,
+                    UpdatedAt = latestDocument.UpdatedAt
                 };
         }
 
@@ -2775,7 +2776,8 @@ namespace ESSDesign.Server.Services
             string builderId,
             string projectId,
             string scaffTagFormId,
-            string? preferredHandoverFormId = null)
+            string? preferredHandoverFormId = null,
+            string? preferredScaffoldRegisterId = null)
         {
             var result = new ScaffTagLinkedDocuments();
             var select = Uri.EscapeDataString("id,pdf_path,payload,updated_at");
@@ -2794,20 +2796,44 @@ namespace ESSDesign.Server.Services
                         StringComparison.Ordinal))
                 ?? handovers.FirstOrDefault(candidate =>
                     !string.IsNullOrWhiteSpace(preferredHandoverFormId) &&
-                    string.Equals(candidate.Id, preferredHandoverFormId, StringComparison.Ordinal));
-            if (handover == null)
+                    string.Equals(candidate.Id, preferredHandoverFormId, StringComparison.Ordinal))
+                ?? handovers.FirstOrDefault(candidate =>
+                    !string.IsNullOrWhiteSpace(preferredScaffoldRegisterId) &&
+                    string.Equals(
+                        GetPayloadString(candidate.Payload, "scaffoldRegisterId"),
+                        preferredScaffoldRegisterId,
+                        StringComparison.Ordinal));
+            if (handover != null)
             {
-                return result;
+                result.HandoverPdfPath = !string.IsNullOrWhiteSpace(handover.PdfPath)
+                    ? handover.PdfPath
+                    : GetPayloadString(handover.Payload, "pdfPath");
+                result.HandoverUpdatedAt = handover.UpdatedAt;
+
+                var drawingDocumentId = GetPayloadString(handover.Payload, "drawingDocumentId");
+                if (Guid.TryParse(drawingDocumentId, out var parsedDrawingDocumentId))
+                {
+                    result.DesignDocument = await ResolveLatestLinkedDesignDocumentAsync(parsedDrawingDocumentId);
+                }
             }
 
-            result.HandoverPdfPath = !string.IsNullOrWhiteSpace(handover.PdfPath)
-                ? handover.PdfPath
-                : GetPayloadString(handover.Payload, "pdfPath");
-
-            var drawingDocumentId = GetPayloadString(handover.Payload, "drawingDocumentId");
-            if (Guid.TryParse(drawingDocumentId, out var parsedDrawingDocumentId))
+            if (result.DesignDocument == null && !string.IsNullOrWhiteSpace(preferredScaffoldRegisterId))
             {
-                result.DesignDocument = await ResolveLatestLinkedDesignDocumentAsync(parsedDrawingDocumentId);
+                var registerRows = await GetRestRowsAsync<SafetyFormRow>(
+                    "ess_safety_forms" +
+                    $"?select={select}" +
+                    "&form_type=eq.scaffold-register" +
+                    $"&builder_id=eq.{Uri.EscapeDataString(builderId)}" +
+                    $"&project_id=eq.{Uri.EscapeDataString(projectId)}" +
+                    $"&id=eq.{Uri.EscapeDataString(preferredScaffoldRegisterId)}" +
+                    "&limit=1");
+                var registerDrawingDocumentId = registerRows.FirstOrDefault() is { } register
+                    ? GetPayloadString(register.Payload, "drawingDocumentId")
+                    : null;
+                if (Guid.TryParse(registerDrawingDocumentId, out var parsedRegisterDrawingDocumentId))
+                {
+                    result.DesignDocument = await ResolveLatestLinkedDesignDocumentAsync(parsedRegisterDrawingDocumentId);
+                }
             }
 
             return result;
@@ -4355,6 +4381,9 @@ namespace ESSDesign.Server.Services
         [JsonPropertyName("handoverFormId")]
         public string? HandoverFormId { get; set; }
 
+        [JsonPropertyName("scaffoldRegisterId")]
+        public string? ScaffoldRegisterId { get; set; }
+
         [JsonPropertyName("dateErected")]
         public string? DateErected { get; set; }
 
@@ -4413,6 +4442,7 @@ namespace ESSDesign.Server.Services
     public class ScaffTagLinkedDocuments
     {
         public string? HandoverPdfPath { get; set; }
+        public DateTimeOffset? HandoverUpdatedAt { get; set; }
         public ScaffTagLinkedDesignDocument? DesignDocument { get; set; }
     }
 
@@ -4420,6 +4450,7 @@ namespace ESSDesign.Server.Services
     {
         public Guid DocumentId { get; set; }
         public string DocumentType { get; set; } = string.Empty;
+        public DateTime UpdatedAt { get; set; }
     }
 
     public class ScaffTagInspectionRecord

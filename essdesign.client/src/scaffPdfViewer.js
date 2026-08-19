@@ -284,7 +284,10 @@ if (viewer) {
     }
 
     function pageImageUrl(pageNumber, quality) {
-        return `${previewBase}/pages/${pageNumber}.webp?quality=${quality}`;
+        const version = documentInfo?.version
+            ? `&v=${encodeURIComponent(documentInfo.version)}`
+            : '';
+        return `${previewBase}/pages/${pageNumber}.webp?quality=${quality}${version}`;
     }
 
     function renderPageImage(pageNumber, generation = renderGeneration, quality = 'zoom') {
@@ -706,6 +709,7 @@ if (viewer) {
             throw new Error('This PDF has no previewable pages.');
         }
         documentInfo = {
+            version: String(manifest.version || ''),
             pageCount: manifest.pages.length,
             pages: manifest.pages.map(page => ({
                 width: Math.max(1, Number(page.width) || 1),

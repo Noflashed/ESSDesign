@@ -38,7 +38,8 @@ public sealed class ScaffTagPublicPageService
             builderId,
             projectId,
             formId,
-            details.HandoverFormId);
+            details.HandoverFormId,
+            details.ScaffoldRegisterId);
         var photoUrls = await Task.WhenAll(photoUrlTasks);
 
         var linkedDocuments = new ScaffTagLinkedDocuments();
@@ -87,7 +88,8 @@ public sealed class ScaffTagPublicPageService
             builderId,
             projectId,
             formId,
-            details.HandoverFormId);
+            details.HandoverFormId,
+            details.ScaffoldRegisterId);
         if (linkedDocuments.DesignDocument == null)
         {
             return null;
@@ -116,12 +118,17 @@ public sealed class ScaffTagPublicPageService
             builderId,
             projectId,
             formId,
-            details.HandoverFormId);
-        return string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath)
-            ? null
-            : await _supabaseService.GetSafetyStorageSignedUrlAsync(
-                linkedDocuments.HandoverPdfPath,
-                60 * 60 * 24 * 14);
+            details.HandoverFormId,
+            details.ScaffoldRegisterId);
+        if (string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath))
+        {
+            return null;
+        }
+
+        var handoverUrl = await _supabaseService.GetSafetyStorageSignedUrlAsync(
+            linkedDocuments.HandoverPdfPath,
+            60 * 60 * 24 * 14);
+        return AddDocumentVersion(handoverUrl, linkedDocuments.HandoverUpdatedAt);
     }
 
     public async Task<ScaffTagLinkedDocumentViewModel?> GetLinkedDocumentViewAsync(
@@ -143,7 +150,8 @@ public sealed class ScaffTagPublicPageService
             builderId,
             projectId,
             formId,
-            details.HandoverFormId);
+            details.HandoverFormId,
+            details.ScaffoldRegisterId);
         var resolvedTagRef = Uri.EscapeDataString($"{builderId}:{projectId}:{formId}");
         var scaffTagUrl = $"/t/{resolvedTagRef}";
 
@@ -163,6 +171,7 @@ public sealed class ScaffTagPublicPageService
                 PageTitle = "Design Drawing",
                 DocumentName = download.FileName,
                 DocumentUrl = download.Url,
+                DocumentVersion = $"{linkedDocuments.DesignDocument.DocumentId:N}-{linkedDocuments.DesignDocument.UpdatedAt.ToUniversalTime().Ticks}",
                 RightUrl = scaffTagUrl,
                 RightLabel = "Scaff-Tag"
             };
@@ -181,9 +190,12 @@ public sealed class ScaffTagPublicPageService
             DocumentName = string.IsNullOrWhiteSpace(details.ScaffoldName)
                 ? "Latest linked handover"
                 : details.ScaffoldName,
-            DocumentUrl = await _supabaseService.GetSafetyStorageSignedUrlAsync(
-                linkedDocuments.HandoverPdfPath,
-                60 * 60 * 24 * 14),
+            DocumentUrl = AddDocumentVersion(
+                await _supabaseService.GetSafetyStorageSignedUrlAsync(
+                    linkedDocuments.HandoverPdfPath,
+                    60 * 60 * 24 * 14),
+                linkedDocuments.HandoverUpdatedAt),
+            DocumentVersion = linkedDocuments.HandoverUpdatedAt?.ToUnixTimeMilliseconds().ToString() ?? string.Empty,
             LeftUrl = scaffTagUrl,
             LeftLabel = "Scaff-Tag"
         };
@@ -193,6 +205,17 @@ public sealed class ScaffTagPublicPageService
         string.Equals(companyEntityId, "maloo", StringComparison.OrdinalIgnoreCase)
             ? "maloo"
             : "ess";
+
+    private static string AddDocumentVersion(string url, DateTimeOffset? updatedAt)
+    {
+        if (string.IsNullOrWhiteSpace(url) || updatedAt == null)
+        {
+            return url;
+        }
+
+        var separator = url.Contains('?') ? '&' : '?';
+        return $"{url}{separator}v={updatedAt.Value.ToUnixTimeMilliseconds()}";
+    }
 
     public static bool TryParseReference(
         string tagRef,
@@ -237,6 +260,7 @@ public sealed class ScaffTagLinkedDocumentViewModel
     public string PageTitle { get; init; } = string.Empty;
     public string DocumentName { get; init; } = string.Empty;
     public string DocumentUrl { get; init; } = string.Empty;
+    public string DocumentVersion { get; init; } = string.Empty;
     public string LeftUrl { get; init; } = string.Empty;
     public string LeftLabel { get; init; } = string.Empty;
     public string RightUrl { get; init; } = string.Empty;
@@ -395,7 +419,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=a89-raster-3"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=a89-raster-4"></script>
 </body>
 </html>
 """;
