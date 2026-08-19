@@ -291,7 +291,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:contain; background:transparent; touch-action:pan-x pan-y pinch-zoom; -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:none; transition:opacity .18s ease,transform .18s ease; }
+    .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:none; background:transparent; touch-action:pan-x pan-y pinch-zoom; -webkit-overflow-scrolling:touch; scrollbar-width:none; transition:opacity .18s ease,transform .18s ease; }
     .pdf-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
     .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-adjusting,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
     .pdf-pages { min-width:100%; min-height:100%; transform-origin:center center; }
@@ -392,7 +392,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
       window.setTimeout(() => window.location.assign(link.href), delay);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=7"></script>
+  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=8"></script>
 </body>
 </html>
 """;
