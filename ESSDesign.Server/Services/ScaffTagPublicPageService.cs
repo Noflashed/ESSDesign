@@ -282,11 +282,11 @@ public static class ScaffTagLinkedDocumentPageRenderer
     * { box-sizing:border-box; }
     html, body { width:100%; height:100%; margin:0; }
     body { min-height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
-    .viewer { position:relative; width:100%; height:100dvh; display:flex; align-items:center; justify-content:center; padding:max(52px,calc(env(safe-area-inset-top) + 44px)) max(48px,env(safe-area-inset-right)) max(34px,env(safe-area-inset-bottom)) max(48px,env(safe-area-inset-left)); background:rgba(32,35,39,.96); }
+    .viewer { position:relative; width:100%; height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); }
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .document-shell { position:relative; width:min(calc(100vw - 96px),82vw,1060px); height:min(88dvh,920px); flex:0 0 auto; overflow:hidden; border:1px solid rgba(255,255,255,.7); border-radius:9px; background:#fff; box-shadow:0 18px 54px rgba(0,0,0,.45); transition:opacity .18s ease,transform .18s ease; }
+    .document-shell { position:absolute; inset:0; width:100%; height:100%; overflow:hidden; background:transparent; transition:opacity .18s ease,transform .18s ease; }
     .document-frame { width:100%; height:100%; display:block; border:0; background:#fff; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
     .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
@@ -304,8 +304,6 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .document-fallback { display:flex; width:100%; height:100%; align-items:center; justify-content:center; padding:24px; color:#111827; text-align:center; }
     .document-fallback a { color:#1268c4; font-weight:750; }
     @media (min-width:700px) {
-      .viewer { padding-right:max(78px,env(safe-area-inset-right)); padding-left:max(78px,env(safe-area-inset-left)); }
-      .document-shell { width:min(calc(100vw - 152px),84vw,1060px); height:min(90dvh,920px); }
       .document-nav { width:76px; }
       .document-nav-icon { width:52px; height:52px; }
       .document-nav svg { width:29px; height:29px; }
@@ -330,7 +328,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
   </nav>
   <main class="viewer">
     <section class="document-shell" aria-label="{{pageTitle}} preview">
-      <iframe class="document-frame" src="{{documentUrl}}#view=FitH" title="{{pageTitle}}">
+      <iframe class="document-frame" src="{{documentUrl}}#view=Fit" title="{{pageTitle}}" loading="eager">
         <div class="document-fallback">This document cannot be previewed here. <a href="{{documentUrl}}">Open {{pageTitle}}</a>.</div>
       </iframe>
     </section>
