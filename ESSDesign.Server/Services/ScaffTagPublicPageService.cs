@@ -247,11 +247,6 @@ public static class ScaffTagLinkedDocumentPageRenderer
 {
     public static string Render(ScaffTagLinkedDocumentViewModel model)
     {
-        var isMaloo = string.Equals(model.CompanyEntityId, "maloo", StringComparison.OrdinalIgnoreCase);
-        var brandLogoUrl = isMaloo
-            ? "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png"
-            : "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
-        var brandName = isMaloo ? "Maloo Access Group" : "Erect Safe Scaffolding";
         var pageTitle = System.Net.WebUtility.HtmlEncode(model.PageTitle);
         var documentName = System.Net.WebUtility.HtmlEncode(model.DocumentName);
         var documentUrl = System.Net.WebUtility.HtmlEncode(model.DocumentUrl);
@@ -287,36 +282,12 @@ public static class ScaffTagLinkedDocumentPageRenderer
     * { box-sizing:border-box; }
     html, body { width:100%; height:100%; margin:0; }
     body { min-height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
-    .viewer { position:relative; width:100%; height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); }
+    .viewer { position:relative; width:100%; height:100dvh; display:flex; align-items:center; justify-content:center; padding:max(52px,calc(env(safe-area-inset-top) + 44px)) max(48px,env(safe-area-inset-right)) max(34px,env(safe-area-inset-bottom)) max(48px,env(safe-area-inset-left)); background:rgba(32,35,39,.96); }
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .pdf-viewport { position:absolute; inset:0; overflow:auto; overscroll-behavior:none; background:transparent; touch-action:pan-x pan-y pinch-zoom; -webkit-overflow-scrolling:touch; scrollbar-width:none; transition:opacity .18s ease,transform .18s ease; }
-    .pdf-viewport::-webkit-scrollbar { width:0; height:0; display:none; }
-    .pdf-viewport.is-zoomed,.pdf-viewport.is-pinching,.pdf-viewport.is-adjusting,.pdf-viewport.is-fit-width { scroll-snap-type:none; }
-    .pdf-pages { min-width:100%; min-height:100%; transform-origin:center center; }
-    .pdf-page-slot { min-width:100%; min-height:100%; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; scroll-snap-stop:always; }
-    .pdf-viewport.is-zoomed .pdf-page-slot:not(.is-current-page),.pdf-viewport.is-pinching .pdf-page-slot:not(.is-current-page) { visibility:hidden; }
-    .pdf-page { display:block; flex:0 0 auto; border:1px solid rgba(255,255,255,.72); border-radius:3px; background:#fff; box-shadow:0 16px 48px rgba(0,0,0,.42); }
-    .pdf-page-placeholder { width:58px; height:58px; display:grid; flex:0 0 auto; place-items:center; }
-    .pdf-status { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; color:rgba(255,255,255,.82); font-size:11px; font-weight:750; letter-spacing:.45px; text-align:center; }
-    .pdf-status[hidden] { display:none; }
-    .brand-loader { position:relative; width:104px; height:104px; display:grid; flex:0 0 auto; place-items:center; }
-    .brand-loader-ring { position:absolute; inset:0; border:7px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:viewer-spin .9s linear infinite; }
-    .brand-loader-core { position:absolute; inset:10px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.28); }
-    .brand-loader-logo { width:100%; height:100%; display:block; object-fit:contain; }
-    .brand-loader.compact { width:52px; height:52px; }
-    .brand-loader.compact .brand-loader-ring { border-width:4px; }
-    .brand-loader.compact .brand-loader-core { inset:6px; padding:3px; }
-    .pdf-error a { display:inline-block; margin-top:10px; color:#fff; font-weight:850; text-underline-offset:3px; }
-    .pdf-toolbar { position:fixed; bottom:max(7px,env(safe-area-inset-bottom)); left:50%; z-index:35; height:36px; display:flex; align-items:center; gap:3px; padding:3px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(7,12,18,.48); opacity:.68; transform:translateX(-50%); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
-    .pdf-toolbar button { width:30px; height:28px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:650; }
-    .pdf-toolbar button:disabled { opacity:.28; }
-    .pdf-toolbar button:active { background:rgba(255,255,255,.14); }
-    .pdf-toolbar .pdf-toolbar-compact { font-size:10px; font-weight:800; }
-    .pdf-toolbar .pdf-fit-mode { width:auto; min-width:39px; padding:0 7px; border-radius:999px; font-size:8px; font-weight:800; letter-spacing:.1px; }
-    .pdf-toolbar-label { min-width:36px; color:rgba(255,255,255,.86); font-size:8px; line-height:1; font-weight:800; text-align:center; }
-    .pdf-page-indicator { min-width:34px; padding:0 5px; border-left:1px solid rgba(255,255,255,.14); color:rgba(255,255,255,.72); font-size:8px; line-height:1; font-weight:750; text-align:center; }
+    .document-shell { position:relative; width:min(calc(100vw - 96px),82vw,1060px); height:min(88dvh,920px); flex:0 0 auto; overflow:hidden; border:1px solid rgba(255,255,255,.7); border-radius:9px; background:#fff; box-shadow:0 18px 54px rgba(0,0,0,.45); transition:opacity .18s ease,transform .18s ease; }
+    .document-frame { width:100%; height:100%; display:block; border:0; background:#fff; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
     .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
     .document-nav:hover,.document-nav:focus-visible,.document-nav:active { opacity:.94; }
@@ -328,17 +299,13 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .document-nav-right { right:max(1px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
     @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-3px); } }
     @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(3px); } }
-    @keyframes viewer-spin { to { transform:rotate(360deg); } }
-    body.is-leaving-left .pdf-viewport { opacity:0; transform:translateX(22px) scale(.985); }
-    body.is-leaving-right .pdf-viewport { opacity:0; transform:translateX(-22px) scale(.985); }
-    .navigation-loading { position:fixed; inset:0; z-index:90; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:13px; background:rgba(18,21,24,.78); color:rgba(255,255,255,.9); font-size:11px; font-weight:800; letter-spacing:.5px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease,visibility 0s linear .14s; -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
-    .navigation-loading.is-visible { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
+    body.is-leaving-left .document-shell { opacity:0; transform:translateX(22px) scale(.985); }
+    body.is-leaving-right .document-shell { opacity:0; transform:translateX(-22px) scale(.985); }
+    .document-fallback { display:flex; width:100%; height:100%; align-items:center; justify-content:center; padding:24px; color:#111827; text-align:center; }
+    .document-fallback a { color:#1268c4; font-weight:750; }
     @media (min-width:700px) {
-      .pdf-toolbar { height:42px; padding:4px; }
-      .pdf-toolbar button { width:36px; height:32px; font-size:20px; }
-      .pdf-toolbar .pdf-toolbar-compact { font-size:11px; }
-      .pdf-toolbar .pdf-fit-mode { min-width:46px; padding:0 9px; font-size:9px; }
-      .pdf-toolbar-label,.pdf-page-indicator { font-size:9px; }
+      .viewer { padding-right:max(78px,env(safe-area-inset-right)); padding-left:max(78px,env(safe-area-inset-left)); }
+      .document-shell { width:min(calc(100vw - 152px),84vw,1060px); height:min(90dvh,920px); }
       .document-nav { width:76px; }
       .document-nav-icon { width:52px; height:52px; }
       .document-nav svg { width:29px; height:29px; }
@@ -348,8 +315,7 @@ public static class ScaffTagLinkedDocumentPageRenderer
     }
     @media (prefers-reduced-motion:reduce) {
       .document-nav { animation:none; transform:translateY(-50%); }
-      .pdf-viewport,.navigation-loading { transition:none; }
-      .brand-loader-ring { animation:none; }
+      .document-shell { transition:none; }
     }
   </style>
 </head>
@@ -363,36 +329,22 @@ public static class ScaffTagLinkedDocumentPageRenderer
     {{rightNavigation}}
   </nav>
   <main class="viewer">
-    <section id="pdfViewer" class="pdf-viewport" data-pdf-url="{{documentUrl}}" data-loader-logo="{{brandLogoUrl}}" data-loader-name="{{brandName}}" aria-label="{{pageTitle}} preview">
-      <div id="pdfPages" class="pdf-pages" aria-live="polite" aria-busy="true"></div>
-      <div id="pdfLoading" class="pdf-status" role="status"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span>Preparing PDF preview</span></div>
-      <div id="pdfError" class="pdf-status pdf-error" hidden><span>We could not render this PDF preview.</span><a href="{{documentUrl}}">Open the PDF directly</a></div>
+    <section class="document-shell" aria-label="{{pageTitle}} preview">
+      <iframe class="document-frame" src="{{documentUrl}}#view=FitH" title="{{pageTitle}}">
+        <div class="document-fallback">This document cannot be previewed here. <a href="{{documentUrl}}">Open {{pageTitle}}</a>.</div>
+      </iframe>
     </section>
   </main>
-  <div class="pdf-toolbar" aria-label="PDF zoom controls">
-    <button id="pdfZoomOut" type="button" aria-label="Zoom out">&minus;</button>
-    <span id="pdfZoomIndicator" class="pdf-toolbar-label">100%</span>
-    <button id="pdfZoomFit" class="pdf-toolbar-compact" type="button" aria-label="Reset zoom to fitted size" title="Reset zoom">1&times;</button>
-    <button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button>
-    <button id="pdfFitMode" class="pdf-fit-mode" type="button" aria-label="Fit PDF to screen width" title="Fit width">Page</button>
-    <button id="pdfRotate" type="button" aria-label="Rotate PDF clockwise" title="Rotate clockwise">&#8635;</button>
-    <span id="pdfPageIndicator" class="pdf-page-indicator" aria-live="polite">1 / 1</span>
-  </div>
-  <div id="navigationLoading" class="navigation-loading" role="status" aria-live="polite"><span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span><span id="navigationLoadingLabel">Opening document</span></div>
   <script>
     document.getElementById('documentNavigation').addEventListener('click', event => {
       const link = event.target.closest('a.document-nav');
       if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       event.preventDefault();
-      const label = link.querySelector('.document-nav-label')?.textContent?.trim() || 'document';
-      document.getElementById('navigationLoadingLabel').textContent = `Opening ${label}`;
-      document.getElementById('navigationLoading').classList.add('is-visible');
       document.body.classList.add(`is-leaving-${link.dataset.direction}`);
-      const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 140;
-      window.setTimeout(() => window.location.assign(link.href), delay);
+      window.setTimeout(() => window.location.assign(link.href), 180);
     });
   </script>
-  <script type="module" src="https://essdesign.app/assets/scaff-pdf-viewer.js?v=8"></script>
 </body>
 </html>
 """;
