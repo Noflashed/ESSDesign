@@ -15,8 +15,10 @@ public sealed class ScaffTagPdfPreviewService
     private const int MaximumPageCount = 200;
     private const int PreviewLongEdgePixels = 1400;
     private const int PreviewWebpQuality = 80;
-    private const int DetailLongEdgePixels = 2400;
-    private const int DetailWebpQuality = 86;
+    private const int DetailLongEdgePixels = 3000;
+    private const int DetailWebpQuality = 90;
+    private const int ZoomLongEdgePixels = 4200;
+    private const int ZoomWebpQuality = 92;
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache _cache;
@@ -61,9 +63,12 @@ public sealed class ScaffTagPdfPreviewService
                 StatusCodes.Status404NotFound);
         }
 
-        var useDetailQuality = string.Equals(quality, "detail", StringComparison.OrdinalIgnoreCase);
-        var longEdgePixels = useDetailQuality ? DetailLongEdgePixels : PreviewLongEdgePixels;
-        var webpQuality = useDetailQuality ? DetailWebpQuality : PreviewWebpQuality;
+        var (longEdgePixels, webpQuality) = quality?.Trim().ToLowerInvariant() switch
+        {
+            "zoom" => (ZoomLongEdgePixels, ZoomWebpQuality),
+            "detail" => (DetailLongEdgePixels, DetailWebpQuality),
+            _ => (PreviewLongEdgePixels, PreviewWebpQuality),
+        };
         var pageCacheKey = $"scaff-pdf-page:{document.ContentKey}:{pageNumber}:{longEdgePixels}:{webpQuality}";
         if (_cache.TryGetValue<ScaffTagPdfPreviewPageContent>(pageCacheKey, out var cachedPage) &&
             cachedPage != null)

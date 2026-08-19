@@ -26,12 +26,14 @@ if (viewer) {
     let scrollFrame = 0;
     let geometryUpdateInProgress = false;
     let pinchState = null;
+    let pinchFrame = 0;
     let suspended = false;
 
     const minimumZoom = 1;
     const maximumZoom = 5;
     const pageImageTimeoutMs = 45000;
-    const qualityRank = { preview: 1, detail: 2 };
+    const qualityRank = { preview: 1, detail: 2, zoom: 3 };
+    const highResolutionZoomThreshold = 1.5;
     const clampZoom = value => Math.min(maximumZoom, Math.max(minimumZoom, value));
 
     function getPage(pageNumber) {
@@ -395,7 +397,7 @@ if (viewer) {
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             const pageNumber = Number(slot.dataset.pageNumber);
             if (pageNumber === centerPage || Math.abs(pageNumber - centerPage) > 1) return;
-            if (slot.dataset.imageQuality !== 'detail') return;
+            if ((qualityRank[slot.dataset.imageQuality] || 0) <= qualityRank.preview) return;
             releasePage(slot);
         });
     }
@@ -404,7 +406,8 @@ if (viewer) {
         window.clearTimeout(detailRenderTimer);
         detailRenderTimer = window.setTimeout(() => {
             if (!pinchState && !geometryUpdateInProgress) {
-                void renderPageImage(currentPageNumber, renderGeneration, 'detail')
+                const quality = zoom >= highResolutionZoomThreshold ? 'zoom' : 'detail';
+                void renderPageImage(currentPageNumber, renderGeneration, quality)
                     .catch(error => console.warn('Detailed PDF page unavailable:', error));
             }
         }, delay);
@@ -584,13 +587,33 @@ if (viewer) {
         const bounds = viewer.getBoundingClientRect();
         const clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
         const clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
+        const slot = pagesElement.querySelector(`[data-page-number="${currentPageNumber}"]`);
+        if (slot) cancelSlotRequest(slot);
+        const image = slot?.querySelector('.pdf-page') || null;
         pinchState = {
             startDistance,
             startZoom: zoom,
             draftZoom: zoom,
+            startClientX: clientX,
+            startClientY: clientY,
+            clientX,
+            clientY,
+            image,
             anchor: captureViewAnchor(clientX, clientY),
         };
+        if (image) image.style.willChange = 'transform';
         viewer.classList.add('is-pinching');
+    }
+
+    function applyPinchPreview() {
+        pinchFrame = 0;
+        if (!pinchState?.image?.isConnected) return;
+        const relativeScale = pinchState.draftZoom / pinchState.startZoom;
+        const translateX = pinchState.clientX - pinchState.startClientX;
+        const translateY = pinchState.clientY - pinchState.startClientY;
+        pinchState.image.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) rotate(${userRotation}deg) scale(${relativeScale})`;
+        pinchState.image.style.transformOrigin = 'center center';
+        zoomIndicator.textContent = `${Math.round(pinchState.draftZoom * 100)}%`;
     }
 
     function updatePinch(touches) {
@@ -600,23 +623,31 @@ if (viewer) {
             pinchState.startZoom * (distance / pinchState.startDistance),
         );
         const bounds = viewer.getBoundingClientRect();
-        const clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
-        const clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
-        applyZoomGeometry(pinchState.draftZoom, {
-            ...pinchState.anchor,
-            clientX,
-            clientY,
-        });
+        pinchState.clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
+        pinchState.clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
+        if (!pinchFrame) pinchFrame = window.requestAnimationFrame(applyPinchPreview);
     }
 
     function finishPinch() {
         if (!pinchState) return;
+        const completedPinch = pinchState;
+        if (pinchFrame) window.cancelAnimationFrame(pinchFrame);
+        pinchFrame = 0;
+        if (completedPinch.image) {
+            completedPinch.image.style.transform = `rotate(${userRotation}deg)`;
+            completedPinch.image.style.transformOrigin = 'center center';
+            completedPinch.image.style.willChange = '';
+        }
         pinchState = null;
         viewer.classList.remove('is-pinching');
         geometryUpdateInProgress = false;
         viewer.classList.remove('is-adjusting');
-        updateControls();
-        scheduleDetailRender(60);
+        applyZoomGeometry(completedPinch.draftZoom, {
+            ...completedPinch.anchor,
+            clientX: completedPinch.clientX,
+            clientY: completedPinch.clientY,
+        });
+        scheduleDetailRender(80);
     }
 
     document.addEventListener('touchstart', event => {
@@ -651,6 +682,7 @@ if (viewer) {
     }
 
     function suspendDocument() {
+        if (pinchState) finishPinch();
         suspended = true;
         renderGeneration += 1;
         window.clearTimeout(detailRenderTimer);
