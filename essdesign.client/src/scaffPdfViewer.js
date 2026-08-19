@@ -22,7 +22,7 @@ if (viewer) {
     let currentPageNumber = 1;
     let renderGeneration = 0;
     let resizeTimer = 0;
-    let detailRenderTimer = 0;
+    let highQualityRenderTimer = 0;
     let scrollFrame = 0;
     let geometryUpdateInProgress = false;
     let pinchState = null;
@@ -32,8 +32,7 @@ if (viewer) {
     const minimumZoom = 1;
     const maximumZoom = 5;
     const pageImageTimeoutMs = 45000;
-    const qualityRank = { preview: 1, detail: 2, zoom: 3 };
-    const highResolutionZoomThreshold = 1.5;
+    const qualityRank = { preview: 1, detail: 2, zoom: 2 };
     const clampZoom = value => Math.min(maximumZoom, Math.max(minimumZoom, value));
 
     function getPage(pageNumber) {
@@ -213,7 +212,7 @@ if (viewer) {
             slot.dataset.imageQuality = '';
             slot.dataset.renderRequest = '';
             replaceSlotContents(slot, createPlaceholder(pageNumber));
-            void renderPageImage(pageNumber, renderGeneration, 'preview');
+            void renderPageImage(pageNumber, renderGeneration, 'zoom');
         });
         failure.append(message, retry);
         return failure;
@@ -288,7 +287,7 @@ if (viewer) {
         return `${previewBase}/pages/${pageNumber}.webp?quality=${quality}`;
     }
 
-    function renderPageImage(pageNumber, generation = renderGeneration, quality = 'detail') {
+    function renderPageImage(pageNumber, generation = renderGeneration, quality = 'zoom') {
         if (generation !== renderGeneration || !documentInfo || suspended) return Promise.resolve(null);
         const slot = pagesElement.querySelector(`[data-page-number="${pageNumber}"]`);
         const page = getPage(pageNumber);
@@ -393,7 +392,7 @@ if (viewer) {
         });
     }
 
-    function downgradeAdjacentDetailPages(centerPage) {
+    function downgradeAdjacentHighQualityPages(centerPage) {
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             const pageNumber = Number(slot.dataset.pageNumber);
             if (pageNumber === centerPage || Math.abs(pageNumber - centerPage) > 1) return;
@@ -402,29 +401,27 @@ if (viewer) {
         });
     }
 
-    function scheduleDetailRender(delay = 180) {
-        window.clearTimeout(detailRenderTimer);
-        detailRenderTimer = window.setTimeout(() => {
+    function scheduleHighQualityRender(delay = 0) {
+        window.clearTimeout(highQualityRenderTimer);
+        highQualityRenderTimer = window.setTimeout(() => {
             if (!pinchState && !geometryUpdateInProgress) {
-                const quality = zoom >= highResolutionZoomThreshold ? 'zoom' : 'detail';
-                void renderPageImage(currentPageNumber, renderGeneration, quality)
-                    .catch(error => console.warn('Detailed PDF page unavailable:', error));
+                void renderPageImage(currentPageNumber, renderGeneration, 'zoom')
+                    .catch(error => console.warn('High-quality PDF page unavailable:', error));
             }
         }, delay);
     }
 
     async function renderVisiblePages(pageNumber, generation = renderGeneration) {
-        await renderPageImage(pageNumber, generation, 'preview');
-        if (generation !== renderGeneration || pageNumber !== currentPageNumber) return;
         releaseDistantPages(pageNumber);
-        downgradeAdjacentDetailPages(pageNumber);
+        downgradeAdjacentHighQualityPages(pageNumber);
+        await renderPageImage(pageNumber, generation, 'zoom');
+        if (generation !== renderGeneration || pageNumber !== currentPageNumber) return;
         [pageNumber - 1, pageNumber + 1]
             .filter(candidate => candidate >= 1 && candidate <= documentInfo.pageCount)
             .forEach(candidate => {
                 void renderPageImage(candidate, generation, 'preview')
                     .catch(error => console.warn(`Adjacent PDF page ${candidate} unavailable:`, error));
             });
-        scheduleDetailRender();
     }
 
     function updateCurrentPage() {
@@ -454,7 +451,7 @@ if (viewer) {
     async function renderPages({ preservePosition = true, anchor = null } = {}) {
         if (!documentInfo) return;
         const generation = ++renderGeneration;
-        window.clearTimeout(detailRenderTimer);
+        window.clearTimeout(highQualityRenderTimer);
         const savedAnchor = anchor || (preservePosition ? captureViewAnchor() : null);
         const targetPage = Math.min(
             Math.max(savedAnchor?.pageNumber || currentPageNumber, 1),
@@ -541,7 +538,6 @@ if (viewer) {
         pageIndicator.textContent = `${currentPageNumber} / ${documentInfo.pageCount}`;
         restoreViewAnchor(savedAnchor);
         clampToCurrentPage();
-        if (!pinchState) scheduleDetailRender();
         window.requestAnimationFrame(() => {
             geometryUpdateInProgress = false;
             viewer.classList.remove('is-adjusting');
@@ -583,7 +579,7 @@ if (viewer) {
         if (pinchState || touches.length < 2) return;
         const startDistance = touchDistance(touches);
         if (startDistance <= 0) return;
-        window.clearTimeout(detailRenderTimer);
+        window.clearTimeout(highQualityRenderTimer);
         const bounds = viewer.getBoundingClientRect();
         const clientX = ((touches[0].clientX + touches[1].clientX) / 2) - bounds.left;
         const clientY = ((touches[0].clientY + touches[1].clientY) / 2) - bounds.top;
@@ -647,7 +643,8 @@ if (viewer) {
             clientX: completedPinch.clientX,
             clientY: completedPinch.clientY,
         });
-        scheduleDetailRender(80);
+        const currentSlot = pagesElement.querySelector(`[data-page-number="${currentPageNumber}"]`);
+        if (currentSlot?.dataset.imageQuality !== 'zoom') scheduleHighQualityRender();
     }
 
     document.addEventListener('touchstart', event => {
@@ -685,7 +682,7 @@ if (viewer) {
         if (pinchState) finishPinch();
         suspended = true;
         renderGeneration += 1;
-        window.clearTimeout(detailRenderTimer);
+        window.clearTimeout(highQualityRenderTimer);
         window.clearTimeout(resizeTimer);
         pagesElement.querySelectorAll('.pdf-page-slot').forEach(slot => {
             cancelSlotRequest(slot);
