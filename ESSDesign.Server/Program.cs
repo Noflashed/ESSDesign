@@ -519,6 +519,7 @@ app.MapGet("/t/{tagRef}/{documentKind}/preview/pages/{pageNumber:int}.webp", asy
     string tagRef,
     string documentKind,
     int pageNumber,
+    string? quality,
     HttpContext context,
     ScaffTagPublicPageService scaffTagPageService,
     ScaffTagPdfPreviewService previewService,
@@ -544,6 +545,7 @@ app.MapGet("/t/{tagRef}/{documentKind}/preview/pages/{pageNumber:int}.webp", asy
         var page = await previewService.RenderPageAsync(
             model.DocumentUrl,
             pageNumber,
+            quality,
             context.RequestAborted);
         context.Response.Headers.CacheControl = "private, max-age=300";
         return Results.File(page.Content, page.ContentType);

@@ -13,8 +13,10 @@ public sealed class ScaffTagPdfPreviewService
 {
     private const long MaximumPdfBytes = 160L * 1024 * 1024;
     private const int MaximumPageCount = 200;
-    private const int PreviewLongEdgePixels = 2400;
-    private const int PreviewWebpQuality = 86;
+    private const int PreviewLongEdgePixels = 1400;
+    private const int PreviewWebpQuality = 80;
+    private const int DetailLongEdgePixels = 2400;
+    private const int DetailWebpQuality = 86;
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache _cache;
@@ -48,6 +50,7 @@ public sealed class ScaffTagPdfPreviewService
     public async Task<ScaffTagPdfPreviewPageContent> RenderPageAsync(
         string documentUrl,
         int pageNumber,
+        string? quality,
         CancellationToken cancellationToken)
     {
         var document = await GetDocumentAsync(documentUrl, cancellationToken);
@@ -58,7 +61,10 @@ public sealed class ScaffTagPdfPreviewService
                 StatusCodes.Status404NotFound);
         }
 
-        var pageCacheKey = $"scaff-pdf-page:{document.ContentKey}:{pageNumber}:{PreviewLongEdgePixels}:{PreviewWebpQuality}";
+        var useDetailQuality = string.Equals(quality, "detail", StringComparison.OrdinalIgnoreCase);
+        var longEdgePixels = useDetailQuality ? DetailLongEdgePixels : PreviewLongEdgePixels;
+        var webpQuality = useDetailQuality ? DetailWebpQuality : PreviewWebpQuality;
+        var pageCacheKey = $"scaff-pdf-page:{document.ContentKey}:{pageNumber}:{longEdgePixels}:{webpQuality}";
         if (_cache.TryGetValue<ScaffTagPdfPreviewPageContent>(pageCacheKey, out var cachedPage) &&
             cachedPage != null)
         {
@@ -82,7 +88,7 @@ public sealed class ScaffTagPdfPreviewService
                 var pageSize = document.Pages[pageNumber - 1];
                 var renderOptions = pageSize.Width >= pageSize.Height
                     ? new RenderOptions(
-                        Width: PreviewLongEdgePixels,
+                        Width: longEdgePixels,
                         Height: null,
                         WithAnnotations: true,
                         WithFormFill: true,
@@ -91,7 +97,7 @@ public sealed class ScaffTagPdfPreviewService
                         UseTiling: true)
                     : new RenderOptions(
                         Width: null,
-                        Height: PreviewLongEdgePixels,
+                        Height: longEdgePixels,
                         WithAnnotations: true,
                         WithFormFill: true,
                         WithAspectRatio: true,
@@ -105,7 +111,7 @@ public sealed class ScaffTagPdfPreviewService
                         pageNumber - 1,
                         options: renderOptions);
                     using var image = SKImage.FromBitmap(bitmap);
-                    using var encoded = image.Encode(SKEncodedImageFormat.Webp, PreviewWebpQuality);
+                    using var encoded = image.Encode(SKEncodedImageFormat.Webp, webpQuality);
                     if (encoded == null)
                     {
                         throw new InvalidOperationException("The rendered PDF page could not be encoded.");
