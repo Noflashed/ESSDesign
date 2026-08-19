@@ -247,6 +247,10 @@ public static class ScaffTagLinkedDocumentPageRenderer
 {
     public static string Render(ScaffTagLinkedDocumentViewModel model)
     {
+        var isMaloo = string.Equals(model.CompanyEntityId, "maloo", StringComparison.OrdinalIgnoreCase);
+        var brandLogoUrl = isMaloo
+            ? "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/MALOO%20LOGO.png"
+            : "https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png";
         var pageTitle = System.Net.WebUtility.HtmlEncode(model.PageTitle);
         var documentName = System.Net.WebUtility.HtmlEncode(model.DocumentName);
         var documentUrl = System.Net.WebUtility.HtmlEncode(model.DocumentUrl);
@@ -282,12 +286,33 @@ public static class ScaffTagLinkedDocumentPageRenderer
     * { box-sizing:border-box; }
     html, body { width:100%; height:100%; margin:0; }
     body { min-height:100dvh; overflow:hidden; background:rgba(32,35,39,.96); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
+    button { font:inherit; }
     .viewer { position:relative; width:100%; height:100dvh; display:flex; align-items:center; justify-content:center; padding:max(4px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) max(4px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left)); overflow:hidden; background:rgba(32,35,39,.96); }
     .viewer-heading { position:fixed; top:max(8px,calc(env(safe-area-inset-top) + 6px)); left:50%; z-index:30; max-width:68vw; padding:6px 11px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.42); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px); opacity:.68; transform:translateX(-50%); text-align:center; pointer-events:none; }
     .viewer-title { font-size:10px; line-height:1.15; font-weight:850; letter-spacing:1.1px; text-transform:uppercase; }
     .viewer-name { max-width:52vw; margin-top:2px; overflow:hidden; color:rgba(255,255,255,.82); font-size:8px; line-height:1.1; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .document-shell { position:relative; width:calc(100% - 96px); height:90%; min-width:0; min-height:0; overflow:hidden; border-radius:9px; background:#000; transition:opacity .18s ease,transform .18s ease; }
-    .document-frame { width:100%; height:100%; display:block; border:0; background:#fff; }
+    .document-shell { position:relative; width:calc(100% - 96px); height:90%; min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:9px; background:#090b0d; touch-action:none; user-select:none; -webkit-user-select:none; transition:opacity .18s ease,transform .18s ease; }
+    .pdf-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:none; }
+    .pdf-page { position:relative; z-index:2; display:block; width:auto; height:auto; max-width:100%; max-height:100%; object-fit:contain; transform-origin:center center; opacity:1; will-change:transform,opacity; transition:opacity .14s ease,transform .18s ease; -webkit-user-drag:none; user-select:none; -webkit-user-select:none; }
+    .pdf-page[hidden] { display:none; }
+    .pdf-page.is-loading { opacity:0; }
+    .pdf-stage.is-interacting .pdf-page { transition:none; }
+    .pdf-status { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:24px; background:#090b0d; color:rgba(255,255,255,.84); font-size:11px; line-height:1.4; font-weight:750; letter-spacing:.35px; text-align:center; }
+    .pdf-status[hidden] { display:none; }
+    .brand-loader { position:relative; width:92px; height:92px; display:grid; flex:0 0 auto; place-items:center; }
+    .brand-loader-ring { position:absolute; inset:0; border:6px solid rgba(246,114,0,.2); border-top-color:#f67200; border-radius:50%; animation:viewer-spin .9s linear infinite; }
+    .brand-loader-core { position:absolute; inset:9px; display:grid; place-items:center; overflow:hidden; padding:4px; border-radius:50%; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.32); }
+    .brand-loader-logo { width:100%; height:100%; display:block; object-fit:contain; }
+    .pdf-error { z-index:8; }
+    .pdf-error a { display:inline-block; margin-top:7px; color:#fff; font-weight:850; text-underline-offset:3px; }
+    .pdf-controls { position:fixed; bottom:max(7px,env(safe-area-inset-bottom)); left:50%; z-index:45; min-height:38px; display:flex; align-items:center; gap:3px; padding:3px 5px; border:1px solid rgba(255,255,255,.16); border-radius:999px; background:rgba(7,12,18,.68); color:#fff; transform:translateX(-50%); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+    .pdf-controls[hidden] { display:none; }
+    .pdf-controls button { min-width:31px; height:30px; display:grid; place-items:center; padding:0 7px; border:0; border-radius:999px; background:transparent; color:#fff; font-size:18px; line-height:1; font-weight:750; }
+    .pdf-controls button:disabled { opacity:.28; }
+    .pdf-controls button:active { background:rgba(255,255,255,.14); }
+    .pdf-controls .pdf-fit { min-width:38px; font-size:9px; letter-spacing:.2px; }
+    .pdf-zoom-label { min-width:38px; font-size:9px; font-weight:800; text-align:center; }
+    .pdf-page-label { min-width:42px; padding:0 6px; border-left:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.78); font-size:9px; font-weight:800; text-align:center; }
     .document-navigation { position:fixed; inset:0; z-index:40; pointer-events:none; }
     .document-nav { position:absolute; top:50%; width:64px; display:flex; flex-direction:column; align-items:center; gap:5px; color:#fff; opacity:.62; text-decoration:none; pointer-events:auto; -webkit-tap-highlight-color:transparent; transition:opacity .16s ease; }
     .document-nav:hover,.document-nav:focus-visible,.document-nav:active { opacity:.94; }
@@ -299,10 +324,9 @@ public static class ScaffTagLinkedDocumentPageRenderer
     .document-nav-right { right:max(1px,env(safe-area-inset-right)); animation:document-nudge-right 2.3s ease-in-out infinite; }
     @keyframes document-nudge-left { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(-3px); } }
     @keyframes document-nudge-right { 0%,100% { transform:translateY(-50%) translateX(0); } 50% { transform:translateY(-50%) translateX(3px); } }
+    @keyframes viewer-spin { to { transform:rotate(360deg); } }
     body.is-leaving-left .document-shell { opacity:0; transform:translateX(22px) scale(.985); }
     body.is-leaving-right .document-shell { opacity:0; transform:translateX(-22px) scale(.985); }
-    .document-fallback { display:flex; width:100%; height:100%; align-items:center; justify-content:center; padding:24px; color:#111827; text-align:center; }
-    .document-fallback a { color:#1268c4; font-weight:750; }
     @media (min-width:700px) {
       .viewer { padding:18px; }
       .document-shell { width:calc(100% - 152px); height:92%; }
@@ -315,7 +339,8 @@ public static class ScaffTagLinkedDocumentPageRenderer
     }
     @media (prefers-reduced-motion:reduce) {
       .document-nav { animation:none; transform:translateY(-50%); }
-      .document-shell { transition:none; }
+      .document-shell,.pdf-page { transition:none; }
+      .brand-loader-ring { animation:none; }
     }
   </style>
 </head>
@@ -329,12 +354,27 @@ public static class ScaffTagLinkedDocumentPageRenderer
     {{rightNavigation}}
   </nav>
   <main class="viewer">
-    <section class="document-shell" aria-label="{{pageTitle}} preview">
-      <iframe class="document-frame" src="{{documentUrl}}#view=Fit" title="{{pageTitle}}" loading="eager">
-        <div class="document-fallback">This document cannot be previewed here. <a href="{{documentUrl}}">Open {{pageTitle}}</a>.</div>
-      </iframe>
+    <section id="pdfViewer" class="document-shell" data-original-url="{{documentUrl}}" aria-label="{{pageTitle}} preview">
+      <div id="pdfStage" class="pdf-stage">
+        <img id="pdfPage" class="pdf-page is-loading" alt="" draggable="false" hidden />
+      </div>
+      <div id="pdfLoading" class="pdf-status" role="status">
+        <span class="brand-loader" aria-hidden="true"><span class="brand-loader-ring"></span><span class="brand-loader-core"><img class="brand-loader-logo" src="{{brandLogoUrl}}" alt="" /></span></span>
+        <span id="pdfLoadingLabel">Preparing page preview</span>
+      </div>
+      <div id="pdfError" class="pdf-status pdf-error" hidden>
+        <span id="pdfErrorLabel">This PDF preview could not be prepared.</span>
+        <a href="{{documentUrl}}">Open the original PDF</a>
+      </div>
     </section>
   </main>
+  <div id="pdfControls" class="pdf-controls" aria-label="PDF controls" hidden>
+    <button id="pdfZoomOut" type="button" aria-label="Zoom out">&minus;</button>
+    <span id="pdfZoomLabel" class="pdf-zoom-label">100%</span>
+    <button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button>
+    <button id="pdfZoomFit" class="pdf-fit" type="button" aria-label="Fit the complete page to the screen">Fit</button>
+    <span id="pdfPageLabel" class="pdf-page-label" aria-live="polite">1 / 1</span>
+  </div>
   <script>
     document.getElementById('documentNavigation').addEventListener('click', event => {
       const link = event.target.closest('a.document-nav');
@@ -344,6 +384,319 @@ public static class ScaffTagLinkedDocumentPageRenderer
       document.body.classList.add(`is-leaving-${link.dataset.direction}`);
       window.setTimeout(() => window.location.assign(link.href), 180);
     });
+  </script>
+  <script>
+    (() => {
+      const viewer = document.getElementById('pdfViewer');
+      const stage = document.getElementById('pdfStage');
+      const pageImage = document.getElementById('pdfPage');
+      const loading = document.getElementById('pdfLoading');
+      const loadingLabel = document.getElementById('pdfLoadingLabel');
+      const errorPanel = document.getElementById('pdfError');
+      const errorLabel = document.getElementById('pdfErrorLabel');
+      const controls = document.getElementById('pdfControls');
+      const zoomOut = document.getElementById('pdfZoomOut');
+      const zoomIn = document.getElementById('pdfZoomIn');
+      const zoomFit = document.getElementById('pdfZoomFit');
+      const zoomLabel = document.getElementById('pdfZoomLabel');
+      const pageLabel = document.getElementById('pdfPageLabel');
+      const previewBase = `${window.location.pathname.replace(/\/$/, '')}/preview`;
+      const pointers = new Map();
+      const state = {
+        pages: [],
+        page: 1,
+        scale: 1,
+        x: 0,
+        y: 0,
+        dragY: 0,
+        loadingPage: false,
+        generation: 0
+      };
+      let singleGesture = null;
+      let pinchGesture = null;
+      let wheelDistance = 0;
+      let wheelResetTimer = 0;
+
+      const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
+      const distance = (first, second) => Math.hypot(second.x - first.x, second.y - first.y);
+      const midpoint = (first, second) => ({x:(first.x + second.x) / 2, y:(first.y + second.y) / 2});
+
+      function pageBounds() {
+        const width = pageImage.offsetWidth || stage.clientWidth;
+        const height = pageImage.offsetHeight || stage.clientHeight;
+        return {
+          x:Math.max(0,((width * state.scale) - stage.clientWidth) / 2),
+          y:Math.max(0,((height * state.scale) - stage.clientHeight) / 2)
+        };
+      }
+
+      function constrainPan() {
+        if (state.scale <= 1.001) {
+          state.scale = 1;
+          state.x = 0;
+          state.y = 0;
+          return;
+        }
+        const bounds = pageBounds();
+        state.x = clamp(state.x,-bounds.x,bounds.x);
+        state.y = clamp(state.y,-bounds.y,bounds.y);
+      }
+
+      function applyTransform(animate = false) {
+        stage.classList.toggle('is-interacting',!animate);
+        pageImage.style.transform = `translate3d(${state.x}px,${state.y + state.dragY}px,0) scale(${state.scale})`;
+        zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+        zoomOut.disabled = state.scale <= 1.001;
+      }
+
+      function resetZoom(animate = true) {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        state.dragY = 0;
+        applyTransform(animate);
+      }
+
+      function setZoom(nextScale, clientX, clientY) {
+        const previousScale = state.scale;
+        const next = clamp(nextScale,1,6);
+        const bounds = stage.getBoundingClientRect();
+        const pointX = (clientX ?? (bounds.left + (bounds.width / 2))) - bounds.left - (bounds.width / 2);
+        const pointY = (clientY ?? (bounds.top + (bounds.height / 2))) - bounds.top - (bounds.height / 2);
+        state.x = pointX - (((pointX - state.x) / previousScale) * next);
+        state.y = pointY - (((pointY - state.y) / previousScale) * next);
+        state.scale = next;
+        state.dragY = 0;
+        constrainPan();
+        applyTransform(true);
+      }
+
+      function updatePageLabel() {
+        pageLabel.textContent = `${state.page} / ${state.pages.length || 1}`;
+      }
+
+      function showError(message) {
+        state.loadingPage = false;
+        loading.hidden = true;
+        pageImage.hidden = true;
+        controls.hidden = true;
+        errorLabel.textContent = message || 'This PDF preview could not be prepared.';
+        errorPanel.hidden = false;
+      }
+
+      function loadPage(pageNumber, direction = 0) {
+        if (state.loadingPage || pageNumber < 1 || pageNumber > state.pages.length) return;
+        state.loadingPage = true;
+        state.page = pageNumber;
+        state.generation += 1;
+        const generation = state.generation;
+        resetZoom(false);
+        updatePageLabel();
+        errorPanel.hidden = true;
+        loadingLabel.textContent = `Preparing page ${pageNumber} of ${state.pages.length}`;
+        loading.hidden = false;
+        pageImage.classList.add('is-loading');
+        pageImage.alt = `{{pageTitle}}, page ${pageNumber} of ${state.pages.length}`;
+
+        pageImage.onload = () => {
+          if (generation !== state.generation) return;
+          pageImage.hidden = false;
+          requestAnimationFrame(() => {
+            pageImage.classList.remove('is-loading');
+            resetZoom(false);
+            loading.hidden = true;
+            state.loadingPage = false;
+          });
+        };
+        pageImage.onerror = () => {
+          if (generation !== state.generation) return;
+          showError(`Page ${pageNumber} could not be loaded. You can still open the original PDF.`);
+        };
+        pageImage.src = `${previewBase}/pages/${pageNumber}.webp`;
+      }
+
+      function changePage(delta) {
+        if (state.scale > 1.01 || state.loadingPage) return;
+        const nextPage = state.page + delta;
+        if (nextPage < 1 || nextPage > state.pages.length) {
+          state.dragY = 0;
+          applyTransform(true);
+          return;
+        }
+        loadPage(nextPage,delta);
+      }
+
+      function beginSingleGesture(pointer) {
+        singleGesture = {
+          id:pointer.id,
+          x:pointer.x,
+          y:pointer.y,
+          pageX:state.x,
+          pageY:state.y,
+          startedAt:performance.now()
+        };
+        state.dragY = 0;
+        pinchGesture = null;
+      }
+
+      function beginPinchGesture() {
+        const active = [...pointers.values()];
+        if (active.length < 2) return;
+        const center = midpoint(active[0],active[1]);
+        const bounds = stage.getBoundingClientRect();
+        const relativeX = center.x - bounds.left - (bounds.width / 2);
+        const relativeY = center.y - bounds.top - (bounds.height / 2);
+        pinchGesture = {
+          distance:Math.max(1,distance(active[0],active[1])),
+          scale:state.scale,
+          anchorX:(relativeX - state.x) / state.scale,
+          anchorY:(relativeY - state.y) / state.scale
+        };
+        state.dragY = 0;
+        singleGesture = null;
+      }
+
+      stage.addEventListener('pointerdown', event => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        event.preventDefault();
+        stage.setPointerCapture?.(event.pointerId);
+        pointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
+        stage.classList.add('is-interacting');
+        if (pointers.size === 1) beginSingleGesture([...pointers.values()][0]);
+        if (pointers.size === 2) beginPinchGesture();
+      });
+
+      stage.addEventListener('pointermove', event => {
+        if (!pointers.has(event.pointerId)) return;
+        event.preventDefault();
+        pointers.set(event.pointerId,{id:event.pointerId,x:event.clientX,y:event.clientY});
+
+        if (pointers.size >= 2) {
+          if (!pinchGesture) beginPinchGesture();
+          const active = [...pointers.values()];
+          const center = midpoint(active[0],active[1]);
+          const bounds = stage.getBoundingClientRect();
+          const relativeX = center.x - bounds.left - (bounds.width / 2);
+          const relativeY = center.y - bounds.top - (bounds.height / 2);
+          state.scale = clamp(
+            pinchGesture.scale * (distance(active[0],active[1]) / pinchGesture.distance),
+            1,
+            6);
+          state.x = relativeX - (pinchGesture.anchorX * state.scale);
+          state.y = relativeY - (pinchGesture.anchorY * state.scale);
+          constrainPan();
+          applyTransform(false);
+          return;
+        }
+
+        const pointer = [...pointers.values()][0];
+        if (!singleGesture || singleGesture.id !== pointer.id) beginSingleGesture(pointer);
+        const deltaX = pointer.x - singleGesture.x;
+        const deltaY = pointer.y - singleGesture.y;
+        if (state.scale > 1.01) {
+          state.x = singleGesture.pageX + deltaX;
+          state.y = singleGesture.pageY + deltaY;
+          constrainPan();
+        } else {
+          state.dragY = clamp(deltaY,-140,140);
+        }
+        applyTransform(false);
+      },{passive:false});
+
+      function finishPointer(event) {
+        if (!pointers.has(event.pointerId)) return;
+        pointers.delete(event.pointerId);
+        if (pointers.size >= 2) {
+          beginPinchGesture();
+          return;
+        }
+        if (pointers.size === 1) {
+          beginSingleGesture([...pointers.values()][0]);
+          return;
+        }
+
+        stage.classList.remove('is-interacting');
+        pinchGesture = null;
+        singleGesture = null;
+        if (state.scale <= 1.01) {
+          const swipeDistance = state.dragY;
+          state.dragY = 0;
+          if (Math.abs(swipeDistance) >= 52) {
+            changePage(swipeDistance < 0 ? 1 : -1);
+          } else {
+            applyTransform(true);
+          }
+        } else {
+          constrainPan();
+          applyTransform(true);
+        }
+      }
+
+      stage.addEventListener('pointerup',finishPointer);
+      stage.addEventListener('pointercancel',finishPointer);
+      stage.addEventListener('lostpointercapture',finishPointer);
+      stage.addEventListener('gesturestart',event => event.preventDefault(),{passive:false});
+      stage.addEventListener('gesturechange',event => event.preventDefault(),{passive:false});
+
+      stage.addEventListener('dblclick',event => {
+        event.preventDefault();
+        if (state.scale > 1.01) resetZoom(true);
+        else setZoom(2.25,event.clientX,event.clientY);
+      });
+
+      stage.addEventListener('wheel',event => {
+        event.preventDefault();
+        if (event.ctrlKey || event.metaKey) {
+          setZoom(state.scale * Math.exp(-event.deltaY * .01),event.clientX,event.clientY);
+          return;
+        }
+        if (state.scale > 1.01) {
+          state.x -= event.deltaX;
+          state.y -= event.deltaY;
+          constrainPan();
+          applyTransform(false);
+          return;
+        }
+        wheelDistance += event.deltaY;
+        window.clearTimeout(wheelResetTimer);
+        wheelResetTimer = window.setTimeout(() => { wheelDistance = 0; },180);
+        if (Math.abs(wheelDistance) >= 70) {
+          changePage(wheelDistance > 0 ? 1 : -1);
+          wheelDistance = 0;
+        }
+      },{passive:false});
+
+      zoomOut.addEventListener('click',() => setZoom(state.scale / 1.35));
+      zoomIn.addEventListener('click',() => setZoom(state.scale * 1.35));
+      zoomFit.addEventListener('click',() => resetZoom(true));
+      window.addEventListener('resize',() => {
+        constrainPan();
+        applyTransform(false);
+      });
+      document.addEventListener('keydown',event => {
+        if (event.key === 'ArrowDown' || event.key === 'PageDown') changePage(1);
+        if (event.key === 'ArrowUp' || event.key === 'PageUp') changePage(-1);
+        if (event.key === '+' || event.key === '=') setZoom(state.scale * 1.35);
+        if (event.key === '-') setZoom(state.scale / 1.35);
+        if (event.key === '0') resetZoom(true);
+      });
+
+      fetch(previewBase,{cache:'no-store',credentials:'same-origin'})
+        .then(response => {
+          if (!response.ok) throw new Error(`Preview request failed (${response.status})`);
+          return response.json();
+        })
+        .then(manifest => {
+          if (!Array.isArray(manifest.pages) || manifest.pages.length === 0) {
+            throw new Error('This PDF has no previewable pages.');
+          }
+          state.pages = manifest.pages;
+          controls.hidden = false;
+          updatePageLabel();
+          loadPage(1);
+        })
+        .catch(error => showError(error?.message || 'This PDF preview could not be prepared.'));
+    })();
   </script>
 </body>
 </html>

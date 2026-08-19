@@ -49,6 +49,11 @@ builder.Services.AddScoped<Client>(_ =>
 // Register Supabase Service
 builder.Services.AddScoped<SupabaseService>();
 builder.Services.AddScoped<ScaffTagPublicPageService>();
+builder.Services.AddMemoryCache(options =>
+{
+    options.SizeLimit = 384L * 1024 * 1024;
+});
+builder.Services.AddSingleton<ScaffTagPdfPreviewService>();
 builder.Services.AddScoped<SiteRegistryService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
@@ -458,6 +463,110 @@ app.MapGet("/t/{tagRef}/handover", async (
     {
         logger.LogError(ex, "Failed to open the latest handover for Scaff-Tag {TagRef}", tagRef);
         return Results.Problem("Unable to open the linked handover form.", statusCode: 500);
+    }
+});
+
+app.MapGet("/t/{tagRef}/{documentKind}/preview", async (
+    string tagRef,
+    string documentKind,
+    HttpContext context,
+    ScaffTagPublicPageService scaffTagPageService,
+    ScaffTagPdfPreviewService previewService,
+    ILogger<Program> logger) =>
+{
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+    if (!ScaffTagPublicPageService.TryParseReference(tagRef, out _, out _, out _) ||
+        !ScaffTagPdfPreviewService.IsSupportedDocumentKind(documentKind))
+    {
+        return Results.BadRequest("Invalid linked document reference.");
+    }
+
+    try
+    {
+        var model = await scaffTagPageService.GetLinkedDocumentViewAsync(tagRef, documentKind);
+        if (model == null)
+        {
+            return Results.NotFound("No linked document was found.");
+        }
+
+        var preview = await previewService.GetInfoAsync(model.DocumentUrl, context.RequestAborted);
+        return Results.Json(new
+        {
+            pageCount = preview.Pages.Count,
+            pages = preview.Pages.Select((page, index) => new
+            {
+                page = index + 1,
+                width = page.Width,
+                height = page.Height
+            })
+        });
+    }
+    catch (ScaffTagPdfPreviewException ex)
+    {
+        logger.LogWarning(ex, "Could not prepare {DocumentKind} preview for Scaff-Tag {TagRef}", documentKind, tagRef);
+        return Results.Problem(ex.Message, statusCode: ex.StatusCode);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed {DocumentKind} preview manifest for Scaff-Tag {TagRef}", documentKind, tagRef);
+        return Results.Problem("Unable to prepare this PDF preview.", statusCode: 500);
+    }
+});
+
+app.MapGet("/t/{tagRef}/{documentKind}/preview/pages/{pageNumber:int}.webp", async (
+    string tagRef,
+    string documentKind,
+    int pageNumber,
+    HttpContext context,
+    ScaffTagPublicPageService scaffTagPageService,
+    ScaffTagPdfPreviewService previewService,
+    ILogger<Program> logger) =>
+{
+    context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    if (!ScaffTagPublicPageService.TryParseReference(tagRef, out _, out _, out _) ||
+        !ScaffTagPdfPreviewService.IsSupportedDocumentKind(documentKind) ||
+        pageNumber < 1)
+    {
+        return Results.BadRequest("Invalid PDF preview page.");
+    }
+
+    try
+    {
+        var model = await scaffTagPageService.GetLinkedDocumentViewAsync(tagRef, documentKind);
+        if (model == null)
+        {
+            return Results.NotFound("No linked document was found.");
+        }
+
+        var page = await previewService.RenderPageAsync(
+            model.DocumentUrl,
+            pageNumber,
+            context.RequestAborted);
+        context.Response.Headers.CacheControl = "private, max-age=300";
+        return Results.File(page.Content, page.ContentType);
+    }
+    catch (ScaffTagPdfPreviewException ex)
+    {
+        logger.LogWarning(
+            ex,
+            "Could not render page {PageNumber} of {DocumentKind} for Scaff-Tag {TagRef}",
+            pageNumber,
+            documentKind,
+            tagRef);
+        return Results.Problem(ex.Message, statusCode: ex.StatusCode);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(
+            ex,
+            "Failed page {PageNumber} of {DocumentKind} preview for Scaff-Tag {TagRef}",
+            pageNumber,
+            documentKind,
+            tagRef);
+        return Results.Problem("Unable to render this PDF page.", statusCode: 500);
     }
 });
 
