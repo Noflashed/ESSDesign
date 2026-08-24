@@ -203,7 +203,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
 const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
-const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'ess-ai', 'profile', 'settings']);
+const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'site-information', 'ess-ai', 'profile', 'settings']);
 const DESIGN_NAV_ITEM = {
     key: 'design',
     label: 'ESS Design',
@@ -690,6 +690,7 @@ function App() {
         : isScaffoldDesigner
         ? [
             DESIGN_NAV_ITEM,
+            { key: 'site-information', label: 'Site Registry' },
             { key: 'ess-ai', label: 'ESS AI' },
         ]
         : isTruckDeviceUser
