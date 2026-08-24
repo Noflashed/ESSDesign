@@ -5,6 +5,10 @@ namespace ESSDesign.Server.Services;
 
 public sealed class ScaffTagPublicPageService
 {
+    // Keep design relationships and endpoints live while temporarily hiding
+    // the Design control from the public QR page.
+    private const bool ShowDesignDrawingOnQrPage = false;
+
     private readonly SupabaseService _supabaseService;
     private readonly ILogger<ScaffTagPublicPageService> _logger;
 
@@ -56,9 +60,9 @@ public sealed class ScaffTagPublicPageService
         }
 
         var resolvedTagRef = Uri.EscapeDataString($"{builderId}:{projectId}:{formId}");
-        var designUrl = linkedDocuments.DesignDocument == null
-            ? string.Empty
-            : $"/t/{resolvedTagRef}/design";
+        var designUrl = ShowDesignDrawingOnQrPage && linkedDocuments.DesignDocument != null
+            ? $"/t/{resolvedTagRef}/design"
+            : string.Empty;
         var handoverUrl = string.IsNullOrWhiteSpace(linkedDocuments.HandoverPdfPath)
             ? string.Empty
             : $"/t/{resolvedTagRef}/handover";
