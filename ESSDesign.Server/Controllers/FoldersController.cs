@@ -127,7 +127,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireDesignManagerAsync();
+                var adminResult = await RequireDesignContributorAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -234,7 +234,7 @@ namespace ESSDesign.Server.Controllers
         {
             try
             {
-                var adminResult = await RequireDesignManagerAsync();
+                var adminResult = await RequireDesignContributorAsync();
                 if (adminResult.Error != null)
                 {
                     return adminResult.Error;
@@ -1452,6 +1452,27 @@ namespace ESSDesign.Server.Controllers
             if (!canManageDesign)
             {
                 return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Design manager access required" }));
+            }
+
+            return (currentUser, null);
+        }
+
+        private async Task<(UserInfo? User, ActionResult? Error)> RequireDesignContributorAsync()
+        {
+            var currentUser = await GetCurrentUserAsync();
+            if (currentUser == null)
+            {
+                return (null, Unauthorized(new { error = "Not authenticated" }));
+            }
+
+            var canContributeDesign =
+                string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.ScaffoldDesigner, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.ProjectManager, StringComparison.OrdinalIgnoreCase);
+
+            if (!canContributeDesign)
+            {
+                return (null, StatusCode(StatusCodes.Status403Forbidden, new { error = "Design contributor access required" }));
             }
 
             return (currentUser, null);

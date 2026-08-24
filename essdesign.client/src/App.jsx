@@ -1424,7 +1424,9 @@ function App() {
     const isTransportPage = TRANSPORT_PAGE_KEYS.has(currentPage)
         && (hasTransportSuiteAccess || !MATERIAL_ORDERING_PAGE_KEYS.has(currentPage));
     const isAdmin = user?.role === 'admin';
+    const isProjectManager = user?.role === 'project_manager';
     const canManageEssDesign = isAdmin || isScaffoldDesigner;
+    const canContributeEssDesign = canManageEssDesign || isProjectManager;
     const isIntegratedSidebarPage = isAuthenticated && !isTransportPage && DESIGN_PAGE_KEYS.has(currentPage);
     const userDisplayName = user?.fullName || user?.email || 'User';
     const userTitle = getRoleDisplayName(user?.role);
@@ -1662,7 +1664,7 @@ function App() {
         }
 
         if (currentPage === 'drawing-register') {
-            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} canEdit={canManageEssDesign} />;
+            return <DrawingRegisterPage onBack={() => applyPageState('design', { builder: null, project: null }, { leadingHand: null }, { planDate: null })} onOpenDocument={handleDocumentClick} canEdit={canManageEssDesign} canAddDrawing={canContributeEssDesign} />;
         }
 
         if (currentPage === 'ess-ai') {
@@ -1694,6 +1696,7 @@ function App() {
                     onFolderChange={handleFolderSelect}
                     onRefreshNeeded={triggerRefresh}
                     canManage={canManageEssDesign}
+                    canUpload={canContributeEssDesign}
                 />
             </div>
         );

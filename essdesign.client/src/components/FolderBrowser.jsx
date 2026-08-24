@@ -612,7 +612,7 @@ function BuilderFolderLogo({ logoUrl }) {
     );
 }
 
-function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canManage = false }) {
+function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canManage = false, canUpload = canManage }) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(() => selectedFolderId ?? null);
     const [folders, setFolders] = useState([]);
@@ -783,10 +783,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
     }, [selectedFolderId]);
 
     useEffect(() => {
-        if (canManage) {
+        if (canUpload) {
             prefetchNotificationRecipients();
         }
-    }, [canManage]);
+    }, [canUpload]);
 
     useEffect(() => {
         setSearchQuery('');
@@ -1654,7 +1654,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                         <FolderPlusIcon size={16} /> New Folder
                                     </button>
                                 )}
-                                {canManage && (
+                                {canUpload && (
                                     <div className={`upload-split${!currentFolder ? ' disabled' : ''}`}>
                                         <button
                                             className="btn-upload"
@@ -2455,7 +2455,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                     </div>
                 </div>
             )}
-            {showUploadModal && (
+            {canUpload && showUploadModal && (
                 <UploadDocumentModal
                     folderId={currentFolder}
                     onClose={() => setShowUploadModal(false)}

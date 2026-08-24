@@ -229,7 +229,7 @@ const readWorkbook = async file => {
     })).filter(row => FIELDS.some(([key]) => row[key]));
 };
 
-export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = false }) {
+export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = false, canAddDrawing = canEdit }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [query, setQuery] = useState('');
@@ -265,6 +265,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const deletedRowIdsRef = useRef(new Set());
     const originalDesignNamesRef = useRef(new Map());
     const copyResetTimerRef = useRef(null);
+    const canSave = canEdit || canAddDrawing;
 
     const getProjectFolderIdForRow = row => {
         const builder = builders.find(item => item.id === row.builderId)
@@ -313,8 +314,8 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
 
     useEffect(() => {
         rowsRef.current = rows;
-        sharedSaveEnabledRef.current = canEdit && sharedRegisterAvailable && !loading && registryReconciled;
-    }, [canEdit, loading, registryReconciled, rows, sharedRegisterAvailable]);
+        sharedSaveEnabledRef.current = canSave && sharedRegisterAvailable && !loading && registryReconciled;
+    }, [canSave, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
     useEffect(() => () => {
         window.clearTimeout(copyResetTimerRef.current);
@@ -483,7 +484,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     }, [drawingNumberKey, loading]);
 
     useEffect(() => {
-        if (!canEdit
+        if (!canSave
             || !sharedRegisterAvailable
             || loading
             || !registryReconciled
@@ -523,14 +524,14 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
             cancelled = true;
             window.clearTimeout(saveTimer);
         };
-    }, [canEdit, drawingDocumentsLoading, folderSyncingRowIds, loading, registryReconciled, rows, sharedRegisterAvailable]);
+    }, [canSave, drawingDocumentsLoading, folderSyncingRowIds, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
     const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
     const addRow = async event => {
         event.preventDefault();
         const designName = cleanFolderName(draft.design);
         const scaffoldFolderName = designName.toUpperCase();
-        if (addingRow || !canEdit || !draft.client || !draft.project || !designName || !generatedDrawingNo) return;
+        if (addingRow || !canAddDrawing || !draft.client || !draft.project || !designName || !generatedDrawingNo) return;
         const builder = builders.find(item => item.name === draft.client);
         const project = builder?.projects.find(item => item.name === draft.project);
         if (!builder || !project) return;
@@ -706,7 +707,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
     };
     const openAddRow = () => {
-        if (!canEdit) return;
+        if (!canAddDrawing) return;
         setDraft({ ...EMPTY_ROW, dateIssued: getTodayInputValue() });
         setAddRowError('');
         setShowAddRow(true);
@@ -825,13 +826,13 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
                 <button type="button" className="register-icon-button register-back-button" onClick={onBack} title="Back to ESS Design" aria-label="Back to ESS Design"><ArrowLeft size={20} aria-hidden="true" /></button>
                 <label className="register-search"><Search size={18} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search drawings..." /></label>
                 <span className="register-toolbar-spacer" />
-                {canEdit && <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>}
+                {canAddDrawing && <button type="button" className="register-primary-button" onClick={openAddRow}><Plus size={18} /> Add Row</button>}
             </div>
             {documentOpenError && <div className="register-navigation-error" role="alert">{documentOpenError}</div>}
             {copyError && <div className="register-navigation-error" role="alert">{copyError}</div>}
             {siteLinkError && <div className="register-navigation-error" role="alert">{siteLinkError}</div>}
 
-            {canEdit && showAddRow && (
+            {canAddDrawing && showAddRow && (
                 <div className="register-modal-backdrop" role="presentation" onMouseDown={() => { if (!addingRow) setShowAddRow(false); }}>
                     <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title">
                         <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close" disabled={addingRow}><X size={18} /></button></div>
