@@ -62,6 +62,15 @@ const REGISTER_CONFIG = {
             { key: 'qrLabel', label: 'QR LABEL' },
             { key: 'status', label: 'STATUS' }
         ]
+    },
+    'qr-labels': {
+        title: 'QR Code Register',
+        noun: 'QR codes',
+        searchPlaceholder: 'Search QR labels...',
+        api: scaffTagsAPI,
+        defaultSort: 'inspectionDate',
+        linkKey: 'reference',
+        columns: []
     }
 };
 
@@ -208,6 +217,8 @@ function StatusBadge({ value }) {
 
 export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
+    const showingQrRegister = registerType === 'qr-labels';
+    const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -223,7 +234,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [qrCompany, setQrCompany] = useState('ess');
     const [generatingQr, setGeneratingQr] = useState(false);
     const [printingQr, setPrintingQr] = useState(false);
-    const [scaffRegisterView, setScaffRegisterView] = useState('scaff-tags');
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
         project: new Set()
@@ -236,7 +246,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         Promise.all([
             safetyProjectsAPI.getBuilders({ includeArchived: true, force: true }),
             config.api.listAllForms({ includeDeleted: true }),
-            registerType === 'scaff-tags' ? scaffTagQrLabelsAPI.list() : Promise.resolve([])
+            usesScaffTagData ? scaffTagQrLabelsAPI.list() : Promise.resolve([])
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setQrLabels(labels);
@@ -251,7 +261,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         return () => {
             active = false;
         };
-    }, [config, registerType]);
+    }, [config, registerType, usesScaffTagData]);
 
     useEffect(() => {
         setSortField(config.defaultSort);
@@ -259,7 +269,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setQuery('');
         setShowDeleted(registerType !== 'scaff-tags');
         setFilterMenu('');
-        setScaffRegisterView('scaff-tags');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
 
@@ -430,8 +439,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
 
     const unassignedQrLabels = qrLabels.filter(label => label.status === 'unassigned');
 
-    const showingQrRegister = registerType === 'scaff-tags' && scaffRegisterView === 'qr-labels';
-
     return (
         <main className="project-data-register-page">
             <div className="project-data-register-toolbar">
@@ -470,21 +477,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                 </button>
             </div>
 
-            {registerType === 'scaff-tags' ? (
-                <div className="project-register-view-tabs" role="tablist" aria-label="Scaff-Tag register views">
-                    <button type="button" role="tab" aria-selected={scaffRegisterView === 'scaff-tags'} className={scaffRegisterView === 'scaff-tags' ? 'active' : ''} onClick={() => { setScaffRegisterView('scaff-tags'); setQuery(''); }}>
-                        <FileText size={16} />
-                        <span>Scaff-Tags</span>
-                        <strong>{rows.filter(row => !row.deleted).length}</strong>
-                    </button>
-                    <button type="button" role="tab" aria-selected={scaffRegisterView === 'qr-labels'} className={scaffRegisterView === 'qr-labels' ? 'active' : ''} onClick={() => { setScaffRegisterView('qr-labels'); setQuery(''); }}>
-                        <QrCode size={16} />
-                        <span>QR Code Register</span>
-                        <strong>{qrLabels.length}</strong>
-                    </button>
-                </div>
-            ) : null}
-
             {error ? <div className="project-register-error" role="alert">{error}</div> : null}
 
             {showingQrRegister ? (
@@ -498,23 +490,25 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                                 <span><strong>{qrLabels.filter(label => label.status === 'assigned').length}</strong> Assigned</span>
                                 <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> Retired</span>
                             </div>
-                            <table className="project-qr-register-table">
-                                <thead><tr><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
-                                <tbody>
-                                    {qrRegisterRows.map(({ label, assignedRow }) => (
-                                        <tr key={label.id} className={label.status === 'retired' ? 'is-retired' : undefined}>
-                                            <td><strong className="project-qr-register-label-number">{label.displayNumber}</strong></td>
-                                            <td>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</td>
-                                            <td>{assignedRow?.reference || 'Not assigned'}</td>
-                                            <td>{assignedRow?.builder || '-'}</td>
-                                            <td>{assignedRow?.project || '-'}</td>
-                                            <td>{formatDate(label.createdAt)}</td>
-                                            <td><span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span></td>
-                                            <td><button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}><Printer size={15} /></button></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                            <div className="project-qr-register-scroll-region">
+                                <table className="project-qr-register-table">
+                                    <thead><tr><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
+                                    <tbody>
+                                        {qrRegisterRows.map(({ label, assignedRow }) => (
+                                            <tr key={label.id} className={label.status === 'retired' ? 'is-retired' : undefined}>
+                                                <td><strong className="project-qr-register-label-number">{label.displayNumber}</strong></td>
+                                                <td>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</td>
+                                                <td>{assignedRow?.reference || 'Not assigned'}</td>
+                                                <td>{assignedRow?.builder || '-'}</td>
+                                                <td>{assignedRow?.project || '-'}</td>
+                                                <td>{formatDate(label.createdAt)}</td>
+                                                <td><span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span></td>
+                                                <td><button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}><Printer size={15} /></button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </>
                     )}
                     {!loading && qrRegisterRows.length === 0 ? (

@@ -26,7 +26,7 @@ import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
-import { ClipboardCheck, ClipboardList, Sparkles, Tag, Users } from 'lucide-react';
+import { ClipboardCheck, ClipboardList, QrCode, Sparkles, Tag, Users } from 'lucide-react';
 import './App.css';
 
 const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
@@ -184,6 +184,7 @@ const NAV_PAGE_ICONS = {
     'safety-handover-register': ClipboardCheck,
     'safety-day-labour-register': Users,
     'safety-scaff-tag-register': Tag,
+    'safety-qr-code-register': QrCode,
     'site-information': MapNavIcon,
     'safety': ShieldNavIcon,
     'material-ordering': BoxNavIcon,
@@ -202,7 +203,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'site-information', 'ess-ai', 'profile', 'settings']);
 const DESIGN_NAV_ITEM = {
     key: 'design',
@@ -216,17 +217,19 @@ const PROJECT_DATA_NAV_ITEM = {
         { key: 'safety-handover-register', label: 'Handover Register' },
         { key: 'safety-day-labour-register', label: 'Day Labour Register' },
         { key: 'safety-scaff-tag-register', label: 'Scaff-Tag Register' },
+        { key: 'safety-qr-code-register', label: 'QR Code Register' },
     ],
 };
 const PROJECT_DATA_REGISTER_PAGES = {
     'safety-handover-register': 'handovers',
     'safety-day-labour-register': 'day-labour',
     'safety-scaff-tag-register': 'scaff-tags',
+    'safety-qr-code-register': 'qr-labels',
 };
 
 function isPageActive(itemKey, currentPage) {
     if (itemKey === 'design') return currentPage === 'design';
-    if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-handover-register' || currentPage === 'safety-day-labour-register' || currentPage === 'safety-scaff-tag-register' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
+    if (itemKey === 'safety') return currentPage === 'safety' || currentPage === 'safety-handover-register' || currentPage === 'safety-day-labour-register' || currentPage === 'safety-scaff-tag-register' || currentPage === 'safety-qr-code-register' || currentPage === 'safety-scaff-tags' || currentPage === 'safety-swms';
     if (itemKey === 'rostering') return currentPage === 'rostering' || currentPage === 'rostering-tree';
     if (itemKey === 'employees') return currentPage === 'employees' || currentPage === 'employee-relationships';
     if (itemKey === 'truck-schedule') return currentPage === 'transport-dashboard' || currentPage === 'transport-drivers' || currentPage === 'transport-settings' || currentPage === 'transport-fleet' || currentPage === 'transport-trips' || currentPage === 'truck-schedule' || currentPage === 'truck-delivery-schedule' || currentPage === 'truck-tracking' || currentPage === 'material-ordering' || currentPage === 'material-ordering-new' || currentPage === 'material-ordering-active' || currentPage === 'material-ordering-archived';

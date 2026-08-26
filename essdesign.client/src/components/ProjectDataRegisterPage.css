@@ -225,13 +225,17 @@
 }
 
 .project-qr-register-table-wrap {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     border-radius: 9px;
+    isolation: isolate;
 }
 
 .project-qr-register-summary-bar {
-    position: sticky;
-    top: 0;
-    z-index: 5;
+    position: relative;
+    z-index: 2;
+    flex: 0 0 43px;
     min-height: 43px;
     display: flex;
     align-items: center;
@@ -239,7 +243,17 @@
     gap: 8px;
     padding: 0 12px;
     border-bottom: 1px solid var(--border-color);
-    background: linear-gradient(100deg, rgba(8, 122, 69, 0.07), rgba(255, 211, 38, 0.07));
+    background: linear-gradient(100deg, rgba(8, 122, 69, 0.07), rgba(255, 211, 38, 0.07)), var(--card-bg);
+    box-shadow: 0 1px 0 var(--border-color);
+}
+
+.project-qr-register-scroll-region {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--card-bg);
 }
 
 .project-qr-register-summary-bar span {
@@ -285,10 +299,11 @@
 
 .project-qr-register-table th {
     position: sticky;
-    top: 43px;
-    z-index: 4;
+    top: 0;
+    z-index: 3;
     height: 37px;
-    background: var(--bg-secondary);
+    background: var(--bg-secondary, #f7f8fa);
+    box-shadow: 0 1px 0 var(--border-color);
     color: var(--text-secondary);
     font-size: 9px;
     font-weight: 800;
