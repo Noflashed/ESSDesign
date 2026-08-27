@@ -560,7 +560,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         const fieldErrors = validateAddRowFields(draft, generatedDrawingNo);
         if (Object.keys(fieldErrors).length > 0) {
             setAddRowFieldErrors(fieldErrors);
-            setAddRowError('Complete every required field before adding the drawing.');
+            setAddRowError('');
             const firstInvalidField = ADD_ROW_FIELD_ORDER.find(field => fieldErrors[field]);
             event.currentTarget.elements.namedItem(firstInvalidField)?.focus();
             return;
