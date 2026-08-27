@@ -104,23 +104,6 @@ function selectedDesignFolderPayload(folderId, folders) {
     };
 }
 
-function selectedProjectDesignFolderPayload(folderId, folders, fallbackPath = '') {
-    if (!folderId) {
-        return { designFolderId: '', designFolderPath: '' };
-    }
-    const folder = folders.find(item => item.id === folderId && Number(item.depth || 0) === 2);
-    if (!folder && !folders.length) {
-        return {
-            designFolderId: folderId,
-            designFolderPath: fallbackPath
-        };
-    }
-    return {
-        designFolderId: folder?.id || '',
-        designFolderPath: folder ? designFolderLabel(folder) : ''
-    };
-}
-
 function employeeName(employee) {
     if (typeof employee === 'string') {
         return employee.trim() || 'Unnamed employee';
@@ -488,30 +471,9 @@ export default function SiteInformationPage() {
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
-    const projectFormBuilder = useMemo(
-        () => builders.find(builder => builder.id === projectForm.builderId) || null,
-        [builders, projectForm.builderId]
-    );
     const builderDesignFolderOptions = useMemo(
         () => designFolders.filter(folder => folder.depth <= 1),
         [designFolders]
-    );
-    const projectDesignFolderOptions = useMemo(
-        () => {
-            const projectFolders = designFolders.filter(folder => Number(folder.depth || 0) === 2);
-            if (!projectFormBuilder) {
-                return [];
-            }
-
-            if (projectFormBuilder.designFolderPath) {
-                const prefix = `${projectFormBuilder.designFolderPath} /`;
-                return projectFolders.filter(folder => folder.path?.startsWith(prefix));
-            }
-
-            const cleanBuilderName = projectFormBuilder.name.trim().toLowerCase();
-            return projectFolders.filter(folder => String(folder.builderName || '').trim().toLowerCase() === cleanBuilderName);
-        },
-        [designFolders, projectFormBuilder]
     );
 
     const visibleProjects = useMemo(() => {
@@ -778,7 +740,15 @@ export default function SiteInformationPage() {
                     const employee = employeeById.get(employeeId);
                     return employee && isInductableWorker(employee);
                 });
-            const projectDesignFolder = selectedProjectDesignFolderPayload(projectForm.designFolderId, designFolders, projectForm.designFolderPath);
+            const projectDesignFolder = projectForm.editingProjectId
+                ? {
+                    designFolderId: projectForm.designFolderId || '',
+                    designFolderPath: projectForm.designFolderPath || ''
+                }
+                : {
+                    designFolderId: '',
+                    designFolderPath: ''
+                };
             let nextBuilders = projectForm.editingProjectId
                 ? await safetyProjectsAPI.renameProject(projectForm.builderId, projectForm.editingProjectId, projectForm.projectName, projectForm.siteLocation, {
                     projectManagerUserId: projectForm.projectManagerUserId,
@@ -1509,24 +1479,6 @@ export default function SiteInformationPage() {
                                             >
                                                 {SCAFFOLD_ENTITY_OPTIONS.map(entity => (
                                                     <option key={entity} value={entity}>{entity}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Design Folder</label>
-                                            <select
-                                                value={projectForm.designFolderId}
-                                                onChange={event => setProjectForm(prev => ({
-                                                    ...prev,
-                                                    ...selectedProjectDesignFolderPayload(event.target.value, designFolders)
-                                                }))}
-                                            >
-                                                <option value="">Create Design Folder</option>
-                                                {projectForm.designFolderId && projectForm.designFolderPath.includes(' / ') && !designFolders.some(folder => folder.id === projectForm.designFolderId) ? (
-                                                    <option value={projectForm.designFolderId}>{projectForm.designFolderPath || 'Linked folder'}</option>
-                                                ) : null}
-                                                {projectDesignFolderOptions.map(folder => (
-                                                    <option key={folder.id} value={folder.id}>{compactDesignFolderLabel(folder)}</option>
                                                 ))}
                                             </select>
                                         </div>
