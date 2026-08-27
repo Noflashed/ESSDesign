@@ -19,6 +19,7 @@ const FIELDS = [
 ];
 const EMPTY_ROW = Object.fromEntries(FIELDS.map(([key]) => [key, '']));
 const DESIGN_USE_OPTIONS = ['CONSTRUCTION', 'PRELIMINARY', 'CONCEPT', 'AS-BUILT'];
+const ADD_ROW_FIELD_ORDER = ['client', 'project', 'design', 'drawingNo', 'dateIssued', 'revisionNo', 'designUse'];
 const ACTION_MENU_WIDTH = 174;
 const ACTION_MENU_HEIGHT = 84;
 const ACTION_MENU_GAP = 4;
@@ -58,6 +59,18 @@ const cleanStatus = value => {
     if (['ASB', 'AS-BUILT', 'AS-BULT'].includes(status)) return 'AS-BUILT';
     if (['CONC', 'CONCEPT', 'CONCEPT ONLY', 'CONCEPTUAL'].includes(status)) return 'CONCEPT';
     return status;
+};
+
+const validateAddRowFields = (draft, generatedDrawingNo) => {
+    const errors = {};
+    if (!String(draft.client || '').trim()) errors.client = 'Select a client.';
+    if (!String(draft.project || '').trim()) errors.project = 'Select a project.';
+    if (!cleanFolderName(draft.design)) errors.design = 'Enter a design description.';
+    if (!String(generatedDrawingNo || '').trim()) errors.drawingNo = 'Select a client and project to generate the drawing number.';
+    if (!formatDateIssued(draft.dateIssued)) errors.dateIssued = 'Select a valid issue date.';
+    if (!String(draft.revisionNo || '').trim()) errors.revisionNo = 'Enter a revision number.';
+    if (!DESIGN_USE_OPTIONS.includes(cleanStatus(draft.designUse))) errors.designUse = 'Select a design use.';
+    return errors;
 };
 const getDrawingSequence = drawingNo => {
     const match = String(drawingNo || '').trim().match(/(\d+)$/);
@@ -245,6 +258,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
     const [buildersError, setBuildersError] = useState('');
     const [siteLinkError, setSiteLinkError] = useState('');
     const [addRowError, setAddRowError] = useState('');
+    const [addRowFieldErrors, setAddRowFieldErrors] = useState({});
     const [addingRow, setAddingRow] = useState(false);
     const [openingDrawingId, setOpeningDrawingId] = useState(null);
     const [documentOpenError, setDocumentOpenError] = useState('');
@@ -526,15 +540,44 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         };
     }, [canSave, drawingDocumentsLoading, folderSyncingRowIds, loading, registryReconciled, rows, sharedRegisterAvailable]);
 
-    const updateDraft = (key, value) => setDraft(current => ({ ...current, [key]: value }));
+    const updateDraft = (key, value, dependentKeys = [], dependentValues = {}) => {
+        setDraft(current => ({ ...current, [key]: value, ...dependentValues }));
+        setAddRowFieldErrors(current => {
+            if (!current[key] && !dependentKeys.some(dependentKey => current[dependentKey])) return current;
+            const next = { ...current };
+            delete next[key];
+            dependentKeys.forEach(dependentKey => delete next[dependentKey]);
+            return next;
+        });
+        setAddRowError('');
+    };
     const addRow = async event => {
         event.preventDefault();
+        if (addingRow || !canAddDrawing) return;
+
         const designName = cleanFolderName(draft.design);
         const scaffoldFolderName = designName.toUpperCase();
-        if (addingRow || !canAddDrawing || !draft.client || !draft.project || !designName || !generatedDrawingNo) return;
+        const fieldErrors = validateAddRowFields(draft, generatedDrawingNo);
+        if (Object.keys(fieldErrors).length > 0) {
+            setAddRowFieldErrors(fieldErrors);
+            setAddRowError('Complete every required field before adding the drawing.');
+            const firstInvalidField = ADD_ROW_FIELD_ORDER.find(field => fieldErrors[field]);
+            event.currentTarget.elements.namedItem(firstInvalidField)?.focus();
+            return;
+        }
+
         const builder = builders.find(item => item.name === draft.client);
         const project = builder?.projects.find(item => item.name === draft.project);
-        if (!builder || !project) return;
+        if (!builder || !project) {
+            const registryErrors = {
+                ...(!builder ? { client: 'Select a valid client.' } : {}),
+                ...(!project ? { project: 'Select a valid project.' } : {})
+            };
+            setAddRowFieldErrors(registryErrors);
+            setAddRowError('The selected client or project is no longer available. Select them again.');
+            event.currentTarget.elements.namedItem(!builder ? 'client' : 'project')?.focus();
+            return;
+        }
 
         const projectFolderId = normalizeFolderId(project.designFolderId);
         if (!projectFolderId) {
@@ -543,6 +586,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         }
 
         setAddRowError('');
+        setAddRowFieldErrors({});
         setSiteLinkError('');
         setAddingRow(true);
         try {
@@ -710,6 +754,7 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
         if (!canAddDrawing) return;
         setDraft({ ...EMPTY_ROW, dateIssued: getTodayInputValue() });
         setAddRowError('');
+        setAddRowFieldErrors({});
         setShowAddRow(true);
         setOpenMenuId(null);
         setMenuPosition(null);
@@ -834,19 +879,19 @@ export default function DrawingRegisterPage({ onBack, onOpenDocument, canEdit = 
 
             {canAddDrawing && showAddRow && (
                 <div className="register-modal-backdrop" role="presentation" onMouseDown={() => { if (!addingRow) setShowAddRow(false); }}>
-                    <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title">
-                        <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>Enter the drawing register details below.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close" disabled={addingRow}><X size={18} /></button></div>
+                    <form className="drawing-register-modal" onSubmit={addRow} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-drawing-title" noValidate>
+                        <div className="register-modal-header"><div><h2 id="add-drawing-title">Add new drawing</h2><p>All fields marked with an asterisk are required.</p></div><button type="button" className="register-icon-button" onClick={() => setShowAddRow(false)} title="Close" disabled={addingRow}><X size={18} /></button></div>
                         <div className="register-modal-grid">
-                            <label><span>CLIENT</span><select value={draft.client} onChange={event => setDraft(current => ({ ...current, client: event.target.value, project: '' }))} autoFocus disabled={buildersLoading}><option value="">{buildersLoading ? 'Loading builders...' : 'Select client'}</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>{buildersError && <small className="register-field-error">{buildersError}</small>}</label>
-                            <label><span>PROJECT</span><select value={draft.project} onChange={event => updateDraft('project', event.target.value)} disabled={!selectedBuilder}><option value="">{selectedBuilder ? 'Select project' : 'Select a client first'}</option>{availableProjects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select></label>
-                            <label><span>DESIGN</span><input value={draft.design} onChange={event => updateDraft('design', event.target.value)} placeholder="Enter design description" /></label>
-                            <label><span>DRAWING NO.</span><input className="register-generated-number" value={generatedDrawingNo} readOnly placeholder="Generated after client and project selection" /><small className="register-field-hint">Automatically uses the next available ESD number.</small></label>
-                            <label><span>DATE ISSUED</span><input type="date" value={draft.dateIssued} onChange={event => updateDraft('dateIssued', event.target.value)} /></label>
-                            <label><span>REVISION NO.</span><input value={draft.revisionNo} onChange={event => updateDraft('revisionNo', event.target.value)} placeholder="Enter revision" /></label>
-                            <label><span>DESIGN USE</span><select value={draft.designUse} onChange={event => updateDraft('designUse', event.target.value)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label>
+                            <label><span>CLIENT <abbr className="register-required-marker" title="required">*</abbr></span><select name="client" value={draft.client} onChange={event => updateDraft('client', event.target.value, ['project'], { project: '' })} autoFocus disabled={buildersLoading} required aria-invalid={Boolean(addRowFieldErrors.client)}><option value="">{buildersLoading ? 'Loading builders...' : 'Select client'}</option>{builders.map(builder => <option key={builder.id} value={builder.name}>{builder.name}</option>)}</select>{addRowFieldErrors.client && <small className="register-field-error" role="alert">{addRowFieldErrors.client}</small>}{buildersError && <small className="register-field-error">{buildersError}</small>}</label>
+                            <label><span>PROJECT <abbr className="register-required-marker" title="required">*</abbr></span><select name="project" value={draft.project} onChange={event => updateDraft('project', event.target.value)} disabled={!selectedBuilder} required aria-invalid={Boolean(addRowFieldErrors.project)}><option value="">{selectedBuilder ? 'Select project' : 'Select a client first'}</option>{availableProjects.map(project => <option key={project.id} value={project.name}>{project.name}</option>)}</select>{addRowFieldErrors.project && <small className="register-field-error" role="alert">{addRowFieldErrors.project}</small>}</label>
+                            <label><span>DESIGN <abbr className="register-required-marker" title="required">*</abbr></span><input name="design" value={draft.design} onChange={event => updateDraft('design', event.target.value)} placeholder="Enter design description" required aria-invalid={Boolean(addRowFieldErrors.design)} />{addRowFieldErrors.design && <small className="register-field-error" role="alert">{addRowFieldErrors.design}</small>}</label>
+                            <label><span>DRAWING NO. <abbr className="register-required-marker" title="required">*</abbr></span><input name="drawingNo" className="register-generated-number" value={generatedDrawingNo} readOnly placeholder="Generated after client and project selection" aria-invalid={Boolean(addRowFieldErrors.drawingNo)} /><small className="register-field-hint">Automatically uses the next available ESD number.</small>{addRowFieldErrors.drawingNo && <small className="register-field-error" role="alert">{addRowFieldErrors.drawingNo}</small>}</label>
+                            <label><span>DATE ISSUED <abbr className="register-required-marker" title="required">*</abbr></span><input name="dateIssued" type="date" value={draft.dateIssued} onChange={event => updateDraft('dateIssued', event.target.value)} required aria-invalid={Boolean(addRowFieldErrors.dateIssued)} />{addRowFieldErrors.dateIssued && <small className="register-field-error" role="alert">{addRowFieldErrors.dateIssued}</small>}</label>
+                            <label><span>REVISION NO. <abbr className="register-required-marker" title="required">*</abbr></span><input name="revisionNo" value={draft.revisionNo} onChange={event => updateDraft('revisionNo', event.target.value)} placeholder="Enter revision" required aria-invalid={Boolean(addRowFieldErrors.revisionNo)} />{addRowFieldErrors.revisionNo && <small className="register-field-error" role="alert">{addRowFieldErrors.revisionNo}</small>}</label>
+                            <label><span>DESIGN USE <abbr className="register-required-marker" title="required">*</abbr></span><select name="designUse" value={draft.designUse} onChange={event => updateDraft('designUse', event.target.value)} required aria-invalid={Boolean(addRowFieldErrors.designUse)}><option value="">Select design use</option>{DESIGN_USE_OPTIONS.map(option => <option key={option}>{option}</option>)}</select>{addRowFieldErrors.designUse && <small className="register-field-error" role="alert">{addRowFieldErrors.designUse}</small>}</label>
                         </div>
                         {addRowError && <div className="register-navigation-error" role="alert">{addRowError}</div>}
-                        <div className="register-modal-actions"><button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)} disabled={addingRow}>Cancel</button><button type="submit" className="register-primary-button" disabled={addingRow || !draft.client || !draft.project || !cleanFolderName(draft.design) || !generatedDrawingNo}>{addingRow ? 'Creating folder...' : 'Add drawing'}</button></div>
+                        <div className="register-modal-actions"><button type="button" className="register-secondary-button" onClick={() => setShowAddRow(false)} disabled={addingRow}>Cancel</button><button type="submit" className="register-primary-button" disabled={addingRow || buildersLoading}>{addingRow ? 'Creating folder...' : 'Add drawing'}</button></div>
                     </form>
                 </div>
             )}
