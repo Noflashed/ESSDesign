@@ -22410,6 +22410,66 @@ button.stat-card {
     left: auto;
 }
 
+.site-registry-project-editor-modal .site-registry-project-location-field {
+    position: relative;
+    z-index: 105;
+}
+
+.site-registry-project-editor-modal .site-registry-address-autocomplete {
+    position: relative;
+    overflow: visible;
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestions.transport-address-suggestions {
+    position: absolute;
+    z-index: 130;
+    top: calc(100% + 6px);
+    right: auto;
+    left: 0;
+    width: calc(200% + 18px);
+    max-height: 230px;
+    margin: 0;
+    padding: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid #d4d4d8;
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: 0 18px 38px rgba(24, 24, 27, .18);
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestion.transport-address-suggestion {
+    min-height: 44px;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #27272a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestion.transport-address-suggestion + .site-registry-address-suggestion {
+    border-top: 1px solid #eeeeef;
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestion.transport-address-suggestion:hover,
+.site-registry-project-editor-modal .site-registry-address-suggestion.transport-address-suggestion:focus-visible {
+    background: #f4f4f5;
+    outline: none;
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestion strong {
+    color: #27272a;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.site-registry-project-editor-modal .site-registry-address-suggestion span {
+    color: #71717a;
+    font-size: 10px;
+    font-weight: 400;
+}
+
 @media (max-width: 760px) {
     .site-registry-project-view-details,
     .site-registry-project-view-roles {
@@ -22420,6 +22480,10 @@ button.stat-card {
         align-items: flex-start;
         flex-direction: column;
         gap: 5px;
+    }
+
+    .site-registry-project-editor-modal .site-registry-address-suggestions.transport-address-suggestions {
+        width: 100%;
     }
 }
 
