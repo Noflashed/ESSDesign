@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
+import { ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -215,7 +215,7 @@ function StatusBadge({ value }) {
     return <span className={`project-register-status ${String(value || '').toLowerCase()}`}>{value || 'Draft'}</span>;
 }
 
-export default function ProjectDataRegisterPage({ registerType, onBack }) {
+export default function ProjectDataRegisterPage({ registerType }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
     const showingQrRegister = registerType === 'qr-labels';
     const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
@@ -226,7 +226,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
     const [sortField, setSortField] = useState(config.defaultSort);
     const [sortDirection, setSortDirection] = useState('desc');
     const [openingId, setOpeningId] = useState('');
-    const [showDeleted, setShowDeleted] = useState(registerType !== 'scaff-tags');
+    const [showDeleted, setShowDeleted] = useState(false);
     const [filterMenu, setFilterMenu] = useState('');
     const [qrLabels, setQrLabels] = useState([]);
     const [showQrGenerator, setShowQrGenerator] = useState(false);
@@ -267,7 +267,7 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
         setSortField(config.defaultSort);
         setSortDirection('desc');
         setQuery('');
-        setShowDeleted(registerType !== 'scaff-tags');
+        setShowDeleted(false);
         setFilterMenu('');
         setExcludedFilters({ builder: new Set(), project: new Set() });
     }, [config]);
@@ -472,9 +472,6 @@ export default function ProjectDataRegisterPage({ registerType, onBack }) {
                         <span>Show deleted</span>
                     </label>
                 ) : null}
-                <button type="button" className="project-register-icon-button project-register-back-button" onClick={onBack} title="Back to Project Data" aria-label="Back to Project Data">
-                    <ArrowLeft size={20} aria-hidden="true" />
-                </button>
             </div>
 
             {error ? <div className="project-register-error" role="alert">{error}</div> : null}

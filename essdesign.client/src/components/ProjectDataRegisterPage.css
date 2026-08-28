@@ -24,32 +24,6 @@
     margin-bottom: 18px;
 }
 
-.project-register-icon-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--card-bg);
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.project-register-back-button {
-    flex: 0 0 34px;
-    width: 34px;
-    height: 34px;
-    border-color: transparent;
-    background: transparent;
-    color: var(--text-primary);
-}
-
-.project-register-back-button:hover {
-    border-color: var(--primary-color);
-    background: var(--hover-bg);
-    color: var(--primary-color);
-}
-
 .project-register-search {
     width: min(560px, 52vw);
     height: 42px;
@@ -603,8 +577,17 @@
     color: #a61b1b;
 }
 
+.project-data-register-table tbody tr.is-deleted {
+    opacity: 0.58;
+    transition: opacity 0.16s ease;
+}
+
 .project-data-register-table tbody tr.is-deleted:hover td {
     background: rgba(198, 40, 40, 0.13);
+}
+
+.project-data-register-table tbody tr.is-deleted:hover {
+    opacity: 0.72;
 }
 
 .project-register-column-sort {
