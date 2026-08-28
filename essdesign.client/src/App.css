@@ -5366,6 +5366,28 @@ body {
     overflow-y: auto;
 }
 
+.app-nav-sidebar-section {
+    display: grid;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+}
+
+.app-nav-sidebar-section + .app-nav-sidebar-section {
+    margin-top: 12px;
+}
+
+.app-nav-sidebar-section-heading {
+    margin: 0;
+    padding: 0 9px 5px;
+    color: #8a929d;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
 .app-nav-sidebar-item {
     display: flex;
     align-items: center;
@@ -10693,76 +10715,292 @@ button.stat-card {
 
 .module-modal.compact.site-registry-project-modal {
     position: relative;
-    width: min(1080px, calc(100vw - 32px));
-    height: min(820px, calc(100vh - 28px));
-    max-height: min(820px, calc(100vh - 28px));
+    width: min(960px, calc(100vw - 32px));
+    max-height: min(780px, calc(100vh - 28px));
+    display: flex;
+    flex-direction: column;
     padding: 0;
     overflow: hidden;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border: 1px solid #d9e2ef;
+    border-radius: 16px;
+    background: #f5f8fc;
+    box-shadow: 0 28px 80px rgba(15, 35, 65, 0.24);
+}
+
+/* Neutral Site Registry visual system. */
+.site-registry-page,
+.site-registry-page button,
+.site-registry-page input,
+.site-registry-page select,
+.site-registry-page textarea {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.site-registry-page .site-registry-shell {
+    color: #27272a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.site-registry-page .site-registry-search-field {
+    border-color: #d4d4d8;
+    color: #3f3f46;
+}
+
+.site-registry-page .site-registry-search-field svg,
+.site-registry-page .site-registry-search-field input::placeholder {
+    color: #71717a;
+}
+
+.site-registry-page .site-registry-search-field:focus-within {
+    border-color: #71717a;
+    box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.12);
+}
+
+.site-registry-page .site-registry-toggle {
+    color: #3f3f46;
+    font-weight: 600;
+}
+
+.site-registry-page .site-registry-toggle-track {
+    background: #a1a1aa;
+}
+
+.site-registry-page .site-registry-toggle input:checked + .site-registry-toggle-track {
+    background: #3f3f46;
+}
+
+.site-registry-page .site-registry-outline-action,
+.site-registry-page .site-registry-primary-action {
+    min-height: 36px;
+    padding: 0 13px;
+    border-radius: 5px;
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.site-registry-page .site-registry-outline-action {
+    border: 1px solid #d4d4d8;
     background: #ffffff;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+    color: #52525b;
+}
+
+.site-registry-page .site-registry-outline-action:hover:not(:disabled) {
+    border-color: #a1a1aa;
+    background: #fafafa;
+    color: #27272a;
+}
+
+.site-registry-page .site-registry-primary-action {
+    border: 1px solid #d4d4d8;
+    background: #f4f4f5;
+    color: #27272a;
+}
+
+.site-registry-page .site-registry-primary-action:hover:not(:disabled) {
+    border-color: #a1a1aa;
+    background: #e4e4e7;
+    color: #18181b;
+}
+
+.site-registry-page .site-registry-outline-action:focus-visible,
+.site-registry-page .site-registry-primary-action:focus-visible {
+    outline: 3px solid rgba(113, 113, 122, 0.14);
+    outline-offset: 2px;
+}
+
+.site-registry-page .site-registry-table-wrap {
+    box-sizing: border-box;
+    border: 1px solid #dbe5f4;
+    box-shadow: none;
+}
+
+.site-registry-page .site-registry-table,
+.site-registry-page .site-registry-table button {
+    font-family: "Google Sans", Roboto, Arial, sans-serif;
+}
+
+.site-registry-page .site-registry-expand-btn,
+.site-registry-page .site-registry-row-menu-btn {
+    color: #71717a;
+}
+
+.site-registry-page .site-registry-expand-btn:hover,
+.site-registry-page .site-registry-expand-btn:focus-visible,
+.site-registry-page .site-registry-row-menu-btn:hover,
+.site-registry-page .site-registry-row-menu-btn:focus-visible {
+    background: #f1f1f2;
+    color: #27272a;
+}
+
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) {
+    transform-origin: center;
+    animation: siteRegistryProjectModalIn 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes siteRegistryProjectModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.985);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .site-registry-project-modal:not(.site-registry-project-editor-modal) {
+        animation: none;
+    }
+}
+
+.site-registry-project-modal-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px 28px;
+    border-bottom: 1px solid #dfe7f2;
+    background: #ffffff;
+}
+
+.site-registry-project-modal-heading {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.site-registry-project-modal-icon {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: #eaf2ff;
+    color: #175cd3;
+}
+
+.site-registry-project-modal-eyebrow {
+    display: block;
+    margin-bottom: 3px;
+    color: #175cd3;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.site-registry-project-modal-heading h3 {
+    margin: 0;
+    color: #102a4c;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.site-registry-project-modal-heading p {
+    margin: 5px 0 0;
+    color: #61718a;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
 }
 
 .site-registry-project-close {
-    position: absolute;
-    top: 14px;
-    right: 16px;
-    z-index: 2;
-    width: 32px;
-    height: 32px;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #475569;
-    font-size: 22px;
-    font-weight: 600;
-    line-height: 1;
+    border: 1px solid #d9e2ef;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #52637d;
     cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .site-registry-project-close:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    border-color: #c4d0df;
+    background: #f4f7fb;
+    color: #102a4c;
+}
+
+.site-registry-project-close:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.18);
+    outline-offset: 2px;
 }
 
 .site-registry-project-form {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    height: 100%;
     min-height: 0;
     padding: 0;
 }
 
 .site-registry-project-form-body {
     display: grid;
-    gap: 0;
+    gap: 18px;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 20px 36px 0;
+    padding: 22px 28px 24px;
+    scrollbar-gutter: stable;
 }
 
 .site-registry-form-section {
     display: grid;
-    gap: 12px;
-    padding: 16px 0;
-    border-bottom: 1px solid #e2e8f0;
+    gap: 18px;
+    padding: 20px;
+    border: 1px solid #dfe7f2;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 35, 65, 0.035);
 }
 
-.site-registry-form-section-last {
-    border-bottom: 0;
+.site-registry-form-section-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+
+.site-registry-form-section-icon {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #f0f5ff;
+    color: #175cd3;
 }
 
 .site-registry-form-section-head h4 {
     margin: 0;
-    color: #0f172a;
-    font-size: 15px;
-    font-weight: 750;
-    line-height: 1.25;
+    color: #102a4c;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.site-registry-form-section-head p {
+    margin: 3px 0 0;
+    color: #718096;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
 }
 
 .site-registry-project-form-fields {
@@ -10773,8 +11011,8 @@ button.stat-card {
 
 .site-registry-project-details-grid {
     display: grid;
-    grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.35fr);
-    gap: 12px 24px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+    gap: 17px 20px;
 }
 
 .site-registry-project-location-field {
@@ -10782,13 +11020,13 @@ button.stat-card {
 }
 
 .site-registry-project-modal .module-field {
-    gap: 8px;
+    gap: 7px;
 }
 
 .site-registry-project-modal .module-field label {
-    color: #0f172a;
+    color: #233b5d;
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 700;
 }
 
 .site-registry-project-modal .module-field label span {
@@ -10797,21 +11035,26 @@ button.stat-card {
 
 .site-registry-project-modal .module-field input,
 .site-registry-project-modal .module-field select {
-    min-height: 36px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
+    min-height: 42px;
+    border: 1px solid #cbd7e6;
+    border-radius: 8px;
     background: #ffffff;
-    color: #0f172a;
+    color: #152b49;
     font-size: 13px;
     font-weight: 500;
-    box-shadow: 0 1px 1px rgba(15, 23, 42, 0.03);
+    box-shadow: 0 1px 2px rgba(15, 35, 65, 0.025);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .site-registry-project-modal .module-field input:focus,
 .site-registry-project-modal .module-field select:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: #3677dc;
+    box-shadow: 0 0 0 3px rgba(54, 119, 220, 0.13);
     outline: none;
+}
+
+.site-registry-project-modal .module-field input::placeholder {
+    color: #93a2b7;
 }
 
 .site-registry-project-modal .module-field input[readonly],
@@ -10848,6 +11091,40 @@ button.stat-card {
     color: #334155;
 }
 
+.site-registry-project-folder-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 13px;
+    border: 1px solid #d6e5fb;
+    border-radius: 9px;
+    background: #f4f8ff;
+    color: #2463bc;
+}
+
+.site-registry-project-folder-note > svg {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+
+.site-registry-project-folder-note div {
+    display: grid;
+    gap: 2px;
+}
+
+.site-registry-project-folder-note strong {
+    color: #1c4f96;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.site-registry-project-folder-note span {
+    color: #5a7395;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
 .site-registry-map-placeholder {
     width: 100%;
     height: 140px;
@@ -10870,7 +11147,7 @@ button.stat-card {
 .site-registry-personnel-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
+    gap: 14px;
 }
 
 .site-registry-role-select {
@@ -10885,21 +11162,21 @@ button.stat-card {
 }
 
 .site-registry-role-select-label label {
-    color: #0f172a;
+    color: #233b5d;
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 700;
 }
 
 .site-registry-role-select-control {
-    min-height: 52px;
+    min-height: 58px;
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto 32px 16px;
     align-items: center;
     gap: 10px;
     padding: 8px 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 7px;
+    border: 1px solid #cbd7e6;
+    border-radius: 8px;
     background: #ffffff;
     color: #0f172a;
     text-align: left;
@@ -11163,18 +11440,352 @@ button.stat-card {
 
 .site-registry-project-actions {
     flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 18px;
     margin: 0;
-    padding: 12px 36px;
-    border-top: 1px solid #e2e8f0;
+    padding: 16px 28px;
+    border-top: 1px solid #dfe7f2;
     background: #ffffff;
 }
 
+.site-registry-project-action-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .site-registry-project-actions button {
-    min-width: 106px;
-    min-height: 38px;
-    border-radius: 6px;
+    min-width: 112px;
+    min-height: 40px;
+    border-radius: 8px;
     font-size: 13px;
     font-weight: 700;
+}
+
+/* Keep the read-only project view on its established layout. */
+.module-modal.compact.site-registry-project-modal:not(.site-registry-project-editor-modal) {
+    width: min(1080px, calc(100vw - 32px));
+    height: min(820px, calc(100vh - 28px));
+    max-height: min(820px, calc(100vh - 28px));
+    display: block;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-project-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #475569;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-project-form {
+    height: 100%;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-project-form-body {
+    gap: 0;
+    padding: 20px 36px 0;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-form-section {
+    gap: 12px;
+    padding: 16px 0;
+    border: 0;
+    border-bottom: 1px solid #e2e8f0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-form-section-last {
+    border-bottom: 0;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-form-section-head {
+    display: block;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-form-section-head h4 {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 750;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-project-details-grid {
+    grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.35fr);
+    gap: 12px 24px;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .module-field {
+    gap: 8px;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .module-field label,
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-role-select-label label {
+    color: #0f172a;
+    font-weight: 650;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .module-field input,
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .module-field select {
+    min-height: 36px;
+    border-color: #cbd5e1;
+    border-radius: 6px;
+    color: #0f172a;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-personnel-grid {
+    gap: 18px;
+}
+
+.site-registry-project-modal:not(.site-registry-project-editor-modal) .site-registry-role-select-control {
+    min-height: 52px;
+    border-color: #cbd5e1;
+    border-radius: 7px;
+}
+
+/* Compact add/edit experience. */
+.module-modal.compact.site-registry-project-editor-modal {
+    width: min(880px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    border-radius: 10px;
+    background: #ffffff;
+    border-color: #d4d4d8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    box-shadow: 0 22px 60px rgba(24, 24, 27, 0.2);
+}
+
+.site-registry-project-editor-modal .site-registry-project-modal-header {
+    align-items: center;
+    padding: 18px 22px;
+}
+
+.site-registry-project-editor-modal .site-registry-project-modal-heading h3 {
+    font-size: 19px;
+    letter-spacing: -0.01em;
+}
+
+.site-registry-project-editor-modal .site-registry-project-modal-heading p {
+    margin-top: 3px;
+    font-size: 12px;
+}
+
+.site-registry-project-editor-modal .site-registry-project-close {
+    position: absolute;
+    top: 11px;
+    right: 14px;
+    z-index: 3;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.site-registry-project-editor-modal .site-registry-project-close svg {
+    flex: 0 0 auto;
+}
+
+.site-registry-project-editor-modal .site-registry-project-form-body {
+    gap: 16px;
+    padding: 20px 22px 12px;
+}
+
+.site-registry-project-editor-modal .site-registry-project-form {
+    gap: 0;
+}
+
+.site-registry-project-editor-modal .site-registry-form-section {
+    gap: 13px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.site-registry-project-editor-modal .site-registry-form-section + .site-registry-form-section {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.site-registry-project-editor-modal .site-registry-form-section-head {
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+}
+
+.site-registry-project-editor-modal .site-registry-form-section-head h4 {
+    color: #27272a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.site-registry-form-optional {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #f1f1f2;
+    color: #71717a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.site-registry-project-editor-modal .site-registry-project-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 13px 18px;
+}
+
+.site-registry-project-editor-modal .site-registry-project-location-field {
+    grid-column: auto;
+}
+
+.site-registry-project-editor-modal .module-field {
+    gap: 6px;
+}
+
+.site-registry-project-editor-modal .module-field label,
+.site-registry-project-editor-modal .site-registry-role-select-label label {
+    color: #3f3f46;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-weight: 600;
+}
+
+.site-registry-project-editor-modal .module-field input,
+.site-registry-project-editor-modal .module-field select {
+    min-height: 40px;
+    border-color: #d4d4d8;
+    color: #27272a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-weight: 400;
+}
+
+.site-registry-project-editor-modal .module-field input:focus,
+.site-registry-project-editor-modal .module-field select:focus,
+.site-registry-project-editor-modal .site-registry-role-select-control:focus-visible,
+.site-registry-project-editor-modal .site-registry-role-select.open .site-registry-role-select-control {
+    border-color: #71717a;
+    box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.14);
+}
+
+.site-registry-project-editor-modal .site-registry-personnel-grid {
+    gap: 12px;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select {
+    gap: 6px;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select-control {
+    min-height: 50px;
+    grid-template-columns: minmax(0, 1fr) 32px 16px;
+    border-color: #d4d4d8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select-person strong,
+.site-registry-project-editor-modal .site-registry-role-menu-person strong,
+.site-registry-project-editor-modal .site-registry-role-empty {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-weight: 400;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select-person small,
+.site-registry-project-editor-modal .site-registry-role-menu-person small {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-weight: 400;
+}
+
+.site-registry-project-editor-modal .site-registry-role-empty {
+    grid-column: 1 / 3;
+}
+
+.site-registry-project-editor-modal .site-registry-role-pill {
+    display: none;
+}
+
+.site-registry-project-editor-modal .site-registry-role-menu-option {
+    grid-template-columns: minmax(0, 1fr) 30px;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions {
+    padding: 4px 22px 12px;
+    border-top: 0;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-secondary-btn,
+.site-registry-project-editor-modal .site-registry-project-actions .module-primary-btn {
+    min-height: 36px;
+    padding: 0 13px;
+    border-radius: 5px;
+    box-shadow: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-secondary-btn {
+    border: 1px solid #d4d4d8;
+    background: #ffffff;
+    color: #52525b;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-secondary-btn:hover:not(:disabled) {
+    border-color: #a1a1aa;
+    background: #fafafa;
+    color: #27272a;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-primary-btn {
+    border: 1px solid #d4d4d8;
+    background: #f4f4f5;
+    color: #27272a;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-primary-btn:hover:not(:disabled) {
+    border-color: #a1a1aa;
+    background: #e4e4e7;
+    color: #18181b;
+}
+
+.site-registry-project-editor-modal .site-registry-project-actions .module-secondary-btn:focus-visible,
+.site-registry-project-editor-modal .site-registry-project-actions .module-primary-btn:focus-visible {
+    outline: 3px solid rgba(113, 113, 122, 0.14);
+    outline-offset: 2px;
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+    .site-registry-project-editor-modal .site-registry-personnel-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .site-registry-project-editor-modal .site-registry-role-select-control {
+        grid-template-columns: minmax(0, 1fr) 26px 14px;
+        gap: 6px;
+        padding: 8px;
+    }
+
+    .site-registry-project-editor-modal .site-registry-role-empty {
+        grid-column: 1 / 3;
+    }
 }
 
 @media (max-width: 900px) {
@@ -11201,6 +11812,10 @@ button.stat-card {
         grid-template-columns: 1fr;
     }
 
+    .site-registry-project-location-field {
+        grid-column: auto;
+    }
+
     .site-registry-info-modal {
         width: calc(100vw - 24px);
         height: calc(100vh - 28px);
@@ -11222,6 +11837,60 @@ button.stat-card {
     .site-registry-readonly-workers-table th:nth-child(4),
     .site-registry-readonly-workers-table td:nth-child(4) {
         display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .module-modal.compact.site-registry-project-modal {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        border-radius: 12px;
+    }
+
+    .site-registry-project-modal-header {
+        gap: 14px;
+        padding: 18px;
+    }
+
+    .site-registry-project-modal-heading {
+        gap: 11px;
+    }
+
+    .site-registry-project-modal-icon {
+        width: 38px;
+        height: 38px;
+    }
+
+    .site-registry-project-modal-heading h3 {
+        font-size: 18px;
+    }
+
+    .site-registry-project-modal-heading p {
+        font-size: 12px;
+    }
+
+    .site-registry-project-form-body {
+        gap: 14px;
+        padding: 16px;
+    }
+
+    .site-registry-form-section {
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .site-registry-project-actions {
+        padding: 13px 16px 16px;
+    }
+
+    .site-registry-project-action-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .site-registry-project-actions button {
+        width: 100%;
+        min-width: 0;
     }
 }
 
@@ -21178,6 +21847,257 @@ button.stat-card {
     }
 }
 
+/* Employees: neutral directory and inline profile editor */
+.employees-page,
+.employees-page button,
+.employees-page input,
+.employees-page select {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.employees-page .employees-workspace,
+.employees-page .employees-workspace.no-selection {
+    grid-template-columns: minmax(300px, 344px) minmax(0, 1fr);
+    grid-template-areas: "directory profile";
+    background: #fafafa;
+    color: #27272a;
+}
+
+.employees-page .employee-profile-main {
+    padding: 24px 24px 28px;
+    background: #fafafa;
+}
+
+.employees-page .employee-profile-main-header {
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+
+.employees-page .employee-profile-main-identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.employees-page .employee-profile-main-avatar .employees-avatar {
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+    border-color: #e4e4e7;
+    background: #f4f4f5;
+    color: #3f3f46;
+    font-size: 16px;
+}
+
+.employees-page .employee-profile-main-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.employees-page .employee-profile-main-copy h1 {
+    margin: 0;
+    color: #27272a;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.employees-page .employee-profile-main-copy > p {
+    margin: 0;
+    color: #71717a;
+    font-size: 12px;
+}
+
+.employees-page .employee-profile-main-copy .employee-profile-status {
+    margin-top: 3px;
+}
+
+.employees-page .employee-profile-main-identity-fields {
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) minmax(160px, .8fr);
+    gap: 10px;
+}
+
+.employees-page .employee-profile-main-identity-fields label {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+}
+
+.employees-page .employee-profile-main-identity-fields label > span,
+.employees-page .employee-credential-inline-grid small {
+    color: #71717a;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.employees-page .employee-profile-main-input,
+.employees-page .employee-profile-inline-value-input,
+.employees-page .employee-credential-inline-grid input,
+.employees-page .employee-credential-inline-grid select {
+    box-sizing: border-box;
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid #d4d4d8;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #27272a;
+    outline: none;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.employees-page .employee-profile-main-input:focus,
+.employees-page .employee-profile-inline-value-input:focus,
+.employees-page .employee-credential-inline-grid input:focus,
+.employees-page .employee-credential-inline-grid select:focus {
+    border-color: #71717a;
+    box-shadow: 0 0 0 3px rgba(113, 113, 122, .1);
+}
+
+.employees-page .employee-profile-card,
+.employees-page .employee-profile-detail-grid > .employee-details-credentials-section {
+    border-color: #e4e4e7;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+.employees-page .employee-profile-card h3,
+.employees-page .employee-profile-detail-grid > .employee-details-credentials-section > h3 {
+    border-color: #eeeeef;
+    color: #27272a;
+}
+
+.employees-page .employee-profile-card h3 svg,
+.employees-page .employees-directory-search svg {
+    color: #71717a;
+}
+
+.employees-page .employee-profile-fields dt,
+.employees-page .employee-details-credential-values small {
+    color: #71717a;
+}
+
+.employees-page .employee-profile-fields dd,
+.employees-page .employee-details-credential-values strong {
+    color: #3f3f46;
+}
+
+.employees-page .employee-profile-inline-form.is-editing .employee-profile-fields dd {
+    min-height: 34px;
+}
+
+.employees-page .employee-credential-inline-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 10px;
+}
+
+.employees-page .employee-credential-inline-grid label {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.employees-page .employee-credential-inline-file {
+    grid-column: 1 / -1;
+}
+
+.employees-page .employee-credential-inline-file input {
+    height: auto;
+    padding: 6px 8px;
+    font-size: 10px;
+}
+
+.employees-page .employee-credential-inline-file > span {
+    color: #71717a;
+    font-size: 9px;
+}
+
+.employees-page .employees-directory-panel,
+.employees-page .employees-directory-footer {
+    border-color: #e4e4e7;
+    background: #ffffff;
+}
+
+.employees-page .employees-directory-search input,
+.employees-page .employees-directory-tools select {
+    border-color: #d4d4d8;
+    color: #3f3f46;
+}
+
+.employees-page .employees-directory-search input:focus,
+.employees-page .employees-directory-tools select:focus {
+    border-color: #71717a;
+    box-shadow: 0 0 0 3px rgba(113, 113, 122, .1);
+}
+
+.employees-page .employees-directory-row:hover,
+.employees-page .employees-directory-row.selected {
+    background: #f4f4f5;
+}
+
+.employees-page .employees-directory-row.selected {
+    box-shadow: inset 3px 0 0 #52525b;
+}
+
+.employees-page .employees-directory-person-copy strong {
+    color: #27272a;
+}
+
+.employees-page .employees-empty-state > button,
+.employees-page .employees-directory-add,
+.employees-page .employee-profile-edit-btn {
+    border-color: #a1a1aa;
+    background: #f4f4f5;
+    color: #27272a;
+    box-shadow: none;
+}
+
+.employees-page .employees-empty-state > button:hover,
+.employees-page .employees-directory-add:hover,
+.employees-page .employee-profile-edit-btn:hover {
+    border-color: #71717a;
+    background: #e4e4e7;
+    color: #18181b;
+    box-shadow: none;
+}
+
+.employees-page .employees-directory-footer > button {
+    color: #52525b;
+}
+
+@media (max-width: 900px) {
+    .employees-page .employees-workspace,
+    .employees-page .employees-workspace.no-selection {
+        grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
+        grid-template-areas: "directory profile";
+        grid-template-rows: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 820px) {
+    .employees-page .employees-workspace,
+    .employees-page .employees-workspace.no-selection {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "directory" "profile";
+        grid-template-rows: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .employees-page .employee-profile-main-identity-fields,
+    .employees-page .employee-credential-inline-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 /* Employees: fixed profile workspace with a scrollable directory */
 .employees-page .employees-workspace {
     width: 100%;
@@ -22103,5 +23023,62 @@ button.stat-card {
 
     .employees-page .employees-directory-add {
         grid-column: 1;
+    }
+}
+
+/* Final employee workspace overrides */
+.employees-page .employees-workspace,
+.employees-page .employees-workspace.no-selection {
+    grid-template-columns: minmax(300px, 344px) minmax(0, 1fr);
+    grid-template-areas: "directory profile";
+    background: #fafafa;
+}
+
+.employees-page .employee-profile-main {
+    background: #fafafa;
+}
+
+.employees-page .employees-directory-row:hover,
+.employees-page .employees-directory-row.selected {
+    background: #f4f4f5;
+}
+
+.employees-page .employees-directory-row.selected {
+    box-shadow: inset 3px 0 0 #52525b;
+}
+
+.employees-page .employees-empty-state > button,
+.employees-page .employees-directory-add,
+.employees-page .employee-profile-edit-btn {
+    border-color: #a1a1aa;
+    background: #f4f4f5;
+    color: #27272a;
+    box-shadow: none;
+}
+
+.employees-page .employees-empty-state > button:hover,
+.employees-page .employees-directory-add:hover,
+.employees-page .employee-profile-edit-btn:hover {
+    border-color: #71717a;
+    background: #e4e4e7;
+    color: #18181b;
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .employees-page .employees-workspace,
+    .employees-page .employees-workspace.no-selection {
+        grid-template-columns: minmax(280px, 310px) minmax(0, 1fr);
+        grid-template-areas: "directory profile";
+        grid-template-rows: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 820px) {
+    .employees-page .employees-workspace,
+    .employees-page .employees-workspace.no-selection {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "directory" "profile";
+        grid-template-rows: auto;
     }
 }

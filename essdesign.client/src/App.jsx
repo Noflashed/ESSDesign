@@ -312,6 +312,21 @@ function NavSidebar({
             .filter(Boolean);
     }, [navItems, navSearchQuery]);
 
+    const navSections = useMemo(() => {
+        const sectionFor = (key) => {
+            if (['site-information', 'safety', 'employees', 'employee-home'].includes(key)) return 'Workspace';
+            if (['design', 'truck-schedule', 'material-ordering-new', 'rostering'].includes(key)) return 'Operations';
+            return 'Tools';
+        };
+        const itemOrder = ['site-information', 'safety', 'employees', 'employee-home', 'design', 'truck-schedule', 'material-ordering-new', 'rostering', 'ess-ai', 'ess-news'];
+        return ['Workspace', 'Operations', 'Tools'].map((label) => ({
+            label,
+            items: visibleNavItems
+                .filter((item) => sectionFor(item.key) === label)
+                .sort((left, right) => itemOrder.indexOf(left.key) - itemOrder.indexOf(right.key))
+        })).filter((section) => section.items.length > 0);
+    }, [visibleNavItems]);
+
     return (
         <aside className="app-nav-sidebar">
             <div className="app-nav-sidebar-brand">
@@ -349,7 +364,10 @@ function NavSidebar({
             </div>
 
             <nav className="app-nav-sidebar-nav">
-                {visibleNavItems.map(item => {
+                {navSections.map((section) => (
+                    <section key={section.label} className="app-nav-sidebar-section" aria-label={section.label}>
+                        {open ? <p className="app-nav-sidebar-section-heading">{section.label}</p> : null}
+                        {section.items.map(item => {
                     const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                     const hasActiveChild = hasChildren && item.children.some((child) => child.key === currentPage);
                     const expanded = navSearchQuery.trim()
@@ -362,7 +380,7 @@ function NavSidebar({
                                 className={`app-nav-sidebar-item${isPageActive(item.key, currentPage) ? ' active' : ''}`}
                                 onClick={() => {
                                     if (hasChildren) {
-                                        setExpandedKeys({ [item.key]: true });
+                                        setExpandedKeys((previous) => ({ ...previous, [item.key]: !expanded }));
                                     } else {
                                         setExpandedKeys({});
                                     }
@@ -391,7 +409,9 @@ function NavSidebar({
                             ) : null}
                         </div>
                     );
-                })}
+                        })}
+                    </section>
+                ))}
             </nav>
 
             <div className="app-nav-sidebar-bottom">
@@ -714,10 +734,7 @@ function App() {
             ] : [
                 PROJECT_DATA_NAV_ITEM,
             ]),
-            ...(user?.role === 'admin' ? [
-                { key: 'ess-news', label: 'ESS News' },
-                { key: 'ai-feedback', label: 'AI Feedback' },
-            ] : []),
+            ...(user?.role === 'admin' ? [{ key: 'ess-news', label: 'ESS News' }] : []),
         ];
     const showHeaderSearch = false;
     const searchRef = useRef(null);

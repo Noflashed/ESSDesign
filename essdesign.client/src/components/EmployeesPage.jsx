@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Info, Mail, MapPin, Maximize2, MoreHorizontal, Phone, Plus, Search, User, UserPlus, X } from 'lucide-react';
+import { Info, Maximize2, MoreHorizontal, Phone, Plus, Search, User, UserPlus, X } from 'lucide-react';
 import { authAPI, resolveProfileImageUrls, rosteringAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -169,6 +169,38 @@ function formatEmployeeAddress(profile) {
     return structuredAddress || fallbackAddress || '-';
 }
 
+function formatEmployeeInputDate(value) {
+    if (!value) return '';
+    return String(value).split('T')[0];
+}
+
+function buildEmployeeProfileForm(profile = null) {
+    return {
+        preferredName: profile?.preferredName || '',
+        dateOfBirth: formatEmployeeInputDate(profile?.dateOfBirth),
+        gender: profile?.gender || '',
+        personalAddress: formatEmployeeAddress(profile) === '-' ? '' : formatEmployeeAddress(profile),
+        emergencyContactName: profile?.emergencyContactName || '',
+        emergencyRelationship: profile?.emergencyRelationship || '',
+        emergencyPhoneNumber: profile?.emergencyPhoneNumber || '',
+        emergencyEmail: profile?.emergencyEmail || '',
+        emergencyAddress: profile?.emergencyAddress || ''
+    };
+}
+
+function buildEmployeeCredentialForms(credentials = []) {
+    return Object.fromEntries(EMPLOYEE_CREDENTIAL_CONFIG.map((config) => {
+        const credential = credentials.find((item) => item.credentialType === config.type);
+        return [config.type, {
+            credentialNumber: credential?.credentialNumber || '',
+            licenceClasses: credential?.licenceClasses || '',
+            issuingState: credential?.issuingState || 'NSW',
+            issueDate: formatEmployeeInputDate(credential?.issueDate),
+            expiryDate: formatEmployeeInputDate(credential?.expiryDate)
+        }];
+    }));
+}
+
 const EMPLOYEE_CREDENTIAL_CONFIG = [
     { type: 'white_card', title: 'White Card', numberLabel: 'Card Number', showClasses: false, showIssueDate: true, showExpiry: false },
     { type: 'driver_licence', title: 'Driver Licence', numberLabel: 'Licence Number', showClasses: true, showIssueDate: false, showExpiry: true },
@@ -295,7 +327,17 @@ function EmployeeProfileSections({ profile, readOnly = false }) {
     );
 }
 
-function EmployeeCredentialsSection({ credentials, loading = false, error = '', readOnly = false }) {
+function EmployeeCredentialsSection({
+    credentials,
+    loading = false,
+    error = '',
+    readOnly = false,
+    editing = false,
+    forms = {},
+    files = {},
+    onChange,
+    onFileChange
+}) {
     const [expandedImage, setExpandedImage] = useState(null);
 
     useEffect(() => {
@@ -320,18 +362,30 @@ function EmployeeCredentialsSection({ credentials, loading = false, error = '', 
                 <div className="employee-details-credentials-grid">
                     {EMPLOYEE_CREDENTIAL_CONFIG.map((config) => {
                         const credential = credentials.find((item) => item.credentialType === config.type) || null;
+                        const form = forms[config.type] || {};
                         return (
                             <article key={config.type} className="employee-details-credential">
                                 <div className="employee-details-credential-head">
                                     <strong>{config.title}</strong>
                                 </div>
-                                <div className="employee-details-credential-values">
-                                    <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || '-'}</strong></span>
-                                    <span><small>Issuing State</small><strong>{credential?.issuingState || '-'}</strong></span>
-                                    {config.showClasses ? <span><small>{config.type === 'driver_licence' ? 'Class' : 'Class(es)'}</small><strong>{formatEmployeeCredentialClass(config, credential?.licenceClasses)}</strong></span> : null}
-                                    {config.showIssueDate ? <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span> : null}
-                                    {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
-                                </div>
+                                {editing ? (
+                                    <div className="employee-credential-inline-grid">
+                                        <label><small>{config.numberLabel}</small><input value={form.credentialNumber || ''} onChange={(event) => onChange?.(config.type, 'credentialNumber', event.target.value)} /></label>
+                                        <label><small>Issuing State</small><input value={form.issuingState || ''} onChange={(event) => onChange?.(config.type, 'issuingState', event.target.value)} /></label>
+                                        {config.showClasses ? <label><small>{config.type === 'driver_licence' ? 'Class' : 'Class(es)'}</small><input value={form.licenceClasses || ''} onChange={(event) => onChange?.(config.type, 'licenceClasses', event.target.value)} /></label> : null}
+                                        {config.showIssueDate ? <label><small>Issue Date</small><input type="date" value={form.issueDate || ''} onChange={(event) => onChange?.(config.type, 'issueDate', event.target.value)} /></label> : null}
+                                        {config.showExpiry ? <label><small>Expiry Date</small><input type="date" value={form.expiryDate || ''} onChange={(event) => onChange?.(config.type, 'expiryDate', event.target.value)} /></label> : null}
+                                        <label className="employee-credential-inline-file"><small>Front image</small><input type="file" accept="image/*" onChange={(event) => onFileChange?.(config.type, event.target.files?.[0] || null)} /><span>{files[config.type]?.name || (credential?.hasFrontImage ? 'Current image retained' : 'Image required for a new credential')}</span></label>
+                                    </div>
+                                ) : (
+                                    <div className="employee-details-credential-values">
+                                        <span><small>{config.numberLabel}</small><strong>{credential?.credentialNumber || '-'}</strong></span>
+                                        <span><small>Issuing State</small><strong>{credential?.issuingState || '-'}</strong></span>
+                                        {config.showClasses ? <span><small>{config.type === 'driver_licence' ? 'Class' : 'Class(es)'}</small><strong>{formatEmployeeCredentialClass(config, credential?.licenceClasses)}</strong></span> : null}
+                                        {config.showIssueDate ? <span><small>Issue Date</small><strong>{formatEmployeeCredentialDate(credential?.issueDate)}</strong></span> : null}
+                                        {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
+                                    </div>
+                                )}
                                 <EmployeeCredentialImage credential={credential} title={config.title} onOpen={setExpandedImage} />
                             </article>
                         );
@@ -456,6 +510,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const [selectedCredentials, setSelectedCredentials] = useState([]);
     const [selectedCredentialsLoading, setSelectedCredentialsLoading] = useState(false);
     const [selectedCredentialsError, setSelectedCredentialsError] = useState('');
+    const [profileEditForm, setProfileEditForm] = useState(() => buildEmployeeProfileForm());
+    const [credentialEditForms, setCredentialEditForms] = useState(() => buildEmployeeCredentialForms());
+    const [credentialEditFiles, setCredentialEditFiles] = useState({});
     const [employeeMenu, setEmployeeMenu] = useState(null);
 
     useEffect(() => {
@@ -543,6 +600,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 const credentialRows = Array.isArray(rows) ? rows : [];
                 if (!active) return;
                 setSelectedCredentials(credentialRows);
+                setCredentialEditForms(buildEmployeeCredentialForms(credentialRows));
 
                 credentialRows.forEach((credential) => {
                     if (!credential.hasFrontImage) return;
@@ -746,6 +804,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     const editEntry = (entry) => {
         setSelectedInfoEntry(entry);
+        setProfileEditForm(buildEmployeeProfileForm(entry.appUser));
+        setCredentialEditForms(buildEmployeeCredentialForms(selectedCredentials));
+        setCredentialEditFiles({});
         if (entry.type === 'employee') {
             openEmployeeEditor(entry.employee, entry.role);
         } else {
@@ -789,7 +850,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     };
 
     const openAppUserEditor = (appUser) => {
-        setAppUserForm({ id: appUser.id, fullName: appUser.fullName || '', email: appUser.email, role: appUser.role || 'viewer', phoneNumber: appUser.phoneNumber || '' });
+        setAppUserForm({ id: appUser.id, fullName: appUser.fullName || '', email: appUser.email || '', role: appUser.role || 'viewer', phoneNumber: appUser.phoneNumber || '' });
         setError('');
         setShowAppUserModal(true);
     };
@@ -834,6 +895,14 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             }
 
             await rosteringAPI.saveEmployee(saveForm);
+            if (!inviteAfterSave && selectedProfileUserId) {
+                await saveExtendedEmployeeProfile({
+                    userId: selectedProfileUserId,
+                    fullName: employeeFullNameInput,
+                    email: normalizedEmail,
+                    phoneNumber: form.phoneNumber || ''
+                });
+            }
             const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
             setAppUsers(userRows || []);
             setEmployees(employeeRows);
@@ -906,6 +975,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                     phoneNumber: nextPhoneNumber,
                 });
             }
+
+            await saveExtendedEmployeeProfile({
+                userId: appUserForm.id,
+                fullName: nextFullName,
+                email: appUserForm.email || '',
+                phoneNumber: nextPhoneNumber
+            });
 
             const [userRows, employeeRows] = await Promise.all([usersAPI.getAllUsers(), rosteringAPI.getEmployees()]);
             setAppUsers(userRows || []);
@@ -1028,8 +1104,57 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         });
     };
 
+    const updateProfileEditField = (field, value) => {
+        setProfileEditForm((previous) => ({ ...previous, [field]: value }));
+    };
+
+    const updateCredentialEditField = (credentialType, field, value) => {
+        setCredentialEditForms((previous) => ({
+            ...previous,
+            [credentialType]: { ...previous[credentialType], [field]: value }
+        }));
+    };
+
+    const saveExtendedEmployeeProfile = async ({ userId, fullName, email, phoneNumber }) => {
+        if (!userId) return;
+
+        await usersAPI.updateUserProfile(userId, {
+            fullName: fullName.trim(),
+            preferredName: profileEditForm.preferredName.trim(),
+            email: email.trim(),
+            phoneNumber: phoneNumber.trim(),
+            dateOfBirth: profileEditForm.dateOfBirth || null,
+            gender: profileEditForm.gender || null,
+            personalAddress: profileEditForm.personalAddress.trim(),
+            addressStreet: '',
+            addressCity: '',
+            addressState: '',
+            addressPostalCode: '',
+            addressCountry: 'Australia',
+            emergencyContactName: profileEditForm.emergencyContactName.trim(),
+            emergencyRelationship: profileEditForm.emergencyRelationship.trim(),
+            emergencyPhoneNumber: profileEditForm.emergencyPhoneNumber.trim(),
+            emergencyEmail: profileEditForm.emergencyEmail.trim(),
+            emergencyAddress: profileEditForm.emergencyAddress.trim()
+        });
+
+        const savedCredentials = await Promise.all(EMPLOYEE_CREDENTIAL_CONFIG.map(async (config) => {
+            const credentialForm = credentialEditForms[config.type];
+            if (!credentialForm?.credentialNumber?.trim()) return null;
+            return usersAPI.saveUserCredential(userId, config.type, credentialForm, credentialEditFiles[config.type] || null);
+        }));
+        const savedRows = savedCredentials.filter(Boolean);
+        if (savedRows.length > 0) {
+            setSelectedCredentials((current) => [
+                ...current.filter((item) => !savedRows.some((saved) => saved.credentialType === item.credentialType)),
+                ...savedRows
+            ]);
+        }
+    };
+
     const selectedInfoStatus = selectedInfoEntry ? getAccountStatus(selectedInfoEntry) : null;
     const selectedEmployeeProfile = selectedInfoEntry?.appUser || null;
+    const selectedProfileUserId = selectedInfoEntry?.appUser?.id || selectedInfoEntry?.employee?.linkedAuthUserId || '';
     const selectedAppUserIsTruckDevice = isTruckRole(selectedInfoEntry?.appUser?.role);
     const isEditingEmployee = selectedInfoEntry?.type === 'employee' && showModal && !!form.id;
     const isEditingAppUser = selectedInfoEntry?.type === 'app-user' && showAppUserModal;
@@ -1042,6 +1167,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     const cancelInlineEdit = () => {
         setShowModal(false);
         setShowAppUserModal(false);
+        setProfileEditForm(buildEmployeeProfileForm(selectedEmployeeProfile));
+        setCredentialEditForms(buildEmployeeCredentialForms(selectedCredentials));
+        setCredentialEditFiles({});
         setError('');
         setInviteMessage('');
     };
@@ -1080,70 +1208,22 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                 ) : (
                     <>
                         {selectedInfoEntry ? (
-                            <aside className="employee-profile-summary" aria-label="Selected employee summary">
-                                <div className="employee-profile-summary-identity">
-                                    <div className="employee-profile-summary-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
-                                    {isInlineEditing ? (
-                                        <input
-                                            className="employee-profile-summary-name-input"
-                                            aria-label="Full name"
-                                            value={inlineEditorName}
-                                            onChange={(event) => isEditingEmployee
-                                                ? updateEmployeeFullName(event.target.value)
-                                                : setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))}
-                                            autoComplete="name"
-                                        />
-                                    ) : <h2>{selectedInfoEntry.displayName}</h2>}
-                                    {isInlineEditing ? (
-                                        <select
-                                            className="employee-profile-summary-role-select"
-                                            aria-label="Role"
-                                            value={inlineEditorRole}
-                                            onChange={(event) => isEditingEmployee
-                                                ? setForm((previous) => ({ ...previous, selectedRole: event.target.value }))
-                                                : setAppUserForm((previous) => ({ ...previous, role: event.target.value }))}
-                                            disabled={selectedAppUserIsTruckDevice}
-                                        >
-                                            {selectedAppUserIsTruckDevice ? (
-                                                <option value={inlineEditorRole}>{getRoleLabel(inlineEditorRole)} (device only)</option>
-                                            ) : INDIVIDUAL_ROLE_OPTIONS.map((option) => (
-                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                            ))}
-                                        </select>
-                                    ) : <p>{getRoleLabel(selectedInfoEntry.role)}</p>}
-                                    <span className={`employee-profile-status ${selectedInfoStatus.className}`}>
-                                        <i aria-hidden="true" />
-                                        {selectedInfoStatus.label}
-                                    </span>
-                                </div>
-
-                                <dl className="employee-profile-summary-list">
-                                    <div>
-                                        <dt><Phone size={15} aria-hidden="true" /> Mobile</dt>
-                                        <dd>{selectedInfoEntry.displayPhone || '-'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt><Mail size={15} aria-hidden="true" /> Email</dt>
-                                        <dd>{selectedInfoEntry.displayEmail || '-'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt><Calendar size={15} aria-hidden="true" /> Date of birth</dt>
-                                        <dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd>
-                                    </div>
-                                    <div>
-                                        <dt><MapPin size={15} aria-hidden="true" /> Residential address</dt>
-                                        <dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd>
-                                    </div>
-                                </dl>
-                            </aside>
-                        ) : null}
-
-                        {selectedInfoEntry ? (
                             <main className="employee-profile-main">
                                 <form className={`employee-profile-inline-form ${isInlineEditing ? 'is-editing' : ''}`} onSubmit={submitInlineEdit}>
                                     <header className="employee-profile-main-header">
-                                        <div className="employee-profile-heading">
-                                            <h1>{isInlineEditing ? 'Edit employee profile' : 'Employee profile'}</h1>
+                                        <div className="employee-profile-main-identity">
+                                            <div className="employee-profile-main-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
+                                            <div className="employee-profile-main-copy">
+                                                {isInlineEditing ? (
+                                                    <div className="employee-profile-main-identity-fields">
+                                                        <label><span>Full name</span><input className="employee-profile-main-input" aria-label="Full name" value={inlineEditorName} onChange={(event) => isEditingEmployee ? updateEmployeeFullName(event.target.value) : setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))} autoComplete="name" required /></label>
+                                                        <label><span>Role</span><select className="employee-profile-main-input" aria-label="Role" value={inlineEditorRole} onChange={(event) => isEditingEmployee ? setForm((previous) => ({ ...previous, selectedRole: event.target.value })) : setAppUserForm((previous) => ({ ...previous, role: event.target.value }))} disabled={selectedAppUserIsTruckDevice}>{selectedAppUserIsTruckDevice ? <option value={inlineEditorRole}>{getRoleLabel(inlineEditorRole)} (device only)</option> : INDIVIDUAL_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                                                    </div>
+                                                ) : (
+                                                    <><h1>{selectedInfoEntry.displayName}</h1><p>{getRoleLabel(selectedInfoEntry.role)}</p></>
+                                                )}
+                                                <span className={`employee-profile-status ${selectedInfoStatus.className}`}><i aria-hidden="true" />{selectedInfoStatus.label}</span>
+                                            </div>
                                         </div>
                                         <div className="employee-profile-header-actions">
                                             {selectedInfoEntry.leadingHand && selectedInfoEntry.type === 'employee' ? (
@@ -1195,8 +1275,9 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                         <section className="employee-profile-card">
                                             <h3><User size={17} aria-hidden="true" /> Personal details</h3>
                                             <dl className="employee-profile-fields">
-                                                <div><dt>Date of birth</dt><dd>{formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
-                                                <div><dt>Gender</dt><dd>{formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
+                                                <div><dt>Preferred name</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.preferredName} onChange={(event) => updateProfileEditField('preferredName', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.preferredName || '-')}</dd></div>
+                                                <div><dt>Date of birth</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" type="date" value={profileEditForm.dateOfBirth} onChange={(event) => updateProfileEditField('dateOfBirth', event.target.value)} disabled={!selectedProfileUserId} /> : formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
+                                                <div><dt>Gender</dt><dd>{isInlineEditing ? <select className="employee-profile-inline-value-input" value={profileEditForm.gender} onChange={(event) => updateProfileEditField('gender', event.target.value)} disabled={!selectedProfileUserId}><option value="">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="non_binary">Non-binary</option><option value="prefer_not_to_say">Prefer not to say</option></select> : formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
                                                 <div>
                                                     <dt>Mobile</dt>
                                                     <dd>
@@ -1222,25 +1303,27 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                                 aria-label="Email"
                                                                 type="email"
                                                                 value={inlineEditorEmail}
-                                                                onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
-                                                                disabled={isEditingAppUser}
+                                                                onChange={(event) => isEditingEmployee
+                                                                    ? setForm((previous) => ({ ...previous, email: event.target.value }))
+                                                                    : setAppUserForm((previous) => ({ ...previous, email: event.target.value }))}
                                                                 autoComplete="email"
+                                                                required
                                                             />
                                                         ) : (selectedInfoEntry.displayEmail || '-')}
                                                     </dd>
                                                 </div>
-                                                <div className="wide"><dt>Residential address</dt><dd>{formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
+                                                <div className="wide"><dt>Residential address</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.personalAddress} onChange={(event) => updateProfileEditField('personalAddress', event.target.value)} disabled={!selectedProfileUserId} /> : formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
                                             </dl>
                                         </section>
 
                                         <section className="employee-profile-card">
                                             <h3><Phone size={17} aria-hidden="true" /> Emergency contact</h3>
                                             <dl className="employee-profile-fields">
-                                                <div><dt>Contact name</dt><dd>{selectedEmployeeProfile?.emergencyContactName || '-'}</dd></div>
-                                                <div><dt>Relationship</dt><dd>{selectedEmployeeProfile?.emergencyRelationship || '-'}</dd></div>
-                                                <div><dt>Phone</dt><dd>{selectedEmployeeProfile?.emergencyPhoneNumber || '-'}</dd></div>
-                                                <div><dt>Email</dt><dd>{selectedEmployeeProfile?.emergencyEmail || '-'}</dd></div>
-                                                <div className="wide"><dt>Address</dt><dd>{selectedEmployeeProfile?.emergencyAddress || '-'}</dd></div>
+                                                <div><dt>Contact name</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyContactName} onChange={(event) => updateProfileEditField('emergencyContactName', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyContactName || '-')}</dd></div>
+                                                <div><dt>Relationship</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyRelationship} onChange={(event) => updateProfileEditField('emergencyRelationship', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyRelationship || '-')}</dd></div>
+                                                <div><dt>Phone</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyPhoneNumber} onChange={(event) => updateProfileEditField('emergencyPhoneNumber', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyPhoneNumber || '-')}</dd></div>
+                                                <div><dt>Email</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" type="email" value={profileEditForm.emergencyEmail} onChange={(event) => updateProfileEditField('emergencyEmail', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyEmail || '-')}</dd></div>
+                                                <div className="wide"><dt>Address</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyAddress} onChange={(event) => updateProfileEditField('emergencyAddress', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyAddress || '-')}</dd></div>
                                             </dl>
                                         </section>
 
@@ -1248,6 +1331,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                             credentials={selectedCredentials}
                                             loading={selectedCredentialsLoading}
                                             error={selectedCredentialsError}
+                                            editing={isInlineEditing && !!selectedProfileUserId}
+                                            forms={credentialEditForms}
+                                            files={credentialEditFiles}
+                                            onChange={updateCredentialEditField}
+                                            onFileChange={(credentialType, file) => setCredentialEditFiles((previous) => ({ ...previous, [credentialType]: file }))}
                                         />
                                     </div>
                                 </form>

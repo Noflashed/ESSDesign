@@ -5377,6 +5377,12 @@ export const usersAPI = {
         return hydratedUser;
     },
 
+    updateUserProfile: async (userId, profile) => {
+        if (!userId) throw new Error('User is required');
+        const response = await apiClient.put(`/users/${encodeURIComponent(userId)}/profile`, profile);
+        return response.data;
+    },
+
     uploadProfileImage: async (userId, file) => {
         if (!userId || !file) {
             throw new Error('User and image file are required');
@@ -5425,6 +5431,24 @@ export const usersAPI = {
 
         const response = await apiClient.put(
             `/users/me/credentials/${encodeURIComponent(credentialType)}`,
+            formData,
+            { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data;
+    },
+
+    saveUserCredential: async (userId, credentialType, credential, frontImage = null) => {
+        if (!userId) throw new Error('User is required');
+        const formData = new FormData();
+        formData.append('credentialNumber', credential?.credentialNumber || '');
+        formData.append('licenceClasses', credential?.licenceClasses || '');
+        formData.append('issuingState', credential?.issuingState || 'NSW');
+        if (credentialType !== 'driver_licence' && credential?.issueDate) formData.append('issueDate', credential.issueDate);
+        if (credential?.expiryDate) formData.append('expiryDate', credential.expiryDate);
+        if (frontImage) formData.append('frontImage', await optimizeCredentialUpload(frontImage));
+
+        const response = await apiClient.put(
+            `/users/${encodeURIComponent(userId)}/credentials/${encodeURIComponent(credentialType)}`,
             formData,
             { headers: { 'Content-Type': 'multipart/form-data' } }
         );

@@ -167,6 +167,54 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPut("{userId}/profile")]
+        public async Task<ActionResult<UserInfo>> UpdateUserProfile(string userId, [FromBody] UpdateMyProfileRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.FullName))
+                {
+                    return BadRequest(new { error = "Full name is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.Email) || !IsValidEmailAddress(request.Email))
+                {
+                    return BadRequest(new { error = "A valid email address is required" });
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.EmergencyEmail) && !IsValidEmailAddress(request.EmergencyEmail))
+                {
+                    return BadRequest(new { error = "Emergency contact email address is invalid" });
+                }
+
+                return Ok(await _supabaseService.UpdateMyProfileAsync(userId, request));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile for {UserId}", userId);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpPost("me/profile-image")]
         [RequestSizeLimit(8 * 1024 * 1024)]
         public async Task<ActionResult> UploadMyProfileImage([FromForm] IFormFile file)
@@ -355,6 +403,62 @@ namespace ESSDesign.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving {CredentialType} for current user", credentialType);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{userId}/credentials/{credentialType}")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(11 * 1024 * 1024)]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<ActionResult<EmployeeCredentialResponse>> UpsertUserCredential(
+            string userId,
+            string credentialType,
+            [FromForm] UpsertEmployeeCredentialRequest request)
+        {
+            try
+            {
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                if (!string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Admin access required" });
+                }
+
+                var normalizedType = credentialType?.Trim().ToLowerInvariant() ?? string.Empty;
+                if (!EmployeeCredentialTypes.All.Contains(normalizedType))
+                {
+                    return BadRequest(new { error = "Credential type must be white_card, driver_licence or high_risk_work_licence" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.CredentialNumber))
+                {
+                    return BadRequest(new { error = "Credential number is required" });
+                }
+
+                if (request.FrontImage?.Length > 10 * 1024 * 1024)
+                {
+                    return BadRequest(new { error = "Credential image must not exceed 10 MB" });
+                }
+
+                if (request.IssueDate.HasValue && request.ExpiryDate.HasValue && request.ExpiryDate.Value.Date < request.IssueDate.Value.Date)
+                {
+                    return BadRequest(new { error = "Expiry date cannot be earlier than issue date" });
+                }
+
+                return Ok(await _supabaseService.UpsertEmployeeCredentialAsync(userId, normalizedType, request));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving {CredentialType} for {UserId}", credentialType, userId);
                 return StatusCode(500, new { error = ex.Message });
             }
         }

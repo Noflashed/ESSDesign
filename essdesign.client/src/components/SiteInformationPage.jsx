@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronDown, ChevronRight, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus } from 'lucide-react';
+import { Archive, ChevronDown, MoreVertical, Pencil, PlusCircle, Search, Trash2, UserPlus, X } from 'lucide-react';
 import { analysisAPI, foldersAPI, resolveProfileImageUrl, rosteringAPI, safetyProjectsAPI, usersAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
@@ -1119,17 +1119,6 @@ export default function SiteInformationPage() {
                                                     </td>
                                                     <td>
                                                         <div className="site-registry-project-cell">
-                                                            <button
-                                                                type="button"
-                                                                className="site-registry-expand-btn"
-                                                                onClick={event => {
-                                                                    event.stopPropagation();
-                                                                    openProjectInfo(project);
-                                                                }}
-                                                                aria-label={`View ${project.name}`}
-                                                            >
-                                                                <ChevronRight size={16} strokeWidth={2.3} aria-hidden="true" />
-                                                            </button>
                                                             <span>{project.name}</span>
                                                         </div>
                                                     </td>
@@ -1345,18 +1334,20 @@ export default function SiteInformationPage() {
 
             {showProjectModal && (
                 <div className="module-modal-backdrop" onClick={closeProjectModal}>
-                    <div className="module-modal compact site-registry-project-modal" onClick={e => e.stopPropagation()}>
-                        <button type="button" className="site-registry-project-close" onClick={closeProjectModal} aria-label="Close project form">x</button>
+                    <div className="module-modal compact site-registry-project-modal site-registry-project-editor-modal" onClick={e => e.stopPropagation()}>
+                        <button type="button" className="site-registry-project-close" onClick={closeProjectModal} aria-label="Close project form">
+                            <X size={20} strokeWidth={2.2} aria-hidden="true" />
+                        </button>
                         <form className="module-form site-registry-project-form" onSubmit={saveProject}>
                             <div className="site-registry-project-form-body">
                                 <section className="site-registry-form-section">
                                     <div className="site-registry-form-section-head">
-                                        <h4>Project Details</h4>
+                                        <h4>Project details</h4>
                                     </div>
                                     <div className="site-registry-project-details-grid">
                                         <div className="module-field">
                                             <label>Builder <span aria-hidden="true">*</span></label>
-                                            <select value={projectForm.builderId} onChange={e => setProjectForm(prev => ({
+                                            <select required value={projectForm.builderId} onChange={e => setProjectForm(prev => ({
                                                 ...prev,
                                                 builderId: e.target.value,
                                                 designFolderId: '',
@@ -1368,12 +1359,13 @@ export default function SiteInformationPage() {
                                         </div>
                                         <div className="module-field">
                                             <label>Project <span aria-hidden="true">*</span></label>
-                                            <input value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Enter project name" />
+                                            <input required value={projectForm.projectName} onChange={e => setProjectForm(prev => ({ ...prev, projectName: e.target.value }))} placeholder="Enter project name" />
                                         </div>
                                         <div className="module-field site-registry-project-location-field">
                                             <label>Site Location <span aria-hidden="true">*</span></label>
                                             <div className="site-registry-address-autocomplete transport-address-autocomplete">
                                                 <input
+                                                    required
                                                     value={projectForm.siteLocation}
                                                     onChange={e => setProjectForm(prev => ({
                                                         ...prev,
@@ -1416,6 +1408,7 @@ export default function SiteInformationPage() {
                                         <div className="module-field">
                                             <label>Scaffold Entity <span aria-hidden="true">*</span></label>
                                             <select
+                                                required
                                                 value={projectForm.scaffoldEntity}
                                                 onChange={event => setProjectForm(prev => ({
                                                     ...prev,
@@ -1431,9 +1424,6 @@ export default function SiteInformationPage() {
                                 </section>
 
                                 <section className="site-registry-form-section">
-                                    <div className="site-registry-form-section-head">
-                                        <h4>Site Roles</h4>
-                                    </div>
                                     <div className="site-registry-personnel-grid">
                                         <RoleUserSelect
                                             label="Project Manager"
@@ -1479,12 +1469,14 @@ export default function SiteInformationPage() {
 
                             </div>
                             <div className="module-form-actions site-registry-project-actions">
-                                <button type="button" className="module-secondary-btn" onClick={closeProjectModal} disabled={saving}>
-                                    Cancel
-                                </button>
-                                <button type="submit" className="module-primary-btn" disabled={saving || Boolean(projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId)}>
-                                    {saving ? 'Saving...' : 'Save Project'}
-                                </button>
+                                <div className="site-registry-project-action-buttons">
+                                    <button type="button" className="module-secondary-btn" onClick={closeProjectModal} disabled={saving}>
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="module-primary-btn" disabled={saving || Boolean(projectForm.siteLocation.trim() && !projectForm.siteLocationSourceId)}>
+                                        {saving ? 'Saving...' : projectForm.editingProjectId ? 'Save changes' : 'Create project'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
