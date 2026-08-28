@@ -57,6 +57,9 @@ public sealed class AssistantController : ControllerBase
         authTimer.Stop();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
         if (!AllowRequest(currentUser.Id))
             return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Too many assistant requests. Please wait a moment and try again." });
 
@@ -66,7 +69,7 @@ public sealed class AssistantController : ControllerBase
         {
             return Ok(await _assistant.ChatAsync(
                 request,
-                _accessPolicy.For(currentUser),
+                access,
                 cancellationToken,
                 authTimer.ElapsedMilliseconds));
         }
@@ -107,6 +110,13 @@ public sealed class AssistantController : ControllerBase
             await Response.WriteAsJsonAsync(new { error = "Not authenticated." }, cancellationToken);
             return;
         }
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            await Response.WriteAsJsonAsync(new { error = "ESS AI access is not available for this role." }, cancellationToken);
+            return;
+        }
         if (!AllowRequest(currentUser.Id))
         {
             Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -133,7 +143,7 @@ public sealed class AssistantController : ControllerBase
         {
             await _assistant.ChatStreamAsync(
                 request,
-                _accessPolicy.For(currentUser),
+                access,
                 EmitAsync,
                 cancellationToken,
                 authTimer.ElapsedMilliseconds);
@@ -162,6 +172,9 @@ public sealed class AssistantController : ControllerBase
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
         if (request.ConversationId == Guid.Empty || request.Rating is < -1 or > 1 || request.Rating == 0)
             return BadRequest(new { error = "A conversation and positive or negative rating are required." });
 
@@ -170,7 +183,7 @@ public sealed class AssistantController : ControllerBase
             await _conversations.SaveFeedbackAsync(
                 request.ConversationId,
                 request.MessageId,
-                _accessPolicy.For(currentUser),
+                access,
                 request.Rating,
                 request.Comment,
                 cancellationToken);
@@ -238,11 +251,14 @@ public sealed class AssistantController : ControllerBase
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
 
         try
         {
             return Ok(await _conversations.ListConversationsAsync(
-                _accessPolicy.For(currentUser),
+                access,
                 Math.Clamp(limit, 1, 200),
                 cancellationToken));
         }
@@ -261,10 +277,13 @@ public sealed class AssistantController : ControllerBase
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
 
         var conversation = await _conversations.GetConversationAsync(
             conversationId,
-            _accessPolicy.For(currentUser),
+            access,
             cancellationToken);
         return conversation == null
             ? NotFound(new { error = "The saved chat was not found." })
@@ -280,6 +299,9 @@ public sealed class AssistantController : ControllerBase
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
         if (string.IsNullOrWhiteSpace(request.Title))
             return BadRequest(new { error = "A chat title is required." });
 
@@ -287,7 +309,7 @@ public sealed class AssistantController : ControllerBase
         {
             await _conversations.RenameConversationAsync(
                 conversationId,
-                _accessPolicy.For(currentUser),
+                access,
                 request.Title,
                 cancellationToken);
             return Ok(new { saved = true });
@@ -306,12 +328,15 @@ public sealed class AssistantController : ControllerBase
         var currentUser = await GetCurrentUserAsync();
         if (currentUser == null)
             return Unauthorized(new { error = "Not authenticated." });
+        var access = _accessPolicy.For(currentUser);
+        if (!access.CanUseAssistant)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "ESS AI access is not available for this role." });
 
         try
         {
             await _conversations.DeleteConversationAsync(
                 conversationId,
-                _accessPolicy.For(currentUser),
+                access,
                 cancellationToken);
             return NoContent();
         }

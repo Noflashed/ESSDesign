@@ -4,6 +4,14 @@ namespace ESSDesign.Server.Services.Assistant;
 
 public sealed class EssAssistantAccessPolicy
 {
+    private static readonly HashSet<string> AssistantRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        AppRoles.Admin,
+        AppRoles.SiteSupervisor,
+        AppRoles.ProjectManager,
+        AppRoles.LeadingHand,
+    };
+
     private static readonly HashSet<string> ManagementRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         AppRoles.Admin,
@@ -28,6 +36,7 @@ public sealed class EssAssistantAccessPolicy
         UserName = string.IsNullOrWhiteSpace(user.PreferredName) ? user.FullName : user.PreferredName!,
         Email = user.Email,
         Role = string.IsNullOrWhiteSpace(user.Role) ? AppRoles.Viewer : user.Role,
+        CanUseAssistant = AssistantRoles.Contains(user.Role),
         IsAdmin = string.Equals(user.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase),
         CanSeeWorkContactDetails = ManagementRoles.Contains(user.Role),
         CanSeePrivateProfileDetails = string.Equals(user.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase),
@@ -43,6 +52,7 @@ public sealed class EssAssistantAccessContext
     public string UserName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string Role { get; init; } = string.Empty;
+    public bool CanUseAssistant { get; init; }
     public bool IsAdmin { get; init; }
     public bool CanSeeWorkContactDetails { get; init; }
     public bool CanSeePrivateProfileDetails { get; init; }
