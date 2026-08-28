@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Sparkles } from 'lucide-react';
 import { essNewsAPI } from '../services/api';
 
 const LOGO_URL = 'https://jyjsbbugskbbhibhlyks.supabase.co/storage/v1/object/public/public-assets/logo.png';
@@ -93,11 +94,12 @@ async function preloadPhoto(photo) {
     return photo.displayUrl !== photo.mediaUrl ? loadImageUrl(photo.mediaUrl) : false;
 }
 
-export default function WebLandingPage() {
+export default function WebLandingPage({ onAskQuestion }) {
     const initialCacheRef = useRef(null);
     if (!initialCacheRef.current) initialCacheRef.current = readCachedLandingPhotos();
 
     const transitionTimerRef = useRef(null);
+    const aiLaunchTimerRef = useRef(null);
     const transitioningRef = useRef(false);
     const mountedRef = useRef(true);
     const [photos, setPhotos] = useState(initialCacheRef.current.items);
@@ -109,6 +111,8 @@ export default function WebLandingPage() {
     const [reduceMotion, setReduceMotion] = useState(() => (
         typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ));
+    const [question, setQuestion] = useState('');
+    const [aiLaunching, setAiLaunching] = useState(false);
     const saveData = typeof navigator !== 'undefined' && navigator.connection?.saveData === true;
 
     const displayPhotos = useMemo(() => photos.map(photo => ({
@@ -123,6 +127,7 @@ export default function WebLandingPage() {
         return () => {
             mountedRef.current = false;
             if (transitionTimerRef.current) window.clearTimeout(transitionTimerRef.current);
+            if (aiLaunchTimerRef.current) window.clearTimeout(aiLaunchTimerRef.current);
         };
     }, []);
 
@@ -216,8 +221,19 @@ export default function WebLandingPage() {
         }
     };
 
+    const handleQuestionSubmit = event => {
+        event.preventDefault();
+        const prompt = question.trim();
+        if (!prompt || aiLaunching || !onAskQuestion) return;
+
+        setAiLaunching(true);
+        aiLaunchTimerRef.current = window.setTimeout(() => {
+            onAskQuestion(prompt);
+        }, reduceMotion ? 0 : 620);
+    };
+
     return (
-        <section className={`web-landing-page${activePhoto ? ' has-photo' : ''}`}>
+        <section className={`web-landing-page${activePhoto ? ' has-photo' : ''}${aiLaunching ? ' is-ai-launching' : ''}`}>
             <div className="web-landing-photo-stage" aria-hidden="true">
                 {previousPhoto ? (
                     <div className="web-landing-photo-frame is-previous">
@@ -245,6 +261,29 @@ export default function WebLandingPage() {
                     <img src={LOGO_URL} alt="ErectSafe Scaffolding" className="web-landing-logo web-landing-logo-ess" loading="eager" decoding="async" fetchpriority="high" />
                     <img src={MALOO_LOGO_URL} alt="Maloo Access Group" className="web-landing-logo web-landing-logo-maloo" loading="eager" decoding="async" />
                 </div>
+                {onAskQuestion ? (
+                    <form className="web-landing-ai-search" onSubmit={handleQuestionSubmit}>
+                        <Sparkles className="web-landing-ai-icon" size={21} aria-hidden="true" />
+                        <input
+                            type="text"
+                            value={question}
+                            onChange={event => setQuestion(event.target.value)}
+                            placeholder="Ask ESS AI anything..."
+                            aria-label="Ask ESS AI a question"
+                            maxLength={4000}
+                            disabled={aiLaunching}
+                            autoComplete="off"
+                        />
+                        <button
+                            type="submit"
+                            disabled={!question.trim() || aiLaunching}
+                            aria-label="Ask ESS AI"
+                            title="Ask ESS AI"
+                        >
+                            <ArrowUp size={22} strokeWidth={2.35} aria-hidden="true" />
+                        </button>
+                    </form>
+                ) : null}
             </div>
         </section>
     );

@@ -156,6 +156,9 @@ export default function AdminAssistantChat({
     className = '',
     initialConversationId = null,
     initialMessages = [],
+    initialPrompt = '',
+    initialPromptId = '',
+    onInitialPromptHandled,
     userAvatarUrl = '',
     userInitials = 'U',
     userDisplayName = 'User',
@@ -176,6 +179,7 @@ export default function AdminAssistantChat({
     const [feedbackDraft, setFeedbackDraft] = useState(null);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    const initialPromptHandledRef = useRef('');
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -294,6 +298,18 @@ export default function AdminAssistantChat({
             setStreamingReplyVisible(false);
         }
     };
+
+    useEffect(() => {
+        const prompt = initialPrompt.trim();
+        const promptKey = initialPromptId || prompt;
+        if (!prompt || initialPromptHandledRef.current === promptKey) return;
+
+        initialPromptHandledRef.current = promptKey;
+        onInitialPromptHandled?.(initialPromptId);
+        sendMessage(prompt);
+        // The landing prompt is intentionally consumed once on this chat mount.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const openFeedback = (message, rating) => {
         if (!conversationId || feedback[message.id]) return;

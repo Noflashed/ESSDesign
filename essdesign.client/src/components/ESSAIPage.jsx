@@ -37,7 +37,10 @@ export default function ESSAIPage({
     userInitials = 'U',
     userDisplayName = 'User',
     onUserAvatarError,
+    initialQuestionRequest = null,
+    onInitialQuestionHandled,
 }) {
+    const arrivedFromLandingRef = useRef(Boolean(initialQuestionRequest?.text));
     const conversationCache = useRef(new Map());
     const requestSequence = useRef(0);
     const [conversations, setConversations] = useState([]);
@@ -190,7 +193,7 @@ export default function ESSAIPage({
         || 'New chat';
 
     return (
-        <section className="ess-ai-page">
+        <section className={`ess-ai-page${arrivedFromLandingRef.current ? ' is-landing-arrival' : ''}`}>
             <aside className={`ess-ai-history${historyMinimized ? ' is-minimized' : ''}`} aria-label="Chat history">
                 <div className="ess-ai-history-header">
                     <div className="ess-ai-history-brand">
@@ -284,6 +287,9 @@ export default function ESSAIPage({
                         className="ess-ai-chat"
                         initialConversationId={activeConversationId}
                         initialMessages={activeConversation?.messages || []}
+                        initialPrompt={initialQuestionRequest?.text || ''}
+                        initialPromptId={initialQuestionRequest?.id || ''}
+                        onInitialPromptHandled={onInitialQuestionHandled}
                         userAvatarUrl={userAvatarUrl}
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}

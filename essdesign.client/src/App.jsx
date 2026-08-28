@@ -687,6 +687,7 @@ function App() {
     const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [currentPage, setCurrentPage] = useState('landing');
+    const [pendingAiQuestion, setPendingAiQuestion] = useState(null);
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
     const [avatarDebugEvents, setAvatarDebugEvents] = useState([]);
@@ -790,13 +791,13 @@ function App() {
     const applyPageState = useCallback((page, nextSafetyContext = { builder: null, project: null }, nextEmployeeContext = { leadingHand: null }, nextRosteringContext = { planDate: null }, { pushHistory = true } = {}) => {
         const transportPages = TRANSPORT_PAGE_KEYS;
         const resolvedPage = isEmployeePortalRole
-            ? (page === 'landing' || page === 'employee-home' || page === 'profile' || page === 'settings' ? page : 'employee-home')
+            ? (page === 'landing' || page === 'employee-home' || page === 'profile' || page === 'settings' || page === 'ess-ai' ? page : 'employee-home')
             : isScaffoldDesigner
             ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'landing')
             : isTruckDeviceUser
-            ? (transportPages.has(page) ? page : 'truck-schedule')
+            ? (transportPages.has(page) || page === 'ess-ai' ? page : 'truck-schedule')
             : isTransportManagement
-            ? (transportPages.has(page) ? page : 'truck-schedule')
+            ? (transportPages.has(page) || page === 'ess-ai' ? page : 'truck-schedule')
             : (!hasTransportSuiteAccess && transportPages.has(page) && !MATERIAL_ORDERING_PAGE_KEYS.has(page))
             ? 'material-ordering-new'
             : page;
@@ -818,6 +819,13 @@ function App() {
             window.history.replaceState(state, '', targetUrl);
         }
     }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
+
+    const handleLandingAiQuestion = useCallback((question) => {
+        const prompt = question.trim();
+        if (!prompt) return;
+        setPendingAiQuestion({ id: crypto.randomUUID(), text: prompt });
+        applyPageState('ess-ai', { builder: null, project: null }, { leadingHand: null }, { planDate: null });
+    }, [applyPageState]);
 
     useEffect(() => {
         checkAuth();
@@ -1572,7 +1580,7 @@ function App() {
 
     const renderCurrentPage = () => {
         if (currentPage === 'landing') {
-            return <WebLandingPage />;
+            return <WebLandingPage onAskQuestion={handleLandingAiQuestion} />;
         }
 
         if (currentPage === 'employee-home' && isEmployeePortalRole) {
@@ -1696,6 +1704,8 @@ function App() {
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}
                         onUserAvatarError={handleAvatarImageError}
+                        initialQuestionRequest={pendingAiQuestion}
+                        onInitialQuestionHandled={() => setPendingAiQuestion(null)}
                     />
                 </React.Suspense>
             );
