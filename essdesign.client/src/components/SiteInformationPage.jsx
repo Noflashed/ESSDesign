@@ -1193,14 +1193,12 @@ export default function SiteInformationPage() {
                 <div className="module-modal-backdrop" onClick={() => setSelectedInfoProject(null)}>
                     <div className="module-modal compact site-registry-project-modal site-registry-project-view-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${infoProject.name} site information`}>
                         <header className="site-registry-project-view-header">
+                            <BuilderLogoMark builder={infoProject.builder} logoSrc={builderLogoUrls.get(infoProject.builder?.id)} header />
                             <div className="site-registry-project-view-identity">
-                                <BuilderLogoMark builder={infoProject.builder} logoSrc={builderLogoUrls.get(infoProject.builder?.id)} header />
                                 <div>
                                     <div className="site-registry-project-view-title-line">
                                         <h2>{infoProject.name}</h2>
-                                        <span className={`site-registry-status ${infoProject.archived ? 'archived' : 'active'}`}>{infoProject.archived ? 'Archived' : 'Active'}</span>
                                     </div>
-                                    <p>{infoProject.builder?.name || 'Builder not set'}</p>
                                 </div>
                             </div>
                             <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information"><X size={19} strokeWidth={2.2} aria-hidden="true" /></button>

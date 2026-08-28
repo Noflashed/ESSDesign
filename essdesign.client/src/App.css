@@ -22107,14 +22107,16 @@ button.stat-card {
 }
 
 .site-registry-project-view-header {
+    position: relative;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 20px;
-    padding: 18px 22px;
+    padding: 18px 72px;
     border-bottom: 1px solid #e4e4e7;
     background: #ffffff;
+    text-align: center;
 }
 
 .site-registry-project-view-identity {
@@ -22124,18 +22126,22 @@ button.stat-card {
     gap: 12px;
 }
 
-.site-registry-project-view-identity .site-registry-row-location.header {
-    width: 56px;
-    height: 44px;
-    min-width: 56px;
+.site-registry-project-view-header > .site-registry-row-location.header {
+    position: absolute;
+    top: 50%;
+    left: 20px;
+    width: 58px;
+    height: 38px;
+    min-width: 58px;
     padding: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    transform: translateY(-50%);
 }
 
-.site-registry-project-view-identity .site-registry-row-location.header img {
+.site-registry-project-view-header > .site-registry-row-location.header img {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -22150,6 +22156,7 @@ button.stat-card {
     min-width: 0;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
 }
 
@@ -22173,8 +22180,10 @@ button.stat-card {
 }
 
 .site-registry-project-modal.site-registry-project-view-modal .site-registry-project-close {
-    position: static;
-    z-index: auto;
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    right: 20px;
     width: 32px;
     height: 32px;
     padding: 0;
@@ -22183,6 +22192,7 @@ button.stat-card {
     background: transparent;
     color: #71717a;
     font-size: inherit;
+    transform: translateY(-50%);
 }
 
 .site-registry-project-modal.site-registry-project-view-modal .site-registry-project-close:hover {
