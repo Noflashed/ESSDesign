@@ -273,6 +273,26 @@ function RoleUserSelect({ label, role, value, options, avatarUrls, onChange, dis
     );
 }
 
+function ProjectRoleSummary({ label, role, user }) {
+    return (
+        <div className="site-registry-view-role">
+            <span className="site-registry-view-role-label">{label}</span>
+            {user ? (
+                <div className="site-registry-view-role-person">
+                    <UserAvatar user={user} />
+                    <span>
+                        <strong>{appUserName(user)}</strong>
+                        <small>{user.email || user.phoneNumber || 'No contact recorded'}</small>
+                    </span>
+                </div>
+            ) : (
+                <span className="site-registry-view-role-empty">Not assigned</span>
+            )}
+            <span className={`site-registry-role-pill ${role}`}>{roleLabel(role)}</span>
+        </div>
+    );
+}
+
 export default function SiteInformationPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -953,6 +973,23 @@ export default function SiteInformationPage() {
             || employeeById.get(infoProject.leadingHandEmployeeId)?.linkedAuthUserId
             || (infoProject.leadingHandEmployeeId ? `employee:${infoProject.leadingHandEmployeeId}` : '')
         : '';
+    const infoRoleAssignments = infoProject ? [
+        {
+            label: 'Project Manager',
+            role: 'project_manager',
+            user: withRoleAvatar(roleUsers.projectManagers.find(user => roleOptionValue(user) === infoProjectManagerValue) || null, roleAvatarUrls)
+        },
+        {
+            label: 'Site Supervisor',
+            role: 'site_supervisor',
+            user: withRoleAvatar(roleUsers.siteSupervisors.find(user => roleOptionValue(user) === infoSiteSupervisorValue) || null, roleAvatarUrls)
+        },
+        {
+            label: 'Leading Hand',
+            role: 'leading_hand',
+            user: withRoleAvatar(roleUsers.leadingHands.find(user => roleOptionValue(user) === infoLeadingHandValue) || null, roleAvatarUrls)
+        }
+    ] : [];
 
     return (
         <div className="module-page site-registry-page">
@@ -1154,92 +1191,45 @@ export default function SiteInformationPage() {
 
             {infoProject ? (
                 <div className="module-modal-backdrop" onClick={() => setSelectedInfoProject(null)}>
-                    <div className="module-modal compact site-registry-project-modal" onClick={event => event.stopPropagation()}>
-                        <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information">x</button>
-                        <div className="module-form site-registry-project-form" role="dialog" aria-label={`${infoProject.name} site information`}>
-                            <div className="site-registry-project-form-body">
-                                <section className="site-registry-form-section">
-                                    <div className="site-registry-form-section-head">
-                                        <h4>Project Details</h4>
+                    <div className="module-modal compact site-registry-project-modal site-registry-project-view-modal" onClick={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={`${infoProject.name} site information`}>
+                        <header className="site-registry-project-view-header">
+                            <div className="site-registry-project-view-identity">
+                                <BuilderLogoMark builder={infoProject.builder} logoSrc={builderLogoUrls.get(infoProject.builder?.id)} header />
+                                <div>
+                                    <div className="site-registry-project-view-title-line">
+                                        <h2>{infoProject.name}</h2>
+                                        <span className={`site-registry-status ${infoProject.archived ? 'archived' : 'active'}`}>{infoProject.archived ? 'Archived' : 'Active'}</span>
                                     </div>
-                                    <div className="site-registry-project-details-grid">
-                                        <div className="module-field">
-                                            <label>Builder <span aria-hidden="true">*</span></label>
-                                            <select value={infoProject.builder?.id || ''} disabled>
-                                                <option value={infoProject.builder?.id || ''}>{infoProject.builder?.name || 'Not set'}</option>
-                                            </select>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Project <span aria-hidden="true">*</span></label>
-                                            <input value={infoProject.name || ''} readOnly />
-                                        </div>
-                                        <div className="module-field site-registry-project-location-field">
-                                            <label>Site Location <span aria-hidden="true">*</span></label>
-                                            <div className="site-registry-address-autocomplete transport-address-autocomplete">
-                                                <input value={infoProject.siteLocation || ''} readOnly />
-                                            </div>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Scaffold Entity <span aria-hidden="true">*</span></label>
-                                            <select value={normalizeScaffoldEntity(infoProject.scaffoldEntity)} disabled>
-                                                {SCAFFOLD_ENTITY_OPTIONS.map(entity => (
-                                                    <option key={entity} value={entity}>{entity}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="module-field">
-                                            <label>Design Folder</label>
-                                            <select value={infoProject.designFolderId || ''} disabled>
-                                                <option value="">Create Design Folder</option>
-                                                {infoProject.designFolderId ? (
-                                                    <option value={infoProject.designFolderId}>{infoProject.designFolderPath || 'Linked folder'}</option>
-                                                ) : null}
-                                            </select>
-                                        </div>
-                                    </div>
-                                </section>
+                                    <p>{infoProject.builder?.name || 'Builder not set'}</p>
+                                </div>
+                            </div>
+                            <button type="button" className="site-registry-project-close" onClick={() => setSelectedInfoProject(null)} aria-label="Close site information"><X size={19} strokeWidth={2.2} aria-hidden="true" /></button>
+                        </header>
 
-                                <section className="site-registry-form-section">
-                                    <div className="site-registry-form-section-head">
-                                        <h4>Site Roles</h4>
-                                    </div>
-                                    <div className="site-registry-personnel-grid">
-                                        <RoleUserSelect
-                                            label="Project Manager"
-                                            role="project_manager"
-                                            value={infoProjectManagerValue}
-                                            options={roleUsers.projectManagers}
-                                            avatarUrls={roleAvatarUrls}
-                                            onChange={() => {}}
-                                            disabled
-                                        />
-                                        <RoleUserSelect
-                                            label="Site Supervisor"
-                                            role="site_supervisor"
-                                            value={infoSiteSupervisorValue}
-                                            options={roleUsers.siteSupervisors}
-                                            avatarUrls={roleAvatarUrls}
-                                            onChange={() => {}}
-                                            disabled
-                                        />
-                                        <RoleUserSelect
-                                            label="Leading Hand"
-                                            role="leading_hand"
-                                            value={infoLeadingHandValue}
-                                            options={roleUsers.leadingHands}
-                                            avatarUrls={roleAvatarUrls}
-                                            onChange={() => {}}
-                                            disabled
-                                        />
-                                    </div>
-                                </section>
+                        <div className="site-registry-project-view-body">
+                            <section className="site-registry-project-view-section">
+                                <h3>Project information</h3>
+                                <dl className="site-registry-project-view-details">
+                                    <div><dt>Site location</dt><dd>{infoProject.siteLocation || 'Not set'}</dd></div>
+                                    <div><dt>Scaffold entity</dt><dd>{normalizeScaffoldEntity(infoProject.scaffoldEntity)}</dd></div>
+                                    <div><dt>Builder</dt><dd>{infoProject.builder?.name || 'Not set'}</dd></div>
+                                    <div><dt>Design folder</dt><dd>{infoProject.designFolderPath || (infoProject.designFolderId ? 'Linked folder' : 'Not created')}</dd></div>
+                                </dl>
+                            </section>
 
-                                <section className="site-registry-form-section site-registry-form-section-last">
-                                    <div className="site-registry-inducted-editor-head">
-                                        <label>Inducted Workers</label>
-                                        <span>{employeesLoading ? 'Loading employees...' : `${infoProjectEmployees.length} inducted`}</span>
-                                    </div>
-                                    <div className="site-registry-readonly-workers-table">
+                            <section className="site-registry-project-view-section">
+                                <h3>Site roles</h3>
+                                <div className="site-registry-project-view-roles">
+                                    {infoRoleAssignments.map(assignment => <ProjectRoleSummary key={assignment.role} {...assignment} />)}
+                                </div>
+                            </section>
+
+                            <section className="site-registry-project-view-section site-registry-project-view-workers">
+                                <div className="site-registry-inducted-editor-head">
+                                    <h3>Inducted workers</h3>
+                                    <span>{employeesLoading ? 'Loading employees...' : `${infoProjectEmployees.length} inducted`}</span>
+                                </div>
+                                <div className="site-registry-readonly-workers-table">
                                         <table>
                                             <thead>
                                                 <tr>
@@ -1269,26 +1259,14 @@ export default function SiteInformationPage() {
                                                 ))}
                                             </tbody>
                                         </table>
-                                    </div>
-                                </section>
-                            </div>
-                            <div className="module-form-actions site-registry-project-actions">
-                                <button type="button" className="module-secondary-btn" onClick={() => setSelectedInfoProject(null)}>
-                                    Close
-                                </button>
-                                <button
-                                    type="button"
-                                    className="module-primary-btn"
-                                    onClick={() => {
-                                        setSelectedInfoProject(null);
-                                        openEditProject(infoProject.builder.id, infoProject);
-                                    }}
-                                >
-                                    <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                                    <span>Edit Site</span>
-                                </button>
-                            </div>
+                                </div>
+                            </section>
                         </div>
+
+                        <footer className="site-registry-project-view-actions">
+                            <button type="button" className="module-secondary-btn" onClick={() => setSelectedInfoProject(null)}>Close</button>
+                            <button type="button" className="module-primary-btn" onClick={() => { setSelectedInfoProject(null); openEditProject(infoProject.builder.id, infoProject); }}><Pencil size={15} strokeWidth={2.2} aria-hidden="true" /><span>Edit project</span></button>
+                        </footer>
                     </div>
                 </div>
             ) : null}

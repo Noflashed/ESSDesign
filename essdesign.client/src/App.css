@@ -22091,6 +22091,319 @@ button.stat-card {
     }
 }
 
+/* Site Registry project viewer */
+.module-modal.compact.site-registry-project-modal.site-registry-project-view-modal {
+    width: min(920px, calc(100vw - 32px));
+    height: auto;
+    max-height: calc(100vh - 32px);
+    display: flex;
+    overflow: hidden;
+    border: 1px solid #d4d4d8;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #27272a;
+    box-shadow: 0 22px 60px rgba(24, 24, 27, .2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+.site-registry-project-view-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e4e4e7;
+    background: #ffffff;
+}
+
+.site-registry-project-view-identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.site-registry-project-view-identity .site-registry-row-location.header {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-color: #e4e4e7;
+    border-radius: 7px;
+    background: #fafafa;
+}
+
+.site-registry-project-view-identity > div {
+    min-width: 0;
+}
+
+.site-registry-project-view-title-line {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.site-registry-project-view-title-line h2 {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: #27272a;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-project-view-identity p {
+    margin: 3px 0 0;
+    color: #71717a;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.site-registry-project-modal.site-registry-project-view-modal .site-registry-project-close {
+    position: static;
+    z-index: auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #71717a;
+    font-size: inherit;
+}
+
+.site-registry-project-modal.site-registry-project-view-modal .site-registry-project-close:hover {
+    background: #f4f4f5;
+    color: #27272a;
+}
+
+.site-registry-project-view-body {
+    min-height: 0;
+    display: grid;
+    gap: 16px;
+    padding: 18px 22px;
+    overflow-y: auto;
+}
+
+.site-registry-project-view-section {
+    min-width: 0;
+    display: grid;
+    gap: 11px;
+}
+
+.site-registry-project-view-section + .site-registry-project-view-section {
+    padding-top: 15px;
+    border-top: 1px solid #eeeeef;
+}
+
+.site-registry-project-view-section h3,
+.site-registry-project-view-workers .site-registry-inducted-editor-head h3 {
+    margin: 0;
+    color: #3f3f46;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.site-registry-project-view-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 24px;
+    margin: 0;
+}
+
+.site-registry-project-view-details > div {
+    min-width: 0;
+}
+
+.site-registry-project-view-details dt,
+.site-registry-view-role-label {
+    margin: 0 0 4px;
+    color: #71717a;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.site-registry-project-view-details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #27272a;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.site-registry-project-view-roles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.site-registry-view-role {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 11px;
+    border: 1px solid #e4e4e7;
+    border-radius: 7px;
+    background: #fafafa;
+}
+
+.site-registry-view-role-label {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+.site-registry-view-role-person {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.site-registry-view-role-person > span:last-child {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.site-registry-view-role-person strong,
+.site-registry-view-role-person small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.site-registry-view-role-person strong {
+    color: #27272a;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.site-registry-view-role-person small,
+.site-registry-view-role-empty {
+    color: #71717a;
+    font-size: 10px;
+    font-weight: 400;
+}
+
+.site-registry-project-view-modal .site-registry-role-pill {
+    padding: 3px 6px;
+    background: #e4e4e7;
+    color: #52525b;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.site-registry-project-view-workers .site-registry-inducted-editor-head {
+    min-height: 24px;
+}
+
+.site-registry-project-view-modal .site-registry-readonly-workers-table {
+    max-height: 220px;
+    overflow-y: auto;
+    border-color: #e4e4e7;
+    border-radius: 7px;
+}
+
+.site-registry-project-view-modal .site-registry-readonly-workers-table th {
+    background: #fafafa;
+    color: #71717a;
+}
+
+.site-registry-project-view-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 11px 22px 14px;
+    border-top: 1px solid #e4e4e7;
+    background: #ffffff;
+}
+
+.site-registry-project-view-actions button {
+    min-width: 104px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 13px;
+    border-radius: 5px;
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.site-registry-project-view-actions .module-secondary-btn {
+    border: 1px solid #d4d4d8;
+    background: #ffffff;
+    color: #52525b;
+}
+
+.site-registry-project-view-actions .module-primary-btn {
+    border: 1px solid #d4d4d8;
+    background: #f4f4f5;
+    color: #27272a;
+}
+
+.site-registry-project-view-actions .module-secondary-btn:hover,
+.site-registry-project-view-actions .module-primary-btn:hover {
+    border-color: #a1a1aa;
+    background: #e4e4e7;
+    color: #18181b;
+}
+
+/* Keep role pickers overlaid without resizing the editor. */
+.module-modal.compact.site-registry-project-editor-modal,
+.site-registry-project-editor-modal .site-registry-project-form,
+.site-registry-project-editor-modal .site-registry-project-form-body {
+    overflow: visible;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select.open {
+    z-index: 100;
+}
+
+.site-registry-project-editor-modal .site-registry-role-select-control {
+    height: 50px;
+    max-height: 50px;
+    overflow: hidden;
+}
+
+.site-registry-project-editor-modal .site-registry-role-menu {
+    z-index: 120;
+    width: max(100%, 290px);
+    right: auto;
+    max-height: 230px;
+}
+
+.site-registry-project-editor-modal .site-registry-personnel-grid .site-registry-role-select:last-child .site-registry-role-menu {
+    right: 0;
+    left: auto;
+}
+
+@media (max-width: 760px) {
+    .site-registry-project-view-details,
+    .site-registry-project-view-roles {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .site-registry-project-view-title-line {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+    }
+}
+
 @media (max-width: 640px) {
     .employees-page .employee-profile-main-identity-fields,
     .employees-page .employee-credential-inline-grid {
