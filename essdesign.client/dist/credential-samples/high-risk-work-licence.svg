@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="190" viewBox="0 0 600 190">
+  <rect width="600" height="190" rx="14" fill="#f7f0d8"/>
+  <rect width="600" height="24" rx="14" fill="#b98422"/>
+  <rect y="12" width="600" height="12" fill="#b98422"/>
+  <circle cx="86" cy="102" r="56" fill="#e2d6b8"/>
+  <circle cx="86" cy="79" r="22" fill="#8f866f"/>
+  <rect x="52" y="105" width="68" height="46" rx="23" fill="#8f866f"/>
+  <text x="168" y="59" fill="#5b451c" font-family="Arial,sans-serif" font-size="21" font-weight="700">HIGH RISK WORK LICENCE</text>
+  <text x="168" y="96" fill="#3d3527" font-family="Arial,sans-serif" font-size="18" font-weight="700">NATHAN BORG</text>
+  <text x="168" y="126" fill="#635a49" font-family="Arial,sans-serif" font-size="14" font-weight="600">HRWL-NSW-748291</text>
+  <text x="427" y="96" fill="#3d3527" font-family="Arial,sans-serif" font-size="15" font-weight="700">CLASSES SB · SI</text>
+  <text x="427" y="126" fill="#635a49" font-family="Arial,sans-serif" font-size="14" font-weight="600">EXP 6 SEP 2026</text>
+  <text x="477" y="49" fill="#7a7f87" fill-opacity=".38" font-family="Arial,sans-serif" font-size="22" font-weight="700">SAMPLE</text>
+</svg>

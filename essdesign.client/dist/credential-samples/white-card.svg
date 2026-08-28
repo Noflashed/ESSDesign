@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="190" viewBox="0 0 600 190">
+  <rect width="600" height="190" rx="14" fill="#f7fafc"/>
+  <rect width="78" height="190" rx="14" fill="#176b9c"/>
+  <rect x="64" width="14" height="190" fill="#176b9c"/>
+  <text x="18" y="42" fill="#fff" font-family="Arial,sans-serif" font-size="18" font-weight="700">NSW</text>
+  <text x="104" y="42" fill="#163a4f" font-family="Arial,sans-serif" font-size="26" font-weight="700">WHITE CARD</text>
+  <text x="104" y="69" fill="#4a6472" font-family="Arial,sans-serif" font-size="13" font-weight="700">GENERAL CONSTRUCTION INDUCTION</text>
+  <text x="104" y="112" fill="#263a45" font-family="Arial,sans-serif" font-size="18" font-weight="700">NATHAN BORG</text>
+  <text x="380" y="112" fill="#263a45" font-family="Arial,sans-serif" font-size="18" font-weight="700">CGI0123456</text>
+  <text x="104" y="151" fill="#607582" font-family="Arial,sans-serif" font-size="14" font-weight="600">ISSUED 12 MAR 2018</text>
+  <text x="477" y="32" fill="#7a7f87" fill-opacity=".38" font-family="Arial,sans-serif" font-size="22" font-weight="700">SAMPLE</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="190" viewBox="0 0 600 190">
+  <rect width="600" height="190" rx="14" fill="#eaf4f8"/>
+  <rect width="600" height="24" rx="14" fill="#2e718f"/>
+  <rect y="12" width="600" height="12" fill="#2e718f"/>
+  <circle cx="86" cy="102" r="56" fill="#d5e0e6"/>
+  <circle cx="86" cy="79" r="22" fill="#8b9aa4"/>
+  <rect x="52" y="105" width="68" height="46" rx="23" fill="#8b9aa4"/>
+  <text x="168" y="61" fill="#1f4e63" font-family="Arial,sans-serif" font-size="24" font-weight="700">NSW DRIVER LICENCE</text>
+  <text x="168" y="98" fill="#263a45" font-family="Arial,sans-serif" font-size="18" font-weight="700">NATHAN BORG</text>
+  <text x="168" y="127" fill="#4b5e68" font-family="Arial,sans-serif" font-size="16" font-weight="600">2049 8831</text>
+  <text x="420" y="98" fill="#263a45" font-family="Arial,sans-serif" font-size="16" font-weight="700">CLASS MR</text>
+  <text x="420" y="127" fill="#4b5e68" font-family="Arial,sans-serif" font-size="14" font-weight="600">EXP 14 MAY 2028</text>
+  <text x="477" y="49" fill="#7a7f87" fill-opacity=".38" font-family="Arial,sans-serif" font-size="22" font-weight="700">SAMPLE</text>
+</svg>

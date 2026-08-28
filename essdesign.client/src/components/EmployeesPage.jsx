@@ -207,6 +207,30 @@ const EMPLOYEE_CREDENTIAL_CONFIG = [
     { type: 'high_risk_work_licence', title: 'High Risk Work Licence', numberLabel: 'Licence Number', showClasses: true, showIssueDate: true, showExpiry: true }
 ];
 
+const PREVIEW_EMPLOYEES = [
+    { id: 'preview-employee-1', firstName: 'Jordan', lastName: 'Blake', phoneNumber: '0412 555 104', email: 'jordan.blake@example.com', leadingHand: true, linkedAuthUserId: 'preview-user-1', verifiedAt: '2026-07-18T09:30:00Z', invitedRole: 'leading_hand', preferredSiteIds: ['site-1', 'site-2'] },
+    { id: 'preview-employee-2', firstName: 'Mia', lastName: 'Chen', phoneNumber: '0433 216 880', email: 'mia.chen@example.com', leadingHand: false, linkedAuthUserId: 'preview-user-2', verifiedAt: '2026-06-02T08:15:00Z', invitedRole: 'scaffold_designer', preferredSiteIds: ['site-3'] },
+    { id: 'preview-employee-3', firstName: 'Liam', lastName: "O'Connor", phoneNumber: '0408 744 293', email: 'liam.oconnor@example.com', leadingHand: false, linkedAuthUserId: 'preview-user-3', verifiedAt: '2026-04-11T11:45:00Z', invitedRole: 'general_scaffolder', preferredSiteIds: ['site-2'] },
+    { id: 'preview-employee-4', firstName: 'Ava', lastName: 'Patel', phoneNumber: '0421 675 312', email: 'ava.patel@example.com', leadingHand: false, linkedAuthUserId: null, inviteSentAt: '2026-08-25T03:20:00Z', verifiedAt: null, invitedRole: 'site_supervisor', preferredSiteIds: [] },
+    { id: 'preview-employee-5', firstName: 'Noah', lastName: 'Williams', phoneNumber: '0450 331 908', email: 'noah.williams@example.com', leadingHand: false, linkedAuthUserId: null, inviteSentAt: null, verifiedAt: null, invitedRole: 'general_scaffolder', preferredSiteIds: [] },
+    { id: 'preview-employee-6', firstName: 'Ruby', lastName: 'Thompson', phoneNumber: '0419 820 447', email: 'ruby.thompson@example.com', leadingHand: false, linkedAuthUserId: 'preview-user-4', verifiedAt: '2026-08-01T01:10:00Z', invitedRole: 'project_manager', preferredSiteIds: ['site-1'] }
+];
+
+const PREVIEW_APP_USERS = [
+    { id: 'preview-user-1', fullName: 'Jordan Blake', preferredName: 'Jordy', email: 'jordan.blake@example.com', phoneNumber: '0412 555 104', role: 'leading_hand', dateOfBirth: '1988-05-14', gender: 'male', addressStreet: '24 Harbour Street', addressCity: 'Wollongong', addressState: 'NSW', addressPostalCode: '2500', emergencyContactName: 'Casey Blake', emergencyRelationship: 'Partner', emergencyPhoneNumber: '0402 880 119', emergencyEmail: 'casey.blake@example.com', emergencyAddress: '24 Harbour Street, Wollongong NSW 2500' },
+    { id: 'preview-user-2', fullName: 'Mia Chen', preferredName: 'Mia', email: 'mia.chen@example.com', phoneNumber: '0433 216 880', role: 'scaffold_designer', dateOfBirth: '1992-09-23', gender: 'female', addressStreet: '8 Railway Parade', addressCity: 'Hurstville', addressState: 'NSW', addressPostalCode: '2220', emergencyContactName: 'Daniel Chen', emergencyRelationship: 'Brother', emergencyPhoneNumber: '0411 663 204', emergencyEmail: 'daniel.chen@example.com', emergencyAddress: '15 Queens Road, Hurstville NSW 2220' },
+    { id: 'preview-user-3', fullName: "Liam O'Connor", preferredName: 'Liam', email: 'liam.oconnor@example.com', phoneNumber: '0408 744 293', role: 'general_scaffolder', dateOfBirth: '1996-02-08', gender: 'male', addressStreet: '17 Park Avenue', addressCity: 'Penrith', addressState: 'NSW', addressPostalCode: '2750', emergencyContactName: "Erin O'Connor", emergencyRelationship: 'Mother', emergencyPhoneNumber: '0438 901 772', emergencyEmail: 'erin.oconnor@example.com', emergencyAddress: '6 Hillcrest Road, Penrith NSW 2750' },
+    { id: 'preview-user-4', fullName: 'Ruby Thompson', preferredName: 'Ruby', email: 'ruby.thompson@example.com', phoneNumber: '0419 820 447', role: 'project_manager', dateOfBirth: '1990-12-17', gender: 'female', addressStreet: '42 Market Lane', addressCity: 'Parramatta', addressState: 'NSW', addressPostalCode: '2150', emergencyContactName: 'Alex Thompson', emergencyRelationship: 'Spouse', emergencyPhoneNumber: '0422 551 340', emergencyEmail: 'alex.thompson@example.com', emergencyAddress: '42 Market Lane, Parramatta NSW 2150' },
+    { id: 'preview-user-5', fullName: 'Sophie Martin', preferredName: 'Sophie', email: 'sophie.martin@example.com', phoneNumber: '0401 772 608', role: 'admin', dateOfBirth: '1986-07-29', gender: 'female', addressStreet: '11 Ocean View Drive', addressCity: 'Cronulla', addressState: 'NSW', addressPostalCode: '2230', emergencyContactName: 'Ben Martin', emergencyRelationship: 'Partner', emergencyPhoneNumber: '0447 230 881', emergencyEmail: 'ben.martin@example.com', emergencyAddress: '11 Ocean View Drive, Cronulla NSW 2230' }
+];
+
+const PREVIEW_CREDENTIAL_ASSET_ROOT = `${import.meta.env.BASE_URL}credential-samples`;
+const PREVIEW_CREDENTIALS = [
+    { credentialType: 'white_card', credentialNumber: 'CGI0123456', issuingState: 'NSW', issueDate: '2018-03-12', expiryDate: null, licenceClasses: '', hasFrontImage: true, frontImageUrl: `${PREVIEW_CREDENTIAL_ASSET_ROOT}/white-card.svg`, updatedAt: '2026-07-18T09:30:00Z' },
+    { credentialType: 'driver_licence', credentialNumber: '2049 8831', issuingState: 'NSW', issueDate: null, expiryDate: '2028-05-14', licenceClasses: 'MR', hasFrontImage: true, frontImageUrl: `${PREVIEW_CREDENTIAL_ASSET_ROOT}/driver-licence.svg`, updatedAt: '2026-07-18T09:30:00Z' },
+    { credentialType: 'high_risk_work_licence', credentialNumber: 'HRWL-NSW-748291', issuingState: 'NSW', issueDate: '2021-09-06', expiryDate: '2026-09-06', licenceClasses: 'SB, SI', hasFrontImage: true, frontImageUrl: `${PREVIEW_CREDENTIAL_ASSET_ROOT}/high-risk-work-licence.svg`, updatedAt: '2026-07-18T09:30:00Z' }
+];
+
 const DRIVER_LICENCE_CLASS_LABELS = {
     C: 'C (Car)',
     R: 'R (Rider)',
@@ -355,6 +379,7 @@ function EmployeeCredentialsSection({
                 Licences &amp; credentials
                 {readOnly ? <span className="employee-details-section-badge">Read only</span> : null}
             </h3>
+            <p className="employee-details-credentials-subtitle">Required construction and driving credentials · Front images shown when available</p>
 
             {loading ? <div className="employee-details-credentials-message">Loading licence details...</div> : null}
             {!loading && error ? <div className="employee-details-credentials-message error">{error}</div> : null}
@@ -368,6 +393,7 @@ function EmployeeCredentialsSection({
                                 <div className="employee-details-credential-head">
                                     <strong>{config.title}</strong>
                                 </div>
+                                <EmployeeCredentialImage credential={credential} title={config.title} onOpen={setExpandedImage} />
                                 {editing ? (
                                     <div className="employee-credential-inline-grid">
                                         <label><small>{config.numberLabel}</small><input value={form.credentialNumber || ''} onChange={(event) => onChange?.(config.type, 'credentialNumber', event.target.value)} /></label>
@@ -386,7 +412,6 @@ function EmployeeCredentialsSection({
                                         {config.showExpiry ? <span><small>Expiry Date</small><strong>{formatEmployeeCredentialDate(credential?.expiryDate)}</strong></span> : null}
                                     </div>
                                 )}
-                                <EmployeeCredentialImage credential={credential} title={config.title} onOpen={setExpandedImage} />
                             </article>
                         );
                     })}
@@ -485,6 +510,7 @@ function EmployeeAvatar({ entry }) {
 }
 
 export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onOpenLeadingHandRelationships }) {
+    const previewMode = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devAuth') === '1';
     const selectedCredentialImageUrlsRef = useRef(new Map());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -517,6 +543,14 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     useEffect(() => {
         let active = true;
+        if (previewMode) {
+            setEmployees(PREVIEW_EMPLOYEES);
+            setAppUsers(PREVIEW_APP_USERS);
+            setError('');
+            setLoading(false);
+            return () => { active = false; };
+        }
+
         (async () => {
             return Promise.all([rosteringAPI.getEmployees(), usersAPI.getAllUsers()]);
         })()
@@ -545,7 +579,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             });
 
         return () => { active = false; };
-    }, []);
+    }, [previewMode]);
 
     useEffect(() => {
         if (!employeeMenu) {
@@ -589,6 +623,12 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         selectedCredentialImageUrlsRef.current.clear();
         setSelectedCredentials([]);
         setSelectedCredentialsError('');
+        if (previewMode) {
+            setSelectedCredentials(PREVIEW_CREDENTIALS);
+            setCredentialEditForms(buildEmployeeCredentialForms(PREVIEW_CREDENTIALS));
+            setSelectedCredentialsLoading(false);
+            return () => { active = false; };
+        }
         if (!credentialUserId) {
             setSelectedCredentialsLoading(false);
             return () => { active = false; };
@@ -630,7 +670,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
             });
 
         return () => { active = false; };
-    }, [selectedInfoEntry?.appUser?.id, selectedInfoEntry?.employee?.linkedAuthUserId]);
+    }, [previewMode, selectedInfoEntry?.appUser?.id, selectedInfoEntry?.employee?.linkedAuthUserId]);
 
     useEffect(() => () => {
         selectedCredentialImageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -639,6 +679,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
 
     useEffect(() => {
         let active = true;
+        if (previewMode) {
+            setProfileImageUrls({});
+            return () => { active = false; };
+        }
         const userIds = [
             ...appUsers.map(user => user.id),
             ...employees.map(employee => employee.linkedAuthUserId)
@@ -666,7 +710,7 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
         return () => {
             active = false;
         };
-    }, [appUsers, employees]);
+    }, [appUsers, employees, previewMode]);
 
     const mergedEntries = useMemo(() => {
         const appUserById = Object.fromEntries(appUsers.map((u) => [u.id, u]));
@@ -774,6 +818,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
     }, [directoryEntries, filteredEntries, loading]);
 
     const pagedEntries = filteredEntries;
+    const activeDirectoryCount = useMemo(
+        () => directoryEntries.filter((entry) => getAccountStatus(entry).className === 'verified').length,
+        [directoryEntries]
+    );
 
     const openEmployeeDetails = (entry) => {
         if (entry.key !== selectedInfoEntry?.key) {
@@ -1210,19 +1258,30 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         {selectedInfoEntry ? (
                             <main className="employee-profile-main">
                                 <form className={`employee-profile-inline-form ${isInlineEditing ? 'is-editing' : ''}`} onSubmit={submitInlineEdit}>
+                                    <div className="employee-profile-page-head">
+                                        <div>
+                                            <span>WORKFORCE / EMPLOYEES</span>
+                                            <h2>Employee profile</h2>
+                                        </div>
+                                        <small>Live employee record</small>
+                                    </div>
                                     <header className="employee-profile-main-header">
                                         <div className="employee-profile-main-identity">
                                             <div className="employee-profile-main-avatar"><EmployeeAvatar entry={selectedInfoEntry} /></div>
                                             <div className="employee-profile-main-copy">
+                                                <span className="employee-profile-eyebrow">Employee profile</span>
                                                 {isInlineEditing ? (
                                                     <div className="employee-profile-main-identity-fields">
                                                         <label><span>Full name</span><input className="employee-profile-main-input" aria-label="Full name" value={inlineEditorName} onChange={(event) => isEditingEmployee ? updateEmployeeFullName(event.target.value) : setAppUserForm((previous) => ({ ...previous, fullName: event.target.value }))} autoComplete="name" required /></label>
                                                         <label><span>Role</span><select className="employee-profile-main-input" aria-label="Role" value={inlineEditorRole} onChange={(event) => isEditingEmployee ? setForm((previous) => ({ ...previous, selectedRole: event.target.value })) : setAppUserForm((previous) => ({ ...previous, role: event.target.value }))} disabled={selectedAppUserIsTruckDevice}>{selectedAppUserIsTruckDevice ? <option value={inlineEditorRole}>{getRoleLabel(inlineEditorRole)} (device only)</option> : INDIVIDUAL_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
                                                     </div>
                                                 ) : (
-                                                    <><h1>{selectedInfoEntry.displayName}</h1><p>{getRoleLabel(selectedInfoEntry.role)}</p></>
+                                                    <h1>{selectedInfoEntry.displayName}</h1>
                                                 )}
-                                                <span className={`employee-profile-status ${selectedInfoStatus.className}`}><i aria-hidden="true" />{selectedInfoStatus.label}</span>
+                                                <div className="employee-profile-main-meta">
+                                                    {!isInlineEditing ? <p>{getRoleLabel(selectedInfoEntry.role)}</p> : null}
+                                                    <span className={`employee-profile-status ${selectedInfoStatus.className}`}><i aria-hidden="true" />{selectedInfoStatus.label}</span>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="employee-profile-header-actions">
@@ -1274,10 +1333,10 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <div className="employee-profile-detail-grid">
                                         <section className="employee-profile-card">
                                             <h3><User size={17} aria-hidden="true" /> Personal details</h3>
+                                            <p className="employee-profile-card-subtitle">Core contact and identity information</p>
                                             <dl className="employee-profile-fields">
                                                 <div><dt>Preferred name</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.preferredName} onChange={(event) => updateProfileEditField('preferredName', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.preferredName || '-')}</dd></div>
                                                 <div><dt>Date of birth</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" type="date" value={profileEditForm.dateOfBirth} onChange={(event) => updateProfileEditField('dateOfBirth', event.target.value)} disabled={!selectedProfileUserId} /> : formatEmployeeBirthDate(selectedEmployeeProfile?.dateOfBirth)}</dd></div>
-                                                <div><dt>Gender</dt><dd>{isInlineEditing ? <select className="employee-profile-inline-value-input" value={profileEditForm.gender} onChange={(event) => updateProfileEditField('gender', event.target.value)} disabled={!selectedProfileUserId}><option value="">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="non_binary">Non-binary</option><option value="prefer_not_to_say">Prefer not to say</option></select> : formatEmployeeGender(selectedEmployeeProfile?.gender)}</dd></div>
                                                 <div>
                                                     <dt>Mobile</dt>
                                                     <dd>
@@ -1312,18 +1371,17 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                                         ) : (selectedInfoEntry.displayEmail || '-')}
                                                     </dd>
                                                 </div>
-                                                <div className="wide"><dt>Residential address</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.personalAddress} onChange={(event) => updateProfileEditField('personalAddress', event.target.value)} disabled={!selectedProfileUserId} /> : formatEmployeeAddress(selectedEmployeeProfile)}</dd></div>
                                             </dl>
                                         </section>
 
                                         <section className="employee-profile-card">
                                             <h3><Phone size={17} aria-hidden="true" /> Emergency contact</h3>
+                                            <p className="employee-profile-card-subtitle">Primary contact in case of an incident</p>
                                             <dl className="employee-profile-fields">
                                                 <div><dt>Contact name</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyContactName} onChange={(event) => updateProfileEditField('emergencyContactName', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyContactName || '-')}</dd></div>
                                                 <div><dt>Relationship</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyRelationship} onChange={(event) => updateProfileEditField('emergencyRelationship', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyRelationship || '-')}</dd></div>
                                                 <div><dt>Phone</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyPhoneNumber} onChange={(event) => updateProfileEditField('emergencyPhoneNumber', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyPhoneNumber || '-')}</dd></div>
                                                 <div><dt>Email</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" type="email" value={profileEditForm.emergencyEmail} onChange={(event) => updateProfileEditField('emergencyEmail', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyEmail || '-')}</dd></div>
-                                                <div className="wide"><dt>Address</dt><dd>{isInlineEditing ? <input className="employee-profile-inline-value-input" value={profileEditForm.emergencyAddress} onChange={(event) => updateProfileEditField('emergencyAddress', event.target.value)} disabled={!selectedProfileUserId} /> : (selectedEmployeeProfile?.emergencyAddress || '-')}</dd></div>
                                             </dl>
                                         </section>
 
@@ -1349,6 +1407,13 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                         )}
 
                         <aside className="employees-directory-panel" aria-label="Employee directory">
+                            <header className="employees-directory-header">
+                                <div>
+                                    <h2>Employees</h2>
+                                    <p>Workforce directory · {directoryEntries.length} people</p>
+                                </div>
+                                <span>{activeDirectoryCount} active</span>
+                            </header>
                             <div className="employees-directory-tools">
                                 <div className="employees-directory-search">
                                     <Search size={16} aria-hidden="true" />
@@ -1371,6 +1436,11 @@ export default function EmployeesPage({ currentUserId, onCurrentUserUpdated, onO
                                     <Plus size={16} aria-hidden="true" />
                                     Add employee
                                 </button>
+                            </div>
+
+                            <div className="employees-directory-list-label">
+                                <span>TEAM DIRECTORY</span>
+                                <span>{directoryEntries.length} RECORDS</span>
                             </div>
 
                             <div className="employees-directory-list">

