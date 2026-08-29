@@ -3584,13 +3584,48 @@ namespace ESSDesign.Server.Services
                 return null;
             }
 
-            var attachmentCount = message.Attachments.ValueKind == JsonValueKind.Array
-                ? message.Attachments.GetArrayLength()
-                : 0;
             var preview = Regex.Replace(message.Body?.Trim() ?? string.Empty, @"\s+", " ");
             if (string.IsNullOrWhiteSpace(preview))
             {
-                preview = attachmentCount == 1 ? "Photo" : $"{attachmentCount} photos";
+                var referenceTitles = new List<string>();
+                var photoCount = 0;
+                if (message.Attachments.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var attachment in message.Attachments.EnumerateArray())
+                    {
+                        if (attachment.ValueKind != JsonValueKind.Object)
+                        {
+                            continue;
+                        }
+                        var kind = attachment.TryGetProperty("kind", out var kindValue)
+                            ? kindValue.GetString()
+                            : null;
+                        if (string.Equals(kind, "app_reference", StringComparison.Ordinal))
+                        {
+                            var title = attachment.TryGetProperty("title", out var titleValue)
+                                ? titleValue.GetString()?.Trim()
+                                : null;
+                            referenceTitles.Add(string.IsNullOrWhiteSpace(title) ? "an ESS reference" : title);
+                            continue;
+                        }
+                        var mimeType = attachment.TryGetProperty("mimeType", out var mimeTypeValue)
+                            ? mimeTypeValue.GetString()
+                            : null;
+                        if (string.Equals(mimeType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+                        {
+                            photoCount++;
+                        }
+                    }
+                }
+
+                preview = referenceTitles.Count switch
+                {
+                    1 => $"Shared {referenceTitles[0]}",
+                    > 1 => $"Shared {referenceTitles.Count} ESS items",
+                    _ when photoCount == 1 => "Photo",
+                    _ when photoCount > 1 => $"{photoCount} photos",
+                    _ => "Attachment",
+                };
             }
             else if (preview.Length > 180)
             {
