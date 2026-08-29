@@ -372,6 +372,52 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("direct-message")]
+        public async Task<ActionResult> NotifyDirectMessage([FromBody] DirectMessageNotificationRequest request)
+        {
+            try
+            {
+                if (request.MessageId == Guid.Empty)
+                {
+                    return BadRequest(new { error = "Message ID is required" });
+                }
+
+                var authenticatedUser = await GetAuthenticatedUserAsync();
+                if (authenticatedUser == null || !Guid.TryParse(authenticatedUser.Id, out var senderUserId))
+                {
+                    return Unauthorized(new { error = "Not authenticated" });
+                }
+
+                var context = await _supabaseService.GetDirectMessageNotificationContextAsync(
+                    request.MessageId,
+                    senderUserId);
+                if (context == null)
+                {
+                    return StatusCode(StatusCodes.Status403Forbidden, new { error = "Message is not available to this sender" });
+                }
+
+                var senderName = !string.IsNullOrWhiteSpace(authenticatedUser.FullName)
+                    ? authenticatedUser.FullName.Trim()
+                    : !string.IsNullOrWhiteSpace(authenticatedUser.Email)
+                        ? authenticatedUser.Email.Trim()
+                        : "Employee";
+                var pushSent = await _pushNotificationService.SendDirectMessagePushAsync(
+                    context.RecipientUserId,
+                    senderName,
+                    context.MessagePreview,
+                    context.ConversationId,
+                    context.SenderUserId,
+                    authenticatedUser.AvatarUrl);
+
+                return Ok(new { pushSent });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending direct message push notification");
+                return StatusCode(500, new { error = "Unable to send message notification" });
+            }
+        }
+
         private Guid ResolveUserId(string? fallbackUserId)
         {
             var userId = GetUserIdOptional();
@@ -396,6 +442,21 @@ namespace ESSDesign.Server.Controllers
             {
                 return false;
             }
+        }
+
+        private async Task<UserInfo?> GetAuthenticatedUserAsync()
+        {
+            var authHeader = Request.Headers.Authorization.ToString();
+            if (string.IsNullOrWhiteSpace(authHeader) ||
+                !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var accessToken = authHeader["Bearer ".Length..].Trim();
+            return string.IsNullOrWhiteSpace(accessToken)
+                ? null
+                : await _supabaseService.GetAuthUserInfoFromAccessTokenAsync(accessToken);
         }
 
         private Guid GetUserIdOptional()

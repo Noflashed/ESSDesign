@@ -549,6 +549,11 @@ namespace ESSDesign.Server.Models
         public string PdfUrl { get; set; } = string.Empty;
     }
 
+    public class DirectMessageNotificationRequest
+    {
+        public Guid MessageId { get; set; }
+    }
+
     public class CreateFolderRequest
     {
         public string Name { get; set; } = string.Empty;

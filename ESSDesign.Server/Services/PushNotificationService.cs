@@ -214,6 +214,28 @@ namespace ESSDesign.Server.Services
                 });
         }
 
+        public async Task<int> SendDirectMessagePushAsync(
+            Guid recipientUserId,
+            string senderName,
+            string messagePreview,
+            Guid conversationId,
+            Guid senderUserId,
+            string? senderImageUrl)
+        {
+            return await SendDocumentPushAsync(
+                new[] { recipientUserId.ToString() },
+                senderName,
+                messagePreview,
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "direct_message",
+                    ["conversationId"] = conversationId.ToString(),
+                    ["senderId"] = senderUserId.ToString(),
+                    ["senderName"] = senderName,
+                    ["senderImageUrl"] = senderImageUrl,
+                });
+        }
+
 
         private async Task<int> SendDocumentPushAsync(
             IEnumerable<string> recipientUserIds,

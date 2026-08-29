@@ -3548,6 +3548,64 @@ namespace ESSDesign.Server.Services
             }
         }
 
+        public async Task<DirectMessageNotificationContext?> GetDirectMessageNotificationContextAsync(
+            Guid messageId,
+            Guid authenticatedSenderId)
+        {
+            var messages = await GetRestRowsAsync<DirectMessageNotificationRow>(
+                $"ess_direct_messages?select={Uri.EscapeDataString("id,conversation_id,sender_id,body,attachments")}" +
+                $"&id=eq.{messageId:D}&limit=1");
+            var message = messages.FirstOrDefault();
+            if (message == null || message.SenderId != authenticatedSenderId)
+            {
+                return null;
+            }
+
+            var conversations = await GetRestRowsAsync<DirectConversationNotificationRow>(
+                $"ess_direct_conversations?select={Uri.EscapeDataString("id,participant_one_id,participant_two_id")}" +
+                $"&id=eq.{message.ConversationId:D}&limit=1");
+            var conversation = conversations.FirstOrDefault();
+            if (conversation == null)
+            {
+                return null;
+            }
+
+            Guid recipientUserId;
+            if (conversation.ParticipantOneId == authenticatedSenderId)
+            {
+                recipientUserId = conversation.ParticipantTwoId;
+            }
+            else if (conversation.ParticipantTwoId == authenticatedSenderId)
+            {
+                recipientUserId = conversation.ParticipantOneId;
+            }
+            else
+            {
+                return null;
+            }
+
+            var attachmentCount = message.Attachments.ValueKind == JsonValueKind.Array
+                ? message.Attachments.GetArrayLength()
+                : 0;
+            var preview = Regex.Replace(message.Body?.Trim() ?? string.Empty, @"\s+", " ");
+            if (string.IsNullOrWhiteSpace(preview))
+            {
+                preview = attachmentCount == 1 ? "Photo" : $"{attachmentCount} photos";
+            }
+            else if (preview.Length > 180)
+            {
+                preview = $"{preview[..179]}…";
+            }
+
+            return new DirectMessageNotificationContext
+            {
+                ConversationId = conversation.Id,
+                SenderUserId = authenticatedSenderId,
+                RecipientUserId = recipientUserId,
+                MessagePreview = preview,
+            };
+        }
+
         public async Task<EmployeeAuthLinkInfo?> GetEmployeeAuthLinkInfoAsync(Guid employeeId)
         {
             try
@@ -4344,6 +4402,38 @@ namespace ESSDesign.Server.Services
                 _logger.LogWarning(ex, "Failed to deactivate push token");
             }
         }
+    }
+
+    public sealed class DirectMessageNotificationContext
+    {
+        public Guid ConversationId { get; set; }
+        public Guid SenderUserId { get; set; }
+        public Guid RecipientUserId { get; set; }
+        public string MessagePreview { get; set; } = string.Empty;
+    }
+
+    internal sealed class DirectMessageNotificationRow
+    {
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+        [JsonPropertyName("conversation_id")]
+        public Guid ConversationId { get; set; }
+        [JsonPropertyName("sender_id")]
+        public Guid SenderId { get; set; }
+        [JsonPropertyName("body")]
+        public string Body { get; set; } = string.Empty;
+        [JsonPropertyName("attachments")]
+        public JsonElement Attachments { get; set; }
+    }
+
+    internal sealed class DirectConversationNotificationRow
+    {
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+        [JsonPropertyName("participant_one_id")]
+        public Guid ParticipantOneId { get; set; }
+        [JsonPropertyName("participant_two_id")]
+        public Guid ParticipantTwoId { get; set; }
     }
 
     public class FileDownloadInfo
