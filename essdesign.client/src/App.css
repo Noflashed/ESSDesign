@@ -5556,7 +5556,7 @@ body {
 
 .scaff-qr-label-row {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto auto;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
     gap: 11px;
     min-height: 68px;
@@ -5565,6 +5565,11 @@ body {
     background: var(--bg-primary);
     padding: 10px;
     cursor: pointer;
+}
+
+.scaff-qr-label-row:focus-visible {
+    outline: 3px solid rgba(243, 102, 33, 0.3);
+    outline-offset: 2px;
 }
 
 .scaff-qr-label-row.is-selected {
@@ -5691,11 +5696,6 @@ body {
 
     .scaff-qr-label-row {
         grid-template-columns: 44px minmax(0, 1fr) auto;
-    }
-
-    .scaff-qr-label-row .module-secondary-btn {
-        grid-column: 2 / -1;
-        justify-self: start;
     }
 }
 

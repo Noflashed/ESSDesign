@@ -15,7 +15,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [labelCompany, setLabelCompany] = useState('ess');
     const [generating, setGenerating] = useState(false);
     const [printing, setPrinting] = useState(false);
-    const [selectedLabelIds, setSelectedLabelIds] = useState(() => new Set());
+    const [selectedLabelIds, setSelectedLabelIds] = useState([]);
     const [selectionAnchorId, setSelectionAnchorId] = useState(null);
 
     const loadForms = async () => {
@@ -29,7 +29,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
             setItems(next);
             setLabels(nextLabels);
             const availableLabelIds = new Set(nextLabels.map(label => label.id));
-            setSelectedLabelIds(current => new Set([...current].filter(id => availableLabelIds.has(id))));
+            setSelectedLabelIds(current => current.filter(id => availableLabelIds.has(id)));
             setSelectionAnchorId(current => availableLabelIds.has(current) ? current : null);
         } catch (err) {
             setError(err.message || 'Failed to load scaff-tags');
@@ -152,23 +152,22 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                 if (shouldSelect) next.add(item.id);
                 else next.delete(item.id);
             });
-            return next;
+            return [...next];
         });
         setSelectionAnchorId(label.id);
     };
 
     const handleLabelRowClick = (event, label, labelIndex) => {
-        if (event.target.closest?.('button, input, a')) return;
         toggleLabelSelection(
             label,
             labelIndex,
-            !selectedLabelIds.has(label.id),
+            !selectedLabelIds.includes(label.id),
             event.shiftKey
         );
     };
 
     const selectedLabels = labels
-        .filter(label => selectedLabelIds.has(label.id))
+        .filter(label => selectedLabelIds.includes(label.id))
         .sort((left, right) => left.labelNumber - right.labelNumber);
 
     const assignedHere = (label) => label.status === 'assigned' &&
@@ -234,16 +233,16 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                     <button
                                         type="button"
                                         className="module-secondary-btn compact"
-                                        disabled={selectedLabelIds.size === labels.length}
-                                        onClick={() => setSelectedLabelIds(new Set(labels.map(label => label.id)))}>
+                                        disabled={selectedLabelIds.length === labels.length}
+                                        onClick={() => setSelectedLabelIds(labels.map(label => label.id))}>
                                         Select All
                                     </button>
                                     <button
                                         type="button"
                                         className="module-secondary-btn compact"
-                                        disabled={selectedLabelIds.size === 0}
+                                        disabled={selectedLabelIds.length === 0}
                                         onClick={() => {
-                                            setSelectedLabelIds(new Set());
+                                            setSelectedLabelIds([]);
                                             setSelectionAnchorId(null);
                                         }}>
                                         Clear
@@ -261,21 +260,22 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                 {labels.map((label, labelIndex) => (
                                     <article
                                         key={label.id}
-                                        className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.has(label.id) ? ' is-selected' : ''}`}
+                                        className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.includes(label.id) ? ' is-selected' : ''}`}
                                         onClick={event => handleLabelRowClick(event, label, labelIndex)}
-                                        aria-selected={selectedLabelIds.has(label.id)}>
+                                        onKeyDown={event => {
+                                            if (event.key !== 'Enter' && event.key !== ' ') return;
+                                            event.preventDefault();
+                                            handleLabelRowClick(event, label, labelIndex);
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-pressed={selectedLabelIds.includes(label.id)}>
                                         <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
                                         <div className="scaff-qr-label-copy">
                                             <strong>{label.displayNumber}</strong>
                                             <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
                                         </div>
                                         <span className={`scaff-qr-status status-${label.status}`}>{labelStatusText(label)}</span>
-                                        <button
-                                            className="module-secondary-btn compact"
-                                            disabled={printing}
-                                            onClick={() => printLabels([label])}>
-                                            Print
-                                        </button>
                                     </article>
                                 ))}
                             </div>
