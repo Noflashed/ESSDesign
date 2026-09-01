@@ -14,7 +14,7 @@ const BATCH_OUTER_MARGIN_MM = (PRINTER_SAMPLE_PAGE_WIDTH_MM - PDF_WIDTH_MM) / 2;
 // The sample repeats 104 mm bleed tiles on a 105.587 mm pitch.
 const BATCH_TILE_GAP_MM = 1.587;
 // Keeps each PDF page below the standard 14,400 pt media-box limit.
-const MAX_LABELS_PER_HORIZONTAL_SHEET = 70;
+const MAX_LABELS_PER_VERTICAL_SHEET = 45;
 
 // Brand orange supplied for the print artwork: rgb(243, 102, 33). The narrow
 // top accent uses a restrained tint of the same colour to preserve its detail.
@@ -218,12 +218,12 @@ async function drawLabel(pdf, label, offsetX = 0, offsetY = 0) {
     drawCutContour(pdf, offsetX, offsetY);
 }
 
-function horizontalBatchPageSize(labelCount) {
+function verticalBatchPageSize(labelCount) {
     return {
-        width: (BATCH_OUTER_MARGIN_MM * 2)
-            + (labelCount * PDF_WIDTH_MM)
+        width: (BATCH_OUTER_MARGIN_MM * 2) + PDF_WIDTH_MM,
+        height: (BATCH_OUTER_MARGIN_MM * 2)
+            + (labelCount * PDF_HEIGHT_MM)
             + (Math.max(0, labelCount - 1) * BATCH_TILE_GAP_MM),
-        height: (BATCH_OUTER_MARGIN_MM * 2) + PDF_HEIGHT_MM,
     };
 }
 
@@ -231,34 +231,34 @@ export async function createScaffTagLabelPdf(labels) {
     if (!Array.isArray(labels) || labels.length === 0) {
         throw new Error('No QR labels were selected for printing.');
     }
-    const isHorizontalBatch = labels.length > 1;
-    const firstSheetLabelCount = isHorizontalBatch
-        ? Math.min(labels.length, MAX_LABELS_PER_HORIZONTAL_SHEET)
+    const isContinuousBatch = labels.length > 1;
+    const firstSheetLabelCount = isContinuousBatch
+        ? Math.min(labels.length, MAX_LABELS_PER_VERTICAL_SHEET)
         : 1;
-    const firstPageSize = isHorizontalBatch
-        ? horizontalBatchPageSize(firstSheetLabelCount)
+    const firstPageSize = isContinuousBatch
+        ? verticalBatchPageSize(firstSheetLabelCount)
         : { width: PDF_WIDTH_MM, height: PDF_HEIGHT_MM };
     const pdf = new jsPDF({
-        orientation: isHorizontalBatch ? 'landscape' : 'portrait',
+        orientation: 'portrait',
         unit: 'mm',
         format: [firstPageSize.width, firstPageSize.height],
         compress: true,
         putOnlyUsedFonts: true,
     });
 
-    if (!isHorizontalBatch) {
+    if (!isContinuousBatch) {
         await drawLabel(pdf, labels[0]);
     } else {
-        for (let sheetStart = 0; sheetStart < labels.length; sheetStart += MAX_LABELS_PER_HORIZONTAL_SHEET) {
-            const sheetLabels = labels.slice(sheetStart, sheetStart + MAX_LABELS_PER_HORIZONTAL_SHEET);
+        for (let sheetStart = 0; sheetStart < labels.length; sheetStart += MAX_LABELS_PER_VERTICAL_SHEET) {
+            const sheetLabels = labels.slice(sheetStart, sheetStart + MAX_LABELS_PER_VERTICAL_SHEET);
             if (sheetStart > 0) {
-                const pageSize = horizontalBatchPageSize(sheetLabels.length);
-                pdf.addPage([pageSize.width, pageSize.height], 'landscape');
+                const pageSize = verticalBatchPageSize(sheetLabels.length);
+                pdf.addPage([pageSize.width, pageSize.height], 'portrait');
             }
 
             for (let index = 0; index < sheetLabels.length; index += 1) {
-                const offsetX = BATCH_OUTER_MARGIN_MM + (index * (PDF_WIDTH_MM + BATCH_TILE_GAP_MM));
-                await drawLabel(pdf, sheetLabels[index], offsetX, BATCH_OUTER_MARGIN_MM);
+                const offsetY = BATCH_OUTER_MARGIN_MM + (index * (PDF_HEIGHT_MM + BATCH_TILE_GAP_MM));
+                await drawLabel(pdf, sheetLabels[index], BATCH_OUTER_MARGIN_MM, offsetY);
             }
         }
     }
