@@ -3,8 +3,11 @@ import { jsPDF } from 'jspdf';
 
 const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
-const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
-const CUT_CONTOUR_OFFSET_MM = 2;
+const LABEL_BLEED_MM = 2;
+const PDF_WIDTH_MM = LABEL_WIDTH_MM + (LABEL_BLEED_MM * 2);
+const PDF_HEIGHT_MM = LABEL_HEIGHT_MM + (LABEL_BLEED_MM * 2);
+const LABEL_CENTER_X_MM = LABEL_BLEED_MM + (LABEL_WIDTH_MM / 2);
+const CUT_CONTOUR_INSET_MM = 0.09;
 const CUT_CONTOUR_STROKE_MM = 0.25;
 
 // Brand orange supplied for the print artwork: rgb(243, 102, 33). The narrow
@@ -12,7 +15,6 @@ const CUT_CONTOUR_STROKE_MM = 0.25;
 const LABEL_ORANGE = [243, 102, 33];
 const LABEL_ORANGE_HIGHLIGHT = [245, 125, 66];
 const LABEL_INK = ['0', '0', '0', '0.93'];
-const LABEL_BORDER = ['0', '0', '0', '0.93'];
 const LABEL_OFF_WHITE = ['0', '0.008', '0.008', '0'];
 
 const imageDataCache = new Map();
@@ -41,10 +43,10 @@ export function drawCutContour(pdf) {
     pdf.internal.write('1 SCN');
     pdf.setLineWidth(CUT_CONTOUR_STROKE_MM);
     pdf.rect(
-        CUT_CONTOUR_OFFSET_MM,
-        CUT_CONTOUR_OFFSET_MM,
-        LABEL_WIDTH_MM - (CUT_CONTOUR_OFFSET_MM * 2),
-        LABEL_HEIGHT_MM - (CUT_CONTOUR_OFFSET_MM * 2),
+        LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
+        LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
+        LABEL_WIDTH_MM - (CUT_CONTOUR_INSET_MM * 2),
+        LABEL_HEIGHT_MM - (CUT_CONTOUR_INSET_MM * 2),
         'S'
     );
     pdf.internal.write('Q');
@@ -128,17 +130,25 @@ function drawCenteredSpacedText(pdf, text, centerX, y, charSpace) {
 }
 
 function drawLabelBase(pdf) {
+    // Extend the edge colours through the 2 mm bleed while keeping the
+    // original 63 x 100 mm label artwork centred inside the cut boundary.
     pdf.setFillColor(...LABEL_ORANGE);
-    pdf.rect(0, 0, LABEL_WIDTH_MM, LABEL_HEIGHT_MM, 'F');
+    pdf.rect(0, 0, PDF_WIDTH_MM, PDF_HEIGHT_MM, 'F');
 
     pdf.setFillColor(...LABEL_ORANGE_HIGHLIGHT);
-    pdf.rect(0, 0, LABEL_WIDTH_MM, 2.2, 'F');
+    pdf.rect(0, 0, PDF_WIDTH_MM, LABEL_BLEED_MM + 2.2, 'F');
 
     pdf.setFillColor(...LABEL_OFF_WHITE);
-    pdf.roundedRect(8.5, 4.8, 46, 13.2, 2.5, 2.5, 'F');
+    pdf.roundedRect(LABEL_BLEED_MM + 8.5, LABEL_BLEED_MM + 4.8, 46, 13.2, 2.5, 2.5, 'F');
 
     pdf.setFillColor(...LABEL_INK);
-    pdf.rect(0, 87.5, LABEL_WIDTH_MM, 12.5, 'F');
+    pdf.rect(
+        0,
+        LABEL_BLEED_MM + 87.5,
+        PDF_WIDTH_MM,
+        PDF_HEIGHT_MM - (LABEL_BLEED_MM + 87.5),
+        'F'
+    );
 }
 
 async function drawLabel(pdf, label) {
@@ -159,7 +169,7 @@ async function drawLabel(pdf, label) {
         pdf,
         logo,
         LABEL_CENTER_X_MM,
-        6.3,
+        LABEL_BLEED_MM + 6.3,
         company.logoMaxWidth,
         company.logoMaxHeight
     );
@@ -167,41 +177,37 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...LABEL_INK);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11.4);
-    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', LABEL_CENTER_X_MM, 24.05, 0.1);
+    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 24.05, 0.1);
 
     pdf.setFillColor(...LABEL_INK);
-    pdf.roundedRect(15.7, 25.4, 31.6, 4.7, 2.35, 2.35, 'F');
+    pdf.roundedRect(LABEL_BLEED_MM + 15.7, LABEL_BLEED_MM + 25.4, 31.6, 4.7, 2.35, 2.35, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(7.5);
-    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', LABEL_CENTER_X_MM, 28.75, 0.12);
+    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 28.75, 0.12);
 
     // A 28 mm symbol spans about 66 degrees of a 48.8 mm scaffold tube rather
     // than the 124 degrees covered by the former 53 mm symbol. This keeps all
     // three finder patterns visible while retaining a four-module quiet zone.
     pdf.setFillColor(255, 255, 255);
-    pdf.roundedRect(14, 32.5, 35, 35, 1.5, 1.5, 'F');
-    pdf.addImage(qrData, 'PNG', 17.5, 36, 28, 28, undefined, 'FAST');
+    pdf.roundedRect(LABEL_BLEED_MM + 14, LABEL_BLEED_MM + 32.5, 35, 35, 1.5, 1.5, 'F');
+    pdf.addImage(qrData, 'PNG', LABEL_BLEED_MM + 17.5, LABEL_BLEED_MM + 36, 28, 28, undefined, 'FAST');
 
     pdf.setTextColor(...LABEL_INK);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(12.6);
-    drawCenteredSpacedText(pdf, 'LIVE SCAFF-TAG', LABEL_CENTER_X_MM, 77.56, 0.08);
+    drawCenteredSpacedText(pdf, 'LIVE SCAFF-TAG', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 77.56, 0.08);
 
     pdf.setFontSize(5.55);
-    drawCenteredSpacedText(pdf, 'STATUS | INSPECTIONS | PHOTOS', LABEL_CENTER_X_MM, 80.76, 0.12);
+    drawCenteredSpacedText(pdf, 'STATUS | INSPECTIONS | PHOTOS', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 80.76, 0.12);
 
     pdf.setTextColor(...LABEL_ORANGE);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15.5);
-    drawCenteredSpacedText(pdf, label.displayNumber, LABEL_CENTER_X_MM, 95.45, 0.37);
+    drawCenteredSpacedText(pdf, label.displayNumber, LABEL_CENTER_X_MM, LABEL_BLEED_MM + 95.45, 0.37);
 
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(4.9);
-    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', LABEL_CENTER_X_MM, 97.82, 0.35);
-
-    pdf.setDrawColor(...LABEL_BORDER);
-    pdf.setLineWidth(0.18);
-    pdf.rect(0.09, 0.09, LABEL_WIDTH_MM - 0.18, LABEL_HEIGHT_MM - 0.18, 'S');
+    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 97.82, 0.35);
 
     drawCutContour(pdf);
 }
@@ -213,14 +219,14 @@ export async function createScaffTagLabelPdf(labels) {
     const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [LABEL_WIDTH_MM, LABEL_HEIGHT_MM],
+        format: [PDF_WIDTH_MM, PDF_HEIGHT_MM],
         compress: true,
         putOnlyUsedFonts: true,
     });
     registerCutContourSpotColor(pdf);
 
     for (let index = 0; index < labels.length; index += 1) {
-        if (index > 0) pdf.addPage([LABEL_WIDTH_MM, LABEL_HEIGHT_MM], 'portrait');
+        if (index > 0) pdf.addPage([PDF_WIDTH_MM, PDF_HEIGHT_MM], 'portrait');
         await drawLabel(pdf, labels[index]);
     }
 
