@@ -5,11 +5,12 @@ const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
 const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
 
-const LABEL_ORANGE = [255, 101, 0];
-const LABEL_ORANGE_HIGHLIGHT = [255, 122, 0];
-const LABEL_INK = [17, 17, 17];
-const LABEL_BORDER = [59, 59, 59];
-const LABEL_OFF_WHITE = [255, 253, 249];
+// Printer-approved palette sampled from the supplied reference artwork.
+const LABEL_ORANGE = [242, 83, 27];
+const LABEL_ORANGE_HIGHLIGHT = [243, 104, 23];
+const LABEL_INK = [50, 47, 48];
+const LABEL_BORDER = [50, 47, 48];
+const LABEL_OFF_WHITE = [255, 253, 252];
 
 const imageDataCache = new Map();
 
@@ -188,8 +189,9 @@ export async function createScaffTagLabelPdf(labels) {
 }
 
 export async function downloadScaffTagLabelPdf(labels) {
-    const pdf = await createScaffTagLabelPdf(labels);
-    const first = labels[0].displayNumber;
-    const last = labels.at(-1).displayNumber;
+    const orderedLabels = [...labels].sort((left, right) => left.labelNumber - right.labelNumber);
+    const pdf = await createScaffTagLabelPdf(orderedLabels);
+    const first = orderedLabels[0].displayNumber;
+    const last = orderedLabels.at(-1).displayNumber;
     pdf.save(`ESS-Scaff-Tag-Labels-${first}-${last}.pdf`);
 }

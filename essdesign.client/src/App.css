@@ -5531,9 +5531,32 @@ body {
     padding-right: 3px;
 }
 
+.scaff-qr-selection-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-secondary);
+    padding: 10px 12px;
+}
+
+.scaff-qr-selection-toolbar > span {
+    display: grid;
+    gap: 2px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.scaff-qr-selection-toolbar small {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
 .scaff-qr-label-row {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto auto;
+    grid-template-columns: 22px 44px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 11px;
     min-height: 68px;
@@ -5541,6 +5564,20 @@ body {
     border-radius: 14px;
     background: var(--bg-primary);
     padding: 10px;
+}
+
+.scaff-qr-label-row.is-selected {
+    border-color: #f2531b;
+    background: rgba(242, 83, 27, 0.06);
+    box-shadow: 0 0 0 1px rgba(242, 83, 27, 0.22);
+}
+
+.scaff-qr-label-checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: #f2531b;
+    cursor: pointer;
 }
 
 .scaff-qr-label-row.status-retired {
@@ -5650,16 +5687,21 @@ body {
         justify-items: start;
     }
 
+    .scaff-qr-selection-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
     .scaff-qr-label-grid {
         grid-template-columns: 1fr;
     }
 
     .scaff-qr-label-row {
-        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-columns: 22px 44px minmax(0, 1fr) auto;
     }
 
     .scaff-qr-label-row .module-secondary-btn {
-        grid-column: 2 / -1;
+        grid-column: 3 / -1;
         justify-self: start;
     }
 }

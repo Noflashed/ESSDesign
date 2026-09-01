@@ -15,6 +15,8 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [labelCompany, setLabelCompany] = useState('ess');
     const [generating, setGenerating] = useState(false);
     const [printing, setPrinting] = useState(false);
+    const [selectedLabelIds, setSelectedLabelIds] = useState(() => new Set());
+    const [selectionAnchorId, setSelectionAnchorId] = useState(null);
 
     const loadForms = async () => {
         setLoading(true);
@@ -26,6 +28,9 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
             ]);
             setItems(next);
             setLabels(nextLabels);
+            const availableLabelIds = new Set(nextLabels.map(label => label.id));
+            setSelectedLabelIds(current => new Set([...current].filter(id => availableLabelIds.has(id))));
+            setSelectionAnchorId(current => availableLabelIds.has(current) ? current : null);
         } catch (err) {
             setError(err.message || 'Failed to load scaff-tags');
             setItems([]);
@@ -133,6 +138,30 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
         }
     };
 
+    const toggleLabelSelection = (event, label, labelIndex) => {
+        const shouldSelect = event.target.checked;
+        const anchorIndex = labels.findIndex(item => item.id === selectionAnchorId);
+        const isRangeSelection = Boolean(event.nativeEvent?.shiftKey) && anchorIndex >= 0;
+
+        setSelectedLabelIds(current => {
+            const next = new Set(current);
+            const affectedLabels = isRangeSelection
+                ? labels.slice(Math.min(anchorIndex, labelIndex), Math.max(anchorIndex, labelIndex) + 1)
+                : [label];
+
+            affectedLabels.forEach(item => {
+                if (shouldSelect) next.add(item.id);
+                else next.delete(item.id);
+            });
+            return next;
+        });
+        setSelectionAnchorId(label.id);
+    };
+
+    const selectedLabels = labels
+        .filter(label => selectedLabelIds.has(label.id))
+        .sort((left, right) => left.labelNumber - right.labelNumber);
+
     const assignedHere = (label) => label.status === 'assigned' &&
         label.assignedBuilderId === builder.id && label.assignedProjectId === project.id;
 
@@ -186,24 +215,67 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                     ) : labels.length === 0 ? (
                         <div className="module-empty-inline">No pre-printed QR labels exist yet. Generate the first batch to begin.</div>
                     ) : (
-                        <div className="scaff-qr-label-grid">
-                            {labels.map(label => (
-                                <article key={label.id} className={`scaff-qr-label-row status-${label.status}`}>
-                                    <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
-                                    <div className="scaff-qr-label-copy">
-                                        <strong>{label.displayNumber}</strong>
-                                        <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
-                                    </div>
-                                    <span className={`scaff-qr-status status-${label.status}`}>{labelStatusText(label)}</span>
+                        <>
+                            <div className="scaff-qr-selection-toolbar" aria-live="polite">
+                                <span>
+                                    <strong>{selectedLabels.length}</strong> selected
+                                    <small>Shift-click another checkbox to select a range.</small>
+                                </span>
+                                <div className="module-list-actions">
                                     <button
+                                        type="button"
                                         className="module-secondary-btn compact"
-                                        disabled={printing}
-                                        onClick={() => printLabels([label])}>
-                                        Print
+                                        disabled={selectedLabelIds.size === labels.length}
+                                        onClick={() => setSelectedLabelIds(new Set(labels.map(label => label.id)))}>
+                                        Select All
                                     </button>
-                                </article>
-                            ))}
-                        </div>
+                                    <button
+                                        type="button"
+                                        className="module-secondary-btn compact"
+                                        disabled={selectedLabelIds.size === 0}
+                                        onClick={() => {
+                                            setSelectedLabelIds(new Set());
+                                            setSelectionAnchorId(null);
+                                        }}>
+                                        Clear
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="module-primary-btn compact"
+                                        disabled={printing || selectedLabels.length === 0}
+                                        onClick={() => printLabels(selectedLabels)}>
+                                        {printing ? 'Preparing PDF…' : `Print Selected (${selectedLabels.length})`}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="scaff-qr-label-grid">
+                                {labels.map((label, labelIndex) => (
+                                    <article
+                                        key={label.id}
+                                        className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.has(label.id) ? ' is-selected' : ''}`}>
+                                        <input
+                                            className="scaff-qr-label-checkbox"
+                                            type="checkbox"
+                                            checked={selectedLabelIds.has(label.id)}
+                                            onChange={event => toggleLabelSelection(event, label, labelIndex)}
+                                            aria-label={`Select ${label.displayNumber}`}
+                                        />
+                                        <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
+                                        <div className="scaff-qr-label-copy">
+                                            <strong>{label.displayNumber}</strong>
+                                            <span>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</span>
+                                        </div>
+                                        <span className={`scaff-qr-status status-${label.status}`}>{labelStatusText(label)}</span>
+                                        <button
+                                            className="module-secondary-btn compact"
+                                            disabled={printing}
+                                            onClick={() => printLabels([label])}>
+                                            Print
+                                        </button>
+                                    </article>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </section>
                 <div className="module-grid module-grid-two">
