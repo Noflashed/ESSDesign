@@ -5,12 +5,13 @@ const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
 const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
 
-// Printer-approved palette sampled from the supplied reference artwork.
-const LABEL_ORANGE = [242, 83, 27];
-const LABEL_ORANGE_HIGHLIGHT = [243, 104, 23];
-const LABEL_INK = [50, 47, 48];
-const LABEL_BORDER = [50, 47, 48];
-const LABEL_OFF_WHITE = [255, 253, 252];
+// Preserve the supplied Illustrator artwork's CMYK print recipes. Strings keep
+// jsPDF from rounding the fractional ink values or converting them through RGB.
+const LABEL_ORANGE = ['0', '0.742', '1', '0'];
+const LABEL_ORANGE_HIGHLIGHT = ['0', '0.645', '1', '0'];
+const LABEL_INK = ['0', '0', '0', '0.93'];
+const LABEL_BORDER = ['0', '0', '0', '0.93'];
+const LABEL_OFF_WHITE = ['0', '0.008', '0.008', '0'];
 
 const imageDataCache = new Map();
 
