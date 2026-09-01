@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { scaffTagQrLabelsAPI, scaffTagsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
@@ -17,7 +17,6 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [printing, setPrinting] = useState(false);
     const [selectedLabelIds, setSelectedLabelIds] = useState(() => new Set());
     const [selectionAnchorId, setSelectionAnchorId] = useState(null);
-    const rangeSelectionRef = useRef(false);
 
     const loadForms = async () => {
         setLoading(true);
@@ -229,7 +228,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                             <div className="scaff-qr-selection-toolbar" aria-live="polite">
                                 <span>
                                     <strong>{selectedLabels.length}</strong> selected
-                                    <small>Click a label, then Shift-click another label to select the range.</small>
+                                    <small>Click rows to add or remove them. Shift-click another row to select the range.</small>
                                 </span>
                                 <div className="module-list-actions">
                                     <button
@@ -263,28 +262,8 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                     <article
                                         key={label.id}
                                         className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.has(label.id) ? ' is-selected' : ''}`}
-                                        onClick={event => handleLabelRowClick(event, label, labelIndex)}>
-                                        <input
-                                            className="scaff-qr-label-checkbox"
-                                            type="checkbox"
-                                            checked={selectedLabelIds.has(label.id)}
-                                            onPointerDown={event => {
-                                                rangeSelectionRef.current = event.shiftKey;
-                                            }}
-                                            onKeyDown={event => {
-                                                rangeSelectionRef.current = event.shiftKey;
-                                            }}
-                                            onChange={event => {
-                                                toggleLabelSelection(
-                                                    label,
-                                                    labelIndex,
-                                                    event.target.checked,
-                                                    rangeSelectionRef.current || Boolean(event.nativeEvent?.shiftKey)
-                                                );
-                                                rangeSelectionRef.current = false;
-                                            }}
-                                            aria-label={`Select ${label.displayNumber}`}
-                                        />
+                                        onClick={event => handleLabelRowClick(event, label, labelIndex)}
+                                        aria-selected={selectedLabelIds.has(label.id)}>
                                         <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
                                         <div className="scaff-qr-label-copy">
                                             <strong>{label.displayNumber}</strong>

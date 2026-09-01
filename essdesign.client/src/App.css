@@ -5556,7 +5556,7 @@ body {
 
 .scaff-qr-label-row {
     display: grid;
-    grid-template-columns: 22px 44px minmax(0, 1fr) auto auto;
+    grid-template-columns: 44px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 11px;
     min-height: 68px;
@@ -5569,16 +5569,8 @@ body {
 
 .scaff-qr-label-row.is-selected {
     border-color: #f36621;
-    background: rgba(243, 102, 33, 0.06);
-    box-shadow: 0 0 0 1px rgba(243, 102, 33, 0.22);
-}
-
-.scaff-qr-label-checkbox {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    accent-color: #f36621;
-    cursor: pointer;
+    background: rgba(243, 102, 33, 0.11);
+    box-shadow: inset 4px 0 #f36621, 0 0 0 1px rgba(243, 102, 33, 0.28);
 }
 
 .scaff-qr-label-row.status-retired {
@@ -5698,11 +5690,11 @@ body {
     }
 
     .scaff-qr-label-row {
-        grid-template-columns: 22px 44px minmax(0, 1fr) auto;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
     }
 
     .scaff-qr-label-row .module-secondary-btn {
-        grid-column: 3 / -1;
+        grid-column: 2 / -1;
         justify-self: start;
     }
 }
