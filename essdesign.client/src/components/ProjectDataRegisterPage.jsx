@@ -234,6 +234,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const [qrCompany, setQrCompany] = useState('ess');
     const [generatingQr, setGeneratingQr] = useState(false);
     const [printingQr, setPrintingQr] = useState(false);
+    const [selectedQrLabelIds, setSelectedQrLabelIds] = useState([]);
+    const [qrSelectionAnchorId, setQrSelectionAnchorId] = useState(null);
     const [excludedFilters, setExcludedFilters] = useState({
         builder: new Set(),
         project: new Set()
@@ -250,6 +252,9 @@ export default function ProjectDataRegisterPage({ registerType }) {
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setQrLabels(labels);
+            const availableLabelIds = new Set(labels.map(label => label.id));
+            setSelectedQrLabelIds(current => current.filter(id => availableLabelIds.has(id)));
+            setQrSelectionAnchorId(current => availableLabelIds.has(current) ? current : null);
             setRows(mapRows(registerType, forms, buildProjectLookup(builders), labels));
         }).catch(loadError => {
             if (!active) return;
@@ -337,6 +342,48 @@ export default function ProjectDataRegisterPage({ registerType }) {
             };
         }).filter(item => !normalizedQuery || item.searchable.includes(normalizedQuery));
     }, [qrLabels, query, rows]);
+
+    const selectedQrLabels = useMemo(() => (
+        qrLabels.filter(label => selectedQrLabelIds.includes(label.id))
+    ), [qrLabels, selectedQrLabelIds]);
+
+    const toggleQrLabelSelection = (label, rowIndex, selectRange = false) => {
+        const anchorIndex = qrRegisterRows.findIndex(item => item.label.id === qrSelectionAnchorId);
+
+        setSelectedQrLabelIds(current => {
+            const next = new Set(current);
+            const shouldSelect = !next.has(label.id);
+            const affectedRows = selectRange && anchorIndex >= 0
+                ? qrRegisterRows.slice(Math.min(anchorIndex, rowIndex), Math.max(anchorIndex, rowIndex) + 1)
+                : [qrRegisterRows[rowIndex]];
+
+            affectedRows.forEach(item => {
+                if (!item) return;
+                if (shouldSelect) next.add(item.label.id);
+                else next.delete(item.label.id);
+            });
+            return [...next];
+        });
+        setQrSelectionAnchorId(label.id);
+    };
+
+    const handleQrLabelRowKeyDown = (event, label, rowIndex) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        toggleQrLabelSelection(label, rowIndex, event.shiftKey);
+    };
+
+    const selectAllVisibleQrLabels = () => {
+        setSelectedQrLabelIds(current => [
+            ...new Set([...current, ...qrRegisterRows.map(item => item.label.id)])
+        ]);
+        setQrSelectionAnchorId(qrRegisterRows.at(-1)?.label.id || null);
+    };
+
+    const clearQrLabelSelection = () => {
+        setSelectedQrLabelIds([]);
+        setQrSelectionAnchorId(null);
+    };
 
     const toggleFilterValue = (key, value) => {
         setExcludedFilters(current => {
@@ -487,12 +534,51 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                 <span><strong>{qrLabels.filter(label => label.status === 'assigned').length}</strong> Assigned</span>
                                 <span><strong>{qrLabels.filter(label => label.status === 'retired').length}</strong> Retired</span>
                             </div>
+                            <div className="project-qr-register-selection-bar" aria-live="polite">
+                                <div>
+                                    <strong>{selectedQrLabels.length} selected</strong>
+                                    <span>Click a row to select it. Shift-click another row to select the whole range.</span>
+                                </div>
+                                <div className="project-qr-register-selection-actions">
+                                    <button
+                                        type="button"
+                                        className="project-register-secondary-button"
+                                        disabled={!qrRegisterRows.length || qrRegisterRows.every(item => selectedQrLabelIds.includes(item.label.id))}
+                                        onClick={selectAllVisibleQrLabels}>
+                                        Select all shown
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="project-register-secondary-button"
+                                        disabled={!selectedQrLabels.length}
+                                        onClick={clearQrLabelSelection}>
+                                        Clear
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="project-register-primary-button"
+                                        disabled={printingQr || !selectedQrLabels.length}
+                                        onClick={() => printQrLabels(selectedQrLabels)}>
+                                        <Printer size={16} />
+                                        <span>{printingQr ? 'Preparing…' : `Print selected (${selectedQrLabels.length})`}</span>
+                                    </button>
+                                </div>
+                            </div>
                             <div className="project-qr-register-scroll-region">
                                 <table className="project-qr-register-table">
-                                    <thead><tr><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th><th /></tr></thead>
+                                    <thead><tr><th>LABEL</th><th>COMPANY</th><th>ASSIGNED SCAFF-TAG</th><th>CLIENT</th><th>PROJECT</th><th>GENERATED</th><th>STATUS</th></tr></thead>
                                     <tbody>
-                                        {qrRegisterRows.map(({ label, assignedRow }) => (
-                                            <tr key={label.id} className={label.status === 'retired' ? 'is-retired' : undefined}>
+                                        {qrRegisterRows.map(({ label, assignedRow }, rowIndex) => {
+                                            const isSelected = selectedQrLabelIds.includes(label.id);
+                                            return (
+                                            <tr
+                                                key={label.id}
+                                                className={`${label.status === 'retired' ? 'is-retired ' : ''}${isSelected ? 'is-selected' : ''}`.trim() || undefined}
+                                                tabIndex={0}
+                                                aria-selected={isSelected}
+                                                onClick={event => toggleQrLabelSelection(label, rowIndex, event.shiftKey)}
+                                                onKeyDown={event => handleQrLabelRowKeyDown(event, label, rowIndex)}
+                                                title="Click to select. Shift-click to select a range.">
                                                 <td><strong className="project-qr-register-label-number">{label.displayNumber}</strong></td>
                                                 <td>{label.companyEntityId === 'maloo' ? 'Maloo Access Group' : 'Erect Safe Scaffolding'}</td>
                                                 <td>{assignedRow?.reference || 'Not assigned'}</td>
@@ -500,9 +586,9 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                                 <td>{assignedRow?.project || '-'}</td>
                                                 <td>{formatDate(label.createdAt)}</td>
                                                 <td><span className={`project-qr-label-state is-${label.status}`}>{qrStatusText(label)}</span></td>
-                                                <td><button type="button" className="project-qr-label-print" disabled={printingQr} onClick={() => printQrLabels([label])} aria-label={`Print ${label.displayNumber}`}><Printer size={15} /></button></td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
