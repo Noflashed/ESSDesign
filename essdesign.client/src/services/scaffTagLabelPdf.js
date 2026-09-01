@@ -4,6 +4,8 @@ import { jsPDF } from 'jspdf';
 const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
 const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
+const CUT_CONTOUR_OFFSET_MM = 2;
+const CUT_CONTOUR_STROKE_MM = 0.25;
 
 // Brand orange supplied for the print artwork: rgb(243, 102, 33). The narrow
 // top accent uses a restrained tint of the same colour to preserve its detail.
@@ -14,6 +16,39 @@ const LABEL_BORDER = ['0', '0', '0', '0.93'];
 const LABEL_OFF_WHITE = ['0', '0.008', '0.008', '0'];
 
 const imageDataCache = new Map();
+
+export function registerCutContourSpotColor(pdf) {
+    // jsPDF does not expose a public API for Separation colour spaces. Add the
+    // named spot colour to the shared resource dictionary while it is written.
+    // The placeholder dictionary keeps jsPDF's own /XObject dictionary balanced.
+    pdf.internal.events.subscribe('putXobjectDict', () => {
+        pdf.internal.write('>>');
+        pdf.internal.write('/ColorSpace <<');
+        pdf.internal.write('/CutContour [/Separation /CutContour /DeviceCMYK <<');
+        pdf.internal.write('/FunctionType 2 /Domain [0 1]');
+        pdf.internal.write('/C0 [0 0 0 0] /C1 [0 1 0 0] /N 1');
+        pdf.internal.write('>>]');
+        pdf.internal.write('>>');
+        pdf.internal.write('/ESSCutContourResource <<');
+    });
+}
+
+export function drawCutContour(pdf) {
+    // The cutter reads the case-sensitive CutContour spot-colour name. The
+    // magenta alternate colour is only an on-screen preview of that cut path.
+    pdf.internal.write('q');
+    pdf.internal.write('/CutContour CS');
+    pdf.internal.write('1 SCN');
+    pdf.setLineWidth(CUT_CONTOUR_STROKE_MM);
+    pdf.rect(
+        CUT_CONTOUR_OFFSET_MM,
+        CUT_CONTOUR_OFFSET_MM,
+        LABEL_WIDTH_MM - (CUT_CONTOUR_OFFSET_MM * 2),
+        LABEL_HEIGHT_MM - (CUT_CONTOUR_OFFSET_MM * 2),
+        'S'
+    );
+    pdf.internal.write('Q');
+}
 
 async function loadLogo(url) {
     if (imageDataCache.has(url)) return imageDataCache.get(url);
@@ -167,6 +202,8 @@ async function drawLabel(pdf, label) {
     pdf.setDrawColor(...LABEL_BORDER);
     pdf.setLineWidth(0.18);
     pdf.rect(0.09, 0.09, LABEL_WIDTH_MM - 0.18, LABEL_HEIGHT_MM - 0.18, 'S');
+
+    drawCutContour(pdf);
 }
 
 export async function createScaffTagLabelPdf(labels) {
@@ -180,6 +217,7 @@ export async function createScaffTagLabelPdf(labels) {
         compress: true,
         putOnlyUsedFonts: true,
     });
+    registerCutContourSpotColor(pdf);
 
     for (let index = 0; index < labels.length; index += 1) {
         if (index > 0) pdf.addPage([LABEL_WIDTH_MM, LABEL_HEIGHT_MM], 'portrait');
