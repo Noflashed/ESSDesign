@@ -223,12 +223,15 @@ export async function createScaffTagLabelPdf(labels) {
         compress: true,
         putOnlyUsedFonts: true,
     });
-    registerCutContourSpotColor(pdf);
-
     for (let index = 0; index < labels.length; index += 1) {
         if (index > 0) pdf.addPage([PDF_WIDTH_MM, PDF_HEIGHT_MM], 'portrait');
         await drawLabel(pdf, labels[index]);
     }
+
+    // jsPDF registers its image XObject resource callback lazily on the first
+    // addImage call. Register CutContour afterwards so logo/QR mappings remain
+    // inside /XObject rather than being written into our placeholder dictionary.
+    registerCutContourSpotColor(pdf);
 
     return pdf;
 }
