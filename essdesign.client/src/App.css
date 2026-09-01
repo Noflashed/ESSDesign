@@ -5564,19 +5564,20 @@ body {
     border-radius: 14px;
     background: var(--bg-primary);
     padding: 10px;
+    cursor: pointer;
 }
 
 .scaff-qr-label-row.is-selected {
-    border-color: #f2531b;
-    background: rgba(242, 83, 27, 0.06);
-    box-shadow: 0 0 0 1px rgba(242, 83, 27, 0.22);
+    border-color: #f36621;
+    background: rgba(243, 102, 33, 0.06);
+    box-shadow: 0 0 0 1px rgba(243, 102, 33, 0.22);
 }
 
 .scaff-qr-label-checkbox {
     width: 18px;
     height: 18px;
     margin: 0;
-    accent-color: #f2531b;
+    accent-color: #f36621;
     cursor: pointer;
 }
 

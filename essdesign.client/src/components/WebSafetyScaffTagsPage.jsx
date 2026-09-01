@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { scaffTagQrLabelsAPI, scaffTagsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
@@ -17,6 +17,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [printing, setPrinting] = useState(false);
     const [selectedLabelIds, setSelectedLabelIds] = useState(() => new Set());
     const [selectionAnchorId, setSelectionAnchorId] = useState(null);
+    const rangeSelectionRef = useRef(false);
 
     const loadForms = async () => {
         setLoading(true);
@@ -138,10 +139,9 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
         }
     };
 
-    const toggleLabelSelection = (event, label, labelIndex) => {
-        const shouldSelect = event.target.checked;
+    const toggleLabelSelection = (label, labelIndex, shouldSelect, selectRange = false) => {
         const anchorIndex = labels.findIndex(item => item.id === selectionAnchorId);
-        const isRangeSelection = Boolean(event.nativeEvent?.shiftKey) && anchorIndex >= 0;
+        const isRangeSelection = selectRange && anchorIndex >= 0;
 
         setSelectedLabelIds(current => {
             const next = new Set(current);
@@ -156,6 +156,16 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
             return next;
         });
         setSelectionAnchorId(label.id);
+    };
+
+    const handleLabelRowClick = (event, label, labelIndex) => {
+        if (event.target.closest?.('button, input, a')) return;
+        toggleLabelSelection(
+            label,
+            labelIndex,
+            !selectedLabelIds.has(label.id),
+            event.shiftKey
+        );
     };
 
     const selectedLabels = labels
@@ -219,7 +229,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                             <div className="scaff-qr-selection-toolbar" aria-live="polite">
                                 <span>
                                     <strong>{selectedLabels.length}</strong> selected
-                                    <small>Shift-click another checkbox to select a range.</small>
+                                    <small>Click a label, then Shift-click another label to select the range.</small>
                                 </span>
                                 <div className="module-list-actions">
                                     <button
@@ -252,12 +262,27 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                 {labels.map((label, labelIndex) => (
                                     <article
                                         key={label.id}
-                                        className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.has(label.id) ? ' is-selected' : ''}`}>
+                                        className={`scaff-qr-label-row status-${label.status}${selectedLabelIds.has(label.id) ? ' is-selected' : ''}`}
+                                        onClick={event => handleLabelRowClick(event, label, labelIndex)}>
                                         <input
                                             className="scaff-qr-label-checkbox"
                                             type="checkbox"
                                             checked={selectedLabelIds.has(label.id)}
-                                            onChange={event => toggleLabelSelection(event, label, labelIndex)}
+                                            onPointerDown={event => {
+                                                rangeSelectionRef.current = event.shiftKey;
+                                            }}
+                                            onKeyDown={event => {
+                                                rangeSelectionRef.current = event.shiftKey;
+                                            }}
+                                            onChange={event => {
+                                                toggleLabelSelection(
+                                                    label,
+                                                    labelIndex,
+                                                    event.target.checked,
+                                                    rangeSelectionRef.current || Boolean(event.nativeEvent?.shiftKey)
+                                                );
+                                                rangeSelectionRef.current = false;
+                                            }}
                                             aria-label={`Select ${label.displayNumber}`}
                                         />
                                         <div className="scaff-qr-label-mark" aria-hidden="true">QR</div>
