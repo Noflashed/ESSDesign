@@ -5,10 +5,10 @@ const LABEL_WIDTH_MM = 63;
 const LABEL_HEIGHT_MM = 100;
 const LABEL_CENTER_X_MM = LABEL_WIDTH_MM / 2;
 
-// Preserve the supplied Illustrator artwork's CMYK print recipes. Strings keep
-// jsPDF from rounding the fractional ink values or converting them through RGB.
-const LABEL_ORANGE = ['0', '0.742', '1', '0'];
-const LABEL_ORANGE_HIGHLIGHT = ['0', '0.645', '1', '0'];
+// Brand orange supplied for the print artwork: rgb(243, 102, 33). The narrow
+// top accent uses a restrained tint of the same colour to preserve its detail.
+const LABEL_ORANGE = [243, 102, 33];
+const LABEL_ORANGE_HIGHLIGHT = [245, 125, 66];
 const LABEL_INK = ['0', '0', '0', '0.93'];
 const LABEL_BORDER = ['0', '0', '0', '0.93'];
 const LABEL_OFF_WHITE = ['0', '0.008', '0.008', '0'];
