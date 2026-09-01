@@ -227,7 +227,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                             <div className="scaff-qr-selection-toolbar" aria-live="polite">
                                 <span>
                                     <strong>{selectedLabels.length}</strong> selected
-                                    <small>Click rows to add or remove them. Shift-click another row to select the range.</small>
+                                    <small>Click rows to add or remove them. Shift-click another row to select the range. Multiple labels print on one continuous horizontal sheet.</small>
                                 </span>
                                 <div className="module-list-actions">
                                     <button

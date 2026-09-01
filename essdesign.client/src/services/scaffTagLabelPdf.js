@@ -9,6 +9,12 @@ const PDF_HEIGHT_MM = LABEL_HEIGHT_MM + (LABEL_BLEED_MM * 2);
 const LABEL_CENTER_X_MM = LABEL_BLEED_MM + (LABEL_WIDTH_MM / 2);
 const CUT_CONTOUR_INSET_MM = 0.09;
 const CUT_CONTOUR_STROKE_MM = 0.25;
+const PRINTER_SAMPLE_PAGE_WIDTH_MM = 95.72;
+const BATCH_OUTER_MARGIN_MM = (PRINTER_SAMPLE_PAGE_WIDTH_MM - PDF_WIDTH_MM) / 2;
+// The sample repeats 104 mm bleed tiles on a 105.587 mm pitch.
+const BATCH_TILE_GAP_MM = 1.587;
+// Keeps each PDF page below the standard 14,400 pt media-box limit.
+const MAX_LABELS_PER_HORIZONTAL_SHEET = 70;
 
 // Brand orange supplied for the print artwork: rgb(243, 102, 33). The narrow
 // top accent uses a restrained tint of the same colour to preserve its detail.
@@ -35,7 +41,7 @@ export function registerCutContourSpotColor(pdf) {
     });
 }
 
-export function drawCutContour(pdf) {
+export function drawCutContour(pdf, offsetX = 0, offsetY = 0) {
     // The cutter reads the case-sensitive CutContour spot-colour name. The
     // magenta alternate colour is only an on-screen preview of that cut path.
     pdf.internal.write('q');
@@ -43,8 +49,8 @@ export function drawCutContour(pdf) {
     pdf.internal.write('1 SCN');
     pdf.setLineWidth(CUT_CONTOUR_STROKE_MM);
     pdf.rect(
-        LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
-        LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
+        offsetX + LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
+        offsetY + LABEL_BLEED_MM + CUT_CONTOUR_INSET_MM,
         LABEL_WIDTH_MM - (CUT_CONTOUR_INSET_MM * 2),
         LABEL_HEIGHT_MM - (CUT_CONTOUR_INSET_MM * 2),
         'S'
@@ -129,29 +135,29 @@ function drawCenteredSpacedText(pdf, text, centerX, y, charSpace) {
     pdf.setCharSpace(0);
 }
 
-function drawLabelBase(pdf) {
+function drawLabelBase(pdf, offsetX = 0, offsetY = 0) {
     // Extend the edge colours through the 2 mm bleed while keeping the
     // original 63 x 100 mm label artwork centred inside the cut boundary.
     pdf.setFillColor(...LABEL_ORANGE);
-    pdf.rect(0, 0, PDF_WIDTH_MM, PDF_HEIGHT_MM, 'F');
+    pdf.rect(offsetX, offsetY, PDF_WIDTH_MM, PDF_HEIGHT_MM, 'F');
 
     pdf.setFillColor(...LABEL_ORANGE_HIGHLIGHT);
-    pdf.rect(0, 0, PDF_WIDTH_MM, LABEL_BLEED_MM + 2.2, 'F');
+    pdf.rect(offsetX, offsetY, PDF_WIDTH_MM, LABEL_BLEED_MM + 2.2, 'F');
 
     pdf.setFillColor(...LABEL_OFF_WHITE);
-    pdf.roundedRect(LABEL_BLEED_MM + 8.5, LABEL_BLEED_MM + 4.8, 46, 13.2, 2.5, 2.5, 'F');
+    pdf.roundedRect(offsetX + LABEL_BLEED_MM + 8.5, offsetY + LABEL_BLEED_MM + 4.8, 46, 13.2, 2.5, 2.5, 'F');
 
     pdf.setFillColor(...LABEL_INK);
     pdf.rect(
-        0,
-        LABEL_BLEED_MM + 87.5,
+        offsetX,
+        offsetY + LABEL_BLEED_MM + 87.5,
         PDF_WIDTH_MM,
         PDF_HEIGHT_MM - (LABEL_BLEED_MM + 87.5),
         'F'
     );
 }
 
-async function drawLabel(pdf, label) {
+async function drawLabel(pdf, label, offsetX = 0, offsetY = 0) {
     const company = companyDetails(label.companyEntityId);
     const logo = await loadLogo(company.logoUrl);
     const qrData = await QRCode.toDataURL(label.publicUrl, {
@@ -163,13 +169,13 @@ async function drawLabel(pdf, label) {
         color: { dark: '#000000', light: '#FFFFFF' },
     });
 
-    drawLabelBase(pdf);
+    drawLabelBase(pdf, offsetX, offsetY);
 
     drawCenteredImage(
         pdf,
         logo,
-        LABEL_CENTER_X_MM,
-        LABEL_BLEED_MM + 6.3,
+        offsetX + LABEL_CENTER_X_MM,
+        offsetY + LABEL_BLEED_MM + 6.3,
         company.logoMaxWidth,
         company.logoMaxHeight
     );
@@ -177,55 +183,84 @@ async function drawLabel(pdf, label) {
     pdf.setTextColor(...LABEL_INK);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(11.4);
-    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 24.05, 0.1);
+    drawCenteredSpacedText(pdf, 'DIGITAL SCAFF-TAG', offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 24.05, 0.1);
 
     pdf.setFillColor(...LABEL_INK);
-    pdf.roundedRect(LABEL_BLEED_MM + 15.7, LABEL_BLEED_MM + 25.4, 31.6, 4.7, 2.35, 2.35, 'F');
+    pdf.roundedRect(offsetX + LABEL_BLEED_MM + 15.7, offsetY + LABEL_BLEED_MM + 25.4, 31.6, 4.7, 2.35, 2.35, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(7.5);
-    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 28.75, 0.12);
+    drawCenteredSpacedText(pdf, 'SCAN TO OPEN', offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 28.75, 0.12);
 
     // A 28 mm symbol spans about 66 degrees of a 48.8 mm scaffold tube rather
     // than the 124 degrees covered by the former 53 mm symbol. This keeps all
     // three finder patterns visible while retaining a four-module quiet zone.
     pdf.setFillColor(255, 255, 255);
-    pdf.roundedRect(LABEL_BLEED_MM + 14, LABEL_BLEED_MM + 32.5, 35, 35, 1.5, 1.5, 'F');
-    pdf.addImage(qrData, 'PNG', LABEL_BLEED_MM + 17.5, LABEL_BLEED_MM + 36, 28, 28, undefined, 'FAST');
+    pdf.roundedRect(offsetX + LABEL_BLEED_MM + 14, offsetY + LABEL_BLEED_MM + 32.5, 35, 35, 1.5, 1.5, 'F');
+    pdf.addImage(qrData, 'PNG', offsetX + LABEL_BLEED_MM + 17.5, offsetY + LABEL_BLEED_MM + 36, 28, 28, undefined, 'FAST');
 
     pdf.setTextColor(...LABEL_INK);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(12.6);
-    drawCenteredSpacedText(pdf, 'LIVE SCAFF-TAG', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 77.56, 0.08);
+    drawCenteredSpacedText(pdf, 'LIVE SCAFF-TAG', offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 77.56, 0.08);
 
     pdf.setFontSize(5.55);
-    drawCenteredSpacedText(pdf, 'STATUS | INSPECTIONS | PHOTOS', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 80.76, 0.12);
+    drawCenteredSpacedText(pdf, 'STATUS | INSPECTIONS | PHOTOS', offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 80.76, 0.12);
 
     pdf.setTextColor(...LABEL_ORANGE);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(15.5);
-    drawCenteredSpacedText(pdf, label.displayNumber, LABEL_CENTER_X_MM, LABEL_BLEED_MM + 95.45, 0.37);
+    drawCenteredSpacedText(pdf, label.displayNumber, offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 95.45, 0.37);
 
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(4.9);
-    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', LABEL_CENTER_X_MM, LABEL_BLEED_MM + 97.82, 0.35);
+    drawCenteredSpacedText(pdf, 'PERMANENT LABEL ID', offsetX + LABEL_CENTER_X_MM, offsetY + LABEL_BLEED_MM + 97.82, 0.35);
 
-    drawCutContour(pdf);
+    drawCutContour(pdf, offsetX, offsetY);
+}
+
+function horizontalBatchPageSize(labelCount) {
+    return {
+        width: (BATCH_OUTER_MARGIN_MM * 2)
+            + (labelCount * PDF_WIDTH_MM)
+            + (Math.max(0, labelCount - 1) * BATCH_TILE_GAP_MM),
+        height: (BATCH_OUTER_MARGIN_MM * 2) + PDF_HEIGHT_MM,
+    };
 }
 
 export async function createScaffTagLabelPdf(labels) {
     if (!Array.isArray(labels) || labels.length === 0) {
         throw new Error('No QR labels were selected for printing.');
     }
+    const isHorizontalBatch = labels.length > 1;
+    const firstSheetLabelCount = isHorizontalBatch
+        ? Math.min(labels.length, MAX_LABELS_PER_HORIZONTAL_SHEET)
+        : 1;
+    const firstPageSize = isHorizontalBatch
+        ? horizontalBatchPageSize(firstSheetLabelCount)
+        : { width: PDF_WIDTH_MM, height: PDF_HEIGHT_MM };
     const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: isHorizontalBatch ? 'landscape' : 'portrait',
         unit: 'mm',
-        format: [PDF_WIDTH_MM, PDF_HEIGHT_MM],
+        format: [firstPageSize.width, firstPageSize.height],
         compress: true,
         putOnlyUsedFonts: true,
     });
-    for (let index = 0; index < labels.length; index += 1) {
-        if (index > 0) pdf.addPage([PDF_WIDTH_MM, PDF_HEIGHT_MM], 'portrait');
-        await drawLabel(pdf, labels[index]);
+
+    if (!isHorizontalBatch) {
+        await drawLabel(pdf, labels[0]);
+    } else {
+        for (let sheetStart = 0; sheetStart < labels.length; sheetStart += MAX_LABELS_PER_HORIZONTAL_SHEET) {
+            const sheetLabels = labels.slice(sheetStart, sheetStart + MAX_LABELS_PER_HORIZONTAL_SHEET);
+            if (sheetStart > 0) {
+                const pageSize = horizontalBatchPageSize(sheetLabels.length);
+                pdf.addPage([pageSize.width, pageSize.height], 'landscape');
+            }
+
+            for (let index = 0; index < sheetLabels.length; index += 1) {
+                const offsetX = BATCH_OUTER_MARGIN_MM + (index * (PDF_WIDTH_MM + BATCH_TILE_GAP_MM));
+                await drawLabel(pdf, sheetLabels[index], offsetX, BATCH_OUTER_MARGIN_MM);
+            }
+        }
     }
 
     // jsPDF registers its image XObject resource callback lazily on the first
