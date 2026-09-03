@@ -40,12 +40,12 @@
 
 .scaffold-register-dropdown {
     position: relative;
-    width: min(230px, 24vw);
-    min-width: 170px;
+    width: min(310px, 30vw);
+    min-width: 220px;
 }
 
 .scaffold-register-dropdown:nth-child(2) {
-    width: min(280px, 28vw);
+    width: min(390px, 36vw);
 }
 
 .scaffold-register-dropdown-trigger {
@@ -405,7 +405,7 @@
     text-align: center;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1450px) {
     .scaffold-register-toolbar {
         align-items: stretch;
         flex-direction: column;

@@ -210,6 +210,7 @@ function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, ge
                     }
                 }}
                 disabled={disabled}
+                title={selectedLabel}
                 aria-label={label}
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -231,6 +232,7 @@ function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, ge
                                 className={selected ? 'is-selected' : ''}
                                 role="option"
                                 aria-selected={selected}
+                                title={itemLabel}
                                 onClick={() => {
                                     onSelect(item);
                                     setOpen(false);
