@@ -4765,6 +4765,25 @@ export const handoverCertificatesAPI = {
         deleteSafetyFormRecord('handover-certificates', builderId, projectId, formId)
 };
 
+export const scaffoldRegisterAPI = {
+    listRecords: async (builderId, projectId) => {
+        const forms = await listSafetyFormRecords('scaffold-register', builderId, projectId);
+        return forms.map(form => ({
+            ...form,
+            scaffoldName: String(form.scaffoldName || form.title || '').trim(),
+            location: String(form.location || form.projectLabel || '').trim(),
+            drawingNumber: String(form.drawingNumber || form.referenceNumber || '').trim(),
+            drawingDocumentId: String(form.drawingDocumentId || '').trim(),
+            drawingDocumentType: form.drawingDocumentType === 'ess' || form.drawingDocumentType === 'thirdparty'
+                ? form.drawingDocumentType
+                : '',
+            drawingDocumentName: String(form.drawingDocumentName || '').trim(),
+            drawingRevisionNumber: String(form.drawingRevisionNumber || '').trim(),
+            drawingFolderId: String(form.drawingFolderId || '').trim()
+        }));
+    }
+};
+
 const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
 const dayLabourVariationPdfPath = (builderId, projectId, formId) => `${dayLabourVariationPrefix(builderId, projectId)}/pdf/${formId}.pdf`;
 
