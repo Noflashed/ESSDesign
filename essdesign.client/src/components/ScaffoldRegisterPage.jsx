@@ -358,14 +358,6 @@ export default function ScaffoldRegisterPage({
         });
     }, [query, records]);
 
-    const summary = useMemo(() => records.reduce((totals, item) => {
-        const drawing = item.registerRecord?.drawingDocumentId ? item.registerRecord : item.handover;
-        if (drawing?.drawingDocumentId && drawing?.drawingDocumentType) totals.drawings += 1;
-        if (item.handover) totals.handovers += 1;
-        if (item.tag) totals.tags += 1;
-        return totals;
-    }, { drawings: 0, handovers: 0, tags: 0 }), [records]);
-
     return (
         <main className="scaffold-register-page">
             <header className="scaffold-register-header">
@@ -421,13 +413,6 @@ export default function ScaffoldRegisterPage({
 
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
-            <section className="scaffold-register-summary" aria-label="Register summary">
-                <div><span>Scaffolds</span><strong>{records.length}</strong></div>
-                <div><FileText size={15} /><span>Designs linked</span><strong>{summary.drawings}</strong></div>
-                <div><Award size={15} /><span>Handovers linked</span><strong>{summary.handovers}</strong></div>
-                <div><Tag size={15} /><span>Scaff-Tags linked</span><strong>{summary.tags}</strong></div>
-            </section>
-
             <section className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
                 {recordsLoading || buildersLoading ? (
                     <div className="scaffold-register-loading"><LoadingBrandmark label="Loading Scaffold Register" /></div>
@@ -448,7 +433,6 @@ export default function ScaffoldRegisterPage({
                         <thead>
                             <tr>
                                 <th>Scaffold</th>
-                                <th>Location</th>
                                 <th>Design drawing</th>
                                 <th>Handover certificate</th>
                                 <th>Scaff-Tag</th>
@@ -473,7 +457,6 @@ export default function ScaffoldRegisterPage({
                                                 <strong title={item.scaffoldName}>{item.scaffoldName}</strong>
                                             </div>
                                         </td>
-                                        <td title={item.location || selectedProject.name}>{item.location || selectedProject.name}</td>
                                         <td>
                                             <LinkedDocumentButton
                                                 icon={FileText}
