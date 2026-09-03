@@ -301,10 +301,18 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                             <div className="module-list-actions">
                                                 <button className="module-secondary-btn" onClick={() => openForm(item)}>View</button>
                                                 <button className="module-secondary-btn" onClick={() => openPdf(item)}>PDF</button>
-                                                {item.qrLabelStatus === 'assigned' ? (
-                                                    <button className="module-secondary-btn" onClick={() => openQrTarget(item)}>{item.qrLabelNumber || 'QR'}</button>
+                                                <span className={`scaff-qr-status status-${item.status === 'retired' ? 'retired' : 'assigned'}`}>
+                                                    Scaff-Tag: {item.status === 'retired' ? 'Retired' : 'Active'}
+                                                </span>
+                                                {item.qrLabelStatus === 'assigned' || item.qrLabelStatus === 'retired' ? (
+                                                    <>
+                                                        <button className="module-secondary-btn" onClick={() => openQrTarget(item)}>{item.qrLabelNumber || 'QR'}</button>
+                                                        <span className={`scaff-qr-status status-${item.qrLabelStatus}`}>
+                                                            QR: {item.qrLabelStatus === 'retired' ? 'Retired' : 'Assigned'}
+                                                        </span>
+                                                    </>
                                                 ) : (
-                                                    <span className="scaff-qr-status status-unassigned">Awaiting QR link</span>
+                                                    <span className="scaff-qr-status status-unassigned">QR: Awaiting link</span>
                                                 )}
                                                 <button className="module-danger-btn" onClick={() => deleteForm(item)}>Delete</button>
                                             </div>
@@ -325,6 +333,10 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Scaffold Name</span>
                                     <span className="module-pill-value">{selectedForm.scaffoldNo || '-'}</span>
+                                </div>
+                                <div className="module-detail-block">
+                                    <span className="module-pill-label">Scaff-Tag Status</span>
+                                    <span className="module-pill-value">{selectedForm.status === 'retired' ? 'Retired' : 'Active'}</span>
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Job Location</span>

@@ -4925,14 +4925,20 @@ export const scaffTagsAPI = {
             scaffTagQrLabelsAPI.list(),
         ]);
         return forms.map(form => {
-            const label = labels.find(candidate =>
-                candidate.status === 'assigned' &&
+            const linkedLabels = labels.filter(candidate =>
                 candidate.assignedBuilderId === builderId &&
                 candidate.assignedProjectId === projectId &&
                 candidate.assignedFormId === form.id
             );
+            const label = linkedLabels.find(candidate => candidate.status === 'assigned')
+                || [...linkedLabels]
+                    .filter(candidate => candidate.status === 'retired')
+                    .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))[0];
             return {
                 ...form,
+                status: form.status === 'retired' || form.retiredAt ? 'retired' : 'active',
+                retiredAt: form.retiredAt || '',
+                retiredReason: form.retiredReason || '',
                 scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
                 jobLocation: form.jobLocation || form.projectLabel || '',
                 latestInspectionDate: form.latestInspectionDate || form.eventDate || '',
@@ -4940,6 +4946,8 @@ export const scaffTagsAPI = {
                 qrLabelNumber: label?.displayNumber || '',
                 qrLabelStatus: label?.status || 'unassigned',
                 qrLabelAssignedAt: label?.assignedAt || '',
+                qrLabelRetiredAt: label?.retiredAt || '',
+                qrLabelRetiredReason: label?.retiredReason || '',
                 qrTargetUrl: label?.publicUrl || '',
             };
         });

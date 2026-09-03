@@ -621,6 +621,9 @@ export default function ScaffoldRegisterPage({
                                     item.registerRecord,
                                     item.tag?.qrLabelAssignedAt
                                 );
+                                const hasQrLabel = ['assigned', 'retired'].includes(item.tag?.qrLabelStatus)
+                                    && Boolean(item.tag?.qrTargetUrl);
+                                const qrLabelRetired = item.tag?.qrLabelStatus === 'retired';
                                 const statusLabel = lifecycle.status === 'active'
                                     ? 'Active'
                                     : lifecycle.status === 'dismantled'
@@ -678,17 +681,22 @@ export default function ScaffoldRegisterPage({
                                             />
                                         </td>
                                         <td>
-                                            {item.tag?.qrLabelStatus === 'assigned' && item.tag?.qrTargetUrl ? (
-                                                <button
-                                                    type="button"
-                                                    className="scaffold-register-qr-link"
-                                                    onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
-                                                    title={`Open ${item.tag.qrLabelNumber || 'QR label'}`}
-                                                >
-                                                    {item.tag.qrLabelNumber || 'Open QR'}
-                                                </button>
+                                            {hasQrLabel ? (
+                                                <span className="scaffold-register-qr-state">
+                                                    <button
+                                                        type="button"
+                                                        className={`scaffold-register-qr-link${qrLabelRetired ? ' is-retired' : ''}`}
+                                                        onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
+                                                        title={`Open ${qrLabelRetired ? 'inactive ' : ''}${item.tag.qrLabelNumber || 'QR label'}`}
+                                                    >
+                                                        {item.tag.qrLabelNumber || 'Open QR'}
+                                                    </button>
+                                                    {qrLabelRetired ? <small>Retired</small> : null}
+                                                </span>
                                             ) : (
-                                                <span className="scaffold-register-status-pill">Awaiting QR</span>
+                                                <span className="scaffold-register-status-pill">
+                                                    {lifecycle.status === 'dismantled' ? 'Dismantled' : 'Awaiting QR'}
+                                                </span>
                                             )}
                                         </td>
                                         <td><time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time></td>
