@@ -14,6 +14,7 @@ import {
     safetyProjectsAPI
 } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import './DrawingRegisterPage.css';
 import './ScaffoldRegisterPage.css';
 
 const AUTO_REFRESH_MS = 30_000;
@@ -138,13 +139,13 @@ function formatUpdatedAt(value) {
 
 function LinkedDocumentButton({ title, linked, opening, onClick }) {
     if (!linked) {
-        return <span className="scaffold-register-missing-link">Not linked</span>;
+        return <span className="register-drawing-unavailable scaffold-register-missing-link">Not linked</span>;
     }
 
     return (
         <button
             type="button"
-            className="scaffold-register-document-link"
+            className="register-drawing-link scaffold-register-document-link"
             onClick={onClick}
             disabled={opening}
             title={`Open ${title}`}
@@ -341,30 +342,24 @@ export default function ScaffoldRegisterPage({
     }, [query, records]);
 
     return (
-        <main className="scaffold-register-page">
-            <section className="scaffold-register-controls" aria-label="Scaffold Register filters">
+        <main className="drawing-register-page scaffold-register-page">
+            <section className="drawing-register-toolbar scaffold-register-controls" aria-label="Scaffold Register filters">
                 <label className="scaffold-register-select-field">
-                    <span>Builder</span>
-                    <div>
-                        <Building2 size={17} />
-                        <select value={selectedBuilderId} onChange={handleBuilderChange} disabled={buildersLoading || builders.length === 0}>
-                            {builders.length === 0 ? <option value="">No builders available</option> : null}
-                            {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                        </select>
-                    </div>
+                    <Building2 size={18} aria-hidden="true" />
+                    <select aria-label="Builder" title="Builder" value={selectedBuilderId} onChange={handleBuilderChange} disabled={buildersLoading || builders.length === 0}>
+                        {builders.length === 0 ? <option value="">No builders available</option> : null}
+                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
+                    </select>
                 </label>
                 <label className="scaffold-register-select-field">
-                    <span>Project</span>
-                    <div>
-                        <HardHat size={17} />
-                        <select value={selectedProjectId} onChange={handleProjectChange} disabled={buildersLoading || projects.length === 0}>
-                            {projects.length === 0 ? <option value="">No active projects</option> : null}
-                            {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                        </select>
-                    </div>
+                    <HardHat size={18} aria-hidden="true" />
+                    <select aria-label="Project" title="Project" value={selectedProjectId} onChange={handleProjectChange} disabled={buildersLoading || projects.length === 0}>
+                        {projects.length === 0 ? <option value="">No active projects</option> : null}
+                        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                    </select>
                 </label>
-                <label className="scaffold-register-search">
-                    <Search size={17} />
+                <label className="register-search scaffold-register-search">
+                    <Search size={18} aria-hidden="true" />
                     <input
                         type="search"
                         value={query}
@@ -373,39 +368,36 @@ export default function ScaffoldRegisterPage({
                         aria-label="Search Scaffold Register"
                     />
                 </label>
-                <button type="button" className="scaffold-register-refresh" onClick={refresh} disabled={refreshing || buildersLoading}>
+                <span className="register-toolbar-spacer" />
+                <button type="button" className="register-secondary-button scaffold-register-refresh" onClick={refresh} disabled={refreshing || buildersLoading}>
                     <RefreshCw size={16} className={refreshing ? 'is-spinning' : ''} />
                     {refreshing ? 'Refreshing…' : 'Refresh'}
                 </button>
             </section>
 
-            {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
+            {error ? <div className="register-navigation-error" role="alert">{error}</div> : null}
 
-            <section className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
+            <section className={`drawing-register-table-wrap scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
                 {recordsLoading || buildersLoading ? (
-                    <div className="scaffold-register-loading"><LoadingBrandmark label="Loading Scaffold Register" /></div>
+                    <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
                 ) : !selectedProject ? (
-                    <div className="scaffold-register-empty">
-                        <HardHat size={31} />
-                        <strong>Select a builder and project</strong>
-                        <span>The linked Scaffold Register will appear here.</span>
+                    <div className="register-empty">
+                        <HardHat size={24} /> Select a builder and project to view the Scaffold Register.
                     </div>
                 ) : filteredRecords.length === 0 ? (
-                    <div className="scaffold-register-empty">
-                        <ListTree size={31} />
-                        <strong>{records.length ? 'No scaffolds match your search' : 'No scaffold records yet'}</strong>
-                        <span>{records.length ? 'Try a different scaffold, drawing, handover, or tag number.' : 'New mobile Scaffold Register records will appear here automatically.'}</span>
+                    <div className="register-empty">
+                        <ListTree size={24} /> {records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet.'}
                     </div>
                 ) : (
-                    <table className="scaffold-register-table">
+                    <table className="drawing-register-table is-read-only scaffold-register-table">
                         <thead>
                             <tr>
-                                <th>Scaffold</th>
-                                <th>Design drawing</th>
-                                <th>Handover certificate</th>
-                                <th>Scaff-Tag</th>
-                                <th>QR label</th>
-                                <th>Last updated</th>
+                                <th>SCAFFOLD</th>
+                                <th>DESIGN DRAWING</th>
+                                <th>HANDOVER CERTIFICATE</th>
+                                <th>SCAFF-TAG</th>
+                                <th>QR LABEL</th>
+                                <th>LAST UPDATED</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -419,7 +411,7 @@ export default function ScaffoldRegisterPage({
                                 const drawingTitle = drawing?.drawingNumber || drawing?.drawingDocumentName || 'Design drawing';
                                 return (
                                     <tr key={item.id}>
-                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
+                                        <td><span className="register-read-only-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
                                         <td>
                                             <LinkedDocumentButton
                                                 title={drawingTitle}
@@ -453,7 +445,7 @@ export default function ScaffoldRegisterPage({
                                             {item.tag?.qrLabelStatus === 'assigned' && item.tag?.qrTargetUrl ? (
                                                 <button
                                                     type="button"
-                                                    className="scaffold-register-qr-link"
+                                                    className="register-drawing-link scaffold-register-qr-link"
                                                     onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
                                                     title={`Open ${item.tag.qrLabelNumber || 'QR label'}`}
                                                 >
