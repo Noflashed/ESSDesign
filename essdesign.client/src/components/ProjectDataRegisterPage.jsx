@@ -105,6 +105,7 @@ const formatDate = (value, includeTime = false) => {
 };
 
 const getScaffTagStatus = form => {
+    if (form.status === 'retired' || form.retiredAt) return 'Retired';
     const latestInspection = parseDate(form.latestInspectionDate);
     if (!latestInspection) return 'Draft';
     const expiry = parseDate(form.expiresAt) || new Date(latestInspection);
@@ -176,12 +177,15 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
     }
     const latestInspection = latestScaffTagInspection(form);
     const latestInspectionDate = form.latestInspectionDate || latestInspection?.date || form.updatedAt;
-    const qrLabel = qrLabels.find(label => (
-        label.status === 'assigned'
-        && label.assignedBuilderId === form.builderId
+    const linkedQrLabels = qrLabels.filter(label => (
+        label.assignedBuilderId === form.builderId
         && label.assignedProjectId === form.projectId
         && label.assignedFormId === form.id
     ));
+    const qrLabel = linkedQrLabels.find(label => label.status === 'assigned')
+        || [...linkedQrLabels]
+            .filter(label => label.status === 'retired')
+            .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))[0];
     return {
         id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
         builderId: form.builderId,
@@ -195,6 +199,7 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
         inspectionDateSort: parseDate(latestInspectionDate)?.getTime() || 0,
         representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
         qrLabel: qrLabel?.displayNumber || 'Unassigned',
+        qrLabelStatus: qrLabel?.status || 'unassigned',
         status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
     };
 });
@@ -633,7 +638,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                         {config.columns.map(column => (
                                             <td key={column.key} title={String(row[column.key] || '')}>
                                                 {column.key === 'status' ? <StatusBadge value={row.status} />
-                                                    : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment${row.qrLabel === 'Unassigned' ? ' is-unassigned' : ''}`}><QrCode size={12} />{row.qrLabel}</span>
+                                                    : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment is-${row.qrLabelStatus}`}><QrCode size={12} />{row.qrLabel}</span>
                                                     : column.key === config.linkKey && row.deleted ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
                                                     : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => openPdf(row)} title={`Open PDF for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
                                                     : row[column.key] || '-'}

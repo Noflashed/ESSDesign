@@ -198,6 +198,11 @@
     color: #805000;
 }
 
+.project-register-qr-assignment.is-retired {
+    background: #eef2f7;
+    color: #64748b;
+}
+
 .project-qr-register-table-wrap {
     display: flex;
     flex-direction: column;
@@ -877,6 +882,11 @@
 .project-register-status.expired {
     background: #fdecec;
     color: #b42318;
+}
+
+.project-register-status.retired {
+    background: #eef2f7;
+    color: #64748b;
 }
 
 .project-register-status.deleted {
