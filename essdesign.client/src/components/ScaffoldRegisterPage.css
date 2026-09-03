@@ -17,80 +17,13 @@
     font-family: "Google Sans", Roboto, Arial, sans-serif;
 }
 
-.scaffold-register-header {
-    flex: 0 0 auto;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 22px;
-}
-
-.scaffold-register-title {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-}
-
-.scaffold-register-title-icon {
-    flex: 0 0 38px;
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    border: 1px solid #dbe5f4;
-    border-radius: 9px;
-    background: #f8fafc;
-    color: #475569;
-}
-
-.scaffold-register-title h1 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1.15;
-    letter-spacing: 0;
-}
-
-.scaffold-register-title p {
-    margin: 4px 0 0;
-    color: #64748b;
-    font-size: 12px;
-    line-height: 1.3;
-}
-
-.scaffold-register-sync-state {
-    flex: 0 0 auto;
-    min-height: 32px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.scaffold-register-live-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #0b57d0;
-}
-
 .scaffold-register-controls {
     flex: 0 0 auto;
     display: grid;
     grid-template-columns: minmax(180px, 0.8fr) minmax(210px, 1fr) minmax(240px, 1.2fr) auto;
     align-items: end;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
 }
 
 .scaffold-register-select-field {
@@ -204,10 +137,9 @@
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    border: 0;
-    border-radius: 7px;
+    border: 1px solid #dbe5f4;
+    border-radius: 6px;
     background: #ffffff;
-    box-shadow: inset 0 0 0 1px #dbe5f4;
 }
 
 .scaffold-register-table-wrap.is-loading {
@@ -216,19 +148,19 @@
 
 .scaffold-register-table {
     width: 100%;
-    min-width: 1040px;
+    min-width: 0;
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
     background: #ffffff;
-    font-size: 13px;
+    font-size: clamp(9.5px, 0.72vw, 11px);
 }
 
 .scaffold-register-table th,
 .scaffold-register-table td {
-    height: 56px;
-    padding: 10px 16px;
-    border-right: 0;
+    height: 42px;
+    padding: 0 6px;
+    border-right: 1px solid #dbe5f4;
     border-bottom: 1px solid #e5edf8;
     overflow: hidden;
     background: #ffffff;
@@ -242,13 +174,11 @@
     position: sticky;
     top: 0;
     z-index: 3;
-    height: 44px;
-    padding-top: 0;
-    padding-bottom: 0;
+    height: 38px;
     background: #ffffff;
     color: #334155;
-    font-size: 12px;
-    font-weight: 800;
+    font-size: clamp(8.5px, 0.65vw, 10px);
+    font-weight: 750;
     letter-spacing: 0;
     box-shadow: 0 1px 0 #e5edf8;
 }
@@ -273,57 +203,38 @@
     background: #f8fbff;
 }
 
-.scaffold-register-name-cell {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.scaffold-register-name-cell strong {
-    min-width: 0;
+.scaffold-register-cell-value {
+    display: block;
+    width: 100%;
     overflow: hidden;
     color: #0f172a;
-    font-size: 14px;
-    font-weight: 500;
     text-overflow: ellipsis;
-}
-
-.scaffold-register-structure-icon,
-.scaffold-register-document-icon {
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 6px;
-    background: #f8fafc;
-    color: #475569;
-}
-
-.scaffold-register-structure-icon {
-    width: 27px;
-    height: 27px;
+    white-space: nowrap;
 }
 
 .scaffold-register-document-link {
     max-width: 100%;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    display: block;
+    width: 100%;
     padding: 0;
     border: 0;
     background: transparent;
-    color: inherit;
+    color: #0b57d0;
     font: inherit;
+    font-weight: 600;
     text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     cursor: pointer;
 }
 
-.scaffold-register-document-link:hover strong,
-.scaffold-register-document-link:focus-visible strong {
-    color: #0b57d0;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+.scaffold-register-document-link:hover,
+.scaffold-register-document-link:focus-visible {
+    color: #083f98;
 }
 
 .scaffold-register-document-link:focus-visible {
@@ -337,94 +248,46 @@
     opacity: 0.6;
 }
 
-.scaffold-register-document-icon {
-    width: 27px;
-    height: 27px;
-}
-
-.scaffold-register-document-copy {
-    min-width: 0;
-    flex: 1 1 auto;
-    display: grid;
-    gap: 2px;
-}
-
-.scaffold-register-document-copy strong,
-.scaffold-register-document-copy small {
-    min-width: 0;
+.scaffold-register-missing-link {
     display: block;
+    width: 100%;
     overflow: hidden;
+    color: #64748b;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.scaffold-register-document-copy strong {
-    color: #0f172a;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.scaffold-register-document-copy small {
-    color: #64748b;
-    font-size: 11px;
-}
-
-.scaffold-register-external-icon {
-    flex: 0 0 auto;
-    color: #0b57d0;
-    opacity: 0;
-    transform: translateX(-2px);
-    transition: opacity 0.14s ease, transform 0.14s ease;
-}
-
-.scaffold-register-document-link:hover .scaffold-register-external-icon,
-.scaffold-register-document-link:focus-visible .scaffold-register-external-icon {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.scaffold-register-missing-link {
-    min-height: 25px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: #64748b;
-    font-size: 12px;
     opacity: 0.72;
 }
 
 .scaffold-register-qr-link,
 .scaffold-register-status-pill {
-    max-width: 100%;
-    min-height: 25px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 0 8px;
-    border-radius: 5px;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
     font: inherit;
-    font-size: 12px;
-    font-weight: 700;
+    text-align: left;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .scaffold-register-qr-link {
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #334155;
+    background: transparent;
+    color: #0b57d0;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
     cursor: pointer;
 }
 
 .scaffold-register-qr-link:hover {
-    border-color: #8fb0ed;
-    background: #f3f8ff;
-    color: #0b57d0;
+    color: #083f98;
 }
 
 .scaffold-register-status-pill {
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #334155;
+    background: transparent;
+    color: #64748b;
 }
 
 .scaffold-register-loading,
@@ -471,15 +334,6 @@
 @media (max-width: 720px) {
     .scaffold-register-page {
         padding: 22px;
-    }
-
-    .scaffold-register-header {
-        align-items: flex-start;
-    }
-
-    .scaffold-register-title p,
-    .scaffold-register-sync-state {
-        display: none;
     }
 
     .scaffold-register-controls {

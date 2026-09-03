@@ -1,17 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Award,
     Building2,
-    CheckCircle2,
-    ExternalLink,
-    FileText,
     HardHat,
-    Link2,
     ListTree,
-    QrCode,
     RefreshCw,
-    Search,
-    Tag
+    Search
 } from 'lucide-react';
 import {
     handoverCertificatesAPI,
@@ -143,13 +136,9 @@ function formatUpdatedAt(value) {
     }).format(date);
 }
 
-function LinkedDocumentButton({ icon: Icon, title, detail, linked, opening, onClick }) {
+function LinkedDocumentButton({ title, linked, opening, onClick }) {
     if (!linked) {
-        return (
-            <span className="scaffold-register-missing-link">
-                <Link2 size={13} /> Not linked
-            </span>
-        );
+        return <span className="scaffold-register-missing-link">Not linked</span>;
     }
 
     return (
@@ -160,12 +149,7 @@ function LinkedDocumentButton({ icon: Icon, title, detail, linked, opening, onCl
             disabled={opening}
             title={`Open ${title}`}
         >
-            <span className="scaffold-register-document-icon"><Icon size={15} /></span>
-            <span className="scaffold-register-document-copy">
-                <strong>{opening ? 'Opening…' : title}</strong>
-                {detail ? <small>{detail}</small> : null}
-            </span>
-            <ExternalLink size={13} className="scaffold-register-external-icon" />
+            {opening ? 'Opening…' : title}
         </button>
     );
 }
@@ -186,7 +170,6 @@ export default function ScaffoldRegisterPage({
     const [query, setQuery] = useState('');
     const [error, setError] = useState('');
     const [openingKey, setOpeningKey] = useState('');
-    const [lastSyncedAt, setLastSyncedAt] = useState(null);
     const requestSequence = useRef(0);
 
     const selectedBuilder = useMemo(
@@ -261,7 +244,6 @@ export default function ScaffoldRegisterPage({
             ]);
             if (requestId !== requestSequence.current) return;
             setRecords(makeRegisterItems(registerEntries, tags, handovers));
-            setLastSyncedAt(new Date());
             setError('');
         } catch (loadError) {
             if (requestId !== requestSequence.current) return;
@@ -360,20 +342,6 @@ export default function ScaffoldRegisterPage({
 
     return (
         <main className="scaffold-register-page">
-            <header className="scaffold-register-header">
-                <div className="scaffold-register-title">
-                    <span className="scaffold-register-title-icon"><ListTree size={20} /></span>
-                    <div>
-                        <h1>Scaffold Register</h1>
-                        <p>Live scaffold records and their linked project documents</p>
-                    </div>
-                </div>
-                <div className="scaffold-register-sync-state" title={lastSyncedAt ? formatUpdatedAt(lastSyncedAt) : ''}>
-                    <span className="scaffold-register-live-dot" />
-                    {lastSyncedAt ? `Synced ${lastSyncedAt.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}` : 'Live from ESS App'}
-                </div>
-            </header>
-
             <section className="scaffold-register-controls" aria-label="Scaffold Register filters">
                 <label className="scaffold-register-select-field">
                     <span>Builder</span>
@@ -451,17 +419,10 @@ export default function ScaffoldRegisterPage({
                                 const drawingTitle = drawing?.drawingNumber || drawing?.drawingDocumentName || 'Design drawing';
                                 return (
                                     <tr key={item.id}>
-                                        <td>
-                                            <div className="scaffold-register-name-cell">
-                                                <span className="scaffold-register-structure-icon"><ListTree size={15} /></span>
-                                                <strong title={item.scaffoldName}>{item.scaffoldName}</strong>
-                                            </div>
-                                        </td>
+                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
                                         <td>
                                             <LinkedDocumentButton
-                                                icon={FileText}
                                                 title={drawingTitle}
-                                                detail={drawing?.drawingRevisionNumber ? `Revision ${drawing.drawingRevisionNumber}` : ''}
                                                 linked={hasDrawing}
                                                 opening={openingKey === `drawing:${item.id}`}
                                                 onClick={() => onOpenDrawing?.({
@@ -474,9 +435,7 @@ export default function ScaffoldRegisterPage({
                                         </td>
                                         <td>
                                             <LinkedDocumentButton
-                                                icon={Award}
                                                 title={handoverNumber || item.handover?.formReferenceName || 'Handover certificate'}
-                                                detail={handoverNumber ? item.handover?.formReferenceName : ''}
                                                 linked={Boolean(item.handover)}
                                                 opening={openingKey === `handover:${item.handover?.id}`}
                                                 onClick={() => openPdf('handover', item.handover)}
@@ -484,9 +443,7 @@ export default function ScaffoldRegisterPage({
                                         </td>
                                         <td>
                                             <LinkedDocumentButton
-                                                icon={Tag}
                                                 title={tagNumber || item.tag?.scaffoldNo || 'Scaff-Tag'}
-                                                detail={item.tag?.latestInspectionDate ? `Inspected ${formatUpdatedAt(item.tag.latestInspectionDate)}` : ''}
                                                 linked={Boolean(item.tag)}
                                                 opening={openingKey === `tag:${item.tag?.id}`}
                                                 onClick={() => openPdf('tag', item.tag)}
@@ -500,10 +457,10 @@ export default function ScaffoldRegisterPage({
                                                     onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
                                                     title={`Open ${item.tag.qrLabelNumber || 'QR label'}`}
                                                 >
-                                                    <QrCode size={14} /> {item.tag.qrLabelNumber || 'Open QR'}
+                                                    {item.tag.qrLabelNumber || 'Open QR'}
                                                 </button>
                                             ) : (
-                                                <span className="scaffold-register-status-pill"><CheckCircle2 size={12} /> Awaiting QR</span>
+                                                <span className="scaffold-register-status-pill">Awaiting QR</span>
                                             )}
                                         </td>
                                         <td><time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time></td>
