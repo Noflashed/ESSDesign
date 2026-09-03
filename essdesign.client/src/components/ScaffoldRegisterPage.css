@@ -289,7 +289,7 @@
 
 .scaffold-register-table {
     width: 100%;
-    min-width: 940px;
+    min-width: 1180px;
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
@@ -325,12 +325,14 @@
     background: var(--card-bg);
 }
 
-.scaffold-register-table th:nth-child(1) { width: 17%; }
-.scaffold-register-table th:nth-child(2) { width: 20%; }
-.scaffold-register-table th:nth-child(3) { width: 19%; }
+.scaffold-register-table th:nth-child(1) { width: 14%; }
+.scaffold-register-table th:nth-child(2) { width: 10%; }
+.scaffold-register-table th:nth-child(3) { width: 12%; }
 .scaffold-register-table th:nth-child(4) { width: 17%; }
-.scaffold-register-table th:nth-child(5) { width: 12%; }
-.scaffold-register-table th:nth-child(6) { width: 15%; }
+.scaffold-register-table th:nth-child(5) { width: 16%; }
+.scaffold-register-table th:nth-child(6) { width: 13%; }
+.scaffold-register-table th:nth-child(7) { width: 8%; }
+.scaffold-register-table th:nth-child(8) { width: 10%; }
 
 .scaffold-register-table th:last-child,
 .scaffold-register-table td:last-child {
@@ -386,6 +388,52 @@
 .scaffold-register-document-link:disabled {
     cursor: wait;
     opacity: 0.6;
+}
+
+.scaffold-register-lifecycle-status,
+.scaffold-register-elapsed {
+    max-width: 100%;
+    min-height: 25px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.scaffold-register-lifecycle-status {
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.scaffold-register-lifecycle-status > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.scaffold-register-lifecycle-status.is-active {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.scaffold-register-lifecycle-status.is-dismantled {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.scaffold-register-elapsed {
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.scaffold-register-elapsed.is-stopped {
+    color: #64748b;
 }
 
 .scaffold-register-loading,
@@ -446,4 +494,22 @@
 :root[data-theme="dark"] .scaffold-register-error {
     background: rgba(217, 48, 37, 0.12);
     color: #ffb4ab;
+}
+
+:root[data-theme="dark"] .scaffold-register-lifecycle-status {
+    background: rgba(100, 116, 139, 0.2);
+    color: #cbd5e1;
+}
+
+:root[data-theme="dark"] .scaffold-register-lifecycle-status.is-active {
+    background: rgba(22, 163, 74, 0.2);
+    color: #86efac;
+}
+
+:root[data-theme="dark"] .scaffold-register-elapsed {
+    color: #5eead4;
+}
+
+:root[data-theme="dark"] .scaffold-register-elapsed.is-stopped {
+    color: #94a3b8;
 }

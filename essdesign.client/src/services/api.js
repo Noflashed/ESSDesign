@@ -4779,7 +4779,14 @@ export const scaffoldRegisterAPI = {
                 : '',
             drawingDocumentName: String(form.drawingDocumentName || '').trim(),
             drawingRevisionNumber: String(form.drawingRevisionNumber || '').trim(),
-            drawingFolderId: String(form.drawingFolderId || '').trim()
+            drawingFolderId: String(form.drawingFolderId || '').trim(),
+            status: form.status === 'dismantled' || form.dismantledAt
+                ? 'dismantled'
+                : form.status === 'active' || form.activatedAt
+                    ? 'active'
+                    : 'awaiting-qr',
+            activatedAt: String(form.activatedAt || '').trim(),
+            dismantledAt: String(form.dismantledAt || '').trim()
         }));
     }
 };
@@ -4932,6 +4939,7 @@ export const scaffTagsAPI = {
                 qrLabelId: label?.id || '',
                 qrLabelNumber: label?.displayNumber || '',
                 qrLabelStatus: label?.status || 'unassigned',
+                qrLabelAssignedAt: label?.assignedAt || '',
                 qrTargetUrl: label?.publicUrl || '',
             };
         });

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ChevronDown,
+    Clock3,
     HardHat,
     ListTree,
     RefreshCw,
@@ -150,6 +151,35 @@ function formatUpdatedAt(value) {
     }).format(date);
 }
 
+function validTimestamp(value) {
+    const trimmed = String(value || '').trim();
+    return trimmed && Number.isFinite(Date.parse(trimmed)) ? trimmed : '';
+}
+
+function resolveScaffoldLifecycle(record, qrAssignedAt) {
+    const startedAt = validTimestamp(record?.activatedAt) || validTimestamp(qrAssignedAt);
+    const stoppedAt = validTimestamp(record?.dismantledAt);
+    if (record?.status === 'dismantled' || stoppedAt) {
+        return { status: 'dismantled', startedAt, stoppedAt };
+    }
+    if (record?.status === 'active' || startedAt) {
+        return { status: 'active', startedAt, stoppedAt: '' };
+    }
+    return { status: 'awaiting-qr', startedAt: '', stoppedAt: '' };
+}
+
+function formatElapsedTime(startedAt, stoppedAt, nowMs) {
+    const startMs = Date.parse(startedAt);
+    if (!Number.isFinite(startMs)) return 'Not started';
+    const parsedStopMs = Date.parse(stoppedAt);
+    const endMs = Number.isFinite(parsedStopMs) ? parsedStopMs : nowMs;
+    const totalMinutes = Math.max(0, Math.floor((endMs - startMs) / 60_000));
+    const days = Math.floor(totalMinutes / 1_440);
+    const hours = Math.floor((totalMinutes % 1_440) / 60);
+    const minutes = totalMinutes % 60;
+    return `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`;
+}
+
 function builderInitials(name) {
     return String(name || 'Builder')
         .split(/\s+/)
@@ -285,6 +315,7 @@ export default function ScaffoldRegisterPage({
     const [error, setError] = useState('');
     const [openingKey, setOpeningKey] = useState('');
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
+    const [clockNow, setClockNow] = useState(() => Date.now());
     const requestSequence = useRef(0);
 
     const selectedBuilder = useMemo(
@@ -437,6 +468,11 @@ export default function ScaffoldRegisterPage({
         return () => window.removeEventListener(SAFETY_PROJECTS_CHANGED_EVENT, handleProjectsChanged);
     }, [loadBuilders]);
 
+    useEffect(() => {
+        const interval = window.setInterval(() => setClockNow(Date.now()), 30_000);
+        return () => window.clearInterval(interval);
+    }, []);
+
     const handleBuilderChange = builder => {
         const project = builder?.projects?.[0] || null;
         setSelectedBuilderId(builder?.id || '');
@@ -563,6 +599,8 @@ export default function ScaffoldRegisterPage({
                         <thead>
                             <tr>
                                 <th>SCAFFOLD</th>
+                                <th>STATUS</th>
+                                <th>ACTIVE TIME</th>
                                 <th>DESIGN DRAWING</th>
                                 <th>HANDOVER CERTIFICATE</th>
                                 <th>SCAFF-TAG</th>
@@ -579,9 +617,37 @@ export default function ScaffoldRegisterPage({
                                 const handoverNumber = prefixedNumber('H', item.handover?.inspectionNumber);
                                 const tagNumber = prefixedNumber('ST', item.tag?.tagNumber || item.tag?.qrLabelNumber);
                                 const drawingTitle = drawing?.drawingNumber || drawing?.drawingDocumentName || 'Design drawing';
+                                const lifecycle = resolveScaffoldLifecycle(
+                                    item.registerRecord,
+                                    item.tag?.qrLabelAssignedAt
+                                );
+                                const statusLabel = lifecycle.status === 'active'
+                                    ? 'Active'
+                                    : lifecycle.status === 'dismantled'
+                                        ? 'Dismantled'
+                                        : 'Awaiting QR';
+                                const elapsed = formatElapsedTime(
+                                    lifecycle.startedAt,
+                                    lifecycle.stoppedAt,
+                                    clockNow
+                                );
                                 return (
                                     <tr key={item.id}>
                                         <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
+                                        <td>
+                                            <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>
+                                                <span aria-hidden="true" />
+                                                {statusLabel}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span
+                                                className={`scaffold-register-elapsed${lifecycle.status === 'dismantled' ? ' is-stopped' : ''}`}
+                                                title={lifecycle.startedAt ? `Active since ${formatUpdatedAt(lifecycle.startedAt)}` : 'Timer starts when a QR label is linked'}
+                                            >
+                                                <Clock3 size={13} /> {elapsed}
+                                            </span>
+                                        </td>
                                         <td>
                                             <LinkedDocumentButton
                                                 title={drawingTitle}
