@@ -612,7 +612,14 @@ function BuilderFolderLogo({ logoUrl }) {
     );
 }
 
-function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canManage = false, canUpload = canManage }) {
+function FolderBrowser({
+    selectedFolderId,
+    onFolderChange,
+    onRefreshNeeded,
+    canManage = false,
+    canUpload = canManage,
+    canDeleteDocuments = canManage
+}) {
     const { showToast, updateToast } = useToast();
     const [currentFolder, setCurrentFolder] = useState(() => selectedFolderId ?? null);
     const [folders, setFolders] = useState([]);
@@ -1425,7 +1432,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
     }, []);
 
     const handleContextMenu = (e, item) => {
-        if (!canManage) return;
+        if (!canManage && !(canDeleteDocuments && item?.isDocument)) return;
         e.preventDefault();
         openContextMenu({ x: e.clientX, y: e.clientY }, item);
     };
@@ -1784,6 +1791,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                         visibleItems.map(item => {
                                             const isSelected = selectedPreviewItem?.id === item.id;
                                             const isLatest = item.isDocument && Number(item.revisionNumber) === latestRevisionNumber && latestRevisionNumber > 0;
+                                            const canUseItemActions = canManage || (canDeleteDocuments && item.isDocument);
 
                                             return viewMode === 'grid' ? (
                                                 <div
@@ -1800,10 +1808,10 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                     onDragLeave={!item.isDocument ? handleDragLeave : undefined}
                                                     onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                                     onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                                    onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
+                                                    onContextMenu={canUseItemActions ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
                                                     {isSelected && <span className="card-selected-mark"><CheckCircleIcon size={12} /></span>}
-                                                    {canManage && (
+                                                    {canUseItemActions && (
                                                         <button
                                                             type="button"
                                                             className="card-menu-btn"
@@ -1891,7 +1899,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                     onDragLeave={!item.isDocument ? handleDragLeave : undefined}
                                                     onDrop={canManage && !item.isDocument ? (e) => handleDrop(e, item) : undefined}
                                                     onDoubleClick={() => !item.isDocument && handleFolderClick(item.id)}
-                                                    onContextMenu={canManage ? (e) => handleContextMenu(e, item) : undefined}
+                                                    onContextMenu={canUseItemActions ? (e) => handleContextMenu(e, item) : undefined}
                                                 >
                                                     <div className="list-item-name">
                                                         {item.isDocument ? (
@@ -1958,7 +1966,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                                         ) : (
                                                             <span className="folder-file-count">{getFolderItemCount(item)}</span>
                                                         )}
-                                                        {canManage && (
+                                                        {canUseItemActions && (
                                                             <button
                                                                 type="button"
                                                                 className="row-menu-btn"
@@ -2074,33 +2082,42 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                                 </>
                             )}
 
-                            {canManage && (
+                            {(canManage || (canDeleteDocuments && selectedPreviewItem.isDocument)) && (
                                 <div className="details-actions">
-                                    <button type="button" className="details-primary-action" onClick={() => handleOpenShareModal(selectedPreviewItem)}>
-                                        <ShareIcon size={16} /> Share
-                                    </button>
-                                    {selectedPreviewItem.isDocument && (
+                                    {canManage && (
                                         <>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setReplaceDocumentTarget(selectedPreviewItem);
-                                                    setShowReplaceDocumentModal(true);
-                                                }}
-                                            >
-                                                <UploadIcon size={16} /> Replace PDF
+                                            <button type="button" className="details-primary-action" onClick={() => handleOpenShareModal(selectedPreviewItem)}>
+                                                <ShareIcon size={16} /> Share
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setEditDocumentTarget(selectedPreviewItem);
-                                                    setNewRevisionNumber(selectedPreviewItem.revisionNumber);
-                                                    setShowEditDocumentModal(true);
-                                                }}
-                                            >
-                                                <FileTextIcon size={16} /> Change Revision
-                                            </button>
+                                            {selectedPreviewItem.isDocument && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setReplaceDocumentTarget(selectedPreviewItem);
+                                                            setShowReplaceDocumentModal(true);
+                                                        }}
+                                                    >
+                                                        <UploadIcon size={16} /> Replace PDF
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditDocumentTarget(selectedPreviewItem);
+                                                            setNewRevisionNumber(selectedPreviewItem.revisionNumber);
+                                                            setShowEditDocumentModal(true);
+                                                        }}
+                                                    >
+                                                        <FileTextIcon size={16} /> Change Revision
+                                                    </button>
+                                                </>
+                                            )}
                                         </>
+                                    )}
+                                    {canDeleteDocuments && selectedPreviewItem.isDocument && (
+                                        <button type="button" onClick={() => handleDeleteDocument(selectedPreviewItem.id)}>
+                                            <TrashIcon size={16} /> Delete PDF
+                                        </button>
                                     )}
                                 </div>
                             )}
@@ -2109,7 +2126,7 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                 </div>
             </section>
 
-            {canManage && contextMenu && (
+            {(canManage || canDeleteDocuments) && contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
                     {contextMenu.isEmptySpace && (
                         <button type="button" className="context-menu-item" onClick={() => {
@@ -2155,34 +2172,40 @@ function FolderBrowser({ selectedFolderId, onFolderChange, onRefreshNeeded, canM
                     )}
                     {contextMenu.item && contextMenu.item.isDocument && (
                         <>
-                            <button type="button" className="context-menu-item" onClick={() => {
-                                handleOpenShareModal(contextMenu.item);
-                                setContextMenu(null);
-                            }}>
-                                <ShareIcon size={15} /> <span>Share PDF</span>
-                            </button>
-                            <button type="button" className="context-menu-item" onClick={() => {
-                                setReplaceDocumentTarget(contextMenu.item);
-                                setShowReplaceDocumentModal(true);
-                                setContextMenu(null);
-                            }}>
-                                <UploadIcon size={15} /> <span>Replace PDF</span>
-                            </button>
-                            <button type="button" className="context-menu-item" onClick={() => {
-                                setEditDocumentTarget(contextMenu.item);
-                                setNewRevisionNumber(contextMenu.item.revisionNumber);
-                                setShowEditDocumentModal(true);
-                                setContextMenu(null);
-                            }}>
-                                <EditIcon size={15} /> <span>Change Revision</span>
-                            </button>
-                            <div className="context-menu-divider" role="separator"></div>
-                            <button type="button" className="context-menu-item danger" onClick={() => {
-                                handleDeleteDocument(contextMenu.item.id);
-                                setContextMenu(null);
-                            }}>
-                                <TrashIcon size={15} /> <span>Delete PDF</span>
-                            </button>
+                            {canManage && (
+                                <>
+                                    <button type="button" className="context-menu-item" onClick={() => {
+                                        handleOpenShareModal(contextMenu.item);
+                                        setContextMenu(null);
+                                    }}>
+                                        <ShareIcon size={15} /> <span>Share PDF</span>
+                                    </button>
+                                    <button type="button" className="context-menu-item" onClick={() => {
+                                        setReplaceDocumentTarget(contextMenu.item);
+                                        setShowReplaceDocumentModal(true);
+                                        setContextMenu(null);
+                                    }}>
+                                        <UploadIcon size={15} /> <span>Replace PDF</span>
+                                    </button>
+                                    <button type="button" className="context-menu-item" onClick={() => {
+                                        setEditDocumentTarget(contextMenu.item);
+                                        setNewRevisionNumber(contextMenu.item.revisionNumber);
+                                        setShowEditDocumentModal(true);
+                                        setContextMenu(null);
+                                    }}>
+                                        <EditIcon size={15} /> <span>Change Revision</span>
+                                    </button>
+                                </>
+                            )}
+                            {canManage && canDeleteDocuments && <div className="context-menu-divider" role="separator"></div>}
+                            {canDeleteDocuments && (
+                                <button type="button" className="context-menu-item danger" onClick={() => {
+                                    handleDeleteDocument(contextMenu.item.id);
+                                    setContextMenu(null);
+                                }}>
+                                    <TrashIcon size={15} /> <span>Delete PDF</span>
+                                </button>
+                            )}
                         </>
                     )}
                 </div>

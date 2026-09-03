@@ -1739,6 +1739,7 @@ function App() {
                     onRefreshNeeded={triggerRefresh}
                     canManage={canManageEssDesign}
                     canUpload={canContributeEssDesign}
+                    canDeleteDocuments={canContributeEssDesign}
                 />
             </div>
         );
