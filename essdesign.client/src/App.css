@@ -21633,6 +21633,11 @@ button.stat-card {
     color: #176c36;
 }
 
+.project-data-status.retired {
+    background: #e5e7eb;
+    color: #475569;
+}
+
 .project-data-status.expired {
     background: #ffd8db;
     color: #b91c1c;

@@ -64,6 +64,7 @@ const PROJECT_DATA_TABS = [
 
 const STATUS_META = {
     Current: { className: 'current', icon: CheckCircle },
+    Retired: { className: 'retired', icon: X },
     Expired: { className: 'expired', icon: AlertTriangle },
     Draft: { className: 'draft', icon: FileText }
 };
@@ -121,6 +122,7 @@ const withPdfExtension = (value) => {
 };
 
 function getScaffTagStatus(item) {
+    if (item.status === 'retired' || item.retiredAt) return 'Retired';
     const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
     if (!item.latestInspectionDate) return 'Draft';
     return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
@@ -381,6 +383,12 @@ function getPreviewDetails(doc, tab, builder, project) {
         return [
             ['Scaffold reference', doc.raw?.scaffoldNo || doc.raw?.tagNumber || doc.ref],
             ['Tag / Ref No.', doc.ref],
+            ['QR label', doc.raw?.qrLabelNumber || 'Not linked'],
+            ['QR label status', doc.raw?.qrLabelStatus === 'retired'
+                ? 'Retired'
+                : doc.raw?.qrLabelStatus === 'assigned'
+                    ? 'Assigned'
+                    : 'Unassigned'],
             ['Structure location', doc.location || project?.siteLocation || '-'],
             ['Last inspection', formatDateTime(doc.raw?.latestInspectionDate || doc.uploadedAt)],
             ...baseDetails
