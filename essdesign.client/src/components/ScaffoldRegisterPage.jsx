@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Building2,
+    ChevronDown,
     HardHat,
     ListTree,
     RefreshCw,
@@ -14,7 +14,6 @@ import {
     safetyProjectsAPI
 } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
-import './DrawingRegisterPage.css';
 import './ScaffoldRegisterPage.css';
 
 const AUTO_REFRESH_MS = 30_000;
@@ -137,15 +136,112 @@ function formatUpdatedAt(value) {
     }).format(date);
 }
 
+function builderInitials(name) {
+    return String(name || 'Builder')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part[0]?.toUpperCase())
+        .join('') || 'B';
+}
+
+function BuilderLogo({ src, name }) {
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        setFailed(false);
+    }, [src]);
+
+    return (
+        <span className={`scaffold-register-builder-logo${src && !failed ? ' has-image' : ''}`} aria-hidden="true">
+            {src && !failed
+                ? <img src={src} alt="" loading="eager" decoding="async" onError={() => setFailed(true)} />
+                : builderInitials(name)}
+        </span>
+    );
+}
+
+function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, onSelect, disabled, emptyText }) {
+    const [open, setOpen] = useState(false);
+    const rootRef = useRef(null);
+    const menuId = `scaffold-register-${label.toLowerCase()}-options`;
+    const selectedLabel = selectedItem ? getLabel(selectedItem) : `Select ${label.toLowerCase()}`;
+
+    useEffect(() => {
+        if (!open) return undefined;
+        const closeOnOutsideClick = event => {
+            if (!rootRef.current?.contains(event.target)) setOpen(false);
+        };
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('pointerdown', closeOnOutsideClick);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutsideClick);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [open]);
+
+    return (
+        <div className={`scaffold-register-dropdown${open ? ' is-open' : ''}`} ref={rootRef}>
+            <button
+                type="button"
+                className="scaffold-register-dropdown-trigger"
+                onClick={() => setOpen(current => !current)}
+                onKeyDown={event => {
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        setOpen(true);
+                    }
+                }}
+                disabled={disabled}
+                aria-label={label}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-controls={menuId}
+            >
+                <BuilderLogo src={selectedItem ? getLogoUrl(selectedItem) : ''} name={selectedItem ? getLogoName(selectedItem) : selectedLabel} />
+                <span>{selectedLabel}</span>
+                <ChevronDown size={15} aria-hidden="true" />
+            </button>
+            {open ? (
+                <div className="scaffold-register-dropdown-menu" id={menuId} role="listbox" aria-label={label}>
+                    {items.length ? items.map(item => {
+                        const itemLabel = getLabel(item);
+                        const selected = item.id === selectedItem?.id;
+                        return (
+                            <button
+                                key={item.id}
+                                type="button"
+                                className={selected ? 'is-selected' : ''}
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                    onSelect(item);
+                                    setOpen(false);
+                                }}
+                            >
+                                <BuilderLogo src={getLogoUrl(item)} name={getLogoName(item)} />
+                                <span>{itemLabel}</span>
+                            </button>
+                        );
+                    }) : <div className="scaffold-register-dropdown-empty">{emptyText}</div>}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 function LinkedDocumentButton({ title, linked, opening, onClick }) {
     if (!linked) {
-        return <span className="register-drawing-unavailable scaffold-register-missing-link">Not linked</span>;
+        return <span className="scaffold-register-missing-link">Not linked</span>;
     }
 
     return (
         <button
             type="button"
-            className="register-drawing-link scaffold-register-document-link"
+            className="scaffold-register-document-link"
             onClick={onClick}
             disabled={opening}
             title={`Open ${title}`}
@@ -171,6 +267,7 @@ export default function ScaffoldRegisterPage({
     const [query, setQuery] = useState('');
     const [error, setError] = useState('');
     const [openingKey, setOpeningKey] = useState('');
+    const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const requestSequence = useRef(0);
 
     const selectedBuilder = useMemo(
@@ -227,6 +324,36 @@ export default function ScaffoldRegisterPage({
         setSelectedProjectId(nextProject?.id || '');
     }, [builders, initialBuilderId, initialProjectId]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        setBuilderLogoUrls(previous => {
+            const next = new Map();
+            builders.forEach(builder => {
+                next.set(builder.id, previous.get(builder.id) || builder.logoUrl || '');
+            });
+            return next;
+        });
+
+        builders.forEach(builder => {
+            safetyProjectsAPI.resolveBuilderLogoUrl(builder)
+                .then(url => {
+                    if (cancelled) return;
+                    setBuilderLogoUrls(previous => {
+                        if (previous.get(builder.id) === (url || '')) return previous;
+                        const next = new Map(previous);
+                        next.set(builder.id, url || '');
+                        return next;
+                    });
+                })
+                .catch(() => {});
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [builders]);
+
     const loadRegister = useCallback(async ({ silent = false } = {}) => {
         if (!selectedBuilderId || !selectedProjectId) {
             setRecords([]);
@@ -281,8 +408,7 @@ export default function ScaffoldRegisterPage({
         return () => window.removeEventListener(SAFETY_PROJECTS_CHANGED_EVENT, handleProjectsChanged);
     }, [loadBuilders]);
 
-    const handleBuilderChange = event => {
-        const builder = builders.find(item => item.id === event.target.value) || null;
+    const handleBuilderChange = builder => {
         const project = builder?.projects?.[0] || null;
         setSelectedBuilderId(builder?.id || '');
         setSelectedProjectId(project?.id || '');
@@ -290,8 +416,7 @@ export default function ScaffoldRegisterPage({
         onSelectionChange?.(builder, project);
     };
 
-    const handleProjectChange = event => {
-        const project = projects.find(item => item.id === event.target.value) || null;
+    const handleProjectChange = project => {
         setSelectedProjectId(project?.id || '');
         setQuery('');
         onSelectionChange?.(selectedBuilder, project);
@@ -341,55 +466,70 @@ export default function ScaffoldRegisterPage({
         });
     }, [query, records]);
 
+    const getBuilderLogoUrl = builder => builderLogoUrls.get(builder?.id) || builder?.logoUrl || '';
+    const selectedBuilderLogoUrl = getBuilderLogoUrl(selectedBuilder);
+
     return (
-        <main className="drawing-register-page scaffold-register-page">
-            <section className="drawing-register-toolbar scaffold-register-controls" aria-label="Scaffold Register filters">
-                <label className="scaffold-register-select-field">
-                    <Building2 size={18} aria-hidden="true" />
-                    <select aria-label="Builder" title="Builder" value={selectedBuilderId} onChange={handleBuilderChange} disabled={buildersLoading || builders.length === 0}>
-                        {builders.length === 0 ? <option value="">No builders available</option> : null}
-                        {builders.map(builder => <option key={builder.id} value={builder.id}>{builder.name}</option>)}
-                    </select>
-                </label>
-                <label className="scaffold-register-select-field">
-                    <HardHat size={18} aria-hidden="true" />
-                    <select aria-label="Project" title="Project" value={selectedProjectId} onChange={handleProjectChange} disabled={buildersLoading || projects.length === 0}>
-                        {projects.length === 0 ? <option value="">No active projects</option> : null}
-                        {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                    </select>
-                </label>
-                <label className="register-search scaffold-register-search">
-                    <Search size={18} aria-hidden="true" />
-                    <input
-                        type="search"
-                        value={query}
-                        onChange={event => setQuery(event.target.value)}
-                        placeholder="Search this register…"
-                        aria-label="Search Scaffold Register"
+        <main className="scaffold-register-page">
+            <section className="scaffold-register-toolbar" aria-label="Scaffold Register filters">
+                <div className="scaffold-register-dropdowns">
+                    <RegisterDropdown
+                        label="Builder"
+                        selectedItem={selectedBuilder}
+                        items={builders}
+                        getLabel={builder => builder.name}
+                        getLogoUrl={getBuilderLogoUrl}
+                        onSelect={handleBuilderChange}
+                        disabled={buildersLoading || builders.length === 0}
+                        emptyText="No builders available"
                     />
-                </label>
-                <span className="register-toolbar-spacer" />
-                <button type="button" className="register-secondary-button scaffold-register-refresh" onClick={refresh} disabled={refreshing || buildersLoading}>
-                    <RefreshCw size={16} className={refreshing ? 'is-spinning' : ''} />
-                    {refreshing ? 'Refreshing…' : 'Refresh'}
-                </button>
+                    <RegisterDropdown
+                        label="Project"
+                        selectedItem={selectedProject}
+                        items={projects}
+                        getLabel={project => project.name}
+                        getLogoUrl={() => selectedBuilderLogoUrl}
+                        getLogoName={() => selectedBuilder?.name || 'Builder'}
+                        onSelect={handleProjectChange}
+                        disabled={buildersLoading || projects.length === 0}
+                        emptyText="No active projects"
+                    />
+                </div>
+                <div className="scaffold-register-toolbar-actions">
+                    <label className="scaffold-register-search">
+                        <Search size={18} aria-hidden="true" />
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={event => setQuery(event.target.value)}
+                            placeholder="Search this register…"
+                            aria-label="Search Scaffold Register"
+                        />
+                    </label>
+                    <button type="button" className="scaffold-register-refresh" onClick={refresh} disabled={refreshing || buildersLoading}>
+                        <RefreshCw size={16} className={refreshing ? 'is-spinning' : ''} />
+                        <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+                    </button>
+                </div>
             </section>
 
-            {error ? <div className="register-navigation-error" role="alert">{error}</div> : null}
+            {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
-            <section className={`drawing-register-table-wrap scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
+            <section className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
                 {recordsLoading || buildersLoading ? (
-                    <div className="register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
+                    <div className="scaffold-register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
                 ) : !selectedProject ? (
-                    <div className="register-empty">
-                        <HardHat size={24} /> Select a builder and project to view the Scaffold Register.
+                    <div className="scaffold-register-empty">
+                        <HardHat size={24} />
+                        <span>Select a builder and project to view the Scaffold Register.</span>
                     </div>
                 ) : filteredRecords.length === 0 ? (
-                    <div className="register-empty">
-                        <ListTree size={24} /> {records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet.'}
+                    <div className="scaffold-register-empty">
+                        <ListTree size={24} />
+                        <span>{records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet.'}</span>
                     </div>
                 ) : (
-                    <table className="drawing-register-table is-read-only scaffold-register-table">
+                    <table className="scaffold-register-table">
                         <thead>
                             <tr>
                                 <th>SCAFFOLD</th>
@@ -411,7 +551,7 @@ export default function ScaffoldRegisterPage({
                                 const drawingTitle = drawing?.drawingNumber || drawing?.drawingDocumentName || 'Design drawing';
                                 return (
                                     <tr key={item.id}>
-                                        <td><span className="register-read-only-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
+                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
                                         <td>
                                             <LinkedDocumentButton
                                                 title={drawingTitle}
@@ -445,7 +585,7 @@ export default function ScaffoldRegisterPage({
                                             {item.tag?.qrLabelStatus === 'assigned' && item.tag?.qrTargetUrl ? (
                                                 <button
                                                     type="button"
-                                                    className="register-drawing-link scaffold-register-qr-link"
+                                                    className="scaffold-register-qr-link"
                                                     onClick={() => window.open(item.tag.qrTargetUrl, '_blank', 'noopener,noreferrer')}
                                                     title={`Open ${item.tag.qrLabelNumber || 'QR label'}`}
                                                 >

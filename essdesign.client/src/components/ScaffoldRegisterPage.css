@@ -1,49 +1,243 @@
-.scaffold-register-controls {
-    flex-wrap: nowrap;
+.app-page-content:has(.scaffold-register-page) {
+    min-height: 0;
+    overflow: hidden;
 }
 
-.scaffold-register-select-field {
-    width: min(220px, 21vw);
-    height: 42px;
-    min-width: 150px;
+.scaffold-register-page {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 20px 22px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.scaffold-register-toolbar,
+.scaffold-register-dropdowns,
+.scaffold-register-toolbar-actions {
     display: flex;
     align-items: center;
+}
+
+.scaffold-register-toolbar {
+    position: relative;
+    z-index: 20;
+    flex: 0 0 auto;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.scaffold-register-dropdowns,
+.scaffold-register-toolbar-actions {
+    min-width: 0;
     gap: 10px;
-    padding: 0 13px;
+}
+
+.scaffold-register-dropdown {
+    position: relative;
+    width: min(230px, 24vw);
+    min-width: 170px;
+}
+
+.scaffold-register-dropdown:nth-child(2) {
+    width: min(280px, 28vw);
+}
+
+.scaffold-register-dropdown-trigger {
+    width: 100%;
+    height: 44px;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 16px;
+    align-items: center;
+    gap: 9px;
+    padding: 0 11px 0 7px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.scaffold-register-dropdown-trigger > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scaffold-register-dropdown-trigger > svg {
+    color: var(--text-secondary);
+    transition: transform 140ms ease;
+}
+
+.scaffold-register-dropdown-trigger:hover:not(:disabled) {
+    border-color: var(--text-secondary);
+}
+
+.scaffold-register-dropdown.is-open .scaffold-register-dropdown-trigger {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.scaffold-register-dropdown.is-open .scaffold-register-dropdown-trigger > svg {
+    transform: rotate(180deg);
+}
+
+.scaffold-register-dropdown-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.scaffold-register-builder-logo {
+    width: 36px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     border: 1px solid var(--border-color);
     border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+}
+
+.scaffold-register-builder-logo.has-image {
+    padding: 3px;
+    background: #ffffff;
+}
+
+.scaffold-register-builder-logo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+}
+
+.scaffold-register-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 0;
+    z-index: 50;
+    width: 100%;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--card-bg);
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+}
+
+.scaffold-register-dropdown-menu > button {
+    width: 100%;
+    min-height: 44px;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 550;
+    text-align: left;
+    cursor: pointer;
+}
+
+.scaffold-register-dropdown-menu > button > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scaffold-register-dropdown-menu > button:hover,
+.scaffold-register-dropdown-menu > button:focus-visible {
+    background: var(--hover-bg);
+    outline: none;
+}
+
+.scaffold-register-dropdown-menu > button.is-selected {
+    background: var(--hover-bg);
+    color: var(--primary-color);
+    font-weight: 650;
+}
+
+.scaffold-register-dropdown-empty {
+    padding: 14px 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: center;
+}
+
+.scaffold-register-search {
+    width: min(330px, 30vw);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
     background: var(--card-bg);
     color: var(--text-secondary);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.scaffold-register-select-field:nth-child(2) {
-    width: min(260px, 24vw);
+.scaffold-register-search:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 
-.scaffold-register-select-field svg {
-    flex: 0 0 auto;
-}
-
-.scaffold-register-select-field select {
+.scaffold-register-search input {
     width: 100%;
     min-width: 0;
-    height: 100%;
     border: 0;
     outline: 0;
     background: transparent;
     color: var(--text-primary);
     font: inherit;
+    font-size: 13px;
+}
+
+.scaffold-register-refresh {
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.scaffold-register-select-field select:disabled {
-    color: var(--text-secondary);
-    cursor: not-allowed;
-}
-
-.scaffold-register-search {
-    width: min(360px, 32vw);
+.scaffold-register-refresh:hover:not(:disabled) {
+    border-color: var(--text-secondary);
+    background: var(--hover-bg);
 }
 
 .scaffold-register-refresh:disabled {
@@ -59,6 +253,71 @@
     to { transform: rotate(360deg); }
 }
 
+.scaffold-register-error {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 9px 11px;
+    border: 1px solid rgba(217, 48, 37, 0.28);
+    border-radius: 7px;
+    background: rgba(217, 48, 37, 0.06);
+    color: #b3261e;
+    font-size: 12px;
+}
+
+.scaffold-register-table-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--card-bg);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.scaffold-register-table-wrap.is-loading {
+    overflow: hidden;
+}
+
+.scaffold-register-table {
+    width: 100%;
+    min-width: 940px;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    font-size: 12px;
+}
+
+.scaffold-register-table th,
+.scaffold-register-table td {
+    height: 48px;
+    padding: 0 13px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    color: var(--text-primary);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scaffold-register-table th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 40px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+}
+
+.scaffold-register-table td {
+    background: var(--card-bg);
+}
+
 .scaffold-register-table th:nth-child(1) { width: 17%; }
 .scaffold-register-table th:nth-child(2) { width: 20%; }
 .scaffold-register-table th:nth-child(3) { width: 19%; }
@@ -66,33 +325,127 @@
 .scaffold-register-table th:nth-child(5) { width: 12%; }
 .scaffold-register-table th:nth-child(6) { width: 15%; }
 
+.scaffold-register-table th:last-child,
+.scaffold-register-table td:last-child {
+    border-right: 0;
+}
+
+.scaffold-register-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.scaffold-register-table tbody tr:hover td {
+    background: var(--hover-bg);
+}
+
+.scaffold-register-cell-value,
+.scaffold-register-missing-link,
 .scaffold-register-status-pill {
     display: block;
     width: 100%;
     overflow: hidden;
-    color: var(--text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
-    .scaffold-register-controls {
-        flex-wrap: wrap;
+.scaffold-register-missing-link,
+.scaffold-register-status-pill {
+    color: var(--text-secondary);
+}
+
+.scaffold-register-document-link,
+.scaffold-register-qr-link {
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.scaffold-register-document-link:hover,
+.scaffold-register-document-link:focus-visible,
+.scaffold-register-qr-link:hover,
+.scaffold-register-qr-link:focus-visible {
+    color: var(--primary-hover);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    outline: none;
+}
+
+.scaffold-register-document-link:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.scaffold-register-loading,
+.scaffold-register-empty {
+    min-height: 260px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scaffold-register-empty {
+    gap: 9px;
+    padding: 28px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+}
+
+@media (max-width: 1120px) {
+    .scaffold-register-toolbar {
+        align-items: stretch;
+        flex-direction: column;
     }
 
-    .scaffold-register-controls .register-toolbar-spacer {
-        display: none;
+    .scaffold-register-dropdowns,
+    .scaffold-register-toolbar-actions {
+        width: 100%;
+    }
+
+    .scaffold-register-dropdown,
+    .scaffold-register-dropdown:nth-child(2),
+    .scaffold-register-search {
+        flex: 1 1 0;
+        width: auto;
     }
 }
 
 @media (max-width: 700px) {
-    .scaffold-register-select-field,
-    .scaffold-register-select-field:nth-child(2),
-    .scaffold-register-search {
-        width: 100%;
+    .scaffold-register-page {
+        padding: 16px;
     }
 
+    .scaffold-register-dropdowns,
+    .scaffold-register-toolbar-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .scaffold-register-dropdown,
+    .scaffold-register-dropdown:nth-child(2),
+    .scaffold-register-search,
     .scaffold-register-refresh {
         width: 100%;
     }
+}
+
+:root[data-theme="dark"] .scaffold-register-builder-logo.has-image {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: #ffffff;
+}
+
+:root[data-theme="dark"] .scaffold-register-error {
+    background: rgba(217, 48, 37, 0.12);
+    color: #ffb4ab;
 }
