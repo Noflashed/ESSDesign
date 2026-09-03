@@ -17,6 +17,20 @@ import LoadingBrandmark from './LoadingBrandmark';
 import './ScaffoldRegisterPage.css';
 
 const AUTO_REFRESH_MS = 30_000;
+const FILTER_STORAGE_KEY = 'ess-scaffold-register-filters-v1';
+
+function readStoredFilters() {
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        return {
+            builderId: String(saved.builderId || ''),
+            projectId: String(saved.projectId || ''),
+            query: String(saved.query || '')
+        };
+    } catch {
+        return { builderId: '', projectId: '', query: '' };
+    }
+}
 
 function normalizedLinkValue(value) {
     return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -161,7 +175,7 @@ function BuilderLogo({ src, name }) {
     );
 }
 
-function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, onSelect, disabled, emptyText }) {
+function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, showLogo = true, onSelect, disabled, emptyText }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
     const menuId = `scaffold-register-${label.toLowerCase()}-options`;
@@ -184,7 +198,7 @@ function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, ge
     }, [open]);
 
     return (
-        <div className={`scaffold-register-dropdown${open ? ' is-open' : ''}`} ref={rootRef}>
+        <div className={`scaffold-register-dropdown ${showLogo ? 'has-logo' : 'no-logo'}${open ? ' is-open' : ''}`} ref={rootRef}>
             <button
                 type="button"
                 className="scaffold-register-dropdown-trigger"
@@ -201,7 +215,7 @@ function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, ge
                 aria-expanded={open}
                 aria-controls={menuId}
             >
-                <BuilderLogo src={selectedItem ? getLogoUrl(selectedItem) : ''} name={selectedItem ? getLogoName(selectedItem) : selectedLabel} />
+                {showLogo ? <BuilderLogo src={selectedItem ? getLogoUrl(selectedItem) : ''} name={selectedItem ? getLogoName(selectedItem) : selectedLabel} /> : null}
                 <span>{selectedLabel}</span>
                 <ChevronDown size={15} aria-hidden="true" />
             </button>
@@ -222,7 +236,7 @@ function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, ge
                                     setOpen(false);
                                 }}
                             >
-                                <BuilderLogo src={getLogoUrl(item)} name={getLogoName(item)} />
+                                {showLogo ? <BuilderLogo src={getLogoUrl(item)} name={getLogoName(item)} /> : null}
                                 <span>{itemLabel}</span>
                             </button>
                         );
@@ -257,14 +271,15 @@ export default function ScaffoldRegisterPage({
     onSelectionChange,
     onOpenDrawing
 }) {
+    const storedFilters = useMemo(readStoredFilters, []);
     const [builders, setBuilders] = useState([]);
-    const [selectedBuilderId, setSelectedBuilderId] = useState(initialBuilderId);
-    const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
+    const [selectedBuilderId, setSelectedBuilderId] = useState(() => initialBuilderId || storedFilters.builderId);
+    const [selectedProjectId, setSelectedProjectId] = useState(() => initialProjectId || storedFilters.projectId);
     const [buildersLoading, setBuildersLoading] = useState(true);
     const [recordsLoading, setRecordsLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [records, setRecords] = useState([]);
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(() => storedFilters.query);
     const [error, setError] = useState('');
     const [openingKey, setOpeningKey] = useState('');
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
@@ -323,6 +338,18 @@ export default function ScaffoldRegisterPage({
         setSelectedBuilderId(nextBuilder.id);
         setSelectedProjectId(nextProject?.id || '');
     }, [builders, initialBuilderId, initialProjectId]);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+                builderId: selectedBuilderId,
+                projectId: selectedProjectId,
+                query
+            }));
+        } catch {
+            // Filter persistence is a convenience; storage can be unavailable.
+        }
+    }, [query, selectedBuilderId, selectedProjectId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -490,6 +517,7 @@ export default function ScaffoldRegisterPage({
                         getLabel={project => project.name}
                         getLogoUrl={() => selectedBuilderLogoUrl}
                         getLogoName={() => selectedBuilder?.name || 'Builder'}
+                        showLogo={false}
                         onSelect={handleProjectChange}
                         disabled={buildersLoading || projects.length === 0}
                         emptyText="No active projects"
