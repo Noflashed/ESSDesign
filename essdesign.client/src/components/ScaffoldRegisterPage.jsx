@@ -485,7 +485,7 @@ export default function ScaffoldRegisterPage({
     };
 
     const addAction = (label, onClick) => <button type="button" className="scaffold-register-add-cell"
-        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Plus size={15} /></button>;
+        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Plus size={16} aria-hidden="true" /></button>;
 
     const filteredRecords = useMemo(() => {
         const search = query.trim().toLowerCase();
@@ -538,10 +538,6 @@ export default function ScaffoldRegisterPage({
                     />
                 </div>
                 <div className="scaffold-register-toolbar-actions">
-                    <button type="button" className="scaffold-register-refresh scaffold-register-add" aria-label="Add scaffold"
-                        disabled={!selectedProject || buildersLoading || mutationBusy} onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
-                        <Plus size={18} /><span>Add scaffold</span>
-                    </button>
                     <label className="scaffold-register-search">
                         <Search size={18} aria-hidden="true" />
                         <input
@@ -575,13 +571,8 @@ export default function ScaffoldRegisterPage({
                         <HardHat size={24} />
                         <span>Select a builder and project to view the Scaffold Register.</span>
                     </div>
-                ) : filteredRecords.length === 0 ? (
-                    <div className="scaffold-register-empty">
-                        <ListTree size={24} />
-                        <span>{records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet.'}</span>
-                    </div>
                 ) : (
-                    <table className="scaffold-register-table">
+                    <table className="scaffold-register-table" aria-label="Scaffold register">
                         <thead>
                             <tr>
                                 <th>SCAFFOLD</th>
@@ -595,6 +586,16 @@ export default function ScaffoldRegisterPage({
                             </tr>
                         </thead>
                         <tbody>
+                            {filteredRecords.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="scaffold-register-empty-cell">
+                                        <div className="scaffold-register-empty">
+                                            <ListTree size={24} aria-hidden="true" />
+                                            <span>{records.length ? 'No scaffolds match the current search.' : 'No scaffold records yet. Add a scaffold to get started.'}</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
                             {filteredRecords.map(item => {
                                 const drawing = item.registerRecord?.drawingDocumentId && item.registerRecord?.drawingDocumentType
                                     ? item.registerRecord
@@ -689,6 +690,16 @@ export default function ScaffoldRegisterPage({
                                 );
                             })}
                         </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colSpan={8} className="scaffold-register-add-row">
+                                    <button type="button" className="scaffold-register-add" disabled={mutationBusy}
+                                        onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
+                                        <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 )}
             </section>

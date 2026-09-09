@@ -193,6 +193,7 @@
 }
 
 .scaffold-register-search {
+    min-width: 0;
     width: min(330px, 30vw);
     height: 44px;
     display: flex;
@@ -272,6 +273,7 @@
 }
 
 .scaffold-register-table-wrap {
+    container-type: inline-size;
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
@@ -323,6 +325,63 @@
 
 .scaffold-register-table td {
     background: var(--card-bg);
+}
+
+.scaffold-register-table .scaffold-register-add-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    height: 54px;
+    overflow: visible;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 0;
+    background: var(--card-bg);
+}
+
+.scaffold-register-add {
+    position: sticky;
+    left: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 11px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.scaffold-register-add:hover:not(:disabled) {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.scaffold-register-add:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.scaffold-register-add:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.scaffold-register-table .scaffold-register-empty-cell {
+    padding: 0;
+    white-space: normal;
+}
+
+.scaffold-register-empty-cell .scaffold-register-empty {
+    position: sticky;
+    left: 0;
+    width: 100cqw;
+    min-height: 180px;
 }
 
 .scaffold-register-table th:nth-child(1) { width: 14%; }
@@ -487,6 +546,18 @@
     .scaffold-register-dropdown:nth-child(2),
     .scaffold-register-search {
         width: 100%;
+        min-width: 0;
+        flex: 0 0 auto;
+    }
+
+    .scaffold-register-toolbar-actions {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .scaffold-register-search {
+        flex: 1 1 auto;
+        width: auto;
     }
 }
 
@@ -513,9 +584,47 @@
     color: #94a3b8;
 }
 
-.scaffold-register-document-actions { display: flex; align-items: center; gap: 8px; }
-.scaffold-register-add-cell { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid #cbd9e9; border-radius: 7px; background: #f3f8ff; color: #1976d2; cursor: pointer; }
-.scaffold-register-add-cell:hover { background: #e0efff; }
+.scaffold-register-document-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+}
+
+.scaffold-register-document-actions > .scaffold-register-document-link,
+.scaffold-register-document-actions > .scaffold-register-missing-link {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+}
+
+.scaffold-register-add-cell {
+    flex: 0 0 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--primary-color);
+    cursor: pointer;
+}
+
+.scaffold-register-add-cell > svg,
+.scaffold-register-add > svg,
+.scaffold-register-search > svg {
+    flex-shrink: 0;
+}
+
+.scaffold-register-add-cell:hover:not(:disabled) {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
 .scaffold-register-add-cell:disabled { opacity: .45; cursor: wait; }
 .scaffold-register-add-cell:focus-visible { outline: 2px solid #1976d2; outline-offset: 3px; }
 .scaffold-register-name-dialog, .scaffold-browser-alert { width: min(460px, calc(100vw - 40px)); padding: 28px; color: #212121; background: white; border: 1px solid #dce3ec; border-radius: 16px; box-shadow: 0 24px 80px #0003; }
