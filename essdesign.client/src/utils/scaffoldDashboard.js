@@ -61,14 +61,13 @@ export function buildDashboardData({ builders, records, tags, handovers, labour,
             const drawings = [...new Map(drawingSources.map(form => [JSON.stringify([form.drawingDocumentType, form.drawingDocumentId, form.drawingRevisionNumber || '']), form])).values()];
             rows.push({ ...item, id: JSON.stringify([site.key, item.id]), siteKey: site.key,
                 builderId: site.builderId, projectId: site.projectId, builderName: site.builderName,
-                projectName: site.projectName, lifecycle, drawings,
-                missingDocuments: !drawings.length || !item.tags.length || !item.handovers.length });
+                projectName: site.projectName, lifecycle, drawings });
         });
     });
-    return { rows, sites: [...sites.values()] };
+    return { rows, sites: [...sites.values()], builders };
 }
 
-export function filterDashboardRows(rows, { builder = '', site = '', query = '', status = 'current', age = '', missing = false }, now) {
+export function filterDashboardRows(rows, { builder = '', site = '', query = '', status = 'current', age = '' }, now) {
     const search = query.trim().toLowerCase();
     return rows.filter(row => (!builder || row.builderId === builder)
         && (!site || row.siteKey === site)
@@ -76,6 +75,5 @@ export function filterDashboardRows(rows, { builder = '', site = '', query = '',
             ...row.tags.map(tag => tag.tagNumber || tag.scaffoldNo), ...row.handovers.map(form => form.inspectionNumber),
             ...row.drawings.map(form => form.drawingNumber)].some(value => String(value || '').toLowerCase().includes(search)))
         && (status === 'all' || (status === 'current' ? row.lifecycle.status !== 'dismantled' : row.lifecycle.status === status))
-        && (!age || ageBucket(row, now) === age)
-        && (!missing || row.missingDocuments));
+        && (!age || ageBucket(row, now) === age));
 }

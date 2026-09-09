@@ -28,7 +28,6 @@ test('matches legacy names and retains all linked documents without duplicate dr
     assert.equal(rows[0].tags.length, 1);
     assert.equal(rows[0].handovers.length, 2);
     assert.equal(rows[0].drawings.length, 1);
-    assert.equal(rows[0].missingDocuments, false);
 });
 test('includes records outside the current registry and excludes deleted forms', () => {
     const input = source();
@@ -74,7 +73,7 @@ test('active scaffolds without timestamps remain unknown instead of becoming zer
 test('chart age boundaries and combined builder, search and status filters agree', () => {
     const input = source(); input.records = [record(), record({ id: 'r2', scaffoldName: 'South tower', activatedAt: '2026-09-08T00:00:00Z' })];
     const { rows } = buildDashboardData(input);
-    assert.equal(filterDashboardRows(rows, { builder: 'b1', status: 'active', age: '30-60', query: 'north', missing: true }, now).length, 1);
+    assert.equal(filterDashboardRows(rows, { builder: 'b1', status: 'active', age: '30-60', query: 'north' }, now).length, 1);
     assert.equal(filterDashboardRows(rows, { builder: 'b2', status: 'all' }, now).length, 0);
     assert.equal(filterDashboardRows(rows, { status: 'active', age: '0-7' }, now)[0].scaffoldName, 'South tower');
 });

@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowUpRight, Building2, ChartNoAxesCombined, Clock3, FileText, HardHat, RefreshCw, Search, X } from 'lucide-react';
-import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, SAFETY_PROJECTS_CHANGED_EVENT } from '../services/api';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ArrowDownWideNarrow, ArrowUpRight, Building2, ChevronDown, Clock3, FileText, HardHat, RefreshCw, Search, X } from 'lucide-react';
+import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyProjectsAPI, SAFETY_PROJECTS_CHANGED_EVENT } from '../services/api';
 import { loadScaffoldDashboard } from '../services/scaffoldDashboard';
 import { AGE_BUCKETS, STATUS_LABELS, ageBucket, elapsedDays, filterDashboardRows } from '../utils/scaffoldDashboard';
 import { formatElapsedTime } from '../utils/scaffoldRegister';
 import './ScaffoldDashboardPage.css';
 
-const DEFAULT_FILTERS = { builder: '', site: '', query: '', status: 'current', age: '', missing: false };
+const DEFAULT_FILTERS = { builder: '', site: '', query: '', status: 'current', age: '' };
 const STATUS_COLORS = { active: '#0d9488', 'awaiting-qr': '#e6a23c', dismantled: '#94a3b8' };
 const dateLabel = value => {
     if (!value || !Number.isFinite(Date.parse(value))) return 'Not recorded';
@@ -17,6 +17,67 @@ const formLabel = form => form.variationNumber || form.inspectionNumber || form.
 const timeLabel = (row, now) => !row.lifecycle.startedAt ? 'Start not recorded'
     : row.lifecycle.status === 'dismantled' && !row.lifecycle.stoppedAt ? 'End not recorded'
         : formatElapsedTime(row.lifecycle.startedAt, row.lifecycle.stoppedAt, now);
+
+function ClientLogo({ src, name }) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [src]);
+    return <span className="sd-client-logo" aria-hidden="true">
+        {src && !failed ? <img src={src} alt="" onError={() => setFailed(true)} />
+            : name ? <span>{name.split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase()}</span>
+                : <Building2 size={17} />}
+    </span>;
+}
+
+function LogoSelect({ label, value, options, onChange }) {
+    const id = useId();
+    const root = useRef(null);
+    const menu = useRef(null);
+    const typed = useRef({ text: '', time: 0 });
+    const [open, setOpen] = useState(false);
+    const [active, setActive] = useState(0);
+    const selected = options.find(option => option.value === value) || options[0];
+    const openMenu = () => { setActive(Math.max(0, options.findIndex(option => option.value === value))); setOpen(true); };
+    const choose = option => { onChange(option.value); setOpen(false); };
+    useEffect(() => {
+        if (!open) return undefined;
+        const outside = event => { if (!root.current?.contains(event.target)) setOpen(false); };
+        document.addEventListener('pointerdown', outside);
+        return () => document.removeEventListener('pointerdown', outside);
+    }, [open]);
+    useEffect(() => { if (open) menu.current?.children[active]?.scrollIntoView({ block: 'nearest' }); }, [active, open]);
+    const onKeyDown = event => {
+        if (event.key === 'Tab') { setOpen(false); return; }
+        if (event.key === 'Escape') { event.preventDefault(); setOpen(false); return; }
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' '].includes(event.key)) {
+            event.preventDefault();
+            if (!open) { openMenu(); return; }
+            if (event.key === 'Enter' || event.key === ' ') { choose(options[Math.min(active, options.length - 1)]); return; }
+            setActive(current => event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+                : Math.max(0, Math.min(options.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1))));
+        } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault();
+            const time = Date.now();
+            typed.current = { text: (time - typed.current.time < 700 ? typed.current.text : '') + event.key.toLowerCase(), time };
+            const index = options.findIndex(option => option.label.toLowerCase().startsWith(typed.current.text));
+            if (index >= 0) { setOpen(true); setActive(index); }
+        }
+    };
+    return <div className="sd-filter-field sd-logo-select" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+        <label id={`${id}-label`} htmlFor={id}>{label}</label>
+        <button id={id} type="button" role="combobox" aria-labelledby={`${id}-label ${id}-value`} aria-expanded={open} aria-haspopup="listbox"
+            aria-controls={`${id}-options`} aria-activedescendant={open ? `${id}-option-${Math.min(active, options.length - 1)}` : undefined}
+            className="sd-select-trigger" onClick={() => open ? setOpen(false) : openMenu()} onKeyDown={onKeyDown}>
+            <ClientLogo src={selected.logoUrl} name={selected.logoName} />
+            <span id={`${id}-value`} className="sd-select-text">{selected.label}{selected.description && <small>{selected.description}</small>}</span><ChevronDown size={15} aria-hidden="true" />
+        </button>
+        {open && <div id={`${id}-options`} className="sd-select-menu" role="listbox" aria-labelledby={`${id}-label`} ref={menu}>
+            {options.map((option, index) => <div id={`${id}-option-${index}`} key={option.value} role="option" aria-selected={option.value === value}
+                className={index === active ? 'is-active' : ''} onPointerMove={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(option)}>
+                <ClientLogo src={option.logoUrl} name={option.logoName} /><span className="sd-select-text">{option.label}{option.description && <small>{option.description}</small>}</span>
+            </div>)}
+        </div>}
+    </div>;
+}
 
 function StatusChart({ rows, selected, onSelect }) {
     const entries = Object.entries(STATUS_LABELS).map(([id, label]) => ({ id, label, count: rows.filter(row => row.lifecycle.status === id).length }));
@@ -57,7 +118,11 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [updatedAt, setUpdatedAt] = useState('');
+    const [showInsights, setShowInsights] = useState(() => {
+        try { return localStorage.getItem('ess-scaffold-dashboard-insights') !== 'hidden'; }
+        catch { return true; }
+    });
+    const [logoUrls, setLogoUrls] = useState({});
     const [now, setNow] = useState(Date.now());
     const [filters, setFilters] = useState(DEFAULT_FILTERS);
     const [sort, setSort] = useState('oldest');
@@ -78,7 +143,7 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
         try {
             const next = await loadData();
             if (id !== request.current) return;
-            setData(next); setError(''); setUpdatedAt(new Date().toISOString());
+            setData(next); setError('');
         } catch (failure) {
             if (id === request.current) setError(failure.message || 'Could not load the dashboard. Please retry.');
         } finally {
@@ -93,11 +158,26 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
         window.addEventListener(SAFETY_PROJECTS_CHANGED_EVENT, refresh);
         return () => { request.current += 1; inFlight.current = false; window.clearInterval(timer); window.removeEventListener('focus', onFocus); window.removeEventListener(SAFETY_PROJECTS_CHANGED_EVENT, refresh); };
     }, [refresh]);
+    useEffect(() => {
+        try { localStorage.setItem('ess-scaffold-dashboard-insights', showInsights ? 'visible' : 'hidden'); }
+        catch { /* Display preferences are optional. */ }
+    }, [showInsights]);
+    useEffect(() => {
+        let cancelled = false;
+        (data?.builders || []).forEach(builder => {
+            safetyProjectsAPI.resolveBuilderLogoUrl(builder).then(url => {
+                if (!cancelled) setLogoUrls(current => current[builder.id] === url ? current : { ...current, [builder.id]: url });
+            }).catch(() => {
+                if (!cancelled) setLogoUrls(current => ({ ...current, [builder.id]: builder.logoUrl || '' }));
+            });
+        });
+        return () => { cancelled = true; };
+    }, [data?.builders]);
     const updateFilters = patch => { setFilters(current => ({ ...current, ...patch })); setSelectedId(''); setPage(0); };
     const sites = data?.sites || [];
-    const builderOptions = [...new Map(sites.map(site => [site.builderId, site.builderName])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    const builderOptions = [...new Map(sites.map(site => [site.builderId, { value: site.builderId, label: site.builderName, logoName: site.builderName, logoUrl: logoUrls[site.builderId] || '' }])).values()].sort((a, b) => a.label.localeCompare(b.label));
     const siteOptions = sites.filter(site => !filters.builder || site.builderId === filters.builder).sort((a, b) => a.projectName.localeCompare(b.projectName));
-    const scope = useMemo(() => filterDashboardRows(data?.rows || [], { ...filters, status: 'all', age: '', missing: false }, now), [data, filters, now]);
+    const scope = useMemo(() => filterDashboardRows(data?.rows || [], { ...filters, status: 'all', age: '' }, now), [data, filters, now]);
     const filtered = useMemo(() => {
         const result = filterDashboardRows(data?.rows || [], filters, now);
         return result.sort((left, right) => {
@@ -112,10 +192,6 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
     const pageCount = Math.max(1, Math.ceil(filtered.length / 50));
     const visiblePage = Math.min(page, pageCount - 1);
     const active = scope.filter(row => row.lifecycle.status === 'active');
-    const timed = active.map(row => elapsedDays(row, now)).filter(days => days !== null);
-    const activeSiteCount = new Set(active.map(row => row.siteKey)).size;
-    const scopeSites = new Set(scope.map(row => row.siteKey));
-    const labourCount = sites.filter(site => scopeSites.has(site.key)).reduce((sum, site) => sum + site.labour.length, 0);
     const ageEntries = [...AGE_BUCKETS, { id: 'unknown', label: 'Start not recorded' }].map(bucket => ({ ...bucket, count: active.filter(row => ageBucket(row, now) === bucket.id).length }));
     const maxAge = Math.max(1, ...ageEntries.map(entry => entry.count));
     const siteEntries = sites.map(site => ({ ...site, count: active.filter(row => row.siteKey === site.key).length })).filter(site => site.count).sort((a, b) => b.count - a.count).slice(0, 6);
@@ -147,40 +223,32 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
     const reset = () => { setFilters(DEFAULT_FILTERS); setSelectedId(''); setPage(0); };
 
     return <main className="scaffold-dashboard">
-        <header className="sd-header"><div><div className="sd-eyebrow"><ChartNoAxesCombined size={15} /> ACCOUNTS & OPERATIONS</div><h1>Scaffold Dashboard</h1><p>Your scaffolds, time on site and supporting documents in one place.</p></div>
-            <div className="sd-update"><span>{loading ? 'Updating…' : updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}` : 'Not loaded'}</span><button className="sd-icon" onClick={refresh} disabled={loading} aria-label="Refresh dashboard" title="Refresh dashboard"><RefreshCw size={17} className={loading ? 'sd-spin' : ''} /></button></div>
-        </header>
-        {error && <div className="sd-error" role="alert">{error} {data ? 'Showing the last complete snapshot.' : 'Totals are unavailable until all sources load.'} <button onClick={refresh} disabled={loading}>Retry</button></div>}
+        {error && <div className="sd-error" role="alert">{error} {data ? 'Showing the last complete snapshot.' : 'Scaffolds are unavailable until all sources load.'} <button onClick={refresh} disabled={loading}>Retry</button></div>}
         <section className="sd-filters" aria-label="Dashboard filters">
-            <label>Builder<select value={filters.builder} onChange={event => updateFilters({ builder: event.target.value, site: '' })}><option value="">All builders</option>{builderOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-            <label>Site / project<select value={filters.site} onChange={event => updateFilters({ site: event.target.value })}><option value="">All sites</option>{siteOptions.map(site => <option key={site.key} value={site.key}>{site.projectName}{!filters.builder ? ` · ${site.builderName}` : ''}</option>)}</select></label>
+            <LogoSelect label="Builder" value={filters.builder} options={[{ value: '', label: 'All builders' }, ...builderOptions]} onChange={value => updateFilters({ builder: value, site: '' })} />
+            <LogoSelect label="Site / project" value={filters.site} options={[{ value: '', label: 'All sites', logoName: builderOptions.find(option => option.value === filters.builder)?.label, logoUrl: logoUrls[filters.builder] || '' }, ...siteOptions.map(site => ({ value: site.key, label: site.projectName, description: filters.builder ? '' : site.builderName, logoName: site.builderName, logoUrl: logoUrls[site.builderId] || '' }))]} onChange={value => updateFilters({ site: value })} />
             <label className="sd-search">Search<div><Search size={16} /><input type="search" placeholder="Scaffold, location or document…" value={filters.query} onChange={event => updateFilters({ query: event.target.value })} /></div></label>
             <button className="sd-reset" onClick={reset}>Reset filters</button>
+            <button className="sd-icon" onClick={refresh} disabled={loading} aria-label="Refresh dashboard" title="Refresh dashboard"><RefreshCw size={17} className={loading ? 'sd-spin' : ''} /></button>
         </section>
         {!data ? <div className="sd-empty" role="status">{loading ? 'Loading scaffolds and site documents…' : 'The dashboard could not be loaded.'}</div> : <>
-            <section className="sd-metrics" aria-label="Portfolio summary">
-                <button onClick={() => updateFilters({ status: 'active', age: '' })}><HardHat /><span>Active scaffolds<strong>{active.length}</strong><small>View scaffolds currently up <ArrowUpRight size={13} /></small></span></button>
-                <div><Building2 /><span>Sites with active scaffolds<strong>{activeSiteCount}</strong><small>Across the selected portfolio</small></span></div>
-                <button onClick={() => { setSort('oldest'); updateFilters({ status: 'active', age: '' }); }}><Clock3 /><span>Average time up<strong>{timed.length ? `${Math.round(timed.reduce((a, b) => a + b, 0) / timed.length)} days` : '—'}</strong><small>{active.length - timed.length ? `${active.length - timed.length} active scaffolds missing start times` : 'Active scaffolds with a recorded start'}</small></span></button>
-                <div><FileText /><span>Site labour / variation forms<strong>{labourCount}</strong><small>Unique forms across matching scaffold sites</small></span></div>
-            </section>
-            <div className="sd-chart-caption">Portfolio insights <span>Click a chart to explore its scaffolds below. Charts follow builder, site and search filters.</span></div>
-            <section className="sd-charts" aria-label="Interactive scaffold charts">
-                <article className="sd-card"><h2>Scaffold status</h2><p>Current scaffolds and dismantled history</p><StatusChart rows={scope} selected={filters.status} onSelect={selectStatus} /></article>
-                <article className="sd-card"><h2>How long have they been up?</h2><p>Active scaffolds by elapsed time</p><div className="sd-bars">{ageEntries.map(entry => <button key={entry.id} aria-label={`${entry.label}: ${entry.count} active scaffolds`} aria-pressed={filters.age === entry.id} onClick={() => updateFilters({ status: 'active', age: filters.age === entry.id ? '' : entry.id })}>
+            <div className="sd-chart-caption"><h2>Portfolio insights</h2><button className="sd-insights-toggle" aria-expanded={showInsights} aria-controls="scaffold-portfolio-insights" onClick={() => setShowInsights(current => !current)}>{showInsights ? 'Hide' : 'Show'} portfolio insights<ChevronDown size={15} className={showInsights ? 'is-expanded' : ''} /></button></div>
+            <section id="scaffold-portfolio-insights" className="sd-charts" aria-label="Interactive scaffold charts" hidden={!showInsights}>
+                <article className="sd-card"><h2>Scaffold status</h2><StatusChart rows={scope} selected={filters.status} onSelect={selectStatus} /></article>
+                <article className="sd-card"><h2>How long have they been up?</h2><div className="sd-bars">{ageEntries.map(entry => <button key={entry.id} aria-label={`${entry.label}: ${entry.count} active scaffolds`} aria-pressed={filters.age === entry.id} onClick={() => updateFilters({ status: 'active', age: filters.age === entry.id ? '' : entry.id })}>
                     <span>{entry.label}</span><div className="sd-bar-track"><i style={{ width: `${entry.count / maxAge * 100}%` }} /></div><strong>{entry.count}</strong>
                 </button>)}</div></article>
-                <article className="sd-card"><h2>Sites with the most scaffolds</h2><p>Top six sites by active scaffold count</p><div className="sd-site-bars">{siteEntries.length ? siteEntries.map(site => <button key={site.key} onClick={() => updateFilters({ builder: site.builderId, site: site.key, status: 'active', age: '' })} aria-label={`${site.projectName}, ${site.builderName}: ${site.count} active scaffolds`}><span>{site.projectName}<small>{site.builderName}</small></span><strong>{site.count}</strong><div className="sd-bar-track"><i style={{ width: `${site.count / maxSite * 100}%` }} /></div></button>) : <p className="sd-chart-empty">No active scaffolds in this selection.</p>}</div></article>
+                <article className="sd-card"><h2>Sites with the most scaffolds</h2><div className="sd-site-bars">{siteEntries.length ? siteEntries.map(site => <button key={site.key} onClick={() => updateFilters({ builder: site.builderId, site: site.key, status: 'active', age: '' })} aria-label={`${site.projectName}, ${site.builderName}: ${site.count} active scaffolds`}><span>{site.projectName}<small>{site.builderName}</small></span><strong>{site.count}</strong><div className="sd-bar-track"><i style={{ width: `${site.count / maxSite * 100}%` }} /></div></button>) : <p className="sd-chart-empty">No active scaffolds in this selection.</p>}</div></article>
             </section>
             <section className="sd-register" aria-label="Scaffold explorer">
-                <div className="sd-list-heading"><div><h2>Scaffold explorer <span>{filtered.length}</span></h2><p>Select a scaffold to explore its documents and site forms.</p></div><label className="sd-sort"><ArrowDownWideNarrow size={16} /><select aria-label="Sort scaffolds" value={sort} onChange={event => { setSort(event.target.value); setPage(0); }}><option value="oldest">Longest time up</option><option value="newest">Shortest time up</option><option value="name">Scaffold name</option><option value="site">Site name</option></select></label></div>
-                <div className="sd-list-filters"><div className="sd-status-tabs" aria-label="Filter scaffold status">{Object.entries({ current: 'Current', all: 'All history', ...STATUS_LABELS }).map(([id, label]) => <button key={id} aria-pressed={filters.status === id} onClick={() => updateFilters({ status: id, age: '' })}>{label}</button>)}</div><label className="sd-checkbox"><input type="checkbox" checked={filters.missing} onChange={event => updateFilters({ missing: event.target.checked })} /> Missing linked documents</label>{filters.age && <button className="sd-age-chip" onClick={() => updateFilters({ age: '' })}>{ageEntries.find(entry => entry.id === filters.age)?.label}<X size={13} /></button>}</div>
+                <div className="sd-list-heading"><div><h2>Scaffold explorer <span>{filtered.length}</span></h2></div><label className="sd-sort"><ArrowDownWideNarrow size={16} /><select aria-label="Sort scaffolds" value={sort} onChange={event => { setSort(event.target.value); setPage(0); }}><option value="oldest">Longest time up</option><option value="newest">Shortest time up</option><option value="name">Scaffold name</option><option value="site">Site name</option></select></label></div>
+                <div className="sd-list-filters"><div className="sd-status-tabs" aria-label="Filter scaffold status">{Object.entries({ current: 'Current', all: 'All history', ...STATUS_LABELS }).map(([id, label]) => <button key={id} aria-pressed={filters.status === id} onClick={() => updateFilters({ status: id, age: '' })}>{label}</button>)}</div>{filters.age && <button className="sd-age-chip" onClick={() => updateFilters({ age: '' })}>{ageEntries.find(entry => entry.id === filters.age)?.label}<X size={13} /></button>}</div>
                 <div className={`sd-explorer${selected ? ' has-selection' : ''}`}>
                     <div className="sd-table-wrap"><table><thead><tr><th>Scaffold / site</th><th>Status</th><th>Time up</th><th>Documents</th><th>Site forms</th></tr></thead><tbody>{filtered.slice(visiblePage * 50, (visiblePage + 1) * 50).map(row => <tr key={row.id} className={selectedId === row.id ? 'is-selected' : ''}>
                         <td><button className="sd-row-name" onClick={() => chooseRow(row)} aria-expanded={selectedId === row.id}>{row.scaffoldName || 'Untitled scaffold'}<ArrowUpRight size={13} /></button><small>{row.builderName} · {row.projectName}</small>{row.location && <small>{row.location}</small>}</td>
                         <td><span className={`sd-status is-${row.lifecycle.status}`}>{STATUS_LABELS[row.lifecycle.status]}</span></td>
                         <td className="sd-time">{timeLabel(row, now)}<small>{row.lifecycle.status === 'dismantled' ? 'Timer stopped' : row.lifecycle.startedAt ? `Since ${new Date(row.lifecycle.startedAt).toLocaleDateString('en-AU')}` : 'Awaiting recorded activation'}</small></td>
-                        <td><button className="sd-text-button" onClick={() => chooseRow(row)}>{row.drawings.length + row.tags.length + row.handovers.length} linked</button>{row.missingDocuments && <small className="sd-warning">Links missing</small>}</td>
+                        <td><button className="sd-text-button" onClick={() => chooseRow(row)}>{row.drawings.length + row.tags.length + row.handovers.length} linked</button></td>
                         <td><button className="sd-text-button" onClick={() => { chooseRow(row); setDetailTab('labour'); }}>{sites.find(site => site.key === row.siteKey)?.labour.length || 0} forms</button></td>
                     </tr>)}</tbody></table>{!filtered.length && <div className="sd-empty"><HardHat size={30} /><h3>No scaffolds match this view</h3><p>Try another builder, site or status.</p><button onClick={reset}>Reset filters</button></div>}<div className="sd-pagination"><span>{filtered.length ? `${visiblePage * 50 + 1}–${Math.min((visiblePage + 1) * 50, filtered.length)} of ${filtered.length} scaffolds` : '0 scaffolds'}</span><button disabled={visiblePage === 0} onClick={() => { setPage(visiblePage - 1); setSelectedId(''); }}>Previous</button><span>Page {visiblePage + 1} of {pageCount}</span><button disabled={visiblePage + 1 >= pageCount} onClick={() => { setPage(visiblePage + 1); setSelectedId(''); }}>Next</button></div></div>
                     {selected && <aside className="sd-details" ref={detailsRef} tabIndex="-1" aria-label={`Details for ${selected.scaffoldName}`}>
@@ -198,7 +266,6 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
                     </aside>}
                 </div>
             </section>
-            <footer className="sd-footer">Time up follows recorded activation or QR assignment and stops at dismantling. This is elapsed time on site; hire rates and billing periods are not applied. Refreshes every minute while visible.</footer>
         </>}
     </main>;
 }
