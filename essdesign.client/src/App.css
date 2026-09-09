@@ -6175,15 +6175,6 @@ body {
     min-height: 100vh;
 }
 
-/* Bundled variable font keeps sidebar metrics independent of installed fonts. */
-@font-face {
-    font-family: 'ESS Sidebar';
-    src: url('./assets/fonts/roboto-latin-wght-normal.woff2') format('woff2');
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-}
-
 .app-nav-sidebar {
     --app-nav-bg: #ffffff;
     --app-nav-panel: #f8f8f7;
@@ -6196,7 +6187,8 @@ body {
     --app-nav-active-text: #101820;
     --app-nav-accent: #23c98b;
     --app-nav-accent-soft: #e7fbf3;
-    font-family: 'ESS Sidebar', Arial, sans-serif;
+    /* Match Chrome's original Arial rendering; avoid local font substitutions. */
+    font-family: Arial, sans-serif;
     line-height: 1.5;
     width: 236px;
     min-width: 236px;
@@ -6218,7 +6210,6 @@ body {
 .app-nav-sidebar button,
 .app-nav-sidebar input {
     font-family: inherit;
-    line-height: inherit;
 }
 
 .app-nav-sidebar-brand {
@@ -6374,7 +6365,7 @@ body {
     color: #111827;
     cursor: pointer;
     font-size: 13px;
-    font-weight: 520;
+    font-weight: 400;
     text-align: left;
     white-space: nowrap;
     transition: background 0.14s ease, color 0.14s ease;
@@ -6436,7 +6427,7 @@ body {
     background: transparent;
     color: #4b5563;
     font-size: 12px;
-    font-weight: 520;
+    font-weight: 400;
     min-height: 31px;
     padding: 7px 9px;
     border-radius: 6px;
@@ -6524,7 +6515,7 @@ body {
     display: grid;
     place-items: center;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 700;
     overflow: visible;
 }
 
@@ -6559,7 +6550,7 @@ body {
     text-overflow: ellipsis;
     color: #111827;
     font-size: 12px;
-    font-weight: 620;
+    font-weight: 700;
     line-height: 1.2;
 }
 
