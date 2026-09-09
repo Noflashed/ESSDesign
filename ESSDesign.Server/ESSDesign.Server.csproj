@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\essdesign.client\essdesign.client.esproj">
+    <ProjectReference Include="..\essdesign.client\essdesign.client.esproj" Condition="'$(SkipClientBuild)' != 'true'">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>

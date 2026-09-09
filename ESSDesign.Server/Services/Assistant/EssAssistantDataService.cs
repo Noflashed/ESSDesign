@@ -66,6 +66,7 @@ public sealed class EssAssistantDataService
             searches.Add(("transport", () => GetTransportAsync(query, 24, perDomainLimit, access, cancellationToken)));
 
         var selected = searches
+            .Where(search => access.CanSearchDomain(search.Domain))
             .Where(search => searchAll || requested.Contains(Normalize(search.Domain)))
             .ToList();
         var loaded = await Task.WhenAll(selected.Select(async search =>
@@ -450,6 +451,7 @@ public sealed class EssAssistantDataService
     private static string RoleLabel(string? role) => Normalize(role) switch
     {
         "admin" => "Admin",
+        "accounts" => "Accounts",
         "scaffold designer" => "Scaffold Designer",
         "site supervisor" => "Site Supervisor",
         "project manager" => "Project Manager",

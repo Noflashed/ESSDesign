@@ -7,6 +7,7 @@ public sealed class EssAssistantAccessPolicy
     private static readonly HashSet<string> AssistantRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         AppRoles.Admin,
+        AppRoles.Accounts,
         AppRoles.SiteSupervisor,
         AppRoles.ProjectManager,
         AppRoles.LeadingHand,
@@ -48,6 +49,17 @@ public sealed class EssAssistantAccessPolicy
 
 public sealed class EssAssistantAccessContext
 {
+    private static readonly HashSet<string> AccountsTools = new(StringComparer.Ordinal)
+    {
+        "search_ess", "search_sites", "calculate_site_distances", "search_designs",
+        "search_drawing_register", "search_project_data", "get_notifications",
+        "get_weather", "open_ess_record",
+    };
+
+    public bool IsAccounts => string.Equals(Role, AppRoles.Accounts, StringComparison.OrdinalIgnoreCase);
+    public bool CanUseTool(string name) => CanUseAssistant && (!IsAccounts || AccountsTools.Contains(name));
+    public bool CanSearchDomain(string domain) => !IsAccounts || domain is "sites" or "designs" or "drawing_register" or "project_data";
+
     public string UserId { get; init; } = string.Empty;
     public string UserName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;

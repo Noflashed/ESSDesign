@@ -60,6 +60,7 @@ export function getTransportUserInitials(user, fallback = 'U') {
 export function getTransportRoleDisplayName(role) {
   switch (role) {
     case 'admin': return 'Admin';
+    case 'accounts': return 'Accounts';
     case 'scaffold_designer': return 'Scaffold Designer';
     case 'site_supervisor': return 'Site Supervisor';
     case 'project_manager': return 'Project Manager';

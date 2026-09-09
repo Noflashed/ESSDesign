@@ -5,6 +5,7 @@ import { analysisAPI, preferencesAPI, usersAPI } from '../services/api';
 function getRoleDisplayName(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'accounts': return 'Accounts';
         case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';

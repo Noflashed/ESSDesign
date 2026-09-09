@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import FolderBrowser from './components/FolderBrowser';
 import DrawingRegisterPage from './components/DrawingRegisterPage';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
+import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
+import { ACCOUNTS_NAV_ITEMS, resolveAccountsPage } from './utils/accountsAccess';
 import ScaffoldRegisterPage from './components/ScaffoldRegisterPage';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -27,7 +29,7 @@ import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
-import { ClipboardCheck, ClipboardList, ListTree, QrCode, Sparkles, Tag, Users } from 'lucide-react';
+import { ChartNoAxesCombined, ClipboardCheck, ClipboardList, ListTree, QrCode, Sparkles, Tag, Users } from 'lucide-react';
 import './App.css';
 
 const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
@@ -181,6 +183,7 @@ const NewsNavIcon = ({ size = 18 }) => (
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
     'scaffold-register': ListTree,
+    'scaffold-dashboard': ChartNoAxesCombined,
     'design': DesignNavIcon,
     'drawing-register': ClipboardList,
     'safety-handover-register': ClipboardCheck,
@@ -205,7 +208,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'site-information', 'scaffold-register', 'ess-ai', 'profile', 'settings']);
 const DESIGN_NAV_ITEM = {
     key: 'design',
@@ -242,6 +245,7 @@ function isPageActive(itemKey, currentPage) {
 function getRoleDisplayName(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'accounts': return 'Accounts';
         case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';
@@ -316,11 +320,11 @@ function NavSidebar({
 
     const navSections = useMemo(() => {
         const sectionFor = (key) => {
-            if (['site-information', 'scaffold-register', 'safety', 'employees', 'employee-home'].includes(key)) return 'Workspace';
+            if (['site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'employees', 'employee-home'].includes(key)) return 'Workspace';
             if (['design', 'truck-schedule', 'material-ordering-new', 'rostering'].includes(key)) return 'Operations';
             return 'Tools';
         };
-        const itemOrder = ['site-information', 'scaffold-register', 'safety', 'employees', 'employee-home', 'design', 'truck-schedule', 'material-ordering-new', 'rostering', 'ess-ai', 'ess-news'];
+        const itemOrder = ['site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'employees', 'employee-home', 'design', 'truck-schedule', 'material-ordering-new', 'rostering', 'ess-ai', 'ess-news'];
         return ['Workspace', 'Operations', 'Tools'].map((label) => ({
             label,
             items: visibleNavItems
@@ -688,7 +692,9 @@ function App() {
     const [linkingEmployee, setLinkingEmployee] = useState(false);
     const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const [currentPage, setCurrentPage] = useState('landing');
+    const [pageState, setCurrentPage] = useState('landing');
+    const isAccounts = user?.role === 'accounts';
+    const currentPage = isAccounts ? resolveAccountsPage(pageState) : pageState;
     const [pendingAiQuestion, setPendingAiQuestion] = useState(null);
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
@@ -713,11 +719,14 @@ function App() {
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }, { key: 'ess-ai', label: 'ESS AI' }]
+        : isAccounts
+        ? ACCOUNTS_NAV_ITEMS
         : isScaffoldDesigner
         ? [
             DESIGN_NAV_ITEM,
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
+            { key: 'scaffold-dashboard', label: 'Scaffold Dashboard' },
             { key: 'ess-ai', label: 'ESS AI' },
         ]
         : isTruckDeviceUser
@@ -729,6 +738,7 @@ function App() {
             { key: 'ess-ai', label: 'ESS AI' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
+            { key: 'scaffold-dashboard', label: 'Scaffold Dashboard' },
             ...(showRosteringAndEmployees ? [{ key: 'employees', label: 'Employees' }] : []),
             ...(hasTransportSuiteAccess
                 ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
@@ -796,6 +806,8 @@ function App() {
         const transportPages = TRANSPORT_PAGE_KEYS;
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'profile' || page === 'settings' || page === 'ess-ai' ? page : 'employee-home')
+            : isAccounts
+            ? resolveAccountsPage(page)
             : isScaffoldDesigner
             ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'landing')
             : isTruckDeviceUser
@@ -822,7 +834,7 @@ function App() {
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
+    }, [buildAppUrl, hasTransportSuiteAccess, isAccounts, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
 
     const handleLandingAiQuestion = useCallback((question) => {
         const prompt = question.trim();
@@ -1197,6 +1209,8 @@ function App() {
         applyPageState(
             isEmployeePortalRole
                 ? 'employee-home'
+                : isAccounts
+                ? 'scaffold-dashboard'
                 : isScaffoldDesigner
                 ? 'landing'
                 : (isTruckDeviceUser || isTransportManagement)
@@ -1394,13 +1408,17 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const fallbackPage = isEmployeePortalRole
             ? 'employee-home'
+            : isAccounts
+            ? 'scaffold-dashboard'
             : isScaffoldDesigner
             ? 'landing'
             : (isTruckDeviceUser || isTransportManagement)
             ? 'truck-schedule'
             : 'landing';
         const pageFromUrl = urlParams.get('page') || fallbackPage;
-        const resolvedPageFromUrl = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
+        const resolvedPageFromUrl = isAccounts
+            ? resolveAccountsPage(pageFromUrl)
+            : isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
             ? 'landing'
             : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(pageFromUrl) && !MATERIAL_ORDERING_PAGE_KEYS.has(pageFromUrl))
             ? 'material-ordering-new'
@@ -1433,7 +1451,9 @@ function App() {
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
             const page = e.state?.page ?? fallbackPage;
-            const resolvedPage = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
+            const resolvedPage = isAccounts
+                ? resolveAccountsPage(page)
+                : isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
                 ? 'landing'
                 : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(page) && !MATERIAL_ORDERING_PAGE_KEYS.has(page))
                 ? 'material-ordering-new'
@@ -1450,7 +1470,7 @@ function App() {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl, hasTransportSuiteAccess, isAccounts, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -1624,6 +1644,14 @@ function App() {
         if (currentPage === 'site-information') {
             return <SiteInformationPage />;
         }
+        if (currentPage === 'scaffold-dashboard') {
+            return <ScaffoldDashboardPage onOpenDrawing={(drawing) => setPdfViewer({
+                documentId: drawing.drawingDocumentId,
+                fileName: drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf',
+                fileType: drawing.drawingDocumentType,
+                versionKey: drawing.drawingRevisionNumber || drawing.updatedAt || ''
+            })} />;
+        }
         if (currentPage === 'scaffold-register') {
             return (
                 <ScaffoldRegisterPage
@@ -1735,6 +1763,7 @@ function App() {
                 <React.Suspense fallback={<div className="ess-ai-route-loading"><LoadingBrandmark label="Loading ESS AI" /></div>}>
                     <ESSAIPage
                         userId={user?.id || ''}
+                        userRole={user?.role || ''}
                         userAvatarUrl={userAvatarUrl}
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}

@@ -769,6 +769,7 @@ namespace ESSDesign.Server.Services
             return NormalizeRole(role) switch
             {
                 AppRoles.Admin => "Admin",
+                AppRoles.Accounts => "Accounts",
                 AppRoles.ScaffoldDesigner => "Scaffold Designer",
                 AppRoles.SiteSupervisor => "Site Supervisor",
                 AppRoles.ProjectManager => "Project Manager",

@@ -117,7 +117,7 @@ function employeeInitials(employee) {
 }
 
 function employeeFallbackRoleKey(employee) {
-    return employee?.leadingHand ? 'leading_hand' : 'general_scaffolder';
+    return employee?.invitedRole || (employee?.leadingHand ? 'leading_hand' : 'general_scaffolder');
 }
 
 function roleLabel(role) {
@@ -127,6 +127,7 @@ function roleLabel(role) {
         case 'leading_hand': return 'Leading Hand';
         case 'general_scaffolder': return 'Scaffolder';
         case 'admin': return 'Admin';
+        case 'accounts': return 'Accounts';
         case 'viewer': return 'Viewer';
         default: return 'Employee';
     }
