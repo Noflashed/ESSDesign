@@ -5630,3 +5630,24 @@ export const analysisAPI = {
 };
 
 export default { authAPI, foldersAPI, preferencesAPI, usersAPI, essNewsAPI };
+
+// Browser platform boundary for the iOS scaffold forms. Keep session handling in
+// the existing web client; mobile form/PDF logic never carries its own credentials.
+export const scaffoldFormBridge = {
+    constants: {
+        supabaseUrl: SUPABASE_URL,
+        supabaseAnonKey: SUPABASE_ANON_KEY,
+        safetyProjectsBucket: SAFETY_BUCKET,
+        scaffTagQrRedirectBaseUrl: PUBLIC_APP_ORIGIN,
+    },
+    fetchSupabase: async (url, options = {}) => {
+        if (!localStorage.getItem('access_token')) throw new Error('Sign in before saving scaffold forms.');
+        if (!isAccessTokenFresh()) await refreshAuthSession();
+        const headers = new Headers(options.headers);
+        headers.set('Authorization', `Bearer ${localStorage.getItem('access_token')}`);
+        return fetch(url, {...options, headers});
+    },
+    shareProjectDataForm: async payload => {
+        await apiClient.post('/notifications/project-data-form-shared', payload);
+    },
+};

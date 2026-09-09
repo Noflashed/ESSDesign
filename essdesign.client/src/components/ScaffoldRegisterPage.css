@@ -513,3 +513,25 @@
 :root[data-theme="dark"] .scaffold-register-elapsed.is-stopped {
     color: #94a3b8;
 }
+
+.scaffold-register-document-actions { display: flex; align-items: center; gap: 8px; }
+.scaffold-register-add-cell { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid #cbd9e9; border-radius: 7px; background: #f3f8ff; color: #1976d2; cursor: pointer; }
+.scaffold-register-add-cell:hover { background: #e0efff; }
+.scaffold-register-add-cell:disabled { opacity: .45; cursor: wait; }
+.scaffold-register-add-cell:focus-visible { outline: 2px solid #1976d2; outline-offset: 3px; }
+.scaffold-register-name-dialog, .scaffold-browser-alert { width: min(460px, calc(100vw - 40px)); padding: 28px; color: #212121; background: white; border: 1px solid #dce3ec; border-radius: 16px; box-shadow: 0 24px 80px #0003; }
+.scaffold-register-name-dialog::backdrop, .scaffold-browser-alert::backdrop { background: #17253577; }
+.scaffold-register-name-dialog h2, .scaffold-browser-alert h2 { margin: 0 0 12px; font-size: 21px; }
+.scaffold-register-name-dialog label { display:block; margin: 20px 0 8px; }
+.scaffold-register-name-dialog input { box-sizing: border-box; width:100%; padding:12px; border:1px solid #b6c4d6; border-radius:8px; font:inherit; }
+.scaffold-register-dialog-actions, .scaffold-browser-alert > div { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; flex-wrap:wrap; }
+.scaffold-register-dialog-actions button, .scaffold-browser-alert button { padding:10px 16px; border-radius:8px; border:1px solid #cbd9e9; background:#f3f8ff; color:#1565c0; cursor:pointer; }
+.scaffold-register-name-dialog [role=alert] { color:#c62828; }
+.scaffold-form-editor { position:fixed; inset:0; z-index:1100; background:#f5f5f5; display:flex; }
+.scaffold-form-editor-screen { flex:1; min-width:0; min-height:0; flex-direction:column; }
+.scaffold-form-editor-screen > div { flex:1; min-height:0; }
+.scaffold-form-editor input, .scaffold-form-editor textarea { box-shadow:none; }
+
+.scaffold-page-zoom { position:absolute; right:12px; bottom:6px; display:flex; gap:2px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; box-shadow:0 2px 8px #0001; }
+.scaffold-page-zoom button { background:transparent; border:0; color:#1565c0; padding:6px 10px; cursor:pointer; font-size:14px; }
+.scaffold-page-zoom button:disabled { color:#a0a0a0; cursor:default; }

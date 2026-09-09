@@ -4,6 +4,7 @@ import {
     Clock3,
     HardHat,
     ListTree,
+    Plus,
     RefreshCw,
     Search
 } from 'lucide-react';
@@ -14,6 +15,12 @@ import {
     scaffTagsAPI,
     safetyProjectsAPI
 } from '../services/api';
+import ScaffoldFormEditor from './ScaffoldFormEditor';
+import DrawingRegisterPickerModal from '../scaffoldForms/components/DrawingRegisterPickerModal';
+import {createScaffoldRegisterRecord, setScaffoldRegisterDrawing} from '../scaffoldForms/services/supabaseScaffoldRegister';
+import {setHandoverCertificateDrawingLink, setHandoverCertificateScaffoldRecord} from '../scaffoldForms/services/supabaseHandoverCertificates';
+import {listDayLabourVariationForms, setDayLabourVariationDrawingLink} from '../scaffoldForms/services/supabaseDayLabourForms';
+import {setScaffTagScaffoldRecord} from '../scaffoldForms/services/supabaseScaffTags';
 import LoadingBrandmark from './LoadingBrandmark';
 import './ScaffoldRegisterPage.css';
 
@@ -313,10 +320,22 @@ export default function ScaffoldRegisterPage({
     const [records, setRecords] = useState([]);
     const [query, setQuery] = useState(() => storedFilters.query);
     const [error, setError] = useState('');
-    const [openingKey, setOpeningKey] = useState('');
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [clockNow, setClockNow] = useState(() => Date.now());
     const requestSequence = useRef(0);
+    const [nameDialogOpen, setNameDialogOpen] = useState(false);
+    const [scaffoldName, setScaffoldName] = useState('');
+    const [nameError, setNameError] = useState('');
+    const [mutationBusy, setMutationBusy] = useState(false);
+    const mutationLock = useRef(false);
+    const [designItem, setDesignItem] = useState(null);
+    const [editor, setEditor] = useState(null);
+    const promotedRecords = useRef(new Map());
+    const nameDialog = useRef(null);
+
+    useEffect(() => {
+        if (nameDialogOpen) nameDialog.current?.showModal();
+    }, [nameDialogOpen]);
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
@@ -494,22 +513,105 @@ export default function ScaffoldRegisterPage({
         });
     };
 
-    const openPdf = async (kind, form) => {
-        if (!form || openingKey) return;
-        const key = `${kind}:${form.id}`;
-        setOpeningKey(key);
-        setError('');
-        try {
-            const url = kind === 'handover'
-                ? await handoverCertificatesAPI.getPdfUrl(form)
-                : await scaffTagsAPI.getPdfUrl(form);
-            window.open(url, '_blank', 'noopener,noreferrer');
-        } catch (openError) {
-            setError(openError.message || `Could not open the ${kind === 'handover' ? 'handover certificate' : 'Scaff-Tag'}.`);
-        } finally {
-            setOpeningKey('');
-        }
+    const projectParams = {
+        builderId: selectedBuilderId, builderName: selectedBuilder?.name || '',
+        projectId: selectedProjectId, projectName: selectedProject?.name || '',
     };
+
+    const createScaffold = async event => {
+        event.preventDefault();
+        if (mutationLock.current) return;
+        if (!scaffoldName.trim()) { setNameError('Enter a scaffold name to continue.'); return; }
+        mutationLock.current = true; setMutationBusy(true); setNameError('');
+        try {
+            await createScaffoldRegisterRecord({...projectParams, scaffoldName: scaffoldName.trim()});
+            setNameDialogOpen(false); setScaffoldName(''); setQuery('');
+            await loadRegister({silent: true});
+        } catch (failure) { setNameError(failure.message || 'Could not create the scaffold.'); }
+        finally { mutationLock.current = false; setMutationBusy(false); }
+    };
+
+    const ensureRegisterRecord = async item => {
+        const key = `${selectedBuilderId}:${selectedProjectId}:${item.id}`;
+        let record = item.registerRecord || promotedRecords.current.get(key);
+        if (!record) {
+            record = await createScaffoldRegisterRecord({...projectParams, scaffoldName: item.scaffoldName, location: item.location});
+            promotedRecords.current.set(key, record);
+        }
+        // Promote older forms to an explicit register relationship, keeping their PDFs in sync.
+        for (const tag of item.tags) {
+            if (tag.scaffoldRegisterId !== record.id) await setScaffTagScaffoldRecord(selectedBuilderId, selectedProjectId, tag.id, {
+                scaffoldName: item.scaffoldName, scaffoldRegisterId: record.id,
+            });
+        }
+        for (const handover of item.handovers) {
+            if (handover.scaffoldRegisterId !== record.id) await setHandoverCertificateScaffoldRecord(
+                selectedBuilderId, selectedProjectId, handover.id, item.scaffoldName, record.id);
+        }
+        return record;
+    };
+
+    const openFormEditor = async (kind, item) => {
+        if (mutationLock.current) return;
+        mutationLock.current = true; setMutationBusy(true); setError('');
+        try {
+            const record = await ensureRegisterRecord(item);
+            const drawing = record.drawingDocumentId ? record : item.handover;
+            const params = {
+                ...projectParams, readOnly: false,
+                initialScaffoldName: item.scaffoldName, initialLocation: item.location,
+                initialScaffoldRegisterId: record.id,
+            };
+            if (kind === 'handover') {
+                Object.assign(params, {
+                    formId: item.handover?.id,
+                    initialCompanyEntityId: item.tag?.companyEntityId,
+                    initialScaffTagFormId: item.tag?.id, initialScaffTagId: item.tag?.tagNumber,
+                    initialDrawingNumber: drawing?.drawingNumber,
+                    initialDrawingDocumentId: drawing?.drawingDocumentId,
+                    initialDrawingDocumentType: drawing?.drawingDocumentType || undefined,
+                    initialDrawingDocumentName: drawing?.drawingDocumentName,
+                    initialDrawingRevisionNumber: drawing?.drawingRevisionNumber,
+                    initialDrawingFolderId: drawing?.drawingFolderId,
+                });
+            } else Object.assign(params, {
+                formId: item.tag?.id, initialCompanyEntityId: item.handover?.companyEntityId,
+                initialHandoverFormId: item.handover?.id,
+                initialHandoverInspectionNumber: item.handover?.inspectionNumber,
+                initialHandoverReferenceName: item.handover?.formReferenceName,
+            });
+            setEditor({screen: kind === 'handover' ? 'HandoverCertificateForm' : 'ScaffTagForm', params});
+        } catch (failure) { setError(failure.message || 'Could not open the scaffold form.'); }
+        finally { mutationLock.current = false; setMutationBusy(false); }
+    };
+
+    const linkDrawing = async selection => {
+        if (!designItem || mutationLock.current) return;
+        mutationLock.current = true; setMutationBusy(true); setError('');
+        try {
+            const record = await ensureRegisterRecord(designItem);
+            await setScaffoldRegisterDrawing({record, ...selection});
+            for (const handover of designItem.handovers) await setHandoverCertificateDrawingLink(
+                selectedBuilderId, selectedProjectId, handover.id, {...selection, scaffoldRegisterId: record.id});
+            if (designItem.handovers.length) {
+                const handoverIds = new Set(designItem.handovers.map(handover => handover.id));
+                const variations = await listDayLabourVariationForms(selectedBuilderId, selectedProjectId);
+                for (const variation of variations.filter(form => handoverIds.has(form.handoverDocumentId))) {
+                    await setDayLabourVariationDrawingLink(selectedBuilderId, selectedProjectId, variation.id, selection);
+                }
+            }
+            setDesignItem(null);
+            await loadRegister({silent: true});
+        } catch (failure) {
+            setError(failure.message || 'Could not link the drawing. Select it again to retry.');
+            setDesignItem(null);
+            await loadRegister({silent: true});
+            setError(failure.message || 'Could not finish linking the drawing. Please retry.');
+        } finally { mutationLock.current = false; setMutationBusy(false); }
+    };
+
+    const addAction = (label, onClick) => <button type="button" className="scaffold-register-add-cell"
+        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Plus size={15} /></button>;
 
     const filteredRecords = useMemo(() => {
         const search = query.trim().toLowerCase();
@@ -536,7 +638,7 @@ export default function ScaffoldRegisterPage({
 
     return (
         <main className="scaffold-register-page">
-            <section className="scaffold-register-toolbar" aria-label="Scaffold Register filters">
+            <section className="scaffold-register-toolbar" inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} aria-label="Scaffold Register filters">
                 <div className="scaffold-register-dropdowns">
                     <RegisterDropdown
                         label="Builder"
@@ -545,7 +647,7 @@ export default function ScaffoldRegisterPage({
                         getLabel={builder => builder.name}
                         getLogoUrl={getBuilderLogoUrl}
                         onSelect={handleBuilderChange}
-                        disabled={buildersLoading || builders.length === 0}
+                        disabled={buildersLoading || builders.length === 0 || mutationBusy || Boolean(designItem)}
                         emptyText="No builders available"
                     />
                     <RegisterDropdown
@@ -557,11 +659,15 @@ export default function ScaffoldRegisterPage({
                         getLogoName={() => selectedBuilder?.name || 'Builder'}
                         showLogo={false}
                         onSelect={handleProjectChange}
-                        disabled={buildersLoading || projects.length === 0}
+                        disabled={buildersLoading || projects.length === 0 || mutationBusy || Boolean(designItem)}
                         emptyText="No active projects"
                     />
                 </div>
                 <div className="scaffold-register-toolbar-actions">
+                    <button type="button" className="scaffold-register-refresh scaffold-register-add" aria-label="Add scaffold"
+                        disabled={!selectedProject || buildersLoading || mutationBusy} onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
+                        <Plus size={18} /><span>Add scaffold</span>
+                    </button>
                     <label className="scaffold-register-search">
                         <Search size={18} aria-hidden="true" />
                         <input
@@ -581,7 +687,7 @@ export default function ScaffoldRegisterPage({
 
             {error ? <div className="scaffold-register-error" role="alert">{error}</div> : null}
 
-            <section className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
+            <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`scaffold-register-table-wrap${recordsLoading || buildersLoading ? ' is-loading' : ''}`}>
                 {recordsLoading || buildersLoading ? (
                     <div className="scaffold-register-loading page-loading-brandmark"><LoadingBrandmark label="Loading Scaffold Register" /></div>
                 ) : !selectedProject ? (
@@ -651,10 +757,10 @@ export default function ScaffoldRegisterPage({
                                             </span>
                                         </td>
                                         <td>
-                                            <LinkedDocumentButton
+                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
                                                 title={drawingTitle}
                                                 linked={hasDrawing}
-                                                opening={openingKey === `drawing:${item.id}`}
+                                                opening={mutationBusy}
                                                 onClick={() => onOpenDrawing?.({
                                                     id: drawing.drawingDocumentId,
                                                     fileType: drawing.drawingDocumentType,
@@ -662,22 +768,25 @@ export default function ScaffoldRegisterPage({
                                                     versionKey: drawing.drawingRevisionNumber || drawing.updatedAt || ''
                                                 })}
                                             />
+                                            {lifecycle.status !== 'dismantled' && addAction(`Link design for ${item.scaffoldName}`, () => setDesignItem(item))}</div>
                                         </td>
                                         <td>
-                                            <LinkedDocumentButton
+                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
                                                 title={handoverNumber || item.handover?.formReferenceName || 'Handover certificate'}
                                                 linked={Boolean(item.handover)}
-                                                opening={openingKey === `handover:${item.handover?.id}`}
-                                                onClick={() => openPdf('handover', item.handover)}
+                                                opening={mutationBusy}
+                                                onClick={() => openFormEditor('handover', item)}
                                             />
+                                            {!item.handover && lifecycle.status !== 'dismantled' && addAction(`Create handover for ${item.scaffoldName}`, () => openFormEditor('handover', item))}</div>
                                         </td>
                                         <td>
-                                            <LinkedDocumentButton
+                                            <div className="scaffold-register-document-actions"><LinkedDocumentButton
                                                 title={tagNumber || item.tag?.scaffoldNo || 'Scaff-Tag'}
                                                 linked={Boolean(item.tag)}
-                                                opening={openingKey === `tag:${item.tag?.id}`}
-                                                onClick={() => openPdf('tag', item.tag)}
+                                                opening={mutationBusy}
+                                                onClick={() => openFormEditor('tag', item)}
                                             />
+                                            {!item.tag && lifecycle.status !== 'dismantled' && addAction(`Create Scaff-Tag for ${item.scaffoldName}`, () => openFormEditor('tag', item))}</div>
                                         </td>
                                         <td>
                                             {hasQrLabel ? (
@@ -703,6 +812,26 @@ export default function ScaffoldRegisterPage({
                     </table>
                 )}
             </section>
+            {nameDialogOpen && <dialog ref={nameDialog} className="scaffold-register-name-dialog" onCancel={event => {
+                event.preventDefault(); if (!mutationBusy) setNameDialogOpen(false);
+            }}>
+                <form onSubmit={createScaffold}>
+                    <h2>Add scaffold</h2>
+                    <p>{selectedBuilder?.name} · {selectedProject?.name}</p>
+                    <label htmlFor="new-scaffold-name">Scaffold name</label>
+                    <input id="new-scaffold-name" autoFocus value={scaffoldName} disabled={mutationBusy} onChange={event => setScaffoldName(event.target.value)} />
+                    {nameError && <p role="alert">{nameError}</p>}
+                    <div className="scaffold-register-dialog-actions">
+                        <button type="button" disabled={mutationBusy} onClick={() => setNameDialogOpen(false)}>Cancel</button>
+                        <button type="submit" disabled={mutationBusy}>{mutationBusy ? 'Adding…' : 'Add scaffold'}</button>
+                    </div>
+                </form>
+            </dialog>}
+            {designItem && <DrawingRegisterPickerModal visible {...projectParams}
+                onSelect={linkDrawing} onClose={() => {if (!mutationBusy) setDesignItem(null);}} />}
+            {editor && <ScaffoldFormEditor key={`${editor.screen}:${editor.params.formId || editor.params.initialScaffoldRegisterId}`}
+                {...editor} onClose={() => {setEditor(null); loadRegister({silent: true});}}
+                onSaved={() => loadRegister({silent: true})} />}
         </main>
     );
 }
