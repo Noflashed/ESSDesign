@@ -6175,6 +6175,15 @@ body {
     min-height: 100vh;
 }
 
+/* Bundled variable font keeps sidebar metrics independent of installed fonts. */
+@font-face {
+    font-family: 'ESS Sidebar';
+    src: url('./assets/fonts/roboto-latin-wght-normal.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
 .app-nav-sidebar {
     --app-nav-bg: #ffffff;
     --app-nav-panel: #f8f8f7;
@@ -6187,6 +6196,8 @@ body {
     --app-nav-active-text: #101820;
     --app-nav-accent: #23c98b;
     --app-nav-accent-soft: #e7fbf3;
+    font-family: 'ESS Sidebar', Arial, sans-serif;
+    line-height: 1.5;
     width: 236px;
     min-width: 236px;
     background: var(--app-nav-bg);
@@ -6202,6 +6213,12 @@ body {
 .app-nav-sidebar.collapsed {
     width: 236px;
     min-width: 236px;
+}
+
+.app-nav-sidebar button,
+.app-nav-sidebar input {
+    font-family: inherit;
+    line-height: inherit;
 }
 
 .app-nav-sidebar-brand {
