@@ -32,6 +32,7 @@ function emptyTruckDeviceForm() {
 }
 
 const INDIVIDUAL_ROLE_OPTIONS = [
+    { value: 'accounts', label: 'Accounts' },
     { value: 'general_scaffolder', label: 'Scaffolder' },
     { value: 'leading_hand', label: 'Leading Hand' },
     { value: 'scaffold_designer', label: 'Scaffold Designer' },
@@ -52,6 +53,7 @@ function isTruckRole(role) {
 function getRoleLabel(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'accounts': return 'Accounts';
         case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';

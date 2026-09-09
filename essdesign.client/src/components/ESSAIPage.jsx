@@ -33,6 +33,7 @@ function conversationDate(value) {
 
 export default function ESSAIPage({
     userId = '',
+    userRole = '',
     userAvatarUrl = '',
     userInitials = 'U',
     userDisplayName = 'User',
@@ -293,6 +294,7 @@ export default function ESSAIPage({
                         userAvatarUrl={userAvatarUrl}
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}
+                        userRole={userRole}
                         onUserAvatarError={onUserAvatarError}
                         pageContext={{ page: 'ess-ai' }}
                         showNewChatButton={false}

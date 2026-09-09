@@ -1510,6 +1510,7 @@ namespace ESSDesign.Server.Controllers
             var canManageSiteRegistry =
                 string.Equals(currentUser.Role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(currentUser.Role, AppRoles.Viewer, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(currentUser.Role, AppRoles.Accounts, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(currentUser.Role, AppRoles.ProjectManager, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(currentUser.Role, AppRoles.SiteSupervisor, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(currentUser.Role, AppRoles.ScaffoldDesigner, StringComparison.OrdinalIgnoreCase);

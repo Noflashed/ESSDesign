@@ -12,6 +12,13 @@ const STARTER_PROMPTS = [
     'Summarise current material orders',
 ];
 
+const ACCOUNTS_STARTER_PROMPTS = [
+    'Show our active job sites',
+    'Who manages our active job-sites?',
+    'Find the latest revision of a drawing',
+    'Find day labour and variation forms for a site',
+];
+
 const FEEDBACK_REASONS = {
     1: ['Accurate', 'Useful sources', 'Clear answer', 'Saved me time'],
     '-1': ['Incorrect', 'Missing information', 'Outdated information', 'Misunderstood me', 'Wrong source', 'Too long or unclear'],
@@ -153,6 +160,7 @@ function AssistantMessageContent({ content, role }) {
 }
 
 export default function AdminAssistantChat({
+    userRole = '',
     className = '',
     initialConversationId = null,
     initialMessages = [],
@@ -470,7 +478,7 @@ export default function AdminAssistantChat({
 
             {!hasStarted ? (
                 <div className="admin-assistant-prompts">
-                    {STARTER_PROMPTS.map(prompt => (
+                    {(userRole === 'accounts' ? ACCOUNTS_STARTER_PROMPTS : STARTER_PROMPTS).map(prompt => (
                         <button key={prompt} type="button" onClick={() => sendMessage(prompt)}>{prompt}</button>
                     ))}
                 </div>

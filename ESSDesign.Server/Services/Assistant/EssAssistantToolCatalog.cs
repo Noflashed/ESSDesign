@@ -40,7 +40,7 @@ public sealed class EssAssistantToolCatalog
             Function("search_people", "Search and count the complete ESS employee registry and app-user directory. For an employee/headcount total, use a null query and role with limit 1, then read employeeCount. For all people or users, read totalMatches. Counts are exhaustive before the result limit. Contact and private fields are automatically redacted according to the current user's role.", new
             {
                 query = NullableStringSchema("Person name, email, phone, title, or role. Use null for a full-directory list or count; do not pass generic words such as people, employees, headcount, ESS, active, or contractors as search terms."),
-                role = NullableStringSchema("Optional role or classification: Scaffolder, Leading Hand, Site Supervisor, Project Manager, Scaffold Designer, Transport Management, Admin, or Viewer. 'Leading Hand' uses the employee registry's leading-hand flag, not only account-role text."),
+                role = NullableStringSchema("Optional role or classification: Scaffolder, Leading Hand, Site Supervisor, Project Manager, Scaffold Designer, Accounts, Transport Management, Admin, or Viewer. 'Leading Hand' uses the employee registry's leading-hand flag, not only account-role text."),
                 include_private_profile = BooleanSchema("Request private profile fields. They are returned only to authorised administrators."),
                 limit = IntegerSchema("Maximum rows returned, from 1 to 100. This does not limit totalMatches or employeeCount; use 1 for count-only questions."),
             }, "query", "role", "include_private_profile", "limit"),
@@ -107,9 +107,8 @@ public sealed class EssAssistantToolCatalog
             }, "query", "history_hours", "limit"));
         }
 
-        return allowedNames == null
-            ? tools
-            : tools.Where(tool => allowedNames.Contains(GetDefinitionName(tool))).ToList();
+        return tools.Where(tool => access.CanUseTool(GetDefinitionName(tool))
+            && (allowedNames == null || allowedNames.Contains(GetDefinitionName(tool)))).ToList();
     }
 
     public Task<EssAssistantToolResult> ExecuteAsync(
@@ -118,8 +117,14 @@ public sealed class EssAssistantToolCatalog
         EssAssistantAccessContext access,
         CancellationToken cancellationToken)
     {
+        if (!access.CanUseTool(name))
+            return Task.FromResult(new EssAssistantToolResult { Data = new { error = "This tool is outside your role's access." } });
+
         using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson);
         var args = document.RootElement;
+        if (access.IsAccounts && name == "open_ess_record" && GetString(args, "record_type") is not ("design" or "project_data"))
+            return Task.FromResult(new EssAssistantToolResult { Data = new { error = "This record is outside your role's access." } });
+
         return name switch
         {
             "search_ess" => _data.SearchEssAsync(

@@ -3,6 +3,7 @@ import FolderBrowser from './components/FolderBrowser';
 import DrawingRegisterPage from './components/DrawingRegisterPage';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
 import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
+import { ACCOUNTS_NAV_ITEMS, resolveAccountsPage } from './utils/accountsAccess';
 import ScaffoldRegisterPage from './components/ScaffoldRegisterPage';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -244,6 +245,7 @@ function isPageActive(itemKey, currentPage) {
 function getRoleDisplayName(role) {
     switch (role) {
         case 'admin': return 'Admin';
+        case 'accounts': return 'Accounts';
         case 'scaffold_designer': return 'Scaffold Designer';
         case 'site_supervisor': return 'Site Supervisor';
         case 'project_manager': return 'Project Manager';
@@ -690,7 +692,9 @@ function App() {
     const [linkingEmployee, setLinkingEmployee] = useState(false);
     const [employeeLinkAttempted, setEmployeeLinkAttempted] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const [currentPage, setCurrentPage] = useState('landing');
+    const [pageState, setCurrentPage] = useState('landing');
+    const isAccounts = user?.role === 'accounts';
+    const currentPage = isAccounts ? resolveAccountsPage(pageState) : pageState;
     const [pendingAiQuestion, setPendingAiQuestion] = useState(null);
     const [showNavDrawer, setShowNavDrawer] = useState(false);
     const [avatarProfileUser, setAvatarProfileUser] = useState(null);
@@ -715,6 +719,8 @@ function App() {
     const showRosteringAndEmployees = user?.role === 'admin' || user?.role === 'viewer';
     const allowedNavItems = isEmployeePortalRole
         ? [{ key: 'employee-home', label: 'ESS App' }, { key: 'ess-ai', label: 'ESS AI' }]
+        : isAccounts
+        ? ACCOUNTS_NAV_ITEMS
         : isScaffoldDesigner
         ? [
             DESIGN_NAV_ITEM,
@@ -800,6 +806,8 @@ function App() {
         const transportPages = TRANSPORT_PAGE_KEYS;
         const resolvedPage = isEmployeePortalRole
             ? (page === 'landing' || page === 'employee-home' || page === 'profile' || page === 'settings' || page === 'ess-ai' ? page : 'employee-home')
+            : isAccounts
+            ? resolveAccountsPage(page)
             : isScaffoldDesigner
             ? (SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page) ? page : 'landing')
             : isTruckDeviceUser
@@ -826,7 +834,7 @@ function App() {
         } else {
             window.history.replaceState(state, '', targetUrl);
         }
-    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
+    }, [buildAppUrl, hasTransportSuiteAccess, isAccounts, isEmployeePortalRole, isScaffoldDesigner, isTransportManagement, isTruckDeviceUser, selectedFolderId]);
 
     const handleLandingAiQuestion = useCallback((question) => {
         const prompt = question.trim();
@@ -1201,6 +1209,8 @@ function App() {
         applyPageState(
             isEmployeePortalRole
                 ? 'employee-home'
+                : isAccounts
+                ? 'scaffold-dashboard'
                 : isScaffoldDesigner
                 ? 'landing'
                 : (isTruckDeviceUser || isTransportManagement)
@@ -1398,13 +1408,17 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const fallbackPage = isEmployeePortalRole
             ? 'employee-home'
+            : isAccounts
+            ? 'scaffold-dashboard'
             : isScaffoldDesigner
             ? 'landing'
             : (isTruckDeviceUser || isTransportManagement)
             ? 'truck-schedule'
             : 'landing';
         const pageFromUrl = urlParams.get('page') || fallbackPage;
-        const resolvedPageFromUrl = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
+        const resolvedPageFromUrl = isAccounts
+            ? resolveAccountsPage(pageFromUrl)
+            : isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(pageFromUrl)
             ? 'landing'
             : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(pageFromUrl) && !MATERIAL_ORDERING_PAGE_KEYS.has(pageFromUrl))
             ? 'material-ordering-new'
@@ -1437,7 +1451,9 @@ function App() {
         const handlePopState = (e) => {
             const folderId = e.state?.folderId ?? null;
             const page = e.state?.page ?? fallbackPage;
-            const resolvedPage = isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
+            const resolvedPage = isAccounts
+                ? resolveAccountsPage(page)
+                : isScaffoldDesigner && !SCAFFOLD_DESIGNER_ALLOWED_PAGES.has(page)
                 ? 'landing'
                 : (!hasTransportSuiteAccess && TRANSPORT_PAGE_KEYS.has(page) && !MATERIAL_ORDERING_PAGE_KEYS.has(page))
                 ? 'material-ordering-new'
@@ -1454,7 +1470,7 @@ function App() {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [buildAppUrl, hasTransportSuiteAccess, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [buildAppUrl, hasTransportSuiteAccess, isAccounts, isEmployeePortalRole, isScaffoldDesigner, isTruckDeviceUser, isTransportManagement]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close search results and user menu when clicking outside
     useEffect(() => {
@@ -1747,6 +1763,7 @@ function App() {
                 <React.Suspense fallback={<div className="ess-ai-route-loading"><LoadingBrandmark label="Loading ESS AI" /></div>}>
                     <ESSAIPage
                         userId={user?.id || ''}
+                        userRole={user?.role || ''}
                         userAvatarUrl={userAvatarUrl}
                         userInitials={userInitials}
                         userDisplayName={userDisplayName}
