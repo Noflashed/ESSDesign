@@ -97,6 +97,8 @@ try {
  await page.getByRole('button',{name:'D-100 REV A'}).waitFor();
  await page.getByRole('button',{name:'Create handover for North Elevation'}).click();
  await page.locator('[data-testid="ess-handover-stable-scroll-page-1"]').waitFor();
+ assert.equal(await page.getByLabel('Section/location of scaffold',{exact:true}).inputValue(),'','New handover section/location starts blank');
+ await page.getByLabel('Section/location of scaffold',{exact:true}).fill('Level 20, north elevation');
  await page.getByLabel('Intended use',{exact:true}).fill('Facade access');
  await page.getByRole('checkbox',{name:/^YES:/}).first().click();
  await page.getByLabel('ESS REPRESENTATIVE signature',{exact:true}).click();
@@ -121,6 +123,7 @@ try {
  const handover = [...rows.values()].find(row=>row.form_type==='handover-certificates')?.payload;
  assert.ok(handover, 'Handover persisted');
  assert.equal(handover.photoSlots.length, 1);
+ assert.equal(handover.sectionLocation,'Level 20, north elevation','Manually entered section/location is saved');
  assert.ok(handover.essRepresentativeSignatureStrokes[0].length > 2, 'Signature captured');
  assert.equal(handover.essRepresentativeSignatureStrokes.length,1,'Signature works on the first press');
  assert.equal(handover.scaffoldRegisterId, register.id);
@@ -168,6 +171,7 @@ try {
  await page.getByRole('button',{name:'H-00001',exact:true}).click();
  await page.getByLabel('Intended use',{exact:true}).waitFor();
  assert.equal(await page.getByLabel('Intended use',{exact:true}).inputValue(),'Facade access');
+ assert.equal(await page.getByLabel('Section/location of scaffold',{exact:true}).inputValue(),'Level 20, north elevation','Saved section/location is preserved on reopen');
  await checkFormZoom();
  await page.getByRole('button',{name:'Zoom in'}).first().click();
  await page.getByRole('button',{name:'Fit page'}).first().getByText('150%',{exact:true}).waitFor();

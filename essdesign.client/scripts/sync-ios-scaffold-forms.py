@@ -38,6 +38,9 @@ for name in files:
     if name in ['screens/HandoverCertificateFormScreen.tsx', 'screens/ScaffTagFormScreen.tsx']:
         content = content.replace("const usesIOSDocumentEditor = Platform.OS === 'ios';", 'const usesIOSDocumentEditor = true; // Same document editor on web.')
     if name == 'screens/HandoverCertificateFormScreen.tsx':
+        # Section/location is entered by the inspector, not inferred from the project.
+        content = content.replace("sectionLocation: route.params.initialLocation ?? '',", "sectionLocation: '',")
+        content = content.replace('    route.params.initialLocation,\n', '')
         # Linking is handled by the web register, not a button over the form reference row.
         start = content.index('      {!isReadOnly && !isScaffTagLinked ? (')
         end = content.index('      {suggestedScaffTags.length > 0', start)
