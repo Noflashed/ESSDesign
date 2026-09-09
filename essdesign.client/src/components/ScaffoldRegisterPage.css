@@ -223,16 +223,17 @@
 }
 
 .scaffold-register-refresh {
-    height: 44px;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    padding: 0 13px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--card-bg);
-    color: var(--text-primary);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
     font: inherit;
     font-size: 13px;
     font-weight: 600;
@@ -484,8 +485,7 @@
 
     .scaffold-register-dropdown,
     .scaffold-register-dropdown:nth-child(2),
-    .scaffold-register-search,
-    .scaffold-register-refresh {
+    .scaffold-register-search {
         width: 100%;
     }
 }

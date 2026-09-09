@@ -572,9 +572,15 @@ export default function ScaffoldRegisterPage({
                             aria-label="Search Scaffold Register"
                         />
                     </label>
-                    <button type="button" className="scaffold-register-refresh" onClick={refresh} disabled={refreshing || buildersLoading}>
-                        <RefreshCw size={16} className={refreshing ? 'is-spinning' : ''} />
-                        <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+                    <button
+                        type="button"
+                        className="scaffold-register-refresh"
+                        onClick={refresh}
+                        disabled={refreshing || buildersLoading}
+                        aria-label={refreshing ? 'Refreshing Scaffold Register' : 'Refresh Scaffold Register'}
+                        title={refreshing ? 'Refreshing…' : 'Refresh'}
+                    >
+                        <RefreshCw size={16} className={refreshing ? 'is-spinning' : ''} aria-hidden="true" />
                     </button>
                 </div>
             </section>
