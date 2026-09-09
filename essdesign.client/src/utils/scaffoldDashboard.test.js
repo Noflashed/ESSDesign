@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ageBucket, buildDashboardData, elapsedDays, filterDashboardRows } from './scaffoldDashboard.js';
+import { ageBucket, buildDashboardData, elapsedDays, filterDashboardRows, filterSiteForms } from './scaffoldDashboard.js';
 import { formatElapsedTime } from './scaffoldRegister.js';
 
 const now = Date.parse('2026-09-09T00:00:00Z');
@@ -83,4 +83,37 @@ test('site labour forms are kept once per site, not multiplied by scaffold count
     const data = buildDashboardData(input);
     assert.equal(data.rows.length, 2);
     assert.equal(data.sites.reduce((count, site) => count + site.labour.length, 0), 1);
+    assert.equal(filterSiteForms(data.sites).length, 1);
+});
+
+test('site forms remain available without scaffold records or linked handovers', () => {
+    const input = source();
+    input.labour = [{ id: 'l1', builderId: 'b1', projectId: 's2', variationNumber: 'V-001' }];
+    const data = buildDashboardData(input);
+    assert.equal(data.rows.length, 0);
+    const forms = filterSiteForms(data.sites, { builder: 'b1' });
+    assert.equal(forms.length, 1);
+    assert.equal(forms[0].projectName, 'Site Two');
+    assert.equal(forms[0].form.variationNumber, 'V-001');
+});
+
+test('site form filters use site IDs and their own search, independent of scaffold filters', () => {
+    const input = source();
+    input.labour = [{ id: 'l1', builderId: 'b1', projectId: 's1', descriptionOfWork: 'Extra platform' },
+        { id: 'l2', builderId: 'b1', projectId: 's2', descriptionOfWork: 'Extra access' }];
+    const data = buildDashboardData(input);
+    const site = data.sites.find(item => item.projectId === 's2');
+    assert.equal(filterSiteForms(data.sites, { site: site.key, query: 'extra' })[0].form.id, 'l2');
+    assert.equal(filterSiteForms(data.sites, { builder: 'other' }).length, 0);
+    assert.equal(filterSiteForms(data.sites, { query: 'platform', status: 'dismantled', age: '90+' }).length, 1);
+});
+
+test('site forms sort by date with undated forms last', () => {
+    const input = source();
+    input.labour = [{ id: 'a', builderId: 'b1', projectId: 's1', date: '2026-08-01' },
+        { id: 'b', builderId: 'b1', projectId: 's1', date: '2026-09-01' },
+        { id: 'c', builderId: 'b1', projectId: 's1' }];
+    const data = buildDashboardData(input);
+    assert.deepEqual(filterSiteForms(data.sites).map(item => item.form.id), ['b', 'a', 'c']);
+    assert.deepEqual(filterSiteForms(data.sites, { sort: 'oldest' }).map(item => item.form.id), ['a', 'b', 'c']);
 });

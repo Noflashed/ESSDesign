@@ -77,3 +77,22 @@ export function filterDashboardRows(rows, { builder = '', site = '', query = '',
         && (status === 'all' || (status === 'current' ? row.lifecycle.status !== 'dismantled' : row.lifecycle.status === status))
         && (!age || ageBucket(row, now) === age));
 }
+
+export function filterSiteForms(sites, { builder = '', site = '', query = '', sort = 'newest' } = {}) {
+    const search = query.trim().toLowerCase();
+    const forms = sites.filter(item => (!builder || item.builderId === builder) && (!site || item.key === site))
+        .flatMap(item => item.labour.filter(form => !form.isDeleted).map(form => ({
+            id: JSON.stringify([item.key, form.id]), form, siteKey: item.key,
+            builderId: item.builderId, builderName: item.builderName, projectName: item.projectName
+        })))
+        .filter(item => !search || [item.builderName, item.projectName, item.form.variationNumber,
+            item.form.formReferenceName, item.form.descriptionOfWork, item.form.requestedBy]
+            .some(value => String(value || '').toLowerCase().includes(search)));
+    return forms.sort((left, right) => {
+        if (sort === 'site') return left.projectName.localeCompare(right.projectName) || left.builderName.localeCompare(right.builderName);
+        const a = Date.parse(left.form.date || left.form.updatedAt), b = Date.parse(right.form.date || right.form.updatedAt);
+        if (!Number.isFinite(a)) return Number.isFinite(b) ? 1 : 0;
+        if (!Number.isFinite(b)) return -1;
+        return sort === 'oldest' ? a - b : b - a;
+    });
+}

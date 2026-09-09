@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { ArrowDownWideNarrow, ArrowUpRight, Building2, ChevronDown, Clock3, FileText, HardHat, RefreshCw, Search, X } from 'lucide-react';
 import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyProjectsAPI, SAFETY_PROJECTS_CHANGED_EVENT } from '../services/api';
 import { loadScaffoldDashboard } from '../services/scaffoldDashboard';
-import { AGE_BUCKETS, STATUS_LABELS, ageBucket, elapsedDays, filterDashboardRows } from '../utils/scaffoldDashboard';
+import { AGE_BUCKETS, STATUS_LABELS, ageBucket, elapsedDays, filterDashboardRows, filterSiteForms } from '../utils/scaffoldDashboard';
 import { formatElapsedTime } from '../utils/scaffoldRegister';
 import './ScaffoldDashboardPage.css';
 
@@ -128,13 +128,16 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
     const [sort, setSort] = useState('oldest');
     const [page, setPage] = useState(0);
     const [selectedId, setSelectedId] = useState('');
-    const [detailTab, setDetailTab] = useState('documents');
+    const [formSort, setFormSort] = useState('newest');
+    const [formPage, setFormPage] = useState(0);
+    const [formError, setFormError] = useState('');
     const [formQuery, setFormQuery] = useState('');
     const [pending, setPending] = useState(false);
     const [documentError, setDocumentError] = useState('');
     const request = useRef(0);
     const inFlight = useRef(false);
     const detailsRef = useRef(null);
+    const selectedTrigger = useRef(null);
     const refresh = useCallback(async () => {
         if (inFlight.current) return;
         inFlight.current = true;
@@ -173,7 +176,7 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
         });
         return () => { cancelled = true; };
     }, [data?.builders]);
-    const updateFilters = patch => { setFilters(current => ({ ...current, ...patch })); setSelectedId(''); setPage(0); };
+    const updateFilters = patch => { setFilters(current => ({ ...current, ...patch })); setSelectedId(''); setPage(0); if ('builder' in patch || 'site' in patch) setFormPage(0); };
     const sites = data?.sites || [];
     const builderOptions = [...new Map(sites.map(site => [site.builderId, { value: site.builderId, label: site.builderName, logoName: site.builderName, logoUrl: logoUrls[site.builderId] || '' }])).values()].sort((a, b) => a.label.localeCompare(b.label));
     const siteOptions = sites.filter(site => !filters.builder || site.builderId === filters.builder).sort((a, b) => a.projectName.localeCompare(b.projectName));
@@ -197,18 +200,25 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
     const siteEntries = sites.map(site => ({ ...site, count: active.filter(row => row.siteKey === site.key).length })).filter(site => site.count).sort((a, b) => b.count - a.count).slice(0, 6);
     const maxSite = Math.max(1, ...siteEntries.map(site => site.count));
     const selected = filtered.find(row => row.id === selectedId);
-    const selectedSite = sites.find(site => site.key === selected?.siteKey);
-    const forms = (selectedSite?.labour || []).filter(form => [formLabel(form), form.formReferenceName, form.descriptionOfWork, form.requestedBy].some(value => String(value || '').toLowerCase().includes(formQuery.toLowerCase()))).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
-    const chooseRow = row => { setSelectedId(row.id); setDetailTab('documents'); setFormQuery(''); setDocumentError(''); };
+    const forms = useMemo(() => filterSiteForms(data?.sites || [], { builder: filters.builder, site: filters.site, query: formQuery, sort: formSort }), [data, filters.builder, filters.site, formQuery, formSort]);
+    const formPageCount = Math.max(1, Math.ceil(forms.length / 25));
+    const visibleFormPage = Math.min(formPage, formPageCount - 1);
+    const chooseRow = (row, trigger) => { selectedTrigger.current = trigger; setSelectedId(row.id); setDocumentError(''); };
+    const closeDetails = () => {
+        const trigger = selectedTrigger.current;
+        setSelectedId('');
+        requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
+    };
     useEffect(() => {
         if (selectedId) {
             detailsRef.current?.focus({ preventScroll: true });
-            detailsRef.current?.scrollIntoView({ block: 'nearest' });
+            if (detailsRef.current) detailsRef.current.scrollTop = 0;
         }
     }, [selectedId]);
     const openPdf = async (kind, form) => {
         if (pending) return;
-        setPending(true); setDocumentError('');
+        const setOpenError = kind === 'Day labour / variation' ? setFormError : setDocumentError;
+        setPending(true); setOpenError('');
         // Open during the click so browsers do not block the signed PDF after the request.
         const popup = window.open('about:blank', '_blank');
         if (popup) popup.opener = null;
@@ -216,18 +226,19 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
             if (!popup) throw new Error('Your browser blocked the document tab. Allow pop-ups for this site and try again.');
             const api = kind === 'Handover' ? handoverCertificatesAPI : kind === 'Scaff-Tag' ? scaffTagsAPI : dayLabourVariationsAPI;
             popup.location.href = await api.getPdfUrl(form);
-        } catch (failure) { popup?.close(); setDocumentError(failure.message || 'Could not open the document.'); }
+        } catch (failure) { popup?.close(); setOpenError(failure.message || 'Could not open the document.'); }
         finally { setPending(false); }
     };
     const selectStatus = status => updateFilters({ status: filters.status === status ? 'all' : status, age: '' });
-    const reset = () => { setFilters(DEFAULT_FILTERS); setSelectedId(''); setPage(0); };
+    const reset = () => { setFilters(DEFAULT_FILTERS); setSelectedId(''); setPage(0); setFormQuery(''); setFormPage(0); };
 
-    return <main className="scaffold-dashboard">
+    return <main className={`scaffold-dashboard${selected ? ' has-selection' : ''}`} >
+        <div className="sd-main">
         {error && <div className="sd-error" role="alert">{error} {data ? 'Showing the last complete snapshot.' : 'Scaffolds are unavailable until all sources load.'} <button onClick={refresh} disabled={loading}>Retry</button></div>}
         <section className="sd-filters" aria-label="Dashboard filters">
             <LogoSelect label="Builder" value={filters.builder} options={[{ value: '', label: 'All builders' }, ...builderOptions]} onChange={value => updateFilters({ builder: value, site: '' })} />
             <LogoSelect label="Site / project" value={filters.site} options={[{ value: '', label: 'All sites', logoName: builderOptions.find(option => option.value === filters.builder)?.label, logoUrl: logoUrls[filters.builder] || '' }, ...siteOptions.map(site => ({ value: site.key, label: site.projectName, description: filters.builder ? '' : site.builderName, logoName: site.builderName, logoUrl: logoUrls[site.builderId] || '' }))]} onChange={value => updateFilters({ site: value })} />
-            <label className="sd-search">Search<div><Search size={16} /><input type="search" placeholder="Scaffold, location or document…" value={filters.query} onChange={event => updateFilters({ query: event.target.value })} /></div></label>
+            <label className="sd-search">Search scaffolds<div><Search size={16} /><input type="search" placeholder="Scaffold, location or document…" value={filters.query} onChange={event => updateFilters({ query: event.target.value })} /></div></label>
             <button className="sd-reset" onClick={reset}>Reset filters</button>
             <button className="sd-icon" onClick={refresh} disabled={loading} aria-label="Refresh dashboard" title="Refresh dashboard"><RefreshCw size={17} className={loading ? 'sd-spin' : ''} /></button>
         </section>
@@ -243,29 +254,44 @@ export default function ScaffoldDashboardPage({ onOpenDrawing, loadData = loadSc
             <section className="sd-register" aria-label="Scaffold explorer">
                 <div className="sd-list-heading"><div><h2>Scaffold explorer <span>{filtered.length}</span></h2></div><label className="sd-sort"><ArrowDownWideNarrow size={16} /><select aria-label="Sort scaffolds" value={sort} onChange={event => { setSort(event.target.value); setPage(0); }}><option value="oldest">Longest time up</option><option value="newest">Shortest time up</option><option value="name">Scaffold name</option><option value="site">Site name</option></select></label></div>
                 <div className="sd-list-filters"><div className="sd-status-tabs" aria-label="Filter scaffold status">{Object.entries({ current: 'Current', all: 'All history', ...STATUS_LABELS }).map(([id, label]) => <button key={id} aria-pressed={filters.status === id} onClick={() => updateFilters({ status: id, age: '' })}>{label}</button>)}</div>{filters.age && <button className="sd-age-chip" onClick={() => updateFilters({ age: '' })}>{ageEntries.find(entry => entry.id === filters.age)?.label}<X size={13} /></button>}</div>
-                <div className={`sd-explorer${selected ? ' has-selection' : ''}`}>
-                    <div className="sd-table-wrap"><table><thead><tr><th>Scaffold / site</th><th>Status</th><th>Time up</th><th>Documents</th><th>Site forms</th></tr></thead><tbody>{filtered.slice(visiblePage * 50, (visiblePage + 1) * 50).map(row => <tr key={row.id} className={selectedId === row.id ? 'is-selected' : ''}>
-                        <td><button className="sd-row-name" onClick={() => chooseRow(row)} aria-expanded={selectedId === row.id}>{row.scaffoldName || 'Untitled scaffold'}<ArrowUpRight size={13} /></button><small>{row.builderName} · {row.projectName}</small>{row.location && <small>{row.location}</small>}</td>
+                <div className="sd-explorer">
+                    <div className="sd-table-wrap"><table><thead><tr><th>Scaffold / site</th><th>Status</th><th>Time up</th><th>Documents</th></tr></thead><tbody>{filtered.slice(visiblePage * 50, (visiblePage + 1) * 50).map(row => <tr key={row.id} className={`sd-scaffold-row${selectedId === row.id ? ' is-selected' : ''}`} onClick={event => { if (!event.target.closest('button')) chooseRow(row, event.currentTarget.querySelector('.sd-row-name')); }}>
+                        <td><button className="sd-row-name" onClick={event => chooseRow(row, event.currentTarget)} aria-expanded={selectedId === row.id} aria-controls={selectedId === row.id ? 'scaffold-detail-sidebar' : undefined}>{row.scaffoldName || 'Untitled scaffold'}<ArrowUpRight size={13} /></button><small>{row.builderName} · {row.projectName}</small>{row.location && <small>{row.location}</small>}</td>
                         <td><span className={`sd-status is-${row.lifecycle.status}`}>{STATUS_LABELS[row.lifecycle.status]}</span></td>
                         <td className="sd-time">{timeLabel(row, now)}<small>{row.lifecycle.status === 'dismantled' ? 'Timer stopped' : row.lifecycle.startedAt ? `Since ${new Date(row.lifecycle.startedAt).toLocaleDateString('en-AU')}` : 'Awaiting recorded activation'}</small></td>
-                        <td><button className="sd-text-button" onClick={() => chooseRow(row)}>{row.drawings.length + row.tags.length + row.handovers.length} linked</button></td>
-                        <td><button className="sd-text-button" onClick={() => { chooseRow(row); setDetailTab('labour'); }}>{sites.find(site => site.key === row.siteKey)?.labour.length || 0} forms</button></td>
+                        <td><button className="sd-text-button" onClick={event => chooseRow(row, event.currentTarget)}>{row.drawings.length + row.tags.length + row.handovers.length} linked</button></td>
                     </tr>)}</tbody></table>{!filtered.length && <div className="sd-empty"><HardHat size={30} /><h3>No scaffolds match this view</h3><p>Try another builder, site or status.</p><button onClick={reset}>Reset filters</button></div>}<div className="sd-pagination"><span>{filtered.length ? `${visiblePage * 50 + 1}–${Math.min((visiblePage + 1) * 50, filtered.length)} of ${filtered.length} scaffolds` : '0 scaffolds'}</span><button disabled={visiblePage === 0} onClick={() => { setPage(visiblePage - 1); setSelectedId(''); }}>Previous</button><span>Page {visiblePage + 1} of {pageCount}</span><button disabled={visiblePage + 1 >= pageCount} onClick={() => { setPage(visiblePage + 1); setSelectedId(''); }}>Next</button></div></div>
-                    {selected && <aside className="sd-details" ref={detailsRef} tabIndex="-1" aria-label={`Details for ${selected.scaffoldName}`}>
-                        <div className="sd-detail-heading"><div><span className={`sd-status is-${selected.lifecycle.status}`}>{STATUS_LABELS[selected.lifecycle.status]}</span><h2>{selected.scaffoldName}</h2><p>{selected.builderName} · {selected.projectName}</p></div><button className="sd-icon" aria-label="Close scaffold details" onClick={() => setSelectedId('')}><X size={18} /></button></div>
+
+                </div>
+            </section>
+
+            <section className="sd-register sd-site-forms" aria-label="Site forms explorer">
+                <div className="sd-list-heading"><h2>Site forms explorer <span>{forms.length}</span></h2><label className="sd-sort"><ArrowDownWideNarrow size={16} /><select aria-label="Sort site forms" value={formSort} onChange={event => { setFormSort(event.target.value); setFormPage(0); }}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="site">Site name</option></select></label></div>
+                <div className="sd-form-toolbar"><span>Day labour & variations</span><label className="sd-search"><div><Search size={16} /><input type="search" aria-label="Search site forms" placeholder="Search site forms…" value={formQuery} onChange={event => { setFormQuery(event.target.value); setFormPage(0); }} /></div></label></div>
+                {formError && <p className="sd-error" role="alert">{formError}</p>}
+                <div className="sd-table-wrap"><table><thead><tr><th>Form / reference</th><th>Site / builder</th><th>Date</th><th>Requested by</th><th>Document</th></tr></thead><tbody>
+                    {forms.slice(visibleFormPage * 25, (visibleFormPage + 1) * 25).map(item => <tr key={item.id}>
+                        <td><button className="sd-row-name" disabled={!item.form.pdfPath || pending} onClick={() => openPdf('Day labour / variation', item.form)}>{item.form.variationNumber || item.form.formReferenceName || 'Day labour / variation'}<ArrowUpRight size={13} /></button>{item.form.variationNumber && item.form.formReferenceName && <small>{item.form.formReferenceName}</small>}{item.form.descriptionOfWork && <small className="sd-work-description" title={item.form.descriptionOfWork}>{item.form.descriptionOfWork}</small>}</td>
+                        <td><span>{item.projectName}</span><small>{item.builderName}</small></td>
+                        <td>{dateLabel(item.form.date || item.form.updatedAt)}</td><td>{item.form.requestedBy || 'Not recorded'}</td>
+                        <td><button className="sd-text-button" disabled={!item.form.pdfPath || pending} onClick={() => openPdf('Day labour / variation', item.form)}>{item.form.pdfPath ? 'View PDF' : 'PDF unavailable'}</button></td>
+                    </tr>)}
+                </tbody></table>{!forms.length && <div className="sd-empty"><FileText size={26} /><h3>No site forms match this view</h3></div>}
+                <div className="sd-pagination"><span>{forms.length ? `${visibleFormPage * 25 + 1}–${Math.min((visibleFormPage + 1) * 25, forms.length)} of ${forms.length} forms` : '0 forms'}</span><button disabled={visibleFormPage === 0} onClick={() => setFormPage(visibleFormPage - 1)}>Previous forms</button><span>Page {visibleFormPage + 1} of {formPageCount}</span><button disabled={visibleFormPage + 1 >= formPageCount} onClick={() => setFormPage(visibleFormPage + 1)}>Next forms</button></div></div>
+            </section>
+        </>}
+        </div>
+                    {selected && <aside id="scaffold-detail-sidebar" className="sd-details" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeDetails(); } }} ref={detailsRef} tabIndex="-1" aria-label={`Details for ${selected.scaffoldName}`}>
+                        <div className="sd-detail-heading"><div><span className={`sd-status is-${selected.lifecycle.status}`}>{STATUS_LABELS[selected.lifecycle.status]}</span><h2>{selected.scaffoldName}</h2><p>{selected.builderName} · {selected.projectName}</p></div><button className="sd-icon" aria-label="Close scaffold details" onClick={closeDetails}><X size={18} /></button></div>
                         <div className="sd-detail-timer"><Clock3 size={20} /><div><strong>{timeLabel(selected, now)}</strong><small>{selected.lifecycle.status === 'dismantled' ? 'Total recorded time up' : 'Current time up'}</small></div></div>
                         <dl><div><dt>Activated</dt><dd>{dateLabel(selected.lifecycle.startedAt)}</dd></div>{selected.lifecycle.status === 'dismantled' && <div><dt>Dismantled</dt><dd>{dateLabel(selected.lifecycle.stoppedAt)}</dd></div>}<div><dt>Location</dt><dd>{selected.location || 'Not recorded'}</dd></div></dl>
-                        <div className="sd-detail-tabs"><button aria-pressed={detailTab === 'documents'} onClick={() => setDetailTab('documents')}>Scaffold documents</button><button aria-pressed={detailTab === 'labour'} onClick={() => setDetailTab('labour')}>Site forms ({selectedSite?.labour.length || 0})</button></div>
                         {documentError && <p role="alert" className="sd-error">{documentError}</p>}
                         {pending && <p role="status">Opening document…</p>}
-                        {detailTab === 'documents' ? <div className="sd-documents">
+                        <div className="sd-documents">
                             <h3>Design drawings</h3>{selected.drawings.length ? selected.drawings.map((form, index) => <button key={index} className="sd-document" onClick={() => onOpenDrawing?.(form)} disabled={!onOpenDrawing}><FileText size={17} /><span><strong>{form.drawingNumber || form.drawingDocumentName || 'Design drawing'}</strong><small>{form.drawingRevisionNumber ? `Revision ${form.drawingRevisionNumber}` : 'Linked drawing'}</small></span><ArrowUpRight size={15} /></button>) : <p>No design drawing linked.</p>}
                             <h3>Handover certificates</h3>{selected.handovers.length ? selected.handovers.map(form => <DocumentButton key={form.id} form={form} kind="Handover" onOpen={openPdf} pending={pending} />) : <p>No handover linked.</p>}
                             <h3>Scaff-Tags</h3>{selected.tags.length ? selected.tags.map(form => <DocumentButton key={form.id} form={form} kind="Scaff-Tag" onOpen={openPdf} pending={pending} />) : <p>No Scaff-Tag linked.</p>}
-                        </div> : <div className="sd-documents"><p>All day labour and variation forms for <strong>{selected.projectName}</strong>. These are site-wide records.</p><input type="search" className="sd-form-search" aria-label="Search site forms" placeholder="Search site forms…" value={formQuery} onChange={event => setFormQuery(event.target.value)} />{forms.length ? forms.map(form => <div key={form.id} className="sd-labour-form"><DocumentButton form={form} kind="Day labour / variation" onOpen={openPdf} pending={pending} /><small>{dateLabel(form.date || form.updatedAt)}{form.requestedBy ? ` · ${form.requestedBy}` : ''}</small>{form.descriptionOfWork && <p>{form.descriptionOfWork}</p>}{form.handoverDocumentId && <small>{selected.handovers.some(handover => handover.id === form.handoverDocumentId) ? 'Linked to this scaffold’s handover' : `Handover: ${form.handoverDocumentNumber || form.handoverDocumentTitle || 'Linked on site'}`}</small>}</div>) : <p>{formQuery ? 'No forms match your search.' : 'No day labour or variation forms recorded for this site.'}</p>}</div>}
+                        </div>
                     </aside>}
-                </div>
-            </section>
-        </>}
     </main>;
 }
