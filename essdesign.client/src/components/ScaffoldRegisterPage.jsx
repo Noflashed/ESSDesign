@@ -824,18 +824,8 @@ export default function ScaffoldRegisterPage({
                         event.preventDefault();
                         if (!deleteInFlight.current) setPendingDelete(null);
                     }}>
-                    <Trash2 size={26} className="scaffold-register-delete-icon" aria-hidden="true" />
                     <h3 id="scaffold-delete-title">Delete scaffold?</h3>
-                    <div id="scaffold-delete-description">
-                        <p>Delete <strong>{pendingDelete.item.scaffoldName}</strong> from the Scaffold Register? This cannot be undone.</p>
-                        <ul>
-                            {pendingDelete.item.tags.length > 0 ? <li>{pendingDelete.item.tags.length} linked {pendingDelete.item.tags.length === 1 ? 'Scaff-Tag' : 'Scaff-Tags'} and generated files</li> : null}
-                            {pendingDelete.item.handovers.length > 0 ? <li>{pendingDelete.item.handovers.length} linked handover {pendingDelete.item.handovers.length === 1 ? 'form' : 'forms'} and generated files</li> : null}
-                            {pendingDelete.item.registerRecord ? <li>Scaffold Register entry</li> : null}
-                        </ul>
-                        <p>The linked design drawing will remain untouched.
-                            {pendingDelete.item.tags.length > 0 ? ' QR labels will remain in the QR Code Register and change to Retired.' : ''}</p>
-                    </div>
+                    <p id="scaffold-delete-description">Delete <strong>{pendingDelete.item.scaffoldName}</strong> from the Scaffold Register? This cannot be undone.</p>
                     {deleteError ? <div className="scaffold-register-error" role="alert">{deleteError}</div> : null}
                     <div className="module-form-actions">
                         <button type="button" className="module-secondary-btn" autoFocus disabled={deleting}

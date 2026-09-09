@@ -7,6 +7,35 @@ page.setDefaultTimeout(10000);
 const rows = new Map(), objects = new Map(), errors = [];
 let failNextSave = false;
 let failNextDelete = false;
+async function checkFormZoom() {
+ const viewport = page.locator('.scaffold-zoom-viewport').filter({visible:true}).first();
+ await viewport.scrollIntoViewIfNeeded();
+ const fit = viewport.locator('..').getByRole('button',{name:'Fit page',exact:true});
+ await fit.click();
+ await fit.getByText('100%',{exact:true}).waitFor();
+ const initial = await viewport.boundingBox();
+ await viewport.hover();
+ await page.mouse.wheel(0,60);
+ assert.equal(await fit.textContent(),'100%','Ordinary scrolling does not zoom');
+ await page.keyboard.down('Control');
+ await page.mouse.wheel(0,-100);
+ await page.keyboard.up('Control');
+ await fit.getByText('135%',{exact:true}).waitFor();
+ const after = await viewport.boundingBox();
+ assert.ok(Math.abs(initial.width-after.width)<1,'Gesture zooms canvas, not browser viewport');
+ await viewport.focus();
+ await page.keyboard.press('Control+0');
+ await fit.getByText('100%',{exact:true}).waitFor();
+ await page.keyboard.press('Control+=');
+ await fit.getByText('125%',{exact:true}).waitFor();
+ await page.keyboard.press('Control+-');
+ await fit.getByText('100%',{exact:true}).waitFor();
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.keyboard.press('Control+=');
+ assert.equal(await fit.textContent(),'125%','Reduced motion applies zoom immediately');
+ await page.keyboard.press('Control+0');
+ await page.emulateMedia({reducedMotion:'no-preference'});
+}
 page.on('pageerror', error => errors.push(error.message));
 await page.addInitScript(() => {
  localStorage.setItem('access_token', 'test.'+btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600}))+'.test');
@@ -47,6 +76,10 @@ await page.route('**/*', async route => {
 try {
  await page.goto(baseURL+'/tests/fixtures/scaffold-register.html');
  await page.getByRole('button',{name:'Add scaffold',exact:true}).click();
+ await page.getByRole('dialog').evaluate(element=>Promise.all(element.getAnimations().map(animation=>animation.finished)));
+ const addDialog = await page.getByRole('dialog').boundingBox();
+ assert.ok(Math.abs(addDialog.x+addDialog.width/2-720)<2 && Math.abs(addDialog.y+addDialog.height/2-500)<2,'Add scaffold is centered');
+ await page.screenshot({path:'/tmp/ess-scaffold-add-modal.png'});
  await page.locator('dialog').getByRole('button',{name:'Add scaffold',exact:true}).click();
  await page.getByText('Enter a scaffold name to continue.').waitFor();
  await page.getByLabel('Scaffold name',{exact:true}).fill(' North Elevation ');
@@ -94,6 +127,7 @@ try {
  await page.getByLabel('Go back',{exact:true}).click();
  await page.getByRole('button',{name:'Create Scaff-Tag for North Elevation'}).click();
  await page.locator('[data-testid="ess-scaff-tag-stable-scroll-sheet"]').first().waitFor();
+ await checkFormZoom();
  await page.screenshot({path:'/tmp/ess-scaff-tag-web.png'});
  
  await page.getByRole('button',{name:'Save scaffold tag',exact:true}).click();
@@ -108,6 +142,7 @@ try {
  await page.getByRole('button',{name:'H-00001',exact:true}).click();
  await page.getByLabel('Intended use',{exact:true}).waitFor();
  assert.equal(await page.getByLabel('Intended use',{exact:true}).inputValue(),'Facade access');
+ await checkFormZoom();
  await page.getByRole('button',{name:'Zoom in'}).first().click();
  await page.getByRole('button',{name:'Fit page'}).first().getByText('150%',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Fit page'}).first().click();
@@ -119,6 +154,10 @@ try {
  const scaffoldRow = page.locator('tbody tr').filter({hasText:'North Elevation'});
  await scaffoldRow.click({button:'right'});
  await page.getByRole('menuitem',{name:'Delete scaffold'}).click();
+ assert.equal(await page.locator('#scaffold-delete-description').textContent(),'Delete North Elevation from the Scaffold Register? This cannot be undone.');
+ assert.equal(await page.locator('#scaffold-delete-description').evaluate(element=>getComputedStyle(element).textAlign),'center');
+ await page.getByRole('dialog').evaluate(element=>Promise.all(element.getAnimations().map(animation=>animation.finished)));
+ await page.screenshot({path:'/tmp/ess-scaffold-delete-modal.png'});
  await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click();
  assert.equal(rows.size,3,'Cancel keeps all records');
  await scaffoldRow.focus();
