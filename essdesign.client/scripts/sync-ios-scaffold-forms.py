@@ -37,6 +37,12 @@ for name in files:
     content = re.sub(r"require\('([^']+\.(?:png|jpg))'\)", asset, content)
     if name in ['screens/HandoverCertificateFormScreen.tsx', 'screens/ScaffTagFormScreen.tsx']:
         content = content.replace("const usesIOSDocumentEditor = Platform.OS === 'ios';", 'const usesIOSDocumentEditor = true; // Same document editor on web.')
+    if name == 'screens/HandoverCertificateFormScreen.tsx':
+        # Linking is handled by the web register, not a button over the form reference row.
+        start = content.index('      {!isReadOnly && !isScaffTagLinked ? (')
+        end = content.index('      {suggestedScaffTags.length > 0', start)
+        content = content[:start] + content[end:]
+        content = content.replace('  const isScaffTagLinked = Boolean(form.scaffTagFormId.trim());\n', '')
     if name == 'screens/ScaffTagFormScreen.tsx':
         content = content.replace('scrollEnabled={!usesIOSDocumentEditor}', 'scrollEnabled={true}')
         content = content.replace("import React from 'react';", "import React from 'react';\nimport {adaptScaffTagStyles} from '../browser/scaffTagStyles';")

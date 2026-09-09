@@ -559,7 +559,6 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   const isReadOnly = route.params.readOnly === true;
   const isScaffoldRegisterLinked = Boolean(scaffoldRegisterId.trim());
   const isDrawingLinked = Boolean(form.drawingDocumentId.trim());
-  const isScaffTagLinked = Boolean(form.scaffTagFormId.trim());
   const currentSnapshot = React.useMemo(() => serializeFormState(form), [form]);
   const hasUnsavedChanges = !isReadOnly && baselineSnapshotRef.current !== null && (
     currentSnapshot !== baselineSnapshotRef.current || pendingPhotos.length > 0
@@ -2384,15 +2383,6 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           />
         );
       })}
-      {!isReadOnly && !isScaffTagLinked ? (
-        <TouchableOpacity
-          style={[styles.iPhoneReferenceRegisterButton, phoneFormBoxStyle({left: 667, top: 185.3, width: 74, height: 18})]}
-          onPress={() => setShowScaffTagPicker(true)}>
-          <Text style={styles.iPhoneReferenceRegisterButtonText}>
-            {isScaffoldRegisterLinked ? 'Link Scaff-Tag' : 'Search register'}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
       {suggestedScaffTags.length > 0 && !isReadOnly ? (
         <View
           style={[
