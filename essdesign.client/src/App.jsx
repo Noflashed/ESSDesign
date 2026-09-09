@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import FolderBrowser from './components/FolderBrowser';
 import DrawingRegisterPage from './components/DrawingRegisterPage';
 import ProjectDataRegisterPage from './components/ProjectDataRegisterPage';
+import ScaffoldDashboardPage from './components/ScaffoldDashboardPage';
 import ScaffoldRegisterPage from './components/ScaffoldRegisterPage';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
@@ -27,7 +28,7 @@ import LoadingBrandmark from './components/LoadingBrandmark';
 import PublicSharedFolderPage from './components/PublicSharedFolderPage';
 import { ToastProvider } from './components/Toast';
 import { authAPI, preferencesAPI, foldersAPI, usersAPI, rosteringAPI, resolveProfileImageUrl } from './services/api';
-import { ClipboardCheck, ClipboardList, ListTree, QrCode, Sparkles, Tag, Users } from 'lucide-react';
+import { ChartNoAxesCombined, ClipboardCheck, ClipboardList, ListTree, QrCode, Sparkles, Tag, Users } from 'lucide-react';
 import './App.css';
 
 const ESSAIPage = React.lazy(() => import('./components/ESSAIPage'));
@@ -181,6 +182,7 @@ const NewsNavIcon = ({ size = 18 }) => (
 const NAV_PAGE_ICONS = {
     'employee-home': HomeNavIcon,
     'scaffold-register': ListTree,
+    'scaffold-dashboard': ChartNoAxesCombined,
     'design': DesignNavIcon,
     'drawing-register': ClipboardList,
     'safety-handover-register': ClipboardCheck,
@@ -205,7 +207,7 @@ function NavPageIcon({ pageKey, size = 18 }) {
 
 const TRANSPORT_PAGE_KEYS = new Set(['transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking']);
 const MATERIAL_ORDERING_PAGE_KEYS = new Set(['material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived']);
-const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
+const DESIGN_PAGE_KEYS = new Set(['landing', 'employee-home', 'profile', 'settings', 'site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'safety-handover-register', 'safety-day-labour-register', 'safety-scaff-tag-register', 'safety-qr-code-register', 'safety-scaff-tags', 'safety-swms', 'transport-dashboard', 'transport-drivers', 'transport-settings', 'transport-fleet', 'transport-trips', 'material-ordering', 'material-ordering-new', 'material-ordering-active', 'material-ordering-archived', 'truck-schedule', 'truck-delivery-schedule', 'truck-tracking', 'rostering', 'rostering-tree', 'employees', 'employee-relationships', 'design', 'drawing-register', 'ess-news', 'ess-ai', 'ai-feedback']);
 const SCAFFOLD_DESIGNER_ALLOWED_PAGES = new Set(['landing', 'design', 'drawing-register', 'site-information', 'scaffold-register', 'ess-ai', 'profile', 'settings']);
 const DESIGN_NAV_ITEM = {
     key: 'design',
@@ -316,11 +318,11 @@ function NavSidebar({
 
     const navSections = useMemo(() => {
         const sectionFor = (key) => {
-            if (['site-information', 'scaffold-register', 'safety', 'employees', 'employee-home'].includes(key)) return 'Workspace';
+            if (['site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'employees', 'employee-home'].includes(key)) return 'Workspace';
             if (['design', 'truck-schedule', 'material-ordering-new', 'rostering'].includes(key)) return 'Operations';
             return 'Tools';
         };
-        const itemOrder = ['site-information', 'scaffold-register', 'safety', 'employees', 'employee-home', 'design', 'truck-schedule', 'material-ordering-new', 'rostering', 'ess-ai', 'ess-news'];
+        const itemOrder = ['site-information', 'scaffold-register', 'scaffold-dashboard', 'safety', 'employees', 'employee-home', 'design', 'truck-schedule', 'material-ordering-new', 'rostering', 'ess-ai', 'ess-news'];
         return ['Workspace', 'Operations', 'Tools'].map((label) => ({
             label,
             items: visibleNavItems
@@ -718,6 +720,7 @@ function App() {
             DESIGN_NAV_ITEM,
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
+            { key: 'scaffold-dashboard', label: 'Scaffold Dashboard' },
             { key: 'ess-ai', label: 'ESS AI' },
         ]
         : isTruckDeviceUser
@@ -729,6 +732,7 @@ function App() {
             { key: 'ess-ai', label: 'ESS AI' },
             { key: 'site-information', label: 'Site Registry' },
             { key: 'scaffold-register', label: 'Scaffold Register' },
+            { key: 'scaffold-dashboard', label: 'Scaffold Dashboard' },
             ...(showRosteringAndEmployees ? [{ key: 'employees', label: 'Employees' }] : []),
             ...(hasTransportSuiteAccess
                 ? [{ key: 'truck-schedule', label: 'ESS Transport' }]
@@ -1623,6 +1627,14 @@ function App() {
 
         if (currentPage === 'site-information') {
             return <SiteInformationPage />;
+        }
+        if (currentPage === 'scaffold-dashboard') {
+            return <ScaffoldDashboardPage onOpenDrawing={(drawing) => setPdfViewer({
+                documentId: drawing.drawingDocumentId,
+                fileName: drawing.drawingDocumentName || drawing.drawingNumber || 'Design drawing.pdf',
+                fileType: drawing.drawingDocumentType,
+                versionKey: drawing.drawingRevisionNumber || drawing.updatedAt || ''
+            })} />;
         }
         if (currentPage === 'scaffold-register') {
             return (

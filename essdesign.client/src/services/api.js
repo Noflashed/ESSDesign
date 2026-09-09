@@ -4765,10 +4765,7 @@ export const handoverCertificatesAPI = {
         deleteSafetyFormRecord('handover-certificates', builderId, projectId, formId)
 };
 
-export const scaffoldRegisterAPI = {
-    listRecords: async (builderId, projectId) => {
-        const forms = await listSafetyFormRecords('scaffold-register', builderId, projectId);
-        return forms.map(form => ({
+const mapScaffoldRegisterRecord = form => ({
             ...form,
             scaffoldName: String(form.scaffoldName || form.title || '').trim(),
             location: String(form.location || form.projectLabel || '').trim(),
@@ -4787,8 +4784,13 @@ export const scaffoldRegisterAPI = {
                     : 'awaiting-qr',
             activatedAt: String(form.activatedAt || '').trim(),
             dismantledAt: String(form.dismantledAt || '').trim()
-        }));
-    }
+        });
+
+export const scaffoldRegisterAPI = {
+    listRecords: async (builderId, projectId) =>
+        (await listSafetyFormRecords('scaffold-register', builderId, projectId)).map(mapScaffoldRegisterRecord),
+    listAllRecords: async () =>
+        (await listAllSafetyFormRecords('scaffold-register')).map(mapScaffoldRegisterRecord)
 };
 
 const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
@@ -4818,6 +4820,17 @@ const mapScaffTagQrLabel = (row) => ({
 });
 
 export const scaffTagQrLabelsAPI = {
+    listAll: async () => {
+        const labels = [];
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+            const rows = await readRestRows('ess_scaff_tag_qr_labels',
+                '?select=*&order=label_number.desc&limit=' + pageSize + '&offset=' + offset,
+                { force: true });
+            labels.push(...rows.map(mapScaffTagQrLabel));
+            if (rows.length < pageSize) return labels;
+        }
+    },
     list: async () => {
         const rows = await readRestRows(
             'ess_scaff_tag_qr_labels',
