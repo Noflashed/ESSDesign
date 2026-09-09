@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 
 const baseURL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5178';
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, channel: 'chrome' });
 const page = await browser.newPage();
 const errors = [];
 let empty = false;
@@ -31,11 +31,11 @@ async function load() {
     await page.goto(`${baseURL}/tests/fixtures/scaffold-register.html`);
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
     await page.addStyleTag({ content: '#root { height: 100vh; } @media(min-width: 701px) { #root { margin-left:236px; } }' });
-    await page.locator('tfoot .scaffold-register-add').waitFor();
+    await page.locator('caption .scaffold-register-add').waitFor();
 }
 
 async function checkAdd() {
-    const add = page.locator('tfoot .scaffold-register-add');
+    const add = page.locator('caption .scaffold-register-add');
     const rect = await add.boundingBox();
     const viewport = page.viewportSize();
     assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width);

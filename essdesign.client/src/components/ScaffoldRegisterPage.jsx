@@ -6,6 +6,7 @@ import {
     Clock3,
     HardHat,
     ListTree,
+    Link2,
     Plus,
     RefreshCw,
     Search,
@@ -560,7 +561,7 @@ export default function ScaffoldRegisterPage({
     };
 
     const addAction = (label, onClick) => <button type="button" className="scaffold-register-add-cell"
-        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Plus size={16} aria-hidden="true" /></button>;
+        aria-label={label} title={label} disabled={mutationBusy} onClick={onClick}><Link2 size={16} aria-hidden="true" /></button>;
 
     const filteredRecords = useMemo(() => {
         const search = query.trim().toLowerCase();
@@ -648,6 +649,12 @@ export default function ScaffoldRegisterPage({
                     </div>
                 ) : (
                     <table className="scaffold-register-table" aria-label="Scaffold register">
+                        <caption className="scaffold-register-add-row">
+                            <button type="button" className="scaffold-register-add" disabled={mutationBusy}
+                                onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
+                                <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
+                            </button>
+                        </caption>
                         <thead>
                             <tr>
                                 <th>SCAFFOLD</th>
@@ -773,16 +780,6 @@ export default function ScaffoldRegisterPage({
                                 );
                             })}
                         </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colSpan={8} className="scaffold-register-add-row">
-                                    <button type="button" className="scaffold-register-add" disabled={mutationBusy}
-                                        onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
-                                        <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tfoot>
                     </table>
                 )}
             </section>
