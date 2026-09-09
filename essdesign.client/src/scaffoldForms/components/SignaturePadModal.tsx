@@ -285,7 +285,8 @@ export default React.memo(function SignaturePadModal({
               canvasSizeRef.current = next;
               setCanvasSize(next);
             }}
-            {...panResponder.panHandlers}>
+            {...panResponder.panHandlers}
+            dataSet={{signatureCanvas: true}}>
             {renderedSegments}
             {renderedStrokes.length === 0 ? <Text style={styles.placeholder}>Sign here</Text> : null}
           </View>

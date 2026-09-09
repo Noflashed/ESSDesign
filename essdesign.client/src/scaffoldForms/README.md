@@ -13,8 +13,9 @@ The sync script applies only browser import/asset adaptations, selects the iOS d
 Browser differences:
 
 - Document zoom accepts Ctrl/Cmd+wheel, trackpad/touch pinch, and Ctrl/Cmd plus/minus/0 on the active form page. Zoom animates around the pointer or page center and respects reduced-motion preferences. Visible zoom controls remain available; regular scrolling is unchanged.
-- Photo selection uses a browser file picker, optionally requesting the camera, and converts images to JPEG for the original PDF writers.
-- Signatures retain the original stroke format and signature-pad component.
+- Photo slots open the browser file picker directly and convert images to JPEG for the original PDF writers.
+- Signatures retain the original stroke format and signature-pad component, with pointer capture so drawing starts on the first press with mouse, touch or pen.
+- Scaff-Tag browser styles supply a sans-serif fallback for the iOS heading font and explicit proportional column widths so input cells align with table headers. The sync script reapplies these adaptations when refreshing the mobile sources.
 - Email attachments use the browser share sheet when supported. Otherwise the PDF is downloaded and an email draft instructs the user to attach it. The browser cannot attach a file to a `mailto:` draft automatically.
 - The web session and existing API client supply authentication. No new database schema or privileged credentials are introduced.
 

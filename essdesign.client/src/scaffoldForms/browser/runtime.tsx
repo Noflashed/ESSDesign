@@ -3,6 +3,12 @@ import * as Native from 'react-native-web';
 export * from 'react-native-web';
 // React Native Web's Alert is a no-op. Preserve every iOS action, including photo choices.
 export const Alert = { alert(title, message = '', buttons = [{text: 'OK'}]) {
+  // Preserve the original form callbacks, but open the desktop picker in the
+  // user's click event instead of showing the native camera/library chooser.
+  if (title === 'Add Photo' && message === 'Choose image source') {
+    const library = buttons.find(button => button.text === 'Choose Existing');
+    if (library?.onPress) { library.onPress(); return; }
+  }
   const dialog = document.createElement('dialog');
   dialog.className = 'scaffold-browser-alert';
   const heading = document.createElement('h2'); heading.textContent = title;
@@ -20,6 +26,44 @@ export const Alert = { alert(title, message = '', buttons = [{text: 'OK'}]) {
   });
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); buttons.find(b => b.style === 'cancel')?.onPress?.(); });
   document.body.append(dialog); dialog.showModal();
+}};
+
+// SignaturePadModal is the sole PanResponder consumer in these shared forms.
+// Capture the canvas itself before drawing removes the initial placeholder.
+export const PanResponder = {create(callbacks) {
+ let pointerId: number | null = null;
+ const pointEvent = event => {
+  const canvas = event.currentTarget;
+  const bounds = canvas.getBoundingClientRect();
+  return {nativeEvent: {
+   locationX: (event.clientX - bounds.left) * canvas.offsetWidth / Math.max(bounds.width, 1),
+   locationY: (event.clientY - bounds.top) * canvas.offsetHeight / Math.max(bounds.height, 1)
+  }};
+ };
+ const finish = (event, cancelled = false) => {
+  if (event.pointerId !== pointerId) return;
+  pointerId = null;
+  if (cancelled) callbacks.onPanResponderTerminate?.(pointEvent(event));
+  else callbacks.onPanResponderRelease?.(pointEvent(event));
+ };
+ return {panHandlers: {
+  onPointerDown(event) {
+   if (pointerId !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+   event.preventDefault();
+   event.stopPropagation();
+   pointerId = event.pointerId;
+   event.currentTarget.setPointerCapture(pointerId);
+   callbacks.onPanResponderGrant?.(pointEvent(event));
+  },
+  onPointerMove(event) {
+   if (event.pointerId !== pointerId) return;
+   event.preventDefault();
+   callbacks.onPanResponderMove?.(pointEvent(event));
+  },
+  onPointerUp: event => finish(event),
+  onPointerCancel: event => finish(event, true),
+  onLostPointerCapture: event => finish(event, true)
+ }};
 }};
 
 // Route browser zoom gestures to the document canvas, preserving the editor chrome.

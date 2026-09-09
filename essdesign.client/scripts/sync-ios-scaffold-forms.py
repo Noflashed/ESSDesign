@@ -39,6 +39,12 @@ for name in files:
         content = content.replace("const usesIOSDocumentEditor = Platform.OS === 'ios';", 'const usesIOSDocumentEditor = true; // Same document editor on web.')
     if name == 'screens/ScaffTagFormScreen.tsx':
         content = content.replace('scrollEnabled={!usesIOSDocumentEditor}', 'scrollEnabled={true}')
+        content = content.replace("import React from 'react';", "import React from 'react';\nimport {adaptScaffTagStyles} from '../browser/scaffTagStyles';")
+        content = content.replace('return StyleSheet.create({', 'return StyleSheet.create(adaptScaffTagStyles({')
+        content = '  }));'.join(content.rsplit('  });', 1))
+    if name == 'components/SignaturePadModal.tsx':
+        content = content.replace('            {...panResponder.panHandlers}>',
+            '            {...panResponder.panHandlers}\n            dataSet={{signatureCanvas: true}}>')
     if name == 'config/companyEntities.ts':
         content = content.replace("import ReactNativeBlobUtil from 'react-native-blob-util';", '')
         start = content.index('      const uri = Image.resolveAssetSource')

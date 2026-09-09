@@ -640,6 +640,8 @@
 .scaffold-form-editor-screen { flex:1; min-width:0; min-height:0; flex-direction:column; }
 .scaffold-form-editor-screen > div { flex:1; min-height:0; }
 .scaffold-form-editor input, .scaffold-form-editor textarea { box-shadow:none; }
+[data-signature-canvas] { touch-action: none; user-select: none; }
+[data-signature-canvas] > * { pointer-events: none; }
 
 .scaffold-page-zoom { position:absolute; right:12px; bottom:6px; display:flex; gap:2px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; box-shadow:0 2px 8px #0001; }
 .scaffold-page-zoom button { background:transparent; border:0; color:#1565c0; padding:6px 10px; cursor:pointer; font-size:14px; }

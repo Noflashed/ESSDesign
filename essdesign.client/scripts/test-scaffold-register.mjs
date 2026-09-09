@@ -102,14 +102,15 @@ try {
  await page.getByLabel('ESS REPRESENTATIVE signature',{exact:true}).click();
  const signatureCanvas = page.getByText('Sign here',{exact:true}).locator('..');
  const box = await signatureCanvas.boundingBox();
- await page.mouse.move(box.x+30,box.y+100); await page.mouse.down();
+ // Start directly on the placeholder: removing it must not interrupt stroke one.
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2); await page.mouse.down();
  await page.mouse.move(box.x+140,box.y+60,{steps:12});
  await page.mouse.move(box.x+260,box.y+160,{steps:12}); await page.mouse.up();
  await page.getByRole('button',{name:'Use Signature',exact:true}).click();
- await page.getByLabel('Add photo 1',{exact:true}).click();
  const chooser = page.waitForEvent('filechooser');
- await page.locator('.scaffold-browser-alert').getByRole('button',{name:'Choose Existing'}).click();
+ await page.getByLabel('Add photo 1',{exact:true}).click();
  await (await chooser).setFiles('public/scaffold-forms/logo.png');
+ assert.equal(await page.locator('.scaffold-browser-alert').count(),0,'Photo slot opens picker directly');
  await page.getByLabel('Replace photo 1',{exact:true}).waitFor();
  await page.getByLabel('Intended use',{exact:true}).scrollIntoViewIfNeeded();
  await page.screenshot({path:'/tmp/ess-handover-web.png'});
@@ -121,6 +122,7 @@ try {
  assert.ok(handover, 'Handover persisted');
  assert.equal(handover.photoSlots.length, 1);
  assert.ok(handover.essRepresentativeSignatureStrokes[0].length > 2, 'Signature captured');
+ assert.equal(handover.essRepresentativeSignatureStrokes.length,1,'Signature works on the first press');
  assert.equal(handover.scaffoldRegisterId, register.id);
  assert.equal(handover.formReferenceName, 'North Elevation');
  assert.equal(handover.drawingDocumentId, 'design-1');
@@ -128,12 +130,36 @@ try {
  await page.getByRole('button',{name:'Create Scaff-Tag for North Elevation'}).click();
  await page.locator('[data-testid="ess-scaff-tag-stable-scroll-sheet"]').first().waitFor();
  await checkFormZoom();
+ for (const title of ['AUTHORISED PERSON','COMPLIANCE NOTE']) {
+  const table = page.getByText(title,{exact:true}).locator('..').locator('xpath=following-sibling::*[1]');
+  const aligned = await table.evaluate(element=>{
+   const header = [...element.children[0].children].map(cell=>cell.getBoundingClientRect().right);
+   return [...element.children].slice(1).every(row=>[...row.children].every((cell,index)=>Math.abs(cell.getBoundingClientRect().right-header[index])<.75));
+  });
+  assert.ok(aligned,`${title} column lines align`);
+ }
+ assert.match(await page.getByText('SCAFFOLD TAG',{exact:true}).evaluate(element=>getComputedStyle(element).fontFamily),/Helvetica/);
+ const tagChooser = page.waitForEvent('filechooser');
+ await page.getByText('Tap to add photo',{exact:true}).first().click();
+ await (await tagChooser).setFiles('public/scaffold-forms/logo.png');
+ await page.getByText('SIGNATURE:',{exact:true}).locator('xpath=following-sibling::*[1]').click();
+ const tagCanvas = page.locator('[data-signature-canvas]');
+ const tagBox = await tagCanvas.boundingBox();
+ await page.mouse.move(tagBox.x+tagBox.width/2,tagBox.y+tagBox.height/2);
+ await page.mouse.down();
+ await page.mouse.move(tagBox.x+50,tagBox.y+50,{steps:15});
+ await page.mouse.up();
+ await page.getByRole('button',{name:'Apply',exact:true}).click();
+ await tagCanvas.waitFor({state:'hidden'});
  await page.screenshot({path:'/tmp/ess-scaff-tag-web.png'});
  
  await page.getByRole('button',{name:'Save scaffold tag',exact:true}).click();
  await page.locator('.scaffold-form-editor').waitFor({state:'detached'});
  const tag = [...rows.values()].find(row=>row.form_type==='scaff-tags')?.payload;
  assert.ok(tag, 'Scaff-Tag persisted');
+ assert.equal(tag.photoPaths.length,1,'Scaff-Tag photo uploaded from direct picker');
+ assert.equal(tag.erectedBySignatureStrokes.length,1);
+ assert.ok(tag.erectedBySignatureStrokes[0].length>2,'Scaff-Tag first press draws full signature');
  assert.equal(tag.scaffoldRegisterId, register.id);
  assert.equal(tag.handoverFormId, handover.id);
  assert.equal([...rows.values()].find(row=>row.form_type==='handover-certificates').payload.scaffTagFormId,tag.id);

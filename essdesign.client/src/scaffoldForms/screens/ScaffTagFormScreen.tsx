@@ -1,5 +1,6 @@
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
+import {adaptScaffTagStyles} from '../browser/scaffTagStyles';
 import {
   ActivityIndicator,
   Alert,
@@ -1509,7 +1510,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
 }
 
 function makeStyles(theme: ReturnType<typeof getTheme>) {
-  return StyleSheet.create({
+  return StyleSheet.create(adaptScaffTagStyles({
     container: {flex: 1, backgroundColor: theme.background},
     centered: {justifyContent: 'center', alignItems: 'center'},
     scroll: {padding: Spacing.md, gap: Spacing.sm},
@@ -3131,5 +3132,5 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       fontSize: FontSize.sm,
       fontWeight: '600',
     },
-  });
+  }));
 }
