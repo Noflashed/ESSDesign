@@ -279,10 +279,8 @@
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    border: 1px solid var(--border-color);
-    border-radius: 9px;
-    background: var(--card-bg);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    border: 0;
+    background: transparent;
 }
 
 .scaffold-register-table-wrap.is-loading {
@@ -296,6 +294,8 @@
     border-spacing: 0;
     table-layout: fixed;
     font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 0 9px 9px 9px;
 }
 
 .scaffold-register-table th,
@@ -313,7 +313,7 @@
 
 .scaffold-register-table th {
     position: sticky;
-    top: 48px;
+    top: 40px;
     z-index: 3;
     height: 40px;
     background: var(--bg-secondary);
@@ -331,27 +331,27 @@
     position: sticky;
     top: 0;
     z-index: 4;
-    height: 48px;
+    height: 40px;
     box-sizing: border-box;
-    padding: 7px 13px;
+    padding: 0;
     text-align: left;
     overflow: visible;
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
 }
 
 .scaffold-register-add {
     position: sticky;
-    left: 13px;
+    left: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 34px;
-    padding: 6px 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
+    height: 40px;
+    padding: 0 13px;
+    border: 1px solid var(--border-color);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    background: var(--bg-secondary);
     color: var(--text-primary);
     font: inherit;
     font-weight: 600;
