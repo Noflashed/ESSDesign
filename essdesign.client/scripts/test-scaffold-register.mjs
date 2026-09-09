@@ -6,6 +6,7 @@ const page = await browser.newPage({viewport:{width:1440,height:1000},ignoreHTTP
 page.setDefaultTimeout(10000);
 const rows = new Map(), objects = new Map(), errors = [];
 let failNextSave = false;
+let failNextDelete = false;
 page.on('pageerror', error => errors.push(error.message));
 await page.addInitScript(() => {
  localStorage.setItem('access_token', 'test.'+btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600}))+'.test');
@@ -19,6 +20,13 @@ await page.route('**/*', async route => {
   if (url.pathname.includes('/rpc/')) return json(url.pathname.includes('scaff_tag')?'ST-00001':'H-00001');
   if (url.pathname.includes('/rest/v1/ess_scaff_tag_qr_labels')) return json([]);
   if (url.pathname.includes('/rest/v1/ess_safety_forms')) {
+   if (request.method()==='DELETE') {
+    if (failNextDelete) { failNextDelete=false; return route.fulfill({status:500,json:{message:'Test delete failure'}}); }
+    for (const [key,row] of rows) {
+     if ([...url.searchParams].every(([field,value])=>!value.startsWith('eq.')||String(row[field])===value.slice(3))) rows.delete(key);
+    }
+    return json([]);
+   }
    if (request.method()==='POST') {
     if (failNextSave) { failNextSave=false; return route.fulfill({status:500,json:{message:'Test save failure'}}); }
     const records = request.postDataJSON(); records.forEach(row=>rows.set(row.form_type+':'+row.id,row)); return json(records);
@@ -106,8 +114,26 @@ try {
  await page.setViewportSize({width:390,height:844});
  await page.getByLabel('Intended use',{exact:true}).waitFor();
  await page.screenshot({path:'/tmp/ess-handover-web-mobile.png'});
+ await page.getByLabel('Go back',{exact:true}).click();
+ await page.setViewportSize({width:1440,height:1000});
+ const scaffoldRow = page.locator('tbody tr').filter({hasText:'North Elevation'});
+ await scaffoldRow.click({button:'right'});
+ await page.getByRole('menuitem',{name:'Delete scaffold'}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Cancel',exact:true}).click();
+ assert.equal(rows.size,3,'Cancel keeps all records');
+ await scaffoldRow.focus();
+ await page.keyboard.press('Shift+F10');
+ await page.getByRole('menuitem',{name:'Delete scaffold'}).click();
+ failNextDelete=true;
+ await page.getByRole('dialog').getByRole('button',{name:'Delete scaffold',exact:true}).click();
+ await page.getByRole('dialog').getByRole('alert').waitFor();
+ assert.ok([...rows.values()].some(row=>row.form_type==='scaffold-register'),'Linked deletion failure keeps parent');
+ await page.getByRole('dialog').getByRole('button',{name:'Delete scaffold',exact:true}).click();
+ await page.getByRole('dialog').waitFor({state:'detached'});
+ await page.getByText('No scaffold records yet. Add a scaffold to get started.',{exact:true}).waitFor();
+ assert.equal(rows.size,0,'Retry deletes linked forms and scaffold');
  assert.deepEqual(errors,[]);
- console.log('PASS: name validation, save retry, design linking, form creation, signatures, photos, PDF uploads, cross-links, reload, zoom and mobile viewport.');
+ console.log('PASS: creation, form editing, uploads, cross-links, reload, mobile viewport, right-click/keyboard deletion, cancellation and deletion retry.');
 } catch(error) {
  await page.screenshot({path:'/tmp/ess-scaffold-test-failure.png'});
  console.error('Browser errors:',errors);

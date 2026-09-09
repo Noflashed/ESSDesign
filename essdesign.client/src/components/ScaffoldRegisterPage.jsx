@@ -1,5 +1,6 @@
 import { makeRegisterItems, resolveScaffoldLifecycle, formatElapsedTime } from '../utils/scaffoldRegister';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ChevronDown,
     Clock3,
@@ -7,7 +8,8 @@ import {
     ListTree,
     Plus,
     RefreshCw,
-    Search
+    Search,
+    Trash2
 } from 'lucide-react';
 import {
     handoverCertificatesAPI,
@@ -210,6 +212,55 @@ export default function ScaffoldRegisterPage({
     useEffect(() => {
         if (nameDialogOpen) nameDialog.current?.showModal();
     }, [nameDialogOpen]);
+    const [contextMenu, setContextMenu] = useState(null);
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
+    const deleteInFlight = useRef(false);
+    const menuRef = useRef(null);
+    const deleteDialogRef = useRef(null);
+
+    useEffect(() => {
+        setContextMenu(null);
+        setPendingDelete(null);
+    }, [selectedBuilderId, selectedProjectId, query]);
+
+    useEffect(() => {
+        if (!contextMenu) return undefined;
+        menuRef.current?.querySelector('button')?.focus();
+        const close = () => setContextMenu(null);
+        const onPointerDown = event => {
+            if (!menuRef.current?.contains(event.target)) close();
+        };
+        const onKeyDown = event => {
+            if (event.key === 'Escape' || event.key === 'Tab') close();
+        };
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('resize', close);
+        window.addEventListener('scroll', close, true);
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('resize', close);
+            window.removeEventListener('scroll', close, true);
+        };
+    }, [contextMenu]);
+
+    useEffect(() => {
+        if (pendingDelete) deleteDialogRef.current?.showModal();
+    }, [pendingDelete]);
+
+    const openRowMenu = (event, item) => {
+        event.preventDefault();
+        if (deleteInFlight.current || mutationLock.current || editor || designItem || nameDialogOpen) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        setContextMenu({
+            item,
+            x: Math.max(8, Math.min(event.clientX || bounds.left, window.innerWidth - 232)),
+            y: Math.max(8, Math.min(event.clientY || bounds.bottom, window.innerHeight - 64))
+        });
+    };
 
     const selectedBuilder = useMemo(
         () => builders.find(builder => builder.id === selectedBuilderId) || null,
@@ -308,6 +359,7 @@ export default function ScaffoldRegisterPage({
     }, [builders]);
 
     const loadRegister = useCallback(async ({ silent = false } = {}) => {
+        if (deleteInFlight.current) return;
         if (!selectedBuilderId || !selectedProjectId) {
             setRecords([]);
             setRecordsLoading(false);
@@ -337,6 +389,29 @@ export default function ScaffoldRegisterPage({
             }
         }
     }, [selectedBuilderId, selectedProjectId]);
+
+    const deleteScaffold = async () => {
+        if (!pendingDelete || deleteInFlight.current || mutationLock.current) return;
+        deleteInFlight.current = true;
+        mutationLock.current = true;
+        requestSequence.current += 1;
+        setDeleting(true);
+        setDeleteError('');
+        try {
+            await scaffoldRegisterAPI.deleteScaffold(
+                pendingDelete.builderId, pendingDelete.projectId, pendingDelete.item
+            );
+            promotedRecords.current.delete(`${pendingDelete.builderId}:${pendingDelete.projectId}:${pendingDelete.item.id}`);
+            setPendingDelete(null);
+        } catch (deleteFailure) {
+            setDeleteError(deleteFailure.message || 'Could not delete the scaffold. Please try again.');
+        } finally {
+            deleteInFlight.current = false;
+            mutationLock.current = false;
+            setDeleting(false);
+            await loadRegister({ silent: true });
+        }
+    };
 
     useEffect(() => {
         loadRegister().catch(() => {});
@@ -621,7 +696,15 @@ export default function ScaffoldRegisterPage({
                                     clockNow
                                 );
                                 return (
-                                    <tr key={item.id}>
+                                    <tr key={item.id}
+                                        tabIndex={0}
+                                        onContextMenu={event => openRowMenu(event, item)}
+                                        onKeyDown={event => {
+                                            if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+                                                openRowMenu(event, item);
+                                            }
+                                        }}
+                                    >
                                         <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
                                         <td>
                                             <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>
@@ -723,6 +806,45 @@ export default function ScaffoldRegisterPage({
             {editor && <ScaffoldFormEditor key={`${editor.screen}:${editor.params.formId || editor.params.initialScaffoldRegisterId}`}
                 {...editor} onClose={() => {setEditor(null); loadRegister({silent: true});}}
                 onSaved={() => loadRegister({silent: true})} />}
+            {contextMenu ? createPortal(
+                <div ref={menuRef} className="scaffold-register-context-menu" role="menu"
+                    aria-label={`Actions for ${contextMenu.item.scaffoldName}`}
+                    style={{ left: contextMenu.x, top: contextMenu.y }}>
+                    <button type="button" role="menuitem" onClick={() => {
+                        setDeleteError('');
+                        setPendingDelete({ item: contextMenu.item, builderId: selectedBuilderId, projectId: selectedProjectId });
+                        setContextMenu(null);
+                    }}><Trash2 size={16} aria-hidden="true" />Delete scaffold</button>
+                </div>, document.body
+            ) : null}
+            {pendingDelete ? createPortal(
+                <dialog ref={deleteDialogRef} className="scaffold-register-delete-dialog"
+                    aria-labelledby="scaffold-delete-title" aria-describedby="scaffold-delete-description"
+                    onCancel={event => {
+                        event.preventDefault();
+                        if (!deleteInFlight.current) setPendingDelete(null);
+                    }}>
+                    <Trash2 size={26} className="scaffold-register-delete-icon" aria-hidden="true" />
+                    <h3 id="scaffold-delete-title">Delete scaffold?</h3>
+                    <div id="scaffold-delete-description">
+                        <p>Delete <strong>{pendingDelete.item.scaffoldName}</strong> from the Scaffold Register? This cannot be undone.</p>
+                        <ul>
+                            {pendingDelete.item.tags.length > 0 ? <li>{pendingDelete.item.tags.length} linked {pendingDelete.item.tags.length === 1 ? 'Scaff-Tag' : 'Scaff-Tags'} and generated files</li> : null}
+                            {pendingDelete.item.handovers.length > 0 ? <li>{pendingDelete.item.handovers.length} linked handover {pendingDelete.item.handovers.length === 1 ? 'form' : 'forms'} and generated files</li> : null}
+                            {pendingDelete.item.registerRecord ? <li>Scaffold Register entry</li> : null}
+                        </ul>
+                        <p>The linked design drawing will remain untouched.
+                            {pendingDelete.item.tags.length > 0 ? ' QR labels will remain in the QR Code Register and change to Retired.' : ''}</p>
+                    </div>
+                    {deleteError ? <div className="scaffold-register-error" role="alert">{deleteError}</div> : null}
+                    <div className="module-form-actions">
+                        <button type="button" className="module-secondary-btn" autoFocus disabled={deleting}
+                            onClick={() => setPendingDelete(null)}>Cancel</button>
+                        <button type="button" className="module-danger-btn" disabled={deleting}
+                            onClick={deleteScaffold}>{deleting ? 'Deleting…' : 'Delete scaffold'}</button>
+                    </div>
+                </dialog>, document.body
+            ) : null}
         </main>
     );
 }

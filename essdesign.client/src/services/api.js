@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL, API_ORIGIN_URL } from '../config/api';
+import { deleteScaffoldItem } from './scaffoldDeletion';
 import {
     PICKING_CARD_ROWS,
     formatDayLabel,
@@ -4790,7 +4791,13 @@ export const scaffoldRegisterAPI = {
     listRecords: async (builderId, projectId) =>
         (await listSafetyFormRecords('scaffold-register', builderId, projectId)).map(mapScaffoldRegisterRecord),
     listAllRecords: async () =>
-        (await listAllSafetyFormRecords('scaffold-register')).map(mapScaffoldRegisterRecord)
+        (await listAllSafetyFormRecords('scaffold-register')).map(mapScaffoldRegisterRecord),
+    deleteScaffold: (builderId, projectId, item) => deleteScaffoldItem(builderId, projectId, item, {
+        listHandovers: handoverCertificatesAPI.listForms,
+        deleteHandover: handoverCertificatesAPI.deleteForm,
+        deleteTag: scaffTagsAPI.deleteForm,
+        deleteRecord: (builder, project, id) => deleteSafetyFormRecord('scaffold-register', builder, project, id)
+    })
 };
 
 const dayLabourVariationPrefix = (builderId, projectId) => `${safetyModulePrefix(builderId, projectId, 'day-labour-variations')}`;
