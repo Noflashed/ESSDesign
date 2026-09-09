@@ -28,6 +28,7 @@ export type DrawingRegisterSelection = {
 
 type Props = {
   visible: boolean;
+  designFolderId?: string;
   builderId: string;
   builderName: string;
   projectId: string;
@@ -92,6 +93,7 @@ function selectionFromDocument(document: DesignDocument): DrawingRegisterSelecti
 
 export default function DrawingRegisterPickerModal({
   visible,
+  designFolderId,
   builderId,
   builderName,
   projectId,
@@ -110,12 +112,15 @@ export default function DrawingRegisterPickerModal({
     setLoading(true);
     setError('');
     try {
-      const builders = await getSafetyBuilders(true);
-      const builder = builders.find(item => item.id === builderId)
-        ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());
-      const project = builder?.projects.find(item => item.id === projectId)
-        ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());
-      const folderId = project?.designFolderId?.trim();
+      let folderId = designFolderId?.trim();
+      if (designFolderId === undefined) {
+        const builders = await getSafetyBuilders(true);
+        const builder = builders.find(item => item.id === builderId)
+          ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());
+        const project = builder?.projects.find(item => item.id === projectId)
+          ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());
+        folderId = project?.designFolderId?.trim();
+      }
       if (!folderId) {
         throw new Error('This project does not have a Design folder linked yet.');
       }
@@ -129,7 +134,7 @@ export default function DrawingRegisterPickerModal({
     } finally {
       setLoading(false);
     }
-  }, [builderId, builderName, projectId, projectName]);
+  }, [builderId, builderName, projectId, projectName, designFolderId]);
 
   React.useEffect(() => {
     if (!visible) {

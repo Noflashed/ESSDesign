@@ -787,7 +787,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   }, [initialFormState, route.params.builderId, route.params.projectId, route.params.formId]);
 
   React.useEffect(() => {
-    if (route.params.formId) {
+    if (route.params.formId || route.params.initialCompanyEntityId) {
       return;
     }
     let active = true;
@@ -816,6 +816,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
   }, [
     route.params.builderId,
     route.params.builderName,
+    route.params.initialCompanyEntityId,
     route.params.formId,
     route.params.projectId,
     route.params.projectName,

@@ -37,6 +37,11 @@ for name in files:
     content = re.sub(r"require\('([^']+\.(?:png|jpg))'\)", asset, content)
     if name in ['screens/HandoverCertificateFormScreen.tsx', 'screens/ScaffTagFormScreen.tsx']:
         content = content.replace("const usesIOSDocumentEditor = Platform.OS === 'ios';", 'const usesIOSDocumentEditor = true; // Same document editor on web.')
+        # The web register supplies the site's company before mounting the editor.
+        content = content.replace('if (route.params.formId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)',
+            'if (route.params.formId || route.params.initialCompanyEntityId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)')
+        content = content.replace('    route.params.builderName,\n    route.params.formId,',
+            '    route.params.builderName,\n    route.params.initialCompanyEntityId,\n    route.params.formId,')
     if name == 'screens/HandoverCertificateFormScreen.tsx':
         # Section/location is entered by the inspector, not inferred from the project.
         content = content.replace("sectionLocation: route.params.initialLocation ?? '',", "sectionLocation: '',")
@@ -51,6 +56,12 @@ for name in files:
         content = content.replace("import React from 'react';", "import React from 'react';\nimport {adaptScaffTagStyles} from '../browser/scaffTagStyles';")
         content = content.replace('return StyleSheet.create({', 'return StyleSheet.create(adaptScaffTagStyles({')
         content = '  }));'.join(content.rsplit('  });', 1))
+    if name == 'components/DrawingRegisterPickerModal.tsx':
+        # Use the registry already loaded by the web page instead of fetching it again.
+        content = content.replace('  visible: boolean;', '  visible: boolean;\n  designFolderId?: string;')
+        content = content.replace('  visible,\n  builderId,', '  visible,\n  designFolderId,\n  builderId,')
+        content = content.replace('      const builders = await getSafetyBuilders(true);\n      const builder = builders.find(item => item.id === builderId)\n        ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());\n      const project = builder?.projects.find(item => item.id === projectId)\n        ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());\n      const folderId = project?.designFolderId?.trim();\n', '      let folderId = designFolderId?.trim();\n      if (designFolderId === undefined) {\n        const builders = await getSafetyBuilders(true);\n        const builder = builders.find(item => item.id === builderId)\n          ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());\n        const project = builder?.projects.find(item => item.id === projectId)\n          ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());\n        folderId = project?.designFolderId?.trim();\n      }\n')
+        content = content.replace('[builderId, builderName, projectId, projectName]', '[builderId, builderName, projectId, projectName, designFolderId]')
     if name == 'components/SignaturePadModal.tsx':
         content = content.replace('            {...panResponder.panHandlers}>',
             '            {...panResponder.panHandlers}\n            dataSet={{signatureCanvas: true}}>')

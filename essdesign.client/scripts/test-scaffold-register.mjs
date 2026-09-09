@@ -1,6 +1,7 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 const baseURL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5178';
+const companyEntity = process.env.TEST_COMPANY_ENTITY || 'ess';
 const browser = await chromium.launch({headless:true, channel:'chrome'});
 const page = await browser.newPage({viewport:{width:1440,height:1000},ignoreHTTPSErrors:true});
 page.setDefaultTimeout(10000);
@@ -38,6 +39,12 @@ async function checkFormZoom() {
 }
 page.on('pageerror', error => errors.push(error.message));
 await page.addInitScript(() => {
+ window.companyLabels = [];
+ new MutationObserver(() => {
+  document.querySelectorAll('[aria-label^="Change company. Currently"]').forEach(element => {
+   if (element.getBoundingClientRect().width) window.companyLabels.push(element.getAttribute('aria-label'));
+  });
+ }).observe(document, {subtree:true, childList:true, attributes:true, attributeFilter:['aria-label']});
  localStorage.setItem('access_token', 'test.'+btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600}))+'.test');
  localStorage.setItem('user', JSON.stringify({id:'user-test',fullName:'Test Inspector',email:'test@example.com'}));
 });
@@ -74,7 +81,7 @@ await page.route('**/*', async route => {
  return route.abort(); // The fixture can never read or write a live service.
 });
 try {
- await page.goto(baseURL+'/tests/fixtures/scaffold-register.html');
+ await page.goto(baseURL+'/tests/fixtures/scaffold-register.html?entity='+encodeURIComponent(companyEntity));
  await page.getByRole('button',{name:'Add scaffold',exact:true}).click();
  await page.getByRole('dialog').evaluate(element=>Promise.all(element.getAnimations().map(animation=>animation.finished)));
  const addDialog = await page.getByRole('dialog').boundingBox();
@@ -92,7 +99,10 @@ try {
  assert.equal(rows.size,1);
  const register = [...rows.values()][0].payload;
  assert.equal(register.scaffoldName,'North Elevation');
+ const registryReads = await page.evaluate(()=>window.registryReads);
  await page.getByRole('button',{name:'Link design for North Elevation'}).click();
+ await page.getByText('D-100 REV A',{exact:true}).waitFor();
+ assert.equal(await page.evaluate(()=>window.registryReads),registryReads,'Drawing picker opens without fetching the site registry again');
  await page.getByText('D-100 REV A',{exact:true}).click();
  await page.getByRole('button',{name:'D-100 REV A'}).waitFor();
  await page.getByRole('button',{name:'Create handover for North Elevation'}).click();
@@ -101,7 +111,7 @@ try {
  await page.getByLabel('Section/location of scaffold',{exact:true}).fill('Level 20, north elevation');
  await page.getByLabel('Intended use',{exact:true}).fill('Facade access');
  await page.getByRole('checkbox',{name:/^YES:/}).first().click();
- await page.getByLabel('ESS REPRESENTATIVE signature',{exact:true}).click();
+ await page.getByLabel(`${companyEntity === 'maloo' ? 'Maloo' : 'ESS'} REPRESENTATIVE signature`,{exact:true}).click();
  const signatureCanvas = page.getByText('Sign here',{exact:true}).locator('..');
  const box = await signatureCanvas.boundingBox();
  // Start directly on the placeholder: removing it must not interrupt stroke one.
@@ -123,6 +133,7 @@ try {
  const handover = [...rows.values()].find(row=>row.form_type==='handover-certificates')?.payload;
  assert.ok(handover, 'Handover persisted');
  assert.equal(handover.photoSlots.length, 1);
+ assert.equal(handover.companyEntityId,companyEntity,'New handover inherits site company');
  assert.equal(handover.sectionLocation,'Level 20, north elevation','Manually entered section/location is saved');
  assert.ok(handover.essRepresentativeSignatureStrokes[0].length > 2, 'Signature captured');
  assert.equal(handover.essRepresentativeSignatureStrokes.length,1,'Signature works on the first press');
@@ -160,6 +171,7 @@ try {
  await page.locator('.scaffold-form-editor').waitFor({state:'detached'});
  const tag = [...rows.values()].find(row=>row.form_type==='scaff-tags')?.payload;
  assert.ok(tag, 'Scaff-Tag persisted');
+ assert.equal(tag.companyEntityId,companyEntity,'New Scaff-Tag inherits site company');
  assert.equal(tag.photoPaths.length,1,'Scaff-Tag photo uploaded from direct picker');
  assert.equal(tag.erectedBySignatureStrokes.length,1);
  assert.ok(tag.erectedBySignatureStrokes[0].length>2,'Scaff-Tag first press draws full signature');
@@ -202,6 +214,9 @@ try {
  await page.getByText('No scaffold records yet. Add a scaffold to get started.',{exact:true}).waitFor();
  assert.equal(rows.size,0,'Retry deletes linked forms and scaffold');
  assert.deepEqual(errors,[]);
+ const labels = await page.evaluate(()=>window.companyLabels);
+ assert.ok(labels.length>0,'Company branding was observed');
+ assert.ok(labels.every(label=>label === `Change company. Currently ${companyEntity === 'maloo' ? 'Maloo' : 'ESS'}`),'Company branding is correct from first render, without a flash');
  console.log('PASS: creation, form editing, uploads, cross-links, reload, mobile viewport, right-click/keyboard deletion, cancellation and deletion retry.');
 } catch(error) {
  await page.screenshot({path:'/tmp/ess-scaffold-test-failure.png'});

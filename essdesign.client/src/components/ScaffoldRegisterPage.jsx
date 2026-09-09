@@ -20,6 +20,7 @@ import {
     safetyProjectsAPI
 } from '../services/api';
 import ScaffoldFormEditor from './ScaffoldFormEditor';
+import {normalizeCompanyEntityId} from '../scaffoldForms/config/companyEntities';
 import DrawingRegisterPickerModal from '../scaffoldForms/components/DrawingRegisterPickerModal';
 import {createScaffoldRegisterRecord, setScaffoldRegisterDrawing} from '../scaffoldForms/services/supabaseScaffoldRegister';
 import {setHandoverCertificateDrawingLink, setHandoverCertificateScaffoldRecord} from '../scaffoldForms/services/supabaseHandoverCertificates';
@@ -515,7 +516,7 @@ export default function ScaffoldRegisterPage({
             if (kind === 'handover') {
                 Object.assign(params, {
                     formId: item.handover?.id,
-                    initialCompanyEntityId: item.tag?.companyEntityId,
+                    initialCompanyEntityId: item.handover?.companyEntityId || normalizeCompanyEntityId(selectedProject?.scaffoldEntity),
                     initialScaffTagFormId: item.tag?.id, initialScaffTagId: item.tag?.tagNumber,
                     initialDrawingNumber: drawing?.drawingNumber,
                     initialDrawingDocumentId: drawing?.drawingDocumentId,
@@ -525,7 +526,7 @@ export default function ScaffoldRegisterPage({
                     initialDrawingFolderId: drawing?.drawingFolderId,
                 });
             } else Object.assign(params, {
-                formId: item.tag?.id, initialCompanyEntityId: item.handover?.companyEntityId,
+                formId: item.tag?.id, initialCompanyEntityId: item.tag?.companyEntityId || normalizeCompanyEntityId(selectedProject?.scaffoldEntity),
                 initialHandoverFormId: item.handover?.id,
                 initialHandoverInspectionNumber: item.handover?.inspectionNumber,
                 initialHandoverReferenceName: item.handover?.formReferenceName,
@@ -798,7 +799,7 @@ export default function ScaffoldRegisterPage({
                     </div>
                 </form>
             </dialog>}
-            {designItem && <DrawingRegisterPickerModal visible {...projectParams}
+            {designItem && <DrawingRegisterPickerModal visible {...projectParams} designFolderId={selectedProject?.designFolderId}
                 onSelect={linkDrawing} onClose={() => {if (!mutationBusy) setDesignItem(null);}} />}
             {editor && <ScaffoldFormEditor key={`${editor.screen}:${editor.params.formId || editor.params.initialScaffoldRegisterId}`}
                 {...editor} onClose={() => {setEditor(null); loadRegister({silent: true});}}
