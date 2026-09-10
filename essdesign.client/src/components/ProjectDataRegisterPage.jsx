@@ -229,6 +229,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
     const isDayLabour = registerType === 'day-labour';
     const [builders, setBuilders] = useState([]);
+    const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [builderId, setBuilderId] = useState('');
     const [projectId, setProjectId] = useState('');
     const [editor, setEditor] = useState(null);
@@ -281,6 +282,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setBuilders(builders);
+            setBuilderId(current => builders.some(builder => builder.id === current) ? current : builders[0]?.id || '');
             setQrLabels(labels);
             const availableLabelIds = new Set(labels.map(label => label.id));
             setSelectedQrLabelIds(current => current.filter(id => availableLabelIds.has(id)));
@@ -326,6 +328,37 @@ export default function ProjectDataRegisterPage({ registerType }) {
         };
     }, [filterMenu]);
 
+    useEffect(() => {
+        if (!isDayLabour) return undefined;
+        let cancelled = false;
+
+        setBuilderLogoUrls(previous => {
+            const next = new Map();
+            builders.forEach(builder => {
+                next.set(builder.id, previous.get(builder.id) || builder.logoUrl || '');
+            });
+            return next;
+        });
+
+        builders.forEach(builder => {
+            safetyProjectsAPI.resolveBuilderLogoUrl(builder)
+                .then(url => {
+                    if (cancelled) return;
+                    setBuilderLogoUrls(previous => {
+                        if (previous.get(builder.id) === (url || '')) return previous;
+                        const next = new Map(previous);
+                        next.set(builder.id, url || '');
+                        return next;
+                    });
+                })
+                .catch(() => {});
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [builders, isDayLabour]);
+
     const filterOptions = useMemo(() => ({
         builder: [...new Set(rows.map(row => row.builder).filter(Boolean))].sort((left, right) => left.localeCompare(right)),
         project: [...new Set(rows.map(row => row.project).filter(Boolean))].sort((left, right) => left.localeCompare(right))
@@ -334,7 +367,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (!isDayLabour || ((!builderId || row.builderId === builderId) && (!projectId || row.projectId === projectId)))
+            (!isDayLabour || ((row.builderId === builderId) && (!projectId || row.projectId === projectId)))
             && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
@@ -521,7 +554,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         <main className={`project-data-register-page${isDayLabour ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
                 {isDayLabour && <div className="scaffold-register-dropdowns">
-                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder || {id:'', name:'All builders'}} items={[{id:'',name:'All builders'}, ...builders]} getLabel={item => item.name} getLogoUrl={item => item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId('');}} disabled={loading} />
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId('');}} disabled={loading} />
                     <RegisterDropdown label="Project" selectedItem={selectedProject || {id:'', name:'All projects'}} items={[{id:'',name:'All projects'}, ...projects]} getLabel={item => item.name} showLogo={false} onSelect={item => setProjectId(item.id)} disabled={loading || !selectedBuilder} />
                 </div>}
                 <label className="project-register-search">
@@ -643,8 +676,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
                             <thead>
                                 <tr>
                                     {config.columns.map(column => (
-                                        <th key={column.key} className={column.key === 'builder' || column.key === 'project' ? 'has-filter-menu' : undefined}>
-                                            {column.key === 'builder' || column.key === 'project' ? (
+                                        <th key={column.key} className={!isDayLabour && (column.key === 'builder' || column.key === 'project') ? 'has-filter-menu' : undefined}>
+                                            {isDayLabour && (column.key === 'builder' || column.key === 'project') ? column.label : column.key === 'builder' || column.key === 'project' ? (
                                                 <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
                                                     <button type="button" className="project-register-column-sort project-register-filter-trigger" onClick={event => { event.stopPropagation(); setFilterMenu(current => current === column.key ? '' : column.key); }} aria-haspopup="menu" aria-expanded={filterMenu === column.key}>
                                                         <span>{column.label}</span><ChevronDown aria-hidden="true" />

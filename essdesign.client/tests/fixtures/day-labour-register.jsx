@@ -6,5 +6,6 @@ import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPag
 import {safetyProjectsAPI, dayLabourVariationsAPI} from '../../src/services/api';
 const entity = new URLSearchParams(location.search).get('entity') || 'ess';
 safetyProjectsAPI.getBuilders = async () => [{id:'builder-test',name:'Test Builder',projects:[{id:'project-test',name:'Test Project',scaffoldEntity:entity},{id:'project-empty',name:'Empty Project',scaffoldEntity:entity}]}];
+safetyProjectsAPI.resolveBuilderLogoUrl = async () => '/scaffold-forms/logo.png';
 dayLabourVariationsAPI.listAllForms = async () => (await fetch('/fixture/forms?type=day-labour-variations')).json();
 createRoot(document.getElementById('root')).render(<ProjectDataRegisterPage registerType="day-labour" />);
