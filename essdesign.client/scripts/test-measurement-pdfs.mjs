@@ -7,7 +7,7 @@ const api = {authToken:'test',fetchSupabase:async (_url, options)=>{
  return Response.json([{payload:raw,pdf_path:raw.pdfPath}]);
 }};
 const r = await loadMeasurementRenderers(api,{supabaseUrl:'https://example.invalid',supabaseAnonKey:'test',safetyProjectsBucket:'test'});
-for (const [input,expected] of [[null,''],['',''],['  ',''],[0,'0m'],['12','12m'],['.5','.5m'],['12.50','12.50m'],['12m','12m'],['12 m','12 m'],['1200mm','1200mm'],['N/A','N/A'],['3 ft','3 ft']]) assert.equal(r.formatMetres(input),expected);
+for (const [input,expected] of [[null,''],['',''],['  ',''],[0,'0m'],['12','12m'],['.5','.5m'],['12.50','12.50m'],['16.','16m'],['12m','12m'],['12 m','12 m'],['1200mm','1200mm'],['N/A','N/A'],['3 ft','3 ft']]) assert.equal(r.formatMetres(input),expected);
 for (const [get,build] of [[r.getHandoverCertificateForm,r.buildHandoverCertificatePdfBody],[r.getDayLabourVariationForm,r.buildDayLabourVariationPdfBody]]) {
  const form = await get('builder','project','legacy');
  const before = JSON.stringify(form);

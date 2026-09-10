@@ -71,8 +71,11 @@ await writeFile(resolve(directory,filePrefix+'.json'),JSON.stringify({original:r
 if (!args.includes('--apply')) {console.log('Review PDFs and original row saved to '+directory+'. No remote changes made.');process.exit(0);}
 // Preserve the old object; all existing direct links remain valid.
 await request(`/storage/v1/object/${bucket}/${encoded(newPath)}`,{method:'POST',headers:{'Content-Type':'application/pdf','x-upsert':'true'},body:bytes});
-const guard = new URLSearchParams({id:`eq.${row.id}`,form_type:`eq.${type}`,builder_id:`eq.${row.builder_id}`,project_id:`eq.${row.project_id}`,pdf_path:`eq.${row.pdf_path}`,payload:`eq.${JSON.stringify(row.payload)}`});
-if (row.updated_at) guard.set('updated_at',`eq.${row.updated_at}`);
+const guard = new URLSearchParams({id:`eq.${row.id}`,form_type:`eq.${type}`,builder_id:`eq.${row.builder_id}`,project_id:`eq.${row.project_id}`,pdf_path:`eq.${row.pdf_path}`});
+// The database BEFORE UPDATE trigger changes updated_at on every row edit.
+// Keep the guard compact: full signature payloads can exceed proxy URL limits.
+if (!row.updated_at) throw new Error('Missing row revision; reference left untouched');
+guard.set('updated_at',`eq.${row.updated_at}`);
 const updated = await (await request('/rest/v1/ess_safety_forms?'+guard,{method:'PATCH',headers:{'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({pdf_path:newPath,payload:{...row.payload,pdfPath:newPath}})})).json();
 if (updated.length !== 1) throw new Error('Form changed concurrently. Original reference preserved; review copy is unlinked.');
 console.log('PDF reference repaired. Original PDF, form data, inspection dates and QR assignments preserved.');

@@ -40,7 +40,8 @@ for (const mode of ['review','apply','conflict','missing-photo']) {
   assert.deepEqual(Object.keys(patch.body).sort(),['payload','pdf_path']);
   assert.equal(patch.body.payload.inspectionDateTime,'01/01/2020');
   assert.equal(patch.body.payload.scaffoldLength,'12');
-  assert.ok(new URLSearchParams(patch.query).has('payload'));
+  assert.ok(new URLSearchParams(patch.query).has('pdf_path'));
+  assert.ok(!new URLSearchParams(patch.query).has('payload'),'Signature data is not placed in URLs');
   assert.ok(new URLSearchParams(patch.query).has('updated_at'));
  }
  assert.ok(!calls.some(c=>c.path.includes('qr_labels')||c.path.includes('/rpc/')));

@@ -2,7 +2,7 @@
 
 Handover length/height and Day Labour length/width use `formatMetres` in both editors and PDF generators. Day Labour height uses the same formatter. Numeric values gain `m` when rendered. Empty fields, notes and existing units are preserved. Stored values are not migrated or rewritten.
 
-The matching mobile changes are in the ESS-Mobile-App worktree on `codex/measurement-units`. Release both web and mobile changes before repairing saved PDFs. The vendor sync includes the shared measurement utility.
+The matching mobile changes are published to ESS-Mobile-App `main`. Release both web and mobile changes before repairing saved PDFs. The vendor sync includes the shared measurement utility.
 
 ## Existing PDFs and QR links
 
@@ -20,7 +20,7 @@ The default run makes no remote changes. It writes the original PDF, candidate P
 
 After reviewing, run the same command with `--apply`. The original object remains available. The saved JSON records the original reference for a guarded rollback if required. Do not blindly restore the entire row, as it may contain newer edits.
 
-Use `--type day-labour-variations` for Day Labour PDFs. No live repair has been performed as part of this code change.
+Use `--type day-labour-variations` for Day Labour PDFs. On 10 September 2026, the authorised live repair pass corrected two handovers and one Day Labour PDF. All original PDFs remain stored. Before/after checksums matched for the form payloads (excluding the PDF path), dates, reference numbers and all 250 QR records. The temporary scoped repair endpoint was disabled after verification.
 
 ## Validation
 

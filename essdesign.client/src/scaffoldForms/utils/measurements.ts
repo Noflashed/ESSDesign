@@ -4,5 +4,5 @@ export function formatMetres(value: string | number | null | undefined): string 
   const text = String(value ?? '').trim();
   if (!text) return '';
   // Preserve legacy values with units (including mm/ft) and notes such as N/A.
-  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? `${text}m` : text;
+  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? `${text.replace(/\.$/, '')}m` : text;
 }

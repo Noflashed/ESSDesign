@@ -57,7 +57,7 @@
     "utils/scaffTagQrLabelToken.ts": "11e4fdae4bb8e5ae7346cd25284d9c9d8921aa272cfcfed2fe8c8cb5b0529969",
     "utils/scaffoldLifecycle.ts": "7f4a0933128f0930e57ecaa2e8979a3269a707e6659b90a2184cf015e0bfe8ea",
     "screens/DayLabourVariationFormScreen.tsx": "c77be16f55b35a5106646250fa8316a305552a3d9d15231a7bd563ca64cb4d7c",
-    "utils/measurements.ts": "41776eb565354f9cc5d8e51a3346972b5269f398f317fd76c91bafcf4bd27a73"
+    "utils/measurements.ts": "93f3d78fcc09061908e6ac17faa7c6acdceddb5f8c32a4e1e0f68dcd1297609a"
   },
   "assets": {
     "src/assets/handover/phone-page-1-maloo.png": "scaffold-forms/phone-page-1-maloo.png",
