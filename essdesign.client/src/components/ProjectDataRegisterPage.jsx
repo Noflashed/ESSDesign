@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {createPortal} from 'react-dom';
+import { ChevronDown, Trash2, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -234,6 +235,14 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const [projectId, setProjectId] = useState('');
     const [editor, setEditor] = useState(null);
     const [reloadKey, setReloadKey] = useState(0);
+    const [contextMenu, setContextMenu] = useState(null);
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
+    const deleteInFlight = useRef(false);
+    const menuRef = useRef(null);
+    const deleteDialogRef = useRef(null);
+
     const selectedBuilder = builders.find(builder => builder.id === builderId);
     const projects = selectedBuilder?.projects || [];
     const selectedProject = projects.find(project => project.id === projectId) || projects[0];
@@ -358,6 +367,62 @@ export default function ProjectDataRegisterPage({ registerType }) {
             cancelled = true;
         };
     }, [builders, isDayLabour]);
+
+    useEffect(() => {
+        if (!contextMenu) return undefined;
+        menuRef.current?.querySelector('button')?.focus();
+        const close = () => setContextMenu(null);
+        const onPointerDown = event => {
+            if (!menuRef.current?.contains(event.target)) close();
+        };
+        const onKeyDown = event => {
+            if (event.key === 'Escape' || event.key === 'Tab') close();
+        };
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('resize', close);
+        window.addEventListener('scroll', close, true);
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('resize', close);
+            window.removeEventListener('scroll', close, true);
+        };
+    }, [contextMenu]);
+
+    useEffect(() => {
+        if (pendingDelete) deleteDialogRef.current?.showModal();
+    }, [pendingDelete]);
+
+    useEffect(() => { setContextMenu(null); }, [builderId, projectId, query, registerType]);
+
+    const openRowMenu = (event, row) => {
+        if (!isDayLabour || row.deleted) return;
+        event.preventDefault();
+        if (deleteInFlight.current || editor || loading || pendingDelete) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        setContextMenu({row,
+            x: Math.max(8, Math.min(event.clientX || bounds.left, window.innerWidth - 232)),
+            y: Math.max(8, Math.min(event.clientY || bounds.bottom, window.innerHeight - 64)),
+        });
+    };
+    const deleteDayLabour = async () => {
+        if (!pendingDelete || deleteInFlight.current) return;
+        deleteInFlight.current = true;
+        setDeleting(true);
+        setDeleteError('');
+        try {
+            await dayLabourVariationsAPI.deleteForm(pendingDelete.builderId, pendingDelete.projectId, pendingDelete.form.id);
+            setRows(previous => previous.filter(row => row.id !== pendingDelete.id));
+            setPendingDelete(null);
+            setReloadKey(value => value + 1);
+        } catch (failure) {
+            setDeleteError(failure.message || 'Could not delete the Day Labour form. Please try again.');
+        } finally {
+            deleteInFlight.current = false;
+            setDeleting(false);
+        }
+    };
 
     const filterOptions = useMemo(() => ({
         builder: [...new Set(rows.map(row => row.builder).filter(Boolean))].sort((left, right) => left.localeCompare(right)),
@@ -698,7 +763,11 @@ export default function ProjectDataRegisterPage({ registerType }) {
                             </thead>
                             <tbody>
                                 {filteredRows.map(row => (
-                                    <tr key={row.id} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
+                                    <tr key={row.id} tabIndex={isDayLabour && !row.deleted ? 0 : undefined}
+                                        onContextMenu={event => openRowMenu(event, row)}
+                                        onKeyDown={event => {
+                                            if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openRowMenu(event, row);
+                                        }} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
                                         {config.columns.map(column => (
                                             <td key={column.key} title={String(row[column.key] || '')}>
                                                 {column.key === 'status' ? <StatusBadge value={row.status} />
@@ -729,6 +798,25 @@ export default function ProjectDataRegisterPage({ registerType }) {
                     </form>
                 </div>
             ) : null}
+            {contextMenu && createPortal(
+                <div ref={menuRef} className="scaffold-register-context-menu" role="menu" aria-label={`Actions for ${contextMenu.row.title}`}
+                    style={{left: contextMenu.x, top: contextMenu.y}}>
+                    <button type="button" role="menuitem" onClick={() => {
+                        setDeleteError(''); setPendingDelete(contextMenu.row); setContextMenu(null);
+                    }}><Trash2 size={16} aria-hidden="true" />Delete Day Labour form</button>
+                </div>, document.body)}
+            {pendingDelete && createPortal(
+                <dialog ref={deleteDialogRef} className="scaffold-register-delete-dialog"
+                    aria-labelledby="day-labour-delete-title" aria-describedby="day-labour-delete-description"
+                    onCancel={event => {event.preventDefault(); if (!deleteInFlight.current) setPendingDelete(null);}}>
+                    <h3 id="day-labour-delete-title">Delete Day Labour form?</h3>
+                    <p id="day-labour-delete-description">Delete <strong>{pendingDelete.title}</strong> from the Day Labour Register? This cannot be undone.</p>
+                    {deleteError && <div className="scaffold-register-error" role="alert">{deleteError}</div>}
+                    <div className="module-form-actions">
+                        <button type="button" className="module-secondary-btn" autoFocus disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</button>
+                        <button type="button" className="module-danger-btn" disabled={deleting} onClick={deleteDayLabour}>{deleting ? 'Deleting…' : 'Delete form'}</button>
+                    </div>
+                </dialog>, document.body)}
             {editor && <ScaffoldFormEditor screen="DayLabourVariationForm" params={editor} onClose={closeEditor} onSaved={() => {}} />}
         </main>
     );
