@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/services/supabaseHandoverCertificates.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
 import api from './apiService';
 import {
@@ -680,8 +681,8 @@ export async function buildHandoverCertificatePdfBody(form: HandoverCertificateF
       rightValue: string;
     }> = [
       {top: 270.8, bottom: 292.8, leftLabel: 'Intended use', leftValue: form.intendedUse, rightLabel: 'No. of working decks', rightValue: form.workingDecks},
-      {top: 292.8, bottom: 312.2, leftLabel: 'Scaffold Length', leftValue: form.scaffoldLength, rightLabel: 'Scaffold ID No', rightValue: form.scaffoldIdNo},
-      {top: 312.2, bottom: 331.2, leftLabel: 'No. of bays long', leftValue: form.baysLong, rightLabel: 'Scaffold Height', rightValue: form.scaffoldHeight},
+      {top: 292.8, bottom: 312.2, leftLabel: 'Scaffold Length', leftValue: formatMetres(form.scaffoldLength), rightLabel: 'Scaffold ID No', rightValue: form.scaffoldIdNo},
+      {top: 312.2, bottom: 331.2, leftLabel: 'No. of bays long', leftValue: form.baysLong, rightLabel: 'Scaffold Height', rightValue: formatMetres(form.scaffoldHeight)},
       {top: 331.2, bottom: 350.2, leftLabel: 'Drawing Number', leftValue: form.drawingNumber, rightLabel: 'Scaff-Tag ID', rightValue: form.scaffTagId},
     ];
     metricRows.forEach(row => {
@@ -1177,7 +1178,8 @@ export async function getHandoverCertificatePdfUrl(
   if ('pdfPath' in form) {
     return signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
   }
-  return signedPathUrl(pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
+  const saved = await getHandoverCertificateForm(form.builderId, form.projectId, form.formId);
+  return signedPathUrl(saved?.pdfPath || pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
 }
 
 export async function saveHandoverCertificateForm(

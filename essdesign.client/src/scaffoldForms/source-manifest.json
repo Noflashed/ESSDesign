@@ -26,10 +26,11 @@
     "utils/scaffoldRecordMatching.ts",
     "utils/scaffTagQrLabelToken.ts",
     "utils/scaffoldLifecycle.ts",
-    "screens/DayLabourVariationFormScreen.tsx"
+    "screens/DayLabourVariationFormScreen.tsx",
+    "utils/measurements.ts"
   ],
   "sha256": {
-    "screens/HandoverCertificateFormScreen.tsx": "d9ab19b8540d85f57b0661c45fe1c10c0d8cd4ae2cfff638aa8f7099e35924b8",
+    "screens/HandoverCertificateFormScreen.tsx": "0ca59c467ede97fe0a4e65455910fd5570974dba9c53b910336e9aa109262026",
     "screens/ScaffTagFormScreen.tsx": "b090af7723bf4930451813b60f7ca63d235180b9652042df5e79abddb4451321",
     "components/AppTopBar.tsx": "1db0ccbb0f3db7f5653d1345143707271857c0f37aca0d61f3b818e72b742123",
     "components/CompanyEntitySelector.tsx": "370dd3c1ef50972fd7617b5a0a570d6c6a8aa625d116e0644f8e88607254d631",
@@ -38,13 +39,13 @@
     "components/ProjectDataFormShareModal.tsx": "d61bcd321ff79576330328bdce704556c7f4dc7af3a1e5a1c450b0932ef2cf91",
     "components/ScaffoldRecordLinkControls.tsx": "4b816f471289475dbbd795d98ca7cb172dd018bcd36f04657247606dd02354a1",
     "components/DrawingRegisterPickerModal.tsx": "951d3797376774eb7fe9bf2a3d09a397e9306d317a01f38e7c9dab25e893d185",
-    "services/supabaseHandoverCertificates.ts": "8ff02ef6880b90ce0d7d4b938b8b6e106cb3eee28cae21fe7b6cdfab9e8bf3d0",
+    "services/supabaseHandoverCertificates.ts": "d9dee7eb01765374f5c5ca06049cc5c23036ac04675fe6a00376e4a453799ca2",
     "services/supabaseScaffTags.ts": "9353141c393e50433b4a738aa02f64f7a9bf7a70778690675382b1e8cd31d59e",
     "services/scaffTagPdfRenderer.ts": "a20fe4023ce020b17f3c32b0dbfeaba4bcba410493c6569a216ce41640e5a06b",
     "services/supabaseSafetyRecords.ts": "b327fa96d0695fc8cc1c2fee499cbc662a3b1e542766a09fb3ce635c14f786b0",
     "services/supabaseScaffTagQrLabels.ts": "c37d70bffb82a3b90c7657e02593294cb52a668dc7af20d1a4515cee876bbe39",
     "services/supabaseScaffoldRegister.ts": "d91aff3bf904ab26ecf2c8349e13cd1dafab3a23a4e500ebe0dda730a952aedd",
-    "services/supabaseDayLabourForms.ts": "ca718d6ffdd688bb85903e68eb0d1d41b5a8d8c9ff688dbd1b01dbc2824b2f8d",
+    "services/supabaseDayLabourForms.ts": "5ad74f0e3216e57297273820739623c3d624c22736d734a805930691bb38f23a",
     "utils/materialSelection.ts": "bc737acc16ce7c068847cf836de416871212272fff81abb6ba890ceaa758278c",
     "features/materialOrders/requestSchema.ts": "6d5b42cd75126156418f785cde170ef5f57843719459b16824415a8f1d343011",
     "theme/appTheme.ts": "2f91cb284515766f8c7b431e953a5d07e6647f0a471d9be04e6bfda21ed4c1cb",
@@ -55,7 +56,8 @@
     "utils/scaffoldRecordMatching.ts": "b18a92079ae1f15801c753915f5b5bff0f1b1596a1b02acafc049dea7891b312",
     "utils/scaffTagQrLabelToken.ts": "11e4fdae4bb8e5ae7346cd25284d9c9d8921aa272cfcfed2fe8c8cb5b0529969",
     "utils/scaffoldLifecycle.ts": "7f4a0933128f0930e57ecaa2e8979a3269a707e6659b90a2184cf015e0bfe8ea",
-    "screens/DayLabourVariationFormScreen.tsx": "c925df93ffdb875c8da5450d277218f54f92fc60937db004f1d4d57b16d63673"
+    "screens/DayLabourVariationFormScreen.tsx": "c77be16f55b35a5106646250fa8316a305552a3d9d15231a7bd563ca64cb4d7c",
+    "utils/measurements.ts": "41776eb565354f9cc5d8e51a3346972b5269f398f317fd76c91bafcf4bd27a73"
   },
   "assets": {
     "src/assets/handover/phone-page-1-maloo.png": "scaffold-forms/phone-page-1-maloo.png",

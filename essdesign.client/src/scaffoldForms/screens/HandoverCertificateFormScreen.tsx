@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/HandoverCertificateFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatMetres} from '../utils/measurements';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -1812,7 +1813,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
               style={activeStyles.metricSideInput}
               editable={!isReadOnly && !isStatic}
               selectTextOnFocus={!isStatic}
-              value={isStatic ? (form.scaffoldLength ? `${form.scaffoldLength}m` : '') : (isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : `${form.scaffoldLength}m`)}
+              value={isStatic ? (form.scaffoldLength ? formatMetres(form.scaffoldLength) : '') : (isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : formatMetres(form.scaffoldLength))}
               onFocus={() => setIsEditingScaffoldLength(true)}
               onBlur={() => setIsEditingScaffoldLength(false)}
               onChangeText={value => updateNumericField('scaffoldLength', value)}
@@ -1847,7 +1848,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
               style={activeStyles.metricSideInput}
               editable={!isReadOnly && !isStatic}
               selectTextOnFocus={!isStatic}
-              value={isStatic ? (form.scaffoldHeight ? `${form.scaffoldHeight}m` : '') : (isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : `${form.scaffoldHeight}m`)}
+              value={isStatic ? (form.scaffoldHeight ? formatMetres(form.scaffoldHeight) : '') : (isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : formatMetres(form.scaffoldHeight))}
               onFocus={() => setIsEditingScaffoldHeight(true)}
               onBlur={() => setIsEditingScaffoldHeight(false)}
               onChangeText={value => updateNumericField('scaffoldHeight', value)}
@@ -2229,9 +2230,9 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         const displayValue = field.key === 'inspectionNumber'
           ? form.inspectionNumber || inspectionNumberPreview
           : isLength && form.scaffoldLength && !isEditingScaffoldLength
-            ? `${form.scaffoldLength}m`
+            ? formatMetres(form.scaffoldLength)
             : isHeight && form.scaffoldHeight && !isEditingScaffoldHeight
-              ? `${form.scaffoldHeight}m`
+              ? formatMetres(form.scaffoldHeight)
               : form[field.key];
 
         const linkedOnPress = isDrawing && form.drawingDocumentId && form.drawingNumber
@@ -3031,7 +3032,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
         <>
           {renderPhoneInput('Scaffold Length', form.scaffoldLength, value => updateNumericField('scaffoldLength', value), {
             keyboardType: 'decimal-pad',
-            displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : `${form.scaffoldLength}m`,
+            displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : formatMetres(form.scaffoldLength),
             onFocus: () => setIsEditingScaffoldLength(true),
             onBlur: () => setIsEditingScaffoldLength(false),
           })}
@@ -3039,7 +3040,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           {renderPhoneInput('No. of bays long', form.baysLong, value => updateNumericField('baysLong', value), {keyboardType: 'number-pad'})}
           {renderPhoneInput('Scaffold Height', form.scaffoldHeight, value => updateNumericField('scaffoldHeight', value), {
             keyboardType: 'decimal-pad',
-            displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : `${form.scaffoldHeight}m`,
+            displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : formatMetres(form.scaffoldHeight),
             onFocus: () => setIsEditingScaffoldHeight(true),
             onBlur: () => setIsEditingScaffoldHeight(false),
           })}

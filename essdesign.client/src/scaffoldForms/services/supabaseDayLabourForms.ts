@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/services/supabaseDayLabourForms.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
 import {buildMaterialListColumns} from '../utils/materialSelection';
 import api from './apiService';
@@ -507,7 +508,7 @@ function drawImage(name: string, x: number, y: number, w: number, h: number): st
   return `q\n${w} 0 0 ${h} ${x} ${y} cm\n/${name} Do\nQ`;
 }
 
-async function buildDayLabourVariationPdfBody(form: DayLabourVariationForm): Promise<string> {
+export async function buildDayLabourVariationPdfBody(form: DayLabourVariationForm): Promise<string> {
   const pageW = 768;
   const pageH = 1092;
   const margin = 20;
@@ -604,9 +605,9 @@ async function buildDayLabourVariationPdfBody(form: DayLabourVariationForm): Pro
   page.push(drawCenteredBoxText(rightX + 10, infoTop - 24, rightW - 20, 10.5, 'LENGTH, WIDTH, HEIGHT', 'F2'));
   page.push(drawCenteredBoxText(rightX + 10, infoTop - 38, rightW - 20, 10.5, 'DECKS & ACCESS', 'F2'));
   [
-    ['L', form.scaffoldLength],
-    ['W', form.scaffoldWidth],
-    ['H', form.scaffoldHeight],
+    ['L', formatMetres(form.scaffoldLength)],
+    ['W', formatMetres(form.scaffoldWidth)],
+    ['H', formatMetres(form.scaffoldHeight)],
     ['D', form.workingDecks],
     ['A', form.access],
   ].forEach(([label, value], index) => {
@@ -948,7 +949,8 @@ export async function getDayLabourVariationPdfUrl(
   if ('pdfPath' in form) {
     return signedPathUrl(form.pdfPath, 60 * 60 * 24 * 14);
   }
-  return signedPathUrl(pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
+  const saved = await getDayLabourVariationForm(form.builderId, form.projectId, form.formId);
+  return signedPathUrl(saved?.pdfPath || pdfObjectPath(form.builderId, form.projectId, form.formId), 60 * 60 * 24 * 14);
 }
 
 export async function saveDayLabourVariationForm(

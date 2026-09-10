@@ -15,7 +15,7 @@ services/supabaseSafetyRecords.ts services/supabaseScaffTagQrLabels.ts services/
 services/supabaseDayLabourForms.ts utils/materialSelection.ts features/materialOrders/requestSchema.ts
 theme/appTheme.ts config/companyEntities.ts utils/sydneyTime.ts utils/projectDataEmail.ts
 utils/projectDataWorkflowDemoPreference.ts utils/scaffoldRecordMatching.ts utils/scaffTagQrLabelToken.ts
-utils/scaffoldLifecycle.ts'''.split()
+utils/measurements.ts utils/scaffoldLifecycle.ts'''.split()
 assets = {}
 source_hashes = {}
 for name in files:

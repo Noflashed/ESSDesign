@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {formatMetres} from '../utils/measurements';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -1665,19 +1666,19 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
           <View style={styles.phoneDimensionGrid}>
             {renderPhoneField('Length', form.scaffoldLength, value => updateField('scaffoldLength', sanitizeDecimal(value)), {
               keyboardType: 'decimal-pad',
-              displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : `${form.scaffoldLength}m`,
+              displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : formatMetres(form.scaffoldLength),
               onFocus: () => setIsEditingScaffoldLength(true),
               onBlur: () => setIsEditingScaffoldLength(false),
             })}
             {renderPhoneField('Width', form.scaffoldWidth, value => updateField('scaffoldWidth', sanitizeDecimal(value)), {
               keyboardType: 'decimal-pad',
-              displayValue: isEditingScaffoldWidth || !form.scaffoldWidth ? form.scaffoldWidth : `${form.scaffoldWidth}m`,
+              displayValue: isEditingScaffoldWidth || !form.scaffoldWidth ? form.scaffoldWidth : formatMetres(form.scaffoldWidth),
               onFocus: () => setIsEditingScaffoldWidth(true),
               onBlur: () => setIsEditingScaffoldWidth(false),
             })}
             {renderPhoneField('Height', form.scaffoldHeight, value => updateField('scaffoldHeight', sanitizeDecimal(value)), {
               keyboardType: 'decimal-pad',
-              displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : `${form.scaffoldHeight}m`,
+              displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : formatMetres(form.scaffoldHeight),
               onFocus: () => setIsEditingScaffoldHeight(true),
               onBlur: () => setIsEditingScaffoldHeight(false),
             })}
@@ -2097,17 +2098,17 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
                 <Text style={styles.dimensionTitle}>{'LENGTH, WIDTH, HEIGHT\nDECKS & ACCESS'}</Text>
                 <View style={styles.dimensionList}>
                   {renderDimensionLine('L', form.scaffoldLength, value => updateField('scaffoldLength', sanitizeDecimal(value)), 'decimal-pad', undefined, {
-                    displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : `${form.scaffoldLength}m`,
+                    displayValue: isEditingScaffoldLength || !form.scaffoldLength ? form.scaffoldLength : formatMetres(form.scaffoldLength),
                     onFocus: () => setIsEditingScaffoldLength(true),
                     onBlur: () => setIsEditingScaffoldLength(false),
                   })}
                   {renderDimensionLine('W', form.scaffoldWidth, value => updateField('scaffoldWidth', sanitizeDecimal(value)), 'decimal-pad', undefined, {
-                    displayValue: isEditingScaffoldWidth || !form.scaffoldWidth ? form.scaffoldWidth : `${form.scaffoldWidth}m`,
+                    displayValue: isEditingScaffoldWidth || !form.scaffoldWidth ? form.scaffoldWidth : formatMetres(form.scaffoldWidth),
                     onFocus: () => setIsEditingScaffoldWidth(true),
                     onBlur: () => setIsEditingScaffoldWidth(false),
                   })}
                   {renderDimensionLine('H', form.scaffoldHeight, value => updateField('scaffoldHeight', sanitizeDecimal(value)), 'decimal-pad', undefined, {
-                    displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : `${form.scaffoldHeight}m`,
+                    displayValue: isEditingScaffoldHeight || !form.scaffoldHeight ? form.scaffoldHeight : formatMetres(form.scaffoldHeight),
                     onFocus: () => setIsEditingScaffoldHeight(true),
                     onBlur: () => setIsEditingScaffoldHeight(false),
                   })}
