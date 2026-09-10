@@ -285,6 +285,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
     const isPreStart = registerType === 'pre-starts';
     const isEditableRegister = registerType === 'day-labour' || isPreStart;
+    const hasProjectSelection = isEditableRegister || registerType === 'handovers' || registerType === 'scaff-tags';
     const formLabel = isPreStart ? 'Pre-Start' : 'Day Labour';
     const [builders, setBuilders] = useState([]);
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
@@ -348,7 +349,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setBuilders(builders);
-            if (isEditableRegister) {
+            if (hasProjectSelection) {
                 const saved = readRegisterSelection(registerType);
                 const builder = builders.find(item => item.id === saved.builderId) || builders[0];
                 const project = builder?.projects?.find(item => item.id === saved.projectId) || builder?.projects?.[0];
@@ -373,7 +374,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             active = false;
         };
-    }, [config, registerType, usesScaffTagData, reloadKey, isEditableRegister]);
+    }, [config, registerType, usesScaffTagData, reloadKey, hasProjectSelection]);
 
     useEffect(() => {
         setSortField(config.defaultSort);
@@ -404,7 +405,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     }, [filterMenu]);
 
     useEffect(() => {
-        if (!isEditableRegister) return undefined;
+        if (!hasProjectSelection) return undefined;
         let cancelled = false;
 
         setBuilderLogoUrls(previous => {
@@ -432,7 +433,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             cancelled = true;
         };
-    }, [builders, isEditableRegister]);
+    }, [builders, hasProjectSelection]);
 
     useEffect(() => {
         if (!contextMenu) return undefined;
@@ -498,7 +499,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (!isEditableRegister || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
+            (!hasProjectSelection || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
             && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
@@ -512,7 +513,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isEditableRegister, builderId, selectedProject?.id]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, hasProjectSelection, builderId, selectedProject?.id]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -684,7 +685,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     return (
         <main className={`project-data-register-page${isEditableRegister ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
-                {isEditableRegister && <div className="scaffold-register-dropdowns">
+                {hasProjectSelection && <div className="scaffold-register-dropdowns">
                     <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.projects?.[0]?.id || ''; setBuilderId(item.id); setProjectId(nextProjectId); rememberRegisterSelection(registerType, item.id, nextProjectId);}} disabled={loading} />
                     <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberRegisterSelection(registerType, builderId, item.id);}} disabled={loading || projects.length === 0} emptyText="No projects available" />
                 </div>}
@@ -807,8 +808,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
                             <thead>
                                 <tr>
                                     {config.columns.map(column => (
-                                        <th key={column.key} className={!isEditableRegister && (column.key === 'builder' || column.key === 'project') ? 'has-filter-menu' : undefined}>
-                                            {isEditableRegister && (column.key === 'builder' || column.key === 'project') ? column.label : column.key === 'builder' || column.key === 'project' ? (
+                                        <th key={column.key} className={!hasProjectSelection && (column.key === 'builder' || column.key === 'project') ? 'has-filter-menu' : undefined}>
+                                            {hasProjectSelection && (column.key === 'builder' || column.key === 'project') ? column.label : column.key === 'builder' || column.key === 'project' ? (
                                                 <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
                                                     <button type="button" className="project-register-column-sort project-register-filter-trigger" onClick={event => { event.stopPropagation(); setFilterMenu(current => current === column.key ? '' : column.key); }} aria-haspopup="menu" aria-expanded={filterMenu === column.key}>
                                                         <span>{column.label}</span><ChevronDown aria-hidden="true" />
