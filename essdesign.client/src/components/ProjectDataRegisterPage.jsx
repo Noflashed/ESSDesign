@@ -15,6 +15,7 @@ import {normalizeCompanyEntityId} from '../scaffoldForms/config/companyEntities'
 import LoadingBrandmark from './LoadingBrandmark';
 import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
 import './ProjectDataRegisterPage.css';
+import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope, matchesProjectScope} from '../utils/projectDataScope';
 
 const REGISTER_CONFIG = {
     handovers: {
@@ -301,14 +302,16 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const menuRef = useRef(null);
     const deleteDialogRef = useRef(null);
 
-    const selectedBuilder = builders.find(builder => builder.id === builderId);
-    const projects = selectedBuilder?.projects || [];
-    const selectedProject = projects.find(project => project.id === projectId) || projects[0];
+    const builderOptions = useMemo(() => [ALL_BUILDERS, ...builders], [builders]);
+    const selectedBuilder = builderOptions.find(builder => builder.id === builderId);
+    const projects = useMemo(() => projectScopeOptions(builders, builderId), [builders, builderId]);
+    const selectedProject = projects.find(project => project.id === projectId);
+    const canCreate = selectedBuilder && !selectedBuilder.isAll && selectedProject && !selectedProject.isAll;
     const closeEditor = () => { setEditor(null); setReloadKey(value => value + 1); };
     const openForm = (row = null) => {
         const builder = row ? builders.find(item => item.id === row.builderId) : selectedBuilder;
         const project = row ? builder?.projects?.find(item => item.id === row.projectId) : selectedProject;
-        if (!row && (!builder || !project)) return;
+        if (!row && !canCreate) return;
         setEditor({
             builderId: row?.builderId || builder.id, builderName: builder?.name || row?.builder,
             projectId: row?.projectId || project.id, projectName: project?.name || row?.project,
@@ -350,12 +353,10 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (!active) return;
             setBuilders(builders);
             if (hasProjectSelection) {
-                const saved = readRegisterSelection(registerType);
-                const builder = builders.find(item => item.id === saved.builderId) || builders[0];
-                const project = builder?.projects?.find(item => item.id === saved.projectId) || builder?.projects?.[0];
-                setBuilderId(builder?.id || '');
-                setProjectId(project?.id || '');
-                if (builder && project) rememberRegisterSelection(registerType, builder.id, project.id);
+                const selection = resolveProjectScope(builders, readRegisterSelection(registerType));
+                setBuilderId(selection.builderId);
+                setProjectId(selection.projectId);
+                rememberRegisterSelection(registerType, selection.builderId, selection.projectId);
             } else {
                 setBuilderId(current => builders.some(builder => builder.id === current) ? current : builders[0]?.id || '');
             }
@@ -499,7 +500,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (!hasProjectSelection || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
+            (!hasProjectSelection || matchesProjectScope(row, builderId, selectedProject))
             && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
@@ -513,7 +514,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, hasProjectSelection, builderId, selectedProject?.id]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, hasProjectSelection, builderId, selectedProject]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -686,8 +687,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
         <main className={`project-data-register-page${isEditableRegister ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
                 {hasProjectSelection && <div className="scaffold-register-dropdowns">
-                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.projects?.[0]?.id || ''; setBuilderId(item.id); setProjectId(nextProjectId); rememberRegisterSelection(registerType, item.id, nextProjectId);}} disabled={loading} />
-                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberRegisterSelection(registerType, builderId, item.id);}} disabled={loading || projects.length === 0} emptyText="No projects available" />
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builderOptions} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.isAll || selectedProject?.isAll ? ALL_SCOPE : item.projects?.[0]?.id || ALL_SCOPE; setBuilderId(item.id); setProjectId(nextProjectId); rememberRegisterSelection(registerType, item.id, nextProjectId);}} disabled={loading} />
+                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberRegisterSelection(registerType, builderId, item.id);}} disabled={loading} emptyText="No projects available" />
                 </div>}
                 <label className="project-register-search">
                     <Search size={18} />
@@ -804,7 +805,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                         <div className="project-register-loading page-loading-brandmark"><LoadingBrandmark label={`Loading ${config.title.toLowerCase()}`} /></div>
                     ) : (
                         <table className={`project-data-register-table type-${registerType}`}>
-                            {isEditableRegister && <caption className="day-labour-add-row"><button type="button" className="scaffold-register-add" disabled={loading || !selectedProject} title={selectedProject ? `Create ${formLabel} form` : 'Select a builder and project to create a form'} onClick={() => openForm()}><Plus size={18} /><span>Add {formLabel}</span></button></caption>}
+                            {isEditableRegister && <caption className="day-labour-add-row"><button type="button" className="scaffold-register-add" disabled={loading || !canCreate} title={canCreate ? `Create ${formLabel} form` : 'Select a builder and project to create a form'} onClick={() => openForm()}><Plus size={18} /><span>Add {formLabel}</span></button></caption>}
                             <thead>
                                 <tr>
                                     {config.columns.map(column => (

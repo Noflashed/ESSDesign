@@ -43,8 +43,27 @@ try {
    await page.screenshot({path:`/tmp/ess-${type}-dropdowns.png`});
   }
   await builder.click();
+  await page.getByRole('option',{name:'Alpha Builder',exact:true}).click();
+  await project.click();
+  await page.getByRole('option',{name:'All Projects',exact:true}).click();
+  assert.equal(await page.locator('tbody tr').count(),2,'Builder-wide view includes both sites');
+  await builder.click();
+  await page.getByRole('option',{name:'All Builders',exact:true}).click();
+  assert.equal(await page.locator('tbody tr').count(),3,'All builders/projects includes all forms');
+  if(type==='day-labour'||type==='pre-starts') assert.equal(await page.getByRole('button',{name:/^Add /}).isDisabled(),true);
+  await page.reload();
+  await builder.waitFor();
+  assert.match(await builder.innerText(),/All Builders/);
+  assert.match(await project.innerText(),/All Projects/);
+  assert.equal(await page.locator('tbody tr').count(),3);
+  await project.click();
+  await page.getByRole('option',{name:'West Site — Beta Builder',exact:true}).click();
+  assert.equal(await page.locator('tbody tr').count(),1,'A project remains selectable across all builders');
+  assert.match(await page.locator('tbody').innerText(),/West Site/);
+  await builder.click();
   await page.getByRole('option',{name:'Empty Builder',exact:true}).click();
-  assert.equal(await project.isDisabled(),true);
+  assert.equal(await project.isDisabled(),false);
+  assert.match(await project.innerText(),/All Projects/);
   assert.equal(await page.locator('tbody tr').count(),0);
   await page.evaluate(type => localStorage.setItem(`ess-${type}-selection-v1:dropdown-test`,JSON.stringify({builderId:'removed',projectId:'removed'})),type);
   await page.reload();

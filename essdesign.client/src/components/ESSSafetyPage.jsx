@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { preStartsAPI, dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope, matchesProjectScope} from '../utils/projectDataScope';
 
 const PROJECT_DATA_TABS = [
     {
@@ -555,6 +556,7 @@ export default function ESSSafetyPage() {
     const builderDropdownRef = useRef(null);
     const projectDropdownRef = useRef(null);
     const kindDropdownRef = useRef(null);
+    const documentsRequest = useRef(0);
 
     useEffect(() => {
         let active = true;
@@ -562,9 +564,9 @@ export default function ESSSafetyPage() {
             .then(nextBuilders => {
                 if (!active) return;
                 setBuilders(nextBuilders);
-                const firstBuilder = nextBuilders[0] || null;
-                setSelectedBuilderId(firstBuilder?.id || '');
-                setSelectedProjectId(firstBuilder?.projects?.[0]?.id || '');
+                const selection = resolveProjectScope(nextBuilders);
+                setSelectedBuilderId(selection.builderId);
+                setSelectedProjectId(selection.projectId);
             })
             .catch(err => {
                 if (active) {
@@ -647,29 +649,32 @@ export default function ESSSafetyPage() {
         };
     }, [builderDropdownOpen, projectDropdownOpen, kindDropdownOpen, columnFilterMenu, contextMenu]);
 
+    const builderOptions = useMemo(() => [ALL_BUILDERS, ...builders], [builders]);
     const selectedBuilder = useMemo(
-        () => builders.find(builder => builder.id === selectedBuilderId) || builders[0] || null,
-        [builders, selectedBuilderId]
+        () => builderOptions.find(builder => builder.id === selectedBuilderId) || null,
+        [builderOptions, selectedBuilderId]
     );
-
+    const projectOptions = useMemo(() => projectScopeOptions(builders, selectedBuilderId), [builders, selectedBuilderId]);
     const selectedProject = useMemo(
-        () => selectedBuilder?.projects?.find(project => project.id === selectedProjectId) || selectedBuilder?.projects?.[0] || null,
-        [selectedBuilder, selectedProjectId]
+        () => projectOptions.find(project => project.id === selectedProjectId) || null,
+        [projectOptions, selectedProjectId]
     );
+    const scopeProjects = useMemo(() => builders.flatMap(builder => (builder.projects || [])
+        .filter(project => matchesProjectScope({builderId: builder.id, projectId: project.id}, selectedBuilderId, selectedProject))
+        .map(project => ({builder, project}))), [builders, selectedBuilderId, selectedProject]);
 
     const activeTab = useMemo(
         () => PROJECT_DATA_TABS.find(tab => tab.key === activeTabKey) || PROJECT_DATA_TABS[0],
         [activeTabKey]
     );
 
-    useEffect(() => {
-        if (selectedBuilder && !selectedBuilder.projects.some(project => project.id === selectedProjectId)) {
-            setSelectedProjectId(selectedBuilder.projects[0]?.id || '');
-        }
-    }, [selectedBuilder, selectedProjectId]);
-
     const handleSelectBuilder = (builderId) => {
-        setSelectedBuilderId(builderId);
+        const selection = resolveProjectScope(builders, {
+            builderId,
+            projectId: builderId === ALL_SCOPE || selectedProject?.isAll ? ALL_SCOPE : undefined,
+        });
+        setSelectedBuilderId(selection.builderId);
+        setSelectedProjectId(selection.projectId);
         setBuilderDropdownOpen(false);
         setProjectDropdownOpen(false);
         setKindDropdownOpen(false);
@@ -693,7 +698,9 @@ export default function ESSSafetyPage() {
     };
 
     const loadDocuments = useCallback(async ({ silent = false, preserveSelection = false } = {}) => {
-        if (!selectedBuilder || !selectedProject) {
+        const request = ++documentsRequest.current;
+        if (!scopeProjects.length) {
+            setDocumentsLoading(false);
             setDocuments([]);
             setSelectedDocumentId('');
             return;
@@ -704,25 +711,53 @@ export default function ESSSafetyPage() {
             setError('');
         }
         try {
-            let rows;
-            if (activeTab.key === 'scaff-tags') {
-                rows = mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id));
-            } else if (activeTab.key === 'handover-certificates') {
-                rows = mapHandoverRows(await handoverCertificatesAPI.listForms(selectedBuilder.id, selectedProject.id));
-            } else if (activeTab.key === 'pre-starts') {
-                rows = mapPreStartRows(await preStartsAPI.listForms(selectedBuilder.id, selectedProject.id));
-            } else if (activeTab.key === 'day-labour-variations') {
-                rows = mapDayLabourVariationRows(await dayLabourVariationsAPI.listForms(selectedBuilder.id, selectedProject.id));
+            const attachContext = (doc, builder, project) => ({
+                ...doc,
+                recordId: doc.id,
+                id: JSON.stringify([builder.id, project.id, doc.kind, doc.id]),
+                builderId: builder.id,
+                projectId: project.id,
+                builder,
+                project,
+            });
+            const formSources = {
+                'scaff-tags': [scaffTagsAPI, mapScaffTagRows],
+                'handover-certificates': [handoverCertificatesAPI, mapHandoverRows],
+                'pre-starts': [preStartsAPI, mapPreStartRows],
+                'day-labour-variations': [dayLabourVariationsAPI, mapDayLabourVariationRows],
+            };
+            let rows = [];
+            if (formSources[activeTab.key]) {
+                const [api, mapRows] = formSources[activeTab.key];
+                if (scopeProjects.length === 1) {
+                    const {builder, project} = scopeProjects[0];
+                    rows = mapRows(await api.listForms(builder.id, project.id)).map(doc => attachContext(doc, builder, project));
+                } else {
+                    const contexts = new Map(scopeProjects.map(context => [JSON.stringify([context.builder.id, context.project.id]), context]));
+                    rows = mapRows(await api.listAllForms()).flatMap(doc => {
+                        const context = contexts.get(JSON.stringify([doc.raw.builderId, doc.raw.projectId]));
+                        return context ? [attachContext(doc, context.builder, context.project)] : [];
+                    });
+                }
             } else {
-                rows = mapFileRows(await safetyFilesAPI.listModuleFiles(selectedBuilder.id, selectedProject.id, activeTab.storageKind), activeTab);
+                // File-based document types are stored by project; bound concurrent reads.
+                for (let offset = 0; offset < scopeProjects.length; offset += 6) {
+                    const groups = await Promise.all(scopeProjects.slice(offset, offset + 6).map(async ({builder, project}) =>
+                        mapFileRows(await safetyFilesAPI.listModuleFiles(builder.id, project.id, activeTab.storageKind), activeTab)
+                            .map(doc => attachContext(doc, builder, project))));
+                    if (request !== documentsRequest.current) return;
+                    rows.push(...groups.flat());
+                }
             }
-
+            if (request !== documentsRequest.current) return;
+            rows.sort((left, right) => String(right.uploadedAt).localeCompare(String(left.uploadedAt)));
             setDocuments(rows);
             if (!preserveSelection) {
                 setSelectedDocumentId('');
                 setPreviewOpen(false);
             }
         } catch (err) {
+            if (request !== documentsRequest.current) return;
             if (!silent) {
                 setDocuments([]);
                 setSelectedDocumentId('');
@@ -730,14 +765,15 @@ export default function ESSSafetyPage() {
                 setError(err.message || `Failed to load ${activeTab.noun}`);
             }
         } finally {
-            if (!silent) {
+            if (request === documentsRequest.current) {
                 setDocumentsLoading(false);
             }
         }
-    }, [activeTab, selectedBuilder, selectedProject]);
+    }, [activeTab, scopeProjects]);
 
     useEffect(() => {
         loadDocuments().catch(() => {});
+        return () => { documentsRequest.current += 1; };
     }, [loadDocuments]);
 
     useEffect(() => {
@@ -799,24 +835,24 @@ export default function ESSSafetyPage() {
     };
 
     const resolveDocumentPdfUrl = async (doc) => {
-        if (!doc || !selectedBuilder || !selectedProject) return '';
+        if (!doc) return '';
         if (doc.kind === 'scaff-tags') {
-            const form = await scaffTagsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            const form = await scaffTagsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
             if (!form) throw new Error('Scaff-tag form not found');
             return scaffTagsAPI.getPdfUrl(form);
         }
         if (doc.kind === 'handover-certificates') {
-            const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            const form = await handoverCertificatesAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
             if (!form) throw new Error('Handover certificate not found');
             return handoverCertificatesAPI.getPdfUrl(form);
         }
         if (doc.kind === 'pre-starts') {
-            const form = await preStartsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            const form = await preStartsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
             if (!form) throw new Error('Pre-start form not found');
             return preStartsAPI.getPdfUrl(form);
         }
         if (doc.kind === 'day-labour-variations') {
-            const form = await dayLabourVariationsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            const form = await dayLabourVariationsAPI.getForm(doc.builderId, doc.projectId, doc.recordId);
             if (form) {
                 return dayLabourVariationsAPI.getPdfUrl(form);
             }
@@ -831,7 +867,7 @@ export default function ESSSafetyPage() {
     useEffect(() => {
         let active = true;
 
-        if (!previewOpen || !selectedDocument || !selectedBuilder || !selectedProject) {
+        if (!previewOpen || !selectedDocument) {
             setPreviewPdfUrl('');
             setPreviewError('');
             setPreviewLoading(false);
@@ -866,7 +902,7 @@ export default function ESSSafetyPage() {
     }, [previewOpen, selectedDocument?.id, selectedDocument?.kind, selectedBuilder?.id, selectedProject?.id]);
 
     const openSelectedDocument = async (doc = selectedDocument) => {
-        if (!doc || !selectedBuilder || !selectedProject) return;
+        if (!doc) return;
         try {
             const url = await resolveDocumentPdfUrl(doc);
             if (url) {
@@ -878,7 +914,7 @@ export default function ESSSafetyPage() {
     };
 
     const downloadDocumentPdf = async (doc) => {
-        if (!doc || !selectedBuilder || !selectedProject) return;
+        if (!doc) return;
         try {
             const url = await resolveDocumentPdfUrl(doc);
             if (!url) return;
@@ -924,7 +960,7 @@ export default function ESSSafetyPage() {
     };
 
     const deleteProjectDataDocument = async (doc = contextMenuDocument) => {
-        if (!doc || !selectedBuilder || !selectedProject || deletingDocumentId) return;
+        if (!doc || deletingDocumentId) return;
 
         setDeletingDocumentId(doc.id);
         setError('');
@@ -936,13 +972,13 @@ export default function ESSSafetyPage() {
         setPendingDeleteDocument(null);
         try {
             if (doc.kind === 'scaff-tags') {
-                await scaffTagsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+                await scaffTagsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
             } else if (doc.kind === 'handover-certificates') {
-                await handoverCertificatesAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+                await handoverCertificatesAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
             } else if (doc.kind === 'pre-starts') {
-                await preStartsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+                await preStartsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
             } else if (doc.kind === 'day-labour-variations') {
-                await dayLabourVariationsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+                await dayLabourVariationsAPI.deleteForm(doc.builderId, doc.projectId, doc.recordId);
             } else {
                 await safetyFilesAPI.deleteModuleFile(doc.raw.path);
             }
@@ -966,7 +1002,7 @@ export default function ESSSafetyPage() {
                     <label className="project-data-select-field">
                         <span>Builder</span>
                         <BuilderDropdown
-                            builders={builders}
+                            builders={builderOptions}
                             selectedBuilder={selectedBuilder}
                             logoUrls={builderLogoUrls}
                             open={builderDropdownOpen}
@@ -982,7 +1018,7 @@ export default function ESSSafetyPage() {
                     <label className="project-data-select-field">
                         <span>Project</span>
                         <ProjectDropdown
-                            projects={selectedBuilder?.projects || []}
+                            projects={projectOptions}
                             selectedProject={selectedProject}
                             open={projectDropdownOpen}
                             onToggle={() => {
@@ -1164,8 +1200,8 @@ export default function ESSSafetyPage() {
                             <ProjectDataPreview
                                 doc={selectedDocument}
                                 tab={activeTab}
-                                builder={selectedBuilder}
-                                project={selectedProject}
+                                builder={selectedDocument.builder}
+                                project={selectedDocument.project}
                                 previewUrl={previewPdfUrl}
                                 previewLoading={previewLoading}
                                 previewError={previewError}
@@ -1190,7 +1226,7 @@ export default function ESSSafetyPage() {
                         <div className="project-data-delete-copy">
                             <h3>Delete Project Data PDF?</h3>
                             <p>
-                                This will permanently delete <strong>{pendingDeleteDocument.name}</strong> from {selectedProject?.name || 'this project'}.
+                                This will permanently delete <strong>{pendingDeleteDocument.name}</strong> from {pendingDeleteDocument.project?.name || 'this project'}.
                             </p>
                             <span>This cannot be undone.</span>
                         </div>
