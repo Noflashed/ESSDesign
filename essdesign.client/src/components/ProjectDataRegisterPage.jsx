@@ -236,7 +236,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const [reloadKey, setReloadKey] = useState(0);
     const selectedBuilder = builders.find(builder => builder.id === builderId);
     const projects = selectedBuilder?.projects || [];
-    const selectedProject = projects.find(project => project.id === projectId);
+    const selectedProject = projects.find(project => project.id === projectId) || projects[0];
     const closeEditor = () => { setEditor(null); setReloadKey(value => value + 1); };
     const openDayLabour = (row = null) => {
         const builder = row ? builders.find(item => item.id === row.builderId) : selectedBuilder;
@@ -367,7 +367,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (!isDayLabour || ((row.builderId === builderId) && (!projectId || row.projectId === projectId)))
+            (!isDayLabour || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
             && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
@@ -381,7 +381,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isDayLabour, builderId, projectId]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isDayLabour, builderId, selectedProject?.id]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -554,8 +554,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
         <main className={`project-data-register-page${isDayLabour ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
                 {isDayLabour && <div className="scaffold-register-dropdowns">
-                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId('');}} disabled={loading} />
-                    <RegisterDropdown label="Project" selectedItem={selectedProject || {id:'', name:'All projects'}} items={[{id:'',name:'All projects'}, ...projects]} getLabel={item => item.name} showLogo={false} onSelect={item => setProjectId(item.id)} disabled={loading || !selectedBuilder} />
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId(item.projects?.[0]?.id || '');}} disabled={loading} />
+                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => setProjectId(item.id)} disabled={loading || projects.length === 0} emptyText="No projects available" />
                 </div>}
                 <label className="project-register-search">
                     <Search size={18} />

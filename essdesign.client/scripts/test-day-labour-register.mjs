@@ -85,13 +85,15 @@ try {
  const add = page.getByRole('button',{name:'Add Day Labour',exact:true});
  await add.waitFor();
  assert.equal(await page.locator('thead .project-register-header-filter').count(),0,'Day Labour uses toolbar filters only');
- assert.equal(await add.isEnabled(),false);
+ assert.equal(await add.isEnabled(),true,'First project is selected automatically');
  await page.getByRole('button',{name:'Builder',exact:true}).click();
  assert.equal(await page.getByRole('option',{name:'All builders',exact:true}).count(),0);
  await page.getByRole('option',{name:'Test Builder',exact:true}).locator('img').waitFor();
  await page.getByRole('option',{name:'Test Builder',exact:true}).click();
  await page.getByRole('button',{name:'Builder',exact:true}).locator('img').waitFor();
  await page.getByRole('button',{name:'Project',exact:true}).click();
+ assert.equal(await page.getByRole('option',{name:'All projects',exact:true}).count(),0);
+ assert.equal(await page.getByRole('option',{name:'Test Project',exact:true}).getAttribute('aria-selected'),'true');
  await page.getByRole('option',{name:'Test Project',exact:true}).click();
  await add.click();
  await page.getByTestId('ess-day-labour-stable-scroll-page').waitFor();

@@ -939,3 +939,14 @@
 }
 
 .day-labour-register .project-register-empty { pointer-events: none; top: 82px; }
+
+/* The table border starts below the compact action tab, as in the Scaffold Register. */
+.day-labour-register .project-data-register-table-wrap {
+    border: 0;
+    border-radius: 0;
+    background: var(--bg-primary);
+}
+.day-labour-register .project-data-register-table {
+    border: 1px solid var(--border-color);
+    border-radius: 0 6px 6px 6px;
+}
