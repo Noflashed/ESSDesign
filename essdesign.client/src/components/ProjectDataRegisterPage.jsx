@@ -224,6 +224,30 @@ function StatusBadge({ value }) {
     return <span className={`project-register-status ${String(value || '').toLowerCase()}`}>{value || 'Draft'}</span>;
 }
 
+// Store selections separately for each account on this browser.
+function dayLabourSelectionKey() {
+    const user = JSON.parse(window.localStorage.getItem('user') || 'null');
+    return user?.id ? `ess-day-labour-selection-v1:${user.id}` : null;
+}
+
+function readDayLabourSelection() {
+    try {
+        const key = dayLabourSelectionKey();
+        return (key && JSON.parse(window.localStorage.getItem(key) || 'null')) || {};
+    } catch {
+        return {};
+    }
+}
+
+function rememberDayLabourSelection(builderId, projectId) {
+    try {
+        const key = dayLabourSelectionKey();
+        if (key) window.localStorage.setItem(key, JSON.stringify({builderId, projectId}));
+    } catch {
+        // Navigation must still work when browser storage is unavailable.
+    }
+}
+
 export default function ProjectDataRegisterPage({ registerType }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
     const showingQrRegister = registerType === 'qr-labels';
@@ -291,7 +315,16 @@ export default function ProjectDataRegisterPage({ registerType }) {
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setBuilders(builders);
-            setBuilderId(current => builders.some(builder => builder.id === current) ? current : builders[0]?.id || '');
+            if (isDayLabour) {
+                const saved = readDayLabourSelection();
+                const builder = builders.find(item => item.id === saved.builderId) || builders[0];
+                const project = builder?.projects?.find(item => item.id === saved.projectId) || builder?.projects?.[0];
+                setBuilderId(builder?.id || '');
+                setProjectId(project?.id || '');
+                if (builder && project) rememberDayLabourSelection(builder.id, project.id);
+            } else {
+                setBuilderId(current => builders.some(builder => builder.id === current) ? current : builders[0]?.id || '');
+            }
             setQrLabels(labels);
             const availableLabelIds = new Set(labels.map(label => label.id));
             setSelectedQrLabelIds(current => current.filter(id => availableLabelIds.has(id)));
@@ -307,7 +340,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             active = false;
         };
-    }, [config, registerType, usesScaffTagData, reloadKey]);
+    }, [config, registerType, usesScaffTagData, reloadKey, isDayLabour]);
 
     useEffect(() => {
         setSortField(config.defaultSort);
@@ -619,8 +652,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
         <main className={`project-data-register-page${isDayLabour ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
                 {isDayLabour && <div className="scaffold-register-dropdowns">
-                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId(item.projects?.[0]?.id || '');}} disabled={loading} />
-                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => setProjectId(item.id)} disabled={loading || projects.length === 0} emptyText="No projects available" />
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.projects?.[0]?.id || ''; setBuilderId(item.id); setProjectId(nextProjectId); rememberDayLabourSelection(item.id, nextProjectId);}} disabled={loading} />
+                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberDayLabourSelection(builderId, item.id);}} disabled={loading || projects.length === 0} emptyText="No projects available" />
                 </div>}
                 <label className="project-register-search">
                     <Search size={18} />

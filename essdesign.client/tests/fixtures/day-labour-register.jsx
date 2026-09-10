@@ -5,7 +5,7 @@ import {createRoot} from 'react-dom/client';
 import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPage';
 import {safetyProjectsAPI, dayLabourVariationsAPI} from '../../src/services/api';
 const entity = new URLSearchParams(location.search).get('entity') || 'ess';
-safetyProjectsAPI.getBuilders = async () => [{id:'builder-test',name:'Test Builder',projects:[{id:'project-test',name:'Test Project',scaffoldEntity:entity},{id:'project-empty',name:'Empty Project',scaffoldEntity:entity}]}];
+safetyProjectsAPI.getBuilders = async () => [{id:'builder-test',name:'Test Builder',projects:[{id:'project-test',name:'Test Project',scaffoldEntity:entity},{id:'project-empty',name:'Empty Project',scaffoldEntity:entity}]},{id:'builder-other',name:'Other Builder',projects:[{id:'other-first',name:'First Site',scaffoldEntity:entity},{id:'other-second',name:'Second Site',scaffoldEntity:entity}]}];
 safetyProjectsAPI.resolveBuilderLogoUrl = async () => '/scaffold-forms/logo.png';
 dayLabourVariationsAPI.listAllForms = async () => (await fetch('/fixture/forms?type=day-labour-variations')).json();
 createRoot(document.getElementById('root')).render(<ProjectDataRegisterPage registerType="day-labour" />);
