@@ -2,7 +2,11 @@
 import api from './apiService';
 import { AppConstants } from '../utils/constants';
 import { PreStartForm } from '../models/preStart';
-import { buildPreStartPdf, PreStartPdfImage } from './preStartPdfRenderer';
+import {
+  buildPreStartPdf,
+  PreStartPdfImage,
+  PRE_START_PDF_LAYOUT_VERSION,
+} from './preStartPdfRenderer';
 import {
   getCompanyEntity,
   getCompanyLogoJpegBase64,
@@ -246,6 +250,7 @@ export async function savePreStartForm(
     ...form,
     preStartNumber,
     pdfPath,
+    pdfLayoutVersion: PRE_START_PDF_LAYOUT_VERSION,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };

@@ -8,7 +8,7 @@ import {
 export const PRE_START_EDITOR_WIDTH = 704;
 export const PRE_START_EDITOR_HEIGHTS = [1030, 1000] as const;
 
-/** Presentation-only expansion. PDF layout stays unchanged while the editor is refined. */
+/** Shared page geometry for the zoomable editor and matching PDF export. */
 export function preStartEditorPages(
   brand: Parameters<typeof preStartDocumentPages>[0],
 ): PreStartDocumentNode[][] {

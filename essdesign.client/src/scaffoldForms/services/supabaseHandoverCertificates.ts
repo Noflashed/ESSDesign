@@ -42,6 +42,8 @@ export interface HandoverActionRow {
 }
 
 export interface HandoverCertificateForm {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   builderId: string;
   builderName: string;
@@ -87,6 +89,8 @@ export interface HandoverCertificateForm {
 }
 
 export interface HandoverCertificateListItem {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   companyEntityId: CompanyEntityId;
   formReferenceName: string;
@@ -1049,6 +1053,8 @@ export async function listHandoverCertificateForms(
     projectId,
   );
   return forms.map(form => ({
+    completedAt: form.completedAt,
+    completedByUserId: form.completedByUserId,
     id: form.id,
     companyEntityId: normalizeCompanyEntityId(form.companyEntityId),
     formReferenceName: form.formReferenceName ?? '',
@@ -1147,6 +1153,8 @@ export async function getHandoverCertificateForm(
     clientSignature: raw.clientSignature ?? '',
     clientSignatureStrokes: normalizeSignatureStrokes(raw.clientSignatureStrokes),
     hrwLicenceNumber: raw.hrwLicenceNumber ?? '',
+    completedAt: raw.completedAt,
+    completedByUserId: raw.completedByUserId,
     pdfPath: raw.pdfPath ?? pdfObjectPath(builderId, projectId, formId),
     createdAt: raw.createdAt ?? nowIso(),
     updatedAt: raw.updatedAt ?? nowIso(),

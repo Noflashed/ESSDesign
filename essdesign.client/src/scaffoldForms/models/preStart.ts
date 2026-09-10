@@ -29,6 +29,8 @@ export const PRE_START_CHECKLIST = [
 ] as const;
 export type PreStartCheckId = (typeof PRE_START_CHECKLIST)[number]['id'];
 export interface PreStartForm {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   builderId: string;
   builderName: string;
@@ -57,6 +59,7 @@ export interface PreStartForm {
   photoSlots: Array<{ slot: number; path: string }>;
   attendees: Array<{ name: string; signatureStrokes: PreStartStroke[] }>;
   pdfPath: string;
+  pdfLayoutVersion?: number;
   createdAt: string;
   updatedAt: string;
 }

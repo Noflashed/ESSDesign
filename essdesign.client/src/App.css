@@ -25328,3 +25328,6 @@ button.stat-card {
     background: #f4f4f5;
     color: #202024;
 }
+
+.project-data-status.active { background: #eff6ff; color: #2563eb; }
+.project-data-status.completed { background: #ecfdf5; color: #047857; }

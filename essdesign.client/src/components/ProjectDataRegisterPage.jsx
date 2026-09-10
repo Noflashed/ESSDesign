@@ -1,3 +1,4 @@
+import {getProjectDataStatus} from '../utils/projectDataStatus';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { ChevronDown, Trash2, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
@@ -31,7 +32,8 @@ const REGISTER_CONFIG = {
             { key: 'title', label: 'SCAFFOLD / FORM' },
             { key: 'reference', label: 'CERTIFICATE NO.' },
             { key: 'inspectionDate', label: 'INSPECTION DATE' },
-            { key: 'representative', label: 'INSPECTED BY' }
+            { key: 'representative', label: 'INSPECTED BY' },
+            { key: 'status', label: 'STATUS' }
         ]
     },
     'pre-starts': {
@@ -48,7 +50,8 @@ const REGISTER_CONFIG = {
             { key: 'reference', label: 'PRE-START NO.' },
             { key: 'formDate', label: 'FORM DATE' },
             { key: 'representative', label: 'REPRESENTATIVE' },
-            { key: 'areaForeman', label: 'AREA FOREMAN' }
+            { key: 'areaForeman', label: 'AREA FOREMAN' },
+            { key: 'status', label: 'STATUS' }
         ]
     },
     'day-labour': {
@@ -65,7 +68,8 @@ const REGISTER_CONFIG = {
             { key: 'reference', label: 'VARIATION NO.' },
             { key: 'formDate', label: 'FORM DATE' },
             { key: 'requestedBy', label: 'REQUESTED BY' },
-            { key: 'handoverNumber', label: 'HANDOVER NO.' }
+            { key: 'handoverNumber', label: 'HANDOVER NO.' },
+            { key: 'status', label: 'STATUS' }
         ]
     },
     'scaff-tags': {
@@ -165,7 +169,8 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
     const names = resolveProjectNames(form, projectLookup);
     const deletion = {
         deleted: Boolean(form.isDeleted),
-        deletedAt: form.deletedAt || null
+        deletedAt: form.deletedAt || null,
+        status: getProjectDataStatus(form)
     };
     if (registerType === 'handovers') {
         return {
@@ -294,6 +299,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const [projectId, setProjectId] = useState('');
     const [editor, setEditor] = useState(null);
     const [reloadKey, setReloadKey] = useState(0);
+    const [statusFilter, setStatusFilter] = useState('all');
+    useEffect(() => setStatusFilter('all'), [registerType]);
     const [contextMenu, setContextMenu] = useState(null);
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
@@ -502,6 +509,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         const next = rows.filter(row => (
             (!hasProjectSelection || matchesProjectScope(row, builderId, selectedProject))
             && (showDeleted || !row.deleted)
+            && (statusFilter === 'all' || row.status === statusFilter)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
             && (!normalizedQuery || config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
@@ -514,7 +522,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, hasProjectSelection, builderId, selectedProject]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, statusFilter, sortDirection, sortField, hasProjectSelection, builderId, selectedProject]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -699,6 +707,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                         placeholder={showingQrRegister ? 'Search QR labels...' : config.searchPlaceholder}
                     />
                 </label>
+                {!usesScaffTagData && <RegisterDropdown label="Status" selectedItem={{id: statusFilter, name: statusFilter === 'all' ? 'All statuses' : statusFilter}} items={[{id: 'all', name: 'All statuses'}, {id: 'Active', name: 'Active'}, {id: 'Completed', name: 'Completed'}]} getLabel={item => item.name} showLogo={false} onSelect={item => setStatusFilter(item.id)} />}
                 <span className="project-register-toolbar-spacer" />
                 {showingQrRegister ? (
                     <>

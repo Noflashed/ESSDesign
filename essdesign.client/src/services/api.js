@@ -4649,6 +4649,9 @@ async function saveSafetyFormRecord(formType, builderId, projectId, form) {
     if (!id) {
         throw new Error('A form ID is required');
     }
+    const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates'].includes(formType)
+        ? await getSafetyFormRecord(formType, builderId, projectId, id) : null;
+    if (existing?.completedAt) form = {...form, completedAt: existing.completedAt, completedByUserId: existing.completedByUserId};
     const metadata = safetyFormMetadata(formType, form);
     const payload = {
         ...form,

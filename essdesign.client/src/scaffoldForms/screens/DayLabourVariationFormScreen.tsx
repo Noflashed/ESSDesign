@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/DayLabourVariationFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {markSafetyFormCompleted} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
 import React from 'react';
 import {
@@ -1194,7 +1195,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
     try {
       const result = await composeEmailWithPdf({
         to: recipients,
-        subject: `${formTitle} – ${formNumber}`,
+        subject: `${formTitle} â€“ ${formNumber}`,
         body: `Please find attached the Day Labour/Variation PDF for ${route.params.projectName}.`,
         pdfUrl: sharePdfUrl,
         fileName: projectDataPdfFileName(`Day Labour Variation ${formNumber}`),
@@ -2496,6 +2497,7 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
       </Modal>
 
       <ProjectDataFormShareModal
+        onBeforeShare={() => markSafetyFormCompleted('day-labour-variations', route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}
         title={form.formReferenceName || form.variationNumber || 'Day Labour/Variation'}

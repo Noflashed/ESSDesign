@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/PreStartFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {markSafetyFormCompleted} from '../services/supabaseSafetyRecords';
 import ProjectDataFormDemoModal from '../components/ProjectDataFormDemoModal';
 import {
   hideProjectDataWorkflowDemo,
@@ -53,6 +54,7 @@ import {
   projectDataPdfFileName,
 } from '../utils/projectDataEmail';
 import api from '../services/apiService';
+import { PRE_START_PDF_LAYOUT_VERSION } from '../services/preStartPdfRenderer';
 import Pdf from '../browser/Pdf';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PreStartForm'>;
@@ -455,7 +457,10 @@ export default function PreStartFormScreen({ navigation, route }: Props) {
             />
           }
           rightContent={
-            dirty || (!form.pdfPath && !readOnly) ? (
+            dirty ||
+            ((!form.pdfPath ||
+              form.pdfLayoutVersion !== PRE_START_PDF_LAYOUT_VERSION) &&
+              !readOnly) ? (
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Save pre-start form"
@@ -588,6 +593,7 @@ export default function PreStartFormScreen({ navigation, route }: Props) {
         }}
       />
       <ProjectDataFormShareModal
+        onBeforeShare={() => markSafetyFormCompleted('pre-starts', route.params.builderId, route.params.projectId, form.id)}
         visible={showShare}
         theme={theme}
         title={form.subject || 'Daily Pre-Start'}

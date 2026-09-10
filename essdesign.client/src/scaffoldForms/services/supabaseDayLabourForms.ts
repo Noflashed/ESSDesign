@@ -43,6 +43,8 @@ export interface DayLabourLabourRow {
 }
 
 export interface DayLabourVariationForm {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   builderId: string;
   builderName: string;
@@ -89,6 +91,8 @@ export interface DayLabourVariationForm {
 }
 
 export interface DayLabourVariationListItem {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   variationNumber: string;
   formReferenceName: string;
@@ -838,6 +842,8 @@ export async function listDayLabourVariationForms(builderId: string, projectId: 
     projectId,
   );
   return forms.map(form => ({
+    completedAt: form.completedAt,
+    completedByUserId: form.completedByUserId,
       id: form.id,
       variationNumber: form.variationNumber ?? '',
       formReferenceName: form.formReferenceName ?? '',
@@ -926,6 +932,8 @@ export async function getDayLabourVariationForm(builderId: string, projectId: st
     clientName: raw.clientName ?? '',
     clientSignature: raw.clientSignature ?? '',
     clientSignatureStrokes: normalizeSignatureStrokes(raw.clientSignatureStrokes),
+    completedAt: raw.completedAt,
+    completedByUserId: raw.completedByUserId,
     pdfPath: raw.pdfPath ?? pdfObjectPath(builderId, projectId, formId),
     createdAt: raw.createdAt ?? nowIso(),
     updatedAt: raw.updatedAt ?? nowIso(),

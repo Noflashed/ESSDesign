@@ -186,6 +186,39 @@ export async function getSafetyForm<T extends object>(
   return rows[0] ? mapSafetyForm<T>(rows[0]) : null;
 }
 
+/** Completion records a share-button press, not delivery confirmation. */
+export async function markSafetyFormCompleted(
+  formType: SafetyFormType,
+  builderId: string,
+  projectId: string,
+  formId: string,
+): Promise<void> {
+  const query = `?form_type=eq.${encodeURIComponent(formType)}` +
+    `&id=eq.${encodeURIComponent(formId)}` +
+    `&builder_id=eq.${encodeURIComponent(builderId)}` +
+    `&project_id=eq.${encodeURIComponent(projectId)}`;
+  // Compare the read revision before patching so another editor's data is never overwritten.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const read = await api.fetchSupabase(restUrl(SAFETY_FORMS_TABLE, query + '&select=payload,updated_at'), {
+      method: 'GET', headers: await freshReadHeaders(),
+    });
+    if (!read.ok) { throw await responseError(read, 'Loading completion status'); }
+    const [row] = await read.json() as SafetyFormRow[];
+    if (!row) { throw new Error('This form is no longer available.'); }
+    if (row.payload?.completedAt) { return; }
+    const now = new Date().toISOString();
+    const revision = row.updated_at ? `&updated_at=eq.${encodeURIComponent(row.updated_at)}` : '&updated_at=is.null';
+    const response = await api.fetchSupabase(restUrl(SAFETY_FORMS_TABLE, query + revision), {
+      method: 'PATCH',
+      headers: {...await authHeaders(true), Prefer: 'return=representation'},
+      body: JSON.stringify({payload: {...row.payload, completedAt: now, completedByUserId: api.currentUser?.id ?? null}, updated_at: now}),
+    });
+    if (!response.ok) { throw await responseError(response, 'Updating completion status'); }
+    if ((await response.json()).length) { return; }
+  }
+  throw new Error('The form changed while updating its status. Please try sharing again.');
+}
+
 export async function upsertSafetyForm<T extends object>(
   formType: SafetyFormType,
   builderId: string,
@@ -193,6 +226,12 @@ export async function upsertSafetyForm<T extends object>(
   form: T & {id: string},
   metadata: SafetyFormMetadata,
 ): Promise<T> {
+  const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates'].includes(formType)
+    ? await getSafetyForm<{completedAt?: string; completedByUserId?: string}>(formType, builderId, projectId, form.id)
+    : null;
+  const payload = existing?.completedAt
+    ? {...form, completedAt: existing.completedAt, completedByUserId: existing.completedByUserId}
+    : form;
   const response = await api.fetchSupabase(
     restUrl(SAFETY_FORMS_TABLE, '?on_conflict=form_type%2Cid'),
     {
@@ -214,7 +253,7 @@ export async function upsertSafetyForm<T extends object>(
         pdf_path: metadata.pdfPath,
         share_path: metadata.sharePath ?? '',
         photo_paths: metadata.photoPaths ?? [],
-        payload: form,
+        payload,
         created_by_user_id: api.currentUser?.id ?? null,
         updated_at: new Date().toISOString(),
       }]),

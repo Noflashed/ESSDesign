@@ -1,4 +1,5 @@
 // Derived from ESSApp/src/screens/HandoverCertificateFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {markSafetyFormCompleted} from '../services/supabaseSafetyRecords';
 import {formatMetres} from '../utils/measurements';
 import React from 'react';
 import {
@@ -3334,6 +3335,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
       />
 
       <ProjectDataFormShareModal
+        onBeforeShare={() => markSafetyFormCompleted('handover-certificates', route.params.builderId, route.params.projectId, formId!)}
         visible={showShareModal}
         theme={theme}
         title={form.formReferenceName || form.inspectionNumber || 'Handover Certificate'}

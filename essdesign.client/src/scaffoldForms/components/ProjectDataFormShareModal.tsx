@@ -2,6 +2,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -38,6 +39,7 @@ interface Props {
   sharing: boolean;
   emailingAttachment?: boolean;
   onClose: () => void;
+  onBeforeShare?: () => Promise<void>;
   onShare: (selection: ProjectDataShareSelection) => void;
   onEmailAttachment?: (selection: ProjectDataShareSelection) => void;
 }
@@ -87,6 +89,7 @@ export default function ProjectDataFormShareModal({
   sharing,
   emailingAttachment = false,
   onClose,
+  onBeforeShare,
   onShare,
   onEmailAttachment,
 }: Props) {
@@ -154,7 +157,23 @@ export default function ProjectDataFormShareModal({
     currentSelection.internalRecipients,
     currentSelection.externalEmails,
   ).length;
-  const busy = sharing || emailingAttachment;
+  const [recordingCompletion, setRecordingCompletion] = React.useState(false);
+  const actionInFlight = React.useRef(false);
+  const busy = sharing || emailingAttachment || recordingCompletion;
+  const runShareAction = async (action: (selection: ProjectDataShareSelection) => void) => {
+    if (actionInFlight.current || busy) { return; }
+    actionInFlight.current = true;
+    setRecordingCompletion(true);
+    try {
+      await onBeforeShare?.();
+      await action(currentSelection);
+    } catch (error) {
+      Alert.alert('Could not update form status', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      actionInFlight.current = false;
+      setRecordingCompletion(false);
+    }
+  };
 
   const toggleRecipient = (userId: string) => {
     setSelectedIds(current => {
@@ -405,7 +424,7 @@ export default function ProjectDataFormShareModal({
               busy || totalRecipientCount === 0 ? styles.shareButtonDisabled : null,
             ]}
             disabled={busy || totalRecipientCount === 0}
-            onPress={() => onShare(currentSelection)}>
+            onPress={() => runShareAction(onShare)}>
             {sharing ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
@@ -429,7 +448,7 @@ export default function ProjectDataFormShareModal({
                 busy || attachmentRecipientCount === 0 ? styles.shareButtonDisabled : null,
               ]}
               disabled={busy || attachmentRecipientCount === 0}
-              onPress={() => onEmailAttachment(currentSelection)}>
+              onPress={() => runShareAction(onEmailAttachment)}>
               {emailingAttachment ? (
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (

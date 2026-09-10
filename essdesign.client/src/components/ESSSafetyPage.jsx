@@ -1,3 +1,4 @@
+import {getProjectDataStatus} from '../utils/projectDataStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle,
@@ -72,6 +73,8 @@ const PROJECT_DATA_TABS = [
 ];
 
 const STATUS_META = {
+    Active: {icon: FileText, className: 'active'},
+    Completed: {icon: CheckCircle, className: 'completed'},
     Current: { className: 'current', icon: CheckCircle },
     Retired: { className: 'retired', icon: X },
     Expired: { className: 'expired', icon: AlertTriangle },
@@ -165,7 +168,7 @@ function mapHandoverRows(items) {
             kind: 'handover-certificates',
             name: withPdfExtension(item.formReferenceName || `Handover certificate ${ref}`),
             ref,
-            status: 'Current',
+            status: getProjectDataStatus(item),
             uploadedAt: item.updatedAt || item.inspectionDateTime || '',
             expiresAt: '',
             uploadedBy: item.essRepresentativeName || 'Site team',
@@ -185,7 +188,7 @@ function mapDayLabourVariationRows(items) {
             kind: 'day-labour-variations',
             name: withPdfExtension(title),
             ref,
-            status: 'Current',
+            status: getProjectDataStatus(item),
             uploadedAt: item.updatedAt || item.date || '',
             expiresAt: '',
             uploadedBy: item.requestedBy || 'Site team',
@@ -202,7 +205,7 @@ function mapPreStartRows(items) {
         kind: 'pre-starts',
         name: withPdfExtension(item.subject || `Daily Pre-Start ${item.preStartNumber}`),
         ref: item.preStartNumber || '-',
-        status: 'Current',
+        status: getProjectDataStatus(item),
         uploadedAt: item.updatedAt || '',
         expiresAt: '',
         uploadedBy: item.representativeName || 'Site team',
@@ -803,8 +806,8 @@ export default function ESSSafetyPage() {
     }, [documents, statusFilter, uploadedByFilter]);
 
     const statusOptions = useMemo(
-        () => [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-        [documents]
+        () => ['handover-certificates', 'day-labour-variations', 'pre-starts'].includes(activeTab.key) ? ['Active', 'Completed'] : [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        [documents, activeTab.key]
     );
 
     const uploadedByOptions = useMemo(

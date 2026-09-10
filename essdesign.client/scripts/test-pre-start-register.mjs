@@ -9,6 +9,8 @@ const rows = new Map(), deleted = [], objects = new Map(), errors = [];
 let allocations = 0, failSave = false, failDelete = false;
 page.on('pageerror', error => errors.push(error.message));
 await page.addInitScript(() => {
+ Object.defineProperty(navigator, 'canShare', {value:()=>true, configurable:true});
+ Object.defineProperty(navigator, 'share', {value:async()=>{throw new DOMException('Cancelled','AbortError');}, configurable:true});
  localStorage.setItem('access_token', 'test.'+btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600}))+'.test');
  localStorage.setItem('user', JSON.stringify({id:'user-test',fullName:'Test Inspector',email:'test@example.com'}));
  localStorage.setItem('ess_project_data_workflow_demo_hidden_v2:user-test', 'true');
@@ -16,6 +18,7 @@ await page.addInitScript(() => {
 await page.route('**/*', async route => {
  const request = route.request(), url = new URL(request.url());
  const json = body => route.fulfill({json:body});
+ if (url.pathname.endsWith('/notifications/project-data-form-shared')) return route.fulfill({status:500,json:{message:'Test share failure'}});
  if (url.pathname.endsWith('/users/notification-recipients')) return json([]);
  const matches = row => [...url.searchParams].every(([key,value])=>!value.startsWith('eq.') || String(row[key]) === value.slice(3));
  if (url.hostname.endsWith('.supabase.co')) {
@@ -23,6 +26,9 @@ await page.route('**/*', async route => {
   if (url.pathname.endsWith('/rpc/allocate_pre_start_number')) return json(String(++allocations).padStart(4,'0'));
   if (url.pathname.includes('/rest/v1/ess_deleted_safety_forms')) return json(deleted.filter(matches));
   if (url.pathname.includes('/rest/v1/ess_safety_forms')) {
+   if (request.method()==='PATCH') {
+    const updated=[]; for (const [id,row] of rows) if (matches(row)) {const next={...row,...request.postDataJSON()}; rows.set(id,next); updated.push(next);} return json(updated);
+   }
    if (request.method()==='POST') {
     if (failSave) { failSave=false; return route.fulfill({status:500,json:{message:'Test save failure'}}); }
     const records=request.postDataJSON(); records.forEach(row=>rows.set(row.id,row)); return json(records);
@@ -94,7 +100,28 @@ try {
  await page.getByRole('button',{name:'Share pre-start form'}).click();
  await page.getByText('Share PDF',{exact:true}).waitFor();
  await page.getByLabel('Close share',{exact:true}).click();
+ assert.equal(rows.get(saved.id).payload.completedAt,undefined,'Opening/closing Share leaves the form Active');
+ await page.getByRole('button',{name:'Share pre-start form'}).click();
+ await page.getByRole('button',{name:'Email PDF attachment to 1 recipients',exact:true}).click();
+ await page.waitForFunction(() => !document.querySelector('[aria-label="Close share"]')?.disabled);
+ await page.getByLabel('Close share',{exact:true}).click();
+ assert.ok(rows.get(saved.id).payload.completedAt,'External action marks Completed even when the external share is cancelled');
+ const completedAt=rows.get(saved.id).payload.completedAt;
+ await page.getByRole('button',{name:'Share pre-start form'}).click();
+ await page.getByRole('button',{name:'Share PDF with 1 recipients',exact:true}).click();
+ await page.getByText('Share failed',{exact:true}).waitFor(); await ok();
+ assert.equal(rows.get(saved.id).payload.completedAt,completedAt,'A failed send does not undo share-intent completion');
+ await page.getByLabel('Close share',{exact:true}).click();
  await page.getByLabel('Go back',{exact:true}).click();
+ await page.getByRole('cell',{name:'Completed',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Status',exact:true}).click();
+ await page.getByRole('option',{name:'Active',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:subject,exact:true}).count(),0);
+ await page.getByRole('button',{name:'Status',exact:true}).click();
+ await page.getByRole('option',{name:'Completed',exact:true}).click();
+ await page.getByRole('button',{name:subject,exact:true}).waitFor();
+ await page.getByRole('button',{name:'Status',exact:true}).click();
+ await page.getByRole('option',{name:'All statuses',exact:true}).click();
  await page.getByRole('button',{name:subject,exact:true}).click();
  assert.equal(await page.getByLabel('Area foreman',{exact:true}).inputValue(),'Updated Foreman');
  await page.getByLabel('Identified risk 3',{exact:true}).fill('Updated risk');
@@ -103,6 +130,7 @@ try {
  await page.getByText('Pre-start saved',{exact:true}).waitFor(); await ok();
  assert.equal(allocations,priorAllocations,'Editing preserves the saved number');
  assert.equal(rows.get(saved.id).payload.preStartNumber,number);
+ assert.equal(rows.get(saved.id).payload.completedAt,completedAt,'Saving preserves Completed status');
  await page.getByTestId('ess-pre-start-stable-scroll-page-1').scrollIntoViewIfNeeded();
  await page.screenshot({path:'/tmp/ess-pre-start-web-form.png'});
  await page.getByLabel('Go back',{exact:true}).click();
@@ -117,6 +145,8 @@ try {
  await page.getByRole('button',{name:'Project',exact:true}).click();
  await page.getByRole('option',{name:'Test Project',exact:true}).click();
  assert.equal(await page.getByRole('cell',{name:saved.payload.date,exact:true}).count(),1,'Register preserves the four-digit year');
+ const statusBox = await page.getByRole('cell',{name:'Completed',exact:true}).boundingBox();
+ assert.ok(statusBox.width > 60 && statusBox.x + statusBox.width <= 1440, 'Completion badge has a visible register column');
  await page.screenshot({path:'/tmp/ess-pre-start-web-register.png'});
  const row=page.getByRole('button',{name:subject,exact:true}).locator('xpath=ancestor::tr');
  await row.click({button:'right'});
@@ -135,10 +165,17 @@ try {
  await page.getByLabel('Show deleted',{exact:true}).check();
  await page.getByText(subject,{exact:true}).waitFor();
  // Reintroduce the fixture's saved row to verify the Project Data document surface.
- rows.set(saved.id,saved);
+ rows.set(saved.id,{...saved,payload:{...saved.payload,completedAt}});
  await page.goto(baseURL+'/tests/fixtures/pre-start-register.html?project-data');
  await page.locator('.project-data-kind-trigger').click();
  await page.getByRole('option',{name:'Pre-Starts',exact:true}).click();
+ await page.getByText(subject+'.pdf',{exact:true}).waitFor();
+ await page.locator('.project-data-status').filter({hasText:'Completed'}).waitFor();
+ await page.getByRole('button',{name:'Status',exact:true}).click();
+ await page.getByRole('button',{name:'Active',exact:true}).click();
+ assert.equal(await page.getByText(subject+'.pdf',{exact:true}).count(),0);
+ await page.getByRole('button',{name:'Status',exact:true}).click();
+ await page.getByRole('button',{name:'Completed',exact:true}).click();
  await page.getByText(subject+'.pdf',{exact:true}).waitFor();
  const downloadPromise = page.waitForEvent('download');
  await page.getByRole('button',{name:`Download ${subject}.pdf`,exact:true}).click();
