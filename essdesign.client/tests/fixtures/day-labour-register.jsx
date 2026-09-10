@@ -1,0 +1,10 @@
+import React from 'react';
+import '../../src/App';
+import '../../src/index.css';
+import {createRoot} from 'react-dom/client';
+import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPage';
+import {safetyProjectsAPI, dayLabourVariationsAPI} from '../../src/services/api';
+const entity = new URLSearchParams(location.search).get('entity') || 'ess';
+safetyProjectsAPI.getBuilders = async () => [{id:'builder-test',name:'Test Builder',projects:[{id:'project-test',name:'Test Project',scaffoldEntity:entity},{id:'project-empty',name:'Empty Project',scaffoldEntity:entity}]}];
+dayLabourVariationsAPI.listAllForms = async () => (await fetch('/fixture/forms?type=day-labour-variations')).json();
+createRoot(document.getElementById('root')).render(<ProjectDataRegisterPage registerType="day-labour" />);

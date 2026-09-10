@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FileText, Printer, QrCode, Search, X } from 'lucide-react';
+import { ChevronDown, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
     handoverCertificatesAPI,
@@ -7,6 +7,9 @@ import {
     scaffTagsAPI,
     safetyProjectsAPI
 } from '../services/api';
+import ScaffoldFormEditor from './ScaffoldFormEditor';
+import {RegisterDropdown} from './ScaffoldRegisterPage';
+import {normalizeCompanyEntityId} from '../scaffoldForms/config/companyEntities';
 import LoadingBrandmark from './LoadingBrandmark';
 import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
 import './ProjectDataRegisterPage.css';
@@ -224,6 +227,27 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
     const showingQrRegister = registerType === 'qr-labels';
     const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
+    const isDayLabour = registerType === 'day-labour';
+    const [builders, setBuilders] = useState([]);
+    const [builderId, setBuilderId] = useState('');
+    const [projectId, setProjectId] = useState('');
+    const [editor, setEditor] = useState(null);
+    const [reloadKey, setReloadKey] = useState(0);
+    const selectedBuilder = builders.find(builder => builder.id === builderId);
+    const projects = selectedBuilder?.projects || [];
+    const selectedProject = projects.find(project => project.id === projectId);
+    const closeEditor = () => { setEditor(null); setReloadKey(value => value + 1); };
+    const openDayLabour = (row = null) => {
+        const builder = row ? builders.find(item => item.id === row.builderId) : selectedBuilder;
+        const project = row ? builder?.projects?.find(item => item.id === row.projectId) : selectedProject;
+        if (!row && (!builder || !project)) return;
+        setEditor({
+            builderId: row?.builderId || builder.id, builderName: builder?.name || row?.builder,
+            projectId: row?.projectId || project.id, projectName: project?.name || row?.project,
+            formId: row?.form.id, readOnly: Boolean(row?.deleted),
+            initialCompanyEntityId: row?.form.companyEntityId || normalizeCompanyEntityId(project?.scaffoldEntity),
+        });
+    };
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -256,6 +280,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             usesScaffTagData ? scaffTagQrLabelsAPI.list() : Promise.resolve([])
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
+            setBuilders(builders);
             setQrLabels(labels);
             const availableLabelIds = new Set(labels.map(label => label.id));
             setSelectedQrLabelIds(current => current.filter(id => availableLabelIds.has(id)));
@@ -271,7 +296,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             active = false;
         };
-    }, [config, registerType, usesScaffTagData]);
+    }, [config, registerType, usesScaffTagData, reloadKey]);
 
     useEffect(() => {
         setSortField(config.defaultSort);
@@ -309,7 +334,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (showDeleted || !row.deleted)
+            (!isDayLabour || ((!builderId || row.builderId === builderId) && (!projectId || row.projectId === projectId)))
+            && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
             && (!normalizedQuery || config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
@@ -322,7 +348,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isDayLabour, builderId, projectId]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -492,8 +518,12 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const unassignedQrLabels = qrLabels.filter(label => label.status === 'unassigned');
 
     return (
-        <main className="project-data-register-page">
-            <div className="project-data-register-toolbar">
+        <main className={`project-data-register-page${isDayLabour ? " day-labour-register" : ""}`}>
+            <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
+                {isDayLabour && <div className="scaffold-register-dropdowns">
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder || {id:'', name:'All builders'}} items={[{id:'',name:'All builders'}, ...builders]} getLabel={item => item.name} getLogoUrl={item => item.logoUrl || ''} onSelect={item => {setBuilderId(item.id); setProjectId('');}} disabled={loading} />
+                    <RegisterDropdown label="Project" selectedItem={selectedProject || {id:'', name:'All projects'}} items={[{id:'',name:'All projects'}, ...projects]} getLabel={item => item.name} showLogo={false} onSelect={item => setProjectId(item.id)} disabled={loading || !selectedBuilder} />
+                </div>}
                 <label className="project-register-search">
                     <Search size={18} />
                     <input
@@ -604,11 +634,12 @@ export default function ProjectDataRegisterPage({ registerType }) {
                     ) : null}
                 </section>
             ) : (
-                <section className={`project-data-register-table-wrap${loading ? ' is-loading' : ''}`}>
+                <section inert={editor ? "" : undefined} aria-hidden={Boolean(editor)} className={`project-data-register-table-wrap${loading ? ' is-loading' : ''}`}>
                     {loading ? (
                         <div className="project-register-loading page-loading-brandmark"><LoadingBrandmark label={`Loading ${config.title.toLowerCase()}`} /></div>
                     ) : (
                         <table className={`project-data-register-table type-${registerType}`}>
+                            {isDayLabour && <caption className="day-labour-add-row"><button type="button" className="scaffold-register-add" disabled={loading || !selectedProject} title={selectedProject ? 'Create Day Labour form' : 'Select a builder and project to create a form'} onClick={() => openDayLabour()}><Plus size={18} /><span>Add Day Labour</span></button></caption>}
                             <thead>
                                 <tr>
                                     {config.columns.map(column => (
@@ -640,7 +671,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                                 {column.key === 'status' ? <StatusBadge value={row.status} />
                                                     : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment is-${row.qrLabelStatus}`}><QrCode size={12} />{row.qrLabel}</span>
                                                     : column.key === config.linkKey && row.deleted ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
-                                                    : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => openPdf(row)} title={`Open PDF for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
+                                                    : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => isDayLabour && !row.deleted ? openDayLabour(row) : openPdf(row)} title={`${isDayLabour && !row.deleted ? "Edit form" : "Open PDF"} for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
                                                     : row[column.key] || '-'}
                                             </td>
                                         ))}
@@ -665,6 +696,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                     </form>
                 </div>
             ) : null}
+            {editor && <ScaffoldFormEditor screen="DayLabourVariationForm" params={editor} onClose={closeEditor} onSaved={() => {}} />}
         </main>
     );
 }

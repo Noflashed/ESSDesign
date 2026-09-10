@@ -25,7 +25,8 @@
     "utils/projectDataWorkflowDemoPreference.ts",
     "utils/scaffoldRecordMatching.ts",
     "utils/scaffTagQrLabelToken.ts",
-    "utils/scaffoldLifecycle.ts"
+    "utils/scaffoldLifecycle.ts",
+    "screens/DayLabourVariationFormScreen.tsx"
   ],
   "sha256": {
     "screens/HandoverCertificateFormScreen.tsx": "d9ab19b8540d85f57b0661c45fe1c10c0d8cd4ae2cfff638aa8f7099e35924b8",
@@ -53,7 +54,8 @@
     "utils/projectDataWorkflowDemoPreference.ts": "8b33721c5bbe1d2265a5d8adecdcec47ff69d84883adc14721b5a0a9c4d1f4b4",
     "utils/scaffoldRecordMatching.ts": "b18a92079ae1f15801c753915f5b5bff0f1b1596a1b02acafc049dea7891b312",
     "utils/scaffTagQrLabelToken.ts": "11e4fdae4bb8e5ae7346cd25284d9c9d8921aa272cfcfed2fe8c8cb5b0529969",
-    "utils/scaffoldLifecycle.ts": "7f4a0933128f0930e57ecaa2e8979a3269a707e6659b90a2184cf015e0bfe8ea"
+    "utils/scaffoldLifecycle.ts": "7f4a0933128f0930e57ecaa2e8979a3269a707e6659b90a2184cf015e0bfe8ea",
+    "screens/DayLabourVariationFormScreen.tsx": "c925df93ffdb875c8da5450d277218f54f92fc60937db004f1d4d57b16d63673"
   },
   "assets": {
     "src/assets/handover/phone-page-1-maloo.png": "scaffold-forms/phone-page-1-maloo.png",

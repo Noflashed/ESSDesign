@@ -6,7 +6,7 @@ import sys, re, shutil, json, hashlib
 source = Path(sys.argv[1]).resolve()
 client = Path(__file__).resolve().parents[1]
 dest = client / 'src/scaffoldForms'
-files = '''screens/HandoverCertificateFormScreen.tsx screens/ScaffTagFormScreen.tsx
+files = '''screens/DayLabourVariationFormScreen.tsx screens/HandoverCertificateFormScreen.tsx screens/ScaffTagFormScreen.tsx
 components/AppTopBar.tsx components/CompanyEntitySelector.tsx components/SignaturePadModal.tsx
 components/ProjectDataFormDemoModal.tsx components/ProjectDataFormShareModal.tsx
 components/ScaffoldRecordLinkControls.tsx components/DrawingRegisterPickerModal.tsx
@@ -35,13 +35,20 @@ for name in files:
         assets[str(path.relative_to(source))] = target
         return "{uri: '/" + target + "'}"
     content = re.sub(r"require\('([^']+\.(?:png|jpg))'\)", asset, content)
-    if name in ['screens/HandoverCertificateFormScreen.tsx', 'screens/ScaffTagFormScreen.tsx']:
+    if name in ['screens/DayLabourVariationFormScreen.tsx', 'screens/HandoverCertificateFormScreen.tsx', 'screens/ScaffTagFormScreen.tsx']:
         content = content.replace("const usesIOSDocumentEditor = Platform.OS === 'ios';", 'const usesIOSDocumentEditor = true; // Same document editor on web.')
         # The web register supplies the site's company before mounting the editor.
         content = content.replace('if (route.params.formId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)',
             'if (route.params.formId || route.params.initialCompanyEntityId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)')
         content = content.replace('    route.params.builderName,\n    route.params.formId,',
             '    route.params.builderName,\n    route.params.initialCompanyEntityId,\n    route.params.formId,')
+    if name == 'screens/DayLabourVariationFormScreen.tsx':
+        content = content.replace('    labourTotalValue: {\n      flex: 1,', '    labourTotalValue: {\n      flex: 1,\n      width: 0,')
+        content = content.replace("pdfInput: {color: '#222222'},", "pdfInput: {color: '#222222', minWidth: 0},")
+        content = content.replace("pdfTitle: {width: '100%', fontSize: isWide ? 26 : 16", "pdfTitle: {width: '100%', fontSize: isWide ? 20 : 16")
+        content = content.replace('        key={`pdf-photo-${slot}`}', '        key={`pdf-photo-${slot}`}\n        accessibilityRole="button"\n        accessibilityLabel={`${photo ? \'Replace\' : \'Add\'} photo ${slot + 1}`}')
+        content = content.replace('companyEntityId: DEFAULT_COMPANY_ENTITY_ID,', 'companyEntityId: route.params.initialCompanyEntityId ?? DEFAULT_COMPANY_ENTITY_ID,')
+        content = content.replace('[route.params.projectName, user?.fullName]', '[route.params.projectName, route.params.initialCompanyEntityId, user?.fullName]')
     if name == 'screens/HandoverCertificateFormScreen.tsx':
         # Section/location is entered by the inspector, not inferred from the project.
         content = content.replace("sectionLocation: route.params.initialLocation ?? '',", "sectionLocation: '',")

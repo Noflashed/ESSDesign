@@ -90,7 +90,7 @@ function BuilderLogo({ src, name }) {
     );
 }
 
-function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, showLogo = true, onSelect, disabled, emptyText }) {
+export function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, showLogo = true, onSelect, disabled, emptyText }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
     const menuId = `scaffold-register-${label.toLowerCase()}-options`;

@@ -926,3 +926,16 @@
     .project-qr-register-selection-bar { align-items: flex-start; flex-direction: column; }
     .project-qr-register-selection-actions { width: 100%; margin-left: 0; flex-wrap: wrap; }
 }
+
+.project-data-register-table .day-labour-add-row {
+    text-align: left;
+    padding: 0;
+    height: 40px;
+    background: var(--bg-primary);
+}
+.project-data-register-toolbar .scaffold-register-dropdowns { min-width: 0; }
+@media (max-width: 700px) {
+    .project-data-register-toolbar .scaffold-register-dropdowns { width: 100%; }
+}
+
+.day-labour-register .project-register-empty { pointer-events: none; top: 82px; }
