@@ -43,6 +43,9 @@ for name in files:
         content = content.replace('    route.params.builderName,\n    route.params.formId,',
             '    route.params.builderName,\n    route.params.initialCompanyEntityId,\n    route.params.formId,')
     if name == 'screens/DayLabourVariationFormScreen.tsx':
+        # Reserve equal label widths so both signature boxes have equal space.
+        content = content.replace('<Text style={styles.pdfSignatureLabel}>{label} SIGNATURE:</Text>', "<Text style={[styles.pdfSignatureLabel, {width: '50%', flexShrink: 0}]}>{label} SIGNATURE:</Text>")
+        content = content.replace('          style={styles.pdfSignatureBox}', '          accessibilityRole="button"\n          accessibilityLabel={`${label} signature`}\n          style={styles.pdfSignatureBox}')
         content = content.replace('    labourTotalValue: {\n      flex: 1,', '    labourTotalValue: {\n      flex: 1,\n      width: 0,')
         content = content.replace("pdfInput: {color: '#222222'},", "pdfInput: {color: '#222222', minWidth: 0},")
         content = content.replace("pdfTitle: {width: '100%', fontSize: isWide ? 26 : 16", "pdfTitle: {width: '100%', fontSize: isWide ? 20 : 16")

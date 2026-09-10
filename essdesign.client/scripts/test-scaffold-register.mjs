@@ -1,5 +1,6 @@
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
 const baseURL = process.env.TEST_BASE_URL || 'http://127.0.0.1:5178';
 const companyEntity = process.env.TEST_COMPANY_ENTITY || 'ess';
 const browser = await chromium.launch({headless:true, channel:'chrome'});
@@ -111,6 +112,22 @@ try {
  await page.getByLabel('Section/location of scaffold',{exact:true}).fill('Level 20, north elevation');
  await page.getByLabel('Intended use',{exact:true}).fill('Facade access');
  await page.getByRole('checkbox',{name:/^YES:/}).first().click();
+ const upliftQuestion = 'Have the uplift devices been installed and are engaged, where required?';
+ const upliftYes = page.getByRole('checkbox',{name:`YES: ${upliftQuestion}`,exact:true});
+ const upliftNo = page.getByRole('checkbox',{name:`NO: ${upliftQuestion}`,exact:true});
+ const upliftNa = page.getByRole('checkbox',{name:`NA: ${upliftQuestion}`,exact:true});
+ const tiesBox = await page.getByRole('checkbox',{name:'YES: Are ties installed to specifications?',exact:true}).boundingBox();
+ const upliftBox = await upliftYes.boundingBox();
+ assert.ok(Math.abs(upliftBox.y - tiesBox.y - tiesBox.height) < 1, 'Uplift row immediately follows ties');
+ await page.getByRole('button',{name:'Mark every checklist item as Yes'}).click();
+ assert.equal(await upliftYes.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(75, 85, 99, 0.28)','Yes to all includes uplift');
+ await upliftYes.click();
+ for (const choice of [upliftYes, upliftNo, upliftNa]) {
+  await choice.click();
+  assert.equal(await choice.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(75, 85, 99, 0.28)');
+ }
+ assert.equal(await upliftYes.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(247, 247, 247)');
+ assert.equal(await upliftNo.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(247, 247, 247)');
  await page.getByLabel(`${companyEntity === 'maloo' ? 'Maloo' : 'ESS'} REPRESENTATIVE signature`,{exact:true}).click();
  const signatureCanvas = page.getByText('Sign here',{exact:true}).locator('..');
  const box = await signatureCanvas.boundingBox();
@@ -130,8 +147,17 @@ try {
  await page.waitForFunction(()=>document.querySelector('.scaffold-browser-alert') || document.querySelector('[aria-label="Share handover certificate"]'));
  if (await page.locator('.scaffold-browser-alert').count()) console.log('Handover alert:',await page.locator('.scaffold-browser-alert').innerText());
  await page.getByRole('button',{name:'Share handover certificate'}).waitFor();
+ await page.getByText('Draw Signature',{exact:true}).waitFor({state:'hidden'});
+ await page.getByLabel('Intended use',{exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:'/tmp/ess-handover-uplift-web.png'});
  const handover = [...rows.values()].find(row=>row.form_type==='handover-certificates')?.payload;
  assert.ok(handover, 'Handover persisted');
+ assert.equal(handover.checklist.upliftDevicesInstalledAndEngaged,'NA','Uplift answer is persisted');
+ const handoverPdf = [...objects.entries()].find(([path])=>path.endsWith(handover.pdfPath))?.[1];
+ assert.ok(handoverPdf, 'Saved PDF path resolves to uploaded output used by QR sharing');
+ assert.match(handoverPdf.toString('latin1'), /Have the uplift devices been installed/);
+ assert.match(handoverPdf.toString('latin1'), /where required/);
+ await writeFile('/tmp/ess-handover-uplift.pdf',handoverPdf);
  assert.equal(handover.photoSlots.length, 1);
  assert.equal(handover.companyEntityId,companyEntity,'New handover inherits site company');
  assert.equal(handover.sectionLocation,'Level 20, north elevation','Manually entered section/location is saved');
@@ -184,6 +210,7 @@ try {
  await page.getByLabel('Intended use',{exact:true}).waitFor();
  assert.equal(await page.getByLabel('Intended use',{exact:true}).inputValue(),'Facade access');
  assert.equal(await page.getByLabel('Section/location of scaffold',{exact:true}).inputValue(),'Level 20, north elevation','Saved section/location is preserved on reopen');
+ assert.equal(await upliftNa.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(75, 85, 99, 0.28)','Uplift answer survives reopening');
  await checkFormZoom();
  await page.getByRole('button',{name:'Zoom in'}).first().click();
  await page.getByRole('button',{name:'Fit page'}).first().getByText('150%',{exact:true}).waitFor();

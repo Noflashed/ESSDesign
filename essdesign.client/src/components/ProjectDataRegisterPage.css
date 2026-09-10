@@ -950,3 +950,10 @@
     border: 1px solid var(--border-color);
     border-radius: 0 6px 6px 6px;
 }
+
+.day-labour-context-menu {
+    width: 272px;
+    box-sizing: border-box;
+}
+.day-labour-context-menu button { white-space: nowrap; }
+.day-labour-context-menu button svg { flex-shrink: 0; }

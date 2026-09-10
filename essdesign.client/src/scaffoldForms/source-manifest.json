@@ -30,7 +30,7 @@
     "utils/measurements.ts"
   ],
   "sha256": {
-    "screens/HandoverCertificateFormScreen.tsx": "0ca59c467ede97fe0a4e65455910fd5570974dba9c53b910336e9aa109262026",
+    "screens/HandoverCertificateFormScreen.tsx": "a388a25ba2490b2a5f5216f3c16c9069453bced8b1ddb5f3d9bd2330e2f5ab46",
     "screens/ScaffTagFormScreen.tsx": "b090af7723bf4930451813b60f7ca63d235180b9652042df5e79abddb4451321",
     "components/AppTopBar.tsx": "1db0ccbb0f3db7f5653d1345143707271857c0f37aca0d61f3b818e72b742123",
     "components/CompanyEntitySelector.tsx": "370dd3c1ef50972fd7617b5a0a570d6c6a8aa625d116e0644f8e88607254d631",
@@ -39,7 +39,7 @@
     "components/ProjectDataFormShareModal.tsx": "d61bcd321ff79576330328bdce704556c7f4dc7af3a1e5a1c450b0932ef2cf91",
     "components/ScaffoldRecordLinkControls.tsx": "4b816f471289475dbbd795d98ca7cb172dd018bcd36f04657247606dd02354a1",
     "components/DrawingRegisterPickerModal.tsx": "951d3797376774eb7fe9bf2a3d09a397e9306d317a01f38e7c9dab25e893d185",
-    "services/supabaseHandoverCertificates.ts": "d9dee7eb01765374f5c5ca06049cc5c23036ac04675fe6a00376e4a453799ca2",
+    "services/supabaseHandoverCertificates.ts": "c9c0538abaf74d01a46c006dc5cf61ed09c922a7f4ca4e651abe5ca3bdbc9e81",
     "services/supabaseScaffTags.ts": "9353141c393e50433b4a738aa02f64f7a9bf7a70778690675382b1e8cd31d59e",
     "services/scaffTagPdfRenderer.ts": "a20fe4023ce020b17f3c32b0dbfeaba4bcba410493c6569a216ce41640e5a06b",
     "services/supabaseSafetyRecords.ts": "b327fa96d0695fc8cc1c2fee499cbc662a3b1e542766a09fb3ce635c14f786b0",

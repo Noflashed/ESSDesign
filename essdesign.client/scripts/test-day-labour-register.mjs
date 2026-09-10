@@ -113,7 +113,13 @@ try {
  await page.getByPlaceholder('0',{exact:true}).first().fill('5');
  await page.getByText('Save materials',{exact:true}).click();
  await checkFormZoom();
- await page.getByText('Tap to sign',{exact:true}).first().click();
+ const representativeBox = page.getByRole('button',{name:`${companyEntity === 'maloo' ? 'Maloo' : 'ESS'} REPRESENTATIVE signature`,exact:true});
+ const clientBox = page.getByRole('button',{name:'CLIENT signature',exact:true});
+ await representativeBox.scrollIntoViewIfNeeded();
+ const representativeBounds = await representativeBox.boundingBox(), clientBounds = await clientBox.boundingBox();
+ assert.ok(Math.abs(representativeBounds.width-clientBounds.width)<1,'Signature boxes have equal widths');
+ assert.ok(Math.abs(representativeBounds.height-clientBounds.height)<1,'Signature boxes have equal heights');
+ await representativeBox.click();
  const canvas = page.getByText('Sign here',{exact:true}).locator('..');
  const box = await canvas.boundingBox();
  await page.mouse.move(box.x+80,box.y+70); await page.mouse.down();

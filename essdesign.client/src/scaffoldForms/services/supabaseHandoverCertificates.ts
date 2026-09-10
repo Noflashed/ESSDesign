@@ -166,6 +166,7 @@ const HANDOVER_CHECKLIST_SECTIONS: Array<{title: string; items: Array<{id: strin
       {id: 'containmentSheetingFixed', label: 'Is containment sheeting fixed and secured at 1m centres?'},
       {id: 'shadeClothFireRetardant', label: 'Is the shade cloth fire retardant?'},
       {id: 'tiesInstalledToSpecifications', label: 'Are ties installed to specifications?'},
+      {id: 'upliftDevicesInstalledAndEngaged', label: 'Have the uplift devices been installed and are engaged, where required?'},
       {id: 'scaffoldTagInstalled', label: 'Has a scafftag been installed on scaffold?'},
       {id: 'scaffoldErectedToDesign', label: 'Is the scaffold erected as per design drawing?'},
       {id: 'ladderBeamsTied', label: 'Are ladder beams tied at each 1.2m? With cross bracing as per drawing?'},
@@ -726,23 +727,23 @@ export async function buildHandoverCertificatePdfBody(form: HandoverCertificateF
     }
   };
 
-  page1.push(dark, pageOneCanvas.text(68, 396, 11, 'Access:', 'F2'));
-  drawChoice(page1, pageOneCanvas, 'Stretcher Stair', 270, 396, 275, 378.7, form.accessType === 'stretcher-stair');
-  drawChoice(page1, pageOneCanvas, 'Aluminium access stair', 469, 396, 474, 378.7, form.accessType === 'aluminium-access-stair');
-  drawChoice(page1, pageOneCanvas, 'Ladder access', 643, 398, 648, 381, form.accessType === 'ladder-access');
-  page1.push(dark, pageOneCanvas.text(68, 430, 11, 'Scaffold Duty:', 'F2'));
-  drawChoice(page1, pageOneCanvas, 'Light 225kg', 270, 430, 275, 412.2, form.scaffoldDuty === 'LIGHT');
-  drawChoice(page1, pageOneCanvas, 'Medium 450kg', 460, 430, 474, 412.2, form.scaffoldDuty === 'MEDIUM');
-  drawChoice(page1, pageOneCanvas, 'Heavy 675kg', 636, 430, 648, 412.2, form.scaffoldDuty === 'HEAVY');
+  page1.push(dark, pageOneCanvas.text(68, 376, 11, 'Access:', 'F2'));
+  drawChoice(page1, pageOneCanvas, 'Stretcher Stair', 270, 376, 275, 358.7, form.accessType === 'stretcher-stair');
+  drawChoice(page1, pageOneCanvas, 'Aluminium access stair', 469, 376, 474, 358.7, form.accessType === 'aluminium-access-stair');
+  drawChoice(page1, pageOneCanvas, 'Ladder access', 643, 376, 648, 358.7, form.accessType === 'ladder-access');
+  page1.push(dark, pageOneCanvas.text(68, 403, 11, 'Scaffold Duty:', 'F2'));
+  drawChoice(page1, pageOneCanvas, 'Light 225kg', 270, 403, 275, 385.2, form.scaffoldDuty === 'LIGHT');
+  drawChoice(page1, pageOneCanvas, 'Medium 450kg', 460, 403, 474, 385.2, form.scaffoldDuty === 'MEDIUM');
+  drawChoice(page1, pageOneCanvas, 'Heavy 675kg', 636, 403, 648, 385.2, form.scaffoldDuty === 'HEAVY');
 
   const checklistSections = HANDOVER_CHECKLIST_SECTIONS;
   const vicinityItems = checklistSections[0].items;
   const supportingItems = checklistSections[1].items;
   const structureItems = checklistSections[2].items;
-  const leftVicinityRows = [465.1, 486.2, 506.9, 533.8, 554.4, 581.3];
-  const leftSupportRows = [602.4, 629.3, 655.7, 682.6, 709.4, 736, 757];
-  const leftStructureRows = [778.1, 798.7, 826.1, 852];
-  const rightStructureRows = [581.3, 602.4, 629.3, 655.7, 682.6, 709.4, 736, 757, 778.1, 798.7, 826.1, 852];
+  const leftVicinityRows = [438.1, 459.2, 479.9, 506.8, 527.4, 554.3];
+  const leftSupportRows = [575.4, 602.3, 628.7, 655.6, 682.4, 709, 730];
+  const leftStructureRows = [751.1, 780.7, 817.1, 852];
+  const rightStructureRows = [554.3, 575.4, 602.3, 628.7, 655.6, 682.4, 709, 730, 751.1, 778.1, 798.7, 826.1, 852];
 
   const drawSectionBand = (x: number, top: number, width: number, height: number, title: string) => {
     page1.push(orangeFill, pageOneCanvas.fillRect(x, top, width, height));
@@ -784,25 +785,25 @@ export async function buildHandoverCertificatePdfBody(form: HandoverCertificateF
     });
   };
 
-  drawSectionBand(64, 444.5, 682, 20.6, 'SCAFFOLD VICINITY');
+  drawSectionBand(64, 417.5, 682, 20.6, 'SCAFFOLD VICINITY');
   vicinityItems.slice(0, 5).forEach((item, index) => {
     drawChecklistRow(item, 64, 258, 322, leftVicinityRows[index], leftVicinityRows[index + 1]);
   });
   vicinityItems.slice(5, 10).forEach((item, index) => {
     drawChecklistRow(item, 402, 264, 666, leftVicinityRows[index], leftVicinityRows[index + 1]);
   });
-  drawSectionBand(64, 581.3, 338, 21.1, 'SUPPORTING STRUCTURES');
+  drawSectionBand(64, 554.3, 338, 21.1, 'SUPPORTING STRUCTURES');
   supportingItems.forEach((item, index) => {
     drawChecklistRow(item, 64, 258, 322, leftSupportRows[index], leftSupportRows[index + 1]);
   });
-  structureItems.slice(0, 11).forEach((item, index) => {
+  structureItems.slice(0, 12).forEach((item, index) => {
     drawChecklistRow(item, 402, 264, 666, rightStructureRows[index], rightStructureRows[index + 1]);
   });
-  drawSectionBand(64, 757, 338, 21.1, 'SCAFFOLD STRUCTURES');
-  structureItems.slice(11, 14).forEach((item, index) => {
+  drawSectionBand(64, 730, 338, 21.1, 'SCAFFOLD STRUCTURES');
+  structureItems.slice(-3).forEach((item, index) => {
     drawChecklistRow(item, 64, 258, 322, leftStructureRows[index], leftStructureRows[index + 1]);
   });
-  page1.push(border, `${Math.max(0.55, pageOneCanvas.scale)} w`, pageOneCanvas.strokeRect(64, 444.5, 682, 407.5));
+  page1.push(border, `${Math.max(0.55, pageOneCanvas.scale)} w`, pageOneCanvas.strokeRect(64, 417.5, 682, 434.5));
   page1.push(`${Math.max(0.45, pageOneCanvas.scale * 0.75)} w`);
 
   drawSectionBand(64, 852, 682, 21.5, 'CORRECTIVE ACTIONS');

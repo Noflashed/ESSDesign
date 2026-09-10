@@ -20,3 +20,17 @@ for (const [get,build] of [[r.getHandoverCertificateForm,r.buildHandoverCertific
 }
 for (const getUrl of [r.getHandoverCertificatePdfUrl,r.getDayLabourVariationPdfUrl]) assert.equal(await getUrl({builderId:'builder',projectId:'project',formId:'legacy'}),'https://example.invalid/storage/v1/corrected.pdf');
 console.log('PASS: measurement formatting and both production PDF generators preserve legacy form data.');
+
+const legacyHandover = await r.getHandoverCertificateForm('builder','project','legacy');
+assert.equal(legacyHandover.checklist.upliftDevicesInstalledAndEngaged, undefined);
+const upliftPdfs = [];
+for (const status of ['', 'YES', 'NO', 'NA']) {
+ const form = {...legacyHandover, checklist: {...legacyHandover.checklist, upliftDevicesInstalledAndEngaged: status}};
+ const pdf = await r.buildHandoverCertificatePdfBody(form);
+ assert.match(pdf, /Have the uplift devices been installed/);
+ assert.match(pdf, /where required/);
+ upliftPdfs.push(pdf);
+}
+assert.equal(new Set(upliftPdfs).size, 4, 'Each uplift answer produces a distinct PDF selection');
+assert.equal(legacyHandover.checklist.upliftDevicesInstalledAndEngaged, undefined, 'Rendering does not backfill legacy records');
+console.log('PASS: uplift PDF supports blank, Yes, No and N/A without altering legacy answers.');

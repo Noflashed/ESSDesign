@@ -1581,10 +1581,12 @@ export default function DayLabourVariationFormScreen({navigation, route}: Props)
         {renderPdfTextInput(name, onNameChange, {style: styles.pdfSignatureNameInput})}
       </View>
       <View style={styles.pdfSignatureSignRow}>
-        <Text style={styles.pdfSignatureLabel}>{label} SIGNATURE:</Text>
+        <Text style={[styles.pdfSignatureLabel, {width: '50%', flexShrink: 0}]}>{label} SIGNATURE:</Text>
         <TouchableOpacity
           activeOpacity={isReadOnly ? 1 : 0.85}
           disabled={isReadOnly}
+          accessibilityRole="button"
+          accessibilityLabel={`${label} signature`}
           style={styles.pdfSignatureBox}
           onPress={() => openSignatureModal(target)}
           onLayout={evt => {

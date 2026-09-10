@@ -402,7 +402,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         if (deleteInFlight.current || editor || loading || pendingDelete) return;
         const bounds = event.currentTarget.getBoundingClientRect();
         setContextMenu({row,
-            x: Math.max(8, Math.min(event.clientX || bounds.left, window.innerWidth - 232)),
+            x: Math.max(8, Math.min(event.clientX || bounds.left, window.innerWidth - 280)),
             y: Math.max(8, Math.min(event.clientY || bounds.bottom, window.innerHeight - 64)),
         });
     };
@@ -799,7 +799,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                 </div>
             ) : null}
             {contextMenu && createPortal(
-                <div ref={menuRef} className="scaffold-register-context-menu" role="menu" aria-label={`Actions for ${contextMenu.row.title}`}
+                <div ref={menuRef} className="scaffold-register-context-menu day-labour-context-menu" role="menu" aria-label={`Actions for ${contextMenu.row.title}`}
                     style={{left: contextMenu.x, top: contextMenu.y}}>
                     <button type="button" role="menuitem" onClick={() => {
                         setDeleteError(''); setPendingDelete(contextMenu.row); setContextMenu(null);

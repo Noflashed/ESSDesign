@@ -250,6 +250,7 @@ const SCAFFOLD_STRUCTURES: ChecklistItem[] = [
   {id: 'containmentSheetingFixed', label: 'Is containment sheeting fixed and secured at 1m centres?'},
   {id: 'shadeClothFireRetardant', label: 'Is the shade cloth fire retardant?'},
   {id: 'tiesInstalledToSpecifications', label: 'Are ties installed to specifications?'},
+  {id: 'upliftDevicesInstalledAndEngaged', label: 'Have the uplift devices been installed and are engaged, where required?'},
   {id: 'scaffoldTagInstalled', label: 'Has a scafftag been installed on scaffold?'},
   {id: 'scaffoldErectedToDesign', label: 'Is the scaffold erected as per design drawing?'},
   {id: 'ladderBeamsTied', label: 'Are ladder beams tied at each 1.2m? With cross bracing as per drawing?'},
@@ -267,16 +268,16 @@ const PHONE_CHECKLIST_LABELS = [
   return labels;
 }, {});
 
-const PHONE_LEFT_VICINITY_ROWS = [465.1, 486.2, 506.9, 533.8, 554.4, 581.3];
-const PHONE_LEFT_SUPPORT_ROWS = [602.4, 629.3, 655.7, 682.6, 709.4, 736.0, 757.0];
-const PHONE_LEFT_STRUCTURE_ROWS = [778.1, 798.7, 826.1, 852.0];
-const PHONE_RIGHT_STRUCTURE_ROWS = [581.3, 602.4, 629.3, 655.7, 682.6, 709.4, 736.0, 757.0, 778.1, 798.7, 826.1, 852.0];
+const PHONE_LEFT_VICINITY_ROWS = [438.1, 459.2, 479.9, 506.8, 527.4, 554.3];
+const PHONE_LEFT_SUPPORT_ROWS = [575.4, 602.3, 628.7, 655.6, 682.4, 709, 730];
+const PHONE_LEFT_STRUCTURE_ROWS = [751.1, 780.7, 817.1, 852];
+const PHONE_RIGHT_STRUCTURE_ROWS = [554.3, 575.4, 602.3, 628.7, 655.6, 682.4, 709, 730, 751.1, 778.1, 798.7, 826.1, 852];
 const PHONE_CHECKLIST_PLACEMENTS: PhoneChecklistPlacement[] = [
   ...checklistPlacements(SCAFFOLD_VICINITY.slice(0, 5), PHONE_LEFT_VICINITY_ROWS, 322),
   ...checklistPlacements(SCAFFOLD_VICINITY.slice(5), PHONE_LEFT_VICINITY_ROWS, 666),
   ...checklistPlacements(SUPPORTING_STRUCTURES, PHONE_LEFT_SUPPORT_ROWS, 322),
   ...checklistPlacements(SCAFFOLD_STRUCTURES.slice(-3), PHONE_LEFT_STRUCTURE_ROWS, 322),
-  ...checklistPlacements(SCAFFOLD_STRUCTURES.slice(0, 11), PHONE_RIGHT_STRUCTURE_ROWS, 666),
+  ...checklistPlacements(SCAFFOLD_STRUCTURES.slice(0, 12), PHONE_RIGHT_STRUCTURE_ROWS, 666),
 ];
 
 const PHONE_DETAIL_FIELDS: Array<{
@@ -303,21 +304,21 @@ const PHONE_DETAIL_FIELDS: Array<{
 const EMPTY_SCAFF_TAG_ID_PLACEHOLDER = 'Create Scaff-Tag to generate';
 
 const PHONE_ACCESS_CHOICES: Array<{value: HandoverAccessType; box: PhoneFormBox}> = [
-  {value: 'stretcher-stair', box: {left: 275, top: 378.7, width: 26, height: 23.5}},
-  {value: 'aluminium-access-stair', box: {left: 474, top: 378.7, width: 26, height: 23.5}},
-  {value: 'ladder-access', box: {left: 648, top: 381, width: 26, height: 23.5}},
+  {value: 'stretcher-stair', box: {left: 275, top: 358.7, width: 26, height: 23.5}},
+  {value: 'aluminium-access-stair', box: {left: 474, top: 358.7, width: 26, height: 23.5}},
+  {value: 'ladder-access', box: {left: 648, top: 358.7, width: 26, height: 23.5}},
 ];
 
 const PHONE_DUTY_CHOICES: Array<{value: HandoverScaffoldDuty; box: PhoneFormBox}> = [
-  {value: 'LIGHT', box: {left: 275, top: 412.2, width: 26, height: 23.5}},
-  {value: 'MEDIUM', box: {left: 474, top: 412.2, width: 26, height: 23.5}},
-  {value: 'HEAVY', box: {left: 648, top: 412.2, width: 26, height: 23.5}},
+  {value: 'LIGHT', box: {left: 275, top: 385.2, width: 26, height: 23.5}},
+  {value: 'MEDIUM', box: {left: 474, top: 385.2, width: 26, height: 23.5}},
+  {value: 'HEAVY', box: {left: 648, top: 385.2, width: 26, height: 23.5}},
 ];
 
 const PHONE_DUTY_LABELS: Array<{label: string; box: PhoneFormBox}> = [
-  {label: 'Light 225kg', box: {left: 190, top: 412.2, width: 82, height: 23.5}},
-  {label: 'Medium 450kg', box: {left: 365, top: 412.2, width: 105, height: 23.5}},
-  {label: 'Heavy 675kg', box: {left: 550, top: 412.2, width: 94, height: 23.5}},
+  {label: 'Light 225kg', box: {left: 190, top: 385.2, width: 82, height: 23.5}},
+  {label: 'Medium 450kg', box: {left: 365, top: 385.2, width: 105, height: 23.5}},
+  {label: 'Heavy 675kg', box: {left: 550, top: 385.2, width: 94, height: 23.5}},
 ];
 
 const PHONE_ACTION_ROWS = [893.8, 915.4, 937.4, 959.5, 981.1];
@@ -2166,7 +2167,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
       pointerEvents="none"
       style={[
         styles.iPhoneDetailsTablePatch,
-        phoneFormBoxStyle({left: 63, top: 159.5, width: 683, height: 214}),
+        phoneFormBoxStyle({left: 63, top: 159.5, width: 683, height: 192}),
       ]}>
       <View style={styles.iPhoneDetailsTableGrid}>
         <View style={styles.iPhoneDetailsTableHeader}>
@@ -2465,7 +2466,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
           <TouchableOpacity
             key={`iphone-checklist-${placement.id}-${value}`}
             accessibilityRole="checkbox"
-            accessibilityLabel={`${value}: ${placement.id}`}
+            accessibilityLabel={`${value}: ${PHONE_CHECKLIST_LABELS[placement.id]}`}
             accessibilityState={{checked: active, disabled: isReadOnly}}
             style={[styles.iPhoneStatusCell, active ? styles.iPhoneStatusCellActive : null]}
             disabled={isReadOnly}
@@ -2682,6 +2683,33 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
             </View>
             {renderIPhoneDetailsTable()}
             {renderIPhoneDetailInputs()}
+            {/* Replace the printed checklist area so new rows also align on older template images. */}
+            <View pointerEvents="none" style={[phoneFormBoxStyle({left: 63, top: 351.5, width: 684, height: 500.5}), {zIndex: 1}]}>
+              <View style={{flex: 1, backgroundColor: '#FFFFFF'}} />
+            </View>
+            {[
+              {label: 'Access:', left: 68, top: 358.7, width: 110, bold: true},
+              {label: 'Stretcher Stair', left: 180, top: 358.7, width: 90},
+              {label: 'Aluminium access stair', left: 310, top: 358.7, width: 159},
+              {label: 'Ladder access', left: 535, top: 358.7, width: 108},
+              {label: 'Scaffold Duty:', left: 68, top: 385.2, width: 115, bold: true},
+            ].map(({label, left, top, width, bold}) => (
+              <View key={label} pointerEvents="none" style={[styles.iPhoneDutyLabelPatch, phoneFormBoxStyle({left, top, width, height: 23.5})]}>
+                <Text style={[styles.iPhoneDutyLabelText, bold ? {fontWeight: '700', textAlign: 'left'} : null]}>{label}</Text>
+              </View>
+            ))}
+            {[...PHONE_ACCESS_CHOICES, ...PHONE_DUTY_CHOICES].map(({value, box}) => (
+              <View key={`choice-border-${value}`} pointerEvents="none" style={[phoneFormBoxStyle(box), {zIndex: 2, borderWidth: 1.5, borderColor: '#333333'}]} />
+            ))}
+            {[
+              {title: 'SCAFFOLD VICINITY', top: 417.5, width: 682, height: 20.6},
+              {title: 'SUPPORTING STRUCTURES', top: 554.3, width: 338, height: 21.1},
+              {title: 'SCAFFOLD STRUCTURES', top: 730, width: 338, height: 21.1},
+            ].map(({title, top, width, height}) => (
+              <View key={title} pointerEvents="none" style={[phoneFormBoxStyle({left: 64, top, width, height}), {zIndex: 2, backgroundColor: '#F28C28', borderWidth: 0.75, borderColor: '#C6C6C6', justifyContent: 'center', paddingLeft: 4}]}>
+                <Text style={{color: '#111111', fontSize: 9.6, fontWeight: '700'}}>{title}</Text>
+              </View>
+            ))}
             {renderIPhoneChoice(
               PHONE_ACCESS_CHOICES,
               form.accessType,
@@ -2705,7 +2733,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
                 hitSlop={8}
                 style={[
                   styles.iPhoneYesToAllButton,
-                  phoneFormBoxStyle({left: 669, top: 447, width: 69, height: 15}),
+                  phoneFormBoxStyle({left: 669, top: 420, width: 69, height: 15}),
                 ]}
                 onPress={markAllChecklistYes}>
                 <Text style={styles.iPhoneYesToAllButtonText}>YES TO ALL</Text>
@@ -2715,7 +2743,7 @@ export default function HandoverCertificateFormScreen({navigation, route}: Props
               pointerEvents="none"
               style={[
                 styles.iPhoneChecklistOutline,
-                phoneFormBoxStyle({left: 64, top: 444.5, width: 682, height: 429}),
+                phoneFormBoxStyle({left: 64, top: 417.5, width: 682, height: 456}),
               ]}
             />
             {renderIPhoneCorrectiveActions()}
