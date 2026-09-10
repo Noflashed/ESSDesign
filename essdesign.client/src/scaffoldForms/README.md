@@ -1,6 +1,6 @@
 # Scaffold forms shared with ESSApp
 
-The register opens the iOS Handover Certificate and Scaff-Tag screens through React Native Web. Their document layouts, form state, checklists, signatures, numbering, photo limits, relationship updates, and PDF writers are copied from ESSApp. `source-manifest.json` records the source paths and SHA-256 hashes.
+The register opens the iOS Handover Certificate, Day Labour, Pre-Start and Scaff-Tag screens through React Native Web. Their document layouts, form state, checklists, signatures, numbering, photo limits, relationship updates, and PDF writers are copied from ESSApp. `source-manifest.json` records the source paths and SHA-256 hashes.
 
 Regenerate the copied files after an intentional mobile form change:
 
@@ -32,3 +32,14 @@ npm run build
 ```
 
 The test uses Playwright with installed Chrome and a test-only fixture (excluded from the production build). All external traffic is intercepted or blocked. It checks blank-name validation, failed-save retry, drawing selection, handover and tag saves, generated PDF uploads, uploaded photos, drawn signature strokes, reciprocal form links, reopening saved data, zoom, and a phone-sized viewport. Screenshots are written to `/tmp/ess-*-web*.png`. It does not verify live database policies or send email.
+
+Pre-Starts use the same `pre-starts` Safety records and numbering RPCs as iOS.
+The web register adds project selection, sorting/search and deletion; Project Data
+lists saved PDFs under Pre-Starts. The editor includes the current mobile page
+layout, six risk rows, checklist Yes to All, signatures, photos and sharing.
+
+To refresh only Pre-Start files without overwriting separately updated form screens,
+pass `--only` followed by the source-relative filenames to the sync script.
+Run `npm run test:pre-start-register` with `TEST_BASE_URL` set to the local Vite URL.
+Its isolated fixtures cover saves/retries, numbering, signatures/photos/PDFs,
+project filters, remembered selection, deletion/archive and Project Data.

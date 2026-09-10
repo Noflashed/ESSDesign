@@ -18,7 +18,7 @@ import {Colors} from '../theme/appTheme';
 
 type Props = {
   visible: boolean;
-  variant: 'handover' | 'day-labour';
+  variant: 'handover' | 'day-labour' | 'pre-start';
   formNumber?: string;
   referenceName?: string;
   representativeName?: string;
@@ -333,6 +333,7 @@ export default function ProjectDataFormDemoModal({
   }, [playAnimation, visible]);
 
   const isHandover = variant === 'handover';
+  const isPreStart = variant === 'pre-start';
   const cleanNumber = (formNumber || '-').replace(/^A\s*/i, '');
   const fields = isHandover
     ? [
@@ -342,10 +343,10 @@ export default function ProjectDataFormDemoModal({
         ['Safety checklist', 'Completed'],
       ]
     : [
-        ['Form reference', referenceName || 'Variation works'],
-        ['Variation no.', `A${cleanNumber}`],
+        ['Form reference', referenceName || (isPreStart ? 'Daily pre-start' : 'Variation works')],
+        [isPreStart ? 'Pre-start no.' : 'Variation no.', `${isPreStart ? '' : 'A'}${cleanNumber}`],
         ['ESS representative', representativeName || 'ESS Representative'],
-        ['Labour & materials', 'Completed'],
+        [isPreStart ? 'Daily safety checklist' : 'Labour & materials', 'Completed'],
       ];
 
   return (
@@ -381,7 +382,7 @@ export default function ProjectDataFormDemoModal({
               <View>
                 <Text style={styles.eyebrow}>HOW IT WORKS</Text>
                 <Text style={styles.modalTitle}>
-                  {isHandover ? 'Share a Handover' : 'Share Day Labour'}
+                  {isHandover ? 'Share a Handover' : isPreStart ? 'Share a Pre-Start' : 'Share Day Labour'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -408,10 +409,10 @@ export default function ProjectDataFormDemoModal({
                   />
                   <View style={styles.documentHeaderCopy}>
                     <Text style={styles.documentTitle}>
-                      {isHandover ? 'ESS HANDOVER CERTIFICATE' : 'ESS VARIATION / DAY LABOUR'}
+                      {isHandover ? 'ESS HANDOVER CERTIFICATE' : isPreStart ? 'ESS DAILY PRE-START' : 'ESS VARIATION / DAY LABOUR'}
                     </Text>
                     <Text style={styles.documentNumber}>
-                      {isHandover ? 'INSPECTION' : 'VARIATION'} NO. A{cleanNumber}
+                      {isHandover ? 'INSPECTION' : isPreStart ? 'PRE-START' : 'VARIATION'} NO. {isPreStart ? '' : 'A'}{cleanNumber}
                     </Text>
                   </View>
                 </View>
@@ -538,7 +539,7 @@ export default function ProjectDataFormDemoModal({
                     <View style={styles.shareSheetHeaderCopy}>
                       <Text style={styles.shareSheetTitle}>Share PDF</Text>
                       <Text style={styles.shareSheetSubtitle} numberOfLines={1}>
-                        {referenceName || (isHandover ? 'Handover Certificate' : 'Day Labour / Variation')}
+                        {referenceName || (isHandover ? 'Handover Certificate' : isPreStart ? 'Daily Pre-Start' : 'Day Labour / Variation')}
                       </Text>
                     </View>
                     <View style={styles.shareSheetClose}>

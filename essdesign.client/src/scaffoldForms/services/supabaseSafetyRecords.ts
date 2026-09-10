@@ -7,7 +7,8 @@ export type SafetyFormType =
   | 'scaff-tags'
   | 'handover-certificates'
   | 'day-labour-variations'
-  | 'scaffold-register';
+  | 'scaffold-register'
+  | 'pre-starts';
 
 export interface SafetyFormMetadata {
   title: string;

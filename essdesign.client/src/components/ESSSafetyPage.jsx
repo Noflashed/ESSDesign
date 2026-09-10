@@ -16,7 +16,7 @@ import {
     Users,
     X
 } from 'lucide-react';
-import { dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
+import { preStartsAPI, dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 
 const PROJECT_DATA_TABS = [
@@ -51,6 +51,14 @@ const PROJECT_DATA_TABS = [
         refLabel: 'Variation / Ref No.',
         storageKind: 'day-labour-variations',
         icon: Users
+    },
+    {
+        key: 'pre-starts',
+        label: 'Pre-Starts',
+        noun: 'pre-start forms',
+        refLabel: 'Pre-Start No.',
+        storageKind: 'pre-starts',
+        icon: ClipboardCheck
     },
     {
         key: 'design-document',
@@ -185,6 +193,22 @@ function mapDayLabourVariationRows(items) {
             raw: item
         };
     });
+}
+
+function mapPreStartRows(items) {
+    return items.map(item => ({
+        id: item.id,
+        kind: 'pre-starts',
+        name: withPdfExtension(item.subject || `Daily Pre-Start ${item.preStartNumber}`),
+        ref: item.preStartNumber || '-',
+        status: 'Current',
+        uploadedAt: item.updatedAt || '',
+        expiresAt: '',
+        uploadedBy: item.representativeName || 'Site team',
+        location: item.clientProjectName || '',
+        size: formatBytes(item.size),
+        raw: item
+    }));
 }
 
 function mapFileRows(files, tab) {
@@ -402,6 +426,18 @@ function getPreviewDetails(doc, tab, builder, project) {
             ['ESS representative', doc.raw?.essRepresentativeName || doc.uploadedBy || '-'],
             ['Inspection date', formatDateTime(doc.raw?.inspectionDateTime || doc.uploadedAt)],
             ['Client project no.', doc.raw?.projectNumberClient || '-'],
+            ...baseDetails
+        ];
+    }
+
+    if (tab.key === 'pre-starts') {
+        return [
+            ['Subject', doc.raw?.subject || doc.name],
+            ['Pre-start no.', doc.raw?.preStartNumber || doc.ref],
+            ['Representative', doc.raw?.representativeName || doc.uploadedBy || '-'],
+            ['Form date', doc.raw?.date || '-'],
+            ['Area foreman', doc.raw?.areaForeman || '-'],
+            ['Client project', doc.raw?.clientProjectName || '-'],
             ...baseDetails
         ];
     }
@@ -673,6 +709,8 @@ export default function ESSSafetyPage() {
                 rows = mapScaffTagRows(await scaffTagsAPI.listForms(selectedBuilder.id, selectedProject.id));
             } else if (activeTab.key === 'handover-certificates') {
                 rows = mapHandoverRows(await handoverCertificatesAPI.listForms(selectedBuilder.id, selectedProject.id));
+            } else if (activeTab.key === 'pre-starts') {
+                rows = mapPreStartRows(await preStartsAPI.listForms(selectedBuilder.id, selectedProject.id));
             } else if (activeTab.key === 'day-labour-variations') {
                 rows = mapDayLabourVariationRows(await dayLabourVariationsAPI.listForms(selectedBuilder.id, selectedProject.id));
             } else {
@@ -771,6 +809,11 @@ export default function ESSSafetyPage() {
             const form = await handoverCertificatesAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
             if (!form) throw new Error('Handover certificate not found');
             return handoverCertificatesAPI.getPdfUrl(form);
+        }
+        if (doc.kind === 'pre-starts') {
+            const form = await preStartsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
+            if (!form) throw new Error('Pre-start form not found');
+            return preStartsAPI.getPdfUrl(form);
         }
         if (doc.kind === 'day-labour-variations') {
             const form = await dayLabourVariationsAPI.getForm(selectedBuilder.id, selectedProject.id, doc.id);
@@ -896,6 +939,8 @@ export default function ESSSafetyPage() {
                 await scaffTagsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
             } else if (doc.kind === 'handover-certificates') {
                 await handoverCertificatesAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
+            } else if (doc.kind === 'pre-starts') {
+                await preStartsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
             } else if (doc.kind === 'day-labour-variations') {
                 await dayLabourVariationsAPI.deleteForm(selectedBuilder.id, selectedProject.id, doc.id);
             } else {

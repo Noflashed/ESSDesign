@@ -4512,6 +4512,15 @@ function safetyFormMetadata(formType, form) {
             eventDate: form.latestInspectionDate || ''
         };
     }
+    if (formType === 'pre-starts') {
+        return {
+            title: form.subject || '',
+            referenceNumber: form.preStartNumber || '',
+            requestedBy: form.representativeName || '',
+            projectLabel: form.clientProjectName || '',
+            eventDate: form.date || ''
+        };
+    }
     if (formType === 'handover-certificates') {
         return {
             title: form.formReferenceName || '',
@@ -4862,6 +4871,32 @@ export const scaffTagQrLabelsAPI = {
         }
         return (await response.json()).map(mapScaffTagQrLabel);
     }
+};
+
+function mapPreStartForm(form) {
+    return form ? {
+        ...form,
+        preStartNumber: form.preStartNumber || form.referenceNumber || '',
+        subject: form.subject || form.title || '',
+        representativeName: form.representativeName || form.requestedBy || '',
+        clientProjectName: form.clientProjectName || form.projectLabel || '',
+        date: form.date || form.eventDate || '',
+    } : null;
+}
+
+export const preStartsAPI = {
+    listForms: async (builderId, projectId) =>
+        (await listSafetyFormRecords('pre-starts', builderId, projectId)).map(mapPreStartForm),
+    listAllForms: async ({includeDeleted = false} = {}) =>
+        (await listAllSafetyFormRecords('pre-starts', {includeDeleted})).map(mapPreStartForm),
+    getForm: async (builderId, projectId, formId) =>
+        mapPreStartForm(await getSafetyFormRecord('pre-starts', builderId, projectId, formId)),
+    getPdfUrl: async form => {
+        if (!form?.pdfPath) throw new Error('No saved PDF is available for this pre-start.');
+        return signedDayLabourVariationUrl(form.pdfPath, 60 * 60 * 24 * 14);
+    },
+    deleteForm: async (builderId, projectId, formId) =>
+        deleteSafetyFormRecord('pre-starts', builderId, projectId, formId),
 };
 
 export const dayLabourVariationsAPI = {

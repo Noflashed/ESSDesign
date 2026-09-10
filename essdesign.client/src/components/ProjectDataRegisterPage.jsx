@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import { ChevronDown, Trash2, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
 import {
     dayLabourVariationsAPI,
+    preStartsAPI,
     handoverCertificatesAPI,
     scaffTagQrLabelsAPI,
     scaffTagsAPI,
@@ -30,6 +31,23 @@ const REGISTER_CONFIG = {
             { key: 'reference', label: 'CERTIFICATE NO.' },
             { key: 'inspectionDate', label: 'INSPECTION DATE' },
             { key: 'representative', label: 'INSPECTED BY' }
+        ]
+    },
+    'pre-starts': {
+        title: 'Pre-Start Register',
+        noun: 'pre-start forms',
+        searchPlaceholder: 'Search pre-starts...',
+        api: preStartsAPI,
+        defaultSort: 'formDate',
+        linkKey: 'title',
+        columns: [
+            { key: 'builder', label: 'CLIENT' },
+            { key: 'project', label: 'PROJECT' },
+            { key: 'title', label: 'SUBJECT' },
+            { key: 'reference', label: 'PRE-START NO.' },
+            { key: 'formDate', label: 'FORM DATE' },
+            { key: 'representative', label: 'REPRESENTATIVE' },
+            { key: 'areaForeman', label: 'AREA FOREMAN' }
         ]
     },
     'day-labour': {
@@ -82,7 +100,7 @@ const parseDate = value => {
     const text = String(value || '').trim();
     if (!text) return null;
 
-    const localMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})\s*(am|pm)?)?/i);
+    const localMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})(?:\s+(\d{1,2}):(\d{2})\s*(am|pm)?)?/i);
     if (localMatch) {
         const [, day, month, yearText, hourText = '0', minuteText = '0', period = ''] = localMatch;
         const year = Number(yearText) < 100 ? 2000 + Number(yearText) : Number(yearText);
@@ -163,6 +181,19 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
             representative: form.essRepresentativeName || 'Not recorded'
         };
     }
+    if (registerType === 'pre-starts') {
+        return {
+            id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
+            builderId: form.builderId, projectId: form.projectId, form,
+            ...names, ...deletion,
+            title: form.subject || 'Untitled pre-start',
+            reference: form.preStartNumber || '-',
+            formDate: formatDate(form.date || form.updatedAt),
+            formDateSort: parseDate(form.date || form.updatedAt)?.getTime() || 0,
+            representative: form.representativeName || 'Not recorded',
+            areaForeman: form.areaForeman || '-'
+        };
+    }
     if (registerType === 'day-labour') {
         return {
             id: `${form.builderId}:${form.projectId}:${form.id}:${form.deletedAt || 'active'}`,
@@ -225,23 +256,23 @@ function StatusBadge({ value }) {
 }
 
 // Store selections separately for each account on this browser.
-function dayLabourSelectionKey() {
+function registerSelectionKey(registerType = 'day-labour') {
     const user = JSON.parse(window.localStorage.getItem('user') || 'null');
-    return user?.id ? `ess-day-labour-selection-v1:${user.id}` : null;
+    return user?.id ? `ess-${registerType}-selection-v1:${user.id}` : null;
 }
 
-function readDayLabourSelection() {
+function readRegisterSelection(registerType) {
     try {
-        const key = dayLabourSelectionKey();
+        const key = registerSelectionKey(registerType);
         return (key && JSON.parse(window.localStorage.getItem(key) || 'null')) || {};
     } catch {
         return {};
     }
 }
 
-function rememberDayLabourSelection(builderId, projectId) {
+function rememberRegisterSelection(registerType, builderId, projectId) {
     try {
-        const key = dayLabourSelectionKey();
+        const key = registerSelectionKey(registerType);
         if (key) window.localStorage.setItem(key, JSON.stringify({builderId, projectId}));
     } catch {
         // Navigation must still work when browser storage is unavailable.
@@ -252,7 +283,9 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const config = REGISTER_CONFIG[registerType] || REGISTER_CONFIG.handovers;
     const showingQrRegister = registerType === 'qr-labels';
     const usesScaffTagData = registerType === 'scaff-tags' || showingQrRegister;
-    const isDayLabour = registerType === 'day-labour';
+    const isPreStart = registerType === 'pre-starts';
+    const isEditableRegister = registerType === 'day-labour' || isPreStart;
+    const formLabel = isPreStart ? 'Pre-Start' : 'Day Labour';
     const [builders, setBuilders] = useState([]);
     const [builderLogoUrls, setBuilderLogoUrls] = useState(() => new Map());
     const [builderId, setBuilderId] = useState('');
@@ -271,7 +304,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const projects = selectedBuilder?.projects || [];
     const selectedProject = projects.find(project => project.id === projectId) || projects[0];
     const closeEditor = () => { setEditor(null); setReloadKey(value => value + 1); };
-    const openDayLabour = (row = null) => {
+    const openForm = (row = null) => {
         const builder = row ? builders.find(item => item.id === row.builderId) : selectedBuilder;
         const project = row ? builder?.projects?.find(item => item.id === row.projectId) : selectedProject;
         if (!row && (!builder || !project)) return;
@@ -315,13 +348,13 @@ export default function ProjectDataRegisterPage({ registerType }) {
         ]).then(([builders, forms, labels]) => {
             if (!active) return;
             setBuilders(builders);
-            if (isDayLabour) {
-                const saved = readDayLabourSelection();
+            if (isEditableRegister) {
+                const saved = readRegisterSelection(registerType);
                 const builder = builders.find(item => item.id === saved.builderId) || builders[0];
                 const project = builder?.projects?.find(item => item.id === saved.projectId) || builder?.projects?.[0];
                 setBuilderId(builder?.id || '');
                 setProjectId(project?.id || '');
-                if (builder && project) rememberDayLabourSelection(builder.id, project.id);
+                if (builder && project) rememberRegisterSelection(registerType, builder.id, project.id);
             } else {
                 setBuilderId(current => builders.some(builder => builder.id === current) ? current : builders[0]?.id || '');
             }
@@ -340,7 +373,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             active = false;
         };
-    }, [config, registerType, usesScaffTagData, reloadKey, isDayLabour]);
+    }, [config, registerType, usesScaffTagData, reloadKey, isEditableRegister]);
 
     useEffect(() => {
         setSortField(config.defaultSort);
@@ -371,7 +404,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     }, [filterMenu]);
 
     useEffect(() => {
-        if (!isDayLabour) return undefined;
+        if (!isEditableRegister) return undefined;
         let cancelled = false;
 
         setBuilderLogoUrls(previous => {
@@ -399,7 +432,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
         return () => {
             cancelled = true;
         };
-    }, [builders, isDayLabour]);
+    }, [builders, isEditableRegister]);
 
     useEffect(() => {
         if (!contextMenu) return undefined;
@@ -430,7 +463,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     useEffect(() => { setContextMenu(null); }, [builderId, projectId, query, registerType]);
 
     const openRowMenu = (event, row) => {
-        if (!isDayLabour || row.deleted) return;
+        if (!isEditableRegister || row.deleted) return;
         event.preventDefault();
         if (deleteInFlight.current || editor || loading || pendingDelete) return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -439,18 +472,18 @@ export default function ProjectDataRegisterPage({ registerType }) {
             y: Math.max(8, Math.min(event.clientY || bounds.bottom, window.innerHeight - 64)),
         });
     };
-    const deleteDayLabour = async () => {
+    const deleteForm = async () => {
         if (!pendingDelete || deleteInFlight.current) return;
         deleteInFlight.current = true;
         setDeleting(true);
         setDeleteError('');
         try {
-            await dayLabourVariationsAPI.deleteForm(pendingDelete.builderId, pendingDelete.projectId, pendingDelete.form.id);
+            await config.api.deleteForm(pendingDelete.builderId, pendingDelete.projectId, pendingDelete.form.id);
             setRows(previous => previous.filter(row => row.id !== pendingDelete.id));
             setPendingDelete(null);
             setReloadKey(value => value + 1);
         } catch (failure) {
-            setDeleteError(failure.message || 'Could not delete the Day Labour form. Please try again.');
+            setDeleteError(failure.message || `Could not delete the ${formLabel} form. Please try again.`);
         } finally {
             deleteInFlight.current = false;
             setDeleting(false);
@@ -465,7 +498,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const filteredRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         const next = rows.filter(row => (
-            (!isDayLabour || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
+            (!isEditableRegister || ((row.builderId === builderId) && (row.projectId === selectedProject?.id)))
             && (showDeleted || !row.deleted)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
@@ -479,7 +512,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isDayLabour, builderId, selectedProject?.id]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, sortDirection, sortField, isEditableRegister, builderId, selectedProject?.id]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -649,11 +682,11 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const unassignedQrLabels = qrLabels.filter(label => label.status === 'unassigned');
 
     return (
-        <main className={`project-data-register-page${isDayLabour ? " day-labour-register" : ""}`}>
+        <main className={`project-data-register-page${isEditableRegister ? " day-labour-register" : ""}`}>
             <div className="project-data-register-toolbar" inert={editor ? '' : undefined} aria-hidden={Boolean(editor)}>
-                {isDayLabour && <div className="scaffold-register-dropdowns">
-                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.projects?.[0]?.id || ''; setBuilderId(item.id); setProjectId(nextProjectId); rememberDayLabourSelection(item.id, nextProjectId);}} disabled={loading} />
-                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberDayLabourSelection(builderId, item.id);}} disabled={loading || projects.length === 0} emptyText="No projects available" />
+                {isEditableRegister && <div className="scaffold-register-dropdowns">
+                    <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders} getLabel={item => item.name} getLogoUrl={item => builderLogoUrls.get(item.id) || item.logoUrl || ''} onSelect={item => {const nextProjectId = item.projects?.[0]?.id || ''; setBuilderId(item.id); setProjectId(nextProjectId); rememberRegisterSelection(registerType, item.id, nextProjectId);}} disabled={loading} />
+                    <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects} getLabel={item => item.name} showLogo={false} onSelect={item => {setProjectId(item.id); rememberRegisterSelection(registerType, builderId, item.id);}} disabled={loading || projects.length === 0} emptyText="No projects available" />
                 </div>}
                 <label className="project-register-search">
                     <Search size={18} />
@@ -770,12 +803,12 @@ export default function ProjectDataRegisterPage({ registerType }) {
                         <div className="project-register-loading page-loading-brandmark"><LoadingBrandmark label={`Loading ${config.title.toLowerCase()}`} /></div>
                     ) : (
                         <table className={`project-data-register-table type-${registerType}`}>
-                            {isDayLabour && <caption className="day-labour-add-row"><button type="button" className="scaffold-register-add" disabled={loading || !selectedProject} title={selectedProject ? 'Create Day Labour form' : 'Select a builder and project to create a form'} onClick={() => openDayLabour()}><Plus size={18} /><span>Add Day Labour</span></button></caption>}
+                            {isEditableRegister && <caption className="day-labour-add-row"><button type="button" className="scaffold-register-add" disabled={loading || !selectedProject} title={selectedProject ? `Create ${formLabel} form` : 'Select a builder and project to create a form'} onClick={() => openForm()}><Plus size={18} /><span>Add {formLabel}</span></button></caption>}
                             <thead>
                                 <tr>
                                     {config.columns.map(column => (
-                                        <th key={column.key} className={!isDayLabour && (column.key === 'builder' || column.key === 'project') ? 'has-filter-menu' : undefined}>
-                                            {isDayLabour && (column.key === 'builder' || column.key === 'project') ? column.label : column.key === 'builder' || column.key === 'project' ? (
+                                        <th key={column.key} className={!isEditableRegister && (column.key === 'builder' || column.key === 'project') ? 'has-filter-menu' : undefined}>
+                                            {isEditableRegister && (column.key === 'builder' || column.key === 'project') ? column.label : column.key === 'builder' || column.key === 'project' ? (
                                                 <div className={`project-register-header-filter${filterMenu === column.key ? ' open' : ''}${excludedFilters[column.key].size > 0 ? ' filtered' : ''}`}>
                                                     <button type="button" className="project-register-column-sort project-register-filter-trigger" onClick={event => { event.stopPropagation(); setFilterMenu(current => current === column.key ? '' : column.key); }} aria-haspopup="menu" aria-expanded={filterMenu === column.key}>
                                                         <span>{column.label}</span><ChevronDown aria-hidden="true" />
@@ -796,7 +829,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                             </thead>
                             <tbody>
                                 {filteredRows.map(row => (
-                                    <tr key={row.id} tabIndex={isDayLabour && !row.deleted ? 0 : undefined}
+                                    <tr key={row.id} tabIndex={isEditableRegister && !row.deleted ? 0 : undefined}
                                         onContextMenu={event => openRowMenu(event, row)}
                                         onKeyDown={event => {
                                             if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openRowMenu(event, row);
@@ -806,7 +839,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                                 {column.key === 'status' ? <StatusBadge value={row.status} />
                                                     : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment is-${row.qrLabelStatus}`}><QrCode size={12} />{row.qrLabel}</span>
                                                     : column.key === config.linkKey && row.deleted ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
-                                                    : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => isDayLabour && !row.deleted ? openDayLabour(row) : openPdf(row)} title={`${isDayLabour && !row.deleted ? "Edit form" : "Open PDF"} for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
+                                                    : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => isEditableRegister && !row.deleted ? openForm(row) : openPdf(row)} title={`${isEditableRegister && !row.deleted ? "Edit form" : "Open PDF"} for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>
                                                     : row[column.key] || '-'}
                                             </td>
                                         ))}
@@ -836,21 +869,21 @@ export default function ProjectDataRegisterPage({ registerType }) {
                     style={{left: contextMenu.x, top: contextMenu.y}}>
                     <button type="button" role="menuitem" onClick={() => {
                         setDeleteError(''); setPendingDelete(contextMenu.row); setContextMenu(null);
-                    }}><Trash2 size={16} aria-hidden="true" />Delete Day Labour form</button>
+                    }}><Trash2 size={16} aria-hidden="true" />Delete {formLabel} form</button>
                 </div>, document.body)}
             {pendingDelete && createPortal(
                 <dialog ref={deleteDialogRef} className="scaffold-register-delete-dialog"
                     aria-labelledby="day-labour-delete-title" aria-describedby="day-labour-delete-description"
                     onCancel={event => {event.preventDefault(); if (!deleteInFlight.current) setPendingDelete(null);}}>
-                    <h3 id="day-labour-delete-title">Delete Day Labour form?</h3>
-                    <p id="day-labour-delete-description">Delete <strong>{pendingDelete.title}</strong> from the Day Labour Register? This cannot be undone.</p>
+                    <h3 id="day-labour-delete-title">Delete {formLabel} form?</h3>
+                    <p id="day-labour-delete-description">Delete <strong>{pendingDelete.title}</strong> from the {config.title}? This cannot be undone.</p>
                     {deleteError && <div className="scaffold-register-error" role="alert">{deleteError}</div>}
                     <div className="module-form-actions">
                         <button type="button" className="module-secondary-btn" autoFocus disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</button>
-                        <button type="button" className="module-danger-btn" disabled={deleting} onClick={deleteDayLabour}>{deleting ? 'Deleting…' : 'Delete form'}</button>
+                        <button type="button" className="module-danger-btn" disabled={deleting} onClick={deleteForm}>{deleting ? 'Deletingâ€¦' : 'Delete form'}</button>
                     </div>
                 </dialog>, document.body)}
-            {editor && <ScaffoldFormEditor screen="DayLabourVariationForm" params={editor} onClose={closeEditor} onSaved={() => {}} />}
+            {editor && <ScaffoldFormEditor screen={isPreStart ? "PreStartForm" : "DayLabourVariationForm"} params={editor} onClose={closeEditor} onSaved={() => {}} />}
         </main>
     );
 }

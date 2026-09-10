@@ -16,9 +16,17 @@ services/supabaseDayLabourForms.ts utils/materialSelection.ts features/materialO
 theme/appTheme.ts config/companyEntities.ts utils/sydneyTime.ts utils/projectDataEmail.ts
 utils/projectDataWorkflowDemoPreference.ts utils/scaffoldRecordMatching.ts utils/scaffTagQrLabelToken.ts
 utils/measurements.ts utils/scaffoldLifecycle.ts'''.split()
-assets = {}
-source_hashes = {}
+files += '''screens/PreStartFormScreen.tsx components/PreStartDocumentEditor.tsx
+components/ProjectDataDatePicker.tsx models/preStart.ts models/preStartDocument.ts
+models/preStartEditorLayout.ts services/supabasePreStarts.ts services/preStartPdfRenderer.ts'''.split()
+selected = set(sys.argv[3:]) if len(sys.argv) > 2 and sys.argv[2] == '--only' else set(files)
+manifest_path = dest / 'source-manifest.json'
+previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+assets = previous.get('assets', {})
+source_hashes = previous.get('sha256', {})
 for name in files:
+    if name not in selected:
+        continue
     original = source / 'src' / name
     source_hashes[name] = hashlib.sha256(original.read_bytes()).hexdigest()
     content = original.read_text()
@@ -72,6 +80,32 @@ for name in files:
         content = content.replace('  visible,\n  builderId,', '  visible,\n  designFolderId,\n  builderId,')
         content = content.replace('      const builders = await getSafetyBuilders(true);\n      const builder = builders.find(item => item.id === builderId)\n        ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());\n      const project = builder?.projects.find(item => item.id === projectId)\n        ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());\n      const folderId = project?.designFolderId?.trim();\n', '      let folderId = designFolderId?.trim();\n      if (designFolderId === undefined) {\n        const builders = await getSafetyBuilders(true);\n        const builder = builders.find(item => item.id === builderId)\n          ?? builders.find(item => item.name.trim().toLowerCase() === builderName.trim().toLowerCase());\n        const project = builder?.projects.find(item => item.id === projectId)\n          ?? builder?.projects.find(item => item.name.trim().toLowerCase() === projectName.trim().toLowerCase());\n        folderId = project?.designFolderId?.trim();\n      }\n')
         content = content.replace('[builderId, builderName, projectId, projectName]', '[builderId, builderName, projectId, projectName, designFolderId]')
+    if name == 'components/PreStartDocumentEditor.tsx':
+        content = content.replace("import Svg, { Polyline } from 'react-native-svg';", "import Svg, { Polyline } from '../browser/svg';")
+    if name == 'screens/PreStartFormScreen.tsx':
+        content = content.replace("import { usePreventRemove } from '@react-navigation/native';", '')
+        content = content.replace("import Pdf from 'react-native-pdf';", "import Pdf from '../browser/Pdf';")
+        start = content.index('  usePreventRemove(dirty || busy,')
+        end = content.index('  const load =', start)
+        content = content[:start] + '''  React.useEffect(() => {
+    if (!dirty && !busy) return;
+    const preventUnload = event => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [dirty, busy]);
+  const requestClose = () => {
+    if (busy) { Alert.alert('Please wait', 'The pre-start is being saved.'); return; }
+    if (!dirty) { navigation.goBack(); return; }
+    Alert.alert('Discard changes?', 'Your pre-start has unsaved changes.', [
+      {text: 'Keep editing', style: 'cancel'},
+      {text: 'Discard', style: 'destructive', onPress: () => navigation.goBack()},
+    ]);
+  };
+''' + content[end:]
+        content = content.replace('onPressBack={() => navigation.goBack()}', 'onPressBack={requestClose}')
+        content = content.replace('    createPreStartForm(', '    ({ ...createPreStartForm(')
+        content = content.replace("      user?.fullName || '',\n    ),", "      user?.fullName || '',\n    ), companyEntityId: route.params.initialCompanyEntityId || 'ess' }),")
+        content = content.replace('if (route.params.formId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)', 'if (route.params.formId || route.params.initialCompanyEntityId) {\n      return;\n    }\n    let active = true;\n    getSafetyBuilders(true)')
     if name == 'components/SignaturePadModal.tsx':
         content = content.replace('            {...panResponder.panHandlers}>',
             '            {...panResponder.panHandlers}\n            dataSet={{signatureCanvas: true}}>')

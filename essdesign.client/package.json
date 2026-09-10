@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test:scaffold-register": "node scripts/test-scaffold-register.mjs",
     "test:scaffold-register-layout": "node scripts/test-scaffold-register-layout.mjs",
+    "test:pre-start-register": "node scripts/test-pre-start-register.mjs",
     "test:day-labour-register": "node scripts/test-day-labour-register.mjs",
     "test:measurement-pdfs": "node scripts/test-measurement-pdfs.mjs && node scripts/test-measurement-pdf-repair.mjs"
   },
