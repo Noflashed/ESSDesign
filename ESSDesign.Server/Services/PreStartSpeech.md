@@ -20,3 +20,5 @@ References:
 - https://developers.deepgram.com/docs/tts-models
 
 Combined answers: the text model may return the current field plus explicitly supplied related fields listed by the app. The app validates every value and conditional dependency before writing the batch, then skips those supplied questions. A bare yes does not fabricate details.
+
+Revisit prompts: the catalog also includes four confirmation variants for every AI-assisted form topic plus a generic section clarification. These are generated on demand, persisted, and reused like other standard prompts. The app keeps remembered notes pending until the user confirms the topic, appends additions without dropping existing notes, and returns to the interrupted question. Unknown model field keys cannot directly modify the form.

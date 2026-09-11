@@ -57,6 +57,19 @@ public sealed class PreStartVoiceLibraryTests
     [InlineData("No worries, I’ve updated the incident report for Alex. What work is planned today?")]
     public void NonstandardCorrectionBodiesAreNotAddedToSharedLibrary(string text) => Assert.False(PreStartVoiceCatalog.IsReusable(text));
 
+    [Theory]
+    [InlineData("Were you referring to issues from the previous day?")]
+    [InlineData("Just checking, is that about permit details?")]
+    [InlineData("Which part of the form were you referring to?")]
+    public async Task RevisitClarificationsArePersistedAndReplayed(string text)
+    {
+        var store = new Store(); var handler = new Handler();
+        await Speech(Config(),handler,store).GenerateAsync(text,default,"elevenlabs");
+        Assert.Single(store.Items);
+        await Speech(Config(),handler,store).GenerateAsync(text,default,"elevenlabs");
+        Assert.Equal(1,handler.Calls);
+    }
+
     [Fact]
     public async Task PersonalisedQuestionsNeverEnterThePermanentLibrary()
     {
