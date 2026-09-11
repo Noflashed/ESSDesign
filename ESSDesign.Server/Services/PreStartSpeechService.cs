@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Services;
@@ -9,7 +10,7 @@ public sealed class PreStartSpeechService(
     IHttpClientFactory clients,
     ILogger<PreStartSpeechService> logger)
 {
-    public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false);
+    public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false, JsonElement? Alignment = null);
 
     public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken)
     {
@@ -27,7 +28,7 @@ public sealed class PreStartSpeechService(
         using var client = clients.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(10);
         using var request = new HttpRequestMessage(HttpMethod.Post,
-            $"https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128");
+            $"https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps?output_format=mp3_44100_128");
         request.Headers.Add("xi-api-key", key);
         request.Content = JsonContent.Create(new
         {
@@ -40,7 +41,7 @@ public sealed class PreStartSpeechService(
                 similarity_boost = 0.75,
                 style = 0,
                 use_speaker_boost = false,
-                // iOS already applies a 1.12 playback rate; don't speed it up twice.
+                // Preserve the natural speaking speed.
                 speed = 1.0
             }
         });
@@ -53,12 +54,21 @@ public sealed class PreStartSpeechService(
                 logger.LogWarning("ElevenLabs pre-start speech returned HTTP {StatusCode}", (int)response.StatusCode);
                 return new();
             }
-            var audio = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            return audio.Length == 0 ? new() : new(Convert.ToBase64String(audio), "mp3", true);
+            using var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            var root = payload.RootElement;
+            if (!root.TryGetProperty("audio_base64", out var encoded) || encoded.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(encoded.GetString()))
+                return new();
+            var alignment = root.TryGetProperty("alignment", out var timing) && timing.ValueKind == JsonValueKind.Object ? timing.Clone() : (JsonElement?)null;
+            return new(encoded.GetString(), "mp3", true, alignment);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning("ElevenLabs pre-start speech timed out");
+            return new();
+        }
+        catch (JsonException)
+        {
+            logger.LogWarning("ElevenLabs returned invalid speech timing data");
             return new();
         }
         catch (HttpRequestException)

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ESSDesign.Server.Services;
 using Microsoft.Extensions.Configuration;
@@ -12,7 +13,7 @@ public sealed class PreStartSpeechTests
     {
         public int Calls;
         public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Reply =
-            (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) });
+            (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { audio_base64 = "AQID", alignment = new { characters = new[] { "H", "i" }, character_start_times_seconds = new[] { 0.0, 0.1 } } }) });
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             Calls++;
@@ -59,18 +60,19 @@ public sealed class PreStartSpeechTests
         handler.Reply = async (request, _) =>
         {
             Assert.Equal("api.elevenlabs.io", request.RequestUri!.Host);
-            Assert.Contains("test-voice", request.RequestUri.AbsolutePath);
+            Assert.Contains("test-voice/with-timestamps", request.RequestUri.AbsolutePath);
             Assert.Equal("test-server-key", request.Headers.GetValues("xi-api-key").Single());
             var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()).RootElement;
             Assert.Equal("Any issues yesterday?", body.GetProperty("text").GetString());
             Assert.Equal("eleven_flash_v2_5", body.GetProperty("model_id").GetString());
             Assert.Equal(1.0, body.GetProperty("voice_settings").GetProperty("speed").GetDouble());
-            return new(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) };
+            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { audio_base64 = "AQID", alignment = new { characters = new[] { "H", "i" }, character_start_times_seconds = new[] { 0.0, 0.1 } } }) };
         };
         var result = await Create(handler).GenerateAsync(" Any issues yesterday? ", default);
         Assert.Equal("AQID", result.AudioBase64);
         Assert.Equal("mp3", result.AudioFormat);
         Assert.True(result.UsesAiVoice);
+        Assert.Equal(0.1, result.Alignment!.Value.GetProperty("character_start_times_seconds")[1].GetDouble());
     }
 
     [Fact]
