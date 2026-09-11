@@ -40,6 +40,23 @@ public sealed class PreStartVoiceLibraryTests
         await Speech(Config(voice:"another-voice"),handler,store).GenerateAsync(text,default,"elevenlabs");
         Assert.Equal(2,handler.Calls);
     }
+    [Theory]
+    [InlineData("No worries, I’ve changed the foreman to James Smith. What are the work area risks and agreed actions?")]
+    [InlineData("Got it, I’ve updated the permit details. Have conditions changed since permit approval?")]
+    [InlineData("Of course, I’ve marked no issues from the previous day. What work is planned today?")]
+    public async Task CorrectionsAreSharedDurablyWithoutAnotherVoiceCall(string text)
+    {
+        var store = new Store(); var handler = new Handler();
+        await Speech(Config(),handler,store).GenerateAsync(text,default,"elevenlabs");
+        Assert.Single(store.Items);
+        await Speech(Config(),handler,store).GenerateAsync(text,default,"elevenlabs");
+        Assert.Equal(1,handler.Calls);
+    }
+    [Theory]
+    [InlineData("No worries, I’ve changed the foreman to James Smith. What happened at the private site?")]
+    [InlineData("No worries, I’ve updated the incident report for Alex. What work is planned today?")]
+    public void NonstandardCorrectionBodiesAreNotAddedToSharedLibrary(string text) => Assert.False(PreStartVoiceCatalog.IsReusable(text));
+
     [Fact]
     public async Task PersonalisedQuestionsNeverEnterThePermanentLibrary()
     {

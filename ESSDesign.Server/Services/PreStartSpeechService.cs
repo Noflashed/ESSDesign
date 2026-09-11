@@ -16,7 +16,7 @@ public sealed class PreStartSpeechService(
     IPreStartVoiceLibrary? library = null)
 {
     public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false, JsonElement? Alignment = null);
-    // Fast bounded memory cache in front of the durable, allowlisted question library.
+    // Fast bounded memory cache in front of the durable, validated prompt and correction library.
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 100 });
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1)).ToArray();
 
@@ -34,7 +34,7 @@ public sealed class PreStartSpeechService(
         cancellationToken.ThrowIfCancellationRequested();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{provider}\n{key}\n{model}\n{configuration["ElevenLabs:VoiceId"]}\n{configuration["ElevenLabs:ModelId"]}\n{text}"));
         var cacheKey = Convert.ToHexString(hash);
-        var reusable = library is not null && PreStartVoiceCatalog.Texts.Contains(text);
+        var reusable = library is not null && PreStartVoiceCatalog.IsReusable(text);
         var durableId = PreStartVoiceCatalog.Identity(configuration, provider, text);
         var gate = Gates[hash[0] % Gates.Length];
         await gate.WaitAsync(cancellationToken);
