@@ -50,7 +50,7 @@ public sealed class PreStartSpeechService(
         using var client = clients.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(10);
         using var request = new HttpRequestMessage(HttpMethod.Post,
-            $"https://api.deepgram.com/v1/speak?model={model}&encoding=mp3&bit_rate=128000&speed=1");
+            $"https://api.deepgram.com/v1/speak?model={model}&encoding=mp3&bit_rate=48000&speed=1");
         request.Headers.Authorization = new AuthenticationHeaderValue("Token", key);
         request.Content = JsonContent.Create(new { text });
         try

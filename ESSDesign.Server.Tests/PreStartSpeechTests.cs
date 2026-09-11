@@ -67,6 +67,8 @@ public sealed class PreStartSpeechTests
                 } } } } } } }) };
             Assert.Contains("model=aura-2-hyperion-en", request.RequestUri.Query);
             Assert.Contains("speed=1", request.RequestUri.Query);
+            // Deepgram MP3 accepts 32000 or 48000, not ElevenLabs' 128000 bitrate.
+            Assert.Contains("encoding=mp3&bit_rate=48000", request.RequestUri.Query);
             var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()).RootElement;
             Assert.Equal("Any issues yesterday?", body.GetProperty("text").GetString());
             var content = new ByteArrayContent(new byte[] { 1, 2, 3 });
