@@ -29,8 +29,8 @@ public sealed class PreStartSpeechTests
         var settings = new Dictionary<string, string?>();
         if (configured)
         {
-            settings["ElevenLabs:ApiKey"] = "test-server-key";
-            settings["ElevenLabs:VoiceId"] = "test-voice";
+            settings["Deepgram:ApiKey"] = Guid.NewGuid().ToString();
+
         }
         return new(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             new Factory(handler), NullLogger<PreStartSpeechService>.Instance);
@@ -59,20 +59,28 @@ public sealed class PreStartSpeechTests
         var handler = new StubHandler();
         handler.Reply = async (request, _) =>
         {
-            Assert.Equal("api.elevenlabs.io", request.RequestUri!.Host);
-            Assert.Contains("test-voice/with-timestamps", request.RequestUri.AbsolutePath);
-            Assert.Equal("test-server-key", request.Headers.GetValues("xi-api-key").Single());
+            Assert.Equal("api.deepgram.com", request.RequestUri!.Host);
+            Assert.Equal("Token", request.Headers.Authorization!.Scheme);
+            if (request.RequestUri.AbsolutePath == "/v1/listen")
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { results = new { channels = new[] { new { alternatives = new[] { new { words = new[] {
+                    new { word = "any", start = 0.0 }, new { word = "issues", start = 0.2 }, new { word = "yesterday", start = 0.5 }
+                } } } } } } }) };
+            Assert.Contains("model=aura-2-hyperion-en", request.RequestUri.Query);
+            Assert.Contains("speed=1", request.RequestUri.Query);
             var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()).RootElement;
             Assert.Equal("Any issues yesterday?", body.GetProperty("text").GetString());
-            Assert.Equal("eleven_flash_v2_5", body.GetProperty("model_id").GetString());
-            Assert.Equal(1.0, body.GetProperty("voice_settings").GetProperty("speed").GetDouble());
-            return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { audio_base64 = "AQID", alignment = new { characters = new[] { "H", "i" }, character_start_times_seconds = new[] { 0.0, 0.1 } } }) };
+            var content = new ByteArrayContent(new byte[] { 1, 2, 3 });
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+            return new(HttpStatusCode.OK) { Content = content };
         };
-        var result = await Create(handler).GenerateAsync(" Any issues yesterday? ", default);
+        var service = Create(handler);
+        var result = await service.GenerateAsync(" Any issues yesterday? ", default);
+        Assert.Equal(result, await service.GenerateAsync("Any issues yesterday?", default));
+        Assert.Equal(2, handler.Calls);
         Assert.Equal("AQID", result.AudioBase64);
         Assert.Equal("mp3", result.AudioFormat);
         Assert.True(result.UsesAiVoice);
-        Assert.Equal(0.1, result.Alignment!.Value.GetProperty("character_start_times_seconds")[1].GetDouble());
+        Assert.Equal(0.2, result.Alignment!.Value.GetProperty("character_start_times_seconds")[4].GetDouble());
     }
 
     [Fact]
@@ -108,5 +116,43 @@ public sealed class PreStartSpeechTests
         using var cancel = new CancellationTokenSource();
         cancel.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Create(handler).GenerateAsync("Question?", cancel.Token));
+    }
+
+    [Theory]
+    [InlineData("[{\"word\":\"wrong\",\"start\":0},{\"word\":\"team\",\"start\":1}]")]
+    [InlineData("[{\"word\":\"hi\",\"start\":1},{\"word\":\"team\",\"start\":0}]")]
+    [InlineData("[{\"word\":\"hi\",\"start\":-1},{\"word\":\"team\",\"start\":0}]")]
+    [InlineData("[]")]
+    public void InvalidTimingIsNotPresentedAsAccurate(string json)
+    {
+        using var words = JsonDocument.Parse(json);
+        Assert.Null(PreStartSpeechService.BuildAlignment("Hi team", words.RootElement));
+    }
+
+    [Fact]
+    public void TimingPreservesWrittenPunctuation()
+    {
+        using var words = JsonDocument.Parse("[{\"word\":\"hi\",\"start\":0.1},{\"word\":\"team\",\"start\":0.5}]");
+        var result = PreStartSpeechService.BuildAlignment("Hi, team!", words.RootElement)!.Value;
+        Assert.Equal("Hi, team!", string.Concat(result.GetProperty("characters").EnumerateArray().Select(c => c.GetString())));
+        Assert.Equal(0.5, result.GetProperty("character_start_times_seconds")[4].GetDouble());
+    }
+
+    [Fact]
+    public async Task PronunciationAndTimingFailureStillReturnAudio()
+    {
+        var handler = new StubHandler();
+        handler.Reply = async (request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/v1/listen") return new(HttpStatusCode.ServiceUnavailable);
+            var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()).RootElement;
+            Assert.Equal("Is a swims ready?", body.GetProperty("text").GetString());
+            var content = new ByteArrayContent(new byte[] { 1, 2, 3 });
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+            return new(HttpStatusCode.OK) { Content = content };
+        };
+        var result = await Create(handler).GenerateAsync("Is a SWMS ready?", default);
+        Assert.True(result.UsesAiVoice);
+        Assert.Null(result.Alignment);
     }
 }
