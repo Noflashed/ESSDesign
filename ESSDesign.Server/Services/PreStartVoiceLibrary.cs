@@ -71,7 +71,7 @@ public sealed class PreStartVoiceLibrary(IConfiguration config, IHttpClientFacto
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or FormatException or InvalidOperationException || e is OperationCanceledException && !token.IsCancellationRequested)
         {
-            logger.LogWarning("Pre-start voice library read unavailable ({ErrorType})", e.GetType().Name);
+            logger.LogWarning("Pre-start voice library read unavailable ({ErrorType}, HTTP {StatusCode})", e.GetType().Name, (e as HttpRequestException)?.StatusCode);
             return null;
         }
     }
@@ -84,15 +84,31 @@ public sealed class PreStartVoiceLibrary(IConfiguration config, IHttpClientFacto
             client.Timeout = TimeSpan.FromSeconds(3);
             using var request = Request(HttpMethod.Post, id);
             request.Headers.Add("x-upsert", "true");
-            request.Content = JsonContent.Create(audio);
+            // Storage uploads are files, not a JSON API request: send a known-length body
+            // and an exact bucket-approved MIME type (without JsonContent's charset suffix).
+            request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(audio, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             using var response = await client.SendAsync(request, token);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(token);
+                string? code = null;
+                try
+                {
+                    using var error = JsonDocument.Parse(body);
+                    if (error.RootElement.TryGetProperty("error", out var value) && value.ValueKind == JsonValueKind.String &&
+                        Regex.IsMatch(value.GetString()!, "^[A-Za-z_ ]{1,80}$")) code = value.GetString();
+                }
+                catch (JsonException) { }
+                logger.LogWarning("Pre-start voice library upload rejected: HTTP {StatusCode}, code {ErrorCode}", (int)response.StatusCode, code ?? "unknown");
+                return false;
+            }
             logger.LogInformation("Pre-start voice library stored audio {AudioId}", id);
             return true;
         }
         catch (Exception e) when (e is HttpRequestException or InvalidOperationException || e is OperationCanceledException && !token.IsCancellationRequested)
         {
-            logger.LogWarning("Pre-start voice library write unavailable ({ErrorType})", e.GetType().Name);
+            logger.LogWarning("Pre-start voice library write unavailable ({ErrorType}, HTTP {StatusCode})", e.GetType().Name, (e as HttpRequestException)?.StatusCode);
             return false;
         }
     }

@@ -66,6 +66,8 @@ public sealed class PreStartVoiceLibraryTests
             Assert.DoesNotContain("server-secret",request.RequestUri!.AbsoluteUri);
             if(request.Method==HttpMethod.Post) {
                 Assert.Equal("true",request.Headers.GetValues("x-upsert").Single());
+                Assert.Equal("application/json", request.Content!.Headers.ContentType!.ToString());
+                Assert.True(request.Content.Headers.ContentLength > 0);
                 payload=request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
                 return new(HttpStatusCode.OK);
             }

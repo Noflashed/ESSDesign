@@ -68,7 +68,12 @@ public sealed class PreStartVoiceHistoryImport(
                 // Recover caption timing once from the saved audio; no ElevenLabs regeneration.
                 using var scope = scopes.CreateScope();
                 var alignment = await scope.ServiceProvider.GetRequiredService<PreStartSpeechService>().AlignImportedAsync(text, audio, token);
-                if (await library.WriteAsync(id, new(Convert.ToBase64String(audio), "mp3", true, alignment), token)) imported++;
+                if (!await library.WriteAsync(id, new(Convert.ToBase64String(audio), "mp3", true, alignment), token))
+                {
+                    logger.LogWarning("Pre-start history import paused after storage rejection; imported {Imported}", imported);
+                    return;
+                }
+                imported++;
             }
             if (!root.GetProperty("has_more").GetBoolean()) break;
             var next = root.GetProperty("last_history_item_id").GetString();
