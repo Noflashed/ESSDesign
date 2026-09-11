@@ -89,6 +89,34 @@ public sealed class AssistantController : ControllerBase
         }
     }
 
+    [HttpPost("/api/pre-start/assistant-answer")]
+    public async Task<IActionResult> PreStartAnswer(
+        [FromBody] EssAssistantChatRequest request,
+        [FromServices] PreStartAnswerService answers,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message) || request.Message.Length > 4000)
+            return BadRequest(new { error = "A message of up to 4,000 characters is required." });
+        var currentUser = await GetCurrentUserAsync();
+        if (currentUser == null) return Unauthorized(new { error = "Not authenticated." });
+        if (!_accessPolicy.For(currentUser).CanUseAssistant)
+            return StatusCode(403, new { error = "ESS AI access is not available for this role." });
+        if (!AllowRequest(currentUser.Id))
+            return StatusCode(429, new { error = "Too many assistant requests. Please wait a moment." });
+        try
+        {
+            var reply = await answers.InterpretAsync(request.Message, cancellationToken);
+            return Ok(new { reply, links = Array.Empty<string>() });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return new EmptyResult(); }
+        catch (InvalidOperationException) { return StatusCode(503, new { error = "Form AI is not configured." }); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Pre-start answer failed: {ErrorType}", ex.GetType().Name);
+            return StatusCode(502, new { error = "Could not process this answer. Please try again." });
+        }
+    }
+
     [HttpPost("chat/stream")]
     public async Task ChatStream(
         [FromBody] EssAssistantChatRequest request,
