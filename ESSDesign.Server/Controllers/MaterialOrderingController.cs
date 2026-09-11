@@ -45,6 +45,7 @@ namespace ESSDesign.Server.Controllers
 
         public sealed class AssistantSpeechRequest
         {
+            public string? Provider { get; set; }
             public string Text { get; set; } = string.Empty;
         }
 
@@ -256,7 +257,10 @@ namespace ESSDesign.Server.Controllers
             if (user == null)
                 return Unauthorized(new { error = "Not authenticated" });
 
-            return Ok(await speech.GenerateAsync(request.Text, cancellationToken));
+            var provider = request.Provider ?? "deepgram";
+            if (provider is not ("deepgram" or "elevenlabs"))
+                return BadRequest(new { error = "Choose Deepgram or ElevenLabs." });
+            return Ok(await speech.GenerateAsync(request.Text, cancellationToken, provider));
         }
 
         private async Task<UserInfo?> GetCurrentUserAsync()

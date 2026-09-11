@@ -157,4 +157,37 @@ public sealed class PreStartSpeechTests
         Assert.True(result.UsesAiVoice);
         Assert.Null(result.Alignment);
     }
+
+    [Fact]
+    public async Task ElevenLabsSelectionUsesItsOwnCredentialsAndTimestampEndpoint()
+    {
+        var key = Guid.NewGuid().ToString();
+        var handler = new StubHandler { Reply = (request, _) =>
+        {
+            Assert.Equal("api.elevenlabs.io", request.RequestUri!.Host);
+            Assert.Contains("test-voice/with-timestamps", request.RequestUri.AbsolutePath);
+            Assert.Equal(key, request.Headers.GetValues("xi-api-key").Single());
+            Assert.Null(request.Headers.Authorization);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
+                Content = JsonContent.Create(new { audio_base64 = "AQID", alignment = new { characters = new[] { "H", "i" }, character_start_times_seconds = new[] { 0.0, 0.1 } } }) });
+        } };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["ElevenLabs:ApiKey"] = key, ["ElevenLabs:VoiceId"] = "test-voice", ["Deepgram:ApiKey"] = "other-key"
+        }).Build();
+        var service = new PreStartSpeechService(config, new Factory(handler), NullLogger<PreStartSpeechService>.Instance);
+        var result = await service.GenerateAsync("Hi", default, "elevenlabs");
+        Assert.True(result.UsesAiVoice);
+        Assert.Equal(result, await service.GenerateAsync("Hi", default, "elevenlabs"));
+        Assert.Equal(1, handler.Calls);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAsync("Hi", default, "unknown"));
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task MissingSelectedCredentialsNeverSpendOnOtherProvider()
+    {
+        var handler = new StubHandler();
+        Assert.False((await Create(handler).GenerateAsync("Hi", default, "elevenlabs")).UsesAiVoice);
+        Assert.Equal(0, handler.Calls);
+    }
 }

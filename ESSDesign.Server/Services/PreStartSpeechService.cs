@@ -19,25 +19,28 @@ public sealed class PreStartSpeechService(
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 100 });
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1)).ToArray();
 
-    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken)
+    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken, string provider = "deepgram")
     {
         text = Regex.Replace(text.Trim(), @"\bSWMS\b", "swims", RegexOptions.IgnoreCase);
         if (text.Length is 0 or > 600)
             throw new ArgumentException("Speech must contain between 1 and 600 characters.", nameof(text));
-        var key = configuration["Deepgram:ApiKey"];
+        if (provider is not ("deepgram" or "elevenlabs")) throw new ArgumentException("Unknown voice provider.", nameof(provider));
+        var key = configuration[provider == "deepgram" ? "Deepgram:ApiKey" : "ElevenLabs:ApiKey"];
         var model = configuration["Deepgram:ModelId"] ?? "aura-2-hyperion-en";
         if (string.IsNullOrWhiteSpace(key)) return new();
-        if (!Regex.IsMatch(model, "^aura-2-[a-z]+-en$"))
+        if (provider == "deepgram" && !Regex.IsMatch(model, "^aura-2-[a-z]+-en$"))
             throw new InvalidOperationException("Deepgram voice configuration is invalid.");
         cancellationToken.ThrowIfCancellationRequested();
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{key}\n{model}\n{text}"));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{provider}\n{key}\n{model}\n{configuration["ElevenLabs:VoiceId"]}\n{configuration["ElevenLabs:ModelId"]}\n{text}"));
         var cacheKey = Convert.ToHexString(hash);
         var gate = Gates[hash[0] % Gates.Length];
         await gate.WaitAsync(cancellationToken);
         try
         {
             if (Cache.TryGetValue<SpeechResult>(cacheKey, out var cached)) return cached!;
-            var result = await GenerateUncached(text, key, model, cancellationToken);
+            var result = provider == "elevenlabs"
+                ? await GenerateElevenLabs(text, cancellationToken)
+                : await GenerateUncached(text, key, model, cancellationToken);
             if (result.UsesAiVoice && result.Alignment is not null)
                 Cache.Set(cacheKey, result, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
             return result;
@@ -119,5 +122,66 @@ public sealed class PreStartSpeechService(
             previous = time;
         }
         return JsonSerializer.SerializeToElement(new { characters = text.Select(c => c.ToString()).ToArray(), character_start_times_seconds = times });
+    }
+    private async Task<SpeechResult> GenerateElevenLabs(string text, CancellationToken cancellationToken)
+    {
+        var key = configuration["ElevenLabs:ApiKey"];
+        var voice = configuration["ElevenLabs:VoiceId"];
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(voice))
+            return new(); // The app can use device speech until server configuration is complete.
+        if (!Regex.IsMatch(voice, "^[A-Za-z0-9_-]{1,100}$"))
+            throw new InvalidOperationException("ElevenLabs voice configuration is invalid.");
+
+        using var client = clients.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(10);
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://api.elevenlabs.io/v1/text-to-speech/{voice}/with-timestamps?output_format=mp3_44100_128");
+        request.Headers.Add("xi-api-key", key);
+        request.Content = JsonContent.Create(new
+        {
+            text,
+            model_id = configuration["ElevenLabs:ModelId"] ?? "eleven_flash_v2_5",
+            language_code = "en",
+            voice_settings = new
+            {
+                stability = 0.45,
+                similarity_boost = 0.75,
+                style = 0,
+                use_speaker_boost = false,
+                // Preserve the natural speaking speed.
+                speed = 1.0
+            }
+        });
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                // Never log the API key, generated text or upstream response body.
+                logger.LogWarning("ElevenLabs pre-start speech returned HTTP {StatusCode}", (int)response.StatusCode);
+                return new();
+            }
+            using var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            var root = payload.RootElement;
+            if (!root.TryGetProperty("audio_base64", out var encoded) || encoded.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(encoded.GetString()))
+                return new();
+            var alignment = root.TryGetProperty("alignment", out var timing) && timing.ValueKind == JsonValueKind.Object ? timing.Clone() : (JsonElement?)null;
+            return new(encoded.GetString(), "mp3", true, alignment);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("ElevenLabs pre-start speech timed out");
+            return new();
+        }
+        catch (JsonException)
+        {
+            logger.LogWarning("ElevenLabs returned invalid speech timing data");
+            return new();
+        }
+        catch (HttpRequestException)
+        {
+            logger.LogWarning("ElevenLabs pre-start speech could not connect");
+            return new();
+        }
     }
 }
