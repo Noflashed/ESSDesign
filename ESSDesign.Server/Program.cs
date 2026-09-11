@@ -58,6 +58,8 @@ builder.Services.AddScoped<SiteRegistryService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
 builder.Services.AddScoped<PreStartSpeechService>();
+builder.Services.AddSingleton<IPreStartVoiceLibrary, PreStartVoiceLibrary>();
+builder.Services.AddHostedService<PreStartVoiceHistoryImport>();
 builder.Services.AddScoped<PreStartAnswerService>();
 builder.Services.AddSingleton<EssAssistantAccessPolicy>();
 builder.Services.AddScoped<EssAssistantSupabaseGateway>();

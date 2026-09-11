@@ -12,10 +12,11 @@ namespace ESSDesign.Server.Services;
 public sealed class PreStartSpeechService(
     IConfiguration configuration,
     IHttpClientFactory clients,
-    ILogger<PreStartSpeechService> logger)
+    ILogger<PreStartSpeechService> logger,
+    IPreStartVoiceLibrary? library = null)
 {
     public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false, JsonElement? Alignment = null);
-    // Bounded, process-local cache; restarts and deployments clear it. No transcripts on disk.
+    // Fast bounded memory cache in front of the durable, allowlisted question library.
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 100 });
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1)).ToArray();
 
@@ -33,15 +34,24 @@ public sealed class PreStartSpeechService(
         cancellationToken.ThrowIfCancellationRequested();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{provider}\n{key}\n{model}\n{configuration["ElevenLabs:VoiceId"]}\n{configuration["ElevenLabs:ModelId"]}\n{text}"));
         var cacheKey = Convert.ToHexString(hash);
+        var reusable = library is not null && PreStartVoiceCatalog.Texts.Contains(text);
+        var durableId = PreStartVoiceCatalog.Identity(configuration, provider, text);
         var gate = Gates[hash[0] % Gates.Length];
         await gate.WaitAsync(cancellationToken);
         try
         {
             if (Cache.TryGetValue<SpeechResult>(cacheKey, out var cached)) return cached!;
+            if (reusable && await library!.ReadAsync(durableId, cancellationToken) is { } stored)
+            {
+                Cache.Set(cacheKey, stored, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
+                logger.LogInformation("Pre-start voice library hit {Provider} {AudioId}", provider, durableId);
+                return stored;
+            }
             var result = provider == "elevenlabs"
                 ? await GenerateElevenLabs(text, cancellationToken)
                 : await GenerateUncached(text, key, model, cancellationToken);
-            if (result.UsesAiVoice && result.Alignment is not null)
+            if (reusable && result.UsesAiVoice) await library!.WriteAsync(durableId, result, cancellationToken);
+            if (result.UsesAiVoice)
                 Cache.Set(cacheKey, result, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
             return result;
         }
@@ -79,6 +89,15 @@ public sealed class PreStartSpeechService(
             logger.LogWarning("Deepgram pre-start speech could not connect");
             return new();
         }
+    }
+
+    public async Task<JsonElement?> AlignImportedAsync(string text, byte[] audio, CancellationToken token)
+    {
+        var key = configuration["Deepgram:ApiKey"];
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        using var client = clients.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(10);
+        return await Align(client, key, text, audio, token);
     }
 
     private async Task<JsonElement?> Align(HttpClient client, string key, string text, byte[] audio, CancellationToken token)
