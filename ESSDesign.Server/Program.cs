@@ -57,6 +57,7 @@ builder.Services.AddSingleton<ScaffTagPdfPreviewService>();
 builder.Services.AddScoped<SiteRegistryService>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped<MaterialOrderingAiService>();
+builder.Services.AddScoped<PreStartSpeechService>();
 builder.Services.AddSingleton<EssAssistantAccessPolicy>();
 builder.Services.AddScoped<EssAssistantSupabaseGateway>();
 builder.Services.AddScoped<EssAssistantConversationStore>();

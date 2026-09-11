@@ -243,6 +243,22 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        [HttpPost("/api/pre-start/assistant-voice")]
+        public async Task<ActionResult<PreStartSpeechService.SpeechResult>> PreStartVoice(
+            [FromBody] AssistantSpeechRequest request,
+            [FromServices] PreStartSpeechService speech,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.Text) || request.Text.Trim().Length > 600)
+                return BadRequest(new { error = "Speech must contain between 1 and 600 characters." });
+
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized(new { error = "Not authenticated" });
+
+            return Ok(await speech.GenerateAsync(request.Text, cancellationToken));
+        }
+
         private async Task<UserInfo?> GetCurrentUserAsync()
         {
             var authorizationHeader = Request.Headers.Authorization.ToString();
