@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Services/PreStartVoiceCatalog.json" />
+    <EmbeddedResource Include="Services/PreStartDialogue.json" />
   </ItemGroup>
 
   <ItemGroup>

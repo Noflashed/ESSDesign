@@ -77,7 +77,7 @@ public sealed class PreStartSpeechTests
         };
         var service = Create(handler);
         var result = await service.GenerateAsync(" Any issues yesterday? ", default);
-        Assert.Equal(result, await service.GenerateAsync("Any issues yesterday?", default));
+        Assert.Equal(result.AudioBase64, (await service.GenerateAsync("Any issues yesterday?", default)).AudioBase64);
         Assert.Equal(2, handler.Calls);
         Assert.Equal("AQID", result.AudioBase64);
         Assert.Equal("mp3", result.AudioFormat);
@@ -177,7 +177,7 @@ public sealed class PreStartSpeechTests
         var service = new PreStartSpeechService(config, new Factory(handler), NullLogger<PreStartSpeechService>.Instance);
         var result = await service.GenerateAsync("Hi", default, "elevenlabs");
         Assert.True(result.UsesAiVoice);
-        Assert.Equal(result, await service.GenerateAsync("Hi", default, "elevenlabs"));
+        Assert.Equal(result.AudioBase64, (await service.GenerateAsync("Hi", default, "elevenlabs")).AudioBase64);
         Assert.Equal(1, handler.Calls);
         await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateAsync("Hi", default, "unknown"));
         Assert.Equal(1, handler.Calls);

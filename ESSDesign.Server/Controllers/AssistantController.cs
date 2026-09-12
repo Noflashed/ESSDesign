@@ -117,6 +117,36 @@ public sealed class AssistantController : ControllerBase
         }
     }
 
+    [HttpPost("/api/pre-start/conversation-turn")]
+    [RequestSizeLimit(128_000)]
+    public async Task<IActionResult> PreStartTurn(
+        [FromBody] PreStartTurnRequest request,
+        [FromServices] PreStartTurnService turns,
+        CancellationToken cancellationToken)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized(new { error = "Not authenticated." });
+        if (!_accessPolicy.For(user).CanUseAssistant) return StatusCode(403, new { error = "ESS AI access is not available for this role." });
+        if (!AllowRequest(user.Id)) return StatusCode(429, new { error = "Too many assistant requests. Please wait a moment." });
+        try { return Ok(await turns.InterpretAsync(request, cancellationToken)); }
+        catch (ArgumentException) { return BadRequest(new { error = "Please give a shorter answer or reopen the form." }); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return new EmptyResult(); }
+        catch (InvalidOperationException) { return StatusCode(503, new { error = "Form AI is not configured." }); }
+        catch (Exception ex) {
+            _logger.LogWarning("Pre-start conversation failed: {ErrorType}", ex.GetType().Name);
+            return StatusCode(502, new { error = "I couldn't reliably apply that update. Please try saying it another way." });
+        }
+    }
+
+    [HttpGet("/api/pre-start/voice-usage")]
+    public async Task<IActionResult> PreStartVoiceUsage([FromServices] IPreStartVoiceRegistry registry, [FromServices] IConfiguration config, CancellationToken token)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (!_accessPolicy.For(user).IsAdmin) return StatusCode(403, new { error = "Administrator access is required." });
+        return Ok(new { dailyCharacterLimit = Math.Clamp(config.GetValue<int?>("PreStartVoice:DailyCharacterLimit") ?? 10000, 0, 10000000), resetTimezone = "UTC", days = await registry.UsageAsync(token) });
+    }
+
     [HttpPost("chat/stream")]
     public async Task ChatStream(
         [FromBody] EssAssistantChatRequest request,

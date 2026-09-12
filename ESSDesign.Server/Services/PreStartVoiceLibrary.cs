@@ -22,9 +22,10 @@ public static class PreStartVoiceCatalog
     public static bool IsReusable(string text)
     {
         text = Normalise(text);
-        if (Texts.Contains(text)) return true;
+        if (text == Normalise("Stop and develop a SWMS before starting any activity without one.")) return true;
+        if (Texts.Contains(text) || PreStartDialogueService.BuiltIn.Any(p => Normalise(p.Text) == text)) return true;
         const string intro = @"(?:No worries|Thanks for clarifying|Got it|Of course), I’ve ";
-        const string change = @"(?:changed the foreman to [\p{L}\p{M} .’'\-]{1,100}|changed the (?:work group|clean-up worker) count to [0-9]{1,3}|marked no issues from the previous day|marked no hazardous substances|changed that answer to (?:yes|no|not confirmed)|updated the (?:planned activities|previous day’s issue details|permit details|substance details|risks and actions|general notes|attendance list|answer on the form))\.";
+        const string change = @"(?:marked no issues from the previous day|marked no hazardous substances|changed that answer to (?:yes|no|not confirmed)|updated the (?:planned activities|previous day’s issue details|permit details|substance details|risks and actions|general notes|attendance list|answer on the form))\.";
         var match = Regex.Match(text, "^" + intro + change + " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
         return match.Success && Texts.Contains(text[match.Length..]);
     }
@@ -44,6 +45,8 @@ public interface IPreStartVoiceLibrary
     Task<PreStartSpeechService.SpeechResult?> ReadAsync(string id, CancellationToken token);
     Task<bool> WriteAsync(string id, PreStartSpeechService.SpeechResult audio, CancellationToken token);
 }
+
+public sealed class PreStartVoiceStorageUnavailableException : Exception { }
 
 /// <summary>Private Supabase objects; only standard prompts and validated correction confirmations reach this store.</summary>
 public sealed class PreStartVoiceLibrary(IConfiguration config, IHttpClientFactory clients, ILogger<PreStartVoiceLibrary> logger) : IPreStartVoiceLibrary
@@ -84,7 +87,7 @@ public sealed class PreStartVoiceLibrary(IConfiguration config, IHttpClientFacto
         catch (Exception e) when (e is HttpRequestException or JsonException or FormatException or InvalidOperationException || e is OperationCanceledException && !token.IsCancellationRequested)
         {
             logger.LogWarning("Pre-start voice library read unavailable ({ErrorType}, HTTP {StatusCode})", e.GetType().Name, (e as HttpRequestException)?.StatusCode);
-            return null;
+            throw new PreStartVoiceStorageUnavailableException();
         }
     }
     public async Task<bool> WriteAsync(string id, PreStartSpeechService.SpeechResult audio, CancellationToken token)

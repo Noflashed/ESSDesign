@@ -8,19 +8,21 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace ESSDesign.Server.Services;
 
-/// <summary>Server-only Deepgram voice. The existing AI still interprets form answers.</summary>
+/// <summary>Server-only shared speech with a bounded allowance for provider generation.</summary>
 public sealed class PreStartSpeechService(
     IConfiguration configuration,
     IHttpClientFactory clients,
     ILogger<PreStartSpeechService> logger,
-    IPreStartVoiceLibrary? library = null)
+    IPreStartVoiceLibrary? library = null,
+    IPreStartVoiceRegistry? registry = null,
+    PreStartVoicePersistence? persistence = null)
 {
-    public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false, JsonElement? Alignment = null);
+    public sealed record SpeechResult(string? AudioBase64 = null, string? AudioFormat = null, bool UsesAiVoice = false, JsonElement? Alignment = null, string? CacheSource = null, string? FallbackReason = null);
     // Fast bounded memory cache in front of the durable, validated prompt and correction library.
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 100 });
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1)).ToArray();
 
-    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken, string provider = "deepgram")
+    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken, string provider = "deepgram", bool cacheOnly = false)
     {
         text = Regex.Replace(text.Trim(), @"\bSWMS\b", "swims", RegexOptions.IgnoreCase);
         if (text.Length is 0 or > 600)
@@ -28,33 +30,61 @@ public sealed class PreStartSpeechService(
         if (provider is not ("deepgram" or "elevenlabs")) throw new ArgumentException("Unknown voice provider.", nameof(provider));
         var key = configuration[provider == "deepgram" ? "Deepgram:ApiKey" : "ElevenLabs:ApiKey"];
         var model = configuration["Deepgram:ModelId"] ?? "aura-2-hyperion-en";
-        if (string.IsNullOrWhiteSpace(key)) return new();
         if (provider == "deepgram" && !Regex.IsMatch(model, "^aura-2-[a-z]+-en$"))
             throw new InvalidOperationException("Deepgram voice configuration is invalid.");
         cancellationToken.ThrowIfCancellationRequested();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{provider}\n{key}\n{model}\n{configuration["ElevenLabs:VoiceId"]}\n{configuration["ElevenLabs:ModelId"]}\n{text}"));
         var cacheKey = Convert.ToHexString(hash);
-        var reusable = library is not null && PreStartVoiceCatalog.IsReusable(text);
         var durableId = PreStartVoiceCatalog.Identity(configuration, provider, text);
         var gate = Gates[hash[0] % Gates.Length];
         await gate.WaitAsync(cancellationToken);
         try
         {
-            if (Cache.TryGetValue<SpeechResult>(cacheKey, out var cached)) return cached!;
+            if (Cache.TryGetValue<SpeechResult>(cacheKey, out var cached)) {
+                if (registry != null) _ = registry.MetricAsync(provider, "cache_hits", CancellationToken.None);
+                return cached! with { CacheSource = "memory" };
+            }
+            var reusable = library is not null && (PreStartVoiceCatalog.IsReusable(text) || registry is not null && await registry.IsApprovedAsync(text, cancellationToken));
             if (reusable && await library!.ReadAsync(durableId, cancellationToken) is { } stored)
             {
                 Cache.Set(cacheKey, stored, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
                 logger.LogInformation("Pre-start voice library hit {Provider} {AudioId}", provider, durableId);
-                return stored;
+                if (registry != null) _ = registry.MetricAsync(provider, "cache_hits", CancellationToken.None);
+                return stored with { CacheSource = "shared" };
+            }
+            if (cacheOnly) return new(FallbackReason: "cache_miss");
+            if (string.IsNullOrWhiteSpace(key)) return new(FallbackReason: "not_configured");
+            var attemptId = Guid.NewGuid().ToString();
+            if (registry != null) {
+                var limit = Math.Clamp(configuration.GetValue<int?>("PreStartVoice:DailyCharacterLimit") ?? 10000, 0, 10000000);
+                var reservation = await registry.ReserveAsync(durableId, attemptId, provider, text.Length, limit, cancellationToken);
+                if (reservation != "acquired") {
+                    // Another instance may be persisting this clip. Recheck without generating twice.
+                    if (reusable && reservation is "busy" or "generated") {
+                        for (var attempt = 0; attempt < 3; attempt++) {
+                            await Task.Delay(250, cancellationToken);
+                            if (await library!.ReadAsync(durableId, cancellationToken) is { } ready) return ready with { CacheSource = "shared" };
+                        }
+                    }
+                    logger.LogInformation("Pre-start voice generation skipped {Reason}", reservation);
+                    return new(FallbackReason: reservation);
+                }
             }
             var result = provider == "elevenlabs"
                 ? await GenerateElevenLabs(text, cancellationToken)
                 : await GenerateUncached(text, key, model, cancellationToken);
-            if (reusable && result.UsesAiVoice) await library!.WriteAsync(durableId, result, cancellationToken);
+            // Once synthesis has returned, client cancellation must not discard an already-paid recording.
+            var storedNow = false;
+            if (reusable && result.UsesAiVoice) {
+                if (persistence != null) persistence.Enqueue(durableId, result, attemptId);
+                else storedNow = await library!.WriteAsync(durableId, result, CancellationToken.None);
+            }
+            if (registry != null) await registry.FinishAsync(attemptId, result.UsesAiVoice, storedNow, CancellationToken.None);
             if (result.UsesAiVoice)
                 Cache.Set(cacheKey, result, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
-            return result;
+            return result with { CacheSource = result.UsesAiVoice ? "generated" : null, FallbackReason = result.UsesAiVoice ? null : "provider_unavailable" };
         }
+        catch (PreStartVoiceStorageUnavailableException) { return new(FallbackReason: "cache_unavailable"); }
         finally { gate.Release(); }
     }
 
