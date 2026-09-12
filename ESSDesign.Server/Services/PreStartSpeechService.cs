@@ -20,7 +20,7 @@ public sealed class PreStartSpeechService(
     private static readonly MemoryCache Cache = new(new MemoryCacheOptions { SizeLimit = 100 });
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1)).ToArray();
 
-    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken, string provider = "deepgram")
+    public async Task<SpeechResult> GenerateAsync(string text, CancellationToken cancellationToken, string provider = "deepgram", bool shared = true)
     {
         text = Regex.Replace(text.Trim(), @"\bSWMS\b", "swims", RegexOptions.IgnoreCase);
         if (text.Length is 0 or > 600)
@@ -33,8 +33,8 @@ public sealed class PreStartSpeechService(
             throw new InvalidOperationException("Deepgram voice configuration is invalid.");
         cancellationToken.ThrowIfCancellationRequested();
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{provider}\n{key}\n{model}\n{configuration["ElevenLabs:VoiceId"]}\n{configuration["ElevenLabs:ModelId"]}\n{text}"));
-        var cacheKey = Convert.ToHexString(hash);
-        var reusable = library is not null && PreStartVoiceCatalog.IsReusable(text);
+        var cacheKey = Convert.ToHexString(hash) + (shared ? "" : ":private");
+        var reusable = shared && library is not null && PreStartVoiceCatalog.IsReusable(text);
         var durableId = PreStartVoiceCatalog.Identity(configuration, provider, text);
         var gate = Gates[hash[0] % Gates.Length];
         await gate.WaitAsync(cancellationToken);

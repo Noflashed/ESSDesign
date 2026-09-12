@@ -90,6 +90,30 @@ public sealed class PreStartVoiceLibraryTests
         await Speech(Config(),handler,store).GenerateAsync("Which permit did Alex use at Building B?",default,"elevenlabs");
         Assert.Empty(store.Items); Assert.Equal(0,store.Reads);
     }
+    [Theory]
+    [InlineData("I’ll change issues from the previous day to:")]
+    [InlineData("I’ll add this to planned activities:")]
+    [InlineData("I’ll record this for hazardous substances:")]
+    [InlineData("Is that okay? Are you happy for me to make that change?")]
+    public async Task ConfirmationFragmentsAreStoredOnceAndReusedAcrossCredentials(string text)
+    {
+        var store = new Store(); var handler = new Handler();
+        await Speech(Config(), handler, store).GenerateAsync(text, default, "elevenlabs");
+        await Speech(Config(), handler, store).GenerateAsync(text, default, "elevenlabs");
+        Assert.Single(store.Items); Assert.Equal(1, handler.Calls);
+    }
+    [Fact]
+    public async Task PrivateProposalPartsNeverEnterSharedStorageEvenIfTextMatchesTheCatalog()
+    {
+        var store = new Store(); var handler = new Handler(); var config = Config();
+        var speech = Speech(config, handler, store);
+        const string text = "What work is planned today?";
+        await speech.GenerateAsync(text, default, "elevenlabs", shared: false);
+        await speech.GenerateAsync(text, default, "elevenlabs", shared: false);
+        Assert.Equal(1, handler.Calls); Assert.Empty(store.Items); Assert.Equal(0, store.Reads);
+        await speech.GenerateAsync(text, default, "elevenlabs", shared: true);
+        Assert.Single(store.Items); // Private cache entries cannot bypass the shared write path.
+    }
     [Fact]
     public async Task CancellingPlaybackDoesNotDiscardAlreadyGeneratedSharedAudio()
     {

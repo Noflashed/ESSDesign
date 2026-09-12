@@ -6,6 +6,7 @@ public sealed class PreStartAnswerRequest
 {
     public string Message { get; set; } = "";
     public PreStartHistoryContext? Context { get; set; }
+    public string? Contract { get; set; }
 }
 
 public sealed record PreStartHistoryMessage(string Role, string Content, string Field);
@@ -16,6 +17,7 @@ public sealed class PreStartHistoryContext
     public Dictionary<string, string> Answers { get; set; } = new();
     public string Question { get; set; } = "";
     public PreStartHistoryEdit? Edit { get; set; }
+    public Dictionary<string, string>? Pending { get; set; }
 
     private static readonly HashSet<string> Fields = ["previousIssues", "previousIssuesDetails", "plannedActivities", "swmsInPlace", "permitDetails", "permitConditionsChanged", "hazardousSubstances", "hazardousSubstancesDetails", "areaForeman", "risks", "checklist.dailyRiskAssessment", "checklist.qualifications", "checklist.plantAndEquipment", "checklist.equipmentSafe", "checklist.workAreaSafe", "checklist.ppe", "checklist.weather", "checklist.consulted", "workGroupCount", "cleanupWorkerCount", "generalNotes", "attendees"];
 
@@ -23,7 +25,8 @@ public sealed class PreStartHistoryContext
     {
         if (History is null || History.Count > 12 || Answers is null || Answers.Count > Fields.Count || Question is null || Question.Length > 600 ||
             History.Any(m => m is null || m.Role is not ("user" or "assistant") || m.Content is null || m.Content.Length > 1000 || !Fields.Contains(m.Field)) ||
-            Answers.Any(p => !Fields.Contains(p.Key) || p.Value is null || p.Value.Length > 1800) ||
+            Answers.Any(p => !Fields.Contains(p.Key) || p.Value is null || p.Value.Length > 4000) ||
+            Pending is not null && (Pending.Count > 4 || Pending.Any(p => !Fields.Contains(p.Key) || p.Value is null || p.Value.Length > 4000)) ||
             Edit is not null && (!Fields.Contains(Edit.Key) || Edit.Mode is not ("append" or "replace")))
             throw new ArgumentException("Invalid pre-start conversation context.");
     }

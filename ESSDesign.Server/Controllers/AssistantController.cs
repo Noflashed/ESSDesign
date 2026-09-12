@@ -106,8 +106,8 @@ public sealed class AssistantController : ControllerBase
             return StatusCode(429, new { error = "Too many assistant requests. Please wait a moment." });
         try
         {
-            var reply = await answers.InterpretAsync(request.Message, cancellationToken, request.Context);
-            return Ok(new { reply, links = Array.Empty<string>() });
+            var reply = await answers.InterpretAsync(request.Message, cancellationToken, request.Context, request.Contract);
+            return Ok(new { reply, links = Array.Empty<string>(), contract = request.Contract });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return new EmptyResult(); }
         catch (ArgumentException) { return BadRequest(new { error = "Invalid pre-start conversation context." }); }
