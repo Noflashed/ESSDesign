@@ -13,6 +13,8 @@ public sealed class PreStartAnswerTests
         public int Calls;
         public string Finish = "stop";
         public string Reply = "VALUE: Erect scaffolding.";
+        public int ExpectedMessages = 2;
+        public JsonElement Payload;
         public HttpClient CreateClient(string name) => new(this, false);
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
@@ -20,12 +22,14 @@ public sealed class PreStartAnswerTests
             Calls++;
             Assert.Equal("https://api.openai.com/v1/chat/completions", request.RequestUri!.ToString());
             Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
-            var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token)).RootElement;
+            using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(token));
+            var body = json.RootElement;
+            Payload = body.Clone();
             Assert.Equal("gpt-4.1-mini", body.GetProperty("model").GetString());
             Assert.Equal(1000, body.GetProperty("max_completion_tokens").GetInt32());
             Assert.False(body.TryGetProperty("tools", out _));
             Assert.False(body.GetProperty("store").GetBoolean());
-            Assert.Equal(2, body.GetProperty("messages").GetArrayLength());
+            Assert.Equal(ExpectedMessages, body.GetProperty("messages").GetArrayLength());
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { choices = new[] { new { finish_reason = Finish, message = new { content = Reply } } } }) };
         }
     }
@@ -56,6 +60,42 @@ public sealed class PreStartAnswerTests
         await Assert.ThrowsAsync<ArgumentException>(() => Service(handler).InterpretAsync(new string('x', 4001), default));
         using var source = new CancellationTokenSource(); source.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Service(handler).InterpretAsync("Question", source.Token));
+        Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task ContextIsSuppliedWithoutChangingTheExistingResponseOrModel()
+    {
+        var handler = new Handler { ExpectedMessages = 4 };
+        var context = new PreStartHistoryContext {
+            History = [new("assistant", "What work is planned today?", "plannedActivities"), new("user", "Erect scaffold", "plannedActivities")],
+            Answers = new() { ["plannedActivities"] = "Erect scaffold." },
+            Question = "Which permits apply?",
+            Edit = new("plannedActivities", "append")
+        };
+        Assert.Equal(handler.Reply, await Service(handler).InterpretAsync("Extract the additional scaffold work.", default, context));
+        Assert.Equal(1, handler.Calls);
+        var messages = handler.Payload.GetProperty("messages");
+        Assert.Contains("extract ONLY the new information", messages[1].GetProperty("content").GetString());
+        Assert.Contains("Erect scaffold.", messages[2].GetProperty("content").GetString());
+        Assert.Equal("Extract the additional scaffold work.", messages[3].GetProperty("content").GetString());
+    }
+    [Theory]
+    [InlineData("system", "plannedActivities", "append")]
+    [InlineData("user", "signatures", "append")]
+    [InlineData("user", "plannedActivities", "execute")]
+    public async Task InvalidContextIsRejectedBeforeCallingTheProvider(string role, string field, string mode)
+    {
+        var handler = new Handler();
+        var context = new PreStartHistoryContext { History = [new(role, "Content", field)], Edit = new("plannedActivities", mode) };
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(handler).InterpretAsync("Question", default, context));
+        Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task ExcessHistoryAndProtectedSnapshotFieldsAreRejected()
+    {
+        var handler = new Handler();
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(handler).InterpretAsync("Question", default, new() { History = Enumerable.Repeat(new PreStartHistoryMessage("user", "Hello", "plannedActivities"), 13).ToList() }));
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(handler).InterpretAsync("Question", default, new() { Answers = new() { ["signatures"] = "Signed" } }));
         Assert.Equal(0, handler.Calls);
     }
     [Fact]

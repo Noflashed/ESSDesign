@@ -50,7 +50,8 @@ public sealed class PreStartSpeechService(
             var result = provider == "elevenlabs"
                 ? await GenerateElevenLabs(text, cancellationToken)
                 : await GenerateUncached(text, key, model, cancellationToken);
-            if (reusable && result.UsesAiVoice) await library!.WriteAsync(durableId, result, cancellationToken);
+            // Keep an already-generated shared line even if playback was cancelled during the upload.
+            if (reusable && result.UsesAiVoice) await library!.WriteAsync(durableId, result, CancellationToken.None);
             if (result.UsesAiVoice)
                 Cache.Set(cacheKey, result, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1) });
             return result;

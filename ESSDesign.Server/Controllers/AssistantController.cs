@@ -90,8 +90,9 @@ public sealed class AssistantController : ControllerBase
     }
 
     [HttpPost("/api/pre-start/assistant-answer")]
+    [RequestSizeLimit(256_000)]
     public async Task<IActionResult> PreStartAnswer(
-        [FromBody] EssAssistantChatRequest request,
+        [FromBody] PreStartAnswerRequest request,
         [FromServices] PreStartAnswerService answers,
         CancellationToken cancellationToken)
     {
@@ -105,10 +106,11 @@ public sealed class AssistantController : ControllerBase
             return StatusCode(429, new { error = "Too many assistant requests. Please wait a moment." });
         try
         {
-            var reply = await answers.InterpretAsync(request.Message, cancellationToken);
+            var reply = await answers.InterpretAsync(request.Message, cancellationToken, request.Context);
             return Ok(new { reply, links = Array.Empty<string>() });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return new EmptyResult(); }
+        catch (ArgumentException) { return BadRequest(new { error = "Invalid pre-start conversation context." }); }
         catch (InvalidOperationException) { return StatusCode(503, new { error = "Form AI is not configured." }); }
         catch (Exception ex)
         {

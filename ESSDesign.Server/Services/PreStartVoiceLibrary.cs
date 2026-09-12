@@ -23,10 +23,16 @@ public static class PreStartVoiceCatalog
     {
         text = Normalise(text);
         if (Texts.Contains(text)) return true;
+        const string cancelled = "No problem, let’s return to the form. ";
+        if (text.StartsWith(cancelled, StringComparison.Ordinal)) return Texts.Contains(text[cancelled.Length..]);
         const string intro = @"(?:No worries|Thanks for clarifying|Got it|Of course), I’ve ";
-        const string change = @"(?:changed the foreman to [\p{L}\p{M} .’'\-]{1,100}|changed the (?:work group|clean-up worker) count to [0-9]{1,3}|marked no issues from the previous day|marked no hazardous substances|changed that answer to (?:yes|no|not confirmed)|updated the (?:planned activities|previous day’s issue details|permit details|substance details|risks and actions|general notes|attendance list|answer on the form))\.";
+        const string change = @"(?:changed the foreman to [\p{L}\p{M} .’'\-]{1,100}|changed the (?:work group|clean-up worker) count to [0-9]{1,3}|marked no issues from the previous day|marked no hazardous substances|changed that answer to (?:yes|no|not confirmed)|(?:updated the|added that to the) (?:planned activities|previous day’s issue details|permit details|substance details|risks and actions|general notes|attendance list|answer on the form|area foreman|work group count|clean-up worker count))\.";
         var match = Regex.Match(text, "^" + intro + change + " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        return match.Success && Texts.Contains(text[match.Length..]);
+        if (!match.Success) return false;
+        var question = text[match.Length..];
+        var warning = Normalise("Stop and develop a SWMS before starting any activity without one. ");
+        if (question.StartsWith(warning + " ", StringComparison.Ordinal)) question = question[(warning.Length + 1)..];
+        return Texts.Contains(question);
     }
 
     // Identity includes every synthesis setting, but never credentials: rotating a key keeps usable audio.

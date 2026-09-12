@@ -20,8 +20,9 @@ public sealed class PreStartVoiceLibraryTests
     {
         public Dictionary<string, PreStartSpeechService.SpeechResult> Items = new();
         public int Reads;
+        public Action? OnWrite;
         public Task<PreStartSpeechService.SpeechResult?> ReadAsync(string id, CancellationToken token) { Reads++; return Task.FromResult(Items.GetValueOrDefault(id)); }
-        public Task<bool> WriteAsync(string id, PreStartSpeechService.SpeechResult audio, CancellationToken token) { Items[id] = audio; return Task.FromResult(true); }
+        public Task<bool> WriteAsync(string id, PreStartSpeechService.SpeechResult audio, CancellationToken token) { OnWrite?.Invoke(); token.ThrowIfCancellationRequested(); Items[id] = audio; return Task.FromResult(true); }
     }
     private static IConfiguration Config(string? key = null, string voice = "voice") => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> {
         ["ElevenLabs:ApiKey"] = key ?? Guid.NewGuid().ToString(), ["ElevenLabs:VoiceId"] = voice
@@ -44,6 +45,11 @@ public sealed class PreStartVoiceLibraryTests
     [InlineData("No worries, I’ve changed the foreman to James Smith. What are the work area risks and agreed actions?")]
     [InlineData("Got it, I’ve updated the permit details. Have conditions changed since permit approval?")]
     [InlineData("Of course, I’ve marked no issues from the previous day. What work is planned today?")]
+    [InlineData("No worries, I’ve updated the area foreman. What are the work area risks and agreed actions?")]
+    [InlineData("Got it, I’ve added that to the planned activities. Which permits apply? Give their numbers and descriptions, or say none.")]
+    [InlineData("Of course, I’ve updated the work group count. How many workers are assigned to clean-up?")]
+    [InlineData("No worries, I’ve changed that answer to no. Stop and develop a SWMS before starting any activity without one. What work is planned today?")]
+    [InlineData("No problem, let’s return to the form. What work is planned today?")]
     public async Task CorrectionsAreSharedDurablyWithoutAnotherVoiceCall(string text)
     {
         var store = new Store(); var handler = new Handler();
@@ -55,12 +61,19 @@ public sealed class PreStartVoiceLibraryTests
     [Theory]
     [InlineData("No worries, I’ve changed the foreman to James Smith. What happened at the private site?")]
     [InlineData("No worries, I’ve updated the incident report for Alex. What work is planned today?")]
+    [InlineData("Got it, I’ve added that to the planned activities. Which permit did Alex mention?")]
+    [InlineData("No problem, let’s return to the form. Was permit 123 for Building B?")]
     public void NonstandardCorrectionBodiesAreNotAddedToSharedLibrary(string text) => Assert.False(PreStartVoiceCatalog.IsReusable(text));
 
     [Theory]
     [InlineData("Were you referring to issues from the previous day?")]
     [InlineData("Just checking, is that about permit details?")]
     [InlineData("Which part of the form were you referring to?")]
+    [InlineData("Which answer would you like to change?")]
+    [InlineData("What would you like to add to that answer?")]
+    [InlineData("What should that answer say instead?")]
+    [InlineData("Which risk or action would you like to change, and what should it say?")]
+    [InlineData("The form has changed. Please tell me that update again.")]
     public async Task RevisitClarificationsArePersistedAndReplayed(string text)
     {
         var store = new Store(); var handler = new Handler();
@@ -76,6 +89,17 @@ public sealed class PreStartVoiceLibraryTests
         var store=new Store(); var handler=new Handler();
         await Speech(Config(),handler,store).GenerateAsync("Which permit did Alex use at Building B?",default,"elevenlabs");
         Assert.Empty(store.Items); Assert.Equal(0,store.Reads);
+    }
+    [Fact]
+    public async Task CancellingPlaybackDoesNotDiscardAlreadyGeneratedSharedAudio()
+    {
+        using var playback = new CancellationTokenSource();
+        var store = new Store { OnWrite = () => playback.Cancel() }; var handler = new Handler();
+        var text = "What would you like to add to that answer?";
+        Assert.True((await Speech(Config(), handler, store).GenerateAsync(text, playback.Token, "elevenlabs")).UsesAiVoice);
+        Assert.Single(store.Items);
+        await Speech(Config(), handler, store).GenerateAsync(text, default, "elevenlabs");
+        Assert.Equal(1, handler.Calls);
     }
     [Fact]
     public void ProviderAndSpeedVersionCannotShareAnAudioIdentity()
