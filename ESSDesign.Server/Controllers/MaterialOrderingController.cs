@@ -45,7 +45,6 @@ namespace ESSDesign.Server.Controllers
 
         public sealed class AssistantSpeechRequest
         {
-            public bool CacheOnly { get; set; }
             public string? Provider { get; set; }
             public string Text { get; set; } = string.Empty;
         }
@@ -261,7 +260,7 @@ namespace ESSDesign.Server.Controllers
             var provider = request.Provider ?? "deepgram";
             if (provider is not ("deepgram" or "elevenlabs"))
                 return BadRequest(new { error = "Choose Deepgram or ElevenLabs." });
-            return Ok(await speech.GenerateAsync(request.Text, cancellationToken, provider, request.CacheOnly));
+            return Ok(await speech.GenerateAsync(request.Text, cancellationToken, provider));
         }
 
         private async Task<UserInfo?> GetCurrentUserAsync()
