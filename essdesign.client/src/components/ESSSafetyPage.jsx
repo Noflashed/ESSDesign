@@ -906,6 +906,26 @@ export default function ESSSafetyPage() {
         }
     };
 
+    const statusHeader = (
+        <TableHeaderFilter
+            label={sharingReplacesStatus ? "Form Shared" : "Status"}
+            active={statusFilter !== 'all'}
+            open={columnFilterMenu === 'status'}
+            onToggle={() => toggleColumnFilterMenu('status')}
+        >
+            <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
+                setStatusFilter('all');
+                setColumnFilterMenu('');
+            }}>All statuses</button>
+            {statusOptions.map(status => (
+                <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
+                    setStatusFilter(status);
+                    setColumnFilterMenu('');
+                }}>{status}</button>
+            ))}
+        </TableHeaderFilter>
+    );
+
     if (loading) {
         return <div className="module-page"><div className="page-loading-brandmark"><LoadingBrandmark label="Loading project data" /></div></div>;
     }
@@ -970,31 +990,12 @@ export default function ESSSafetyPage() {
 
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
-                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : ''}`}>
+                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : sharingReplacesStatus ? ' sharing-only' : ''}`}>
                             <div className="project-data-table-head">
                                 <span className="project-data-checkbox" aria-hidden="true" />
                                 <span>Document name</span>
                                 <span>{activeTab.refLabel}</span>
-                                <span>
-                                    <TableHeaderFilter
-                                        label={sharingReplacesStatus ? "Form Shared" : "Status"}
-                                        active={statusFilter !== 'all'}
-                                        open={columnFilterMenu === 'status'}
-                                        onToggle={() => toggleColumnFilterMenu('status')}
-                                    >
-                                        <button type="button" className={statusFilter === 'all' ? 'selected' : ''} onClick={() => {
-                                            setStatusFilter('all');
-                                            setColumnFilterMenu('');
-                                        }}>All statuses</button>
-                                        {statusOptions.map(status => (
-                                            <button type="button" key={status} className={statusFilter === status ? 'selected' : ''} onClick={() => {
-                                                setStatusFilter(status);
-                                                setColumnFilterMenu('');
-                                            }}>{status}</button>
-                                        ))}
-                                    </TableHeaderFilter>
-                                </span>
-                                {hasSeparateSharing && <span>Form Shared</span>}
+                                {!sharingReplacesStatus && <span>{statusHeader}</span>}
                                 <span>Uploaded</span>
                                 <span>
                                     <TableHeaderFilter
@@ -1016,6 +1017,8 @@ export default function ESSSafetyPage() {
                                     </TableHeaderFilter>
                                 </span>
                                 <span />
+                                {hasSeparateSharing && <span className="project-data-sharing-cell">Form Shared</span>}
+                                {sharingReplacesStatus && <span className="project-data-sharing-cell">{statusHeader}</span>}
                             </div>
 
                             {documentsLoading ? (
@@ -1059,8 +1062,7 @@ export default function ESSSafetyPage() {
                                                 <span title={document.name}>{document.name}</span>
                                             </span>
                                             <span>{document.ref}</span>
-                                            <span>{sharingReplacesStatus ? <FormSharedCheckbox form={document.raw} /> : <StatusChip status={document.status} />}</span>
-                                            {hasSeparateSharing && <span><FormSharedCheckbox form={document.raw} /></span>}
+                                            {!sharingReplacesStatus && <span><StatusChip status={document.status} /></span>}
                                             <span>{formatDate(document.uploadedAt)}</span>
                                             <span>{document.uploadedBy}</span>
                                             <span
@@ -1077,6 +1079,7 @@ export default function ESSSafetyPage() {
                                             >
                                                 <MoreVertical size={17} />
                                             </span>
+                                            {(hasSeparateSharing || sharingReplacesStatus) && <span className="project-data-sharing-cell"><FormSharedCheckbox form={document.raw} /></span>}
                                         </button>
                                     ))}
                                 </div>

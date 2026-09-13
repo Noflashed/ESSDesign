@@ -43,6 +43,7 @@ try {
   assert.equal(await page.getByRole('checkbox',{name:'Form Shared',checked:false}).count(),1);
   for(const check of await checks.all()) assert.equal(await check.getAttribute('aria-disabled'),'true');
   assert.equal(await page.getByRole('columnheader',{name:'FORM SHARED',exact:true}).count(),1);
+  assert.equal(await page.locator('thead th').last().innerText(),'FORM SHARED');
   const lifecycle=['handovers','scaff-tags'].includes(type);
   assert.equal(await page.getByRole('columnheader',{name:'STATUS',exact:true}).count(),lifecycle?1:0);
   assert.equal(await page.getByText('Completed',{exact:true}).count(),0);
@@ -78,6 +79,15 @@ try {
   const checks=page.getByRole('checkbox',{name:'Form Shared',exact:true});
   await checks.first().waitFor();
   assert.equal(await checks.count(),3,'Project Data exposes all sharing indicators');
+  assert.equal(await page.locator('.project-data-table-head > span').last().innerText(),'Form Shared');
+  for (const row of await page.locator('.project-data-table-row').all()) {
+   const lastCell = row.locator(':scope > span').last();
+   assert.equal(await lastCell.getByRole('checkbox',{name:'Form Shared'}).count(),1);
+   const cells = await row.locator(':scope > span').evaluateAll(cells => cells.map(cell => {const r=cell.getBoundingClientRect();return {x:r.x,right:r.right};}));
+   assert.ok(cells.slice(0,-1).every(cell => cell.right <= cells.at(-1).x),'Sharing is visually the far-right column');
+  }
+  const checked = page.getByRole('checkbox',{name:'Form Shared',checked:true}).first();
+  assert.equal(await checked.evaluate(el => getComputedStyle(el).backgroundColor),'rgb(107, 114, 128)');
   if (process.env.TEST_SCREENSHOTS === "1") await page.screenshot({path:'/tmp/ess-form-shared-project-data-'+type.replaceAll('/','-')+'.png'});
  }
  assert.deepEqual(writes,[],'Viewing and filtering automatic checkboxes never writes form state');

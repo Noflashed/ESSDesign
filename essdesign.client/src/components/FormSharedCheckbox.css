@@ -5,10 +5,14 @@
     box-sizing: border-box;
     align-items: center;
     justify-content: center;
-    border: 1.5px solid #94a3b8;
+    border: 1px solid #9ca3af;
     border-radius: 4px;
     vertical-align: middle;
-    background: #fff;
+    background: var(--card-bg, #fff);
     color: #fff;
 }
-.form-shared-checkbox.is-checked { border-color: #047857; background: #047857; }
+.form-shared-checkbox.is-checked {
+    border-color: #6b7280;
+    background: #6b7280;
+}
+.form-shared-checkbox svg { flex-shrink: 0; }

@@ -25334,7 +25334,15 @@ button.stat-card {
 
 .project-data-table-card.has-form-sharing .project-data-table-head,
 .project-data-table-card.has-form-sharing .project-data-table-row {
-    grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(90px, .58fr) 90px minmax(100px, .66fr) minmax(110px, .72fr) 28px;
+    grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(90px, .58fr) minmax(100px, .66fr) minmax(110px, .72fr) 28px 100px;
     min-width: 950px;
 }
 .project-data-table-card.has-form-sharing { overflow-x: auto; }
+
+.project-data-table-card.sharing-only .project-data-table-head,
+.project-data-table-card.sharing-only .project-data-table-row {
+    grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(100px, .66fr) minmax(110px, .72fr) 28px 100px;
+    min-width: 850px;
+}
+.project-data-table-card.sharing-only { overflow-x: auto; }
+.project-data-sharing-cell { text-align: center; }
