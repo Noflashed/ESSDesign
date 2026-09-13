@@ -3,14 +3,12 @@ import {getScaffTagStatus} from '../utils/scaffTagStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle,
-    Building2,
     CheckCircle,
     ChevronDown,
     ClipboardCheck,
     ExternalLink,
     FileCheck,
     FileText,
-    HardHat,
     MoreVertical,
     Shield,
     Tag,
@@ -20,6 +18,7 @@ import {
 } from 'lucide-react';
 import { preStartsAPI, dayLabourVariationsAPI, handoverCertificatesAPI, scaffTagsAPI, safetyFilesAPI, safetyProjectsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
+import {RegisterDropdown} from './ScaffoldRegisterPage';
 import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope, matchesProjectScope} from '../utils/projectDataScope';
 
 const PROJECT_DATA_TABS = [
@@ -235,91 +234,18 @@ function StatusChip({ status }) {
     );
 }
 
-function BuilderLogo({ builder, logoUrl }) {
-    if (logoUrl) {
-        return <img src={logoUrl} alt="" className="project-data-builder-logo" />;
-    }
-
-    return (
-        <span className="project-data-builder-logo fallback" aria-hidden="true">
-            <Building2 size={17} />
-        </span>
-    );
+function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, onOpenChange, onSelect, dropdownRef }) {
+    return <RegisterDropdown label="Builder" selectedItem={selectedBuilder} items={builders}
+        getLabel={builder => builder.name} getLogoUrl={builder => logoUrls[builder.id] || builder.logoUrl || ''}
+        open={open} onOpenChange={next => {if (next) onToggle(); else onOpenChange(false);}} dropdownRef={dropdownRef}
+        onSelect={builder => onSelect(builder.id)} emptyText="No builders yet" />;
 }
 
-function BuilderDropdown({ builders, selectedBuilder, logoUrls, open, onToggle, onSelect, dropdownRef }) {
-    return (
-        <div className="project-data-builder-dropdown" ref={dropdownRef}>
-            <button
-                type="button"
-                className="project-data-select-shell project-data-builder-trigger"
-                onClick={onToggle}
-                aria-haspopup="listbox"
-                aria-expanded={open}
-            >
-                <BuilderLogo builder={selectedBuilder} logoUrl={selectedBuilder ? logoUrls[selectedBuilder.id] : ''} />
-                <span>{selectedBuilder?.name || 'No builders yet'}</span>
-                <ChevronDown size={18} />
-            </button>
-            {open ? (
-                <div className="project-data-builder-menu" role="listbox" aria-label="Builder">
-                    {builders.length === 0 ? (
-                        <div className="project-data-builder-option empty">No builders yet</div>
-                    ) : builders.map(builder => (
-                        <button
-                            key={builder.id}
-                            type="button"
-                            className={`project-data-builder-option${builder.id === selectedBuilder?.id ? ' selected' : ''}`}
-                            onClick={() => onSelect(builder.id)}
-                            role="option"
-                            aria-selected={builder.id === selectedBuilder?.id}
-                        >
-                            <BuilderLogo builder={builder} logoUrl={logoUrls[builder.id]} />
-                            <span>{builder.name}</span>
-                        </button>
-                    ))}
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function ProjectDropdown({ projects, selectedProject, open, onToggle, onSelect, disabled, dropdownRef }) {
-    return (
-        <div className="project-data-project-dropdown" ref={dropdownRef}>
-            <button
-                type="button"
-                className="project-data-select-shell project-data-project-trigger"
-                onClick={onToggle}
-                aria-haspopup="listbox"
-                aria-expanded={open}
-                disabled={disabled}
-            >
-                <HardHat size={19} />
-                <span>{selectedProject?.name || (disabled ? 'Select builder first' : 'No active projects')}</span>
-                <ChevronDown size={18} />
-            </button>
-            {open ? (
-                <div className="project-data-project-menu" role="listbox" aria-label="Project">
-                    {projects.length === 0 ? (
-                        <div className="project-data-project-option empty">No active projects</div>
-                    ) : projects.map(project => (
-                        <button
-                            key={project.id}
-                            type="button"
-                            className={`project-data-project-option${project.id === selectedProject?.id ? ' selected' : ''}`}
-                            onClick={() => onSelect(project.id)}
-                            role="option"
-                            aria-selected={project.id === selectedProject?.id}
-                        >
-                            <HardHat size={17} />
-                            <span>{project.name}</span>
-                        </button>
-                    ))}
-                </div>
-            ) : null}
-        </div>
-    );
+function ProjectDropdown({ projects, selectedProject, open, onToggle, onOpenChange, onSelect, disabled, dropdownRef }) {
+    return <RegisterDropdown label="Project" selectedItem={selectedProject} items={projects}
+        getLabel={project => project.name} showLogo={false}
+        open={open} onOpenChange={next => {if (next) onToggle(); else onOpenChange(false);}} dropdownRef={dropdownRef}
+        onSelect={project => onSelect(project.id)} disabled={disabled} emptyText="No active projects" />;
 }
 
 function DataTypeDropdown({ tabs, activeTab, open, onToggle, onSelect, dropdownRef }) {
@@ -994,6 +920,7 @@ export default function ESSSafetyPage() {
                             selectedBuilder={selectedBuilder}
                             logoUrls={builderLogoUrls}
                             open={builderDropdownOpen}
+                            onOpenChange={setBuilderDropdownOpen}
                             onToggle={() => {
                                 setBuilderDropdownOpen(prev => !prev);
                                 setProjectDropdownOpen(false);
@@ -1009,6 +936,7 @@ export default function ESSSafetyPage() {
                             projects={projectOptions}
                             selectedProject={selectedProject}
                             open={projectDropdownOpen}
+                            onOpenChange={setProjectDropdownOpen}
                             onToggle={() => {
                                 if (!selectedBuilder) return;
                                 setProjectDropdownOpen(prev => !prev);

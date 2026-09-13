@@ -91,9 +91,16 @@ function BuilderLogo({ src, name }) {
     );
 }
 
-export function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, showLogo = true, onSelect, disabled, emptyText }) {
-    const [open, setOpen] = useState(false);
-    const rootRef = useRef(null);
+export function RegisterDropdown({ label, selectedItem, items, getLabel, getLogoUrl, getLogoName = getLabel, showLogo = true, onSelect, disabled, emptyText, open: controlledOpen, onOpenChange, dropdownRef }) {
+    const [localOpen, setLocalOpen] = useState(false);
+    const open = controlledOpen ?? localOpen;
+    const setOpen = value => {
+        const next = typeof value === 'function' ? value(open) : value;
+        if (onOpenChange) onOpenChange(next);
+        else setLocalOpen(next);
+    };
+    const localRef = useRef(null);
+    const rootRef = dropdownRef || localRef;
     const menuId = `scaffold-register-${label.toLowerCase()}-options`;
     const selectedLabel = selectedItem ? getLabel(selectedItem) : `Select ${label.toLowerCase()}`;
 
