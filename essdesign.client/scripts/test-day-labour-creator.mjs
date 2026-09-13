@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-import {getProjectDataStatus} from '../src/utils/projectDataStatus.js';
+import {getProjectDataStatus, getFormSharingStatus} from '../src/utils/projectDataStatus.js';
 import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const apiSource = await readFile(new URL('../src/services/api.js', import.meta.url), 'utf8');
@@ -16,7 +16,7 @@ const records = [original, {...original,id:'missing',created_by_user_id:null},
     {...original,id:'email',created_by_user_id:'email-account'}];
 let lookupCalls = 0;
 const context = vm.createContext({
-    getProjectDataStatus,
+    getProjectDataStatus, getFormSharingStatus,
     getScaffTagStatus,
     handoverCertificatesAPI:{}, preStartsAPI:{}, scaffTagsAPI:{},
     safetyModulePrefix: () => 'test', safetyFormPhotoPaths: () => [], nowIso: () => 'now',

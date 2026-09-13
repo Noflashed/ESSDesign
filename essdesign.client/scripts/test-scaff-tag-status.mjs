@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-import {getProjectDataStatus} from '../src/utils/projectDataStatus.js';
+import {getProjectDataStatus, getFormSharingStatus} from '../src/utils/projectDataStatus.js';
 import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const register = await readFile(new URL('../src/components/ProjectDataRegisterPage.jsx', import.meta.url), 'utf8');
 const projectData = await readFile(new URL('../src/components/ESSSafetyPage.jsx', import.meta.url), 'utf8');
-const context = vm.createContext({getProjectDataStatus, getScaffTagStatus, makeFileRef: () => 'TAG'});
+const context = vm.createContext({getProjectDataStatus, getFormSharingStatus, getScaffTagStatus, makeFileRef: () => 'TAG'});
 vm.runInContext(register.slice(register.indexOf('const parseDate ='), register.indexOf('function StatusBadge('))
     + projectData.slice(projectData.indexOf('function mapScaffTagRows('), projectData.indexOf('function mapHandoverRows('))
     + '\nglobalThis.mapRegisterRows = mapRows;', context);
@@ -19,6 +19,8 @@ for (const [fields, expected] of [
     [{retiredAt:'2026-09-14'},'Expired'],
     [{status:'dismantled'},'Expired'],
     [{dismantledAt:'2026-09-14'},'Expired'],
+    [{scaffoldStatus:'Dismantled',completedAt:'2026-09-14'},'Expired'],
+    [{scaffoldStatus:'Active',completedAt:'2026-09-14'},'Active'],
     [{isDeleted:true,status:'retired'},'Deleted'],
 ]) {
     const form = {...base,...fields};

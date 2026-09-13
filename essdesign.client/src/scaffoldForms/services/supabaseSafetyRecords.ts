@@ -186,8 +186,8 @@ export async function getSafetyForm<T extends object>(
   return rows[0] ? mapSafetyForm<T>(rows[0]) : null;
 }
 
-/** Completion records a share-button press, not delivery confirmation. */
-export async function markSafetyFormCompleted(
+/** Tracks the share action. The legacy completedAt key preserves existing sharing history. */
+export async function markSafetyFormShared(
   formType: SafetyFormType,
   builderId: string,
   projectId: string,
@@ -202,7 +202,7 @@ export async function markSafetyFormCompleted(
     const read = await api.fetchSupabase(restUrl(SAFETY_FORMS_TABLE, query + '&select=payload,updated_at'), {
       method: 'GET', headers: await freshReadHeaders(),
     });
-    if (!read.ok) { throw await responseError(read, 'Loading completion status'); }
+    if (!read.ok) { throw await responseError(read, 'Loading sharing status'); }
     const [row] = await read.json() as SafetyFormRow[];
     if (!row) { throw new Error('This form is no longer available.'); }
     if (row.payload?.completedAt) { return; }
@@ -213,7 +213,7 @@ export async function markSafetyFormCompleted(
       headers: {...await authHeaders(true), Prefer: 'return=representation'},
       body: JSON.stringify({payload: {...row.payload, completedAt: now, completedByUserId: api.currentUser?.id ?? null}, updated_at: now}),
     });
-    if (!response.ok) { throw await responseError(response, 'Updating completion status'); }
+    if (!response.ok) { throw await responseError(response, 'Updating sharing status'); }
     if ((await response.json()).length) { return; }
   }
   throw new Error('The form changed while updating its status. Please try sharing again.');
@@ -226,7 +226,7 @@ export async function upsertSafetyForm<T extends object>(
   form: T & {id: string},
   metadata: SafetyFormMetadata,
 ): Promise<T> {
-  const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates'].includes(formType)
+  const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates', 'scaff-tags'].includes(formType)
     ? await getSafetyForm<{completedAt?: string; completedByUserId?: string}>(formType, builderId, projectId, form.id)
     : null;
   const payload = existing?.completedAt

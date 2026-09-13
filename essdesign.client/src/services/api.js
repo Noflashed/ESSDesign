@@ -1,3 +1,4 @@
+import {resolveScaffoldFormStatus} from '../scaffoldForms/utils/scaffoldFormStatus';
 import axios from 'axios';
 import { API_BASE_URL, API_ORIGIN_URL } from '../config/api';
 import { deleteScaffoldItem } from './scaffoldDeletion';
@@ -4650,7 +4651,7 @@ async function saveSafetyFormRecord(formType, builderId, projectId, form) {
     if (!id) {
         throw new Error('A form ID is required');
     }
-    const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates'].includes(formType)
+    const existing = ['pre-starts', 'day-labour-variations', 'handover-certificates', 'scaff-tags'].includes(formType)
         ? await getSafetyFormRecord(formType, builderId, projectId, id) : null;
     if (existing?.completedAt) form = {...form, completedAt: existing.completedAt, completedByUserId: existing.completedByUserId};
     const metadata = safetyFormMetadata(formType, form);
@@ -4715,9 +4716,14 @@ async function deleteSafetyFormRecord(formType, builderId, projectId, formId) {
 
 export const handoverCertificatesAPI = {
     listForms: async (builderId, projectId) => {
-        const forms = await listSafetyFormRecords('handover-certificates', builderId, projectId);
+        const [forms, records, tags] = await Promise.all([
+            listSafetyFormRecords('handover-certificates', builderId, projectId),
+            listSafetyFormRecords('scaffold-register', builderId, projectId),
+            listSafetyFormRecords('scaff-tags', builderId, projectId),
+        ]);
         return forms.map(form => ({
             ...form,
+            scaffoldStatus: resolveScaffoldFormStatus(form, records, tags),
             inspectionNumber: form.inspectionNumber || form.referenceNumber || '',
             formReferenceName: form.formReferenceName || form.title || '',
             essRepresentativeName: form.essRepresentativeName || form.requestedBy || '',
@@ -4727,9 +4733,14 @@ export const handoverCertificatesAPI = {
     },
 
     listAllForms: async ({ includeDeleted = false } = {}) => {
-        const forms = await listAllSafetyFormRecords('handover-certificates', { includeDeleted });
+        const [forms, records, tags] = await Promise.all([
+            listAllSafetyFormRecords('handover-certificates', { includeDeleted }),
+            listAllSafetyFormRecords('scaffold-register'),
+            listAllSafetyFormRecords('scaff-tags'),
+        ]);
         return forms.map(form => ({
             ...form,
+            scaffoldStatus: resolveScaffoldFormStatus(form, records, tags),
             inspectionNumber: form.inspectionNumber || form.referenceNumber || '',
             formReferenceName: form.formReferenceName || form.title || '',
             essRepresentativeName: form.essRepresentativeName || form.requestedBy || '',
@@ -4992,9 +5003,10 @@ export const dayLabourVariationsAPI = {
 
 export const scaffTagsAPI = {
     listForms: async (builderId, projectId) => {
-        const [forms, labels] = await Promise.all([
+        const [forms, labels, records] = await Promise.all([
             listSafetyFormRecords('scaff-tags', builderId, projectId),
             scaffTagQrLabelsAPI.list(),
+            listSafetyFormRecords('scaffold-register', builderId, projectId),
         ]);
         return forms.map(form => {
             const linkedLabels = labels.filter(candidate =>
@@ -5008,6 +5020,7 @@ export const scaffTagsAPI = {
                     .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))[0];
             return {
                 ...form,
+            scaffoldStatus: resolveScaffoldFormStatus(form, records),
                 status: form.status === 'retired' || form.retiredAt ? 'retired' : 'active',
                 retiredAt: form.retiredAt || '',
                 retiredReason: form.retiredReason || '',
@@ -5026,9 +5039,13 @@ export const scaffTagsAPI = {
     },
 
     listAllForms: async ({ includeDeleted = false } = {}) => {
-        const forms = await listAllSafetyFormRecords('scaff-tags', { includeDeleted });
+        const [forms, records] = await Promise.all([
+            listAllSafetyFormRecords('scaff-tags', { includeDeleted }),
+            listAllSafetyFormRecords('scaffold-register'),
+        ]);
         return forms.map(form => ({
             ...form,
+            scaffoldStatus: resolveScaffoldFormStatus(form, records),
             scaffoldNo: form.scaffoldNo || form.tagNumber || form.referenceNumber || '',
             jobLocation: form.jobLocation || form.projectLabel || '',
             latestInspectionDate: form.latestInspectionDate || form.eventDate || ''

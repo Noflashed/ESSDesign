@@ -1,4 +1,6 @@
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
+import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
 import {AppConstants} from '../utils/constants';
 import api from './apiService';
 import {deleteSafetyFormRecord, getSafetyForm, listSafetyForms, upsertSafetyForm} from './supabaseSafetyRecords';
@@ -36,6 +38,8 @@ export interface InspectionRecordEntry {
 }
 
 export interface ScaffTagForm {
+  completedAt?: string;
+  completedByUserId?: string;
   id: string;
   status?: 'active' | 'retired';
   retiredAt?: string;
@@ -79,6 +83,9 @@ export interface ScaffTagForm {
 }
 
 export interface ScaffTagListItem {
+  completedAt?: string;
+  completedByUserId?: string;
+  scaffoldStatus?: ScaffoldFormStatus;
   id: string;
   status: 'active' | 'retired';
   retiredAt: string;
@@ -725,13 +732,19 @@ async function buildRenderedScaffTagPdf(form: ScaffTagForm): Promise<string> {
 }
 
 export async function listScaffTagForms(builderId: string, projectId: string): Promise<ScaffTagListItem[]> {
-  const forms = await listSafetyForms<ScaffTagForm>('scaff-tags', builderId, projectId);
+  const [forms, records] = await Promise.all([
+    listSafetyForms<ScaffTagForm>('scaff-tags', builderId, projectId),
+    listSafetyForms<ScaffoldRegisterRecord>('scaffold-register', builderId, projectId),
+  ]);
   const labels = await listAssignedScaffTagQrLabels(builderId, projectId).catch(() => []);
   return forms.map(form => {
     const linkedLabels = labels.filter(candidate => candidate.assignedFormId === form.id);
     const label = linkedLabels.find(candidate => candidate.status === 'assigned') ?? linkedLabels[0];
     return {
       id: form.id,
+      completedAt: form.completedAt,
+      completedByUserId: form.completedByUserId,
+      scaffoldStatus: resolveScaffoldFormStatus(form, records),
       status: form.status === 'retired' || form.retiredAt ? 'retired' : 'active',
       retiredAt: form.retiredAt ?? '',
       retiredReason: form.retiredReason ?? '',
@@ -890,6 +903,8 @@ export async function saveScaffTagForm(
   const latestInspectionAt = latestInspectionRecord?.inspectedAt || existing?.latestInspectionAt || '';
   const baseForm: ScaffTagForm = {
     ...input,
+    completedAt: existing?.completedAt ?? input.completedAt,
+    completedByUserId: existing?.completedByUserId ?? input.completedByUserId,
     id: formId,
     status: existing?.status ?? input.status ?? 'active',
     retiredAt: existing?.retiredAt ?? input.retiredAt ?? '',

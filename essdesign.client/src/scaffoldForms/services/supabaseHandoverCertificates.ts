@@ -1,4 +1,6 @@
 // Derived from ESSApp/src/services/supabaseHandoverCertificates.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
+import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
+import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
 import {formatMetres} from '../utils/measurements';
 import {AppConstants} from '../utils/constants';
 import api from './apiService';
@@ -89,6 +91,7 @@ export interface HandoverCertificateForm {
 }
 
 export interface HandoverCertificateListItem {
+  scaffoldStatus?: ScaffoldFormStatus;
   completedAt?: string;
   completedByUserId?: string;
   id: string;
@@ -1047,12 +1050,13 @@ export async function listHandoverCertificateForms(
   builderId: string,
   projectId: string,
 ): Promise<HandoverCertificateListItem[]> {
-  const forms = await listSafetyForms<HandoverCertificateForm>(
-    'handover-certificates',
-    builderId,
-    projectId,
-  );
+  const [forms, records, tags] = await Promise.all([
+    listSafetyForms<HandoverCertificateForm>('handover-certificates', builderId, projectId),
+    listSafetyForms<ScaffoldRegisterRecord>('scaffold-register', builderId, projectId),
+    listSafetyForms<import('./supabaseScaffTags').ScaffTagForm>('scaff-tags', builderId, projectId),
+  ]);
   return forms.map(form => ({
+    scaffoldStatus: resolveScaffoldFormStatus(form, records, tags),
     completedAt: form.completedAt,
     completedByUserId: form.completedByUserId,
     id: form.id,

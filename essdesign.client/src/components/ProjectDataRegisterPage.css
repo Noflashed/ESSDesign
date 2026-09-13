@@ -841,14 +841,6 @@
 
 
 
-.project-data-register-table.type-scaff-tags th:nth-child(1) { width: 12%; }
-.project-data-register-table.type-scaff-tags th:nth-child(2) { width: 15%; }
-.project-data-register-table.type-scaff-tags th:nth-child(3) { width: 11%; }
-.project-data-register-table.type-scaff-tags th:nth-child(4) { width: 15%; }
-.project-data-register-table.type-scaff-tags th:nth-child(5) { width: 14%; }
-.project-data-register-table.type-scaff-tags th:nth-child(6) { width: 12%; }
-.project-data-register-table.type-scaff-tags th:nth-child(7) { width: 12%; }
-.project-data-register-table.type-scaff-tags th:nth-child(8) { width: 9%; }
 
 .project-register-status {
     display: inline-flex;
@@ -947,15 +939,8 @@
 .day-labour-context-menu button svg { flex-shrink: 0; }
 
 .project-register-status.active { background: #eff6ff; color: #2563eb; }
-.project-register-status.completed { background: #ecfdf5; color: #047857; }
+.project-register-status.dismantled { background: #eef2f7; color: #64748b; }
 
-.project-data-register-table.type-handovers th:nth-child(1) { width: 14%; }
-.project-data-register-table.type-handovers th:nth-child(2) { width: 17%; }
-.project-data-register-table.type-handovers th:nth-child(3) { width: 20%; }
-.project-data-register-table.type-handovers th:nth-child(4) { width: 12%; }
-.project-data-register-table.type-handovers th:nth-child(5) { width: 15%; }
-.project-data-register-table.type-handovers th:nth-child(6) { width: 13%; }
-.project-data-register-table.type-handovers th:nth-child(7) { width: 9%; }
 
 .project-data-register-table.type-day-labour th:nth-child(1) { width: 12%; }
 .project-data-register-table.type-day-labour th:nth-child(2) { width: 15%; }
@@ -974,3 +959,22 @@
 .project-data-register-table.type-pre-starts th:nth-child(6) { width: 12%; }
 .project-data-register-table.type-pre-starts th:nth-child(7) { width: 11%; }
 .project-data-register-table.type-pre-starts th:nth-child(8) { width: 10%; }
+
+.project-data-register-table.type-handovers th:nth-child(1) { width: 12%; }
+.project-data-register-table.type-handovers th:nth-child(2) { width: 13%; }
+.project-data-register-table.type-handovers th:nth-child(3) { width: 18%; }
+.project-data-register-table.type-handovers th:nth-child(4) { width: 11%; }
+.project-data-register-table.type-handovers th:nth-child(5) { width: 14%; }
+.project-data-register-table.type-handovers th:nth-child(6) { width: 12%; }
+.project-data-register-table.type-handovers th:nth-child(7) { width: 10%; }
+.project-data-register-table.type-handovers th:nth-child(8) { width: 10%; }
+
+.project-data-register-table.type-scaff-tags th:nth-child(1) { width: 10%; }
+.project-data-register-table.type-scaff-tags th:nth-child(2) { width: 12%; }
+.project-data-register-table.type-scaff-tags th:nth-child(3) { width: 11%; }
+.project-data-register-table.type-scaff-tags th:nth-child(4) { width: 12%; }
+.project-data-register-table.type-scaff-tags th:nth-child(5) { width: 13%; }
+.project-data-register-table.type-scaff-tags th:nth-child(6) { width: 11%; }
+.project-data-register-table.type-scaff-tags th:nth-child(7) { width: 11%; }
+.project-data-register-table.type-scaff-tags th:nth-child(8) { width: 10%; }
+.project-data-register-table.type-scaff-tags th:nth-child(9) { width: 10%; }

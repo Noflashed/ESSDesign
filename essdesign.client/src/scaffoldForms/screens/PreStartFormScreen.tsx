@@ -1,5 +1,5 @@
 // Derived from ESSApp/src/screens/PreStartFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
-import {markSafetyFormCompleted} from '../services/supabaseSafetyRecords';
+import {markSafetyFormShared} from '../services/supabaseSafetyRecords';
 import ProjectDataFormDemoModal from '../components/ProjectDataFormDemoModal';
 import {
   hideProjectDataWorkflowDemo,
@@ -593,7 +593,7 @@ export default function PreStartFormScreen({ navigation, route }: Props) {
         }}
       />
       <ProjectDataFormShareModal
-        onBeforeShare={() => markSafetyFormCompleted('pre-starts', route.params.builderId, route.params.projectId, form.id)}
+        onBeforeShare={() => markSafetyFormShared('pre-starts', route.params.builderId, route.params.projectId, form.id)}
         visible={showShare}
         theme={theme}
         title={form.subject || 'Daily Pre-Start'}

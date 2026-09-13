@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-import {getProjectDataStatus} from '../src/utils/projectDataStatus.js';
+import {getProjectDataStatus, getFormSharingStatus} from '../src/utils/projectDataStatus.js';
 import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const source = await readFile(new URL('../src/components/ProjectDataRegisterPage.jsx', import.meta.url), 'utf8');
-const context = vm.createContext({getProjectDataStatus, getScaffTagStatus});
+const context = vm.createContext({getProjectDataStatus, getFormSharingStatus, getScaffTagStatus});
 vm.runInContext(source.slice(source.indexOf('const parseDate ='), source.indexOf('function StatusBadge('))
     + '\nglobalThis.mapRegisterRows = mapRows;', context);
 const tag = {id:'existing-tag',builderId:'builder',projectId:'project',erectedBy:'Scaffold Builder',

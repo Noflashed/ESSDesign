@@ -1,3 +1,4 @@
+import FormSharedCheckbox from './FormSharedCheckbox';
 import {getProjectDataStatus} from '../utils/projectDataStatus';
 import {getScaffTagStatus} from '../utils/scaffTagStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -74,7 +75,7 @@ const PROJECT_DATA_TABS = [
 
 const STATUS_META = {
     Active: {icon: FileText, className: 'active'},
-    Completed: {icon: CheckCircle, className: 'completed'},
+    Dismantled: {icon: X, className: 'retired'},
     Current: { className: 'current', icon: CheckCircle },
     Retired: { className: 'retired', icon: X },
     Expired: { className: 'expired', icon: AlertTriangle },
@@ -315,7 +316,8 @@ function getPreviewDetails(doc, tab, builder, project) {
         ['Project', project?.name || '-'],
         ['Uploaded by', doc.uploadedBy || '-'],
         ['Date uploaded', formatDateTime(doc.uploadedAt)],
-        ['Status', doc.status || '-']
+        ...(['pre-starts', 'day-labour-variations'].includes(doc.kind) ? [] : [['Status', doc.status || '-']]),
+        ...(['pre-starts', 'day-labour-variations', 'handover-certificates', 'scaff-tags'].includes(doc.kind) ? [['Form Shared', <FormSharedCheckbox form={doc.raw} />]] : [])
     ];
 
     if (tab.key === 'scaff-tags') {
@@ -453,6 +455,8 @@ export default function ESSSafetyPage() {
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
     const [kindDropdownOpen, setKindDropdownOpen] = useState(false);
     const [activeTabKey, setActiveTabKey] = useState('scaff-tags');
+    const sharingReplacesStatus = ['pre-starts', 'day-labour-variations'].includes(activeTabKey);
+    const hasSeparateSharing = ['handover-certificates', 'scaff-tags'].includes(activeTabKey);
     const [columnFilterMenu, setColumnFilterMenu] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [uploadedByFilter, setUploadedByFilter] = useState('all');
@@ -714,7 +718,7 @@ export default function ESSSafetyPage() {
     }, [documents, statusFilter, uploadedByFilter]);
 
     const statusOptions = useMemo(
-        () => ['handover-certificates', 'day-labour-variations', 'pre-starts'].includes(activeTab.key) ? ['Active', 'Completed'] : [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        () => ['day-labour-variations', 'pre-starts'].includes(activeTab.key) ? ['Form Shared', 'Not Shared'] : activeTab.key === 'handover-certificates' ? ['Active', 'Dismantled'] : [...new Set(documents.map(document => document.status).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
         [documents, activeTab.key]
     );
 
@@ -966,14 +970,14 @@ export default function ESSSafetyPage() {
 
                 <section className="project-data-workspace">
                     <div className="project-data-main-panel">
-                        <div className="project-data-table-card">
+                        <div className={`project-data-table-card${hasSeparateSharing ? ' has-form-sharing' : ''}`}>
                             <div className="project-data-table-head">
                                 <span className="project-data-checkbox" aria-hidden="true" />
                                 <span>Document name</span>
                                 <span>{activeTab.refLabel}</span>
                                 <span>
                                     <TableHeaderFilter
-                                        label="Status"
+                                        label={sharingReplacesStatus ? "Form Shared" : "Status"}
                                         active={statusFilter !== 'all'}
                                         open={columnFilterMenu === 'status'}
                                         onToggle={() => toggleColumnFilterMenu('status')}
@@ -990,6 +994,7 @@ export default function ESSSafetyPage() {
                                         ))}
                                     </TableHeaderFilter>
                                 </span>
+                                {hasSeparateSharing && <span>Form Shared</span>}
                                 <span>Uploaded</span>
                                 <span>
                                     <TableHeaderFilter
@@ -1054,7 +1059,8 @@ export default function ESSSafetyPage() {
                                                 <span title={document.name}>{document.name}</span>
                                             </span>
                                             <span>{document.ref}</span>
-                                            <span><StatusChip status={document.status} /></span>
+                                            <span>{sharingReplacesStatus ? <FormSharedCheckbox form={document.raw} /> : <StatusChip status={document.status} />}</span>
+                                            {hasSeparateSharing && <span><FormSharedCheckbox form={document.raw} /></span>}
                                             <span>{formatDate(document.uploadedAt)}</span>
                                             <span>{document.uploadedBy}</span>
                                             <span

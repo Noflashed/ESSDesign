@@ -4,6 +4,7 @@ export const getScaffTagStatus = form => {
     if (form.isDeleted) return 'Deleted';
     return form.status === 'retired' || form.retiredAt
         || form.status === 'dismantled' || form.dismantledAt
+        || form.scaffoldStatus === 'Dismantled' || form.scaffoldStatus === 'Retired'
         ? 'Expired'
         : 'Active';
 };

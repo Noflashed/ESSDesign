@@ -157,21 +157,21 @@ export default function ProjectDataFormShareModal({
     currentSelection.internalRecipients,
     currentSelection.externalEmails,
   ).length;
-  const [recordingCompletion, setRecordingCompletion] = React.useState(false);
+  const [recordingSharing, setRecordingSharing] = React.useState(false);
   const actionInFlight = React.useRef(false);
-  const busy = sharing || emailingAttachment || recordingCompletion;
+  const busy = sharing || emailingAttachment || recordingSharing;
   const runShareAction = async (action: (selection: ProjectDataShareSelection) => void) => {
     if (actionInFlight.current || busy) { return; }
     actionInFlight.current = true;
-    setRecordingCompletion(true);
+    setRecordingSharing(true);
     try {
       await onBeforeShare?.();
       await action(currentSelection);
     } catch (error) {
-      Alert.alert('Could not update form status', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not update sharing status', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       actionInFlight.current = false;
-      setRecordingCompletion(false);
+      setRecordingSharing(false);
     }
   };
 

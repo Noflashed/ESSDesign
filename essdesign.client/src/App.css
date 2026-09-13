@@ -25331,3 +25331,10 @@ button.stat-card {
 
 .project-data-status.active { background: #eff6ff; color: #2563eb; }
 .project-data-status.completed { background: #ecfdf5; color: #047857; }
+
+.project-data-table-card.has-form-sharing .project-data-table-head,
+.project-data-table-card.has-form-sharing .project-data-table-row {
+    grid-template-columns: 28px minmax(180px, 1.55fr) minmax(100px, .75fr) minmax(90px, .58fr) 90px minmax(100px, .66fr) minmax(110px, .72fr) 28px;
+    min-width: 950px;
+}
+.project-data-table-card.has-form-sharing { overflow-x: auto; }

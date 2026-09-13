@@ -1,4 +1,5 @@
-import {getProjectDataStatus} from '../utils/projectDataStatus';
+import FormSharedCheckbox from './FormSharedCheckbox';
+import {getProjectDataStatus, getFormSharingStatus} from '../utils/projectDataStatus';
 import {getScaffTagStatus} from '../utils/scaffTagStatus';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
@@ -34,7 +35,8 @@ const REGISTER_CONFIG = {
             { key: 'reference', label: 'CERTIFICATE NO.' },
             { key: 'inspectionDate', label: 'INSPECTION DATE' },
             { key: 'representative', label: 'INSPECTED BY' },
-            { key: 'status', label: 'STATUS' }
+            { key: 'status', label: 'STATUS' },
+            { key: 'formShared', label: 'FORM SHARED' }
         ]
     },
     'pre-starts': {
@@ -52,7 +54,7 @@ const REGISTER_CONFIG = {
             { key: 'formDate', label: 'FORM DATE' },
             { key: 'representative', label: 'REPRESENTATIVE' },
             { key: 'areaForeman', label: 'AREA FOREMAN' },
-            { key: 'status', label: 'STATUS' }
+            { key: 'formShared', label: 'FORM SHARED' }
         ]
     },
     'day-labour': {
@@ -70,7 +72,7 @@ const REGISTER_CONFIG = {
             { key: 'formDate', label: 'FORM DATE' },
             { key: 'uploadedBy', label: 'UPLOADED BY' },
             { key: 'handoverNumber', label: 'HANDOVER NO.' },
-            { key: 'status', label: 'STATUS' }
+            { key: 'formShared', label: 'FORM SHARED' }
         ]
     },
     'scaff-tags': {
@@ -88,7 +90,8 @@ const REGISTER_CONFIG = {
             { key: 'inspectionDate', label: 'LAST INSPECTION' },
             { key: 'representative', label: 'INSPECTED BY' },
             { key: 'qrLabel', label: 'QR LABEL' },
-            { key: 'status', label: 'STATUS' }
+            { key: 'status', label: 'STATUS' },
+            { key: 'formShared', label: 'FORM SHARED' }
         ]
     },
     'qr-labels': {
@@ -162,6 +165,7 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
     const deletion = {
         deleted: Boolean(form.isDeleted),
         deletedAt: form.deletedAt || null,
+        formShared: getFormSharingStatus(form),
         status: getProjectDataStatus(form)
     };
     if (registerType === 'handovers') {
@@ -292,7 +296,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
     const [editor, setEditor] = useState(null);
     const [reloadKey, setReloadKey] = useState(0);
     const [statusFilter, setStatusFilter] = useState('all');
-    useEffect(() => setStatusFilter('all'), [registerType]);
+    const [sharedFilter, setSharedFilter] = useState('all');
+    useEffect(() => { setStatusFilter('all'); setSharedFilter('all'); }, [registerType]);
     const [contextMenu, setContextMenu] = useState(null);
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
@@ -502,6 +507,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             (!hasProjectSelection || matchesProjectScope(row, builderId, selectedProject))
             && (showDeleted || !row.deleted)
             && (statusFilter === 'all' || row.status === statusFilter)
+            && (sharedFilter === 'all' || row.formShared === sharedFilter)
             && !excludedFilters.builder.has(row.builder)
             && !excludedFilters.project.has(row.project)
             && (!normalizedQuery || config.columns.some(column => String(row[column.key] || '').toLowerCase().includes(normalizedQuery)))
@@ -514,7 +520,7 @@ export default function ProjectDataRegisterPage({ registerType }) {
             if (leftValue > rightValue) return 1 * direction;
             return left.id.localeCompare(right.id);
         });
-    }, [config.columns, excludedFilters, query, rows, showDeleted, statusFilter, sortDirection, sortField, hasProjectSelection, builderId, selectedProject]);
+    }, [config.columns, excludedFilters, query, rows, showDeleted, statusFilter, sharedFilter, sortDirection, sortField, hasProjectSelection, builderId, selectedProject]);
 
     const qrRegisterRows = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
@@ -699,7 +705,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
                         placeholder={showingQrRegister ? 'Search QR labels...' : config.searchPlaceholder}
                     />
                 </label>
-                {!usesScaffTagData && <RegisterDropdown label="Status" selectedItem={{id: statusFilter, name: statusFilter === 'all' ? 'All statuses' : statusFilter}} items={[{id: 'all', name: 'All statuses'}, {id: 'Active', name: 'Active'}, {id: 'Completed', name: 'Completed'}]} getLabel={item => item.name} showLogo={false} onSelect={item => setStatusFilter(item.id)} />}
+                {registerType === 'handovers' && <RegisterDropdown label="Status" selectedItem={{id: statusFilter, name: statusFilter === 'all' ? 'All statuses' : statusFilter}} items={[{id: 'all', name: 'All statuses'}, {id: 'Active', name: 'Active'}, {id: 'Dismantled', name: 'Dismantled'}]} getLabel={item => item.name} showLogo={false} onSelect={item => setStatusFilter(item.id)} />}
+                {!showingQrRegister && <RegisterDropdown label="Form Shared" selectedItem={{id: sharedFilter, name: sharedFilter === 'all' ? 'All forms' : sharedFilter}} items={[{id: 'all', name: 'All forms'}, {id: 'Form Shared', name: 'Form Shared'}, {id: 'Not Shared', name: 'Not Shared'}]} getLabel={item => item.name} showLogo={false} onSelect={item => setSharedFilter(item.id)} />}
                 <span className="project-register-toolbar-spacer" />
                 {showingQrRegister ? (
                     <>
@@ -839,7 +846,8 @@ export default function ProjectDataRegisterPage({ registerType }) {
                                         }} className={row.deleted ? 'is-deleted' : undefined} title={row.deleted ? `Deleted ${formatDate(row.deletedAt, true)}` : undefined}>
                                         {config.columns.map(column => (
                                             <td key={column.key} title={String(row[column.key] || '')}>
-                                                {column.key === 'status' ? <StatusBadge value={row.status} />
+                                                {column.key === 'formShared' ? <FormSharedCheckbox form={row.form} />
+                                                    : column.key === 'status' ? <StatusBadge value={row.status} />
                                                     : column.key === 'qrLabel' ? <span className={`project-register-qr-assignment is-${row.qrLabelStatus}`}><QrCode size={12} />{row.qrLabel}</span>
                                                     : column.key === config.linkKey && row.deleted ? <span className="project-register-deleted-title">{row[column.key] || '-'}</span>
                                                     : column.key === config.linkKey ? <button type="button" className={`project-register-pdf-link${openingId === row.id ? ' opening' : ''}`} disabled={Boolean(openingId)} onClick={() => isEditableRegister && !row.deleted ? openForm(row) : openPdf(row)} title={`${isEditableRegister && !row.deleted ? "Edit form" : "Open PDF"} for ${row[column.key] || row.reference}`}>{row[column.key] || '-'}</button>

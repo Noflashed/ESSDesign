@@ -1,0 +1,11 @@
+import React from 'react';
+import '../../src/App';
+import '../../src/index.css';
+import {createRoot} from 'react-dom/client';
+import ProjectDataRegisterPage from '../../src/components/ProjectDataRegisterPage';
+import ESSSafetyPage from '../../src/components/ESSSafetyPage';
+import {safetyProjectsAPI} from '../../src/services/api';
+safetyProjectsAPI.getBuilders = async () => [{id:'builder-test',name:'Test Builder',projects:[{id:'project-test',name:'Test Project'}]}];
+safetyProjectsAPI.resolveBuilderLogoUrl = async () => '';
+const params = new URLSearchParams(location.search);
+createRoot(document.getElementById('root')).render(params.has('project-data') ? <ESSSafetyPage /> : <ProjectDataRegisterPage registerType={params.get('type') || 'handovers'} />);
