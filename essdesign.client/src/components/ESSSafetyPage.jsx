@@ -446,8 +446,8 @@ function ProjectDataPreview({ doc, tab, builder, project, previewUrl, previewLoa
 export default function ESSSafetyPage() {
     const [loading, setLoading] = useState(true);
     const [builders, setBuilders] = useState([]);
-    const [selectedBuilderId, setSelectedBuilderId] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [selectedBuilderId, setSelectedBuilderId] = useState(ALL_SCOPE);
+    const [selectedProjectId, setSelectedProjectId] = useState(ALL_SCOPE);
     const [builderLogoUrls, setBuilderLogoUrls] = useState({});
     const [builderDropdownOpen, setBuilderDropdownOpen] = useState(false);
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
@@ -478,9 +478,6 @@ export default function ESSSafetyPage() {
             .then(nextBuilders => {
                 if (!active) return;
                 setBuilders(nextBuilders);
-                const selection = resolveProjectScope(nextBuilders);
-                setSelectedBuilderId(selection.builderId);
-                setSelectedProjectId(selection.projectId);
             })
             .catch(err => {
                 if (active) {
