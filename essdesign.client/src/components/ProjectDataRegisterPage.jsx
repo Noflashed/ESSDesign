@@ -238,7 +238,7 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
         location: form.jobLocation || '-',
         inspectionDate: formatDate(latestInspectionDate, true),
         inspectionDateSort: parseDate(latestInspectionDate)?.getTime() || 0,
-        representative: latestInspection?.competentPerson || form.erectedBy || 'Not recorded',
+        representative: form.inspectedBy?.trim() || latestInspection?.competentPerson?.trim() || 'Not recorded',
         qrLabel: qrLabel?.displayNumber || 'Unassigned',
         qrLabelStatus: qrLabel?.status || 'unassigned',
         status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
