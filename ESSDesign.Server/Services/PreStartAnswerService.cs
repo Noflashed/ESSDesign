@@ -10,10 +10,16 @@ public sealed class PreStartAnswerService(IConfiguration configuration, IHttpCli
 {
     public async Task<string> InterpretAsync(string prompt, CancellationToken token, PreStartHistoryContext? context = null, string? contract = null)
     {
+        token.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > 4000) throw new ArgumentException("A prompt of up to 4,000 characters is required.");
         context?.Validate();
         if (contract is not null && contract != PreStartTurnContract.Version) throw new ArgumentException("Unknown pre-start contract.");
         var allowedFields = contract == PreStartTurnContract.Version ? PreStartTurnContract.ReadAllowedFields(prompt) : null;
+        if (contract == PreStartTurnContract.Version && PreStartTurnContract.TryNoPermits(prompt, context) is { } directReply)
+        {
+            logger.LogInformation("Pre-start answer completed locally: no_permits");
+            return directReply;
+        }
         var key = configuration["OpenAI:ApiKey"];
         if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Form AI is not configured.");
         using var client = clients.CreateClient();
@@ -43,15 +49,20 @@ public sealed class PreStartAnswerService(IConfiguration configuration, IHttpCli
         var timer = Stopwatch.StartNew();
         using var response = await client.SendAsync(request, token);
         response.EnsureSuccessStatusCode();
-        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(token), cancellationToken: token);
-        var choice = json.RootElement.GetProperty("choices")[0];
-        if (choice.GetProperty("finish_reason").GetString() != "stop") throw new HttpRequestException("Form answer was incomplete.");
-        var message = choice.GetProperty("message");
-        if (message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(refusal.GetString())) throw new HttpRequestException("Form answer was declined.");
-        var reply = message.GetProperty("content").GetString()?.Trim();
-        if (string.IsNullOrWhiteSpace(reply) || reply.Length > (contract == PreStartTurnContract.Version ? 16000 : 4000)) throw new HttpRequestException("Form answer was empty or too long.");
-        if (contract == PreStartTurnContract.Version) PreStartTurnContract.ValidateReply(reply);
-        logger.LogInformation("Pre-start answer model completed in {ElapsedMs}ms", timer.ElapsedMilliseconds);
-        return reply;
+        try
+        {
+            using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(token), cancellationToken: token);
+            var choice = json.RootElement.GetProperty("choices")[0];
+            if (choice.GetProperty("finish_reason").GetString() != "stop") throw new PreStartAnswerFailure("model_incomplete");
+            var message = choice.GetProperty("message");
+            if (message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(refusal.GetString())) throw new PreStartAnswerFailure("model_refused");
+            var reply = message.GetProperty("content").GetString()?.Trim();
+            if (string.IsNullOrWhiteSpace(reply) || reply.Length > (contract == PreStartTurnContract.Version ? 16000 : 4000)) throw new PreStartAnswerFailure("model_empty");
+            if (contract == PreStartTurnContract.Version) PreStartTurnContract.ValidateReply(reply);
+            logger.LogInformation("Pre-start answer model completed in {ElapsedMs}ms", timer.ElapsedMilliseconds);
+            return reply;
+        }
+        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or FormatException)
+        { throw new PreStartAnswerFailure("model_response_invalid"); }
     }
 }

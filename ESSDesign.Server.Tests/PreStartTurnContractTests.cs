@@ -27,6 +27,85 @@ public sealed class PreStartTurnContractTests
     }
     private static PreStartAnswerService Service(Provider provider) => new(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {["OpenAI:ApiKey"] = "stub-only"}).Build(), provider, NullLogger<PreStartAnswerService>.Instance);
     private static string Input(params string[] fields) => JsonSerializer.Serialize(new {currentField = fields[0], allowedFields = fields.Select(key => new {key}), transcript = "A fall from height", priorAnswers = Array.Empty<string>(), followUp = ""});
+    private static string PermitInput(string transcript, string field = "permitDetails", string followUp = "", string[]? priorAnswers = null) =>
+        JsonSerializer.Serialize(new {currentField = field, allowedFields = new[] {new {key = field}}, transcript, priorAnswers = priorAnswers ?? [], followUp});
+
+    [Theory]
+    [InlineData("No permits apply")]
+    [InlineData("No permits are required.")]
+    [InlineData("There are no permits")]
+    [InlineData("No")]
+    [InlineData("None")]
+    [InlineData("None apply")]
+    [InlineData("No permits today")]
+    public async Task ClearNoPermitsAnswersReturnOnlyPermitTextWithoutCallingTheProvider(string transcript)
+    {
+        var provider = new Provider();
+        // Clear answers do not depend on provider availability/configuration.
+        var service = new PreStartAnswerService(new ConfigurationBuilder().Build(), provider, NullLogger<PreStartAnswerService>.Instance);
+        var reply = await service.InterpretAsync(PermitInput(transcript), default, new(), PreStartTurnContract.Version);
+        PreStartTurnContract.ValidateReply(reply);
+        using var json = JsonDocument.Parse(reply);
+        Assert.Equal("updates", json.RootElement.GetProperty("action").GetString());
+        var update = Assert.Single(json.RootElement.GetProperty("updates").EnumerateArray());
+        Assert.Equal("permitDetails", update.GetProperty("key").GetString());
+        Assert.Equal("No permits apply.", update.GetProperty("value").GetString());
+        Assert.Equal("answer", update.GetProperty("mode").GetString());
+        Assert.Equal(transcript, update.GetProperty("evidence").GetString());
+        Assert.Equal(0, provider.Calls);
+    }
+
+    [Theory]
+    [InlineData("No permits yet")]
+    [InlineData("No permits except hot works")]
+    [InlineData("No hot work permits apply")]
+    [InlineData("No permits apply, but change yesterday")]
+    [InlineData("I am not sure")]
+    [InlineData("Permit 17")]
+    [InlineData("Yes")]
+    public async Task QualifiedAndCompoundAnswersStillReachTheModel(string transcript)
+    {
+        var provider = new Provider {Reply = """{"action":"clarify","updates":[],"target":null,"editMode":null,"question":"Which permits apply?"}"""};
+        await Service(provider).InterpretAsync(PermitInput(transcript), default, new(), PreStartTurnContract.Version);
+        Assert.Equal(1, provider.Calls);
+        Assert.Contains("permitDetails is text, not a yes/no checkbox", provider.Payload.GetProperty("messages")[1].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public void NoPermitsShortcutDoesNotInterpretAnotherQuestionOrAnEditOrClarification()
+    {
+        Assert.Null(PreStartTurnContract.TryNoPermits(PermitInput("No", "permitConditionsChanged"), new()));
+        Assert.Null(PreStartTurnContract.TryNoPermits(PermitInput("No", followUp: "Do you mean there are no permits?"), new()));
+        Assert.Null(PreStartTurnContract.TryNoPermits(PermitInput("No", priorAnswers: ["Hot works"]), new()));
+        Assert.Null(PreStartTurnContract.TryNoPermits(PermitInput("No"), new() {Edit = new("permitDetails", "append")}));
+        Assert.Null(PreStartTurnContract.TryNoPermits(PermitInput("No"), new() {Pending = new() {["permitDetails"] = "Permit 17"}}));
+    }
+
+    [Fact]
+    public async Task LocalNoPermitsPathStillHonoursCancellationAndFieldRestrictions()
+    {
+        var provider = new Provider();
+        using var source = new CancellationTokenSource(); source.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Service(provider).InterpretAsync(PermitInput("No"), source.Token, new(), PreStartTurnContract.Version));
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(provider).InterpretAsync(PermitInput("No").Replace("\"key\":\"permitDetails\"", "\"key\":\"signatures\""), default, new(), PreStartTurnContract.Version));
+        Assert.Equal(0, provider.Calls);
+    }
+
+    [Theory]
+    [InlineData("\"\"")]
+    [InlineData("null")]
+    [InlineData("false")]
+    public async Task SuccessfulProviderHttpResponseWithInvalidPermitValueReportsTheValidationCategory(string value)
+    {
+        var provider = new Provider {Reply = Valid.Replace("\"previousIssues\"", "\"permitDetails\"").Replace("\"value\":true", $"\"value\":{value}")};
+        var failure = await Assert.ThrowsAsync<PreStartAnswerFailure>(() => Service(provider).InterpretAsync(PermitInput("No work permits for this job"), default, new(), PreStartTurnContract.Version));
+        Assert.Equal(1, provider.Calls);
+        Assert.Equal("model_answer_invalid", failure.Code);
+        Assert.Equal("field_value", failure.ValidationStep);
+        Assert.Equal("permitDetails", failure.Field);
+        Assert.DoesNotContain("A fall from height", failure.ToString());
+    }
+
     [Fact]
     public async Task ModernTurnsUseStrictFieldTypedSchemaAndKeepTheExistingModel()
     {
@@ -86,20 +165,22 @@ public sealed class PreStartTurnContractTests
     public async Task IncompleteDecisionsAreRejected(string finish)
     {
         var provider = new Provider {Finish = finish};
-        await Assert.ThrowsAsync<HttpRequestException>(() => Service(provider).InterpretAsync(Input("previousIssues"), default, null, PreStartTurnContract.Version));
+        var failure = await Assert.ThrowsAsync<PreStartAnswerFailure>(() => Service(provider).InterpretAsync(Input("previousIssues"), default, null, PreStartTurnContract.Version));
+        Assert.Equal("model_incomplete", failure.Code);
     }
     [Fact]
     public async Task RefusalIsHandledWithoutTryingToParseOrApplyIt()
     {
         var provider = new Provider {Refusal = "Declined"};
-        await Assert.ThrowsAsync<HttpRequestException>(() => Service(provider).InterpretAsync(Input("previousIssues"), default, null, PreStartTurnContract.Version));
+        var failure = await Assert.ThrowsAsync<PreStartAnswerFailure>(() => Service(provider).InterpretAsync(Input("previousIssues"), default, null, PreStartTurnContract.Version));
+        Assert.Equal("model_refused", failure.Code);
     }
     [Theory]
     [InlineData("{\"plannedActivities\":\"Wrong shape\"}")]
     [InlineData("{\"action\":\"updates\",\"updates\":[]}")]
     [InlineData("{\"action\":\"updates\",\"updates\":[{\"key\":\"previousIssues\",\"mode\":\"answer\",\"value\":\"Yes\",\"evidence\":\"Yes\",\"replaceEntire\":true}]}")]
     [InlineData("{\"action\":\"updates\",\"updates\":[{\"key\":\"risks\",\"mode\":\"answer\",\"value\":\"Wet floors — Mop up\",\"evidence\":\"Wet floors\",\"replaceEntire\":true}]}")]
-    public void InvalidProviderBodiesDoNotReachTheForm(string reply) => Assert.Throws<HttpRequestException>(() => PreStartTurnContract.ValidateReply(reply));
+    public void InvalidProviderBodiesDoNotReachTheForm(string reply) => Assert.Equal("model_answer_invalid", Assert.Throws<PreStartAnswerFailure>(() => PreStartTurnContract.ValidateReply(reply)).Code);
     [Theory]
     [InlineData("previousIssues", "\"Yes\"")]
     [InlineData("risks", "\"Wet floors — Mop up\"")]
@@ -109,7 +190,10 @@ public sealed class PreStartTurnContractTests
     public void FieldTypesAreValidatedEvenWithACompleteEnvelope(string key, string value)
     {
         var reply = Valid.Replace("\"key\":\"previousIssues\"", $"\"key\":\"{key}\"").Replace("\"value\":true", $"\"value\":{value}");
-        Assert.Throws<HttpRequestException>(() => PreStartTurnContract.ValidateReply(reply));
+        var failure = Assert.Throws<PreStartAnswerFailure>(() => PreStartTurnContract.ValidateReply(reply));
+        Assert.Equal("model_answer_invalid", failure.Code);
+        Assert.Equal("field_value", failure.ValidationStep);
+        Assert.Equal(key, failure.Field);
     }
     [Fact]
     public async Task PendingContextLimitsAreCheckedBeforeProviderCall()

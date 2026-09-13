@@ -110,6 +110,21 @@ public sealed class AssistantController : ControllerBase
             return Ok(new { reply, links = Array.Empty<string>(), contract = request.Contract });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return new EmptyResult(); }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Pre-start answer failed: model_timeout Trace {TraceId}", HttpContext.TraceIdentifier);
+            return StatusCode(504, new {error = "The AI took too long to respond. Please try again.", code = "model_timeout", traceId = HttpContext.TraceIdentifier});
+        }
+        catch (PreStartAnswerFailure ex)
+        {
+            _logger.LogWarning("Pre-start answer failed: {Code} Validation {ValidationStep} Field {Field} Trace {TraceId}", ex.Code, ex.ValidationStep, ex.Field, HttpContext.TraceIdentifier);
+            return StatusCode(502, new {error = "The AI returned an unusable answer. Please try again.", code = ex.Code, traceId = HttpContext.TraceIdentifier});
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning("Pre-start answer failed: provider_error HTTP {Status} Trace {TraceId}", ex.StatusCode, HttpContext.TraceIdentifier);
+            return StatusCode(502, new {error = "The AI service could not process this answer. Please try again.", code = "provider_error", traceId = HttpContext.TraceIdentifier});
+        }
         catch (ArgumentException) { return BadRequest(new { error = "Invalid pre-start conversation context." }); }
         catch (InvalidOperationException) { return StatusCode(503, new { error = "Form AI is not configured." }); }
         catch (Exception ex)

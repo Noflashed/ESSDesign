@@ -51,7 +51,8 @@ public sealed class PreStartAnswerTests
     public async Task IncompleteAnswersAreNeverApplied(string finish, string reply)
     {
         var handler = new Handler { Finish = finish, Reply = reply };
-        await Assert.ThrowsAsync<HttpRequestException>(() => Service(handler).InterpretAsync("Question", default));
+        var failure = await Assert.ThrowsAsync<PreStartAnswerFailure>(() => Service(handler).InterpretAsync("Question", default));
+        Assert.Equal(finish == "stop" ? "model_empty" : "model_incomplete", failure.Code);
     }
     [Fact]
     public async Task LimitsAndCancellationPreventUnnecessarySpend()

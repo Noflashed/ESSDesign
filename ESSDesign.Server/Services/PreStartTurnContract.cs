@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace ESSDesign.Server.Services;
 
@@ -15,6 +16,7 @@ public static class PreStartTurnContract
         Use mode answer for first answers, append for additions, replace for corrections. Never update a field without new user evidence. For append, return only new facts; the app combines them with the old value. For replace, preserve unrelated facts only for a partial edit. 'It should just say', 'change it to', 'replace the answer with' means replaceEntire=true: return ONLY the replacement requested, never restore removed details. For a partial change to one risk/action or attendee, replaceEntire=false and keep unrelated existing rows/names. Never silently remove a signed attendee; the app validates that.
         Booleans are true/false/null, not strings. An incident report makes previousIssues=true without needing an extra yes. If previousIssues or hazardousSubstances is false, omit its details. If positive details are provided while that parent is false or empty, include the parent true before details. Bare yes does not supply details. Do not infer other safety checks from activities or from history. Counts are digit strings; names are newline-separated; text is concise professional Australian English without adding facts. For risks use an array of one to six {row,risk,action}: one stated hazard per row and only its stated control, or empty action. Never return risks as a paragraph. More than six hazards requires clarification; do not blame the user for a format problem.
         For a boolean question, an explicit yes/no answer is sufficient: recognise conversational equivalents such as 'yup', 'yeah that is correct', 'nope', 'nah' and 'no we have not'. Uncertainty such as 'I am not sure' stays null, never true. Interpret agreement against the actual spoken follow-up: Yes to 'Do you mean there were no issues?' means previousIssues=false. Cite the actual user phrase as evidence; do not replace 'Yep' with the unspoken word 'Yes'. Do not demand scaffold types, dimensions or extra descriptive information to fill a boolean. A Yes for issues/substances may open the existing detail question afterwards; never invent those details. Extra facts and 'yes/no, but change...' must still be interpreted as a complete turn. Avoid negative or reversed yes/no clarifications; if genuinely unclear, repeat the actual checkbox question and offer yes, no or not confirmed.
+        permitDetails is text, not a yes/no checkbox. An explicit 'none', 'no permits apply' or equivalent is a complete answer: return the non-empty text 'No permits apply.', never null, false or an empty string. Do not ask for permit numbers/descriptions when the user says no permits apply. Preserve exceptions, uncertainty and other requested changes. Do not infer permitConditionsChanged from permitDetails; it is a separate checkbox.
         First completion is not a correction: when a current or related upcoming field is empty and there is no edit intent or pending proposal, return mode answer even if the user says 'add', 'put' or 'it should say'. Answering a clarification before a value has been saved is still first completion. An initial incident report returns previousIssues=true and previousIssuesDetails with mode answer. If the parent already says Yes, omit that unchanged parent and return only its new details with mode answer. Do not request confirmation, read back the answer, or say 'I will change' for initial completion. Use clarify only for genuinely missing/ambiguous facts, never merely to ask permission to record a clear first answer. The app decides whether actual edits require approval from its form state.
         A pending proposal is UNAPPLIED. When the user accepts it, including 'yeah change it to [the same proposed value]' or 'yes I just want it to say [the same value]', return action confirm and no updates. 'Yes, but change...' with DIFFERENT facts means new updates and a new proposal, never confirmation. A rejection without a new replacement means clarify what should change; cancel/never mind means cancel. Do not reinterpret an accepted proposal or repopulate unrelated fields. The app reads back and confirms changes to earlier or existing answers before writing, but saves clear first answers without a readback or approval step.
         If the user asks to revisit a known topic but gives no new facts, return reopen with target and editMode; do not write the navigation request as an answer. If target/change is unclear, return clarify with one short question and no updates. Use only the allowed fields in the current input, regardless of fields present in history. All unused nullable fields must be null; non-update actions have an empty updates list.
@@ -72,8 +74,25 @@ public static class PreStartTurnContract
         return new JsonObject { ["type"] = "json_schema", ["json_schema"] = new JsonObject { ["name"] = "prestart_turn_v2", ["strict"] = true, ["schema"] = schema } };
     }
 
+    public static string? TryNoPermits(string input, PreStartHistoryContext? context)
+    {
+        if (context?.Pending is not null || context?.Edit is not null) return null;
+        // Called after ReadAllowedFields validates the request envelope.
+        using var document = JsonDocument.Parse(input);
+        var root = document.RootElement;
+        if (root.GetProperty("currentField").GetString() != "permitDetails" ||
+            root.TryGetProperty("followUp", out var followUp) && (followUp.ValueKind != JsonValueKind.String || !string.IsNullOrWhiteSpace(followUp.GetString())) ||
+            root.TryGetProperty("priorAnswers", out var prior) && (prior.ValueKind != JsonValueKind.Array || prior.GetArrayLength() > 0)) return null;
+        var transcript = root.GetProperty("transcript").GetString()!;
+        var text = Regex.Replace(transcript.Trim().TrimEnd('.', '!', '?').ToLowerInvariant(), @"\s+", " ");
+        if (!Regex.IsMatch(text, @"^(?:no|none|nil|(?:there are )?no permits(?: (?:apply|are required|are needed|required|needed|today|for today))?|none (?:apply|are required|are needed))$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(50))) return null;
+        return JsonSerializer.Serialize(new {action = "updates", updates = new[] {new {key = "permitDetails", mode = "answer", value = "No permits apply.", evidence = transcript, replaceEntire = true}}, target = (string?)null, editMode = (string?)null, question = (string?)null});
+    }
+
     public static void ValidateReply(string reply)
     {
+        var validationStep = "envelope";
+        string? field = null;
         try
         {
             using var document = JsonDocument.Parse(reply);
@@ -85,11 +104,14 @@ public static class PreStartTurnContract
                 (action == "updates" ? updates.GetArrayLength() == 0 : updates.GetArrayLength() != 0)) throw new JsonException();
             foreach (var update in updates.EnumerateArray())
             {
+                field = null;
+                validationStep = "update_metadata";
                 if (!Fields.Contains(update.GetProperty("key").GetString()) || update.GetProperty("mode").GetString() is not ("answer" or "append" or "replace") ||
                     update.GetProperty("evidence").ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(update.GetProperty("evidence").GetString()) ||
                     update.GetProperty("replaceEntire").ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException();
-                var field = update.GetProperty("key").GetString()!;
+                field = update.GetProperty("key").GetString()!;
                 var value = update.GetProperty("value");
+                validationStep = "field_value";
                 if (field.StartsWith("checklist.") || field is "previousIssues" or "swmsInPlace" or "permitConditionsChanged" or "hazardousSubstances")
                 {
                     if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null)) throw new JsonException();
@@ -106,11 +128,12 @@ public static class PreStartTurnContract
                 else if (value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString()) || value.GetString()!.Length > 4000) throw new JsonException();
                 if (field is "workGroupCount" or "cleanupWorkerCount" && (value.GetString()!.Length > 3 || !value.GetString()!.All(char.IsAsciiDigit))) throw new JsonException();
             }
+            field = null; validationStep = "action_consistency";
             if (updates.EnumerateArray().Select(update => update.GetProperty("key").GetString()).Distinct().Count() != updates.GetArrayLength()) throw new JsonException();
             if (action == "reopen" && (!Fields.Contains(root.GetProperty("target").GetString()) || root.GetProperty("editMode").GetString() is not ("append" or "replace"))) throw new JsonException();
             if (action == "clarify" && (root.GetProperty("question").ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(root.GetProperty("question").GetString()) || root.GetProperty("question").GetString()!.Length > 500)) throw new JsonException();
         }
-        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
-        { throw new HttpRequestException("Invalid structured pre-start decision.", e); }
+        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
+        { throw new PreStartAnswerFailure("model_answer_invalid", validationStep, field); }
     }
 }
