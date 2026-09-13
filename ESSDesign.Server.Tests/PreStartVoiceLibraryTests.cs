@@ -74,6 +74,9 @@ public sealed class PreStartVoiceLibraryTests
     [InlineData("What should that answer say instead?")]
     [InlineData("Which risk or action would you like to change, and what should it say?")]
     [InlineData("The form has changed. Please tell me that update again.")]
+    [InlineData("Please say yes, no, or not confirmed. Any issues from the previous day?")]
+    [InlineData("Please say yes, no, or not confirmed. Is a SWMS in place for every activity today?")]
+    [InlineData("Please say that answer again. I don’t want to guess.")]
     public async Task RevisitClarificationsArePersistedAndReplayed(string text)
     {
         var store = new Store(); var handler = new Handler();
