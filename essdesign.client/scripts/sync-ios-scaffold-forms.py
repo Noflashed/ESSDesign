@@ -27,6 +27,16 @@ source_hashes = previous.get('sha256', {})
 for name in files:
     if name not in selected:
         continue
+    # Web forms open directly in the editor; never mount the native tutorial.
+    web_overrides = {
+        'components/ProjectDataFormDemoModal.tsx': "export {default} from '../browser/workflowDemo';\n",
+        'utils/projectDataWorkflowDemoPreference.ts': "export {shouldShowProjectDataWorkflowDemo, hideProjectDataWorkflowDemo} from '../browser/workflowDemo';\n",
+    }
+    if name in web_overrides:
+        target = dest / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('// Browser-only override; regenerate with scripts/sync-ios-scaffold-forms.py.\n' + web_overrides[name])
+        continue
     original = source / 'src' / name
     source_hashes[name] = hashlib.sha256(original.read_bytes()).hexdigest()
     content = original.read_text()

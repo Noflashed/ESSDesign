@@ -13,7 +13,6 @@ await page.addInitScript(() => {
  Object.defineProperty(navigator, 'share', {value:async()=>{throw new DOMException('Cancelled','AbortError');}, configurable:true});
  localStorage.setItem('access_token', 'test.'+btoa(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600}))+'.test');
  localStorage.setItem('user', JSON.stringify({id:'user-test',fullName:'Test Inspector',email:'test@example.com'}));
- localStorage.setItem('ess_project_data_workflow_demo_hidden_v2:user-test', 'true');
 });
 await page.route('**/*', async route => {
  const request = route.request(), url = new URL(request.url());
@@ -75,9 +74,9 @@ try {
  await page.mouse.move(bounds.x+60,bounds.y+60); await page.mouse.down();
  await page.mouse.move(bounds.x+160,bounds.y+105,{steps:12}); await page.mouse.up();
  await page.getByRole('button',{name:'Apply',exact:true}).click();
- await page.getByLabel('Site photo 1',{exact:true}).click();
  const chooser=page.waitForEvent('filechooser');
- await page.getByRole('button',{name:'Choose existing',exact:true}).click();
+ await page.getByLabel('Site photo 1',{exact:true}).click();
+ assert.equal(await page.locator('dialog.scaffold-browser-alert').count(),0,'Photo slots open the file picker directly');
  await (await chooser).setFiles('public/scaffold-forms/logo.png');
  await page.getByLabel('Site photo 1',{exact:true}).locator('img').waitFor();
  failSave=true;

@@ -1,12 +1,12 @@
 import React from 'react';
 import * as Native from 'react-native-web';
 export * from 'react-native-web';
-// React Native Web's Alert is a no-op. Preserve every iOS action, including photo choices.
+// React Native Web's Alert is a no-op. Adapt native alerts for the browser.
 export const Alert = { alert(title, message = '', buttons = [{text: 'OK'}]) {
   // Preserve the original form callbacks, but open the desktop picker in the
   // user's click event instead of showing the native camera/library chooser.
-  if (title === 'Add Photo' && message === 'Choose image source') {
-    const library = buttons.find(button => button.text === 'Choose Existing');
+  if (message === 'Choose image source') {
+    const library = buttons.find(button => button.text?.toLowerCase() === 'choose existing');
     if (library?.onPress) { library.onPress(); return; }
   }
   const dialog = document.createElement('dialog');

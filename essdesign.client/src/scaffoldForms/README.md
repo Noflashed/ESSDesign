@@ -12,6 +12,8 @@ The sync script applies only browser import/asset adaptations, selects the iOS d
 
 Browser differences:
 
+- Web forms open directly in the editor without the mobile workflow tutorial. Browser overrides disable the tutorial and its preference lookup; syncing mobile sources preserves this behavior.
+
 - Document zoom accepts Ctrl/Cmd+wheel, trackpad/touch pinch, and Ctrl/Cmd plus/minus/0 on the active form page. Zoom animates around the pointer or page center and respects reduced-motion preferences. Visible zoom controls remain available; regular scrolling is unchanged.
 - Photo slots open the browser file picker directly and convert images to JPEG for the original PDF writers.
 - Signatures retain the original stroke format and signature-pad component, with pointer capture so drawing starts on the first press with mouse, touch or pen.
