@@ -191,7 +191,7 @@ function mapDayLabourVariationRows(items) {
             status: getProjectDataStatus(item),
             uploadedAt: item.updatedAt || item.date || '',
             expiresAt: '',
-            uploadedBy: item.requestedBy || 'Site team',
+            uploadedBy: item.createdByName || 'Not recorded',
             location: item.clientProjectName || item.handoverDocumentTitle || '',
             size: formatBytes(item.size),
             raw: item
@@ -450,7 +450,7 @@ function getPreviewDetails(doc, tab, builder, project) {
         return [
             ['Form reference', doc.raw?.formReferenceName || doc.name],
             ['Variation no.', doc.raw?.variationNumber || doc.ref],
-            ['Requested by', doc.raw?.requestedBy || doc.uploadedBy || '-'],
+            ['Requested by', doc.raw?.requestedBy || '-'],
             ['Form date', formatDate(doc.raw?.date || doc.uploadedAt)],
             ['Linked handover', doc.raw?.handoverDocumentNumber || doc.raw?.handoverDocumentTitle || '-'],
             ['Client project', doc.raw?.clientProjectName || '-'],

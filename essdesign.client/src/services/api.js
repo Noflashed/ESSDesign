@@ -4565,6 +4565,7 @@ function mapSafetyFormRow(row) {
         title: row.title || payload.title || '',
         referenceNumber: row.reference_number || payload.referenceNumber || '',
         requestedBy: row.requested_by || payload.requestedBy || '',
+        createdByUserId: row.created_by_user_id || null,
         projectLabel: row.project_label || payload.projectLabel || '',
         eventDate: row.event_date || payload.eventDate || '',
         pdfPath: row.pdf_path || payload.pdfPath || defaultPdfPath,
@@ -4902,9 +4903,22 @@ export const preStartsAPI = {
         deleteSafetyFormRecord('pre-starts', builderId, projectId, formId),
 };
 
+// Resolve the relational creator for old and new forms alike; the requester is
+// a separate, editable field and is never evidence of who created a document.
+async function resolveSafetyFormCreators(forms) {
+    const ids = [...new Set(forms.map(form => form.createdByUserId).filter(Boolean))];
+    const names = new Map();
+    for (let offset = 0; offset < ids.length; offset += 100) {
+        const filter = encodeURIComponent(`(${ids.slice(offset, offset + 100).map(id => JSON.stringify(id)).join(',')})`);
+        const users = await readRestRows('user_names', `?select=id,full_name,email&id=in.${filter}`);
+        users.forEach(user => names.set(user.id, user.full_name?.trim() || user.email || ''));
+    }
+    return forms.map(form => ({ ...form, createdByName: names.get(form.createdByUserId) || '' }));
+}
+
 export const dayLabourVariationsAPI = {
     listForms: async (builderId, projectId) => {
-        const forms = await listSafetyFormRecords('day-labour-variations', builderId, projectId);
+        const forms = await resolveSafetyFormCreators(await listSafetyFormRecords('day-labour-variations', builderId, projectId));
         return forms.map(form => ({
             ...form,
             variationNumber: form.variationNumber || form.referenceNumber || '',
@@ -4919,7 +4933,7 @@ export const dayLabourVariationsAPI = {
     },
 
     listAllForms: async ({ includeDeleted = false } = {}) => {
-        const forms = await listAllSafetyFormRecords('day-labour-variations', { includeDeleted });
+        const forms = await resolveSafetyFormCreators(await listAllSafetyFormRecords('day-labour-variations', { includeDeleted }));
         return forms.map(form => ({
             ...form,
             variationNumber: form.variationNumber || form.referenceNumber || '',
