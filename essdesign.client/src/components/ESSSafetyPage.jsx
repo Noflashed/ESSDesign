@@ -1,4 +1,5 @@
 import {getProjectDataStatus} from '../utils/projectDataStatus';
+import {getScaffTagStatus} from '../utils/scaffTagStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle,
@@ -109,14 +110,6 @@ const formatDateTime = (value) => {
     }).format(date);
 };
 
-const addMonths = (value, months) => {
-    const date = toDate(value);
-    if (!date) return null;
-    const next = new Date(date);
-    next.setMonth(next.getMonth() + months);
-    return next;
-};
-
 const formatBytes = (value) => {
     if (!Number.isFinite(value)) return '';
     if (value < 1024) return `${value} B`;
@@ -133,17 +126,9 @@ const withPdfExtension = (value) => {
     return name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`;
 };
 
-function getScaffTagStatus(item) {
-    if (item.status === 'retired' || item.retiredAt) return 'Retired';
-    const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
-    if (!item.latestInspectionDate) return 'Draft';
-    return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
-}
-
 function mapScaffTagRows(items) {
     return items.map((item, index) => {
         const tagNo = item.scaffoldNo || item.tagNumber || makeFileRef('TAG', index);
-        const expiry = item.expiresAt || addMonths(item.latestInspectionDate, 3);
         return {
             id: item.id,
             kind: 'scaff-tags',
@@ -151,7 +136,7 @@ function mapScaffTagRows(items) {
             ref: tagNo,
             status: getScaffTagStatus(item),
             uploadedAt: item.updatedAt || item.latestInspectionDate || '',
-            expiresAt: expiry ? expiry.toISOString() : '',
+            expiresAt: item.retiredAt || item.dismantledAt || '',
             uploadedBy: item.inspectedBy || item.competentPerson || 'Site team',
             location: item.jobLocation || '',
             size: '',

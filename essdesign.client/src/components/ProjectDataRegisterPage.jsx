@@ -1,4 +1,5 @@
 import {getProjectDataStatus} from '../utils/projectDataStatus';
+import {getScaffTagStatus} from '../utils/scaffTagStatus';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import { ChevronDown, Trash2, Plus, FileText, Printer, QrCode, Search, X } from 'lucide-react';
@@ -131,15 +132,6 @@ const formatDate = (value, includeTime = false) => {
     }).format(date);
 };
 
-const getScaffTagStatus = form => {
-    if (form.status === 'retired' || form.retiredAt) return 'Retired';
-    const latestInspection = parseDate(form.latestInspectionDate);
-    if (!latestInspection) return 'Draft';
-    const expiry = parseDate(form.expiresAt) || new Date(latestInspection);
-    if (!form.expiresAt) expiry.setMonth(expiry.getMonth() + 3);
-    return expiry && expiry.getTime() < Date.now() ? 'Expired' : 'Current';
-};
-
 const latestScaffTagInspection = form => (
     [...(Array.isArray(form.inspectionRecords) ? form.inspectionRecords : [])]
         .filter(record => parseDate(record?.date))
@@ -241,7 +233,7 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
         representative: form.inspectedBy?.trim() || latestInspection?.competentPerson?.trim() || 'Not recorded',
         qrLabel: qrLabel?.displayNumber || 'Unassigned',
         qrLabelStatus: qrLabel?.status || 'unassigned',
-        status: form.isDeleted ? 'Deleted' : getScaffTagStatus({ ...form, latestInspectionDate })
+        status: getScaffTagStatus(form)
     };
 });
 

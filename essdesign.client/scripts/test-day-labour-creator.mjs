@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {getProjectDataStatus} from '../src/utils/projectDataStatus.js';
+import {getScaffTagStatus} from '../src/utils/scaffTagStatus.js';
 
 const apiSource = await readFile(new URL('../src/services/api.js', import.meta.url), 'utf8');
 const pageSource = await readFile(new URL('../src/components/ESSSafetyPage.jsx', import.meta.url), 'utf8');
@@ -16,6 +17,7 @@ const records = [original, {...original,id:'missing',created_by_user_id:null},
 let lookupCalls = 0;
 const context = vm.createContext({
     getProjectDataStatus,
+    getScaffTagStatus,
     handoverCertificatesAPI:{}, preStartsAPI:{}, scaffTagsAPI:{},
     safetyModulePrefix: () => 'test', safetyFormPhotoPaths: () => [], nowIso: () => 'now',
     SAFETY_FORMS_TABLE:'ess_safety_forms', DELETED_SAFETY_FORMS_TABLE:'ess_deleted_safety_forms',
