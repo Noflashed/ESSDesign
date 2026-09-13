@@ -1,4 +1,5 @@
 import { makeRegisterItems, resolveScaffoldLifecycle, formatElapsedTime } from '../utils/scaffoldRegister';
+import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope} from '../utils/projectDataScope';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -265,14 +266,25 @@ export default function ScaffoldRegisterPage({
     };
 
     const selectedBuilder = useMemo(
-        () => builders.find(builder => builder.id === selectedBuilderId) || null,
+        () => selectedBuilderId === ALL_SCOPE ? ALL_BUILDERS : builders.find(builder => builder.id === selectedBuilderId) || null,
         [builders, selectedBuilderId]
     );
-    const projects = selectedBuilder?.projects || [];
+    const projects = useMemo(() => projectScopeOptions(builders, selectedBuilderId)
+        .map(project => project.isAll ? {...project, name: 'All Sites'} : project), [builders, selectedBuilderId]);
     const selectedProject = useMemo(
         () => projects.find(project => project.id === selectedProjectId) || null,
         [projects, selectedProjectId]
     );
+    const scopeProjects = useMemo(() => projects.filter(project => !project.isAll
+        && (selectedProject?.isAll || project.id === selectedProject?.id)), [projects, selectedProject]);
+    const hasSpecificSite = Boolean(selectedProject && !selectedProject.isAll);
+    const paramsForProject = project => ({
+        builderId: project?.builderId || '',
+        builderName: builders.find(builder => builder.id === project?.builderId)?.name || '',
+        projectId: project?.projectId || '',
+        projectName: builders.find(builder => builder.id === project?.builderId)?.projects
+            ?.find(candidate => candidate.id === project?.projectId)?.name || '',
+    });
 
     const loadBuilders = useCallback(async () => {
         setBuildersLoading(true);
@@ -281,18 +293,9 @@ export default function ScaffoldRegisterPage({
             setBuilders(nextBuilders);
             setError('');
 
-            const requestedBuilder = nextBuilders.find(builder => builder.id === initialBuilderId);
-            const nextBuilder = requestedBuilder
-                || nextBuilders.find(builder => builder.id === selectedBuilderId)
-                || nextBuilders[0]
-                || null;
-            const requestedProject = nextBuilder?.projects?.find(project => project.id === initialProjectId);
-            const nextProject = requestedProject
-                || nextBuilder?.projects?.find(project => project.id === selectedProjectId)
-                || nextBuilder?.projects?.[0]
-                || null;
-            setSelectedBuilderId(nextBuilder?.id || '');
-            setSelectedProjectId(nextProject?.id || '');
+            const scope = resolveProjectScope(nextBuilders, {builderId: selectedBuilderId, projectId: selectedProjectId});
+            setSelectedBuilderId(scope.builderId);
+            setSelectedProjectId(scope.projectId);
         } catch (loadError) {
             setBuilders([]);
             setSelectedBuilderId('');
@@ -301,7 +304,7 @@ export default function ScaffoldRegisterPage({
         } finally {
             setBuildersLoading(false);
         }
-    }, [initialBuilderId, initialProjectId, selectedBuilderId, selectedProjectId]);
+    }, [selectedBuilderId, selectedProjectId]);
 
     useEffect(() => {
         loadBuilders().catch(() => {});
@@ -309,14 +312,10 @@ export default function ScaffoldRegisterPage({
 
     useEffect(() => {
         if (!builders.length || (!initialBuilderId && !initialProjectId)) return;
-        const nextBuilder = builders.find(builder => builder.id === initialBuilderId);
-        if (!nextBuilder) return;
-        const nextProject = nextBuilder.projects?.find(project => project.id === initialProjectId)
-            || nextBuilder.projects?.[0]
-            || null;
-        setSelectedBuilderId(nextBuilder.id);
-        setSelectedProjectId(nextProject?.id || '');
-    }, [builders, initialBuilderId, initialProjectId]);
+        const scope = resolveProjectScope(builders, {builderId: initialBuilderId, projectId: initialProjectId});
+        setSelectedBuilderId(scope.builderId);
+        setSelectedProjectId(scope.projectId);
+    }, [initialBuilderId, initialProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         try {
@@ -362,7 +361,7 @@ export default function ScaffoldRegisterPage({
 
     const loadRegister = useCallback(async ({ silent = false } = {}) => {
         if (deleteInFlight.current) return;
-        if (!selectedBuilderId || !selectedProjectId) {
+        if (!scopeProjects.length) {
             setRecords([]);
             setRecordsLoading(false);
             setRefreshing(false);
@@ -372,13 +371,27 @@ export default function ScaffoldRegisterPage({
         const requestId = ++requestSequence.current;
         if (!silent) setRecordsLoading(true);
         try {
-            const [registerEntries, tags, handovers] = await Promise.all([
-                scaffoldRegisterAPI.listRecords(selectedBuilderId, selectedProjectId),
-                scaffTagsAPI.listForms(selectedBuilderId, selectedProjectId),
-                handoverCertificatesAPI.listForms(selectedBuilderId, selectedProjectId)
-            ]);
+            const nextRecords = [];
+            for (let offset = 0; offset < scopeProjects.length; offset += 4) {
+                const groups = await Promise.all(scopeProjects.slice(offset, offset + 4).map(async project => {
+                    const [registerEntries, tags, handovers] = await Promise.all([
+                        scaffoldRegisterAPI.listRecords(project.builderId, project.projectId),
+                        scaffTagsAPI.listForms(project.builderId, project.projectId),
+                        handoverCertificatesAPI.listForms(project.builderId, project.projectId)
+                    ]);
+                    const builder = builders.find(candidate => candidate.id === project.builderId);
+                    return makeRegisterItems(registerEntries, tags, handovers).map(item => ({...item,
+                        builderId: project.builderId, builderName: builder?.name || '',
+                        projectId: project.projectId,
+                        projectName: builder?.projects?.find(candidate => candidate.id === project.projectId)?.name || project.name,
+                        project,
+                    }));
+                }));
+                if (requestId !== requestSequence.current) return;
+                nextRecords.push(...groups.flat());
+            }
             if (requestId !== requestSequence.current) return;
-            setRecords(makeRegisterItems(registerEntries, tags, handovers));
+            setRecords(nextRecords.sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''))));
             setError('');
         } catch (loadError) {
             if (requestId !== requestSequence.current) return;
@@ -390,7 +403,7 @@ export default function ScaffoldRegisterPage({
                 setRefreshing(false);
             }
         }
-    }, [selectedBuilderId, selectedProjectId]);
+    }, [scopeProjects, builders]);
 
     const deleteScaffold = async () => {
         if (!pendingDelete || deleteInFlight.current || mutationLock.current) return;
@@ -444,7 +457,7 @@ export default function ScaffoldRegisterPage({
     }, []);
 
     const handleBuilderChange = builder => {
-        const project = builder?.projects?.[0] || null;
+        const project = {id: ALL_SCOPE, name: 'All Sites', isAll: true};
         setSelectedBuilderId(builder?.id || '');
         setSelectedProjectId(project?.id || '');
         setQuery('');
@@ -464,14 +477,13 @@ export default function ScaffoldRegisterPage({
         });
     };
 
-    const projectParams = {
-        builderId: selectedBuilderId, builderName: selectedBuilder?.name || '',
-        projectId: selectedProjectId, projectName: selectedProject?.name || '',
-    };
+    const projectParams = paramsForProject(selectedProject);
+    const paramsForItem = item => ({builderId: item.builderId, builderName: item.builderName,
+        projectId: item.projectId, projectName: item.projectName});
 
     const createScaffold = async event => {
         event.preventDefault();
-        if (mutationLock.current) return;
+        if (mutationLock.current || !hasSpecificSite) return;
         if (!scaffoldName.trim()) { setNameError('Enter a scaffold name to continue.'); return; }
         mutationLock.current = true; setMutationBusy(true); setNameError('');
         try {
@@ -483,21 +495,22 @@ export default function ScaffoldRegisterPage({
     };
 
     const ensureRegisterRecord = async item => {
-        const key = `${selectedBuilderId}:${selectedProjectId}:${item.id}`;
+        const {builderId, projectId} = item;
+        const key = `${builderId}:${projectId}:${item.id}`;
         let record = item.registerRecord || promotedRecords.current.get(key);
         if (!record) {
-            record = await createScaffoldRegisterRecord({...projectParams, scaffoldName: item.scaffoldName, location: item.location});
+            record = await createScaffoldRegisterRecord({...paramsForItem(item), scaffoldName: item.scaffoldName, location: item.location});
             promotedRecords.current.set(key, record);
         }
         // Promote older forms to an explicit register relationship, keeping their PDFs in sync.
         for (const tag of item.tags) {
-            if (tag.scaffoldRegisterId !== record.id) await setScaffTagScaffoldRecord(selectedBuilderId, selectedProjectId, tag.id, {
+            if (tag.scaffoldRegisterId !== record.id) await setScaffTagScaffoldRecord(builderId, projectId, tag.id, {
                 scaffoldName: item.scaffoldName, scaffoldRegisterId: record.id,
             });
         }
         for (const handover of item.handovers) {
             if (handover.scaffoldRegisterId !== record.id) await setHandoverCertificateScaffoldRecord(
-                selectedBuilderId, selectedProjectId, handover.id, item.scaffoldName, record.id);
+                builderId, projectId, handover.id, item.scaffoldName, record.id);
         }
         return record;
     };
@@ -509,14 +522,14 @@ export default function ScaffoldRegisterPage({
             const record = await ensureRegisterRecord(item);
             const drawing = record.drawingDocumentId ? record : item.handover;
             const params = {
-                ...projectParams, readOnly: false,
+                ...paramsForItem(item), readOnly: false,
                 initialScaffoldName: item.scaffoldName, initialLocation: item.location,
                 initialScaffoldRegisterId: record.id,
             };
             if (kind === 'handover') {
                 Object.assign(params, {
                     formId: item.handover?.id,
-                    initialCompanyEntityId: item.handover?.companyEntityId || normalizeCompanyEntityId(selectedProject?.scaffoldEntity),
+                    initialCompanyEntityId: item.handover?.companyEntityId || normalizeCompanyEntityId(item.project?.scaffoldEntity),
                     initialScaffTagFormId: item.tag?.id, initialScaffTagId: item.tag?.tagNumber,
                     initialDrawingNumber: drawing?.drawingNumber,
                     initialDrawingDocumentId: drawing?.drawingDocumentId,
@@ -526,7 +539,7 @@ export default function ScaffoldRegisterPage({
                     initialDrawingFolderId: drawing?.drawingFolderId,
                 });
             } else Object.assign(params, {
-                formId: item.tag?.id, initialCompanyEntityId: item.tag?.companyEntityId || normalizeCompanyEntityId(selectedProject?.scaffoldEntity),
+                formId: item.tag?.id, initialCompanyEntityId: item.tag?.companyEntityId || normalizeCompanyEntityId(item.project?.scaffoldEntity),
                 initialHandoverFormId: item.handover?.id,
                 initialHandoverInspectionNumber: item.handover?.inspectionNumber,
                 initialHandoverReferenceName: item.handover?.formReferenceName,
@@ -541,14 +554,15 @@ export default function ScaffoldRegisterPage({
         mutationLock.current = true; setMutationBusy(true); setError('');
         try {
             const record = await ensureRegisterRecord(designItem);
+            const {builderId, projectId} = designItem;
             await setScaffoldRegisterDrawing({record, ...selection});
             for (const handover of designItem.handovers) await setHandoverCertificateDrawingLink(
-                selectedBuilderId, selectedProjectId, handover.id, {...selection, scaffoldRegisterId: record.id});
+                builderId, projectId, handover.id, {...selection, scaffoldRegisterId: record.id});
             if (designItem.handovers.length) {
                 const handoverIds = new Set(designItem.handovers.map(handover => handover.id));
-                const variations = await listDayLabourVariationForms(selectedBuilderId, selectedProjectId);
+                const variations = await listDayLabourVariationForms(builderId, projectId);
                 for (const variation of variations.filter(form => handoverIds.has(form.handoverDocumentId))) {
-                    await setDayLabourVariationDrawingLink(selectedBuilderId, selectedProjectId, variation.id, selection);
+                    await setDayLabourVariationDrawingLink(builderId, projectId, variation.id, selection);
                 }
             }
             setDesignItem(null);
@@ -573,6 +587,8 @@ export default function ScaffoldRegisterPage({
                 : item.handover;
             return [
                 item.scaffoldName,
+                item.builderName,
+                item.projectName,
                 item.location,
                 drawing?.drawingNumber,
                 drawing?.drawingDocumentName,
@@ -594,7 +610,7 @@ export default function ScaffoldRegisterPage({
                     <RegisterDropdown
                         label="Builder"
                         selectedItem={selectedBuilder}
-                        items={builders}
+                        items={[ALL_BUILDERS, ...builders]}
                         getLabel={builder => builder.name}
                         getLogoUrl={getBuilderLogoUrl}
                         onSelect={handleBuilderChange}
@@ -651,7 +667,8 @@ export default function ScaffoldRegisterPage({
                 ) : (
                     <table className="scaffold-register-table" aria-label="Scaffold register">
                         <caption className="scaffold-register-add-row">
-                            <button type="button" className="scaffold-register-add" disabled={mutationBusy}
+                            <button type="button" className="scaffold-register-add" disabled={mutationBusy || !hasSpecificSite}
+                                title={hasSpecificSite ? 'Add scaffold' : 'Select a specific site to add a scaffold'}
                                 onClick={() => {setScaffoldName(''); setNameError(''); setNameDialogOpen(true);}}>
                                 <Plus size={18} aria-hidden="true" /><span>Add scaffold</span>
                             </button>
@@ -704,7 +721,7 @@ export default function ScaffoldRegisterPage({
                                     clockNow
                                 );
                                 return (
-                                    <tr key={item.id}
+                                    <tr key={JSON.stringify([item.builderId, item.projectId, item.id])}
                                         tabIndex={0}
                                         onContextMenu={event => openRowMenu(event, item)}
                                         onKeyDown={event => {
@@ -713,7 +730,9 @@ export default function ScaffoldRegisterPage({
                                             }
                                         }}
                                     >
-                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span></td>
+                                        <td><span className="scaffold-register-cell-value" title={item.scaffoldName}>{item.scaffoldName}</span>
+                                            {!hasSpecificSite && <small className="scaffold-register-site-context">{item.builderName} · {item.projectName}</small>}
+                                        </td>
                                         <td>
                                             <span className={`scaffold-register-lifecycle-status is-${lifecycle.status}`}>
                                                 <span aria-hidden="true" />
@@ -799,7 +818,7 @@ export default function ScaffoldRegisterPage({
                     </div>
                 </form>
             </dialog>}
-            {designItem && <DrawingRegisterPickerModal visible {...projectParams} designFolderId={selectedProject?.designFolderId}
+            {designItem && <DrawingRegisterPickerModal visible {...paramsForItem(designItem)} designFolderId={designItem.project?.designFolderId}
                 onSelect={linkDrawing} onClose={() => {if (!mutationBusy) setDesignItem(null);}} />}
             {editor && <ScaffoldFormEditor key={`${editor.screen}:${editor.params.formId || editor.params.initialScaffoldRegisterId}`}
                 {...editor} onClose={() => {setEditor(null); loadRegister({silent: true});}}
@@ -810,7 +829,7 @@ export default function ScaffoldRegisterPage({
                     style={{ left: contextMenu.x, top: contextMenu.y }}>
                     <button type="button" role="menuitem" onClick={() => {
                         setDeleteError('');
-                        setPendingDelete({ item: contextMenu.item, builderId: selectedBuilderId, projectId: selectedProjectId });
+                        setPendingDelete({ item: contextMenu.item, builderId: contextMenu.item.builderId, projectId: contextMenu.item.projectId });
                         setContextMenu(null);
                     }}><Trash2 size={16} aria-hidden="true" />Delete scaffold</button>
                 </div>, document.body

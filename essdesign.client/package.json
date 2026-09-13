@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test:scaffold-register": "node scripts/test-scaffold-register.mjs",
+    "test:scaffold-register-scopes": "node scripts/test-scaffold-register-scopes.mjs",
     "test:scaffold-register-layout": "node scripts/test-scaffold-register-layout.mjs",
     "test:project-data-all-scopes": "node scripts/test-project-data-all-scopes.mjs",
     "test:register-dropdowns": "node scripts/test-register-dropdowns.mjs",

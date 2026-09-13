@@ -724,3 +724,10 @@
     .scaffold-register-dialog-actions button,
     .scaffold-register-delete-dialog button { transition: none; }
 }
+.scaffold-register-site-context {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-secondary, #64748b);
+    font-size: 11px;
+    white-space: normal;
+}
