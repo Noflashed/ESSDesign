@@ -67,7 +67,7 @@ const REGISTER_CONFIG = {
             { key: 'title', label: 'FORM REFERENCE' },
             { key: 'reference', label: 'VARIATION NO.' },
             { key: 'formDate', label: 'FORM DATE' },
-            { key: 'requestedBy', label: 'REQUESTED BY' },
+            { key: 'uploadedBy', label: 'UPLOADED BY' },
             { key: 'handoverNumber', label: 'HANDOVER NO.' },
             { key: 'status', label: 'STATUS' }
         ]
@@ -212,7 +212,7 @@ const mapRows = (registerType, forms, projectLookup, qrLabels = []) => forms.map
             reference: form.variationNumber || '-',
             formDate: formatDate(form.date || form.updatedAt),
             formDateSort: parseDate(form.date || form.updatedAt)?.getTime() || 0,
-            requestedBy: form.requestedBy || 'Not recorded',
+            uploadedBy: form.createdByName || 'Not recorded',
             handoverNumber: form.handoverDocumentNumber || '-'
         };
     }

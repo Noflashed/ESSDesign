@@ -5,6 +5,7 @@ import {getProjectDataStatus} from '../src/utils/projectDataStatus.js';
 
 const apiSource = await readFile(new URL('../src/services/api.js', import.meta.url), 'utf8');
 const pageSource = await readFile(new URL('../src/components/ESSSafetyPage.jsx', import.meta.url), 'utf8');
+const registerSource = await readFile(new URL('../src/components/ProjectDataRegisterPage.jsx', import.meta.url), 'utf8');
 const section = (source, start, end) => source.slice(source.indexOf(start), source.indexOf(end));
 const original = {form_type:'day-labour-variations', id:'existing', builder_id:'builder', project_id:'project',
     created_by_user_id:'creator', requested_by:'Site Manager', created_at:'2020-01-01', updated_at:'2020-01-02',
@@ -15,6 +16,7 @@ const records = [original, {...original,id:'missing',created_by_user_id:null},
 let lookupCalls = 0;
 const context = vm.createContext({
     getProjectDataStatus,
+    handoverCertificatesAPI:{}, preStartsAPI:{}, scaffTagsAPI:{},
     safetyModulePrefix: () => 'test', safetyFormPhotoPaths: () => [], nowIso: () => 'now',
     SAFETY_FORMS_TABLE:'ess_safety_forms', DELETED_SAFETY_FORMS_TABLE:'ess_deleted_safety_forms',
     withPdfExtension: title => `${title}.pdf`, formatBytes: () => '', makeFileRef: () => 'fallback',
@@ -36,7 +38,9 @@ vm.runInContext([
     section(apiSource,'function mapSafetyFormRow(', 'function legacySafetyFormIndexPath('),
     section(apiSource,'async function listSafetyFormRecords(', 'async function getSafetyFormRecord('),
     section(apiSource,'async function resolveSafetyFormCreators(', 'export const scaffTagsAPI').replace('export const dayLabourVariationsAPI','globalThis.dayLabourVariationsAPI'),
-    section(pageSource,'function mapDayLabourVariationRows(', 'function mapFileRows(')
+    section(pageSource,'function mapDayLabourVariationRows(', 'function mapFileRows('),
+    section(registerSource,'const REGISTER_CONFIG =', 'function StatusBadge('),
+    'globalThis.registerConfig = REGISTER_CONFIG; globalThis.mapRegisterRows = mapRows; globalThis.registerSortValue = sortValue;'
 ].join('\n'), context);
 for (const forms of [await context.dayLabourVariationsAPI.listForms('builder','project'),
     await context.dayLabourVariationsAPI.listAllForms({includeDeleted:true})]) {
@@ -49,6 +53,15 @@ for (const forms of [await context.dayLabourVariationsAPI.listForms('builder','p
     assert.equal(byId.get('removed').uploadedBy,'Not recorded');
     assert.equal(byId.get('email').uploadedBy,'email@example.com');
     if (display.length === 5) assert.equal(byId.get('archived').uploadedBy,'Original Creator');
+    const columns = context.registerConfig['day-labour'].columns;
+    assert.equal(columns.find(column => column.key === 'uploadedBy').label,'UPLOADED BY');
+    assert.ok(!columns.some(column => column.key === 'requestedBy'));
+    const registerRows = context.mapRegisterRows('day-labour', forms, new Map());
+    for (const row of registerRows) {
+        assert.equal(row.uploadedBy, byId.get(row.form.id).uploadedBy);
+        assert.equal(row.form.requestedBy,'Site Manager','Requester remains available in the form');
+        assert.equal(context.registerSortValue(row,'uploadedBy'),row.uploadedBy.toLowerCase());
+    }
 }
 assert.equal(lookupCalls,2,'Creator names are fetched once per list, not once per form');
 assert.equal(original.payload.createdByUserId,'wrong-payload-account','Reading preserves original records');
