@@ -363,7 +363,7 @@ function renderScaffTagHtml(form: ScaffTagForm): string {
   const inspections = form.inspectionRecords
     .map(
       (row, index) =>
-        `<tr><td style="${row.date ? '' : 'opacity:0.35'}">${esc(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
+        `<tr><td style="${row.date ? '' : 'opacity:0.55'}">${esc(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
           row.note,
         )}</td></tr>`,
     )
@@ -607,7 +607,7 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
       note: '',
     };
     contentLines.push('q');
-    if (!row.date) { contentLines.push('0.65 0.67 0.69 rg'); }
+    if (!row.date) { contentLines.push('0.48 0.50 0.53 rg'); }
     contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, i), 12), 'F1'));
     contentLines.push('Q');
     contentLines.push(centeredText(tableX + dateCol, timeCol, y - 18, 9, val(row.time, 10), 'F1'));

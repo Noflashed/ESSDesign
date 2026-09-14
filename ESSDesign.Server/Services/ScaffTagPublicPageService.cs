@@ -775,7 +775,7 @@ public static class ScaffTagPublicPageRenderer
 
     function renderFront() {
       const entity = company();
-      const rows = inspectionRows(10).map((row, index) => `<tr><td style="${row.date ? '' : 'opacity:0.35'}">${esc(row.date ? displayDate(row.date) : inspectionDueDate(index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
+      const rows = inspectionRows(10).map((row, index) => `<tr><td style="${row.date ? '' : 'opacity:0.55'}">${esc(row.date ? displayDate(row.date) : inspectionDueDate(index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
       return `<article class="tag">
         <header class="brand"><img src="${entity.logo}" alt="${esc(entity.legal)}" /><div class="brand-copy"><div class="brand-title">SCAFFOLD TAG</div><div class="brand-sub">${esc(entity.address)}</div><div class="brand-company">${esc(entity.legal)} · ${esc(entity.phone)}</div></div></header>
         <div class="band">ERECTION AND INSPECTION RECORD</div>

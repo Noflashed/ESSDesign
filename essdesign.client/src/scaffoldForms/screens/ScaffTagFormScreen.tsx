@@ -1941,7 +1941,7 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       justifyContent: 'center',
     },
     inspectionDueText: {
-      opacity: 0.35,
+      opacity: 0.55,
       fontWeight: '500',
     },
     authCell: {
