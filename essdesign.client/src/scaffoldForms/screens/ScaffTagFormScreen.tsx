@@ -1,3 +1,4 @@
+import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
 import {adaptScaffTagStyles} from '../browser/scaffTagStyles';
@@ -1221,7 +1222,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                               <Feather name="plus" size={15} color="#0B7F45" />
                             </TouchableOpacity>
                           ) : (
-                            <Text style={styles.authCellText}>{row.date || ''}</Text>
+                            <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
                           )}
                         </View>
                         <View style={[styles.authInput, styles.authTimeCell, styles.authTimeValueCell]}>
@@ -1334,7 +1335,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     onPress={() => openDatePicker({type: 'dateErected'}, form.dateErected)}
                   >
                     <Text style={styles.reverseDetailLabel}>DATE:</Text>
-                    <Text style={styles.reverseDetailText}>{form.dateErected || ''}</Text>
+                    <Text style={styles.reverseDetailText}>{formatScaffoldDate(form.dateErected || '')}</Text>
                   </TouchableOpacity>
                   <View style={styles.reverseDetailRow}>
                     <Text style={styles.reverseDetailLabel}>INSPECTED BY:</Text>
@@ -1385,7 +1386,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   {form.inspectionRecords.slice(0, 8).map((row, index) => (
                     <View key={`row-${index}`} style={styles.reverseTableRow}>
                       <View style={[styles.reverseInputButton, styles.reverseDateCell]}>
-                        <Text style={styles.reverseInputText}>{row.date || ''}</Text>
+                        <Text style={styles.reverseInputText}>{formatScaffoldDate(row.date || '')}</Text>
                       </View>
                       <TextInput
                         style={[styles.reverseInput, styles.reversePersonCell]}

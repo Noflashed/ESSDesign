@@ -1,3 +1,4 @@
+import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/scaffTagPdfRenderer.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import type {
   InspectionRecordEntry,
@@ -354,7 +355,7 @@ export function buildScaffTagPdfDocument(
     const row = form.inspectionRecords[index] ?? ({date: '', time: '', competentPerson: ''} as InspectionRecordEntry);
     const rowTop = top + tableHeaderHeight + index * inspectionRowHeight;
     line(frontX, rowTop + inspectionRowHeight, frontX + cardWidth, rowTop + inspectionRowHeight);
-    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(row.date, 12), true);
+    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(formatScaffoldDate(row.date), 12), true);
     centeredText(frontX + columns[0], rowTop + 8.5, columns[1], 6.2, clean(row.time, 10), true);
     centeredText(frontX + columns[0] + columns[1], rowTop + 8.5, columns[2], 6.2, clean(row.competentPerson, 20), true);
     out.push(...drawSignature(frontX + columns[0] + columns[1] + columns[2] + 3, rowTop + 1.5, columns[3] - 6, 22, row.signatureStrokes));
@@ -402,7 +403,7 @@ export function buildScaffTagPdfDocument(
   const backRows: Array<[string, string]> = [
     ['REQUESTED BY:', form.requestedBy],
     ['BUILT BY:', form.erectedBy],
-    ['DATE:', form.dateErected],
+    ['DATE:', formatScaffoldDate(form.dateErected)],
     ['INSPECTED BY:', form.inspectedBy],
   ];
   fill(GREEN);
@@ -454,7 +455,7 @@ export function buildScaffTagPdfDocument(
     const row = form.inspectionRecords[index] ?? ({date: '', note: ''} as InspectionRecordEntry);
     const rowTop = top + complianceHeader + index * complianceRow;
     line(backX, rowTop + complianceRow, backX + cardWidth, rowTop + complianceRow);
-    centeredText(backX, rowTop + 9, dateWidth, 6.5, clean(row.date, 12), true);
+    centeredText(backX, rowTop + 9, dateWidth, 6.5, clean(formatScaffoldDate(row.date), 12), true);
     drawText(backX + dateWidth + 6, rowTop + 9, 6.3, clean(row.note, 44), true);
   }
   top += complianceHeader + complianceRow * 8;

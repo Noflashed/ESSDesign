@@ -3,6 +3,12 @@ import { scaffTagQrLabelsAPI, scaffTagsAPI } from '../services/api';
 import LoadingBrandmark from './LoadingBrandmark';
 import { downloadScaffTagLabelPdf } from '../services/scaffTagLabelPdf';
 
+function displayDate(value) {
+    const text = String(value ?? '').trim();
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : text;
+}
+
 export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -344,7 +350,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Date Erected</span>
-                                    <span className="module-pill-value">{selectedForm.dateErected || '-'}</span>
+                                    <span className="module-pill-value">{displayDate(selectedForm.dateErected) || '-'}</span>
                                 </div>
                                 <div className="module-detail-block">
                                     <span className="module-pill-label">Erected By</span>
@@ -368,7 +374,7 @@ export default function WebSafetyScaffTagsPage({ builder, project, onBack }) {
                                                 .filter(row => row.date || row.competentPerson)
                                                 .map((row, index) => (
                                                     <div key={`${row.date}-${index}`} className="module-record-row">
-                                                        <span>{row.date || '-'}</span>
+                                                        <span>{displayDate(row.date) || '-'}</span>
                                                         <span>{row.competentPerson || '-'}</span>
                                                     </div>
                                                 ))

@@ -1,3 +1,4 @@
+import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
@@ -362,7 +363,7 @@ function renderScaffTagHtml(form: ScaffTagForm): string {
   const inspections = form.inspectionRecords
     .map(
       row =>
-        `<tr><td>${esc(row.date)}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
+        `<tr><td>${esc(formatScaffoldDate(row.date))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
           row.note,
         )}</td></tr>`,
     )
@@ -400,7 +401,7 @@ function renderScaffTagHtml(form: ScaffTagForm): string {
       <div class="field"><div class="label">Reference Number</div><div class="value">${esc(form.tagNumber)}</div></div>
       <div class="field"><div class="label">Scaffold Name</div><div class="value">${esc(form.scaffoldNo)}</div></div>
       <div class="field"><div class="label">Job Location</div><div class="value">${esc(form.jobLocation)}</div></div>
-      <div class="field"><div class="label">Date Erected</div><div class="value">${esc(form.dateErected)}</div></div>
+      <div class="field"><div class="label">Date Erected</div><div class="value">${esc(formatScaffoldDate(form.dateErected))}</div></div>
       <div class="field"><div class="label">Requested By</div><div class="value">${esc(form.requestedBy)}</div></div>
       <div class="field"><div class="label">Erected By</div><div class="value">${esc(form.erectedBy)}</div></div>
       <div class="field"><div class="label">Inspected By</div><div class="value">${esc(form.inspectedBy)}</div></div>
@@ -503,7 +504,7 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
   const fields = [
     `SCAFFOLD NAME: ${val(form.scaffoldNo, 30)}`,
     `JOB LOCATION: ${val(form.jobLocation, 28)}`,
-    `DATE ERECTED: ${val(form.dateErected, 12)}`,
+    `DATE ERECTED: ${val(formatScaffoldDate(form.dateErected), 12)}`,
     `REQUESTED BY: ${val(form.requestedBy, 28)}`,
     `ERECTED BY: ${val(form.erectedBy, 30)}`,
     `INSPECTED BY: ${val(form.inspectedBy, 28)}`,
@@ -605,7 +606,7 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
       competentPerson: '',
       note: '',
     };
-    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(row.date, 12), 'F1'));
+    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(formatScaffoldDate(row.date), 12), 'F1'));
     contentLines.push(centeredText(tableX + dateCol, timeCol, y - 18, 9, val(row.time, 10), 'F1'));
     contentLines.push(text(tableX + dateCol + timeCol + 6, y - 18, 10, val(row.competentPerson, 24), 'F1'));
   }

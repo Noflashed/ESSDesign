@@ -715,6 +715,11 @@ public static class ScaffTagPublicPageRenderer
     const activePointers = new Set();
 
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const displayDate = value => {
+      const text = String(value ?? '').trim();
+      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : text;
+    };
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
     const signature = (strokes, inline = false) => {
       if (!Array.isArray(strokes) || strokes.length === 0) return '<span></span>';
@@ -759,7 +764,7 @@ public static class ScaffTagPublicPageRenderer
 
     function renderFront() {
       const entity = company();
-      const rows = inspectionRows(10).map(row => `<tr><td>${esc(row.date)}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
+      const rows = inspectionRows(10).map(row => `<tr><td>${esc(displayDate(row.date))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
       return `<article class="tag">
         <header class="brand"><img src="${entity.logo}" alt="${esc(entity.legal)}" /><div class="brand-copy"><div class="brand-title">SCAFFOLD TAG</div><div class="brand-sub">${esc(entity.address)}</div><div class="brand-company">${esc(entity.legal)} · ${esc(entity.phone)}</div></div></header>
         <div class="band">ERECTION AND INSPECTION RECORD</div>
@@ -778,7 +783,7 @@ public static class ScaffTagPublicPageRenderer
     }
 
     function renderBack() {
-      const rows = inspectionRows(8).map(row => `<tr><td>${esc(row.date)}</td><td>${esc(row.note)}</td></tr>`).join('');
+      const rows = inspectionRows(8).map(row => `<tr><td>${esc(displayDate(row.date))}</td><td>${esc(row.note)}</td></tr>`).join('');
       const photos = Array.from({length:2}, (_, index) => tag.photoUrls?.[index]
         ? `<button class="photo" type="button" data-photo-url="${esc(tag.photoUrls[index])}" data-photo-alt="Scaff-Tag site photo ${index + 1}" aria-label="Enlarge Scaff-Tag site photo ${index + 1}"><img src="${esc(tag.photoUrls[index])}" alt="Scaff-Tag site photo ${index + 1}" loading="lazy" /></button>`
         : `<div class="photo">Photo ${index + 1}</div>`).join('');
@@ -788,7 +793,7 @@ public static class ScaffTagPublicPageRenderer
         <section class="reverse-details">
           <div class="reverse-row"><span class="reverse-label">REQUESTED BY:</span><span class="reverse-value">${esc(tag.requestedBy)}</span></div>
           <div class="reverse-row"><span class="reverse-label">BUILT BY:</span><span class="reverse-value">${esc(tag.erectedBy)}</span></div>
-          <div class="reverse-row"><span class="reverse-label">DATE:</span><span class="reverse-value">${esc(tag.dateErected)}</span></div>
+          <div class="reverse-row"><span class="reverse-label">DATE:</span><span class="reverse-value">${esc(displayDate(tag.dateErected))}</span></div>
           <div class="reverse-row"><span class="reverse-label">INSPECTED BY:</span><span class="reverse-value">${esc(tag.inspectedBy)}</span></div>
           <div class="reverse-row signature-row"><span class="reverse-label">SIGNATURE:</span><span class="reverse-value">${signature(tag.erectedBySignatureStrokes, true)}</span></div>
           <div class="standard">Built in accordance with AS/NZS 1576 &amp; AS/NZS 4576</div>
