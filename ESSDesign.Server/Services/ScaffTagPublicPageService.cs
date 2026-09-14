@@ -720,6 +720,17 @@ public static class ScaffTagPublicPageRenderer
       const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : text;
     };
+    const inspectionDueDate = index => {
+      const parts = displayDate(tag.dateErected).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!parts) return '';
+      const [, dayText, monthText, yearText] = parts;
+      const year = Number(yearText), month = Number(monthText) - 1, day = Number(dayText);
+      const initial = new Date(Date.UTC(year, month, day));
+      if (initial.getUTCFullYear() !== year || initial.getUTCMonth() !== month || initial.getUTCDate() !== day) return '';
+      const target = new Date(Date.UTC(year, month + index + 1, 1));
+      const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+      return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(target.getUTCMonth() + 1).padStart(2, '0')}/${target.getUTCFullYear()}`;
+    };
     const checked = value => `<span class="box" aria-hidden="true">${value ? '✓' : ''}</span>`;
     const signature = (strokes, inline = false) => {
       if (!Array.isArray(strokes) || strokes.length === 0) return '<span></span>';
@@ -764,7 +775,7 @@ public static class ScaffTagPublicPageRenderer
 
     function renderFront() {
       const entity = company();
-      const rows = inspectionRows(10).map(row => `<tr><td>${esc(displayDate(row.date))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
+      const rows = inspectionRows(10).map((row, index) => `<tr><td style="${row.date ? '' : 'opacity:0.35'}">${esc(row.date ? displayDate(row.date) : inspectionDueDate(index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${signature(row.signatureStrokes)}</td></tr>`).join('');
       return `<article class="tag">
         <header class="brand"><img src="${entity.logo}" alt="${esc(entity.legal)}" /><div class="brand-copy"><div class="brand-title">SCAFFOLD TAG</div><div class="brand-sub">${esc(entity.address)}</div><div class="brand-company">${esc(entity.legal)} · ${esc(entity.phone)}</div></div></header>
         <div class="band">ERECTION AND INSPECTION RECORD</div>

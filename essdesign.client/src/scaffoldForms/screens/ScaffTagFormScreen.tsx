@@ -1,4 +1,4 @@
-import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/screens/ScaffTagFormScreen.tsx; regenerate with scripts/sync-ios-scaffold-forms.py.
 import React from 'react';
 import {adaptScaffTagStyles} from '../browser/scaffTagStyles';
@@ -782,12 +782,6 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const styles = makeStyles(theme);
   const initials = (user?.fullName?.trim()?.[0] ?? 'U').toUpperCase();
   const referenceNumber = form.tagNumber || tagNumberPreview || '-----';
-  const lastActiveInspectionIndex = form.inspectionRecords.reduce(
-    (lastIndex, row, index) => (inspectionRowHasContent(row) ? index : lastIndex),
-    -1,
-  );
-  const nextAvailableInspectionIndex =
-    lastActiveInspectionIndex < form.inspectionRecords.length - 1 ? lastActiveInspectionIndex + 1 : -1;
   const displayedPhotos = React.useMemo<DisplayPhoto[]>(
     () =>
       [
@@ -1208,18 +1202,19 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                   </View>
                   {form.inspectionRecords.map((row, index) => {
                     const isActive = inspectionRowHasContent(row);
-                    const isNextAvailable = index === nextAvailableInspectionIndex;
+                    const dueDate = scaffoldInspectionDueDate(form.dateErected, index);
                     return (
                       <View key={`front-auth-${index}`} style={styles.authorisedTableRow}>
                         <View style={[styles.authCellButton, styles.authDateCell]}>
-                          {isNextAvailable && !isReadOnly ? (
+                          {!row.date ? (
                             <TouchableOpacity
                               accessibilityRole="button"
-                              accessibilityLabel={`Add inspection row ${index + 1}`}
-                              style={styles.inspectionAddButton}
+                              accessibilityLabel={`Inspection ${index + 1} due ${dueDate}. Record inspection now`}
+                              disabled={isReadOnly}
+                              style={styles.inspectionDueButton}
                               onPress={() => autofillInspectionRow(index)}
                             >
-                              <Feather name="plus" size={15} color="#0B7F45" />
+                              <Text style={[styles.authCellText, styles.inspectionDueText]}>{dueDate || '+'}</Text>
                             </TouchableOpacity>
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
@@ -1940,16 +1935,14 @@ function makeStyles(theme: ReturnType<typeof getTheme>) {
       justifyContent: 'center',
       paddingHorizontal: 4,
     },
-    inspectionAddButton: {
-      width: 24,
-      height: 24,
-      alignSelf: 'center',
+    inspectionDueButton: {
+      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: '#0B7F45',
-      backgroundColor: '#E8F6EF',
+    },
+    inspectionDueText: {
+      opacity: 0.35,
+      fontWeight: '500',
     },
     authCell: {
       borderRightWidth: 1,

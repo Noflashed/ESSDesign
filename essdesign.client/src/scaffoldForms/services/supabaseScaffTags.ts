@@ -1,4 +1,4 @@
-import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
@@ -362,8 +362,8 @@ function loadRatingLabel(value: LoadRating): string {
 function renderScaffTagHtml(form: ScaffTagForm): string {
   const inspections = form.inspectionRecords
     .map(
-      row =>
-        `<tr><td>${esc(formatScaffoldDate(row.date))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
+      (row, index) =>
+        `<tr><td style="${row.date ? '' : 'opacity:0.35'}">${esc(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index))}</td><td>${esc(row.time)}</td><td>${esc(row.competentPerson)}</td><td>${esc(
           row.note,
         )}</td></tr>`,
     )
@@ -606,7 +606,10 @@ export function buildScaffTagPdfBlob(form: ScaffTagForm): Blob {
       competentPerson: '',
       note: '',
     };
-    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(formatScaffoldDate(row.date), 12), 'F1'));
+    contentLines.push('q');
+    if (!row.date) { contentLines.push('0.65 0.67 0.69 rg'); }
+    contentLines.push(centeredText(tableX, dateCol, y - 18, 10, val(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, i), 12), 'F1'));
+    contentLines.push('Q');
     contentLines.push(centeredText(tableX + dateCol, timeCol, y - 18, 9, val(row.time, 10), 'F1'));
     contentLines.push(text(tableX + dateCol + timeCol + 6, y - 18, 10, val(row.competentPerson, 24), 'F1'));
   }

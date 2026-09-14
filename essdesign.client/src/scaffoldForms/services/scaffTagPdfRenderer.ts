@@ -1,4 +1,4 @@
-import {formatScaffoldDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/scaffTagPdfRenderer.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import type {
   InspectionRecordEntry,
@@ -355,7 +355,7 @@ export function buildScaffTagPdfDocument(
     const row = form.inspectionRecords[index] ?? ({date: '', time: '', competentPerson: ''} as InspectionRecordEntry);
     const rowTop = top + tableHeaderHeight + index * inspectionRowHeight;
     line(frontX, rowTop + inspectionRowHeight, frontX + cardWidth, rowTop + inspectionRowHeight);
-    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(formatScaffoldDate(row.date), 12), true);
+    centeredText(frontX, rowTop + 8.5, columns[0], 6.2, clean(row.date ? formatScaffoldDate(row.date) : scaffoldInspectionDueDate(form.dateErected, index), 12), Boolean(row.date), row.date ? INK : '0.65 0.67 0.69');
     centeredText(frontX + columns[0], rowTop + 8.5, columns[1], 6.2, clean(row.time, 10), true);
     centeredText(frontX + columns[0] + columns[1], rowTop + 8.5, columns[2], 6.2, clean(row.competentPerson, 20), true);
     out.push(...drawSignature(frontX + columns[0] + columns[1] + columns[2] + 3, rowTop + 1.5, columns[3] - 6, 22, row.signatureStrokes));
