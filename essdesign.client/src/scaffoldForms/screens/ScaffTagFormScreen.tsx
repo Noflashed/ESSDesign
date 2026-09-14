@@ -1493,8 +1493,8 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     if (day == null) {
                       return;
                     }
-                    const d = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
-                    const iso = d.toISOString().slice(0, 10);
+                    // Preserve the selected calendar day without converting local midnight to UTC.
+                    const iso = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     applyPickedDate(iso);
                   }}
                 >
