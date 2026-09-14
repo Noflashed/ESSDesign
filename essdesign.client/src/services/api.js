@@ -5217,6 +5217,7 @@ export const foldersAPI = {
                 throw new Error(response.data?.error || `Replacement failed with status ${response.status}`);
             }
 
+            window.dispatchEvent(new CustomEvent('ess:document-replaced', {detail: {documentId}}));
             return response.data;
         } catch (error) {
             if (error.code === 'ECONNABORTED') {

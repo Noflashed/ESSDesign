@@ -2094,7 +2094,7 @@ namespace ESSDesign.Server.Services
             }
         }
 
-        public async Task<FileDownloadInfo> GetDocumentDownloadUrlAsync(Guid documentId, string type)
+        public virtual async Task<FileDownloadInfo> GetDocumentDownloadUrlAsync(Guid documentId, string type)
         {
             try
             {
@@ -2126,7 +2126,9 @@ namespace ESSDesign.Server.Services
                 return new FileDownloadInfo
                 {
                     Url = url,
-                    FileName = fileName ?? "document.pdf"
+                    FileName = fileName ?? "document.pdf",
+                    Version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+                        $"{path}\n{document.UpdatedAt.ToUniversalTime():O}"))).ToLowerInvariant()[..24]
                 };
             }
             catch (Exception ex)
@@ -3313,7 +3315,7 @@ namespace ESSDesign.Server.Services
         }
 
 
-        public async Task<UserInfo?> GetAuthUserInfoFromAccessTokenAsync(string accessToken)
+        public virtual async Task<UserInfo?> GetAuthUserInfoFromAccessTokenAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(_supabaseUrl) || string.IsNullOrWhiteSpace(_supabaseKey))
             {
@@ -4476,6 +4478,7 @@ namespace ESSDesign.Server.Services
     {
         public string Url { get; set; } = string.Empty;
         public string FileName { get; set; } = string.Empty;
+        public string Version { get; set; } = string.Empty;
     }
 
     public class StorageObjectDownload

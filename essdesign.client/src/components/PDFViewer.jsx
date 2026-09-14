@@ -1,35 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE_URL } from '../config/api';
 import './PDFViewer.css';
-
-const pdfUrlCache = new Map();
-const PDF_URL_CACHE_MS = 50 * 60 * 1000;
 
 function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose }) {
     const [pdfUrl, setPdfUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [currentFileName, setCurrentFileName] = useState(fileName);
+    const requestSequence = useRef(0);
 
-    useEffect(() => {
-        loadPDF();
-    }, [documentId, fileType, versionKey]);
-
-    const loadPDF = async () => {
+    const loadPDF = useCallback(async () => {
+        const request = ++requestSequence.current;
         try {
             setLoading(true);
             setError(null);
-
-            const cacheKey = `${documentId}:${fileType}:${versionKey}`;
-            const cached = pdfUrlCache.get(cacheKey);
-            if (cached?.expiresAt > Date.now()) {
-                setPdfUrl(cached.url);
-                setLoading(false);
-                return;
-            }
+            setPdfUrl(null);
 
             const response = await fetch(
                 `${API_BASE_URL}/folders/documents/${documentId}/download/${fileType}`,
                 {
+                    cache: 'no-store',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     }
@@ -39,27 +29,49 @@ function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose })
             if (!response.ok) throw new Error('Failed to load PDF');
 
             const data = await response.json();
+            if (request !== requestSequence.current) return null;
+            if (!data.url) throw new Error('PDF link unavailable');
             setPdfUrl(data.url);
-            pdfUrlCache.set(cacheKey, { url: data.url, expiresAt: Date.now() + PDF_URL_CACHE_MS });
+            setCurrentFileName(data.fileName || fileName);
+            return data;
         } catch (err) {
-            setError('Failed to load PDF');
+            if (request === requestSequence.current) setError('Failed to load PDF');
             console.error(err);
+            return null;
         } finally {
-            setLoading(false);
+            if (request === requestSequence.current) setLoading(false);
         }
-    };
+    }, [documentId, fileType, fileName]);
+
+    useEffect(() => {
+        loadPDF();
+        const replaced = event => {
+            if (event.detail?.documentId === documentId) loadPDF();
+        };
+        // Reopening an old message/search result or returning from another tab
+        // must resolve the document again, even when its cached metadata is old.
+        window.addEventListener('focus', loadPDF);
+        window.addEventListener('ess:document-replaced', replaced);
+        return () => {
+            requestSequence.current += 1;
+            window.removeEventListener('focus', loadPDF);
+            window.removeEventListener('ess:document-replaced', replaced);
+        };
+    }, [documentId, versionKey, loadPDF]);
 
     const handleDownload = async () => {
         try {
-            // Fetch the PDF as a blob
-            const response = await fetch(pdfUrl, { cache: 'force-cache' });
+            const current = await loadPDF();
+            if (!current) return;
+            const response = await fetch(current.url, { cache: 'no-store' });
+            if (!response.ok) throw new Error('Download failed');
             const blob = await response.blob();
 
             // Create a download link
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = fileName; // Use exact original filename
+            link.download = current.fileName || currentFileName;
             document.body.appendChild(link);
             link.click();
 
@@ -68,8 +80,7 @@ function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose })
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Download failed:', error);
-            // Fallback to opening in new tab if download fails
-            window.open(pdfUrl, '_blank');
+            setError('Failed to download PDF. Please try again.');
         }
     };
 
@@ -97,19 +108,21 @@ function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose })
                         >
                             ✕
                         </button>
-                        <span className="pdf-filename-small">{fileName}</span>
+                        <span className="pdf-filename-small">{currentFileName}</span>
                     </div>
                     <div className="pdf-header-right">
                         <button
                             className="pdf-icon-btn"
                             onClick={handleDownload}
+                            disabled={loading || !pdfUrl}
                             title="Download"
                         >
                             ⬇
                         </button>
                         <button
                             className="pdf-icon-btn"
-                            onClick={() => window.open(pdfUrl, '_blank')}
+                            onClick={() => window.open(pdfUrl, '_blank', 'noopener,noreferrer')}
+                            disabled={loading || !pdfUrl}
                             title="Open in new tab"
                         >
                             ⧉
@@ -140,7 +153,7 @@ function PDFViewer({ documentId, fileName, fileType, versionKey = '', onClose })
                         <iframe
                             src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=1`}
                             className="pdf-iframe"
-                            title={fileName}
+                            title={currentFileName}
                         />
                     )}
                 </div>

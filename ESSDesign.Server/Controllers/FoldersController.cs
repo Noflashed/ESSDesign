@@ -19,13 +19,15 @@ namespace ESSDesign.Server.Controllers
         private readonly string _shareLinkSecret;
         private readonly string _frontendUrl;
         private readonly ILogger<FoldersController> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         public FoldersController(
             SupabaseService supabaseService,
             EmailService emailService,
             PushNotificationService pushNotificationService,
             IConfiguration configuration,
-            ILogger<FoldersController> logger)
+            ILogger<FoldersController> logger,
+            IHttpClientFactory httpClientFactory)
         {
             _supabaseService = supabaseService;
             _emailService = emailService;
@@ -36,6 +38,7 @@ namespace ESSDesign.Server.Controllers
                 ?? "dev-folder-share-link-secret";
             _frontendUrl = configuration["AppSettings:FrontendUrl"] ?? "https://essdesign.app";
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
         }
 
         [HttpGet]
@@ -848,9 +851,40 @@ namespace ESSDesign.Server.Controllers
             }
         }
 
+        private void DisableDocumentCaching()
+        {
+            Response.Headers.CacheControl = "private, no-store, no-cache, must-revalidate";
+            Response.Headers.Pragma = "no-cache";
+            Response.Headers.Expires = "0";
+        }
+
+        private async Task<ActionResult> StreamDocumentAsync(FileDownloadInfo fileInfo)
+        {
+            var client = _httpClientFactory.CreateClient();
+            HttpResponseMessage? response = null;
+            try
+            {
+                response = await client.GetAsync(fileInfo.Url, HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted);
+                response.EnsureSuccessStatusCode();
+                var stream = await response.Content.ReadAsStreamAsync(HttpContext.RequestAborted);
+                // MVC owns the stream through the full response, including large PDFs.
+                Response.RegisterForDispose(response);
+                Response.RegisterForDispose(client);
+                Response.Headers.ContentDisposition = $"inline; filename*=UTF-8''{Uri.EscapeDataString(fileInfo.FileName)}";
+                return new FileStreamResult(stream, response.Content.Headers.ContentType?.ToString() ?? "application/pdf");
+            }
+            catch
+            {
+                response?.Dispose();
+                client.Dispose();
+                throw;
+            }
+        }
+
         [HttpGet("documents/{documentId}/download/{type}")]
         public async Task<ActionResult> DownloadDocument(Guid documentId, string type, [FromQuery] bool redirect = false)
         {
+            DisableDocumentCaching();
             try
             {
                 if (!redirect)
@@ -872,20 +906,14 @@ namespace ESSDesign.Server.Controllers
 
                 if (redirect)
                 {
-                    using var httpClient = new HttpClient();
-                    var response = await httpClient.GetAsync(fileInfo.Url);
-                    response.EnsureSuccessStatusCode();
-
-                    var stream = await response.Content.ReadAsStreamAsync();
-                    var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
-
-                    Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
-                    Response.Headers.CacheControl = "private, max-age=3600";
-
-                    return new FileStreamResult(stream, contentType);
+                    return await StreamDocumentAsync(fileInfo);
                 }
 
-                return Ok(new { url = fileInfo.Url, fileName = fileInfo.FileName });
+                // Share a document address, never an immutable storage-object address.
+                // The version changes client PDF cache keys; old versions of this URL
+                // still resolve the current document because the route ignores v.
+                var url = $"{_frontendUrl.TrimEnd('/')}/api/folders/documents/{documentId:D}/public-download/{type.ToLowerInvariant()}?v={Uri.EscapeDataString(fileInfo.Version)}";
+                return Ok(new { url, fileName = fileInfo.FileName, version = fileInfo.Version });
             }
             catch (FileNotFoundException ex)
             {
@@ -902,6 +930,7 @@ namespace ESSDesign.Server.Controllers
         [HttpGet("documents/{documentId}/public-download/{type}")]
         public async Task<ActionResult> DownloadDocumentFromEmail(Guid documentId, string type)
         {
+            DisableDocumentCaching();
             try
             {
                 if (!type.Equals("ess", StringComparison.OrdinalIgnoreCase) &&
@@ -912,17 +941,7 @@ namespace ESSDesign.Server.Controllers
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
 
-                using var httpClient = new HttpClient();
-                var response = await httpClient.GetAsync(fileInfo.Url);
-                response.EnsureSuccessStatusCode();
-
-                var stream = await response.Content.ReadAsStreamAsync();
-                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
-
-                Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
-                Response.Headers.CacheControl = "private, max-age=3600";
-
-                return new FileStreamResult(stream, contentType);
+                return await StreamDocumentAsync(fileInfo);
             }
             catch (FileNotFoundException ex)
             {
@@ -991,6 +1010,7 @@ namespace ESSDesign.Server.Controllers
         [HttpGet("{folderId}/public-share/documents/{documentId}/download/{type}")]
         public async Task<ActionResult> DownloadSharedFolderDocument(Guid folderId, Guid documentId, string type, [FromQuery] string? token)
         {
+            DisableDocumentCaching();
             try
             {
                 if (!ValidateFolderShareAccessToken(folderId, token))
@@ -1011,16 +1031,7 @@ namespace ESSDesign.Server.Controllers
                 }
 
                 var fileInfo = await _supabaseService.GetDocumentDownloadUrlAsync(documentId, type);
-                using var httpClient = new HttpClient();
-                var response = await httpClient.GetAsync(fileInfo.Url);
-                response.EnsureSuccessStatusCode();
-
-                var stream = await response.Content.ReadAsStreamAsync();
-                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
-                Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileInfo.FileName}\"");
-                Response.Headers.CacheControl = "private, max-age=3600";
-
-                return new FileStreamResult(stream, contentType);
+                return await StreamDocumentAsync(fileInfo);
             }
             catch (FileNotFoundException ex)
             {
