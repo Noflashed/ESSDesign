@@ -2701,7 +2701,9 @@ namespace ESSDesign.Server.Services
                 .ToList();
             details.ScaffoldName = FirstNotBlank(details.ScaffoldName, details.TagNumber, row.Title);
             details.JobLocation = FirstNotBlank(details.JobLocation, details.ProjectName, row.ProjectLabel);
-            details.UpdatedAt = details.UpdatedAt ?? row.UpdatedAt;
+            // Linked date changes are written by database triggers, so the row
+            // timestamp is authoritative for QR-page and PDF cache versions.
+            details.UpdatedAt = row.UpdatedAt ?? details.UpdatedAt;
             details.InspectionRecords = details.InspectionRecords.Take(10).ToList();
             return details;
         }
