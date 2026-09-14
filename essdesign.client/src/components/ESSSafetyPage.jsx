@@ -11,7 +11,6 @@ import {
     FileCheck,
     FileText,
     MoreVertical,
-    Shield,
     Tag,
     Trash2,
     Users,
@@ -30,14 +29,6 @@ const PROJECT_DATA_TABS = [
         refLabel: 'Tag / Ref No.',
         storageKind: 'scaff-tags',
         icon: Tag
-    },
-    {
-        key: 'swms',
-        label: 'SWMS',
-        noun: 'SWMS documents',
-        refLabel: 'SWMS / Ref No.',
-        storageKind: 'swms',
-        icon: Shield
     },
     {
         key: 'handover-certificates',
@@ -63,14 +54,6 @@ const PROJECT_DATA_TABS = [
         storageKind: 'pre-starts',
         icon: ClipboardCheck
     },
-    {
-        key: 'design-document',
-        label: 'Design document',
-        noun: 'design documents',
-        refLabel: 'Drawing / Ref No.',
-        storageKind: 'design-document',
-        icon: FileText
-    }
 ];
 
 const STATUS_META = {

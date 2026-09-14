@@ -15,14 +15,23 @@ const rows=page.locator('.project-data-table-row');
 const count=async expected=>{await page.waitForFunction(n=>document.querySelectorAll('.project-data-table-row').length===n,expected);};
 try {
  await page.goto(`${baseURL}/tests/fixtures/register-dropdowns.html?project-data`);
+ await count(3);
+ await page.locator('.project-data-kind-trigger').click();
+ assert.deepEqual(await page.getByRole('option').allTextContents(),['Scaff-tags','Handover certificates','Day Labour/Variations','Pre-Starts']);
+ await page.getByRole('option',{name:'Scaff-tags',exact:true}).click();
+ await page.getByRole('button',{name:'Builder',exact:true}).click();
+ await page.getByRole('option',{name:'Alpha Builder',exact:true}).click();
+ await count(2);
+ await page.getByRole('button',{name:'Project',exact:true}).click();
+ await page.getByRole('option',{name:'North Site',exact:true}).click();
  await count(1);
- await page.locator('.project-data-project-trigger').click();
+ await page.getByRole('button',{name:'Project',exact:true}).click();
  await page.getByRole('option',{name:'All Projects',exact:true}).click();
  await count(2);
- await page.locator('.project-data-builder-trigger').click();
+ await page.getByRole('button',{name:'Builder',exact:true}).click();
  await page.getByRole('option',{name:'All Builders',exact:true}).click();
  await count(3);
- for(const type of ['Handover certificates','Day Labour/Variations','Pre-Starts','SWMS','Design document']) {
+ for(const type of ['Handover certificates','Day Labour/Variations','Pre-Starts']) {
   await page.locator('.project-data-kind-trigger').click();
   await page.getByRole('option',{name:type,exact:true}).click();
   await count(3);
@@ -48,11 +57,11 @@ try {
  assert.deepEqual((await page.evaluate(()=>window.__scopeActions)).at(-1),{action:'delete',builderId:'beta',projectId:'west',id:'shared-form-id'});
  assert.match(await rows.allTextContents().then(v=>v.join(' ')),/North Site/);
  assert.match(await rows.allTextContents().then(v=>v.join(' ')),/South Site/);
- await page.locator('.project-data-project-trigger').click();
+ await page.getByRole('button',{name:'Project',exact:true}).click();
  await page.getByRole('option',{name:'South Site — Alpha Builder',exact:true}).click();
  await count(1);
  await page.screenshot({path:'/tmp/ess-project-data-all-scopes.png'});
  assert.deepEqual(errors,[]);
- console.log('PASS: Project Data aggregates all six document types and routes preview, PDF download and deletion to the correct source project, including repeated form IDs.');
+ console.log('PASS: Project Data aggregates all four form types and routes preview, PDF download and deletion to the correct source project, including repeated form IDs.');
 } catch(error) {await page.screenshot({path:'/tmp/ess-all-scopes-failure.png'});throw error;}
 finally {await browser.close();}
