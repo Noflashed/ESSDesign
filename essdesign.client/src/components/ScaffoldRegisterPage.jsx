@@ -1,3 +1,4 @@
+import {nextScaffoldInspectionDueDate, scaffoldInspectionCountdown} from '../scaffoldForms/utils/scaffoldDateDisplay';
 import { makeRegisterItems, resolveScaffoldLifecycle, formatElapsedTime } from '../utils/scaffoldRegister';
 import {ALL_SCOPE, ALL_BUILDERS, projectScopeOptions, resolveProjectScope} from '../utils/projectDataScope';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -720,6 +721,9 @@ export default function ScaffoldRegisterPage({
                                     item.registerRecord,
                                     item.tag?.qrLabelAssignedAt
                                 );
+                                const inspectionDueDate = item.tag ? nextScaffoldInspectionDueDate(item.tag.dateErected || '', item.tag.inspectionRecords || []) : '';
+                                const inspectionReminder = lifecycle.status !== 'dismantled' && item.tag?.status !== 'retired'
+                                    ? scaffoldInspectionCountdown(inspectionDueDate, clockNow) : null;
                                 const hasQrLabel = ['assigned', 'retired'].includes(item.tag?.qrLabelStatus)
                                     && Boolean(item.tag?.qrTargetUrl);
                                 const statusLabel = lifecycle.status === 'active'
@@ -807,7 +811,11 @@ export default function ScaffoldRegisterPage({
                                                 </span>
                                             )}
                                         </td>
-                                        <td><time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time></td>
+                                        <td><time dateTime={item.updatedAt}>{formatUpdatedAt(item.updatedAt)}</time>
+                                            {inspectionReminder && <span className={`scaffold-register-inspection-reminder${inspectionReminder.overdue ? ' is-overdue' : ''}`} title={`Inspection due ${inspectionDueDate}`}>
+                                                <Clock3 size={11} aria-hidden="true" />{inspectionReminder.label}
+                                            </span>}
+                                        </td>
                                     </tr>
                                 );
                             })}

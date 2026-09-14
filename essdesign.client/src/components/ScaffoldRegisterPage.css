@@ -731,3 +731,15 @@
 }
 
 .scaffold-register-table .scaffold-register-context-column { width: 170px; }
+
+.scaffold-register-inspection-reminder {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #8a94a3;
+    white-space: normal;
+}
+.scaffold-register-inspection-reminder.is-overdue { color: #a66b36; }

@@ -1,4 +1,4 @@
-import {formatScaffoldDate, scaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
+import {formatScaffoldDate, scaffoldInspectionDueDate, nextScaffoldInspectionDueDate} from '../utils/scaffoldDateDisplay';
 // Derived from ESSApp/src/services/supabaseScaffTags.ts; regenerate with scripts/sync-ios-scaffold-forms.py.
 import {resolveScaffoldFormStatus, ScaffoldFormStatus} from '../utils/scaffoldFormStatus';
 import type {ScaffoldRegisterRecord} from './supabaseScaffoldRegister';
@@ -100,6 +100,7 @@ export interface ScaffTagListItem {
   handoverReferenceName: string;
   jobLocation: string;
   latestInspectionDate: string;
+  nextInspectionDueDate?: string;
   inspectedBy: string;
   proximityAlertEnabled?: boolean;
   locationLatitude?: number | null;
@@ -760,6 +761,7 @@ export async function listScaffTagForms(builderId: string, projectId: string): P
       handoverInspectionNumber: form.handoverInspectionNumber ?? '',
       handoverReferenceName: form.handoverReferenceName ?? '',
       jobLocation: form.jobLocation ?? '',
+      nextInspectionDueDate: nextScaffoldInspectionDueDate(form.dateErected || '', form.inspectionRecords ?? []),
       latestInspectionDate:
         form.latestInspectionAt ||
         ([...(form.inspectionRecords ?? [])]

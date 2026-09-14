@@ -19,3 +19,24 @@ export function scaffoldInspectionDueDate(initialDate: string, rowIndex: number)
   const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
   return `${String(Math.min(day, lastDay)).padStart(2, '0')}/${String(target.getUTCMonth() + 1).padStart(2, '0')}/${target.getUTCFullYear()}`;
 }
+
+/** Match the first unfilled inspection row on the card without creating a record. */
+export function nextScaffoldInspectionDueDate(initialDate: string, records: Array<{date?: string}> = []): string {
+  const nextIndex = records.findIndex(row => !row.date?.trim());
+  return scaffoldInspectionDueDate(initialDate, nextIndex < 0 ? records.length : nextIndex);
+}
+
+/** Compare Sydney calendar days so daylight saving cannot change the day count. */
+export function scaffoldInspectionCountdown(dueDate: string, nowMs = Date.now()): {label: string; overdue: boolean} | null {
+  const parts = formatScaffoldDate(dueDate).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!parts) { return null; }
+  const today = new Intl.DateTimeFormat('en-AU', {timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(new Date(nowMs));
+  const part = (type: string) => Number(today.find(value => value.type === type)?.value);
+  const dueDay = Date.UTC(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]));
+  const todayDay = Date.UTC(part('year'), part('month') - 1, part('day'));
+  const days = Math.round((dueDay - todayDay) / 86400000);
+  if (!Number.isFinite(days)) { return null; }
+  const count = Math.abs(days);
+  const duration = `${count} ${count === 1 ? 'day' : 'days'}`;
+  return {label: days < 0 ? `Inspection overdue by ${duration}` : days === 0 ? 'Inspection due today' : `Inspection in ${duration}`, overdue: days < 0};
+}
