@@ -169,6 +169,12 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   const [tagNumberPreview, setTagNumberPreview] = React.useState('');
   const [existingPhotos, setExistingPhotos] = React.useState<ExistingPhoto[]>([]);
   const [pendingPhotos, setPendingPhotos] = React.useState<PendingPhoto[]>([]);
+  const inspectionGuideContainerRef = React.useRef<View>(null);
+  const inspectionColumnRef = React.useRef<Text>(null);
+  const inspectionColumnEndRef = React.useRef<View | null>(null);
+  const inspectionTargetRef = React.useRef<View | null>(null);
+  const inspectionScrollRef = React.useRef<ScrollView>(null);
+  const inspectionScrollOffsetRef = React.useRef(0);
   const frontCardRef = React.useRef<View>(null);
   const backCardRef = React.useRef<View>(null);
   const initialHandoverFormIdRef = React.useRef(route.params.initialHandoverFormId ?? '');
@@ -910,7 +916,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <View ref={inspectionGuideContainerRef} collapsable={false} style={styles.container}>
       <StatusBar
         barStyle={prefs.themeMode === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={theme.card}
@@ -965,11 +971,10 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
         />
       </View>
 
-      {showInspectionHint && (
-        <ScaffTagInspectionHint date={nextInspectionDueDate} onDismiss={() => setInspectionHintDismissed(true)} />
-      )}
-
       <ScrollView
+        ref={inspectionScrollRef}
+        onScroll={event => { inspectionScrollOffsetRef.current = event.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
         testID={usesIOSDocumentEditor ? 'ess-scaff-tag-stable-scroll-pager' : undefined}
         style={usesIOSDocumentEditor ? styles.iOSTagPager : undefined}
         contentContainerStyle={usesIOSDocumentEditor ? styles.iOSTagPagerContent : styles.scroll}
@@ -1210,7 +1215,7 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                 </View>
                 <View style={styles.authorisedTable}>
                   <View style={styles.authorisedTableHeader}>
-                    <Text style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
+                    <Text ref={inspectionColumnRef} style={[styles.authHeaderCell, styles.authDateCell]}>DATE</Text>
                     <Text style={[styles.authHeaderCell, styles.authTimeCell]}>TIME</Text>
                     <Text style={[styles.authHeaderCell, styles.authNameCell]}>NAME</Text>
                     <Text style={[styles.authHeaderCell, styles.authSignatureCell]}>SIGNATURE</Text>
@@ -1220,7 +1225,13 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                     const dueDate = scaffoldInspectionDueDate(form.dateErected, index);
                     return (
                       <View key={`front-auth-${index}`} style={styles.authorisedTableRow}>
-                        <View style={[styles.authCellButton, styles.authDateCell]}>
+                        <View
+                          collapsable={false}
+                          ref={node => {
+                            if (index === nextInspectionIndex) { inspectionTargetRef.current = node; }
+                            if (index === form.inspectionRecords.length - 1) { inspectionColumnEndRef.current = node; }
+                          }}
+                          style={[styles.authCellButton, styles.authDateCell]}>
                           {!row.date ? (
                             <TouchableOpacity
                               accessibilityRole="button"
@@ -1439,6 +1450,19 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+
+      {showInspectionHint && (
+        <ScaffTagInspectionHint
+          date={nextInspectionDueDate}
+          containerRef={inspectionGuideContainerRef}
+          columnRef={inspectionColumnRef}
+          columnEndRef={inspectionColumnEndRef}
+          targetRef={inspectionTargetRef}
+          onInspect={() => autofillInspectionRow(nextInspectionIndex)}
+          onDismiss={() => setInspectionHintDismissed(true)}
+          onReveal={offset => inspectionScrollRef.current?.scrollTo({y: Math.max(0, inspectionScrollOffsetRef.current + offset), animated: true})}
+        />
+      )}
 
       <SideMenuDrawer
         visible={showDrawer}
