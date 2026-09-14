@@ -1214,7 +1214,8 @@ export default function ScaffTagFormScreen({navigation, route}: Props) {
                               style={styles.inspectionDueButton}
                               onPress={() => autofillInspectionRow(index)}
                             >
-                              <Text style={[styles.authCellText, styles.inspectionDueText]}>{dueDate || '+'}</Text>
+                              <Text style={[styles.authCellText, styles.inspectionDueText]}>{dueDate}</Text>
+                              {!isReadOnly && <Feather name="plus-circle" size={14} color="#0B7F45" />}
                             </TouchableOpacity>
                           ) : (
                             <Text style={styles.authCellText}>{formatScaffoldDate(row.date || '')}</Text>
